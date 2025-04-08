@@ -1,0 +1,7 @@
+[project]
+name = "pipefy-mcp-server"
+version = "0.1.0"
+description = "Pipefy MCP server that enables AI Agents to end-to-end manage your Pipefy pipes, create cards, and more."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []

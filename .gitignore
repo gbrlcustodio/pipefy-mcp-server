@@ -8,3 +8,9 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Ruff stuff:
+.ruff_cache/
+
+# Generated version file
+src/pipefy_mcp/_version.py

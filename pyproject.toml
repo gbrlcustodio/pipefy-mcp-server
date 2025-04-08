@@ -4,4 +4,32 @@ version = "0.1.0"
 description = "Pipefy MCP server that enables AI Agents to end-to-end manage your Pipefy pipes, create cards, and more."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "mcp[cli]>=1.6.0",
+    "pydantic-settings>=2.8.1",
+]
+
+[project.scripts]
+pipefy-mcp-server = "pipefy_mcp.main:main"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.4",
+]
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pipefy_mcp"]
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = { version_scheme = "no-guess-dev" }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/pipefy_mcp/_version.py"
+
+[tool.ruff]
+lint.extend-select = ["I"]

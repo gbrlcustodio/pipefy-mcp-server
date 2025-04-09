@@ -5,6 +5,8 @@ description = "Pipefy MCP server that enables AI Agents to end-to-end manage you
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "gql[httpx]>=3.5.2",
+    "httpx-auth>=0.23.1",
     "mcp[cli]>=1.6.0",
     "pydantic-settings>=2.8.1",
 ]

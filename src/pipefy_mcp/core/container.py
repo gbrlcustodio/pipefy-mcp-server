@@ -21,3 +21,6 @@ class ServicesContainer:
 
     def initialize_services(self, settings: Settings) -> None:
         pass
+
+    def shutdown(self) -> None:
+        pass

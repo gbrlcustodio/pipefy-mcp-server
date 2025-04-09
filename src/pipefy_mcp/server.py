@@ -38,7 +38,7 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP, None]:
 
 
 # Create an MCP server
-mcp = FastMCP("pipefy_mcp", lifespan=lifespan)
+mcp = FastMCP("pipefy", lifespan=lifespan)
 
 
 def run_server():

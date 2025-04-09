@@ -6,9 +6,6 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
-.venv
-
 # Ruff stuff:
 .ruff_cache/
 
@@ -29,3 +26,12 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/

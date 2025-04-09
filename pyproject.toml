@@ -14,6 +14,10 @@ pipefy-mcp-server = "pipefy_mcp.main:main"
 
 [dependency-groups]
 dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.1.1",
+    "pytest-mock>=3.14.0",
     "ruff>=0.11.4",
 ]
 
@@ -33,3 +37,20 @@ version-file = "src/pipefy_mcp/_version.py"
 
 [tool.ruff]
 lint.extend-select = ["I"]
+
+[tool.pytest]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --no-header --tb=short"
+
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+
+markers = [
+    "unit: marks a test as a unit test",
+    "integration: marks a test as an integration test that requires database access"
+]

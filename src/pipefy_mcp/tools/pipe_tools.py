@@ -22,3 +22,9 @@ class PipeTools:
             """Get a card by its ID."""
 
             return await client.get_card(card_id)
+
+        @mcp.tool()
+        async def get_cards(pipe_id: int) -> dict:
+            """Get all cards in the pipe."""
+
+            return await client.get_cards(pipe_id)

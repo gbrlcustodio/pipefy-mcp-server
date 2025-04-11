@@ -59,3 +59,35 @@ class PipefyClient:
             result = await session.execute(query, variable_values=variables)
 
         return result
+
+    async def get_cards(self, pipe_id: int, search: dict | None = None) -> dict:
+        """Get all cards in the specified pipe.
+
+        Args:
+            pipe_id: The ID of the pipe
+            search: Optional search filters following Pipefy's GraphQL schema
+        """
+        query = gql(
+            """
+            query ($pipe_id: ID!, $search: CardSearch) {
+                cards(pipe_id: $pipe_id, search: $search) {
+                    edges {
+                        node {
+                            id
+                            title
+                        }
+                    }
+                }
+            }
+            """
+        )
+        async with Client(
+            transport=self.transport, fetch_schema_from_transport=True
+        ) as session:
+            variables = {"pipe_id": pipe_id}
+            variables["search"] = {}
+            if search is not None:
+                variables["search"] = search
+            result = await session.execute(query, variable_values=variables)
+
+        return result

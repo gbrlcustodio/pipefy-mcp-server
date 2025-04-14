@@ -2,6 +2,7 @@ from gql import Client, gql
 from gql.transport.httpx import HTTPXAsyncTransport
 from httpx_auth import OAuth2ClientCredentials
 
+from pipefy_mcp.services.pipefy.types import CardSearch
 from pipefy_mcp.settings import settings
 
 
@@ -32,9 +33,7 @@ class PipefyClient:
             """
         )
 
-        async with Client(
-            transport=self.transport, fetch_schema_from_transport=True
-        ) as session:
+        async with Client(transport=self.transport, fetch_schema_from_transport=True) as session:
             variables = {"pipe_id": pipe_id, "fields": fields}
             result = await session.execute(query, variable_values=variables)
 
@@ -52,21 +51,26 @@ class PipefyClient:
             }
             """
         )
-        async with Client(
-            transport=self.transport, fetch_schema_from_transport=True
-        ) as session:
+        async with Client(transport=self.transport, fetch_schema_from_transport=True) as session:
             variables = {"card_id": card_id}
             result = await session.execute(query, variable_values=variables)
 
         return result
 
-    async def get_cards(self, pipe_id: int, search: dict | None = None) -> dict:
+    async def get_cards(self, pipe_id: int, search: CardSearch) -> dict:
         """Get all cards in the specified pipe.
 
         Args:
             pipe_id: The ID of the pipe
-            search: Optional search filters following Pipefy's GraphQL schema
+            search: Optional search filters with the following dictionary options:
+                - assignee_ids: List of assignee IDs to filter by
+                - ignore_ids: List of card IDs to ignore
+                - label_ids: List of label IDs to filter by
+                - title: Card title to search for
+                - inbox_emails_read: Filter by whether there are unread email threads
+                - include_done: Whether to include done cards
         """
+
         query = gql(
             """
             query ($pipe_id: ID!, $search: CardSearch) {
@@ -81,9 +85,7 @@ class PipefyClient:
             }
             """
         )
-        async with Client(
-            transport=self.transport, fetch_schema_from_transport=True
-        ) as session:
+        async with Client(transport=self.transport, fetch_schema_from_transport=True) as session:
             variables = {"pipe_id": pipe_id}
             variables["search"] = {}
             if search is not None:

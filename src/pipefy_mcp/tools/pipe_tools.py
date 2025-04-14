@@ -24,7 +24,7 @@ class PipeTools:
             return await client.get_card(card_id)
 
         @mcp.tool()
-        async def get_cards(pipe_id: int) -> dict:
+        async def get_cards(pipe_id: int, search: dict) -> dict:
             """Get all cards in the pipe."""
 
-            return await client.get_cards(pipe_id)
+            return await client.get_cards(pipe_id, search)

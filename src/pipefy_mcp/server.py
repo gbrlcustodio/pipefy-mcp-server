@@ -28,6 +28,8 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP, None]:
         ).register_tools()
 
         yield mcp
+    except Exception as e:
+        logger.error(f"Error during server lifespan: {e}")
     finally:
         logger.info("Shutting down services")
 

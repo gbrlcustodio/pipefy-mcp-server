@@ -16,10 +16,12 @@ pipefy-mcp-server = "pipefy_mcp.main:main"
 
 [dependency-groups]
 dev = [
+    "aiohttp>=3.11.16",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
+    "respx>=0.22.0",
     "ruff>=0.11.4",
 ]
 

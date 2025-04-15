@@ -45,3 +45,11 @@ To inspect servers locally developed or downloaded as a repository, the most com
 ```sh
 npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server
 ```
+
+## Testing
+
+### Updating GraphQL Schema
+
+```sh
+uv run gql-cli https://app.pipefy.com/graphql --print-schema --schema-download --headers 'Authorization: Bearer <AUTH_TOKEN>' > tests/services/pipefy/schema.graphql
+```

@@ -9,15 +9,27 @@ from pipefy_mcp.settings import settings
 class PipefyClient:
     """Client for encapsulating queries and mutations using the Pipefy API"""
 
-    def __init__(self):
-        self.transport = HTTPXAsyncTransport(
-            url=settings.pipefy_graphql_url,
-            auth=OAuth2ClientCredentials(
-                token_url=settings.pipefy_oauth_url,
-                client_id=settings.pipefy_oauth_client,
-                client_secret=settings.pipefy_oauth_secret,
-            ),
+    def __init__(self, schema: str | None = None):
+        self.client = self._create_client(schema)
+
+    async def get_pipe(self, pipe_id: int) -> dict:
+        """Get a pipe by its ID."""
+        query = gql(
+            """
+            query ($pipe_id: ID!) {
+                pipe(id: $pipe_id) {
+                    id
+                    name
+                }
+            }
+            """
         )
+
+        async with self.client as session:
+            variables = {"pipe_id": pipe_id}
+            result = await session.execute(query, variable_values=variables)
+
+        return result
 
     async def create_card(self, pipe_id: int, fields: dict) -> dict:
         """Create a card in the specified pipe with the given fields."""
@@ -33,7 +45,7 @@ class PipefyClient:
             """
         )
 
-        async with Client(transport=self.transport, fetch_schema_from_transport=True) as session:
+        async with self.client as session:
             variables = {"pipe_id": pipe_id, "fields": fields}
             result = await session.execute(query, variable_values=variables)
 
@@ -51,7 +63,8 @@ class PipefyClient:
             }
             """
         )
-        async with Client(transport=self.transport, fetch_schema_from_transport=True) as session:
+
+        async with self.client as session:
             variables = {"card_id": card_id}
             result = await session.execute(query, variable_values=variables)
 
@@ -85,7 +98,8 @@ class PipefyClient:
             }
             """
         )
-        async with Client(transport=self.transport, fetch_schema_from_transport=True) as session:
+
+        async with self.client as session:
             variables = {"pipe_id": pipe_id}
             variables["search"] = {}
             if search is not None:
@@ -93,3 +107,17 @@ class PipefyClient:
             result = await session.execute(query, variable_values=variables)
 
         return result
+
+    def _create_client(self, schema: str | None):
+        transport = HTTPXAsyncTransport(
+            url=settings.pipefy_graphql_url,
+            auth=OAuth2ClientCredentials(
+                token_url=settings.pipefy_oauth_url,
+                client_id=settings.pipefy_oauth_client,
+                client_secret=settings.pipefy_oauth_secret,
+            ),
+        )
+
+        kwargs = {"schema": schema} if schema else {"fetch_schema_from_transport": True}
+
+        return Client(transport=transport, **kwargs)

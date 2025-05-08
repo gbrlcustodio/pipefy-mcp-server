@@ -20,6 +20,10 @@ class PipefyClient:
                 pipe(id: $pipe_id) {
                     id
                     name
+                    phases {
+                        id
+                        name
+                    }
                 }
             }
             """
@@ -104,6 +108,29 @@ class PipefyClient:
             variables["search"] = {}
             if search is not None:
                 variables["search"] = search
+            result = await session.execute(query, variable_values=variables)
+
+        return result
+
+    async def move_card_to_phase(self, card_id: int, destination_phase_id: int) -> dict:
+        """Move a card to a specific phase.
+
+        Args:
+            card_id: The ID of the card to move
+            destination_phase_id: The ID of the destination phase
+        """
+        query = gql(
+            """
+            mutation ($input: MoveCardToPhaseInput!) {
+                moveCardToPhase (input: $input) {
+                    clientMutationId
+                }
+            }
+            """
+        )
+
+        async with self.client as session:
+            variables = {"input": {"card_id": card_id, "destination_phase_id": destination_phase_id}}
             result = await session.execute(query, variable_values=variables)
 
         return result

@@ -28,3 +28,15 @@ class PipeTools:
             """Get all cards in the pipe."""
 
             return await client.get_cards(pipe_id, search)
+
+        @mcp.tool()
+        async def get_pipe(pipe_id: int) -> dict:
+            """Get a pipe by its ID."""
+
+            return await client.get_pipe(pipe_id)
+
+        @mcp.tool()
+        async def move_card_to_phase(card_id: int, destination_phase_id: int) -> dict:
+            """Move a card to a specific phase."""
+
+            return await client.move_card_to_phase(card_id, destination_phase_id)

@@ -313,3 +313,55 @@ async def test_get_start_form_fields_empty_returns_friendly_message():
     assert "start_form_fields" in result
     assert result["start_form_fields"] == []
 
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_start_form_fields_required_only_no_required_fields():
+    """Test get_start_form_fields with required_only=True when all fields are optional."""
+    pipe_id = 303181849
+    mock_fields = [
+        {
+            "id": "priority",
+            "label": "Priority",
+            "type": "select",
+            "required": False,
+            "editable": True,
+            "options": ["Low", "Medium", "High"],
+            "description": None,
+            "help": None
+        },
+        {
+            "id": "notes",
+            "label": "Notes",
+            "type": "long_text",
+            "required": False,
+            "editable": True,
+            "options": None,
+            "description": None,
+            "help": None
+        }
+    ]
+    
+    # Mock the GraphQL client and session
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        return_value={"pipe": {"start_form_fields": mock_fields}}
+    )
+    
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    
+    # Create client instance
+    client = PipefyClient.__new__(PipefyClient)
+    client.client = mock_client
+    
+    # Execute get_start_form_fields with required_only=True
+    result = await client.get_start_form_fields(pipe_id, required_only=True)
+    
+    # Verify user-friendly message is returned for no required fields
+    assert "message" in result
+    assert result["message"] == "This pipe has no required fields in the start form."
+    assert "start_form_fields" in result
+    assert result["start_form_fields"] == []
+

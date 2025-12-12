@@ -193,7 +193,7 @@ class PipefyClient:
         # Extract fields from result
         fields = result.get("pipe", {}).get("start_form_fields", [])
 
-        # Handle empty start form
+        # Handle empty start form (no fields configured at all)
         if not fields:
             return {
                 "message": "This pipe has no start form fields configured.",
@@ -203,6 +203,13 @@ class PipefyClient:
         # Filter for required fields only if requested
         if required_only:
             fields = [field for field in fields if field.get("required")]
+            
+            # Handle case where no required fields exist after filtering
+            if not fields:
+                return {
+                    "message": "This pipe has no required fields in the start form.",
+                    "start_form_fields": []
+                }
 
         return {"start_form_fields": fields}
 

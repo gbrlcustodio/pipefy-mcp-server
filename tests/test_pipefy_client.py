@@ -38,8 +38,8 @@ async def test_create_card_with_dict_fields(mocker):
     assert variables["pipe_id"] == pipe_id
     assert isinstance(variables["fields"], list)
     assert len(variables["fields"]) == 2
-    assert variables["fields"][0] == {"field_id": "title", "field_value": "Teste-MCP"}
-    assert variables["fields"][1] == {"field_id": "description", "field_value": "Test description"}
+    assert variables["fields"][0] == {"field_id": "title", "field_value": "Teste-MCP", "generated_by_ai": True}
+    assert variables["fields"][1] == {"field_id": "description", "field_value": "Test description", "generated_by_ai": True}
     
     # Verify result
     assert result == {"createCard": {"card": {"id": "12345"}}}
@@ -76,10 +76,12 @@ async def test_create_card_with_array_fields(mocker):
     mock_session.execute.assert_called_once()
     call_args = mock_session.execute.call_args
     
-    # Check that fields array was used as-is
+    # Check that fields array was used and generated_by_ai was added
     variables = call_args[1]["variable_values"]
     assert variables["pipe_id"] == pipe_id
-    assert variables["fields"] == fields_array
+    assert len(variables["fields"]) == 2
+    assert variables["fields"][0] == {"field_id": "title", "field_value": "Teste-MCP", "generated_by_ai": True}
+    assert variables["fields"][1] == {"field_id": "description", "field_value": "Test description", "generated_by_ai": True}
     
     # Verify result
     assert result == {"createCard": {"card": {"id": "12345"}}}
@@ -152,7 +154,7 @@ async def test_create_card_with_single_field(mocker):
     variables = call_args[1]["variable_values"]
     assert variables["pipe_id"] == pipe_id
     assert len(variables["fields"]) == 1
-    assert variables["fields"][0] == {"field_id": "title", "field_value": "Teste-MCP"}
+    assert variables["fields"][0] == {"field_id": "title", "field_value": "Teste-MCP", "generated_by_ai": True}
     
     # Verify result
     assert result == {"createCard": {"card": {"id": "12345"}}}

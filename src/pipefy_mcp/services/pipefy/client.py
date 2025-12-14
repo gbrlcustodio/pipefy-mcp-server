@@ -62,9 +62,14 @@ class PipefyClient:
                 # If fields is a dict, convert to array format
                 fields_array = []
                 for key, value in fields.items():
-                    fields_array.append({"field_id": key, "field_value": value})
+                    fields_array.append({"field_id": key, "field_value": value, "generated_by_ai": True})
                 fields = fields_array
-            elif not isinstance(fields, list):
+            elif isinstance(fields, list):
+                # If fields is already a list, ensure generated_by_ai is set
+                for field in fields:
+                    if isinstance(field, dict) and "generated_by_ai" not in field:
+                        field["generated_by_ai"] = True
+            else:
                 # If it's not a list, wrap it
                 fields = [fields] if fields else []
             

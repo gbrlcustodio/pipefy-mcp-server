@@ -113,4 +113,4 @@ uv run gql-cli https://app.pipefy.com/graphql --print-schema --schema-download -
 We are building this in public and we need your feedback!
 
 - Field Mapping: If you encounter a complex field type that the Agent doesn't fill correctly, please open an issue.
-- New Tools: What other Pipefy actions would improve your workflow?
+- New Tools: What other Pipefy actions would improve your workflow? Feel free to opens an issue or a PR explaining what it is and how would you use

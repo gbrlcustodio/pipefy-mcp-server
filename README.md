@@ -49,6 +49,7 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude 3.5 
 Installing the server requires the following on your system:
 - Python 3.12+
 - A **Pipefy Service Account Token** (Generate in Admin Panel > Service Accounts).
+- Rembember to add the Service account to the pipe you want the AI to use.
 
 ### Installation
 We recommend using `uv` for dependency management. Ensure it's [installed](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_1).

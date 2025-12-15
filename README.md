@@ -5,7 +5,6 @@
 </p>
 
 <p align="center">
-  ⚡ Free & open-source forever. <br>
   🚧 <strong>Alpha Release:</strong> Building in public. <br>
   📢 Share your feedback on GitHub issues or at dev@pipefy.com.
 </p>
@@ -56,7 +55,7 @@ We recommend using `uv` for dependency management. Ensure it's [installed](https
 
 ```sh
 # Clone the repository
-git clone [https://github.com/gbrlcustodio/pipefy-mcp-server.git](https://github.com/gbrlcustodio/pipefy-mcp-server.git)
+git clone https://github.com/gbrlcustodio/pipefy-mcp-server.git
 cd pipefy-mcp-server
 
 # Sync dependencies
@@ -106,7 +105,7 @@ npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server
 If you are contributing and need to update the Pipefy GraphQL definitions:
 
 ```bash
-uv run gql-cli [https://app.pipefy.com/graphql](https://app.pipefy.com/graphql) --print-schema --schema-download --headers 'Authorization: Bearer <AUTH_TOKEN>' > tests/services/pipefy/schema.graphql
+uv run gql-cli https://app.pipefy.com/graphql --print-schema --schema-download --headers 'Authorization: Bearer <AUTH_TOKEN>' > tests/services/pipefy/schema.graphql
 ```
 
 ## Contributing

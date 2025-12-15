@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 def main():
     """Main entry point for the pipefy-mcp-server script defined in pyproject.toml"""
 
-    logger.info("Starting Supabase MCP server")
+    logger.info("Starting Pipefy MCP server")
 
     run_server()
 

@@ -24,6 +24,13 @@ class PipefyClient:
                         id
                         name
                     }
+                    start_form_fields {
+                        id
+                        label
+                        required
+                        type
+                        options
+                    }
                 }
             }
             """
@@ -50,6 +57,22 @@ class PipefyClient:
         )
 
         async with self.client as session:
+            # Convert fields dict to array format if needed
+            if isinstance(fields, dict):
+                # If fields is a dict, convert to array format
+                fields_array = []
+                for key, value in fields.items():
+                    fields_array.append({"field_id": key, "field_value": value, "generated_by_ai": True})
+                fields = fields_array
+            elif isinstance(fields, list):
+                # If fields is already a list, ensure generated_by_ai is set
+                for field in fields:
+                    if isinstance(field, dict) and "generated_by_ai" not in field:
+                        field["generated_by_ai"] = True
+            else:
+                # If it's not a list, wrap it
+                fields = [fields] if fields else []
+            
             variables = {"pipe_id": pipe_id, "fields": fields}
             result = await session.execute(query, variable_values=variables)
 
@@ -96,6 +119,10 @@ class PipefyClient:
                         node {
                             id
                             title
+                            current_phase {
+                                id
+                                name
+                            }
                         }
                     }
                 }
@@ -134,6 +161,62 @@ class PipefyClient:
             result = await session.execute(query, variable_values=variables)
 
         return result
+
+    async def get_start_form_fields(self, pipe_id: int, required_only: bool = False) -> dict:
+        """Get the start form fields of a pipe.
+
+        Args:
+            pipe_id: The ID of the pipe
+            required_only: If True, returns only required fields. Default: False
+
+        Returns:
+            dict: A dictionary containing the list of start form fields with their properties
+        """
+        query = gql(
+            """
+            query ($pipe_id: ID!) {
+                pipe(id: $pipe_id) {
+                    start_form_fields {
+                        id
+                        label
+                        type
+                        required
+                        editable
+                        options
+                        description
+                        help
+                    }
+                }
+            }
+            """
+        )
+
+        async with self.client as session:
+            variables = {"pipe_id": pipe_id}
+            result = await session.execute(query, variable_values=variables)
+
+        # Extract fields from result
+        fields = result.get("pipe", {}).get("start_form_fields", [])
+
+        # Handle empty start form (no fields configured at all)
+        if not fields:
+            return {
+                "message": "This pipe has no start form fields configured.",
+                "start_form_fields": []
+            }
+
+        # Filter for required fields only if requested
+        if required_only:
+            fields = [field for field in fields if field.get("required")]
+            
+            # Handle case where no required fields exist after filtering
+            if not fields:
+                return {
+                    "message": "This pipe has no required fields in the start form.",
+                    "start_form_fields": []
+                }
+
+        return {"start_form_fields": fields}
 
     def _create_client(self, schema: str | None):
         transport = HTTPXAsyncTransport(

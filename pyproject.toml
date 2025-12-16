@@ -8,6 +8,7 @@ dependencies = [
     "gql[httpx]>=3.5.2",
     "httpx-auth>=0.23.1",
     "mcp[cli]>=1.6.0",
+    "pydantic>=2.11.3",
     "pydantic-settings>=2.8.1",
 ]
 

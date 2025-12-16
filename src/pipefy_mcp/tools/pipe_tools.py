@@ -1,7 +1,9 @@
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.session import ServerSession
 
+from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.services.pipefy import PipefyClient
 
 
@@ -15,15 +17,33 @@ class PipeTools:
         client = PipefyClient()
 
         @mcp.tool()
-        async def create_card(pipe_id: int, fields: dict) -> dict:
+        async def create_card(pipe_id: int, ctx: Context[ServerSession, None]) -> dict:
             """Create a card in the pipe.
 
             Args:
                 pipe_id: The ID of the pipe where the card will be created
-                fields: A dict with field_id as keys and values
-                       Example: {"title": "Card Title"}
             """
-            return await client.create_card(pipe_id, fields)
+
+            expected_fields = await client.get_start_form_fields(pipe_id, False)
+            await ctx.debug(f"Expected fields for pipe {pipe_id}: {expected_fields}")
+
+            # Convert field definitions to a pydantic form model
+            expected_fields = expected_fields.get("start_form_fields", [])
+            DynamicFormModel = create_form_model(expected_fields)
+
+            await ctx.debug(
+                f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
+            )
+
+            result = await ctx.elicit(
+                message=(f"Creating a card in pipe {pipe_id}"),
+                schema=DynamicFormModel,
+            )
+
+            await ctx.debug(f"Elicited result: {result}")
+
+            # return await client.create_card(pipe_id, fields)
+            return {}
 
         @mcp.tool()
         async def get_card(card_id: int) -> dict:

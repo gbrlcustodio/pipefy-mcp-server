@@ -13,7 +13,7 @@ class PipefyClient:
         self.client = self._create_client(schema)
 
     async def get_pipe(self, pipe_id: int) -> dict:
-        """Get a pipe by its ID."""
+        """Get a pipe by its ID, including phases, labels, and start form fields."""
         query = gql(
             """
             query ($pipe_id: ID!) {
@@ -21,6 +21,10 @@ class PipefyClient:
                     id
                     name
                     phases {
+                        id
+                        name
+                    }
+                    labels {
                         id
                         name
                     }
@@ -251,13 +255,25 @@ class PipefyClient:
         Returns:
             dict: GraphQL response with updated card information
         """
-        use_incremental_mode = self._should_use_incremental_mode(values)
+        # If fields dict is provided, convert to values format for updateFieldsValues
+        # The updateCard mutation doesn't support custom field updates
+        if fields is not None:
+            fields_as_values = [
+                {"field_id": k, "value": v, "operation": "REPLACE"}
+                for k, v in fields.items()
+            ]
+            # Merge with existing values if any
+            if values:
+                values = values + fields_as_values
+            else:
+                values = fields_as_values
 
-        if use_incremental_mode:
+        # Use updateFieldsValues if we have values (including converted fields)
+        if values:
             return await self._execute_update_fields_values(card_id, values)
         else:
             return await self._execute_update_card(
-                card_id, title, assignee_ids, label_ids, due_date, fields
+                card_id, title, assignee_ids, label_ids, due_date
             )
 
     def _should_use_incremental_mode(self, values: list[dict] | None) -> bool:
@@ -275,9 +291,8 @@ class PipefyClient:
         assignee_ids: list[int] | None,
         label_ids: list[int] | None,
         due_date: str | None,
-        fields: dict | None,
     ) -> dict:
-        """Execute updateCard mutation (replacement mode)."""
+        """Execute updateCard mutation for card attributes (title, assignees, labels, due_date)."""
         mutation = gql(
             """
             mutation ($input: UpdateCardInput!) {
@@ -317,8 +332,6 @@ class PipefyClient:
             input_data["label_ids"] = label_ids
         if due_date is not None:
             input_data["due_date"] = due_date
-        if fields is not None:
-            input_data["fields_attributes"] = self._convert_fields_to_array(fields)
 
         async with self.client as session:
             variables = {"input": input_data}

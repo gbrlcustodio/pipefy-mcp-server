@@ -490,15 +490,16 @@ async def test_update_card_replacement_mode_with_title():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_card_replacement_mode_with_fields_dict():
-    """Test update_card converts fields dict to array format with generated_by_ai."""
+async def test_update_card_with_fields_dict_uses_update_fields_values():
+    """Test update_card with fields dict uses updateFieldsValues mutation."""
     card_id = 12345
     fields = {"field_1": "Value 1", "field_2": "Value 2"}
 
     mock_response = {
-        "updateCard": {
-            "card": {"id": "12345", "title": "Test Card"},
-            "clientMutationId": None,
+        "updateFieldsValues": {
+            "success": True,
+            "userErrors": [],
+            "updatedNode": {"id": "12345", "title": "Test Card"},
         }
     }
 
@@ -518,20 +519,17 @@ async def test_update_card_replacement_mode_with_fields_dict():
     call_args = mock_session.execute.call_args
     variables = call_args[1]["variable_values"]
 
-    assert variables["input"]["id"] == card_id
-    assert "fields_attributes" in variables["input"]
-    fields_attrs = variables["input"]["fields_attributes"]
-    assert len(fields_attrs) == 2
-    assert {
-        "field_id": "field_1",
-        "field_value": "Value 1",
-        "generated_by_ai": True,
-    } in fields_attrs
-    assert {
-        "field_id": "field_2",
-        "field_value": "Value 2",
-        "generated_by_ai": True,
-    } in fields_attrs
+    # Fields are converted to updateFieldsValues format
+    assert variables["input"]["nodeId"] == card_id
+    assert "values" in variables["input"]
+    values = variables["input"]["values"]
+    assert len(values) == 2
+    # Check that fields were converted to camelCase format with generatedByAi
+    field_ids = [v["fieldId"] for v in values]
+    assert "field_1" in field_ids
+    assert "field_2" in field_ids
+    assert all(v["generatedByAi"] is True for v in values)
+    assert all(v["operation"] == "REPLACE" for v in values)
     assert result == mock_response
 
 

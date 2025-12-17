@@ -89,6 +89,9 @@ class PipeTools:
             **Field Mode** (uses `updateFieldsValues` mutation):
             For updating custom fields via `fields` dict or `values` list.
 
+            If both `fields` and `values` are empty or omitted, only card attributes
+            (title, assignees, labels, due_date) will be updated.
+
             Args:
                 card_id: The ID of the card to update (required)
                 title: New title for the card

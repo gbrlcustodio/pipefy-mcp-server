@@ -692,56 +692,20 @@ async def test_update_card_incremental_mode_value_format_conversion():
 
 
 @pytest.mark.unit
-def test_should_use_incremental_mode_with_add():
-    """Test _should_use_incremental_mode returns True for ADD operation."""
+def test_convert_values_to_camel_case_missing_field_id():
+    """Test _convert_values_to_camel_case raises ValueError when field_id is missing."""
     client = PipefyClient.__new__(PipefyClient)
 
-    values = [{"field_id": "test", "value": "x", "operation": "ADD"}]
-    assert client._should_use_incremental_mode(values) is True
+    values = [{"value": "test"}]  # Missing field_id
+    with pytest.raises(ValueError, match="missing required 'field_id' key"):
+        client._convert_values_to_camel_case(values)
 
 
 @pytest.mark.unit
-def test_should_use_incremental_mode_with_remove():
-    """Test _should_use_incremental_mode returns True for REMOVE operation."""
+def test_convert_values_to_camel_case_missing_value():
+    """Test _convert_values_to_camel_case raises ValueError when value is missing."""
     client = PipefyClient.__new__(PipefyClient)
 
-    values = [{"field_id": "test", "value": "x", "operation": "REMOVE"}]
-    assert client._should_use_incremental_mode(values) is True
-
-
-@pytest.mark.unit
-def test_should_use_incremental_mode_with_replace_only():
-    """Test _should_use_incremental_mode returns False for REPLACE only."""
-    client = PipefyClient.__new__(PipefyClient)
-
-    values = [{"field_id": "test", "value": "x", "operation": "REPLACE"}]
-    assert client._should_use_incremental_mode(values) is False
-
-
-@pytest.mark.unit
-def test_should_use_incremental_mode_with_no_operation():
-    """Test _should_use_incremental_mode returns False when no operation specified."""
-    client = PipefyClient.__new__(PipefyClient)
-
-    values = [{"field_id": "test", "value": "x"}]
-    assert client._should_use_incremental_mode(values) is False
-
-
-@pytest.mark.unit
-def test_should_use_incremental_mode_with_none():
-    """Test _should_use_incremental_mode returns False for None values."""
-    client = PipefyClient.__new__(PipefyClient)
-
-    assert client._should_use_incremental_mode(None) is False
-
-
-@pytest.mark.unit
-def test_should_use_incremental_mode_case_insensitive():
-    """Test _should_use_incremental_mode handles case insensitive operations."""
-    client = PipefyClient.__new__(PipefyClient)
-
-    values_lower = [{"field_id": "test", "value": "x", "operation": "add"}]
-    assert client._should_use_incremental_mode(values_lower) is True
-
-    values_mixed = [{"field_id": "test", "value": "x", "operation": "Remove"}]
-    assert client._should_use_incremental_mode(values_mixed) is True
+    values = [{"field_id": "test"}]  # Missing value
+    with pytest.raises(ValueError, match="missing required 'value' key"):
+        client._convert_values_to_camel_case(values)

@@ -1,3 +1,5 @@
+from typing import Any
+
 from gql import Client, gql
 from gql.transport.httpx import HTTPXAsyncTransport
 from httpx_auth import OAuth2ClientCredentials
@@ -173,13 +175,15 @@ class PipefyClient:
 
         return result
 
-    async def update_card_field(self, card_id: int, field_id: str, new_value) -> dict:
+    async def update_card_field(
+        self, card_id: int, field_id: str, new_value: Any
+    ) -> dict:
         """Update a single field of a card.
 
         Args:
             card_id: The ID of the card containing the field to update
             field_id: The ID of the field to update
-            new_value: The new value for the field
+            new_value: The new value for the field (string, number, list, etc.)
 
         Returns:
             dict: GraphQL response with success status and updated card information
@@ -231,23 +235,23 @@ class PipefyClient:
     ) -> dict:
         """Update a card's fields and attributes with intelligent mutation selection.
 
-        This method automatically chooses between replacement and incremental update modes
-        based on the parameters provided.
+        This method automatically chooses between two modes based on parameters:
 
-        **Replacement Mode** (uses `updateCard` mutation):
-        Use for simple updates like changing title, replacing all assignees, or updating custom fields.
+        **Attribute Mode** (uses `updateCard` mutation):
+        For updating card attributes like title, assignees, labels, due_date.
 
-        **Incremental Mode** (uses `updateFieldsValues` mutation):
-        Use when you need to add/remove values from multi-value fields without replacing the entire list.
+        **Field Mode** (uses `updateFieldsValues` mutation):
+        For updating custom fields via `fields` dict or `values` list.
 
         Args:
             card_id: The ID of the card to update
-            title: Optional new title for the card (replacement mode)
+            title: Optional new title for the card
             assignee_ids: Optional list of user IDs to assign (replaces existing)
             label_ids: Optional list of label IDs to associate (replaces existing)
             due_date: Optional new due date (ISO 8601 format)
-            fields: Optional dict of custom field updates with field_id as keys
-            values: Optional list of field update objects for incremental operations:
+            fields: Optional dict of custom field updates (uses updateFieldsValues)
+                    Example: {"field_1": "Value 1", "field_2": "Value 2"}
+            values: Optional list of field update objects for advanced operations:
                     - field_id (str): The field ID to update
                     - value (any): The value(s) to add/remove/replace
                     - operation (str, optional): "ADD", "REMOVE", or "REPLACE" (default)
@@ -275,14 +279,6 @@ class PipefyClient:
             return await self._execute_update_card(
                 card_id, title, assignee_ids, label_ids, due_date
             )
-
-    def _should_use_incremental_mode(self, values: list[dict] | None) -> bool:
-        """Check if any value has ADD or REMOVE operation."""
-        if not values:
-            return False
-        return any(
-            v.get("operation", "REPLACE").upper() in ("ADD", "REMOVE") for v in values
-        )
 
     async def _execute_update_card(
         self,
@@ -388,24 +384,35 @@ class PipefyClient:
 
         return result
 
-    def _convert_fields_to_array(self, fields: dict) -> list[dict]:
-        """Convert fields dict to array format with generated_by_ai flag."""
-        return [
-            {"field_id": key, "field_value": value, "generated_by_ai": True}
-            for key, value in fields.items()
-        ]
-
     def _convert_values_to_camel_case(self, values: list[dict]) -> list[dict]:
-        """Convert values to camelCase format for updateFieldsValues mutation."""
-        return [
-            {
-                "fieldId": v["field_id"],
-                "value": v["value"],
-                "operation": v.get("operation", "REPLACE").upper(),
-                "generatedByAi": True,
-            }
-            for v in values
-        ]
+        """Convert values to camelCase format for updateFieldsValues mutation.
+
+        Args:
+            values: List of dicts with field_id, value, and optional operation keys
+
+        Returns:
+            list[dict]: Formatted values for GraphQL mutation
+
+        Raises:
+            ValueError: If any value is missing required 'field_id' or 'value' keys
+        """
+        formatted = []
+        for i, v in enumerate(values):
+            if "field_id" not in v:
+                raise ValueError(
+                    f"Value at index {i} is missing required 'field_id' key"
+                )
+            if "value" not in v:
+                raise ValueError(f"Value at index {i} is missing required 'value' key")
+            formatted.append(
+                {
+                    "fieldId": v["field_id"],
+                    "value": v["value"],
+                    "operation": v.get("operation", "REPLACE").upper(),
+                    "generatedByAi": True,
+                }
+            )
+        return formatted
 
     async def get_start_form_fields(
         self, pipe_id: int, required_only: bool = False

@@ -1,3 +1,5 @@
+from typing import Any
+
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.services.pipefy import PipefyClient
@@ -48,7 +50,9 @@ class PipeTools:
             return await client.move_card_to_phase(card_id, destination_phase_id)
 
         @mcp.tool()
-        async def update_card_field(card_id: int, field_id: str, new_value) -> dict:
+        async def update_card_field(
+            card_id: int, field_id: str, new_value: Any
+        ) -> dict:
             """Update a single field of a card.
 
             Use this tool for simple, single-field updates. The entire field value
@@ -57,7 +61,7 @@ class PipeTools:
             Args:
                 card_id: The ID of the card containing the field to update
                 field_id: The ID (slug) of the field to update
-                new_value: The new value for the field (replaces existing value)
+                new_value: The new value for the field (string, number, list, etc.)
 
             Returns:
                 dict: GraphQL response with success status and updated card information
@@ -77,28 +81,23 @@ class PipeTools:
         ) -> dict:
             """Update a card's fields and attributes with intelligent mutation selection.
 
-            This tool automatically chooses between replacement and incremental update
-            modes based on the parameters provided.
+            This tool automatically chooses between two modes based on parameters:
 
-            **Replacement Mode** (default):
-            Updates fields/attributes by replacing existing values. Use for:
-            - Changing the card title
-            - Replacing all assignees or labels
-            - Updating custom fields
+            **Attribute Mode** (uses `updateCard` mutation):
+            For updating card attributes like title, assignees, labels, due_date.
 
-            **Incremental Mode** (when using `values` with ADD/REMOVE):
-            Updates multi-value fields incrementally without replacing the entire list.
-            Use for adding/removing specific assignees or labels.
+            **Field Mode** (uses `updateFieldsValues` mutation):
+            For updating custom fields via `fields` dict or `values` list.
 
             Args:
                 card_id: The ID of the card to update (required)
-                title: New title for the card (replacement mode)
-                assignee_ids: List of user IDs to assign - replaces existing (replacement mode)
-                label_ids: List of label IDs to associate - replaces existing (replacement mode)
-                due_date: New due date in ISO 8601 format (replacement mode)
-                fields: Dict of custom field updates with field_id as keys (replacement mode)
+                title: New title for the card
+                assignee_ids: List of user IDs to assign (replaces existing)
+                label_ids: List of label IDs to associate (replaces existing)
+                due_date: New due date in ISO 8601 format
+                fields: Dict of custom field updates (uses updateFieldsValues)
                         Example: {"field_1": "Value 1", "field_2": "Value 2"}
-                values: List of field update objects for incremental operations:
+                values: List of field update objects for advanced operations:
                         - field_id (str): The field ID to update
                         - value (any): The value(s) to add/remove/replace
                         - operation (str): "ADD", "REMOVE", or "REPLACE" (default)
@@ -106,11 +105,6 @@ class PipeTools:
                             {"field_id": "assignees", "value": [123], "operation": "ADD"},
                             {"field_id": "labels", "value": [456], "operation": "REMOVE"}
                         ]
-
-            **Mutation Selection:**
-            - If `values` contains ADD/REMOVE operations → uses incremental mode
-            - Otherwise → uses replacement mode
-            - If both provided, incremental mode takes precedence
 
             Returns:
                 dict: GraphQL response with updated card information including

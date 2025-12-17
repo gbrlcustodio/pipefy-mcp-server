@@ -491,9 +491,12 @@ async def test_update_card_replacement_mode_with_title():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_card_with_fields_dict_uses_update_fields_values():
-    """Test update_card with fields dict uses updateFieldsValues mutation."""
+    """Test update_card with field_updates list uses updateFieldsValues mutation."""
     card_id = 12345
-    fields = {"field_1": "Value 1", "field_2": "Value 2"}
+    field_updates = [
+        {"field_id": "field_1", "value": "Value 1"},
+        {"field_id": "field_2", "value": "Value 2"}
+    ]
 
     mock_response = {
         "updateFieldsValues": {
@@ -513,7 +516,7 @@ async def test_update_card_with_fields_dict_uses_update_fields_values():
     client = PipefyClient.__new__(PipefyClient)
     client.client = mock_client
 
-    result = await client.update_card(card_id, fields=fields)
+    result = await client.update_card(card_id, field_updates=field_updates)
 
     mock_session.execute.assert_called_once()
     call_args = mock_session.execute.call_args
@@ -613,7 +616,7 @@ async def test_update_card_incremental_mode_with_add_operation():
     client = PipefyClient.__new__(PipefyClient)
     client.client = mock_client
 
-    result = await client.update_card(card_id, values=values)
+    result = await client.update_card(card_id, field_updates=values)
 
     mock_session.execute.assert_called_once()
     call_args = mock_session.execute.call_args
@@ -649,7 +652,7 @@ async def test_update_card_incremental_mode_with_remove_operation():
     client = PipefyClient.__new__(PipefyClient)
     client.client = mock_client
 
-    result = await client.update_card(card_id, values=values)
+    result = await client.update_card(card_id, field_updates=values)
 
     mock_session.execute.assert_called_once()
     call_args = mock_session.execute.call_args
@@ -678,7 +681,7 @@ async def test_update_card_incremental_mode_value_format_conversion():
     client = PipefyClient.__new__(PipefyClient)
     client.client = mock_client
 
-    await client.update_card(card_id, values=values)
+    await client.update_card(card_id, field_updates=values)
 
     call_args = mock_session.execute.call_args
     variables = call_args[1]["variable_values"]

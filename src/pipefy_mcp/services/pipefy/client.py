@@ -230,8 +230,7 @@ class PipefyClient:
         assignee_ids: list[int] | None = None,
         label_ids: list[int] | None = None,
         due_date: str | None = None,
-        fields: dict | None = None,
-        values: list[dict] | None = None,
+        field_updates: list[dict] | None = None,
     ) -> dict:
         """Update a card's fields and attributes with intelligent mutation selection.
 
@@ -241,10 +240,9 @@ class PipefyClient:
         For updating card attributes like title, assignees, labels, due_date.
 
         **Field Mode** (uses `updateFieldsValues` mutation):
-        For updating custom fields via `fields` dict or `values` list.
+        For updating custom fields via field_updates list.
 
-        If both `fields` and `values` are empty or omitted, only card attributes
-        (title, assignees, labels, due_date) will be updated.
+        If field_updates is empty or omitted, only card attributes will be updated.
 
         Args:
             card_id: The ID of the card to update
@@ -252,32 +250,32 @@ class PipefyClient:
             assignee_ids: Optional list of user IDs to assign (replaces existing)
             label_ids: Optional list of label IDs to associate (replaces existing)
             due_date: Optional new due date (ISO 8601 format)
-            fields: Optional dict of custom field updates (uses updateFieldsValues)
-                    Example: {"field_1": "Value 1", "field_2": "Value 2"}
-            values: Optional list of field update objects for advanced operations:
+            field_updates: Optional list of field update objects:
                     - field_id (str): The field ID to update
-                    - value (any): The value(s) to add/remove/replace
+                    - value (any): The value(s) to set
                     - operation (str, optional): "ADD", "REMOVE", or "REPLACE" (default)
 
         Returns:
             dict: GraphQL response with updated card information
-        """
-        # If fields dict is provided, convert to values format for updateFieldsValues
-        # The updateCard mutation doesn't support custom field updates
-        if fields is not None:
-            fields_as_values = [
-                {"field_id": k, "value": v, "operation": "REPLACE"}
-                for k, v in fields.items()
-            ]
-            # Merge with existing values if any
-            if values:
-                values = values + fields_as_values
-            else:
-                values = fields_as_values
 
-        # Use updateFieldsValues if we have values (including converted fields)
-        if values:
-            return await self._execute_update_fields_values(card_id, values)
+        Examples:
+            # Update only card attributes
+            await client.update_card(card_id=123, title="New Title")
+
+            # Update custom fields with REPLACE operation (default)
+            await client.update_card(card_id=123, field_updates=[
+                {"field_id": "status", "value": "In Progress"},
+                {"field_id": "priority", "value": "High"}
+            ])
+
+            # Update custom fields with ADD operation
+            await client.update_card(card_id=123, field_updates=[
+                {"field_id": "tags", "value": "urgent", "operation": "ADD"}
+            ])
+        """
+        # Use updateFieldsValues if we have field updates
+        if field_updates:
+            return await self._execute_update_fields_values(card_id, field_updates)
         else:
             return await self._execute_update_card(
                 card_id, title, assignee_ids, label_ids, due_date

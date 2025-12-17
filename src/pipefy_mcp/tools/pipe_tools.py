@@ -76,8 +76,7 @@ class PipeTools:
             assignee_ids: list[int] | None = None,
             label_ids: list[int] | None = None,
             due_date: str | None = None,
-            fields: dict | None = None,
-            values: list[dict] | None = None,
+            field_updates: list[dict] | None = None,
         ) -> dict:
             """Update a card's fields and attributes with intelligent mutation selection.
 
@@ -87,10 +86,9 @@ class PipeTools:
             For updating card attributes like title, assignees, labels, due_date.
 
             **Field Mode** (uses `updateFieldsValues` mutation):
-            For updating custom fields via `fields` dict or `values` list.
+            For updating custom fields via field_updates list.
 
-            If both `fields` and `values` are empty or omitted, only card attributes
-            (title, assignees, labels, due_date) will be updated.
+            If field_updates is empty or omitted, only card attributes will be updated.
 
             Args:
                 card_id: The ID of the card to update (required)
@@ -98,20 +96,29 @@ class PipeTools:
                 assignee_ids: List of user IDs to assign (replaces existing)
                 label_ids: List of label IDs to associate (replaces existing)
                 due_date: New due date in ISO 8601 format
-                fields: Dict of custom field updates (uses updateFieldsValues)
-                        Example: {"field_1": "Value 1", "field_2": "Value 2"}
-                values: List of field update objects for advanced operations:
+                field_updates: List of field update objects:
                         - field_id (str): The field ID to update
-                        - value (any): The value(s) to add/remove/replace
-                        - operation (str): "ADD", "REMOVE", or "REPLACE" (default)
-                        Example: [
-                            {"field_id": "assignees", "value": [123], "operation": "ADD"},
-                            {"field_id": "labels", "value": [456], "operation": "REMOVE"}
-                        ]
+                        - value (any): The value(s) to set
+                        - operation (str, optional): "ADD", "REMOVE", or "REPLACE" (default)
 
             Returns:
                 dict: GraphQL response with updated card information including
                       phase, assignees, labels, fields, and timestamps
+
+            Examples:
+                # Update only card attributes
+                update_card(card_id=123, title="New Title")
+
+                # Update custom fields with REPLACE operation (default)
+                update_card(card_id=123, field_updates=[
+                    {"field_id": "status", "value": "In Progress"},
+                    {"field_id": "priority", "value": "High"}
+                ])
+
+                # Update custom fields with ADD operation
+                update_card(card_id=123, field_updates=[
+                    {"field_id": "tags", "value": "urgent", "operation": "ADD"}
+                ])
             """
             return await client.update_card(
                 card_id=card_id,
@@ -119,8 +126,7 @@ class PipeTools:
                 assignee_ids=assignee_ids,
                 label_ids=label_ids,
                 due_date=due_date,
-                fields=fields,
-                values=values,
+                field_updates=field_updates,
             )
 
         @mcp.tool()

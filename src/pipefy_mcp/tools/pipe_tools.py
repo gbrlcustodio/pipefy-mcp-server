@@ -1,3 +1,5 @@
+from typing import Any
+
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.services.pipefy import PipefyClient
@@ -15,7 +17,7 @@ class PipeTools:
         @mcp.tool()
         async def create_card(pipe_id: int, fields: dict) -> dict:
             """Create a card in the pipe.
-            
+
             Args:
                 pipe_id: The ID of the pipe where the card will be created
                 fields: A dict with field_id as keys and values
@@ -48,7 +50,89 @@ class PipeTools:
             return await client.move_card_to_phase(card_id, destination_phase_id)
 
         @mcp.tool()
-        async def get_start_form_fields(pipe_id: int, required_only: bool = False) -> dict:
+        async def update_card_field(
+            card_id: int, field_id: str, new_value: Any
+        ) -> dict:
+            """Update a single field of a card.
+
+            Use this tool for simple, single-field updates. The entire field value
+            will be replaced with the new value provided.
+
+            Args:
+                card_id: The ID of the card containing the field to update
+                field_id: The ID (slug) of the field to update
+                new_value: The new value for the field (string, number, list, etc.)
+
+            Returns:
+                dict: GraphQL response with success status and updated card information
+                      including the card's id, title, fields, and updated_at timestamp
+            """
+            return await client.update_card_field(card_id, field_id, new_value)
+
+        @mcp.tool()
+        async def update_card(
+            card_id: int,
+            title: str | None = None,
+            assignee_ids: list[int] | None = None,
+            label_ids: list[int] | None = None,
+            due_date: str | None = None,
+            field_updates: list[dict] | None = None,
+        ) -> dict:
+            """Update a card's fields and attributes with intelligent mutation selection.
+
+            This tool automatically chooses between two modes based on parameters:
+
+            **Attribute Mode** (uses `updateCard` mutation):
+            For updating card attributes like title, assignees, labels, due_date.
+
+            **Field Mode** (uses `updateFieldsValues` mutation):
+            For updating custom fields via field_updates list.
+
+            If field_updates is empty or omitted, only card attributes will be updated.
+
+            Args:
+                card_id: The ID of the card to update (required)
+                title: New title for the card
+                assignee_ids: List of user IDs to assign (replaces existing)
+                label_ids: List of label IDs to associate (replaces existing)
+                due_date: New due date in ISO 8601 format
+                field_updates: List of field update objects:
+                        - field_id (str): The field ID to update
+                        - value (any): The value(s) to set
+                        - operation (str, optional): "ADD", "REMOVE", or "REPLACE" (default)
+
+            Returns:
+                dict: GraphQL response with updated card information including
+                      phase, assignees, labels, fields, and timestamps
+
+            Examples:
+                # Update only card attributes
+                update_card(card_id=123, title="New Title")
+
+                # Update custom fields with REPLACE operation (default)
+                update_card(card_id=123, field_updates=[
+                    {"field_id": "status", "value": "In Progress"},
+                    {"field_id": "priority", "value": "High"}
+                ])
+
+                # Update custom fields with ADD operation
+                update_card(card_id=123, field_updates=[
+                    {"field_id": "tags", "value": "urgent", "operation": "ADD"}
+                ])
+            """
+            return await client.update_card(
+                card_id=card_id,
+                title=title,
+                assignee_ids=assignee_ids,
+                label_ids=label_ids,
+                due_date=due_date,
+                field_updates=field_updates,
+            )
+
+        @mcp.tool()
+        async def get_start_form_fields(
+            pipe_id: int, required_only: bool = False
+        ) -> dict:
             """Get the start form fields of a pipe.
 
             Use this tool to understand which fields need to be filled when creating

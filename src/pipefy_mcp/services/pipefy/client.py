@@ -1,3 +1,5 @@
+from typing import Any
+
 from gql import Client, gql
 from gql.transport.httpx import HTTPXAsyncTransport
 from httpx_auth import OAuth2ClientCredentials
@@ -13,7 +15,7 @@ class PipefyClient:
         self.client = self._create_client(schema)
 
     async def get_pipe(self, pipe_id: int) -> dict:
-        """Get a pipe by its ID."""
+        """Get a pipe by its ID, including phases, labels, and start form fields."""
         query = gql(
             """
             query ($pipe_id: ID!) {
@@ -21,6 +23,10 @@ class PipefyClient:
                     id
                     name
                     phases {
+                        id
+                        name
+                    }
+                    labels {
                         id
                         name
                     }
@@ -62,7 +68,9 @@ class PipefyClient:
                 # If fields is a dict, convert to array format
                 fields_array = []
                 for key, value in fields.items():
-                    fields_array.append({"field_id": key, "field_value": value, "generated_by_ai": True})
+                    fields_array.append(
+                        {"field_id": key, "field_value": value, "generated_by_ai": True}
+                    )
                 fields = fields_array
             elif isinstance(fields, list):
                 # If fields is already a list, ensure generated_by_ai is set
@@ -72,7 +80,7 @@ class PipefyClient:
             else:
                 # If it's not a list, wrap it
                 fields = [fields] if fields else []
-            
+
             variables = {"pipe_id": pipe_id, "fields": fields}
             result = await session.execute(query, variable_values=variables)
 
@@ -157,12 +165,259 @@ class PipefyClient:
         )
 
         async with self.client as session:
-            variables = {"input": {"card_id": card_id, "destination_phase_id": destination_phase_id}}
+            variables = {
+                "input": {
+                    "card_id": card_id,
+                    "destination_phase_id": destination_phase_id,
+                }
+            }
             result = await session.execute(query, variable_values=variables)
 
         return result
 
-    async def get_start_form_fields(self, pipe_id: int, required_only: bool = False) -> dict:
+    async def update_card_field(
+        self, card_id: int, field_id: str, new_value: Any
+    ) -> dict:
+        """Update a single field of a card.
+
+        Args:
+            card_id: The ID of the card containing the field to update
+            field_id: The ID of the field to update
+            new_value: The new value for the field (string, number, list, etc.)
+
+        Returns:
+            dict: GraphQL response with success status and updated card information
+        """
+        mutation = gql(
+            """
+            mutation ($input: UpdateCardFieldInput!) {
+                updateCardField(input: $input) {
+                    card {
+                        id
+                        title
+                        fields {
+                            field {
+                                id
+                                label
+                            }
+                            value
+                        }
+                        updated_at
+                    }
+                    success
+                    clientMutationId
+                }
+            }
+            """
+        )
+
+        async with self.client as session:
+            variables = {
+                "input": {
+                    "card_id": card_id,
+                    "field_id": field_id,
+                    "new_value": new_value,
+                }
+            }
+            result = await session.execute(mutation, variable_values=variables)
+
+        return result
+
+    async def update_card(
+        self,
+        card_id: int,
+        title: str | None = None,
+        assignee_ids: list[int] | None = None,
+        label_ids: list[int] | None = None,
+        due_date: str | None = None,
+        field_updates: list[dict] | None = None,
+    ) -> dict:
+        """Update a card's fields and attributes with intelligent mutation selection.
+
+        This method automatically chooses between two modes based on parameters:
+
+        **Attribute Mode** (uses `updateCard` mutation):
+        For updating card attributes like title, assignees, labels, due_date.
+
+        **Field Mode** (uses `updateFieldsValues` mutation):
+        For updating custom fields via field_updates list.
+
+        If field_updates is empty or omitted, only card attributes will be updated.
+
+        Args:
+            card_id: The ID of the card to update
+            title: Optional new title for the card
+            assignee_ids: Optional list of user IDs to assign (replaces existing)
+            label_ids: Optional list of label IDs to associate (replaces existing)
+            due_date: Optional new due date (ISO 8601 format)
+            field_updates: Optional list of field update objects:
+                    - field_id (str): The field ID to update
+                    - value (any): The value(s) to set
+                    - operation (str, optional): "ADD", "REMOVE", or "REPLACE" (default)
+
+        Returns:
+            dict: GraphQL response with updated card information
+
+        Examples:
+            # Update only card attributes
+            await client.update_card(card_id=123, title="New Title")
+
+            # Update custom fields with REPLACE operation (default)
+            await client.update_card(card_id=123, field_updates=[
+                {"field_id": "status", "value": "In Progress"},
+                {"field_id": "priority", "value": "High"}
+            ])
+
+            # Update custom fields with ADD operation
+            await client.update_card(card_id=123, field_updates=[
+                {"field_id": "tags", "value": "urgent", "operation": "ADD"}
+            ])
+        """
+        # Use updateFieldsValues if we have field updates
+        if field_updates:
+            return await self._execute_update_fields_values(card_id, field_updates)
+        else:
+            return await self._execute_update_card(
+                card_id, title, assignee_ids, label_ids, due_date
+            )
+
+    async def _execute_update_card(
+        self,
+        card_id: int,
+        title: str | None,
+        assignee_ids: list[int] | None,
+        label_ids: list[int] | None,
+        due_date: str | None,
+    ) -> dict:
+        """Execute updateCard mutation for card attributes (title, assignees, labels, due_date)."""
+        mutation = gql(
+            """
+            mutation ($input: UpdateCardInput!) {
+                updateCard(input: $input) {
+                    card {
+                        id
+                        title
+                        current_phase {
+                            id
+                            name
+                        }
+                        assignees {
+                            id
+                            name
+                            email
+                        }
+                        labels {
+                            id
+                            name
+                        }
+                        due_date
+                        updated_at
+                    }
+                    clientMutationId
+                }
+            }
+            """
+        )
+
+        input_data: dict = {"id": card_id}
+
+        if title is not None:
+            input_data["title"] = title
+        if assignee_ids is not None:
+            input_data["assignee_ids"] = assignee_ids
+        if label_ids is not None:
+            input_data["label_ids"] = label_ids
+        if due_date is not None:
+            input_data["due_date"] = due_date
+
+        async with self.client as session:
+            variables = {"input": input_data}
+            result = await session.execute(mutation, variable_values=variables)
+
+        return result
+
+    async def _execute_update_fields_values(
+        self,
+        card_id: int,
+        values: list[dict],
+    ) -> dict:
+        """Execute updateFieldsValues mutation (incremental mode)."""
+        mutation = gql(
+            """
+            mutation ($input: UpdateFieldsValuesInput!) {
+                updateFieldsValues(input: $input) {
+                    success
+                    userErrors {
+                        field
+                        message
+                    }
+                    updatedNode {
+                        ... on Card {
+                            id
+                            title
+                            fields {
+                                name
+                                value
+                                filled_at
+                                updated_at
+                            }
+                            assignees {
+                                id
+                                name
+                            }
+                            labels {
+                                id
+                                name
+                            }
+                            updated_at
+                        }
+                    }
+                }
+            }
+            """
+        )
+
+        formatted_values = self._convert_values_to_camel_case(values)
+
+        async with self.client as session:
+            variables = {"input": {"nodeId": card_id, "values": formatted_values}}
+            result = await session.execute(mutation, variable_values=variables)
+
+        return result
+
+    def _convert_values_to_camel_case(self, values: list[dict]) -> list[dict]:
+        """Convert values to camelCase format for updateFieldsValues mutation.
+
+        Args:
+            values: List of dicts with field_id, value, and optional operation keys
+
+        Returns:
+            list[dict]: Formatted values for GraphQL mutation
+
+        Raises:
+            ValueError: If any value is missing required 'field_id' or 'value' keys
+        """
+        formatted = []
+        for i, v in enumerate(values):
+            if "field_id" not in v:
+                raise ValueError(
+                    f"Value at index {i} is missing required 'field_id' key"
+                )
+            if "value" not in v:
+                raise ValueError(f"Value at index {i} is missing required 'value' key")
+            formatted.append(
+                {
+                    "fieldId": v["field_id"],
+                    "value": v["value"],
+                    "operation": v.get("operation", "REPLACE").upper(),
+                    "generatedByAi": True,
+                }
+            )
+        return formatted
+
+    async def get_start_form_fields(
+        self, pipe_id: int, required_only: bool = False
+    ) -> dict:
         """Get the start form fields of a pipe.
 
         Args:
@@ -202,18 +457,18 @@ class PipefyClient:
         if not fields:
             return {
                 "message": "This pipe has no start form fields configured.",
-                "start_form_fields": []
+                "start_form_fields": [],
             }
 
         # Filter for required fields only if requested
         if required_only:
             fields = [field for field in fields if field.get("required")]
-            
+
             # Handle case where no required fields exist after filtering
             if not fields:
                 return {
                     "message": "This pipe has no required fields in the start form.",
-                    "start_form_fields": []
+                    "start_form_fields": [],
                 }
 
         return {"start_form_fields": fields}

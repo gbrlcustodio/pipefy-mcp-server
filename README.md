@@ -42,6 +42,14 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude 3.5 
 * **`get_start_form_fields`**: Inspect the schema of a pipe's start form. Use this to let the Agent know which fields are required *before* it tries to create a card.
 * **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
 * **`move_card_to_phase`**: Move a card to a different phase (e.g., move a task to "Code Review" after pushing a PR).
+* **`update_card_field`**: Update a single field of an existing card via `updateCardField` (simple, full replacement of that field's value).
+* **`update_card`**: Update card attributes (title, assignees, labels, due date) and/or multiple custom fields using `updateCard` and `updateFieldsValues`.
+
+### Card update tools: when to use each
+
+- **Use `update_card_field`** when you only need to change *one* field on a card (for example, updating a status, a text field, or a single label value) and you are fine replacing the entire value for that field in one shot.
+- **Use `update_card` with `fields` (dict)** when you want to update **one or more custom fields at once** by ID, replacing their values (the server converts this to `updateFieldsValues` with `REPLACE` under the hood).
+- **Use `update_card` with `values` (list)** when you need **more control** over how values are changed (for example, `ADD` or `REMOVE` entries from multi-value fields like assignees or labels, while keeping other existing values intact).
 
 ## Getting Started
 

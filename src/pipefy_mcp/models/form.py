@@ -34,11 +34,18 @@ def create_form_model(field_definitions: list) -> type[BaseModel]:
                 default=... if required else None,
                 title=field_def["label"],
                 description=field_def.get("description", ""),
-                json_schema_extra=lambda schema, opts=options: (
-                    schema.pop("default", None) if not required else None,
-                    schema.update({"enum": [opt for opt in opts]}) if opts else None,
-                ),
+                json_schema_extra=_create_json_schema_extra(options, required),
             ),
         )
 
     return create_model("DynamicFormModel", **fields)
+
+
+def _create_json_schema_extra(options: list[str], required: bool):
+    def schema_updater(schema: dict) -> None:
+        if not required:
+            schema.pop("default", None)
+        if options:
+            schema["enum"] = options
+
+    return schema_updater

@@ -1,5 +1,6 @@
 from typing import Self
 
+from pipefy_mcp.services.pipefy.client import PipefyClient
 from pipefy_mcp.settings import Settings
 
 
@@ -7,6 +8,7 @@ class ServicesContainer:
     """Container for all services"""
 
     _instance: Self | None = None
+    pipefy_client: PipefyClient | None = None
 
     @classmethod
     def get_instance(cls) -> Self:
@@ -20,7 +22,7 @@ class ServicesContainer:
         pass
 
     def initialize_services(self, settings: Settings) -> None:
-        pass
+        self.pipefy_client = PipefyClient()
 
     def shutdown(self) -> None:
         pass

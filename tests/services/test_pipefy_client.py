@@ -712,3 +712,100 @@ def test_convert_values_to_camel_case_missing_value():
     values = [{"field_id": "test"}]  # Missing value
     with pytest.raises(ValueError, match="missing required 'value' key"):
         client._convert_values_to_camel_case(values)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_pipe():
+    """Test get_pipe queries for a pipe by ID."""
+    pipe_id = 123
+    mock_response = {"pipe": {"id": "123", "name": "Test Pipe"}}
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_response)
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    client = PipefyClient.__new__(PipefyClient)
+    client.client = mock_client
+
+    result = await client.get_pipe(pipe_id)
+
+    mock_session.execute.assert_called_once()
+    call_args = mock_session.execute.call_args
+    variables = call_args[1]["variable_values"]
+    assert variables["pipe_id"] == pipe_id
+    assert result == mock_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_card():
+    """Test get_card queries for a card by ID."""
+    card_id = 456
+    mock_response = {"card": {"id": "456", "title": "Test Card"}}
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_response)
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    client = PipefyClient.__new__(PipefyClient)
+    client.client = mock_client
+
+    result = await client.get_card(card_id)
+
+    mock_session.execute.assert_called_once()
+    call_args = mock_session.execute.call_args
+    variables = call_args[1]["variable_values"]
+    assert variables["card_id"] == card_id
+    assert result == mock_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards():
+    """Test get_cards queries for cards in a pipe."""
+    pipe_id = 123
+    search_params = {"assignee_ids": [1]}
+    mock_response = {"cards": {"edges": []}}
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_response)
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    client = PipefyClient.__new__(PipefyClient)
+    client.client = mock_client
+
+    result = await client.get_cards(pipe_id, search_params)
+
+    mock_session.execute.assert_called_once()
+    call_args = mock_session.execute.call_args
+    variables = call_args[1]["variable_values"]
+    assert variables["pipe_id"] == pipe_id
+    assert variables["search"] == search_params
+    assert result == mock_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_move_card_to_phase():
+    """Test move_card_to_phase moves a card to a new phase."""
+    card_id = 456
+    destination_phase_id = 789
+    mock_response = {"moveCardToPhase": {"clientMutationId": None}}
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_response)
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    client = PipefyClient.__new__(PipefyClient)
+    client.client = mock_client
+
+    result = await client.move_card_to_phase(card_id, destination_phase_id)
+
+    mock_session.execute.assert_called_once()
+    call_args = mock_session.execute.call_args
+    variables = call_args[1]["variable_values"]
+    assert variables["input"]["card_id"] == card_id
+    assert variables["input"]["destination_phase_id"] == destination_phase_id
+    assert result == mock_response
+

@@ -27,11 +27,11 @@ def test_form_model_creation():
 
     expected_fields = {
         "name": (str, ...),
-        "description": (str | None, None),
+        "description": (str, None),
         "priority": (str, ...),
-        "due_date": (str | None, None),
+        "due_date": (str, None),
         "amount": (float, ...),
-        "is_active": (bool | None, None),
+        "is_active": (bool, None),
     }
 
     FormModel = create_form_model(field_definitions)
@@ -48,96 +48,48 @@ def test_form_model_creation():
 
 
 @pytest.mark.unit
-def test_form_model_creation_optional_fields():
-    """Test dynamic Pydantic model creation with all optional fields."""
+def test_json_schema_with_choices():
+    """Test json schema generation with select field choices."""
     field_definitions = [
-        {"id": "nickname", "type": "short_text", "label": "Nickname", "required": False}
+        {
+            "id": "status",
+            "type": "select",
+            "label": "Status",
+            "required": True,
+            "options": ["Open", "In Progress", "Closed"],
+        }
     ]
 
+    expected_fields = {
+        "status": {"enum": ["Open", "In Progress", "Closed"]},
+    }
+
     FormModel = create_form_model(field_definitions)
-    assert FormModel(nickname=None)
+    schema = FormModel.model_json_schema()
+
+    for field_name, expected_schema in expected_fields.items():
+        field_schema = schema["properties"][field_name]
+        for key, value in expected_schema.items():
+            assert field_schema[key] == value
 
 
 @pytest.mark.unit
-def test_form_model_creation_with_multiple_fields():
+def test_json_schema_with_optional_fields():
+    """Test json schema generation with optional fields."""
     field_definitions = [
-        {
-            "id": "name",
-            "label": "Name",
-            "type": "short_text",
-            "required": False,
-            "editable": True,
-            "options": [],
-            "description": "",
-            "help": "",
-        },
-        {
-            "id": "email",
-            "label": "Email",
-            "type": "email",
-            "required": False,
-            "editable": True,
-            "options": [],
-            "description": "",
-            "help": "",
-        },
-        {
-            "id": "phone",
-            "label": "Phone",
-            "type": "phone",
-            "required": False,
-            "editable": True,
-            "options": [],
-            "description": "",
-            "help": "",
-        },
-        {
-            "id": "company",
-            "label": "Company",
-            "type": "short_text",
-            "required": True,
-            "editable": True,
-            "options": [],
-            "description": "",
-            "help": "",
-        },
-        {
-            "id": "company_industry",
-            "label": "Company industry",
-            "type": "select",
-            "required": False,
-            "editable": True,
-            "options": [
-                "Auditing",
-                "Automotive",
-                "Consulting",
-                "Education",
-                "Energy & Utilities",
-                "Financial Services",
-                "Health",
-                "Manufaturing",
-                "Marketing, Media & Entertainment",
-                "Public Sector",
-                "Retail",
-                "Software",
-                "Technology",
-                "Telecom",
-                "Others",
-            ],
-            "description": "",
-            "help": "",
-        },
-        {
-            "id": "observations",
-            "label": "Observations",
-            "type": "long_text",
-            "required": False,
-            "editable": True,
-            "options": [],
-            "description": "",
-            "help": "",
-        },
+        {"id": "comments", "type": "long_text", "label": "Comments", "required": False}
     ]
 
+    expected_fields = {
+        "comments": {"type": "string"},
+    }
+
     FormModel = create_form_model(field_definitions)
-    print(FormModel.model_fields)
+    schema = FormModel.model_json_schema()
+
+    for field_name, expected_schema in expected_fields.items():
+        field_schema = schema["properties"][field_name]
+        for key, value in expected_schema.items():
+            assert field_schema[key] == value
+
+        assert field_name not in schema.get("required", [])

@@ -42,8 +42,10 @@ class PipeTools:
 
             await ctx.debug(f"Elicited result: {result}")
 
-            # return await client.create_card(pipe_id, fields)
-            return {}
+            if result.action == "accept":
+                return await client.create_card(pipe_id, result.data.model_dump())
+
+            return {"error": "Card creation cancelled by user."}
 
         @mcp.tool()
         async def get_card(card_id: int) -> dict:

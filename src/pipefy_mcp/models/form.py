@@ -27,25 +27,17 @@ def create_form_model(field_definitions: list) -> type[BaseModel]:
         options = field_def.get("options", [])
 
         pydantic_type = FIELD_TYPES.get(field_type, str)
-        # if not required:
-        #     pydantic_type = pydantic_type | None  # Make field optional
-
-        if options and field_type == "select":
-            # For select fields, we can restrict to the provided options
-            json_schema_extra = {
-                "oneOf": [{"const": opt, "title": opt} for opt in options]
-            }
-        else:
-            json_schema_extra = None
 
         fields[field_id] = (
             pydantic_type,
             Field(
-                # default=... if required else None,
-                default=... if required else "",
+                default=... if required else None,
                 title=field_def["label"],
                 description=field_def.get("description", ""),
-                json_schema_extra=json_schema_extra,
+                json_schema_extra=lambda schema, opts=options: (
+                    schema.pop("default", None) if not required else None,
+                    schema.update({"enum": [opt for opt in opts]}) if opts else None,
+                ),
             ),
         )
 

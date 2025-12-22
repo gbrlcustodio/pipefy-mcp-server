@@ -3,8 +3,8 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 
+from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.models.form import create_form_model
-from pipefy_mcp.services.pipefy import PipefyClient
 
 
 class PipeTools:
@@ -14,7 +14,8 @@ class PipeTools:
     def register(mcp: FastMCP):
         """Register the tools in the MCP server"""
 
-        client = PipefyClient()
+        container = ServicesContainer.get_instance()
+        client = container.pipefy_client
 
         @mcp.tool()
         async def create_card(pipe_id: int, ctx: Context[ServerSession, None]) -> dict:

@@ -83,6 +83,7 @@ class PipeTools:
         @mcp.tool(
             annotations=ToolAnnotations(
                 destructiveHint=False,
+                idempotentHint=True,
             ),
         )
         async def move_card_to_phase(card_id: int, destination_phase_id: int) -> dict:
@@ -92,7 +93,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(
-                idempotentHint=True,
+                idempotentHint=False,
             ),
         )
         async def update_card_field(card_id: int, field_id: str, new_value: Any) -> dict:

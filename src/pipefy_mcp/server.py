@@ -1,4 +1,5 @@
 import logging
+import textwrap
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -36,17 +37,17 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP, None]:
         # Force kill the entire process - doesn't care about async contexts
         import os
 
-        os._exit(0)  # Use 0 for sucessful termination
+        os._exit(0)  # Use 0 for successful termination
 
 
-PIPEFY_INSTRUCTIONS = """
-You are connected to a Pipefy MCP server for managing Kanban-style workflow processes.
+PIPEFY_INSTRUCTIONS = textwrap.dedent("""
+    You are connected to a Pipefy MCP server for managing Kanban-style workflow processes.
 
-## Workflow Guidelines
+    ## Workflow Guidelines
 
-1. **Before creating cards**: Always call `get_start_form_fields(pipe_id)` first
-   to understand the required fields and their types.
-"""
+    1. **Before creating cards**: Always call `get_start_form_fields(pipe_id)` first
+       to understand the required fields and their types.
+    """).strip()
 
 # Create an MCP server
 mcp = FastMCP("pipefy", instructions=PIPEFY_INSTRUCTIONS, lifespan=lifespan)

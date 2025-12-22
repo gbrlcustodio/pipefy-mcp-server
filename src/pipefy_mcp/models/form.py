@@ -33,7 +33,7 @@ def create_form_model(field_definitions: list) -> type[BaseModel]:
         options = field_def.get("options", [])
 
         pydantic_type = FIELD_TYPES.get(field_type, str)
-        format = FIELD_FORMATS.get(field_type, None)
+        schema_format = FIELD_FORMATS.get(field_type, None)
 
         fields[field_id] = (
             pydantic_type,
@@ -41,7 +41,9 @@ def create_form_model(field_definitions: list) -> type[BaseModel]:
                 default=... if required else None,
                 title=field_def["label"],
                 description=field_def.get("description", ""),
-                json_schema_extra=_create_json_schema_extra(options, required, format),
+                json_schema_extra=_create_json_schema_extra(
+                    options, required, schema_format
+                ),
             ),
         )
 

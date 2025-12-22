@@ -9,6 +9,12 @@ FIELD_TYPES = {
     "checkbox": bool,
 }
 
+FIELD_FORMATS = {
+    "date": "date",
+    "datetime": "date-time",
+    "email": "email",
+}
+
 
 def create_form_model(field_definitions: list) -> type[BaseModel]:
     """Dynamically generate a Pydantic model for form validation.
@@ -27,6 +33,7 @@ def create_form_model(field_definitions: list) -> type[BaseModel]:
         options = field_def.get("options", [])
 
         pydantic_type = FIELD_TYPES.get(field_type, str)
+        format = FIELD_FORMATS.get(field_type, None)
 
         fields[field_id] = (
             pydantic_type,
@@ -34,18 +41,20 @@ def create_form_model(field_definitions: list) -> type[BaseModel]:
                 default=... if required else None,
                 title=field_def["label"],
                 description=field_def.get("description", ""),
-                json_schema_extra=_create_json_schema_extra(options, required),
+                json_schema_extra=_create_json_schema_extra(options, required, format),
             ),
         )
 
     return create_model("DynamicFormModel", **fields)
 
 
-def _create_json_schema_extra(options: list[str], required: bool):
+def _create_json_schema_extra(options: list[str], required: bool, format: str | None):
     def schema_updater(schema: dict) -> None:
         if not required:
             schema.pop("default", None)
         if options:
             schema["enum"] = options
+        if format:
+            schema["format"] = format
 
     return schema_updater

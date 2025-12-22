@@ -19,7 +19,6 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(
-                destructiveHint=False,
                 idempotentHint=False,
             ),
         )
@@ -93,7 +92,6 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(
-                destructiveHint=False,
                 idempotentHint=True,
             ),
         )
@@ -116,7 +114,6 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(
-                destructiveHint=False,
                 idempotentHint=False,
             ),
         )

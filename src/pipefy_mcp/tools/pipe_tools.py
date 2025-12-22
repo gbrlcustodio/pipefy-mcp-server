@@ -2,6 +2,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
+from mcp.types import ToolAnnotations
 
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.models.form import create_form_model
@@ -17,7 +18,11 @@ class PipeTools:
         container = ServicesContainer.get_instance()
         client = container.pipefy_client
 
-        @mcp.tool()
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                idempotentHint=False,
+            ),
+        )
         async def create_card(pipe_id: int, ctx: Context[ServerSession, None]) -> dict:
             """Create a card in the pipe.
 
@@ -32,9 +37,7 @@ class PipeTools:
             expected_fields = expected_fields.get("start_form_fields", [])
             DynamicFormModel = create_form_model(expected_fields)
 
-            await ctx.debug(
-                f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
-            )
+            await ctx.debug(f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}")
 
             result = await ctx.elicit(
                 message=(f"Creating a card in pipe {pipe_id}"),
@@ -48,34 +51,53 @@ class PipeTools:
 
             return {"error": "Card creation cancelled by user."}
 
-        @mcp.tool()
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
         async def get_card(card_id: int) -> dict:
             """Get a card by its ID."""
 
             return await client.get_card(card_id)
 
-        @mcp.tool()
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
         async def get_cards(pipe_id: int, search: dict) -> dict:
             """Get all cards in the pipe."""
 
             return await client.get_cards(pipe_id, search)
 
-        @mcp.tool()
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
         async def get_pipe(pipe_id: int) -> dict:
             """Get a pipe by its ID."""
 
             return await client.get_pipe(pipe_id)
 
-        @mcp.tool()
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                destructiveHint=False,
+                idempotentHint=True,
+            ),
+        )
         async def move_card_to_phase(card_id: int, destination_phase_id: int) -> dict:
             """Move a card to a specific phase."""
 
             return await client.move_card_to_phase(card_id, destination_phase_id)
 
-        @mcp.tool()
-        async def update_card_field(
-            card_id: int, field_id: str, new_value: Any
-        ) -> dict:
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                idempotentHint=False,
+            ),
+        )
+        async def update_card_field(card_id: int, field_id: str, new_value: Any) -> dict:
             """Update a single field of a card.
 
             Use this tool for simple, single-field updates. The entire field value
@@ -92,7 +114,11 @@ class PipeTools:
             """
             return await client.update_card_field(card_id, field_id, new_value)
 
-        @mcp.tool()
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                idempotentHint=False,
+            ),
+        )
         async def update_card(
             card_id: int,
             title: str | None = None,
@@ -152,10 +178,12 @@ class PipeTools:
                 field_updates=field_updates,
             )
 
-        @mcp.tool()
-        async def get_start_form_fields(
-            pipe_id: int, required_only: bool = False
-        ) -> dict:
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def get_start_form_fields(pipe_id: int, required_only: bool = False) -> dict:
             """Get the start form fields of a pipe.
 
             Use this tool to understand which fields need to be filled when creating

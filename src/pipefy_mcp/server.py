@@ -39,8 +39,17 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP, None]:
         os._exit(0)  # Use 0 for sucessful termination
 
 
+PIPEFY_INSTRUCTIONS = """
+You are connected to a Pipefy MCP server for managing Kanban-style workflow processes.
+
+## Workflow Guidelines
+
+1. **Before creating cards**: Always call `get_start_form_fields(pipe_id)` first
+   to understand the required fields and their types.
+"""
+
 # Create an MCP server
-mcp = FastMCP("pipefy", lifespan=lifespan)
+mcp = FastMCP("pipefy", instructions=PIPEFY_INSTRUCTIONS, lifespan=lifespan)
 
 
 def run_server():

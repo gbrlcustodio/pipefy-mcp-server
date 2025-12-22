@@ -93,3 +93,26 @@ def test_json_schema_with_optional_fields():
             assert field_schema[key] == value
 
         assert field_name not in schema.get("required", [])
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "field_type, expected_format",
+    [
+        ("date", "date"),
+        ("datetime", "date-time"),
+        ("email", "email"),
+    ],
+)
+def test_json_schema_with_formats(field_type, expected_format):
+    """Test json schema generation with different field formats."""
+    field_id = f"{field_type}_field"
+    field_definitions = [
+        {"id": field_id, "type": field_type, "label": "Test Field", "required": False}
+    ]
+
+    FormModel = create_form_model(field_definitions)
+    schema = FormModel.model_json_schema()
+    field_schema = schema["properties"][field_id]
+
+    assert field_schema["format"] == expected_format

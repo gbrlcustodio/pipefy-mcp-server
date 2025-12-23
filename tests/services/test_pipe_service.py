@@ -117,8 +117,22 @@ def mock_organizations() -> list[dict]:
         },
         {
             "id": "2",
-            "name": "Dao Org",
-            "pipes": [{"id": "201", "name": "Sales Pipe"}],
+            "name": "Organização Brasil",
+            "pipes": [
+                {"id": "201", "name": "Vendas São Paulo"},
+                {"id": "202", "name": "Gestão de Clientes"},
+                {"id": "203", "name": "Produção"},
+                {"id": "204", "name": "Contratação"},
+            ],
+        },
+        {
+            "id": "3",
+            "name": "Tech Org",
+            "pipes": [
+                {"id": "301", "name": "Bug Tracker [v2.0]"},
+                {"id": "302", "name": "Sales & Marketing"},
+                {"id": "303", "name": "R&D / Innovation"},
+            ],
         },
     ]
 
@@ -157,13 +171,6 @@ async def test_search_pipes_without_name_returns_all(mock_organizations: list[di
             id="case_insensitive_match",
         ),
         pytest.param(
-            "Sales",
-            ["2"],
-            [["Sales Pipe"]],
-            [[90.0]],
-            id="partial_match",
-        ),
-        pytest.param(
             "drico",
             ["1"],
             [["Drico pipe"]],
@@ -172,10 +179,73 @@ async def test_search_pipes_without_name_returns_all(mock_organizations: list[di
         ),
         pytest.param(
             "pipe",
-            ["1", "2"],
-            [["Custaudio pipe", "Drico pipe"], ["Sales Pipe"]],
-            [[90.0, 90.0], [77.1]],
-            id="matches_across_multiple_orgs",
+            ["1"],
+            [["Custaudio pipe", "Drico pipe"]],
+            [[90.0, 90.0]],
+            id="matches_across_multiple_pipes",
+        ),
+        pytest.param(
+            "Vendas",
+            ["2"],
+            [["Vendas São Paulo"]],
+            [[90.0]],
+            id="accented_substring_match",
+        ),
+        pytest.param(
+            "São Paulo",
+            ["2"],
+            [["Vendas São Paulo"]],
+            [[90.0]],
+            id="accented_exact_substring",
+        ),
+        pytest.param(
+            "Sao Paulo",
+            ["2"],
+            [["Vendas São Paulo"]],
+            [[85.5]],
+            id="unaccented_matches_accented",
+        ),
+        pytest.param(
+            "Gestao",
+            ["2"],
+            [["Gestão de Clientes"]],
+            [[75.0]],
+            id="unaccented_matches_tilde",
+        ),
+        pytest.param(
+            "Contratação",
+            ["2"],
+            [["Contratação"]],
+            [[100.0]],
+            id="exact_accented_match",
+        ),
+        pytest.param(
+            "Producao",
+            ["2"],
+            [["Produção"]],
+            [[75.0]],
+            id="unaccented_matches_cedilla",
+        ),
+        pytest.param(
+            "Bug Tracker",
+            ["3"],
+            [["Bug Tracker [v2.0]"]],
+            [[90.0]],
+            id="special_chars_brackets",
+        ),
+        pytest.param(
+            "Sales & Marketing",
+            ["3"],
+            [["Sales & Marketing"]],
+            [[100.0]],
+            id="special_chars_ampersand",
+        ),
+        pytest.param(
+            "R&D",
+            ["3"],
+            [["R&D / Innovation"]],
+            [[90.0]],
+            id="special_chars_ampersand_slash",
         ),
     ],
 )
@@ -212,6 +282,53 @@ async def test_search_pipes_no_matches_returns_empty(mock_organizations: list[di
     mock_client = _create_mock_gql_client(mock_session)
 
     service = PipeService(client=mock_client)
-    result = await service.search_pipes(pipe_name="Dão")
+    result = await service.search_pipes(pipe_name="XyzNonExistent123")
 
     assert result == {"organizations": []}, "Expected empty organizations when no matches"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_empty_organizations():
+    """Test search_pipes handles organizations with no pipes."""
+    mock_orgs = [
+        {
+            "id": "1",
+            "name": "Empty Org",
+            "pipes": [],
+        },
+        {
+            "id": "2",
+            "name": "Org with pipes",
+            "pipes": [{"id": "201", "name": "Test Pipe"}],
+        },
+    ]
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"organizations": mock_orgs})
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = PipeService(client=mock_client)
+
+    result = await service.search_pipes()
+    assert len(result["organizations"]) == 2
+
+    result = await service.search_pipes(pipe_name="Test")
+    assert len(result["organizations"]) == 1
+    assert result["organizations"][0]["id"] == "2"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_all_organizations_empty():
+    """Test search_pipes handles API response with no organizations."""
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"organizations": []})
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = PipeService(client=mock_client)
+
+    result = await service.search_pipes()
+    assert result == {"organizations": []}
+
+    result = await service.search_pipes(pipe_name="anything")
+    assert result == {"organizations": []}

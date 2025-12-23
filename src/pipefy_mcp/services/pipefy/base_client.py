@@ -24,7 +24,15 @@ class BasePipefyClient:
         Args:
             schema: Optional schema string to pass to `gql.Client`.
             client: Optional pre-built `gql.Client` to reuse (preferred for shared wiring).
+
+        Raises:
+            ValueError: If both schema and client are provided, as schema would be ignored.
         """
+        if schema is not None and client is not None:
+            raise ValueError(
+                "Cannot specify both 'schema' and 'client'. "
+                "When reusing an existing client, its schema is already configured."
+            )
 
         self.client: Client = client or self._create_client(schema)
 

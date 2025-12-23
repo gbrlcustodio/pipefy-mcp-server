@@ -50,3 +50,12 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged():
     assert exc.value is expected_error
 
 
+@pytest.mark.unit
+def test_base_pipefy_client_raises_when_both_schema_and_client_provided():
+    """Test that providing both schema and client raises ValueError."""
+    mock_client = MagicMock(spec=Client)
+
+    with pytest.raises(ValueError) as exc:
+        BasePipefyClient(schema="some_schema", client=mock_client)
+
+    assert "Cannot specify both 'schema' and 'client'" in str(exc.value)

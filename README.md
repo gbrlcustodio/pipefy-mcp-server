@@ -41,6 +41,7 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude 3.5 
 * **`get_pipe`**: Get details about a pipe's structure.
 * **`get_start_form_fields`**: Inspect the schema of a pipe's start form. Use this to let the Agent know which fields are required *before* it tries to create a card.
 * **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
+    * **Elicitation Spec**: If the Agent does not provide the required fields to create a card, the server will ask for them. The agent will then ask the user for the required information.
 * **`move_card_to_phase`**: Move a card to a different phase (e.g., move a task to "Code Review" after pushing a PR).
 * **`update_card_field`**: Update a single field of an existing card via `updateCardField` (simple, full replacement of that field's value).
 * **`update_card`**: Update card attributes (title, assignees, labels, due date) and/or multiple custom fields using `updateCard` and `updateFieldsValues`.

@@ -51,6 +51,7 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
         participant S as MCP Server
         participant P as Pipefy API
 
+        U->>A: "Create a new card in pipe 123"
         A->>S: create_card(pipe_id=123)
         S->>P: Get required fields for pipe 123
         S-->>A: Elicit(fields=["title", "due_date"])

@@ -140,36 +140,41 @@ async def test_search_pipes_without_name_returns_all(mock_organizations: list[di
 @pytest.mark.unit
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("search_term", "expected_org_ids", "expected_pipe_names"),
+    ("search_term", "expected_org_ids", "expected_pipe_names", "expected_pipe_scores"),
     [
         pytest.param(
             "Custaudio",
             ["1"],
             [["Custaudio", "Custaudio pipe"]],
+            [[100.0, 90.0]],
             id="exact_match_ranked_first",
         ),
         pytest.param(
             "custaudio",
             ["1"],
             [["Custaudio", "Custaudio pipe"]],
+            [[88.9, 80.0]],
             id="case_insensitive_match",
         ),
         pytest.param(
             "Sales",
             ["2"],
             [["Sales Pipe"]],
+            [[90.0]],
             id="partial_match",
         ),
         pytest.param(
             "drico",
             ["1"],
             [["Drico pipe"]],
+            [[72.0]],
             id="single_match_in_org",
         ),
         pytest.param(
             "pipe",
             ["1", "2"],
             [["Custaudio pipe", "Drico pipe"], ["Sales Pipe"]],
+            [[90.0, 90.0], [77.1]],
             id="matches_across_multiple_orgs",
         ),
     ],
@@ -179,6 +184,7 @@ async def test_search_pipes_fuzzy_matching(
     search_term: str,
     expected_org_ids: list[str],
     expected_pipe_names: list[list[str]],
+    expected_pipe_scores: list[list[float]],
 ):
     """Test search_pipes fuzzy matching filters and sorts correctly."""
     mock_session = AsyncMock()
@@ -193,6 +199,8 @@ async def test_search_pipes_fuzzy_matching(
         assert org["id"] == expected_org_ids[i]
         pipe_names = [p["name"] for p in org["pipes"]]
         assert pipe_names == expected_pipe_names[i]
+        scores = [p["match_score"] for p in org["pipes"]]
+        assert scores == expected_pipe_scores[i], f"Expected scores {expected_pipe_scores[i]}, got {scores}"
 
 
 @pytest.mark.unit

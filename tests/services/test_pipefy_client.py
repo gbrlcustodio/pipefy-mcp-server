@@ -3,12 +3,25 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from gql import Client
 
+from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
+from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.services.pipefy.utils.formatters import convert_values_to_camel_case
+
+
+def _make_facade_client(mock_client: MagicMock) -> PipefyClient:
+    client = PipefyClient.__new__(PipefyClient)
+    # Keep public attr for backward compatibility
+    client.client = mock_client
+    # Real services with injected client (so behavior stays identical)
+    client._pipe_service = PipeService(mock_client)
+    client._card_service = CardService(mock_client)
+    return client
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_with_dict_fields(mocker):
+async def test_create_card_with_dict_fields():
     """Test create_card converts dict fields to FieldValueInput array format."""
     pipe_id = 303181849
     fields_dict = {"title": "Teste-MCP", "description": "Test description"}
@@ -23,9 +36,7 @@ async def test_create_card_with_dict_fields(mocker):
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    # Create client instance and mock the _create_client method
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     # Execute create_card
     result = await client.create_card(pipe_id, fields_dict)
@@ -56,7 +67,7 @@ async def test_create_card_with_dict_fields(mocker):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_with_array_fields(mocker):
+async def test_create_card_with_array_fields():
     """Test create_card works with already formatted array fields."""
     pipe_id = 303181849
     fields_array = [
@@ -74,9 +85,7 @@ async def test_create_card_with_array_fields(mocker):
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    # Create client instance and mock the _create_client method
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     # Execute create_card
     result = await client.create_card(pipe_id, fields_array)
@@ -106,7 +115,7 @@ async def test_create_card_with_array_fields(mocker):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_with_empty_dict(mocker):
+async def test_create_card_with_empty_dict():
     """Test create_card handles empty dict fields."""
     pipe_id = 303181849
     fields_dict = {}
@@ -121,9 +130,7 @@ async def test_create_card_with_empty_dict(mocker):
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    # Create client instance and mock the _create_client method
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     # Execute create_card
     result = await client.create_card(pipe_id, fields_dict)
@@ -142,7 +149,7 @@ async def test_create_card_with_empty_dict(mocker):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_with_single_field(mocker):
+async def test_create_card_with_single_field():
     """Test create_card with a single field."""
     pipe_id = 303181849
     fields_dict = {"title": "Teste-MCP"}
@@ -157,9 +164,7 @@ async def test_create_card_with_single_field(mocker):
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    # Create client instance and mock the _create_client method
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     # Execute create_card
     result = await client.create_card(pipe_id, fields_dict)
@@ -224,9 +229,7 @@ async def test_get_start_form_fields_returns_all_fields():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    # Create client instance
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     # Execute get_start_form_fields
     result = await client.get_start_form_fields(pipe_id)
@@ -292,9 +295,7 @@ async def test_get_start_form_fields_required_only_filter():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    # Create client instance
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     # Execute get_start_form_fields with required_only=True
     result = await client.get_start_form_fields(pipe_id, required_only=True)
@@ -321,9 +322,7 @@ async def test_get_start_form_fields_empty_returns_friendly_message():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    # Create client instance
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     # Execute get_start_form_fields
     result = await client.get_start_form_fields(pipe_id)
@@ -373,9 +372,7 @@ async def test_get_start_form_fields_required_only_no_required_fields():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    # Create client instance
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     # Execute get_start_form_fields with required_only=True
     result = await client.get_start_form_fields(pipe_id, required_only=True)
@@ -425,8 +422,7 @@ async def test_update_card_field_success():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     result = await client.update_card_field(card_id, field_id, new_value)
 
@@ -474,8 +470,7 @@ async def test_update_card_replacement_mode_with_title():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     result = await client.update_card(card_id, title=new_title)
 
@@ -513,8 +508,7 @@ async def test_update_card_with_fields_dict_uses_update_fields_values():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     result = await client.update_card(card_id, field_updates=field_updates)
 
@@ -569,8 +563,7 @@ async def test_update_card_replacement_mode_with_assignees_and_labels():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     result = await client.update_card(
         card_id, assignee_ids=assignee_ids, label_ids=label_ids
@@ -613,8 +606,7 @@ async def test_update_card_incremental_mode_with_add_operation():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     result = await client.update_card(card_id, field_updates=values)
 
@@ -649,8 +641,7 @@ async def test_update_card_incremental_mode_with_remove_operation():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     result = await client.update_card(card_id, field_updates=values)
 
@@ -678,8 +669,7 @@ async def test_update_card_incremental_mode_value_format_conversion():
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    client = PipefyClient.__new__(PipefyClient)
-    client.client = mock_client
+    client = _make_facade_client(mock_client)
 
     await client.update_card(card_id, field_updates=values)
 
@@ -696,19 +686,157 @@ async def test_update_card_incremental_mode_value_format_conversion():
 
 @pytest.mark.unit
 def test_convert_values_to_camel_case_missing_field_id():
-    """Test _convert_values_to_camel_case raises ValueError when field_id is missing."""
-    client = PipefyClient.__new__(PipefyClient)
-
+    """Test convert_values_to_camel_case raises ValueError when field_id is missing."""
     values = [{"value": "test"}]  # Missing field_id
     with pytest.raises(ValueError, match="missing required 'field_id' key"):
-        client._convert_values_to_camel_case(values)
+        convert_values_to_camel_case(values)
 
 
 @pytest.mark.unit
 def test_convert_values_to_camel_case_missing_value():
-    """Test _convert_values_to_camel_case raises ValueError when value is missing."""
-    client = PipefyClient.__new__(PipefyClient)
-
+    """Test convert_values_to_camel_case raises ValueError when value is missing."""
     values = [{"field_id": "test"}]  # Missing value
     with pytest.raises(ValueError, match="missing required 'value' key"):
-        client._convert_values_to_camel_case(values)
+        convert_values_to_camel_case(values)
+
+
+# ============================================================================
+# Regression tests for remaining public API methods (lock compatibility)
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_public_import_path_exports_pipefy_client():
+    """Test public import path stays stable: from pipefy_mcp.services.pipefy import PipefyClient."""
+    from pipefy_mcp.services.pipefy import PipefyClient as PublicPipefyClient
+
+    assert PublicPipefyClient is PipefyClient
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_pipe_passes_pipe_id_variable():
+    """Test get_pipe passes pipe_id under variable_values unchanged."""
+    pipe_id = 303181849
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"pipe": {"id": str(pipe_id)}})
+
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    client = _make_facade_client(mock_client)
+
+    result = await client.get_pipe(pipe_id)
+
+    mock_session.execute.assert_called_once()
+    call_args = mock_session.execute.call_args
+    variables = call_args[1]["variable_values"]
+    assert variables == {"pipe_id": pipe_id}
+    assert result == {"pipe": {"id": str(pipe_id)}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_card_passes_card_id_variable():
+    """Test get_card passes card_id under variable_values unchanged."""
+    card_id = 12345
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"card": {"id": str(card_id)}})
+
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    client = _make_facade_client(mock_client)
+
+    result = await client.get_card(card_id)
+
+    mock_session.execute.assert_called_once()
+    call_args = mock_session.execute.call_args
+    variables = call_args[1]["variable_values"]
+    assert variables == {"card_id": card_id}
+    assert result == {"card": {"id": str(card_id)}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards_with_none_search_sends_empty_search_dict():
+    """Test get_cards sends an empty search object when search is None."""
+    pipe_id = 303181849
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"cards": {"edges": []}})
+
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    client = _make_facade_client(mock_client)
+
+    result = await client.get_cards(pipe_id, None)  # type: ignore[arg-type]
+
+    mock_session.execute.assert_called_once()
+    call_args = mock_session.execute.call_args
+    variables = call_args[1]["variable_values"]
+
+    assert variables["pipe_id"] == pipe_id
+    assert variables["search"] == {}
+    assert result == {"cards": {"edges": []}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards_with_search_dict_passes_search_as_is():
+    """Test get_cards passes search dict unchanged when provided."""
+    pipe_id = 303181849
+    search = {"title": "Test"}
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"cards": {"edges": []}})
+
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    client = _make_facade_client(mock_client)
+
+    result = await client.get_cards(pipe_id, search)  # type: ignore[arg-type]
+
+    mock_session.execute.assert_called_once()
+    call_args = mock_session.execute.call_args
+    variables = call_args[1]["variable_values"]
+
+    assert variables["pipe_id"] == pipe_id
+    assert variables["search"] == search
+    assert result == {"cards": {"edges": []}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_move_card_to_phase_variable_shape():
+    """Test move_card_to_phase sends input with card_id and destination_phase_id."""
+    card_id = 12345
+    destination_phase_id = 678
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"moveCardToPhase": {"clientMutationId": None}})
+
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    client = _make_facade_client(mock_client)
+
+    result = await client.move_card_to_phase(card_id, destination_phase_id)
+
+    mock_session.execute.assert_called_once()
+    call_args = mock_session.execute.call_args
+    variables = call_args[1]["variable_values"]
+
+    assert variables == {
+        "input": {"card_id": card_id, "destination_phase_id": destination_phase_id}
+    }
+    assert result == {"moveCardToPhase": {"clientMutationId": None}}

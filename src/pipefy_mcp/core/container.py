@@ -1,6 +1,6 @@
 from typing import Self
 
-from pipefy_mcp.services.pipefy.client import PipefyClient
+from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.settings import Settings
 
 

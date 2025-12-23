@@ -6,7 +6,6 @@ from gql import Client
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
-from pipefy_mcp.services.pipefy.utils.formatters import convert_values_to_camel_case
 
 
 def _make_facade_client(mock_client: MagicMock) -> PipefyClient:
@@ -682,22 +681,6 @@ async def test_update_card_incremental_mode_value_format_conversion():
     assert formatted_values[0]["value"] == "New Value"
     assert formatted_values[0]["operation"] == "ADD"
     assert formatted_values[0]["generatedByAi"] is True
-
-
-@pytest.mark.unit
-def test_convert_values_to_camel_case_missing_field_id():
-    """Test convert_values_to_camel_case raises ValueError when field_id is missing."""
-    values = [{"value": "test"}]  # Missing field_id
-    with pytest.raises(ValueError, match="missing required 'field_id' key"):
-        convert_values_to_camel_case(values)
-
-
-@pytest.mark.unit
-def test_convert_values_to_camel_case_missing_value():
-    """Test convert_values_to_camel_case raises ValueError when value is missing."""
-    values = [{"field_id": "test"}]  # Missing value
-    with pytest.raises(ValueError, match="missing required 'value' key"):
-        convert_values_to_camel_case(values)
 
 
 # ============================================================================

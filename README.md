@@ -42,7 +42,26 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
 * **`get_cards`**: List and search for cards in a specific pipe (allows the Agent to understand your backlog).
 * **`get_card`**: Retrieve full details of a specific card.
 * **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
-    * **Elicitation Spec**: If the Agent does not provide the required fields to create a card, the server will ask for them. The agent will then ask the user for the required information.
+    * **Elicitation Spec**: The server will always prompt the user for the required fields to create a card, as it currently does not support agent-provided field values.
+    
+    ```mermaid
+    sequenceDiagram
+        participant U as User
+        participant A as Agent
+        participant S as MCP Server
+        participant P as Pipefy API
+
+        A->>S: create_card(pipe_id=123)
+        S->>S: Get required fields for pipe 123
+        S-->>A: Elicit(fields=["title", "due_date"])
+        A-->>U: I need more information: Title, Due Date
+        U-->>A: "Fix bug in login", "2024-12-31"
+        A->>S: create_card(pipe_id=123, title="Fix bug in login", due_date="2024-12-31")
+        S->>P: mutation createCard(...)
+        P-->>S: {"data": {"createCard": ...}}
+        S-->>A: {"success": true, "card_id": 456}
+    ```
+
 * **`move_card_to_phase`**: Move a card to a different phase (e.g., move a task to "Code Review" after pushing a PR).
 * **`update_card_field`**: Update a single field of an existing card via `updateCardField` (simple, full replacement of that field's value).
 * **`update_card`**: Update card attributes (title, assignees, labels, due date) and/or multiple custom fields using `updateCard` and `updateFieldsValues`.

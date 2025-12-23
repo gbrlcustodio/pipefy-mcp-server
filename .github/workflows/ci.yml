@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # This is crucial for git diff to work correctly
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install uv
+      run: pip install uv
+    - name: Install dependencies
+      run: uv pip install .[dev]
+    - name: Get changed Python files
+      id: changed-python-files
+      run: |
+        CHANGED_FILES=$(git diff --name-only --diff-filter=AMCR ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep '\.py$' | tr '\n' ' ')
+        echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
+      shell: bash
+    - name: Lint with ruff on changed files
+      if: steps.changed-python-files.outputs.changed_files != ''
+      run: ruff check ${{ steps.changed-python-files.outputs.changed_files }}
+    - name: Check formatting with ruff on changed files
+      if: steps.changed-python-files.outputs.changed_files != ''
+      run: ruff format --check ${{ steps.changed-python-files.outputs.changed_files }}
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install uv
+      run: pip install uv
+    - name: Install dependencies
+      run: uv pip install .[dev]
+    - name: Run tests
+      run: pytest

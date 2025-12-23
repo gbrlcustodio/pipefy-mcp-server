@@ -219,6 +219,10 @@ class PipeTools:
             Use this tool to find a pipe's ID when you only know its name.
             Returns all pipes from all organizations, optionally filtered by name.
 
+            When filtering by name, uses fuzzy matching with a 70% similarity threshold.
+            Only pipes with a match score of 70 or higher are included in the results.
+            Results are sorted by match score (best matches first).
+
             Args:
                 pipe_name: Optional pipe name to search for (case-insensitive partial match).
                            If not provided, returns all available pipes.
@@ -232,7 +236,5 @@ class PipeTools:
                           - name: Pipe name
                           - description: Pipe description
                           - match_score: Fuzzy match score (0-100) when pipe_name is provided.
-                                        Higher scores indicate better matches. Only included
-                                        when filtering by name. Results are sorted by score.
             """
             return await client.search_pipes(pipe_name)

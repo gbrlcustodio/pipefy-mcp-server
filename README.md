@@ -112,9 +112,6 @@ uv run pytest
 
 # Run with coverage report
 uv run pytest --cov=src/pipefy_mcp/services/pipefy --cov-report=term-missing
-
-# Run smoke tests for refactor validation
-uv run python scripts/smoke_test_refactor.py
 ```
 
 ### Inspecting locally developed servers

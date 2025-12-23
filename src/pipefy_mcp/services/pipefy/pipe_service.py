@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from gql import Client
+from rapidfuzz import fuzz
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.queries.pipe_queries import (
     GET_PIPE_QUERY,
     GET_START_FORM_FIELDS_QUERY,
+    SEARCH_PIPES_QUERY,
 )
 
 
 class PipeService(BasePipefyClient):
     """Service for Pipe-related operations."""
+
+    _FUZZY_MATCH_THRESHOLD: ClassVar[int] = 70
 
     def __init__(self, client: Client) -> None:
         super().__init__(client=client)
@@ -20,9 +26,7 @@ class PipeService(BasePipefyClient):
         variables = {"pipe_id": pipe_id}
         return await self.execute_query(GET_PIPE_QUERY, variables)
 
-    async def get_start_form_fields(
-        self, pipe_id: int, required_only: bool = False
-    ) -> dict:
+    async def get_start_form_fields(self, pipe_id: int, required_only: bool = False) -> dict:
         """Get the start form fields of a pipe.
 
         Args:
@@ -58,3 +62,45 @@ class PipeService(BasePipefyClient):
                 }
 
         return {"start_form_fields": fields}
+
+    async def search_pipes(self, pipe_name: str | None = None) -> dict:
+        """Search for pipes across all organizations using fuzzy matching.
+
+        Args:
+            pipe_name: Optional pipe name to search for (fuzzy match).
+                       Supports partial matches.
+                       If not provided, returns all pipes.
+
+        Returns:
+            dict: A dictionary containing organizations with their pipes.
+                  If pipe_name is provided, only pipes matching the name are included,
+                  sorted by match score (best matches first).
+        """
+        result = await self.execute_query(SEARCH_PIPES_QUERY, {})
+
+        organizations = result.get("organizations", [])
+
+        if not pipe_name:
+            return {"organizations": organizations}
+
+        filtered_orgs = []
+
+        for org in organizations:
+            matching_pipes = []
+            for pipe in org.get("pipes", []):
+                pipe_display_name = pipe.get("name", "")
+                score = fuzz.WRatio(pipe_name, pipe_display_name, score_cutoff=self._FUZZY_MATCH_THRESHOLD)
+                if score:
+                    matching_pipes.append((score, pipe))
+
+            if matching_pipes:
+                matching_pipes.sort(key=lambda x: x[0], reverse=True)
+                filtered_orgs.append(
+                    {
+                        "id": org.get("id"),
+                        "name": org.get("name"),
+                        "pipes": [pipe for _, pipe in matching_pipes],
+                    }
+                )
+
+        return {"organizations": filtered_orgs}

@@ -46,3 +46,19 @@ GET_START_FORM_FIELDS_QUERY = gql(
     }
     """
 )
+
+SEARCH_PIPES_QUERY = gql(
+    """
+    {
+        organizations {
+            id
+            name
+            pipes {
+                id
+                name
+                description
+            }
+        }
+    }
+    """
+)

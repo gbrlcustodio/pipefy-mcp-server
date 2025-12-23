@@ -72,6 +72,7 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 def test_pipefy_client_injects_same_shared_client_instance_into_services():
     """Test PipefyClient creates one shared gql.Client and injects it into both services."""
     from unittest.mock import MagicMock, patch
+
     from gql import Client
 
     # Mock the BasePipefyClient._create_client to avoid OAuth dependencies

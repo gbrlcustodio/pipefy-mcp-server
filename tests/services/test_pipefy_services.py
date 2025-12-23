@@ -205,3 +205,22 @@ async def test_card_service_create_card_with_empty_dict_sends_empty_list():
     assert variables["pipe_id"] == pipe_id
     assert variables["fields"] == []  # empty dict should result in empty list
     assert result == {"createCard": {"card": {"id": "12345"}}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_card_service_update_card_with_due_date_includes_due_date_in_input():
+    """Test that update_card with due_date correctly passes it to GraphQL input."""
+    card_id = 12345
+    due_date = "2025-12-31"
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"updateCard": {"card": {"id": "12345"}}})
+    mock_client = _make_mock_client(mock_session)
+
+    service = CardService(client=mock_client)
+    result = await service.update_card(card_id, due_date=due_date)
+
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert variables == {"input": {"id": card_id, "due_date": due_date}}
+    assert result == {"updateCard": {"card": {"id": "12345"}}}

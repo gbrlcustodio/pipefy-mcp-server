@@ -2,58 +2,49 @@ name: CI
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
+    - name: Set up Python
+      uses: actions/setup-python@v6
       with:
-        fetch-depth: 0 # This is crucial for git diff to work correctly
-    - name: Setup uv
+        python-version-file: ".python-version"
+    - name: Set up uv
       uses: astral-sh/setup-uv@v7
       with:
-        python-version: '3.11'
-    - name: Cache uv dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-python-3.11-${{ hashFiles('**/uv.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-python-3.11-
+        enable-cache: true
     - name: Install dependencies
       run: uv sync --locked --all-extras --dev
     - name: Get changed Python files
-      id: changed-python-files
-      run: |
-        CHANGED_FILES=$(git diff --name-only --diff-filter=AMCR ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep '\.py$' | tr '\n' ' ')
-        echo "changed_files=$CHANGED_FILES" >> $GITHUB_OUTPUT
-      shell: bash
+      id: changed-files
+      uses: tj-actions/changed-files@v47
+      with:
+        files: |
+          **/*.py
+          *.py
     - name: Lint with ruff on changed files
-      if: steps.changed-python-files.outputs.changed_files != ''
-      run: ruff check ${{ steps.changed-python-files.outputs.changed_files }}
+      if: steps.changed-files.outputs.any_changed == 'true'
+      run: ruff check ${{ steps.changed-files.outputs.changed_files }}
     - name: Check formatting with ruff on changed files
-      if: steps.changed-python-files.outputs.changed_files != ''
-      run: ruff format --check ${{ steps.changed-python-files.outputs.changed_files }}
+      if: steps.changed-files.outputs.any_changed == 'true'
+      run: ruff format --check ${{ steps.changed-files.outputs.changed_files }}
 
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
-        python-version: '3.11'
-    - name: Setup uv
+        python-version-file: ".python-version"
+    - name: Set up uv
       uses: astral-sh/setup-uv@v7
-    - name: Cache uv dependencies
-      uses: actions/cache@v4
       with:
-        path: ~/.cache/uv
-        key: ${{ runner.os }}-python-3.11-${{ hashFiles('**/uv.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-python-3.11-
+        enable-cache: true
     - name: Install dependencies
       run: uv sync --locked --all-extras --dev
     - name: Run tests

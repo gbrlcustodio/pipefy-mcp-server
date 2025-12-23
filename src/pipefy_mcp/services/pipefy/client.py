@@ -24,18 +24,23 @@ class PipefyClient:
         self._card_service = CardService(self.client)
 
     async def get_pipe(self, pipe_id: int) -> dict:
+        """Get a pipe by ID, including phases, labels, and start form fields."""
         return await self._pipe_service.get_pipe(pipe_id)
 
     async def create_card(self, pipe_id: int, fields: dict) -> dict:
+        """Create a card in the specified pipe with the given fields."""
         return await self._card_service.create_card(pipe_id, fields)
 
     async def get_card(self, card_id: int) -> dict:
+        """Get a card by its ID."""
         return await self._card_service.get_card(card_id)
 
     async def get_cards(self, pipe_id: int, search: CardSearch) -> dict:
+        """Get all cards in the specified pipe with optional search filters."""
         return await self._card_service.get_cards(pipe_id, search)
 
     async def move_card_to_phase(self, card_id: int, destination_phase_id: int) -> dict:
+        """Move a card to a specific phase."""
         return await self._card_service.move_card_to_phase(
             card_id, destination_phase_id
         )
@@ -43,6 +48,7 @@ class PipefyClient:
     async def update_card_field(
         self, card_id: int, field_id: str, new_value: Any
     ) -> dict:
+        """Update a single field of a card."""
         return await self._card_service.update_card_field(card_id, field_id, new_value)
 
     async def update_card(
@@ -54,6 +60,7 @@ class PipefyClient:
         due_date: str | None = None,
         field_updates: list[dict] | None = None,
     ) -> dict:
+        """Update a card's attributes or fields with intelligent mutation selection."""
         return await self._card_service.update_card(
             card_id=card_id,
             title=title,
@@ -66,4 +73,5 @@ class PipefyClient:
     async def get_start_form_fields(
         self, pipe_id: int, required_only: bool = False
     ) -> dict:
+        """Get the start form fields of a pipe."""
         return await self._pipe_service.get_start_form_fields(pipe_id, required_only)

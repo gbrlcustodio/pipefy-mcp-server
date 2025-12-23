@@ -33,7 +33,10 @@ def convert_fields_to_array(fields: Any) -> list[dict[str, Any]]:
                     item = {**item, "generated_by_ai": True}
                 normalized.append(item)
             else:
-                # Preserve current behavior: allow non-dict items in the list.
+                # Legacy behavior: pass through non-dict items unchanged.
+                # This supports edge cases where callers may send raw values.
+                # Type ignore is intentional - the return type is list[dict] but
+                # we preserve any non-dict items for backward compatibility.
                 normalized.append(item)  # type: ignore[list-item]
         return normalized
 

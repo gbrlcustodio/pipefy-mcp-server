@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from gql import Client
 from gql.transport.httpx import HTTPXAsyncTransport
@@ -17,7 +17,7 @@ class BasePipefyClient:
     """
 
     def __init__(
-        self, schema: str | None = None, client: Optional[Client] = None
+        self, schema: str | None = None, client: Client | None = None
     ) -> None:
         """Create a base client.
 

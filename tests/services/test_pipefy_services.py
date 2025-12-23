@@ -187,3 +187,21 @@ async def test_card_service_update_card_field_mode_uses_update_fields_values_sha
     assert result == {"updateFieldsValues": {"success": True}}
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_card_service_create_card_with_empty_dict_sends_empty_list():
+    """Test that create_card with empty dict sends fields as empty list to GraphQL."""
+    pipe_id = 303181849
+    fields = {}  # empty dict
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"createCard": {"card": {"id": "12345"}}})
+    mock_client = _make_mock_client(mock_session)
+
+    service = CardService(client=mock_client)
+    result = await service.create_card(pipe_id, fields)
+
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert variables["pipe_id"] == pipe_id
+    assert variables["fields"] == []  # empty dict should result in empty list
+    assert result == {"createCard": {"card": {"id": "12345"}}}

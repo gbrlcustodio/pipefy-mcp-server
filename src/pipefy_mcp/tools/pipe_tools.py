@@ -231,5 +231,8 @@ class PipeTools:
                           - id: Pipe ID (use this for other pipe operations)
                           - name: Pipe name
                           - description: Pipe description
+                          - match_score: Fuzzy match score (0-100) when pipe_name is provided.
+                                        Higher scores indicate better matches. Only included
+                                        when filtering by name. Results are sorted by score.
             """
             return await client.search_pipes(pipe_name)

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
 from gql import Client
 from rapidfuzz import fuzz
 
@@ -15,8 +13,6 @@ from pipefy_mcp.services.pipefy.queries.pipe_queries import (
 
 class PipeService(BasePipefyClient):
     """Service for Pipe-related operations."""
-
-    _FUZZY_MATCH_THRESHOLD: ClassVar[int] = 70
 
     def __init__(self, client: Client) -> None:
         super().__init__(client=client)
@@ -63,7 +59,7 @@ class PipeService(BasePipefyClient):
 
         return {"start_form_fields": fields}
 
-    async def search_pipes(self, pipe_name: str | None = None) -> dict:
+    async def search_pipes(self, pipe_name: str | None = None, match_threshold: int = 70) -> dict:
         """Search for pipes across all organizations using fuzzy matching.
 
         Args:
@@ -89,7 +85,7 @@ class PipeService(BasePipefyClient):
             matching_pipes = []
             for pipe in org.get("pipes", []):
                 pipe_display_name = pipe.get("name", "")
-                score = fuzz.WRatio(pipe_name, pipe_display_name, score_cutoff=self._FUZZY_MATCH_THRESHOLD)
+                score = fuzz.WRatio(pipe_name, pipe_display_name, score_cutoff=match_threshold)
                 if score:
                     matching_pipes.append((score, pipe))
 
@@ -99,7 +95,7 @@ class PipeService(BasePipefyClient):
                     {
                         "id": org.get("id"),
                         "name": org.get("name"),
-                        "pipes": [pipe for _, pipe in matching_pipes],
+                        "pipes": [{**pipe, "match_score": round(score, 1)} for score, pipe in matching_pipes],
                     }
                 )
 

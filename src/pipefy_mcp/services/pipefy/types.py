@@ -1,12 +1,15 @@
-from typing import List, TypedDict
+from __future__ import annotations
+
+from typing import TypedDict
 
 
 class CardSearch(TypedDict, total=False):
     """Type definition for card search parameters"""
 
-    assignee_ids: List[str]
-    ignore_ids: List[str]
-    label_ids: List[str]
+    assignee_ids: list[str]
+    ignore_ids: list[str]
+    label_ids: list[str]
     title: str
     inbox_emails_read: bool
     include_done: bool
+

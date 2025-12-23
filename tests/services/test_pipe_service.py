@@ -100,3 +100,110 @@ async def test_get_start_form_fields_required_only_returns_only_required():
 
     expected_fields = [{"id": "title", "required": True}, {"id": "due_date", "required": True}]
     assert result == {"start_form_fields": expected_fields}, "Expected only required fields"
+
+
+@pytest.fixture
+def mock_organizations() -> list[dict]:
+    """Shared mock data for search_pipes tests."""
+    return [
+        {
+            "id": "1",
+            "name": "Custaudio Org",
+            "pipes": [
+                {"id": "47", "name": "Custaudio pipe"},
+                {"id": "100", "name": "Custaudio"},
+                {"id": "101", "name": "Drico pipe"},
+            ],
+        },
+        {
+            "id": "2",
+            "name": "Dao Org",
+            "pipes": [{"id": "201", "name": "Sales Pipe"}],
+        },
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_without_name_returns_all(mock_organizations: list[dict]):
+    """Test search_pipes returns all organizations and pipes when no name filter provided."""
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"organizations": mock_organizations})
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = PipeService(client=mock_client)
+    result = await service.search_pipes()
+
+    assert result == {"organizations": mock_organizations}, "Expected all organizations returned"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("search_term", "expected_org_ids", "expected_pipe_names"),
+    [
+        pytest.param(
+            "Custaudio",
+            ["1"],
+            [["Custaudio", "Custaudio pipe"]],
+            id="exact_match_ranked_first",
+        ),
+        pytest.param(
+            "custaudio",
+            ["1"],
+            [["Custaudio", "Custaudio pipe"]],
+            id="case_insensitive_match",
+        ),
+        pytest.param(
+            "Sales",
+            ["2"],
+            [["Sales Pipe"]],
+            id="partial_match",
+        ),
+        pytest.param(
+            "drico",
+            ["1"],
+            [["Drico pipe"]],
+            id="single_match_in_org",
+        ),
+        pytest.param(
+            "pipe",
+            ["1", "2"],
+            [["Custaudio pipe", "Drico pipe"], ["Sales Pipe"]],
+            id="matches_across_multiple_orgs",
+        ),
+    ],
+)
+async def test_search_pipes_fuzzy_matching(
+    mock_organizations: list[dict],
+    search_term: str,
+    expected_org_ids: list[str],
+    expected_pipe_names: list[list[str]],
+):
+    """Test search_pipes fuzzy matching filters and sorts correctly."""
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"organizations": mock_organizations})
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = PipeService(client=mock_client)
+    result = await service.search_pipes(pipe_name=search_term)
+
+    assert len(result["organizations"]) == len(expected_org_ids)
+    for i, org in enumerate(result["organizations"]):
+        assert org["id"] == expected_org_ids[i]
+        pipe_names = [p["name"] for p in org["pipes"]]
+        assert pipe_names == expected_pipe_names[i]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_no_matches_returns_empty(mock_organizations: list[dict]):
+    """Test search_pipes returns empty list when no pipes match the search term."""
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"organizations": mock_organizations})
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = PipeService(client=mock_client)
+    result = await service.search_pipes(pipe_name="Dão")
+
+    assert result == {"organizations": []}, "Expected empty organizations when no matches"

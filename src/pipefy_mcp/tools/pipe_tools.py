@@ -207,3 +207,29 @@ class PipeTools:
                       - help: Help text for the field
             """
             return await client.get_start_form_fields(pipe_id, required_only)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def search_pipes(pipe_name: str | None = None) -> dict:
+            """Search for all accessible pipes across all organizations.
+
+            Use this tool to find a pipe's ID when you only know its name.
+            Returns all pipes from all organizations, optionally filtered by name.
+
+            Args:
+                pipe_name: Optional pipe name to search for (case-insensitive partial match).
+                           If not provided, returns all available pipes.
+
+            Returns:
+                dict: Contains 'organizations' array, each with:
+                      - id: Organization ID
+                      - name: Organization name
+                      - pipes: Array of pipes in the organization, each with:
+                          - id: Pipe ID (use this for other pipe operations)
+                          - name: Pipe name
+                          - description: Pipe description
+            """
+            return await client.search_pipes(pipe_name)

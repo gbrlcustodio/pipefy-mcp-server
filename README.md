@@ -42,6 +42,7 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
 * **`get_cards`**: List and search for cards in a specific pipe (allows the Agent to understand your backlog).
 * **`get_card`**: Retrieve full details of a specific card.
 * **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
+    * **Elicitation Spec**: If the Agent does not provide the required fields to create a card, the server will ask for them. The agent will then ask the user for the required information.
 * **`move_card_to_phase`**: Move a card to a different phase (e.g., move a task to "Code Review" after pushing a PR).
 * **`update_card_field`**: Update a single field of an existing card via `updateCardField` (simple, full replacement of that field's value).
 * **`update_card`**: Update card attributes (title, assignees, labels, due date) and/or multiple custom fields using `updateCard` and `updateFieldsValues`.

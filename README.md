@@ -42,7 +42,7 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude 3.5 
 * **`get_start_form_fields`**: Inspect the schema of a pipe's start form. Use this to let the Agent know which fields are required *before* it tries to create a card.
 * **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
     * **Elicitation Spec**: The server will always prompt the user for the required fields to create a card, as it currently does not support agent-provided field values.
-    
+
     ```mermaid
     sequenceDiagram
         participant U as User
@@ -51,7 +51,7 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude 3.5 
         participant P as Pipefy API
 
         A->>S: create_card(pipe_id=123)
-        S->>S: Get required fields for pipe 123
+        S->>P: Get required fields for pipe 123
         S-->>A: Elicit(fields=["title", "due_date"])
         A-->>U: I need more information: Title, Due Date
         U-->>A: "Fix bug in login", "2024-12-31"

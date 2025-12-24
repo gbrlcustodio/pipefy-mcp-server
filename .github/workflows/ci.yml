@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version-file: ".python-version"
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+    - name: Install dependencies
+      run: uv sync --locked --all-extras --dev
+    - name: Get changed Python files
+      id: changed-files
+      uses: tj-actions/changed-files@v47
+      with:
+        files: |
+          **/*.py
+          *.py
+    - name: Lint with ruff on changed files
+      if: steps.changed-files.outputs.any_changed == 'true'
+      run: ruff check ${{ steps.changed-files.outputs.changed_files }}
+    - name: Check formatting with ruff on changed files
+      if: steps.changed-files.outputs.any_changed == 'true'
+      run: ruff format --check ${{ steps.changed-files.outputs.changed_files }}
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version-file: ".python-version"
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+    - name: Install dependencies
+      run: uv sync --locked --all-extras --dev
+    - name: Run tests
+      run: uv run pytest

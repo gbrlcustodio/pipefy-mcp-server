@@ -68,7 +68,9 @@ async def test_get_start_form_fields_required_only_filters_and_returns_message_w
     ]
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"pipe": {"start_form_fields": mock_fields}})
+    mock_session.execute = AsyncMock(
+        return_value={"pipe": {"start_form_fields": mock_fields}}
+    )
     mock_client = _create_mock_gql_client(mock_session)
 
     service = PipeService(client=mock_client)
@@ -92,14 +94,21 @@ async def test_get_start_form_fields_required_only_returns_only_required():
     ]
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"pipe": {"start_form_fields": mock_fields}})
+    mock_session.execute = AsyncMock(
+        return_value={"pipe": {"start_form_fields": mock_fields}}
+    )
     mock_client = _create_mock_gql_client(mock_session)
 
     service = PipeService(client=mock_client)
     result = await service.get_start_form_fields(pipe_id, required_only=True)
 
-    expected_fields = [{"id": "title", "required": True}, {"id": "due_date", "required": True}]
-    assert result == {"start_form_fields": expected_fields}, "Expected only required fields"
+    expected_fields = [
+        {"id": "title", "required": True},
+        {"id": "due_date", "required": True},
+    ]
+    assert result == {"start_form_fields": expected_fields}, (
+        "Expected only required fields"
+    )
 
 
 @pytest.fixture
@@ -148,7 +157,9 @@ async def test_search_pipes_without_name_returns_all(mock_organizations: list[di
     service = PipeService(client=mock_client)
     result = await service.search_pipes()
 
-    assert result == {"organizations": mock_organizations}, "Expected all organizations returned"
+    assert result == {"organizations": mock_organizations}, (
+        "Expected all organizations returned"
+    )
 
 
 @pytest.mark.unit
@@ -270,7 +281,9 @@ async def test_search_pipes_fuzzy_matching(
         pipe_names = [p["name"] for p in org["pipes"]]
         assert pipe_names == expected_pipe_names[i]
         scores = [p["match_score"] for p in org["pipes"]]
-        assert scores == expected_pipe_scores[i], f"Expected scores {expected_pipe_scores[i]}, got {scores}"
+        assert scores == expected_pipe_scores[i], (
+            f"Expected scores {expected_pipe_scores[i]}, got {scores}"
+        )
 
 
 @pytest.mark.unit
@@ -284,7 +297,9 @@ async def test_search_pipes_no_matches_returns_empty(mock_organizations: list[di
     service = PipeService(client=mock_client)
     result = await service.search_pipes(pipe_name="XyzNonExistent123")
 
-    assert result == {"organizations": []}, "Expected empty organizations when no matches"
+    assert result == {"organizations": []}, (
+        "Expected empty organizations when no matches"
+    )
 
 
 @pytest.mark.unit

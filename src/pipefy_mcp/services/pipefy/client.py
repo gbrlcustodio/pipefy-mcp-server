@@ -41,9 +41,13 @@ class PipefyClient:
 
     async def move_card_to_phase(self, card_id: int, destination_phase_id: int) -> dict:
         """Move a card to a specific phase."""
-        return await self._card_service.move_card_to_phase(card_id, destination_phase_id)
+        return await self._card_service.move_card_to_phase(
+            card_id, destination_phase_id
+        )
 
-    async def update_card_field(self, card_id: int, field_id: str, new_value: Any) -> dict:
+    async def update_card_field(
+        self, card_id: int, field_id: str, new_value: Any
+    ) -> dict:
         """Update a single field of a card."""
         return await self._card_service.update_card_field(card_id, field_id, new_value)
 
@@ -66,7 +70,9 @@ class PipefyClient:
             field_updates=field_updates,
         )
 
-    async def get_start_form_fields(self, pipe_id: int, required_only: bool = False) -> dict:
+    async def get_start_form_fields(
+        self, pipe_id: int, required_only: bool = False
+    ) -> dict:
         """Get the start form fields of a pipe."""
         return await self._pipe_service.get_start_form_fields(pipe_id, required_only)
 

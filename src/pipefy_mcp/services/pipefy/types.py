@@ -12,4 +12,3 @@ class CardSearch(TypedDict, total=False):
     title: str
     inbox_emails_read: bool
     include_done: bool
-

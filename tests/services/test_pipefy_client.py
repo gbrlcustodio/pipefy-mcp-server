@@ -489,7 +489,7 @@ async def test_update_card_with_fields_dict_uses_update_fields_values():
     card_id = 12345
     field_updates = [
         {"field_id": "field_1", "value": "Value 1"},
-        {"field_id": "field_2", "value": "Value 2"}
+        {"field_id": "field_2", "value": "Value 2"},
     ]
 
     mock_response = {
@@ -805,7 +805,9 @@ async def test_move_card_to_phase_variable_shape():
     destination_phase_id = 678
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"moveCardToPhase": {"clientMutationId": None}})
+    mock_session.execute = AsyncMock(
+        return_value={"moveCardToPhase": {"clientMutationId": None}}
+    )
 
     mock_client = MagicMock(spec=Client)
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)

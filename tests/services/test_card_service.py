@@ -27,7 +27,9 @@ async def test_create_card_converts_fields_and_sets_generated_by_ai():
     fields = {"title": "Teste-MCP"}
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"createCard": {"card": {"id": "12345"}}})
+    mock_session.execute = AsyncMock(
+        return_value={"createCard": {"card": {"id": "12345"}}}
+    )
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)
@@ -38,7 +40,9 @@ async def test_create_card_converts_fields_and_sets_generated_by_ai():
     assert variables["fields"] == [
         {"field_id": "title", "field_value": "Teste-MCP", "generated_by_ai": True}
     ], "Expected fields converted to array format"
-    assert result == {"createCard": {"card": {"id": "12345"}}}, "Expected createCard response"
+    assert result == {"createCard": {"card": {"id": "12345"}}}, (
+        "Expected createCard response"
+    )
 
 
 @pytest.mark.unit
@@ -49,7 +53,9 @@ async def test_create_card_with_empty_dict_sends_empty_list():
     fields = {}
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"createCard": {"card": {"id": "12345"}}})
+    mock_session.execute = AsyncMock(
+        return_value={"createCard": {"card": {"id": "12345"}}}
+    )
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)
@@ -58,7 +64,9 @@ async def test_create_card_with_empty_dict_sends_empty_list():
     variables = mock_session.execute.call_args[1]["variable_values"]
     assert variables["pipe_id"] == pipe_id, "Expected pipe_id in variables"
     assert variables["fields"] == [], "Empty dict should result in empty list"
-    assert result == {"createCard": {"card": {"id": "12345"}}}, "Expected createCard response"
+    assert result == {"createCard": {"card": {"id": "12345"}}}, (
+        "Expected createCard response"
+    )
 
 
 @pytest.mark.unit
@@ -75,7 +83,9 @@ async def test_get_cards_with_none_search_sends_empty_search():
     result = await service.get_cards(pipe_id, None)  # type: ignore[arg-type]
 
     variables = mock_session.execute.call_args[1]["variable_values"]
-    assert variables == {"pipe_id": pipe_id, "search": {}}, "Expected empty search object"
+    assert variables == {"pipe_id": pipe_id, "search": {}}, (
+        "Expected empty search object"
+    )
     assert result == {"cards": {"edges": []}}, "Expected cards response"
 
 
@@ -87,7 +97,9 @@ async def test_move_card_to_phase_variable_shape():
     destination_phase_id = 678
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"moveCardToPhase": {"clientMutationId": None}})
+    mock_session.execute = AsyncMock(
+        return_value={"moveCardToPhase": {"clientMutationId": None}}
+    )
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)
@@ -96,7 +108,9 @@ async def test_move_card_to_phase_variable_shape():
     variables = mock_session.execute.call_args[1]["variable_values"]
     expected_input = {"card_id": card_id, "destination_phase_id": destination_phase_id}
     assert variables == {"input": expected_input}, "Expected correct input shape"
-    assert result == {"moveCardToPhase": {"clientMutationId": None}}, "Expected mutation response"
+    assert result == {"moveCardToPhase": {"clientMutationId": None}}, (
+        "Expected mutation response"
+    )
 
 
 @pytest.mark.unit
@@ -107,15 +121,21 @@ async def test_update_card_attribute_mode_uses_update_card_shape():
     new_title = "Updated Card Title"
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"updateCard": {"card": {"id": "12345"}}})
+    mock_session.execute = AsyncMock(
+        return_value={"updateCard": {"card": {"id": "12345"}}}
+    )
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)
     result = await service.update_card(card_id, title=new_title)
 
     variables = mock_session.execute.call_args[1]["variable_values"]
-    assert variables == {"input": {"id": card_id, "title": new_title}}, "Expected updateCard input"
-    assert result == {"updateCard": {"card": {"id": "12345"}}}, "Expected updateCard response"
+    assert variables == {"input": {"id": card_id, "title": new_title}}, (
+        "Expected updateCard input"
+    )
+    assert result == {"updateCard": {"card": {"id": "12345"}}}, (
+        "Expected updateCard response"
+    )
 
 
 @pytest.mark.unit
@@ -126,7 +146,9 @@ async def test_update_card_with_due_date_includes_due_date_in_input():
     due_date = "2025-12-31"
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"updateCard": {"card": {"id": "12345"}}})
+    mock_session.execute = AsyncMock(
+        return_value={"updateCard": {"card": {"id": "12345"}}}
+    )
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)
@@ -135,7 +157,9 @@ async def test_update_card_with_due_date_includes_due_date_in_input():
     variables = mock_session.execute.call_args[1]["variable_values"]
     expected_input = {"id": card_id, "due_date": due_date}
     assert variables == {"input": expected_input}, "Expected due_date in input"
-    assert result == {"updateCard": {"card": {"id": "12345"}}}, "Expected updateCard response"
+    assert result == {"updateCard": {"card": {"id": "12345"}}}, (
+        "Expected updateCard response"
+    )
 
 
 @pytest.mark.unit
@@ -146,7 +170,9 @@ async def test_update_card_field_mode_uses_update_fields_values_shape():
     field_updates = [{"field_id": "field_1", "value": "Value 1"}]
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"updateFieldsValues": {"success": True}})
+    mock_session.execute = AsyncMock(
+        return_value={"updateFieldsValues": {"success": True}}
+    )
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)
@@ -155,7 +181,16 @@ async def test_update_card_field_mode_uses_update_fields_values_shape():
     variables = mock_session.execute.call_args[1]["variable_values"]
     assert variables["input"]["nodeId"] == card_id, "Expected nodeId in input"
     expected_values = [
-        {"fieldId": "field_1", "value": "Value 1", "operation": "REPLACE", "generatedByAi": True}
+        {
+            "fieldId": "field_1",
+            "value": "Value 1",
+            "operation": "REPLACE",
+            "generatedByAi": True,
+        }
     ]
-    assert variables["input"]["values"] == expected_values, "Expected formatted field values"
-    assert result == {"updateFieldsValues": {"success": True}}, "Expected mutation response"
+    assert variables["input"]["values"] == expected_values, (
+        "Expected formatted field values"
+    )
+    assert result == {"updateFieldsValues": {"success": True}}, (
+        "Expected mutation response"
+    )

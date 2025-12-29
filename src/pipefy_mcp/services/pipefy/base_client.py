@@ -16,9 +16,7 @@ class BasePipefyClient:
     underlying `gql.Client` instance via constructor injection.
     """
 
-    def __init__(
-        self, schema: str | None = None, client: Client | None = None
-    ) -> None:
+    def __init__(self, schema: str | None = None, client: Client | None = None) -> None:
         """Create a base client.
 
         Args:

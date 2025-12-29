@@ -22,7 +22,9 @@ class PipeService(BasePipefyClient):
         variables = {"pipe_id": pipe_id}
         return await self.execute_query(GET_PIPE_QUERY, variables)
 
-    async def get_start_form_fields(self, pipe_id: int, required_only: bool = False) -> dict:
+    async def get_start_form_fields(
+        self, pipe_id: int, required_only: bool = False
+    ) -> dict:
         """Get the start form fields of a pipe.
 
         Args:
@@ -59,7 +61,9 @@ class PipeService(BasePipefyClient):
 
         return {"start_form_fields": fields}
 
-    async def search_pipes(self, pipe_name: str | None = None, match_threshold: int = 70) -> dict:
+    async def search_pipes(
+        self, pipe_name: str | None = None, match_threshold: int = 70
+    ) -> dict:
         """Search for pipes across all organizations using fuzzy matching.
 
         Args:
@@ -85,7 +89,9 @@ class PipeService(BasePipefyClient):
             matching_pipes = []
             for pipe in org.get("pipes", []):
                 pipe_display_name = pipe.get("name", "")
-                score = fuzz.WRatio(pipe_name, pipe_display_name, score_cutoff=match_threshold)
+                score = fuzz.WRatio(
+                    pipe_name, pipe_display_name, score_cutoff=match_threshold
+                )
                 if score:
                     matching_pipes.append((score, pipe))
 
@@ -95,7 +101,10 @@ class PipeService(BasePipefyClient):
                     {
                         "id": org.get("id"),
                         "name": org.get("name"),
-                        "pipes": [{**pipe, "match_score": round(score, 1)} for score, pipe in matching_pipes],
+                        "pipes": [
+                            {**pipe, "match_score": round(score, 1)}
+                            for score, pipe in matching_pipes
+                        ],
                     }
                 )
 

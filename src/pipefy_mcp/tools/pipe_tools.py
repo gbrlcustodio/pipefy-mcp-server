@@ -37,7 +37,9 @@ class PipeTools:
             expected_fields = expected_fields.get("start_form_fields", [])
             DynamicFormModel = create_form_model(expected_fields)
 
-            await ctx.debug(f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}")
+            await ctx.debug(
+                f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
+            )
 
             result = await ctx.elicit(
                 message=(f"Creating a card in pipe {pipe_id}"),
@@ -97,7 +99,9 @@ class PipeTools:
                 idempotentHint=False,
             ),
         )
-        async def update_card_field(card_id: int, field_id: str, new_value: Any) -> dict:
+        async def update_card_field(
+            card_id: int, field_id: str, new_value: Any
+        ) -> dict:
             """Update a single field of a card.
 
             Use this tool for simple, single-field updates. The entire field value
@@ -183,7 +187,9 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_start_form_fields(pipe_id: int, required_only: bool = False) -> dict:
+        async def get_start_form_fields(
+            pipe_id: int, required_only: bool = False
+        ) -> dict:
             """Get the start form fields of a pipe.
 
             Use this tool to understand which fields need to be filled when creating

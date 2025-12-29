@@ -37,7 +37,9 @@ class PipeTools:
             expected_fields = expected_fields.get("start_form_fields", [])
             DynamicFormModel = create_form_model(expected_fields)
 
-            await ctx.debug(f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}")
+            await ctx.debug(
+                f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
+            )
 
             result = await ctx.elicit(
                 message=(f"Creating a card in pipe {pipe_id}"),
@@ -97,7 +99,9 @@ class PipeTools:
                 idempotentHint=False,
             ),
         )
-        async def update_card_field(card_id: int, field_id: str, new_value: Any) -> dict:
+        async def update_card_field(
+            card_id: int, field_id: str, new_value: Any
+        ) -> dict:
             """Update a single field of a card.
 
             Use this tool for simple, single-field updates. The entire field value
@@ -183,7 +187,9 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_start_form_fields(pipe_id: int, required_only: bool = False) -> dict:
+        async def get_start_form_fields(
+            pipe_id: int, required_only: bool = False
+        ) -> dict:
             """Get the start form fields of a pipe.
 
             Use this tool to understand which fields need to be filled when creating
@@ -207,3 +213,34 @@ class PipeTools:
                       - help: Help text for the field
             """
             return await client.get_start_form_fields(pipe_id, required_only)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def search_pipes(pipe_name: str | None = None) -> dict:
+            """Search for all accessible pipes across all organizations.
+
+            Use this tool to find a pipe's ID when you only know its name.
+            Returns all pipes from all organizations, optionally filtered by name.
+
+            When filtering by name, uses fuzzy matching with a 70% similarity threshold.
+            Only pipes with a match score of 70 or higher are included in the results.
+            Results are sorted by match score (best matches first).
+
+            Args:
+                pipe_name: Optional pipe name to search for (case-insensitive partial match).
+                           If not provided, returns all available pipes.
+
+            Returns:
+                dict: Contains 'organizations' array, each with:
+                      - id: Organization ID
+                      - name: Organization name
+                      - pipes: Array of pipes in the organization, each with:
+                          - id: Pipe ID (use this for other pipe operations)
+                          - name: Pipe name
+                          - description: Pipe description
+                          - match_score: Fuzzy match score (0-100) when pipe_name is provided.
+            """
+            return await client.search_pipes(pipe_name)

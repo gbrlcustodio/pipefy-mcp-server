@@ -47,17 +47,14 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.update_card_field(8, "f", 123) == {"ok": "update_field"}
     card_service.update_card_field.assert_awaited_once_with(8, "f", 123)
 
-    assert (
-        await client.update_card(
-            card_id=9,
-            title="t",
-            assignee_ids=[1, 2],
-            label_ids=[3],
-            due_date="2025-01-01",
-            field_updates=[{"field_id": "x", "value": "y"}],
-        )
-        == {"ok": "update_card"}
-    )
+    assert await client.update_card(
+        card_id=9,
+        title="t",
+        assignee_ids=[1, 2],
+        label_ids=[3],
+        due_date="2025-01-01",
+        field_updates=[{"field_id": "x", "value": "y"}],
+    ) == {"ok": "update_card"}
     card_service.update_card.assert_awaited_once_with(
         card_id=9,
         title="t",
@@ -92,4 +89,3 @@ def test_pipefy_client_injects_same_shared_client_instance_into_services():
     assert client.client is client._card_service.client
     # Verify it's the same mock instance we injected
     assert client.client is mock_client_instance
-

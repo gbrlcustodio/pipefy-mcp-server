@@ -75,3 +75,7 @@ class PipefyClient:
     ) -> dict:
         """Get the start form fields of a pipe."""
         return await self._pipe_service.get_start_form_fields(pipe_id, required_only)
+
+    async def search_pipes(self, pipe_name: str | None = None) -> dict:
+        """Search for pipes across all organizations"""
+        return await self._pipe_service.search_pipes(pipe_name)

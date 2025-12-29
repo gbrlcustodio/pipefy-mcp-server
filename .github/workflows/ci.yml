@@ -31,10 +31,10 @@ jobs:
           *.py
     - name: Lint with ruff on changed files
       if: steps.changed-files.outputs.any_changed == 'true'
-      run: ruff check ${{ steps.changed-files.outputs.changed_files }}
+      run: uv run ruff check ${{ steps.changed-files.outputs.changed_files }}
     - name: Check formatting with ruff on changed files
       if: steps.changed-files.outputs.any_changed == 'true'
-      run: ruff format --check ${{ steps.changed-files.outputs.changed_files }}
+      run: uv run ruff format --check ${{ steps.changed-files.outputs.changed_files }}
 
   test:
     runs-on: ubuntu-latest

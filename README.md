@@ -42,7 +42,7 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
 * **`get_cards`**: List and search for cards in a specific pipe (allows the Agent to understand your backlog).
 * **`get_card`**: Retrieve full details of a specific card.
 * **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
-    * **Elicitation Spec**: The server will always prompt the user for the required fields to create a card, as it currently does not support agent-provided field values.
+    * **Elicitation*: Elicitation is an MCP feature that allows the server to request additional information from the user mid-tool-execution. This server uses MCP's elicitation feature to prompt the user for required field values before creating the card.
 
     ```mermaid
     sequenceDiagram
@@ -56,8 +56,8 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
         S->>P: Get required fields for pipe 123
         S-->>A: Elicit(fields=["title", "due_date"])
         A-->>U: I need more information: Title, Due Date
-        U-->>A: "Fix bug in login", "2024-12-31"
-        A->>S: create_card(pipe_id=123, title="Fix bug in login", due_date="2024-12-31")
+        U-->>A: "Fix bug in login", "2025-12-31"
+        A->>S: create_card(pipe_id=123, title="Fix bug in login", due_date="2025-12-31")
         S->>P: mutation createCard(...)
         P-->>S: {"data": {"createCard": ...}}
         S-->>A: {"success": true, "card_id": 456}

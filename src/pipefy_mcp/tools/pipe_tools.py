@@ -1,4 +1,4 @@
-from typing import Any, cast
+from typing import Any, Literal, TypedDict, cast
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
@@ -11,6 +11,19 @@ from pipefy_mcp.services.pipefy.types import CardSearch
 
 
 MAX_COMMENT_TEXT_LENGTH = 1000
+
+
+class AddCardCommentSuccessPayload(TypedDict):
+    success: Literal[True]
+    comment_id: str
+
+
+class AddCardCommentErrorPayload(TypedDict):
+    success: Literal[False]
+    error: str
+
+
+AddCardCommentPayload = AddCardCommentSuccessPayload | AddCardCommentErrorPayload
 
 
 def validate_add_card_comment_input(*, card_id: int, text: str) -> None:
@@ -29,7 +42,7 @@ def validate_add_card_comment_input(*, card_id: int, text: str) -> None:
         raise ValueError(f"text must be at most {MAX_COMMENT_TEXT_LENGTH} characters")
 
 
-def build_add_card_comment_success_payload(*, comment_id: object) -> dict:
+def build_add_card_comment_success_payload(*, comment_id: object) -> AddCardCommentSuccessPayload:
     """Build the public success payload for add_card_comment."""
     return {"success": True, "comment_id": str(comment_id)}
 
@@ -100,7 +113,7 @@ def map_add_card_comment_error_to_message(exc: BaseException) -> str:
     return "Unexpected error while adding comment. Please try again."
 
 
-def build_add_card_comment_error_payload(*, message: str) -> dict:
+def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentErrorPayload:
     """Build the public error payload for add_card_comment."""
     return {"success": False, "error": message}
 
@@ -173,7 +186,7 @@ class PipeTools:
                 idempotentHint=False,
             ),
         )
-        async def add_card_comment(card_id: int, text: str) -> dict:
+        async def add_card_comment(card_id: int, text: str) -> AddCardCommentPayload:
             """Add a text comment to a Pipefy card.
 
             Args:

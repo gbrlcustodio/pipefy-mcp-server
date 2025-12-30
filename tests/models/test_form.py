@@ -117,6 +117,7 @@ def test_json_schema_with_formats(field_type, expected_format):
 
     assert field_schema["format"] == expected_format
 
+
 @pytest.mark.unit
 def test_form_model_with_default_values():
     """Test dynamic Pydantic model creation with provided default values."""

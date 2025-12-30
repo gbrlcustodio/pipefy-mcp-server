@@ -74,6 +74,13 @@ def test_validate_add_card_comment_input_rejects_text_over_max_length():
 
 
 @pytest.mark.unit
+def test_validate_add_card_comment_input_accepts_text_at_max_length_boundary():
+    """Tool validation should accept text exactly at the max length boundary."""
+    text = "a" * pipe_tools.MAX_COMMENT_TEXT_LENGTH  # type: ignore[attr-defined]
+    pipe_tools.validate_add_card_comment_input(card_id=1, text=text)  # type: ignore[attr-defined]
+
+
+@pytest.mark.unit
 def test_build_add_card_comment_success_payload_contract_with_string_id():
     """Tool success payload must follow the public contract."""
     payload = pipe_tools.build_add_card_comment_success_payload(comment_id="c_987")  # type: ignore[attr-defined]

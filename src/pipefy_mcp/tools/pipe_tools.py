@@ -50,8 +50,8 @@ class PipeTools:
         async def create_card(
             pipe_id: int,
             fields: dict[str, Any] | None = None,
-            ctx: Context[ServerSession, None] | None = None,
             required_fields_only: bool = False,
+            ctx: Context[ServerSession, None] | None = None,
         ) -> dict:
             """Create a card in the pipe.
 

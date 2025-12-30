@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.prompts.pipe_prompts import PipePrompts
 from pipefy_mcp.tools.pipe_tools import PipeTools
 
 
@@ -14,19 +15,8 @@ class ToolRegistry:
     def register_tools(self) -> FastMCP:
         """Register tools with the MCP server"""
         PipeTools.register(self.mcp)
+        PipePrompts.register(self.mcp)
 
         mcp = self.mcp
-
-        # Add an addition tool
-        @mcp.tool()
-        def add(a: int, b: int) -> int:
-            """Add two numbers"""
-            return a + b
-
-        # Add a dynamic greeting resource
-        @mcp.resource("greeting://{name}")
-        def get_greeting(name: str) -> str:
-            """Get a personalized greeting"""
-            return f"Hello, {name}!"
 
         return mcp

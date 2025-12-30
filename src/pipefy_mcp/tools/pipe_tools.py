@@ -69,7 +69,7 @@ class PipeTools:
 
             if ctx.session.client_params.capabilities.elicitation:
                 return await _create_card_interactive(
-                    pipe_id, fields, ctx, expected_fields
+                    pipe_id, fields, expected_fields, ctx
                 )
             else:
                 return await client.create_card(pipe_id, fields)

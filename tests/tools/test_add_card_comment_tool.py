@@ -5,9 +5,6 @@ import pytest
 from pipefy_mcp.tools import pipe_tools
 
 
-MAX_COMMENT_TEXT_LENGTH = 1000
-
-
 class _FakeGraphQLException(Exception):
     """Test helper: mimics a gql exception exposing `.errors` with `message` fields."""
 
@@ -68,10 +65,10 @@ def test_validate_add_card_comment_input_rejects_blank_or_whitespace_text(text: 
 @pytest.mark.unit
 def test_validate_add_card_comment_input_rejects_text_over_max_length():
     """Tool validation should reject text longer than the maximum length."""
-    too_long_text = "a" * (MAX_COMMENT_TEXT_LENGTH + 1)
+    too_long_text = "a" * (pipe_tools.MAX_COMMENT_TEXT_LENGTH + 1)  # type: ignore[attr-defined]
     with pytest.raises(
         ValueError,
-        match=rf"text must be at most {MAX_COMMENT_TEXT_LENGTH} characters",
+        match=rf"text must be at most {pipe_tools.MAX_COMMENT_TEXT_LENGTH} characters",  # type: ignore[attr-defined]
     ):
         pipe_tools.validate_add_card_comment_input(card_id=1, text=too_long_text)  # type: ignore[attr-defined]
 

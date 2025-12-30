@@ -38,7 +38,18 @@ class BasePipefyClient:
         """Create and configure a `gql.Client` using project settings.
 
         Note: This preserves the current behavior from `PipefyClient._create_client`.
+
+        Raises:
+            ValueError: If required settings are missing.
         """
+        if settings.pipefy_graphql_url is None:
+            raise ValueError("PIPEFY_GRAPHQL_URL setting is required")
+        if settings.pipefy_oauth_url is None:
+            raise ValueError("PIPEFY_OAUTH_URL setting is required")
+        if settings.pipefy_oauth_client is None:
+            raise ValueError("PIPEFY_OAUTH_CLIENT setting is required")
+        if settings.pipefy_oauth_secret is None:
+            raise ValueError("PIPEFY_OAUTH_SECRET setting is required")
 
         transport = HTTPXAsyncTransport(
             url=settings.pipefy_graphql_url,
@@ -49,7 +60,9 @@ class BasePipefyClient:
             ),
         )
 
-        kwargs = {"schema": schema} if schema else {"fetch_schema_from_transport": True}
+        kwargs: dict[str, Any] = (
+            {"schema": schema} if schema else {"fetch_schema_from_transport": True}
+        )
         return Client(transport=transport, **kwargs)
 
     async def execute_query(self, query: Any, variables: dict[str, Any]) -> dict:

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP, None]:
+async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
     """Lifespan function to manage the lifecycle of the server."""
     try:
         logger.info("Initializing services")

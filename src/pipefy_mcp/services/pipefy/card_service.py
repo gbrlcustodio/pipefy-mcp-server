@@ -7,6 +7,7 @@ from gql import Client
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.queries.card_queries import (
     CREATE_CARD_MUTATION,
+    CREATE_COMMENT_MUTATION,
     GET_CARD_QUERY,
     GET_CARDS_QUERY,
     MOVE_CARD_TO_PHASE_MUTATION,
@@ -32,12 +33,17 @@ class CardService(BasePipefyClient):
         variables = {"pipe_id": pipe_id, "fields": convert_fields_to_array(fields)}
         return await self.execute_query(CREATE_CARD_MUTATION, variables)
 
+    async def create_comment(self, card_id: int, text: str) -> dict:
+        """Create a text comment on the specified card."""
+        variables = {"input": {"card_id": card_id, "text": text}}
+        return await self.execute_query(CREATE_COMMENT_MUTATION, variables)
+
     async def get_card(self, card_id: int) -> dict:
         """Get a card by its ID."""
         variables = {"card_id": card_id}
         return await self.execute_query(GET_CARD_QUERY, variables)
 
-    async def get_cards(self, pipe_id: int, search: CardSearch) -> dict:
+    async def get_cards(self, pipe_id: int, search: CardSearch | None = None) -> dict:
         """Get all cards in the specified pipe.
 
         Args:

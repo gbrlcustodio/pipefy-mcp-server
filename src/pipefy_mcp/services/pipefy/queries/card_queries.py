@@ -14,6 +14,18 @@ CREATE_CARD_MUTATION = gql(
     """
 )
 
+CREATE_COMMENT_MUTATION = gql(
+    """
+    mutation ($input: CreateCommentInput!) {
+        createComment(input: $input) {
+            comment {
+                id
+            }
+        }
+    }
+    """
+)
+
 GET_CARD_QUERY = gql(
     """
     query ($card_id: ID!) {

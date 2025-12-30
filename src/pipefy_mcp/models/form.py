@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field, create_model
 
 FIELD_TYPES = {
@@ -25,7 +27,7 @@ def create_form_model(field_definitions: list) -> type[BaseModel]:
     Returns:
         A Pydantic model class for validating form input
     """
-    fields = {}
+    fields: dict[str, Any] = {}
     for field_def in field_definitions:
         field_id = field_def["id"]
         field_type = field_def["type"]

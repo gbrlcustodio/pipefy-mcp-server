@@ -1,8 +1,13 @@
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
+
     pipefy_graphql_url: str | None = Field(
         default=None,
         description="GraphQL URL for Pipefy",
@@ -28,4 +33,4 @@ class Settings(BaseSettings):
     )
 
 
-settings = Settings(_env_file=".env", _env_file_encoding="utf-8")
+settings = Settings()

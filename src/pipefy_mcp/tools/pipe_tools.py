@@ -6,7 +6,6 @@ from mcp.types import ToolAnnotations
 
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.models.form import create_form_model
-from pipefy_mcp.services.pipefy.client import PipefyClient
 
 
 class PipeTools:
@@ -22,8 +21,8 @@ class PipeTools:
         async def _create_card_interactive(
             pipe_id: int,
             fields: dict[str, Any] | None,
-            ctx: Context[ServerSession, None],
             expected_fields: list,
+            ctx: Context[ServerSession, None],
         ) -> dict:
             """Handle interactive card creation with elicitation."""
             DynamicFormModel = create_form_model(expected_fields, fields)

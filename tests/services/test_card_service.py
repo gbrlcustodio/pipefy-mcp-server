@@ -194,3 +194,28 @@ async def test_update_card_field_mode_uses_update_fields_values_shape():
     assert result == {"updateFieldsValues": {"success": True}}, (
         "Expected mutation response"
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_comment_variable_shape_and_return_passthrough():
+    """Test create_comment sends correct input shape and returns response unchanged."""
+    card_id = 12345
+    text = "This is a comment"
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        return_value={"createComment": {"comment": {"id": "c_987"}}}
+    )
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    result = await service.create_comment(card_id=card_id, text=text)  # type: ignore[attr-defined]
+
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert variables == {"input": {"card_id": card_id, "text": text}}, (
+        "Expected correct input shape"
+    )
+    assert result == {"createComment": {"comment": {"id": "c_987"}}}, (
+        "Expected createComment response passthrough"
+    )

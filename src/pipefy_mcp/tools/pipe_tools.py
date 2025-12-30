@@ -42,7 +42,9 @@ def validate_add_card_comment_input(*, card_id: int, text: str) -> None:
         raise ValueError(f"text must be at most {MAX_COMMENT_TEXT_LENGTH} characters")
 
 
-def build_add_card_comment_success_payload(*, comment_id: object) -> AddCardCommentSuccessPayload:
+def build_add_card_comment_success_payload(
+    *, comment_id: object
+) -> AddCardCommentSuccessPayload:
     """Build the public success payload for add_card_comment."""
     return {"success": True, "comment_id": str(comment_id)}
 
@@ -127,12 +129,12 @@ class PipeTools:
 
         container = ServicesContainer.get_instance()
         client = container.pipefy_client
-        
+
         if client is None:
             raise RuntimeError(
                 "PipefyClient not initialized. Ensure initialize_services() is called before registering tools."
             )
-        
+
         # Type assertion: after None check, client is guaranteed to be PipefyClient
         client = cast(PipefyClient, client)
 

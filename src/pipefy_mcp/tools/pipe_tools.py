@@ -1,4 +1,10 @@
-from typing import Any, Literal, TypedDict, cast
+import sys
+from typing import Any, Literal, cast
+
+if sys.version_info < (3, 12):
+    from typing_extensions import TypedDict
+else:
+    from typing import TypedDict
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession

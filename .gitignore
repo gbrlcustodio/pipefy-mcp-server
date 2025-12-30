@@ -35,4 +35,4 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-.cursor/
+.mise.toml

@@ -116,3 +116,47 @@ def test_json_schema_with_formats(field_type, expected_format):
     field_schema = schema["properties"][field_id]
 
     assert field_schema["format"] == expected_format
+
+@pytest.mark.unit
+def test_form_model_with_default_values():
+    """Test dynamic Pydantic model creation with provided default values."""
+    field_definitions = [
+        {"id": "name", "type": "short_text", "label": "Name", "required": True},
+        {
+            "id": "description",
+            "type": "long_text",
+            "label": "Description",
+            "required": False,
+        },
+        {"id": "priority", "type": "select", "label": "Priority", "required": True},
+    ]
+
+    # Test with default values provided
+    default_values = {"name": "Default Name", "description": "Default Description"}
+    FormModelWithDefaults = create_form_model(field_definitions, default_values)
+
+    # Verify 'name' (required) uses provided default
+    name_field = FormModelWithDefaults.model_fields["name"]
+    assert name_field.is_required() is False  # Now has a default
+    assert name_field.get_default() == "Default Name"
+
+    # Verify 'description' (optional) uses provided default
+    description_field = FormModelWithDefaults.model_fields["description"]
+    assert description_field.is_required() is False
+    assert description_field.get_default() == "Default Description"
+
+    # Verify 'priority' (required) still requires a value as no default was provided
+    priority_field = FormModelWithDefaults.model_fields["priority"]
+    assert priority_field.is_required() is True
+
+    # Test without default values (should revert to original behavior)
+    FormModelWithoutDefaults = create_form_model(field_definitions)
+
+    # Verify 'name' (required) is truly required
+    name_field_no_default = FormModelWithoutDefaults.model_fields["name"]
+    assert name_field_no_default.is_required() is True
+
+    # Verify 'description' (optional) defaults to None
+    description_field_no_default = FormModelWithoutDefaults.model_fields["description"]
+    assert description_field_no_default.is_required() is False
+    assert description_field_no_default.get_default() is None

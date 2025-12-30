@@ -6,6 +6,7 @@ from mcp.types import ToolAnnotations
 
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.models.form import create_form_model
+from pipefy_mcp.services.pipefy.client import PipefyClient
 
 
 class PipeTools:
@@ -18,40 +19,61 @@ class PipeTools:
         container = ServicesContainer.get_instance()
         client = container.pipefy_client
 
-        @mcp.tool(
-            annotations=ToolAnnotations(
-                idempotentHint=False,
-            ),
-        )
-        async def create_card(pipe_id: int, ctx: Context[ServerSession, None]) -> dict:
-            """Create a card in the pipe.
-
-            Args:
-                pipe_id: The ID of the pipe where the card will be created
-            """
-
-            expected_fields = await client.get_start_form_fields(pipe_id, False)
-            await ctx.debug(f"Expected fields for pipe {pipe_id}: {expected_fields}")
-
-            # Convert field definitions to a pydantic form model
-            expected_fields = expected_fields.get("start_form_fields", [])
-            DynamicFormModel = create_form_model(expected_fields)
-
+        async def _create_card_interactive(
+            pipe_id: int,
+            fields: dict[str, Any] | None,
+            ctx: Context[ServerSession, None],
+            expected_fields: list,
+        ) -> dict:
+            """Handle interactive card creation with elicitation."""
+            DynamicFormModel = create_form_model(expected_fields, fields)
             await ctx.debug(
                 f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
             )
 
             result = await ctx.elicit(
-                message=(f"Creating a card in pipe {pipe_id}"),
+                message=f"Creating a card in pipe {pipe_id}",
                 schema=DynamicFormModel,
             )
-
             await ctx.debug(f"Elicited result: {result}")
 
-            if result.action == "accept":
-                return await client.create_card(pipe_id, result.data.model_dump())
+            if result.action != "accept":
+                return {"error": "Card creation cancelled by user."}
 
-            return {"error": "Card creation cancelled by user."}
+            data = result.data.model_dump()
+            return await client.create_card(pipe_id, data)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                idempotentHint=False,
+            ),
+        )
+        async def create_card(
+            pipe_id: int,
+            fields: dict[str, Any] | None = None,
+            ctx: Context[ServerSession, None] | None = None,
+            required_fields_only: bool = False,
+        ) -> dict:
+            """Create a card in the pipe.
+
+            Args:
+                pipe_id: The ID of the pipe where the card will be created
+                fields: A dictionary of fields to pre-fill the card with.
+                required_fields_only: If True, only elicit required fields. Default: False
+            """
+            form_fields = await client.get_start_form_fields(
+                pipe_id, required_fields_only
+            )
+            expected_fields = form_fields.get("start_form_fields", [])
+            await ctx.debug(f"Expected fields for pipe {pipe_id}: {expected_fields}")
+            await ctx.debug(f"Provided fields: {fields}")
+
+            if ctx.session.client_params.capabilities.elicitation:
+                return await _create_card_interactive(
+                    pipe_id, fields, ctx, expected_fields
+                )
+            else:
+                return await client.create_card(pipe_id, fields)
 
         @mcp.tool(
             annotations=ToolAnnotations(

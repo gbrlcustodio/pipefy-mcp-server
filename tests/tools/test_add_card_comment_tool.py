@@ -133,6 +133,7 @@ async def test_add_card_comment_tool_can_be_called_via_in_memory_mcp_session():
     """Tool should be registered and callable via MCP in-memory transport."""
     from mcp.server.fastmcp import FastMCP
     from mcp.shared.memory import create_connected_server_and_client_session
+
     from pipefy_mcp.core.container import ServicesContainer
     from pipefy_mcp.tools.pipe_tools import PipeTools
 
@@ -166,6 +167,7 @@ async def test_add_card_comment_tool_invalid_input_returns_error_payload():
     """Tool should return a stable error payload on validation failures."""
     from mcp.server.fastmcp import FastMCP
     from mcp.shared.memory import create_connected_server_and_client_session
+
     from pipefy_mcp.core.container import ServicesContainer
     from pipefy_mcp.tools.pipe_tools import PipeTools
 

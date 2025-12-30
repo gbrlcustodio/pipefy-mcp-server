@@ -1,20 +1,14 @@
-import sys
 from typing import Any, Literal, cast
-
-if sys.version_info < (3, 12):
-    from typing_extensions import TypedDict
-else:
-    from typing import TypedDict
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
+from typing_extensions import TypedDict
 
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
-
 
 MAX_COMMENT_TEXT_LENGTH = 1000
 

@@ -254,12 +254,12 @@ class PipeTools:
     @staticmethod
     async def _elicit_card_details(
         pipe_id: int,
-        fields: dict[str, Any] | None,
+        prefilled_fields: dict[str, Any] | None,
         expected_fields: list,
         ctx: Context[ServerSession, None],
     ) -> dict:
         """Handle interactive card creation with elicitation."""
-        DynamicFormModel = create_form_model(expected_fields, fields)
+        DynamicFormModel = create_form_model(expected_fields, prefilled_fields)
         await ctx.debug(
             f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
         )

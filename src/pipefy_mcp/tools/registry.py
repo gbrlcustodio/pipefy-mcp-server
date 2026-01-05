@@ -13,7 +13,11 @@ class ToolRegistry:
 
     def register_tools(self) -> FastMCP:
         """Register tools with the MCP server"""
-        PipeTools.register(self.mcp)
+
+        if self.services_container.pipefy_client is None:
+            raise ValueError("Pipefy client is not initialized in services container")
+
+        PipeTools.register(self.mcp, self.services_container.pipefy_client)
 
         mcp = self.mcp
 

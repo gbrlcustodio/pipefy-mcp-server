@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP, None]:
+async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
     """Lifespan function to manage the lifecycle of the server."""
     try:
         logger.info("Initializing services")
@@ -31,13 +31,6 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP, None]:
         yield mcp
     except Exception as e:
         logger.error(f"Error during server lifespan: {e}")
-    finally:
-        logger.info("Shutting down services")
-
-        # Force kill the entire process - doesn't care about async contexts
-        import os
-
-        os._exit(0)  # Use 0 for successful termination
 
 
 PIPEFY_INSTRUCTIONS = textwrap.dedent("""

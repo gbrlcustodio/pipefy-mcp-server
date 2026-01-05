@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "gql[httpx]>=3.5.2",
     "httpx-auth>=0.23.1",
-    "mcp[cli]>=1.6.0",
+    "mcp[cli]>=1.25.0",
     "pydantic>=2.11.3",
     "pydantic-settings>=2.8.1",
     "rapidfuzz>=3.14.3",
@@ -50,7 +50,6 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --no-header --tb=short"
-
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

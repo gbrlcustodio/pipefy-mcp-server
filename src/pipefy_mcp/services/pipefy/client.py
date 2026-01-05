@@ -8,13 +8,14 @@ from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.types import CardSearch
+from pipefy_mcp.settings import PipefySettings
 
 
 class PipefyClient:
     """Facade client for Pipefy API operations (pure delegation)."""
 
-    def __init__(self, schema: str | None = None):
-        graphql = BasePipefyClient(schema=schema)
+    def __init__(self, settings: PipefySettings, schema: str | None = None):
+        graphql = BasePipefyClient(settings=settings, schema=schema)
 
         # Keep `client` as a public attribute for backward compatibility.
         self.client: Client = graphql.client

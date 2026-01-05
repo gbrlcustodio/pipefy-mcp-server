@@ -40,6 +40,29 @@ async def test_get_pipe_passes_pipe_id_variable():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_pipe_members_returns_members():
+    """Test get_pipe_members returns the list of members for a pipe."""
+    pipe_id = 123
+    mock_members = [
+        {"user": {"id": "1", "name": "John Doe", "email": "john.doe@example.com"}, "role_name": "Admin"},
+        {"user": {"id": "2", "name": "Jane Smith", "email": "jane.smith@example.com"}, "role_name": "Member"},
+    ]
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"pipe": {"members": mock_members}})
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = PipeService(client=mock_client)
+    result = await service.get_pipe_members(pipe_id)
+
+    mock_session.execute.assert_called_once()
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert variables == {"pipeId": pipe_id}, "Expected pipeId in variables"
+    assert result == {"pipe": {"members": mock_members}}, "Expected pipe members response"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_get_start_form_fields_empty_returns_message():
     """Test get_start_form_fields returns user-friendly message when no fields configured."""
     pipe_id = 303181849

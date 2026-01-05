@@ -38,6 +38,11 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      PIPEFY_GRAPHQL_URL: 'GRAPHQL_URL'
+      PIPEFY_OAUTH_URL: 'OAUTH_URL'
+      PIPEFY_OAUTH_CLIENT: 'CLIENT'
+      PIPEFY_OAUTH_SECRET: 'SECRET'
     steps:
     - uses: actions/checkout@v6
     - name: Set up Python

@@ -36,7 +36,8 @@ class PipeTools:
 
             Args:
                 pipe_id: The ID of the pipe where the card will be created
-                fields: A dictionary of fields to pre-fill the card with.
+                fields: A dictionary of fields that can be pre-filled on the card.
+                        This argument should be provided when the LLM is aware of the intended values for certain fields.
                 required_fields_only: If True, only elicit required fields. Default: False
             """
             form_fields = await client.get_start_form_fields(

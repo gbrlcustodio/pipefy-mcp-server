@@ -27,6 +27,10 @@ class PipefyClient:
         """Get a pipe by ID, including phases, labels, and start form fields."""
         return await self._pipe_service.get_pipe(pipe_id)
 
+    async def get_pipe_members(self, pipe_id: int) -> dict:
+        """Get the members of a pipe."""
+        return await self._pipe_service.get_pipe_members(pipe_id)
+
     async def create_card(self, pipe_id: int, fields: dict) -> dict:
         """Create a card in the specified pipe with the given fields."""
         return await self._card_service.create_card(pipe_id, fields)

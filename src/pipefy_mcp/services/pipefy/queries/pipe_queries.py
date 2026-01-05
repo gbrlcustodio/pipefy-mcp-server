@@ -62,3 +62,20 @@ SEARCH_PIPES_QUERY = gql(
     }
     """
 )
+
+GET_PIPE_MEMBERS_QUERY = gql(
+    """
+    query GetPipeMembers($pipeId: ID!) {
+        pipe(id: $pipeId) {
+            members {
+                user {
+                    id
+                    name
+                    email
+                }
+                role_name
+            }
+        }
+    }
+    """
+)

@@ -5,6 +5,7 @@ from rapidfuzz import fuzz
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.queries.pipe_queries import (
+    GET_PIPE_MEMBERS_QUERY,
     GET_PIPE_QUERY,
     GET_START_FORM_FIELDS_QUERY,
     SEARCH_PIPES_QUERY,
@@ -21,6 +22,11 @@ class PipeService(BasePipefyClient):
         """Get a pipe by its ID, including phases, labels, and start form fields."""
         variables = {"pipe_id": pipe_id}
         return await self.execute_query(GET_PIPE_QUERY, variables)
+
+    async def get_pipe_members(self, pipe_id: int) -> dict:
+        """Get the members of a pipe."""
+        variables = {"pipeId": pipe_id}
+        return await self.execute_query(GET_PIPE_MEMBERS_QUERY, variables)
 
     async def get_start_form_fields(
         self, pipe_id: int, required_only: bool = False

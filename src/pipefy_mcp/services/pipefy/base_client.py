@@ -6,7 +6,7 @@ from gql import Client
 from gql.transport.httpx import HTTPXAsyncTransport
 from httpx_auth import OAuth2ClientCredentials
 
-from pipefy_mcp.settings import settings
+from pipefy_mcp.settings import PipefySettings
 
 
 class BasePipefyClient:
@@ -16,7 +16,12 @@ class BasePipefyClient:
     underlying `gql.Client` instance via constructor injection.
     """
 
-    def __init__(self, schema: str | None = None, client: Client | None = None) -> None:
+    def __init__(
+        self,
+        settings: PipefySettings | None = None,
+        schema: str | None = None,
+        client: Client | None = None,
+    ) -> None:
         """Create a base client.
 
         Args:
@@ -32,6 +37,7 @@ class BasePipefyClient:
                 "When reusing an existing client, its schema is already configured."
             )
 
+        self.settings = settings
         self.client: Client = client or self._create_client(schema)
 
     def _create_client(self, schema: str | None) -> Client:
@@ -40,12 +46,16 @@ class BasePipefyClient:
         Note: This preserves the current behavior from `PipefyClient._create_client`.
         """
 
+        if self.settings is None:
+            raise ValueError("Settings must be provided to create a GraphQL client.")
+
+        print(self.settings)
         transport = HTTPXAsyncTransport(
-            url=settings.pipefy_graphql_url,
+            url=self.settings.graphql_url,
             auth=OAuth2ClientCredentials(
-                token_url=settings.pipefy_oauth_url,
-                client_id=settings.pipefy_oauth_client,
-                client_secret=settings.pipefy_oauth_secret,
+                token_url=self.settings.oauth_url,
+                client_id=self.settings.oauth_client,
+                client_secret=self.settings.oauth_secret,
             ),
         )
 

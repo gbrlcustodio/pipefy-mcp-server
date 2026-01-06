@@ -92,6 +92,16 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def get_pipe_members(pipe_id: int) -> dict:
+            """Get the members of a pipe."""
+
+            return await client.get_pipe_members(pipe_id)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
                 destructiveHint=False,
                 idempotentHint=True,
             ),

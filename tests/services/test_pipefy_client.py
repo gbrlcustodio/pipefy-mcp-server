@@ -722,6 +722,30 @@ async def test_get_pipe_passes_pipe_id_variable():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_pipe_members_calls_service():
+    """Test get_pipe_members calls the pipe service with the correct pipe_id."""
+    pipe_id = 123
+    mock_members = [{"user": {"id": "1", "name": "Test User"}}]
+
+    # Mock PipeService and its get_pipe_members method
+    mock_pipe_service = MagicMock(spec=PipeService)
+    mock_pipe_service.get_pipe_members = AsyncMock(return_value=mock_members)
+
+    # Create a PipefyClient instance with the mocked service
+    client = PipefyClient.__new__(PipefyClient)
+    client._pipe_service = mock_pipe_service
+    client._card_service = MagicMock(spec=CardService)  # Mock CardService as well
+
+    # Call the method
+    result = await client.get_pipe_members(pipe_id)
+
+    # Assert that the service method was called with the correct argument
+    mock_pipe_service.get_pipe_members.assert_called_once_with(pipe_id)
+    assert result == mock_members
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_get_card_passes_card_id_variable():
     """Test get_card passes card_id under variable_values unchanged."""
     card_id = 12345

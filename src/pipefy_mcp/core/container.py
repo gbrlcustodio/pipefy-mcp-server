@@ -22,7 +22,7 @@ class ServicesContainer:
         pass
 
     def initialize_services(self, settings: Settings) -> None:
-        self.pipefy_client = PipefyClient()
+        self.pipefy_client = PipefyClient(settings=settings.pipefy)
 
     def shutdown(self) -> None:
         pass

@@ -11,7 +11,7 @@ from pipefy_mcp.server import mcp as mcp_server
 
 @pytest.fixture
 def anyio_backend():
-    return "anyio"
+    return "asyncio"
 
 
 @pytest.fixture

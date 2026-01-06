@@ -22,7 +22,7 @@ from pipefy_mcp.tools.pipe_tools import PipeTools
 
 @pytest.fixture
 def anyio_backend():
-    return "anyio"
+    return "asyncio"
 
 
 @pytest.fixture

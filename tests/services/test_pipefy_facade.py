@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from pipefy_mcp.services.pipefy.client import PipefyClient
+from pipefy_mcp.settings import PipefySettings
 
 
 @pytest.mark.unit
@@ -80,7 +81,7 @@ def test_pipefy_client_injects_same_shared_client_instance_into_services():
         return_value=mock_client_instance,
     ):
         # Create a real PipefyClient (it will use the mocked _create_client)
-        client = PipefyClient(settings=MagicMock())
+        client = PipefyClient(settings=MagicMock(spec=PipefySettings))
 
     # Verify that both services received the same client instance
     assert client._pipe_service.client is client._card_service.client

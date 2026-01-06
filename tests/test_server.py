@@ -14,8 +14,8 @@ def anyio_backend():
     return "asyncio"
 
 
-@pytest.fixture
-def client_session(scope="module") -> ClientSession:
+@pytest.fixture(scope="module")
+def client_session() -> ClientSession:
     return create_client_session(
         mcp_server,
         read_timeout_seconds=timedelta(seconds=10),

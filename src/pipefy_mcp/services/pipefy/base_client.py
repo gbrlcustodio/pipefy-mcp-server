@@ -49,7 +49,6 @@ class BasePipefyClient:
         if self.settings is None:
             raise ValueError("Settings must be provided to create a GraphQL client.")
 
-        print(self.settings)
         transport = HTTPXAsyncTransport(
             url=self.settings.graphql_url,
             auth=OAuth2ClientCredentials(

@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from random import randint
 from typing import Any
@@ -90,12 +91,22 @@ async def test_create_card_tool_with_elicitation(
     pipe_id,
 ):
     mock_pipefy_client.get_start_form_fields.return_value = {"start_form_fields": []}
-    mock_pipefy_client.create_card.return_value = {"card": {"id": "789"}}
+    mock_pipefy_client.create_card.return_value = {
+        "createCard": {"card": {"id": "789"}}
+    }
 
     async with client_session as session:
         result = await session.call_tool("create_card", {"pipe_id": pipe_id})
         assert result.isError is False, "Unexpected tool result"
         mock_pipefy_client.create_card.assert_called_once_with(pipe_id, {})
+        response = json.loads(result.content[0].text)
+        expected_response = {
+            "createCard": {"card": {"id": "789"}},
+            "card_link": (
+                "[https://app.pipefy.com/open-cards/789](https://app.pipefy.com/open-cards/789)"
+            ),
+        }
+        assert response == expected_response
 
 
 @pytest.mark.anyio
@@ -110,7 +121,9 @@ async def test_create_card_tool_with_elicitation_declined(
     pipe_id,
 ):
     mock_pipefy_client.get_start_form_fields.return_value = {"start_form_fields": []}
-    mock_pipefy_client.create_card.return_value = {"card": {"id": "789"}}
+    mock_pipefy_client.create_card.return_value = {
+        "createCard": {"card": {"id": "789"}}
+    }
 
     async with client_session as session:
         result = await session.call_tool("create_card", {"pipe_id": pipe_id})
@@ -128,7 +141,9 @@ async def test_create_card_tool_without_elicitation(
     mock_pipefy_client.get_start_form_fields.return_value = {
         "start_form_fields": ["field_1", "field_2"]
     }
-    mock_pipefy_client.create_card.return_value = {"card": {"id": "789"}}
+    mock_pipefy_client.create_card.return_value = {
+        "createCard": {"card": {"id": "789"}}
+    }
 
     async with client_session as session:
         result = await session.call_tool(
@@ -142,6 +157,14 @@ async def test_create_card_tool_without_elicitation(
         mock_pipefy_client.create_card.assert_called_once_with(
             pipe_id, {"field_1": "value_1", "field_2": "value_2"}
         )
+        response = json.loads(result.content[0].text)
+        expected_response = {
+            "createCard": {"card": {"id": "789"}},
+            "card_link": (
+                "[https://app.pipefy.com/open-cards/789](https://app.pipefy.com/open-cards/789)"
+            ),
+        }
+        assert response == expected_response
 
 
 @pytest.mark.anyio

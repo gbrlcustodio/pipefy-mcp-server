@@ -58,7 +58,12 @@ class PipeTools:
                 except UserCancelledError:
                     return {"error": "Card creation cancelled by user."}
 
-            return await client.create_card(pipe_id, card_data)
+            result = await client.create_card(pipe_id, card_data)
+            card_id = result.get("createCard", {}).get("card", {}).get("id")
+            if card_id:
+                card_url = f"https://app.pipefy.com/open-cards/{card_id}"
+                result["card_link"] = f"[{card_url}]({card_url})"
+            return result
 
         @mcp.tool(
             annotations=ToolAnnotations(

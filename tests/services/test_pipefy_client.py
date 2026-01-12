@@ -823,6 +823,26 @@ async def test_get_cards_with_search_dict_passes_search_as_is():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_add_card_comment_delegates_to_card_service_create_comment():
+    """Test add_card_comment delegates unchanged to CardService.create_comment."""
+    card_id = 12345
+    text = "This is a comment"
+    expected = {"createComment": {"comment": {"id": "c_987"}}}
+
+    card_service = AsyncMock()
+    card_service.create_comment = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+
+    result = await client.add_card_comment(card_id, text)  # type: ignore[attr-defined]
+
+    assert result == expected
+    card_service.create_comment.assert_awaited_once_with(card_id, text)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_move_card_to_phase_variable_shape():
     """Test move_card_to_phase sends input with card_id and destination_phase_id."""
     card_id = 12345

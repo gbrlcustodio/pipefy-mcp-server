@@ -1,17 +1,125 @@
-from typing import Any
+from typing import Any, Literal
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
+from typing_extensions import TypedDict
 
 from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.services.pipefy.types import CardSearch
+
+MAX_COMMENT_TEXT_LENGTH = 1000
 
 
 class UserCancelledError(Exception):
     """Raised when a user cancels an interactive flow."""
 
     pass
+
+
+class AddCardCommentSuccessPayload(TypedDict):
+    success: Literal[True]
+    comment_id: str
+
+
+class AddCardCommentErrorPayload(TypedDict):
+    success: Literal[False]
+    error: str
+
+
+AddCardCommentPayload = AddCardCommentSuccessPayload | AddCardCommentErrorPayload
+
+
+def validate_add_card_comment_input(*, card_id: int, text: str) -> None:
+    """Validate user inputs for the add_card_comment tool.
+
+    Raises:
+        ValueError: When inputs are invalid.
+    """
+    if card_id <= 0:
+        raise ValueError("card_id must be a positive integer")
+
+    if text.strip() == "":
+        raise ValueError("text must not be blank")
+
+    if len(text) > MAX_COMMENT_TEXT_LENGTH:
+        raise ValueError(f"text must be at most {MAX_COMMENT_TEXT_LENGTH} characters")
+
+
+def build_add_card_comment_success_payload(
+    *, comment_id: object
+) -> AddCardCommentSuccessPayload:
+    """Build the public success payload for add_card_comment."""
+    return {"success": True, "comment_id": str(comment_id)}
+
+
+def _extract_error_strings(exc: BaseException) -> list[str]:
+    """Best-effort extraction of error messages from gql/GraphQL exceptions."""
+    messages: list[str] = []
+
+    raw = str(exc)
+    if raw:
+        messages.append(raw)
+
+    errors = getattr(exc, "errors", None)
+    if isinstance(errors, list):
+        for item in errors:
+            if isinstance(item, dict):
+                msg = item.get("message")
+                if isinstance(msg, str) and msg:
+                    messages.append(msg)
+            elif isinstance(item, str) and item:
+                messages.append(item)
+
+    return messages
+
+
+def map_add_card_comment_error_to_message(exc: BaseException) -> str:
+    """Map a GraphQL exception into a stable, friendly English message."""
+    messages = _extract_error_strings(exc)
+    haystack = " ".join(messages).lower()
+
+    not_found_markers = [
+        "not found",
+        "record not found",
+        "could not find",
+        "does not exist",
+        "doesn't exist",
+    ]
+    permission_markers = [
+        "permission",
+        "not authorized",
+        "unauthorized",
+        "forbidden",
+        "access denied",
+        "not allowed",
+    ]
+    invalid_input_markers = [
+        "invalid",
+        "validation",
+        "must be",
+        "can't be",
+        "cannot be",
+        "required",
+        "blank",
+    ]
+
+    if any(marker in haystack for marker in not_found_markers):
+        return "Card not found. Please verify 'card_id' and access permissions."
+
+    if any(marker in haystack for marker in permission_markers):
+        return "You don't have permission to comment on this card."
+
+    if any(marker in haystack for marker in invalid_input_markers):
+        return "Invalid input. Please provide a valid 'card_id' and non-empty 'text'."
+
+    return "Unexpected error while adding comment. Please try again."
+
+
+def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentErrorPayload:
+    """Build the public error payload for add_card_comment."""
+    return {"success": False, "error": message}
 
 
 class PipeTools:
@@ -77,10 +185,40 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(
+                idempotentHint=False,
+            ),
+        )
+        async def add_card_comment(card_id: int, text: str) -> AddCardCommentPayload:
+            """Add a text comment to a Pipefy card.
+
+            Args:
+                card_id: The ID of the card to comment on
+                text: The comment text to post
+            """
+            # Privacy: never log the full comment text (it may contain sensitive data).
+            try:
+                validate_add_card_comment_input(card_id=card_id, text=text)
+            except ValueError:
+                return build_add_card_comment_error_payload(
+                    message="Invalid input. Please provide a valid 'card_id' and non-empty 'text'."
+                )
+
+            try:
+                response = await client.add_card_comment(card_id=card_id, text=text)
+                comment_id = response["createComment"]["comment"]["id"]
+            except Exception as exc:  # noqa: BLE001
+                return build_add_card_comment_error_payload(
+                    message=map_add_card_comment_error_to_message(exc)
+                )
+
+            return build_add_card_comment_success_payload(comment_id=comment_id)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
         )
-        async def get_cards(pipe_id: int, search: dict) -> dict:
+        async def get_cards(pipe_id: int, search: CardSearch | None = None) -> dict:
             """Get all cards in the pipe."""
 
             return await client.get_cards(pipe_id, search)

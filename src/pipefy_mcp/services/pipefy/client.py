@@ -36,11 +36,15 @@ class PipefyClient:
         """Create a card in the specified pipe with the given fields."""
         return await self._card_service.create_card(pipe_id, fields)
 
+    async def add_card_comment(self, card_id: int, text: str) -> dict:
+        """Add a text comment to a card by its ID."""
+        return await self._card_service.create_comment(card_id, text)
+
     async def get_card(self, card_id: int) -> dict:
         """Get a card by its ID."""
         return await self._card_service.get_card(card_id)
 
-    async def get_cards(self, pipe_id: int, search: CardSearch) -> dict:
+    async def get_cards(self, pipe_id: int, search: CardSearch | None = None) -> dict:
         """Get all cards in the specified pipe with optional search filters."""
         return await self._card_service.get_cards(pipe_id, search)
 

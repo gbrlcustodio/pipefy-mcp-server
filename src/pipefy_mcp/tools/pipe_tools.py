@@ -3,13 +3,13 @@ from typing import Any, Literal
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
+from pydantic import ValidationError
 from typing_extensions import TypedDict
 
+from pipefy_mcp.models.comment import CommentInput
 from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
-
-MAX_COMMENT_TEXT_LENGTH = 1000
 
 
 class UserCancelledError(Exception):
@@ -29,22 +29,6 @@ class AddCardCommentErrorPayload(TypedDict):
 
 
 AddCardCommentPayload = AddCardCommentSuccessPayload | AddCardCommentErrorPayload
-
-
-def validate_add_card_comment_input(*, card_id: int, text: str) -> None:
-    """Validate user inputs for the add_card_comment tool.
-
-    Raises:
-        ValueError: When inputs are invalid.
-    """
-    if card_id <= 0:
-        raise ValueError("card_id must be a positive integer")
-
-    if text.strip() == "":
-        raise ValueError("text must not be blank")
-
-    if len(text) > MAX_COMMENT_TEXT_LENGTH:
-        raise ValueError(f"text must be at most {MAX_COMMENT_TEXT_LENGTH} characters")
 
 
 def build_add_card_comment_success_payload(
@@ -193,18 +177,20 @@ class PipeTools:
 
             Args:
                 card_id: The ID of the card to comment on
-                text: The comment text to post
+                text: The comment text to post (1-1000 characters)
             """
             # Privacy: never log the full comment text (it may contain sensitive data).
             try:
-                validate_add_card_comment_input(card_id=card_id, text=text)
-            except ValueError:
+                comment_input = CommentInput(card_id=card_id, text=text)
+            except ValidationError:
                 return build_add_card_comment_error_payload(
                     message="Invalid input. Please provide a valid 'card_id' and non-empty 'text'."
                 )
 
             try:
-                response = await client.add_card_comment(card_id=card_id, text=text)
+                response = await client.add_card_comment(
+                    card_id=comment_input.card_id, text=comment_input.text
+                )
                 comment_id = response["createComment"]["comment"]["id"]
             except Exception as exc:  # noqa: BLE001
                 return build_add_card_comment_error_payload(

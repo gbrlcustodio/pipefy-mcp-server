@@ -1,7 +1,9 @@
 import json
 
 import pytest
+from pydantic import ValidationError
 
+from pipefy_mcp.models.comment import MAX_COMMENT_TEXT_LENGTH, CommentInput
 from pipefy_mcp.tools import pipe_tools
 
 
@@ -46,52 +48,74 @@ def _extract_call_tool_payload(result) -> dict:
     raise AssertionError("Could not extract tool payload from CallToolResult")
 
 
+# =============================================================================
+# CommentInput model validation tests
+# =============================================================================
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize("card_id", [0, -1, -999])
-def test_validate_add_card_comment_input_rejects_card_id_zero_or_negative(card_id: int):
-    """Tool validation should reject card_id <= 0."""
-    with pytest.raises(ValueError, match=r"card_id must be a positive integer"):
-        pipe_tools.validate_add_card_comment_input(card_id=card_id, text="ok")  # type: ignore[attr-defined]
+def test_comment_input_rejects_card_id_zero_or_negative(card_id: int):
+    """CommentInput should reject card_id <= 0."""
+    with pytest.raises(ValidationError):
+        CommentInput(card_id=card_id, text="ok")
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize("text", ["", "   ", "\n\t  "])
-def test_validate_add_card_comment_input_rejects_blank_or_whitespace_text(text: str):
-    """Tool validation should reject blank/whitespace-only text."""
-    with pytest.raises(ValueError, match=r"text must not be blank"):
-        pipe_tools.validate_add_card_comment_input(card_id=1, text=text)  # type: ignore[attr-defined]
+def test_comment_input_rejects_blank_or_whitespace_text(text: str):
+    """CommentInput should reject blank/whitespace-only text."""
+    with pytest.raises(ValidationError):
+        CommentInput(card_id=1, text=text)
 
 
 @pytest.mark.unit
-def test_validate_add_card_comment_input_rejects_text_over_max_length():
-    """Tool validation should reject text longer than the maximum length."""
-    too_long_text = "a" * (pipe_tools.MAX_COMMENT_TEXT_LENGTH + 1)  # type: ignore[attr-defined]
-    with pytest.raises(
-        ValueError,
-        match=rf"text must be at most {pipe_tools.MAX_COMMENT_TEXT_LENGTH} characters",  # type: ignore[attr-defined]
-    ):
-        pipe_tools.validate_add_card_comment_input(card_id=1, text=too_long_text)  # type: ignore[attr-defined]
+def test_comment_input_rejects_text_over_max_length():
+    """CommentInput should reject text longer than the maximum length."""
+    too_long_text = "a" * (MAX_COMMENT_TEXT_LENGTH + 1)
+    with pytest.raises(ValidationError):
+        CommentInput(card_id=1, text=too_long_text)
 
 
 @pytest.mark.unit
-def test_validate_add_card_comment_input_accepts_text_at_max_length_boundary():
-    """Tool validation should accept text exactly at the max length boundary."""
-    text = "a" * pipe_tools.MAX_COMMENT_TEXT_LENGTH  # type: ignore[attr-defined]
-    pipe_tools.validate_add_card_comment_input(card_id=1, text=text)  # type: ignore[attr-defined]
+def test_comment_input_accepts_text_at_max_length_boundary():
+    """CommentInput should accept text exactly at the max length boundary."""
+    text = "a" * MAX_COMMENT_TEXT_LENGTH
+    comment = CommentInput(card_id=1, text=text)
+    assert comment.card_id == 1
+    assert comment.text == text
+
+
+@pytest.mark.unit
+def test_comment_input_valid_input():
+    """CommentInput should accept valid inputs."""
+    comment = CommentInput(card_id=123, text="Hello world")
+    assert comment.card_id == 123
+    assert comment.text == "Hello world"
+
+
+# =============================================================================
+# Payload builder tests
+# =============================================================================
 
 
 @pytest.mark.unit
 def test_build_add_card_comment_success_payload_contract_with_string_id():
     """Tool success payload must follow the public contract."""
-    payload = pipe_tools.build_add_card_comment_success_payload(comment_id="c_987")  # type: ignore[attr-defined]
+    payload = pipe_tools.build_add_card_comment_success_payload(comment_id="c_987")
     assert payload == {"success": True, "comment_id": "c_987"}
 
 
 @pytest.mark.unit
 def test_build_add_card_comment_success_payload_stringifies_id():
     """Tool success payload should always expose comment_id as a string."""
-    payload = pipe_tools.build_add_card_comment_success_payload(comment_id=123)  # type: ignore[arg-type,attr-defined]
+    payload = pipe_tools.build_add_card_comment_success_payload(comment_id=123)  # type: ignore[arg-type]
     assert payload == {"success": True, "comment_id": "123"}
+
+
+# =============================================================================
+# Error mapping tests
+# =============================================================================
 
 
 @pytest.mark.unit
@@ -102,7 +126,7 @@ def test_map_add_card_comment_error_to_message_card_not_found():
         errors=[{"message": "Card not found"}],
     )
 
-    msg = pipe_tools.map_add_card_comment_error_to_message(exc)  # type: ignore[attr-defined]
+    msg = pipe_tools.map_add_card_comment_error_to_message(exc)
     assert msg == "Card not found. Please verify 'card_id' and access permissions."
 
 
@@ -114,7 +138,7 @@ def test_map_add_card_comment_error_to_message_permission_denied():
         errors=[{"message": "Not authorized"}],
     )
 
-    msg = pipe_tools.map_add_card_comment_error_to_message(exc)  # type: ignore[attr-defined]
+    msg = pipe_tools.map_add_card_comment_error_to_message(exc)
     assert msg == "You don't have permission to comment on this card."
 
 
@@ -123,8 +147,13 @@ def test_map_add_card_comment_error_to_message_generic_fallback():
     """Unknown errors should map to a stable generic message (no raw details)."""
     exc = RuntimeError("socket hang up")
 
-    msg = pipe_tools.map_add_card_comment_error_to_message(exc)  # type: ignore[attr-defined]
+    msg = pipe_tools.map_add_card_comment_error_to_message(exc)
     assert msg == "Unexpected error while adding comment. Please try again."
+
+
+# =============================================================================
+# Integration tests via in-memory MCP session
+# =============================================================================
 
 
 @pytest.mark.unit

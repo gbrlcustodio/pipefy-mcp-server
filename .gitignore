@@ -39,3 +39,6 @@ venv.bak/
 
 # IDEs and editors
 .cursor/
+
+# macOS
+.DS_Store

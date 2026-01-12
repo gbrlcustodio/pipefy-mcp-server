@@ -17,6 +17,7 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     pipe_service.get_start_form_fields = AsyncMock(return_value={"ok": "fields"})
 
     card_service.create_card = AsyncMock(return_value={"ok": "create"})
+    card_service.create_comment = AsyncMock(return_value={"ok": "comment"})
     card_service.get_card = AsyncMock(return_value={"ok": "card"})
     card_service.get_cards = AsyncMock(return_value={"ok": "cards"})
     card_service.move_card_to_phase = AsyncMock(return_value={"ok": "move"})
@@ -35,6 +36,9 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 
     assert await client.create_card(3, {"a": 1}) == {"ok": "create"}
     card_service.create_card.assert_awaited_once_with(3, {"a": 1})
+
+    assert await client.add_card_comment(33, "hello") == {"ok": "comment"}
+    card_service.create_comment.assert_awaited_once_with(33, "hello")
 
     assert await client.get_card(4) == {"ok": "card"}
     card_service.get_card.assert_awaited_once_with(4)

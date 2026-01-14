@@ -219,3 +219,63 @@ async def test_create_comment_variable_shape_and_return_passthrough():
     assert result == {"createComment": {"comment": {"id": "c_987"}}}, (
         "Expected createComment response passthrough"
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_card_success_scenario():
+    """Test delete_card sends correct input and returns success response."""
+    card_id = 12345
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        return_value={"deleteCard": {"success": True}}
+    )
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    result = await service.delete_card(card_id)
+
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert variables == {"input": {"id": card_id}}, "Expected correct input shape"
+    assert result == {"deleteCard": {"success": True}}, "Expected deleteCard response"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_card_resource_not_found_error():
+    """Test delete_card returns error response for RESOURCE_NOT_FOUND."""
+    card_id = 99999
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        return_value={"deleteCard": {"success": False, "errors": ["RESOURCE_NOT_FOUND"]}}
+    )
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    result = await service.delete_card(card_id)
+
+    assert result == {"deleteCard": {"success": False, "errors": ["RESOURCE_NOT_FOUND"]}}, (
+        "Expected error response passthrough"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_card_permission_denied_error():
+    """Test delete_card returns error response for PERMISSION_DENIED."""
+    card_id = 12345
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        return_value={"deleteCard": {"success": False, "errors": ["PERMISSION_DENIED"]}}
+    )
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    result = await service.delete_card(card_id)
+
+    assert result == {"deleteCard": {"success": False, "errors": ["PERMISSION_DENIED"]}}, (
+        "Expected error response passthrough"
+    )

@@ -32,6 +32,10 @@ GET_CARD_QUERY = gql(
         card(id: $card_id) {
             id
             title
+            current_phase {
+                id
+                name
+            }
         }
     }
     """

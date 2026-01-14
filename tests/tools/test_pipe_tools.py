@@ -62,7 +62,7 @@ def mock_services_container(mocker, mock_pipefy_client):
 
 
 @pytest.fixture
-def client_session(mcp_server, request) -> ClientSession:
+def client_session(mcp_server, request):
     return create_client_session(
         mcp_server,
         read_timeout_seconds=timedelta(seconds=10),

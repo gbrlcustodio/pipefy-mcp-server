@@ -15,7 +15,7 @@ def anyio_backend():
 
 
 @pytest.fixture(scope="module")
-def client_session() -> ClientSession:
+def client_session():
     return create_client_session(
         mcp_server,
         read_timeout_seconds=timedelta(seconds=10),
@@ -24,7 +24,7 @@ def client_session() -> ClientSession:
 
 
 @pytest.mark.anyio
-async def test_register_tools(client_session: ClientSession):
+async def test_register_tools(client_session):
     expected_tool_names = [
         "add_card_comment",
         "create_card",

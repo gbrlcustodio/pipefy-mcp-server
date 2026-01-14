@@ -382,3 +382,130 @@ async def test_search_pipes_all_organizations_empty():
 
     result = await service.search_pipes(pipe_name="anything")
     assert result == {"organizations": []}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+class TestGetPhaseFields:
+    """Tests for get_phase_fields method."""
+
+    PHASE_ID = 12345
+
+    @pytest.fixture
+    def mock_phase_service(self):
+        """Factory fixture to create a PipeService with mocked phase response."""
+
+        def _create(phase_response: dict):
+            mock_session = AsyncMock()
+            mock_session.execute = AsyncMock(return_value={"phase": phase_response})
+            mock_client = _create_mock_gql_client(mock_session)
+            return PipeService(client=mock_client), mock_session
+
+        return _create
+
+    async def test_returns_all_fields(self, mock_phase_service):
+        """Test get_phase_fields returns all fields for a phase."""
+        mock_fields = [
+            {"id": "status", "label": "Status", "type": "select", "required": True},
+            {"id": "notes", "label": "Notes", "type": "long_text", "required": False},
+        ]
+        service, session = mock_phase_service(
+            {"id": str(self.PHASE_ID), "name": "In Progress", "fields": mock_fields}
+        )
+
+        result = await service.get_phase_fields(self.PHASE_ID)
+
+        session.execute.assert_called_once()
+        variables = session.execute.call_args[1]["variable_values"]
+        assert variables == {"phase_id": self.PHASE_ID}, (
+            "Expected phase_id in variables"
+        )
+        assert result == {
+            "phase_id": str(self.PHASE_ID),
+            "phase_name": "In Progress",
+            "fields": mock_fields,
+        }
+
+    async def test_required_only_filters_correctly(self, mock_phase_service):
+        """Test get_phase_fields with required_only=True filters correctly."""
+        mock_fields = [
+            {"id": "status", "label": "Status", "type": "select", "required": True},
+            {"id": "notes", "label": "Notes", "type": "long_text", "required": False},
+            {
+                "id": "resolution",
+                "label": "Resolution",
+                "type": "short_text",
+                "required": True,
+            },
+        ]
+        service, _ = mock_phase_service(
+            {"id": str(self.PHASE_ID), "name": "Done", "fields": mock_fields}
+        )
+
+        result = await service.get_phase_fields(self.PHASE_ID, required_only=True)
+
+        expected_fields = [
+            {"id": "status", "label": "Status", "type": "select", "required": True},
+            {
+                "id": "resolution",
+                "label": "Resolution",
+                "type": "short_text",
+                "required": True,
+            },
+        ]
+        assert result == {
+            "phase_id": str(self.PHASE_ID),
+            "phase_name": "Done",
+            "fields": expected_fields,
+        }
+
+    @pytest.mark.parametrize(
+        ("required_only", "fields", "phase_name", "expected_message"),
+        [
+            pytest.param(
+                False,
+                [],
+                "Empty Phase",
+                "This phase has no fields configured.",
+                id="no_fields",
+            ),
+            pytest.param(
+                True,
+                [
+                    {
+                        "id": "notes",
+                        "label": "Notes",
+                        "type": "long_text",
+                        "required": False,
+                    },
+                    {
+                        "id": "priority",
+                        "label": "Priority",
+                        "type": "select",
+                        "required": False,
+                    },
+                ],
+                "Review",
+                "This phase has no required fields.",
+                id="all_optional_with_required_only",
+            ),
+        ],
+    )
+    async def test_empty_result_returns_message(
+        self, mock_phase_service, required_only, fields, phase_name, expected_message
+    ):
+        """Test appropriate message when no fields match criteria."""
+        service, _ = mock_phase_service(
+            {"id": str(self.PHASE_ID), "name": phase_name, "fields": fields}
+        )
+
+        result = await service.get_phase_fields(
+            self.PHASE_ID, required_only=required_only
+        )
+
+        assert result == {
+            "phase_id": str(self.PHASE_ID),
+            "phase_name": phase_name,
+            "message": expected_message,
+            "fields": [],
+        }

@@ -5,6 +5,7 @@ from rapidfuzz import fuzz
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.queries.pipe_queries import (
+    GET_PHASE_FIELDS_QUERY,
     GET_PIPE_MEMBERS_QUERY,
     GET_PIPE_QUERY,
     GET_START_FORM_FIELDS_QUERY,
@@ -115,3 +116,46 @@ class PipeService(BasePipefyClient):
                 )
 
         return {"organizations": filtered_orgs}
+
+    async def get_phase_fields(
+        self, phase_id: int, required_only: bool = False
+    ) -> dict:
+        """Get the fields available in a specific phase.
+
+        Args:
+            phase_id: The ID of the phase.
+            required_only: If True, returns only required fields. Default: False.
+
+        Returns:
+            dict: A dictionary containing the phase info and its fields.
+        """
+        variables = {"phase_id": phase_id}
+        result = await self.execute_query(GET_PHASE_FIELDS_QUERY, variables)
+
+        phase = result.get("phase", {})
+        fields = phase.get("fields", [])
+
+        if not fields:
+            return {
+                "phase_id": phase.get("id"),
+                "phase_name": phase.get("name"),
+                "message": "This phase has no fields configured.",
+                "fields": [],
+            }
+
+        if required_only:
+            fields = [field for field in fields if field.get("required")]
+
+            if not fields:
+                return {
+                    "phase_id": phase.get("id"),
+                    "phase_name": phase.get("name"),
+                    "message": "This phase has no required fields.",
+                    "fields": [],
+                }
+
+        return {
+            "phase_id": phase.get("id"),
+            "phase_name": phase.get("name"),
+            "fields": fields,
+        }

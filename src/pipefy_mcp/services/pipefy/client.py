@@ -88,3 +88,9 @@ class PipefyClient:
     async def search_pipes(self, pipe_name: str | None = None) -> dict:
         """Search for pipes across all organizations"""
         return await self._pipe_service.search_pipes(pipe_name)
+
+    async def get_phase_fields(
+        self, phase_id: int, required_only: bool = False
+    ) -> dict:
+        """Get the fields available in a specific phase."""
+        return await self._pipe_service.get_phase_fields(phase_id, required_only)

@@ -26,12 +26,26 @@ CREATE_COMMENT_MUTATION = gql(
     """
 )
 
+DELETE_CARD_MUTATION = gql(
+    """
+    mutation ($input: DeleteCardInput!) {
+        deleteCard(input: $input) {
+            success
+        }
+    }
+    """
+)
+
 GET_CARD_QUERY = gql(
     """
     query ($card_id: ID!) {
         card(id: $card_id) {
             id
             title
+            pipe {
+                id
+                name
+            }
         }
     }
     """

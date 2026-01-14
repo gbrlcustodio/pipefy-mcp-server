@@ -751,7 +751,15 @@ async def test_get_card_passes_card_id_variable():
     card_id = 12345
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"card": {"id": str(card_id), "title": "Test Card", "pipe": {"id": "123", "name": "Test Pipe"}}})
+    mock_session.execute = AsyncMock(
+        return_value={
+            "card": {
+                "id": str(card_id),
+                "title": "Test Card",
+                "pipe": {"id": "123", "name": "Test Pipe"},
+            }
+        }
+    )
 
     mock_client = MagicMock(spec=Client)
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
@@ -765,7 +773,13 @@ async def test_get_card_passes_card_id_variable():
     call_args = mock_session.execute.call_args
     variables = call_args[1]["variable_values"]
     assert variables == {"card_id": card_id}
-    assert result == {"card": {"id": str(card_id), "title": "Test Card", "pipe": {"id": "123", "name": "Test Pipe"}}}
+    assert result == {
+        "card": {
+            "id": str(card_id),
+            "title": "Test Card",
+            "pipe": {"id": "123", "name": "Test Pipe"},
+        }
+    }
 
 
 @pytest.mark.unit

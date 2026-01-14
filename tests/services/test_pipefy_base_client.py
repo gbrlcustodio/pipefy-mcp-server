@@ -78,7 +78,7 @@ def test_init_raises_when_graphql_url_is_none():
         graphql_url=None,
         oauth_url="https://auth.pipefy.com/oauth/token",
         oauth_client="client_id",
-        oauth_secret="client_secret"
+        oauth_secret="client_secret",
     )
 
     with pytest.raises(ValueError) as exc:
@@ -94,7 +94,7 @@ def test_init_raises_when_oauth_url_is_none():
         graphql_url="https://api.pipefy.com/graphql",
         oauth_url=None,
         oauth_client="client_id",
-        oauth_secret="client_secret"
+        oauth_secret="client_secret",
     )
 
     with pytest.raises(ValueError) as exc:
@@ -110,7 +110,7 @@ def test_init_raises_when_oauth_client_is_none():
         graphql_url="https://api.pipefy.com/graphql",
         oauth_url="https://auth.pipefy.com/oauth/token",
         oauth_client=None,
-        oauth_secret="client_secret"
+        oauth_secret="client_secret",
     )
 
     with pytest.raises(ValueError) as exc:
@@ -126,7 +126,7 @@ def test_init_raises_when_oauth_secret_is_none():
         graphql_url="https://api.pipefy.com/graphql",
         oauth_url="https://auth.pipefy.com/oauth/token",
         oauth_client="client_id",
-        oauth_secret=None
+        oauth_secret=None,
     )
 
     with pytest.raises(ValueError) as exc:

@@ -54,7 +54,9 @@ class DeleteCardErrorPayload(TypedDict):
     error: str
 
 
-DeleteCardPayload = DeleteCardPreviewPayload | DeleteCardSuccessPayload | DeleteCardErrorPayload
+DeleteCardPayload = (
+    DeleteCardPreviewPayload | DeleteCardSuccessPayload | DeleteCardErrorPayload
+)
 
 
 def build_add_card_comment_success_payload(
@@ -202,9 +204,7 @@ def _extract_graphql_correlation_id(exc: BaseException) -> str | None:
     if not raw:
         return None
 
-    match = re.search(
-        r"""['"]correlation_id['"]\s*[:=]\s*['"]([^'"]+)['"]""", raw
-    )
+    match = re.search(r"""['"]correlation_id['"]\s*[:=]\s*['"]([^'"]+)['"]""", raw)
     if match:
         return match.group(1)
     return None
@@ -601,7 +601,7 @@ class PipeTools:
             # Deletion mode: fetch card details first, then execute the deletion
             card_title = "Unknown"
             pipe_name = "Unknown Pipe"
-            
+
             try:
                 # Fetch card details for success message
                 card_response = await client.get_card(card_id)

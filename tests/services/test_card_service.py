@@ -228,9 +228,7 @@ async def test_delete_card_success_scenario():
     card_id = 12345
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={"deleteCard": {"success": True}}
-    )
+    mock_session.execute = AsyncMock(return_value={"deleteCard": {"success": True}})
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)
@@ -249,16 +247,18 @@ async def test_delete_card_resource_not_found_error():
 
     mock_session = AsyncMock()
     mock_session.execute = AsyncMock(
-        return_value={"deleteCard": {"success": False, "errors": ["RESOURCE_NOT_FOUND"]}}
+        return_value={
+            "deleteCard": {"success": False, "errors": ["RESOURCE_NOT_FOUND"]}
+        }
     )
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)
     result = await service.delete_card(card_id)
 
-    assert result == {"deleteCard": {"success": False, "errors": ["RESOURCE_NOT_FOUND"]}}, (
-        "Expected error response passthrough"
-    )
+    assert result == {
+        "deleteCard": {"success": False, "errors": ["RESOURCE_NOT_FOUND"]}
+    }, "Expected error response passthrough"
 
 
 @pytest.mark.unit
@@ -276,6 +276,6 @@ async def test_delete_card_permission_denied_error():
     service = CardService(client=mock_client)
     result = await service.delete_card(card_id)
 
-    assert result == {"deleteCard": {"success": False, "errors": ["PERMISSION_DENIED"]}}, (
-        "Expected error response passthrough"
-    )
+    assert result == {
+        "deleteCard": {"success": False, "errors": ["PERMISSION_DENIED"]}
+    }, "Expected error response passthrough"

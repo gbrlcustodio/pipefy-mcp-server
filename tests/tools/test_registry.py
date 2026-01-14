@@ -20,7 +20,7 @@ class TestToolRegistry:
         assert registry.mcp is mock_mcp
         assert registry.services_container is mock_container
 
-    @patch('pipefy_mcp.tools.registry.PipeTools.register')
+    @patch("pipefy_mcp.tools.registry.PipeTools.register")
     def test_register_tools_calls_pipe_tools_register(self, mock_pipe_tools_register):
         """Test that register_tools calls PipeTools.register with correct arguments"""
         mock_mcp = Mock(spec=FastMCP)
@@ -45,4 +45,6 @@ class TestToolRegistry:
         with pytest.raises(ValueError) as exc:
             registry.register_tools()
 
-        assert "Pipefy client is not initialized in services container" in str(exc.value)
+        assert "Pipefy client is not initialized in services container" in str(
+            exc.value
+        )

@@ -36,18 +36,20 @@ class TestServicesContainer:
 
         assert container.pipefy_client is None
 
-    @patch('pipefy_mcp.core.container.PipefyClient')
+    @patch("pipefy_mcp.core.container.PipefyClient")
     def test_initialize_services_creates_pipefy_client(self, mock_pipefy_client_class):
         """Test that initialize_services creates and assigns PipefyClient"""
         mock_client = Mock(spec=PipefyClient)
         mock_pipefy_client_class.return_value = mock_client
 
-        settings = Settings(pipefy=PipefySettings(
-            graphql_url="https://api.pipefy.com/graphql",
-            oauth_url="https://auth.pipefy.com/oauth/token",
-            oauth_client="client_id",
-            oauth_secret="client_secret"
-        ))
+        settings = Settings(
+            pipefy=PipefySettings(
+                graphql_url="https://api.pipefy.com/graphql",
+                oauth_url="https://auth.pipefy.com/oauth/token",
+                oauth_client="client_id",
+                oauth_secret="client_secret",
+            )
+        )
 
         container = ServicesContainer()
         container.initialize_services(settings)

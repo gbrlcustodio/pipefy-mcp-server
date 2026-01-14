@@ -44,7 +44,9 @@ class DeleteCardErrorPayload(TypedDict):
     error: str
 
 
-DeleteCardPayload = DeleteCardPreviewPayload | DeleteCardSuccessPayload | DeleteCardErrorPayload
+DeleteCardPayload = (
+    DeleteCardPreviewPayload | DeleteCardSuccessPayload | DeleteCardErrorPayload
+)
 
 # =============================================================================
 # Fixtures
@@ -310,11 +312,7 @@ async def test_delete_card_tool_confirm_false_returns_preview(
     """Test delete_card tool with confirm=False returns preview without deletion."""
     # Setup mock responses
     mock_pipefy_client.get_card.return_value = {
-        "card": {
-            "id": "12345",
-            "title": "Test Card",
-            "pipe": {"name": "Test Pipe"}
-        }
+        "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
     }
 
     async with client_session as session:
@@ -375,13 +373,12 @@ async def test_delete_card_tool_resource_not_found_error_mapping(
     """Test delete_card tool maps RESOURCE_NOT_FOUND GraphQL exception to friendly message."""
     # Simulate GraphQL exception with RESOURCE_NOT_FOUND code
     from gql.transport.exceptions import TransportQueryError
-    
+
     error = TransportQueryError(
         "GraphQL Error",
-        errors=[{
-            "message": "Card not found",
-            "extensions": {"code": "RESOURCE_NOT_FOUND"}
-        }]
+        errors=[
+            {"message": "Card not found", "extensions": {"code": "RESOURCE_NOT_FOUND"}}
+        ],
     )
     mock_pipefy_client.get_card.side_effect = error
 
@@ -412,7 +409,7 @@ async def test_delete_card_tool_permission_denied_error_mapping(
     """Test delete_card tool maps PERMISSION_DENIED GraphQL exception to friendly message."""
     # Simulate GraphQL exception with PERMISSION_DENIED code
     from gql.transport.exceptions import TransportQueryError
-    
+
     mock_pipefy_client.get_card.return_value = {
         "card": {
             "id": "12345",
@@ -420,13 +417,15 @@ async def test_delete_card_tool_permission_denied_error_mapping(
             "pipe": {"name": "Test Pipe"},
         }
     }
-    
+
     error = TransportQueryError(
         "GraphQL Error",
-        errors=[{
-            "message": "Permission denied",
-            "extensions": {"code": "PERMISSION_DENIED"}
-        }]
+        errors=[
+            {
+                "message": "Permission denied",
+                "extensions": {"code": "PERMISSION_DENIED"},
+            }
+        ],
     )
     mock_pipefy_client.delete_card.side_effect = error
 
@@ -462,9 +461,7 @@ async def test_delete_card_tool_deletion_fails_with_success_false(
         }
     }
     # API returns success: False without throwing exception
-    mock_pipefy_client.delete_card.return_value = {
-        "deleteCard": {"success": False}
-    }
+    mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": False}}
 
     async with client_session as session:
         result = await session.call_tool(
@@ -492,15 +489,9 @@ async def test_delete_card_tool_confirm_true_executes_deletion(
     """Test delete_card tool with confirm=True executes deletion."""
     # Setup mock responses for both get_card and delete_card
     mock_pipefy_client.get_card.return_value = {
-        "card": {
-            "id": "12345",
-            "title": "Test Card",
-            "pipe": {"name": "Test Pipe"}
-        }
+        "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
     }
-    mock_pipefy_client.delete_card.return_value = {
-        "deleteCard": {"success": True}
-    }
+    mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": True}}
 
     async with client_session as session:
         result = await session.call_tool(

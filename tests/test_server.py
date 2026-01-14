@@ -1,12 +1,12 @@
 from datetime import timedelta
 
 import pytest
-from mcp import ClientSession
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
 from pipefy_mcp.server import mcp as mcp_server
+from pipefy_mcp.settings import settings
 
 
 @pytest.fixture
@@ -25,9 +25,14 @@ def client_session():
 
 @pytest.mark.anyio
 async def test_register_tools(client_session):
+    # Skip if settings are not properly configured (e.g., no GraphQL URL)
+    if not settings.pipefy.graphql_url:
+        pytest.skip("GraphQL URL not configured for integration tests")
+
     expected_tool_names = [
         "add_card_comment",
         "create_card",
+        "delete_card",
         "get_card",
         "get_cards",
         "get_pipe",

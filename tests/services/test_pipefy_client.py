@@ -751,7 +751,7 @@ async def test_get_card_passes_card_id_variable():
     card_id = 12345
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"card": {"id": str(card_id)}})
+    mock_session.execute = AsyncMock(return_value={"card": {"id": str(card_id), "title": "Test Card", "pipe": {"id": "123", "name": "Test Pipe"}}})
 
     mock_client = MagicMock(spec=Client)
     mock_client.__aenter__ = AsyncMock(return_value=mock_session)
@@ -765,7 +765,7 @@ async def test_get_card_passes_card_id_variable():
     call_args = mock_session.execute.call_args
     variables = call_args[1]["variable_values"]
     assert variables == {"card_id": card_id}
-    assert result == {"card": {"id": str(card_id)}}
+    assert result == {"card": {"id": str(card_id), "title": "Test Card", "pipe": {"id": "123", "name": "Test Pipe"}}}
 
 
 @pytest.mark.unit
@@ -869,3 +869,21 @@ async def test_move_card_to_phase_variable_shape():
         "input": {"card_id": card_id, "destination_phase_id": destination_phase_id}
     }
     assert result == {"moveCardToPhase": {"clientMutationId": None}}
+
+
+@pytest.mark.asyncio
+async def test_search_pipes_delegates_to_pipe_service():
+    """Test search_pipes delegates unchanged to PipeService.search_pipes."""
+    pipe_name = "test pipe"
+    expected = {"pipes": []}
+
+    pipe_service = AsyncMock()
+    pipe_service.search_pipes = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._pipe_service = pipe_service
+
+    result = await client.search_pipes(pipe_name)
+
+    pipe_service.search_pipes.assert_called_once_with(pipe_name)
+    assert result == expected

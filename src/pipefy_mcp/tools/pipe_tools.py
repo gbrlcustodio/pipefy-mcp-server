@@ -1,3 +1,4 @@
+import re
 from typing import Any, Literal
 
 from mcp.server.fastmcp import Context, FastMCP
@@ -29,6 +30,31 @@ class AddCardCommentErrorPayload(TypedDict):
 
 
 AddCardCommentPayload = AddCardCommentSuccessPayload | AddCardCommentErrorPayload
+
+
+class DeleteCardPreviewPayload(TypedDict):
+    success: Literal[False]
+    requires_confirmation: Literal[True]
+    card_id: int
+    card_title: str
+    pipe_name: str
+    message: str
+
+
+class DeleteCardSuccessPayload(TypedDict):
+    success: Literal[True]
+    card_id: int
+    card_title: str
+    pipe_name: str
+    message: str
+
+
+class DeleteCardErrorPayload(TypedDict):
+    success: Literal[False]
+    error: str
+
+
+DeleteCardPayload = DeleteCardPreviewPayload | DeleteCardSuccessPayload | DeleteCardErrorPayload
 
 
 def build_add_card_comment_success_payload(
@@ -104,6 +130,132 @@ def map_add_card_comment_error_to_message(exc: BaseException) -> str:
 def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentErrorPayload:
     """Build the public error payload for add_card_comment."""
     return {"success": False, "error": message}
+
+
+def build_delete_card_preview_payload(
+    *, card_id: int, card_title: str, pipe_name: str
+) -> DeleteCardPreviewPayload:
+    """Build the preview payload for delete_card."""
+    return {
+        "success": False,
+        "requires_confirmation": True,
+        "card_id": card_id,
+        "card_title": card_title,
+        "pipe_name": pipe_name,
+        "message": f"⚠️ You are about to permanently delete card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}'. This action is irreversible. Set 'confirm=True' to proceed.",
+    }
+
+
+def build_delete_card_success_payload(
+    *, card_id: int, card_title: str, pipe_name: str
+) -> DeleteCardSuccessPayload:
+    """Build the success payload for delete_card."""
+    return {
+        "success": True,
+        "card_id": card_id,
+        "card_title": card_title,
+        "pipe_name": pipe_name,
+        "message": f"Card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}' has been permanently deleted.",
+    }
+
+
+def build_delete_card_error_payload(*, message: str) -> DeleteCardErrorPayload:
+    """Build the error payload for delete_card."""
+    return {"success": False, "error": message}
+
+
+def _extract_graphql_error_codes(exc: BaseException) -> list[str]:
+    """Extract GraphQL `extensions.code` values from gql/GraphQL exceptions."""
+    codes: list[str] = []
+
+    errors = getattr(exc, "errors", None)
+    if isinstance(errors, list):
+        for item in errors:
+            if not isinstance(item, dict):
+                continue
+            extensions = item.get("extensions")
+            if not isinstance(extensions, dict):
+                continue
+            code = extensions.get("code")
+            if isinstance(code, str) and code:
+                codes.append(code)
+
+    # Fallback: best-effort parse from exception string (some clients stringify errors)
+    raw = str(exc)
+    if raw:
+        for match in re.findall(r"""['"]code['"]\s*[:=]\s*['"]([A-Z_]+)['"]""", raw):
+            codes.append(match)
+
+    # De-dup while preserving order
+    seen: set[str] = set()
+    unique: list[str] = []
+    for code in codes:
+        if code not in seen:
+            seen.add(code)
+            unique.append(code)
+    return unique
+
+
+def _extract_graphql_correlation_id(exc: BaseException) -> str | None:
+    """Best-effort extraction of correlation_id from GraphQL exception strings."""
+    raw = str(exc)
+    if not raw:
+        return None
+
+    match = re.search(
+        r"""['"]correlation_id['"]\s*[:=]\s*['"]([^'"]+)['"]""", raw
+    )
+    if match:
+        return match.group(1)
+    return None
+
+
+def _with_debug_suffix(
+    message: str, *, debug: bool, codes: list[str], correlation_id: str | None
+) -> str:
+    """Append debug context to a single error string without changing payload shape."""
+    if not debug:
+        return message
+
+    parts: list[str] = []
+    if codes:
+        parts.append(f"codes={','.join(codes)}")
+    if correlation_id:
+        parts.append(f"correlation_id={correlation_id}")
+
+    if not parts:
+        return message
+    return f"{message} (debug: {'; '.join(parts)})"
+
+
+def map_delete_card_error_to_message(
+    *, card_id: int, card_title: str, codes: list[str]
+) -> str:
+    """Map GraphQL error codes to PRD-compliant friendly messages for delete_card."""
+    for code in codes:
+        if code == "RESOURCE_NOT_FOUND":
+            return (
+                f"Card with ID {card_id} not found. "
+                "Verify the card exists and you have access permissions."
+            )
+        if code == "PERMISSION_DENIED":
+            return (
+                f"You don't have permission to delete card {card_id}. "
+                "Please check your access permissions."
+            )
+        if code == "RECORD_NOT_DESTROYED":
+            return (
+                f"Failed to delete card '{card_title}' (ID: {card_id}). "
+                "Please try again or contact support."
+            )
+
+    if codes:
+        return f"Failed to delete card '{card_title}' (ID: {card_id}). Codes: {', '.join(codes)}"
+
+    return (
+        f"Failed to delete card '{card_title}' (ID: {card_id}). "
+        "Please try again or contact support."
+    )
 
 
 class PipeTools:
@@ -390,6 +542,103 @@ class PipeTools:
                           - match_score: Fuzzy match score (0-100) when pipe_name is provided.
             """
             return await client.search_pipes(pipe_name)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                destructiveHint=True,
+            ),
+        )
+        async def delete_card(
+            card_id: int, confirm: bool = False, debug: bool = False
+        ) -> DeleteCardPayload:
+            """Delete a card from Pipefy.
+
+            This is a destructive operation that permanently removes a card.
+            Use with caution.
+
+            Args:
+                card_id: The ID of the card to delete
+                confirm: Set to true to confirm deletion. If false, returns a preview only.
+                debug: When true, appends GraphQL error codes and correlation_id to the error message.
+
+            Returns:
+                Preview information when confirm=false, or success/error status when confirm=true.
+            """
+            # Input validation
+            if card_id <= 0:
+                return build_delete_card_error_payload(
+                    message="Invalid 'card_id'. Please provide a positive integer."
+                )
+
+            if not confirm:
+                # Preview mode: fetch card details and return preview
+                try:
+                    card_response = await client.get_card(card_id)
+                    card_data = card_response["card"]
+                    card_title = card_data["title"]
+                    pipe_name = card_data.get("pipe", {}).get("name", "Unknown Pipe")
+
+                    return build_delete_card_preview_payload(
+                        card_id=card_id,
+                        card_title=card_title,
+                        pipe_name=pipe_name,
+                    )
+                except Exception as exc:
+                    codes = _extract_graphql_error_codes(exc)
+                    correlation_id = _extract_graphql_correlation_id(exc)
+                    base = map_delete_card_error_to_message(
+                        card_id=card_id, card_title="Unknown", codes=codes
+                    )
+                    return build_delete_card_error_payload(
+                        message=_with_debug_suffix(
+                            base,
+                            debug=debug,
+                            codes=codes,
+                            correlation_id=correlation_id,
+                        )
+                    )
+
+            # Deletion mode: fetch card details first, then execute the deletion
+            card_title = "Unknown"
+            pipe_name = "Unknown Pipe"
+            
+            try:
+                # Fetch card details for success message
+                card_response = await client.get_card(card_id)
+                card_data = card_response["card"]
+                card_title = card_data["title"]
+                pipe_name = card_data.get("pipe", {}).get("name", "Unknown Pipe")
+
+                # Execute the deletion
+                delete_response = await client.delete_card(card_id)
+
+                delete_data = delete_response.get("deleteCard", {})
+
+                if delete_data.get("success"):
+                    return build_delete_card_success_payload(
+                        card_id=card_id,
+                        card_title=card_title,
+                        pipe_name=pipe_name,
+                    )
+                else:
+                    # Deletion failed - API returned success: false
+                    return build_delete_card_error_payload(
+                        message=f"Failed to delete card '{card_title}' (ID: {card_id}). Please try again or contact support."
+                    )
+            except Exception as exc:
+                codes = _extract_graphql_error_codes(exc)
+                correlation_id = _extract_graphql_correlation_id(exc)
+                base = map_delete_card_error_to_message(
+                    card_id=card_id, card_title=card_title, codes=codes
+                )
+                return build_delete_card_error_payload(
+                    message=_with_debug_suffix(
+                        base,
+                        debug=debug,
+                        codes=codes,
+                        correlation_id=correlation_id,
+                    )
+                )
 
     @staticmethod
     async def _elicit_card_details(

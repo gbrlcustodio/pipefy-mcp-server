@@ -296,6 +296,27 @@ class TestGetPhaseFieldsTool:
             assert response["phase_name"] == "In Progress"
             assert response["fields"] == mock_fields
 
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_permission_denied(self, client_session, mock_pipefy_client):
+        phase_id = 3190653829
+        permission_error = Exception("Permission denied")
+        permission_error.errors = [
+            {
+                "message": "Permission denied",
+                "extensions": {"code": "PERMISSION_DENIED"},
+            }
+        ]
+        mock_pipefy_client.get_phase_fields = AsyncMock(side_effect=permission_error)
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_phase_fields",
+                {"phase_id": phase_id},
+            )
+
+            assert result.isError is True, "Expected tool error for permission denied"
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(phase_id, False)
+
 
 @pytest.mark.anyio
 class TestFillCardPhaseFieldsTool:
@@ -371,7 +392,10 @@ class TestFillCardPhaseFieldsTool:
             assert result.isError is False
             mock_pipefy_client.update_card.assert_not_called()
             response = _extract_call_tool_payload(result)
-            assert response.get("error") == "Phase field update cancelled by user."
+            assert response == {
+                "success": False,
+                "error": "Phase field update cancelled by user.",
+            }
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_without_elicitation(
@@ -439,3 +463,31 @@ class TestFillCardPhaseFieldsTool:
             mock_pipefy_client.update_card.assert_not_called()
             response = _extract_call_tool_payload(result)
             assert response.get("message") == "No fields to update."
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_permission_denied(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        card_id = 456
+        phase_id = 3190653829
+        permission_error = Exception("Permission denied")
+        permission_error.errors = [
+            {
+                "message": "Permission denied",
+                "extensions": {"code": "PERMISSION_DENIED"},
+            }
+        ]
+        mock_pipefy_client.get_phase_fields = AsyncMock(side_effect=permission_error)
+        mock_pipefy_client.update_card = AsyncMock()
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "fill_card_phase_fields",
+                {"card_id": card_id, "phase_id": phase_id},
+            )
+
+            assert result.isError is True, "Expected tool error for permission denied"
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(phase_id, False)
+            mock_pipefy_client.update_card.assert_not_called()

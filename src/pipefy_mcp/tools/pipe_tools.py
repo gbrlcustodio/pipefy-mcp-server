@@ -443,10 +443,14 @@ class PipeTools:
                         ctx=ctx,
                     )
                 except UserCancelledError:
-                    return {"error": "Phase field update cancelled by user."}
+                    return {
+                        "success": False,
+                        "error": "Phase field update cancelled by user.",
+                    }
 
             if not field_data:
                 return {
+                    "success": True,
                     "message": "No fields to update.",
                     "phase_id": phase_id,
                     "phase_name": phase_name,

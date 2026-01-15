@@ -135,24 +135,22 @@ class PipeService(BasePipefyClient):
         phase = result.get("phase", {})
         fields = phase.get("fields", [])
 
+        empty_reason = ""
+
         if not fields:
+            empty_reason = "This phase has no fields configured."
+        elif required_only:
+            fields = [field for field in fields if field.get("required")]
+            if not fields:
+                empty_reason = "This phase has no required fields."
+
+        if empty_reason:
             return {
                 "phase_id": phase.get("id"),
                 "phase_name": phase.get("name"),
-                "message": "This phase has no fields configured.",
+                "message": empty_reason,
                 "fields": [],
             }
-
-        if required_only:
-            fields = [field for field in fields if field.get("required")]
-
-            if not fields:
-                return {
-                    "phase_id": phase.get("id"),
-                    "phase_name": phase.get("name"),
-                    "message": "This phase has no required fields.",
-                    "fields": [],
-                }
 
         return {
             "phase_id": phase.get("id"),

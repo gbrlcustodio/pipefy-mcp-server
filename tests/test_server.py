@@ -28,8 +28,10 @@ async def test_register_tools(client_session: ClientSession):
     expected_tool_names = [
         "add_card_comment",
         "create_card",
+        "fill_card_phase_fields",
         "get_card",
         "get_cards",
+        "get_phase_fields",
         "get_pipe",
         "get_pipe_members",
         "get_start_form_fields",

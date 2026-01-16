@@ -6,7 +6,6 @@ from mcp.shared.memory import (
 )
 
 from pipefy_mcp.server import mcp as mcp_server
-from pipefy_mcp.settings import settings
 
 
 @pytest.fixture

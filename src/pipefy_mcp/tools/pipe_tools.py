@@ -161,7 +161,6 @@ def build_delete_card_success_payload(
     }
 
 
-
 class DeleteCardConfirmation(BaseModel):
     confirm: bool = Field(
         ...,
@@ -719,7 +718,7 @@ class PipeTools:
                     )
 
                     if result.action != "accept":
-                         # User manually cancelled via UI
+                        # User manually cancelled via UI
                         return build_delete_card_error_payload(
                             message="Card deletion cancelled by user."
                         )
@@ -731,10 +730,10 @@ class PipeTools:
                         )
 
                 except Exception as e:
-                     # Fallback if elicitation fails
-                     return build_delete_card_error_payload(
-                         message=f"Failed to request confirmation: {str(e)}"
-                     )
+                    # Fallback if elicitation fails
+                    return build_delete_card_error_payload(
+                        message=f"Failed to request confirmation: {str(e)}"
+                    )
 
             # Execute the deletion
             try:

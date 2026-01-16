@@ -24,8 +24,6 @@ def client_session():
 
 @pytest.mark.anyio
 async def test_register_tools(client_session):
-
-
     expected_tool_names = [
         "add_card_comment",
         "create_card",

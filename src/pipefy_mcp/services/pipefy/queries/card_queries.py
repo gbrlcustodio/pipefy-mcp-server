@@ -46,6 +46,10 @@ GET_CARD_QUERY = gql(
                 id
                 name
             }
+            current_phase {
+                id
+                name
+            }
         }
     }
     """

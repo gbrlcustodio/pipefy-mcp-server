@@ -304,8 +304,11 @@ class PipeTools:
 
             if can_elicit:
                 try:
-                    card_data = await PipeTools._elicit_card_details(
-                        pipe_id, fields, expected_fields, ctx
+                    card_data = await PipeTools._elicit_field_details(
+                        message=f"Creating a card in pipe {pipe_id}",
+                        prefilled_fields=fields,
+                        expected_fields=expected_fields,
+                        ctx=ctx,
                     )
                 except UserCancelledError:
                     return {"error": "Card creation cancelled by user."}
@@ -525,6 +528,109 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
+        async def get_phase_fields(phase_id: int, required_only: bool = False) -> dict:
+            """Get the fields available in a specific phase.
+
+            Use this tool to understand which fields need to be filled on a specific phase.
+            Returns field definitions including type, options, description
+            and whether they are required.
+
+            Args:
+                phase_id: The ID of the phase to get fields from.
+                          You can find phase IDs by calling get_pipe first.
+                required_only: If True, returns only required fields. Default: False.
+                               Use this to see the minimum fields needed in the phase.
+
+            Returns:
+                dict: Contains phase info and 'fields' array with field properties:
+                      - id: Field identifier (slug) used when updating cards
+                      - label: Display name of the field
+                      - type: Field type (short_text, select, date, etc.)
+                      - required: Whether the field is mandatory
+                      - editable: Whether the field can be edited
+                      - options: Available options for select/radio/checklist fields
+                      - description: Field description text
+                      - help: Help text for the field
+            """
+            return await client.get_phase_fields(phase_id, required_only)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                idempotentHint=False,
+            ),
+        )
+        async def fill_card_phase_fields(
+            ctx: Context[ServerSession, None],
+            card_id: int,
+            phase_id: int,
+            fields: dict[str, Any] | None = None,
+            required_fields_only: bool = False,
+        ) -> dict:
+            """Fill in the phase fields for a card using interactive elicitation.
+
+            This tool helps fill in the fields that are specific to a phase.
+            When elicitation is supported, it will prompt the user for field values.
+
+            Args:
+                card_id: The ID of the card to update
+                phase_id: The ID of the phase whose fields should be filled
+                fields: A dictionary of fields that can be pre-filled.
+                        This argument should be provided when the LLM is aware
+                        of the intended values for certain fields.
+                required_fields_only: If True, only elicit required fields. Default: False
+
+            Returns:
+                dict: GraphQL response with success status and updated card information
+            """
+            phase_fields_result = await client.get_phase_fields(
+                phase_id, required_fields_only
+            )
+            expected_fields = phase_fields_result.get("fields", [])
+            phase_name = phase_fields_result.get("phase_name", f"Phase {phase_id}")
+
+            await ctx.debug(f"Expected fields for phase {phase_id}: {expected_fields}")
+            await ctx.debug(f"Provided fields: {fields}")
+
+            field_data = fields or {}
+            can_elicit = ctx.session.client_params.capabilities.elicitation
+
+            if can_elicit and expected_fields:
+                try:
+                    field_data = await PipeTools._elicit_field_details(
+                        message=f"Filling fields for phase '{phase_name}' (ID: {phase_id})",
+                        prefilled_fields=fields,
+                        expected_fields=expected_fields,
+                        ctx=ctx,
+                    )
+                except UserCancelledError:
+                    return {
+                        "success": False,
+                        "error": "Phase field update cancelled by user.",
+                    }
+
+            if not field_data:
+                return {
+                    "success": True,
+                    "message": "No fields to update.",
+                    "phase_id": phase_id,
+                    "phase_name": phase_name,
+                }
+
+            field_updates = [
+                {"field_id": field_id, "value": value}
+                for field_id, value in field_data.items()
+            ]
+
+            return await client.update_card(
+                card_id=card_id,
+                field_updates=field_updates,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
         async def search_pipes(pipe_name: str | None = None) -> dict:
             """Search for all accessible pipes across all organizations.
 
@@ -662,20 +768,20 @@ class PipeTools:
                 )
 
     @staticmethod
-    async def _elicit_card_details(
-        pipe_id: int,
+    async def _elicit_field_details(
+        message: str,
         prefilled_fields: dict[str, Any] | None,
         expected_fields: list,
         ctx: Context[ServerSession, None],
     ) -> dict:
-        """Handle interactive card creation with elicitation."""
+        """Handle interactive field elicitation."""
         DynamicFormModel = create_form_model(expected_fields, prefilled_fields)
         await ctx.debug(
             f"Created DynamicFormModel: {DynamicFormModel.model_json_schema()}"
         )
 
         result = await ctx.elicit(
-            message=f"Creating a card in pipe {pipe_id}",
+            message=message,
             schema=DynamicFormModel,
         )
         await ctx.debug(f"Elicited result: {result}")

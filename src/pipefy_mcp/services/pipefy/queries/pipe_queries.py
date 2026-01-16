@@ -79,3 +79,24 @@ GET_PIPE_MEMBERS_QUERY = gql(
     }
     """
 )
+
+GET_PHASE_FIELDS_QUERY = gql(
+    """
+    query GetPhaseFields($phase_id: ID!) {
+        phase(id: $phase_id) {
+            id
+            name
+            fields {
+                id
+                label
+                type
+                required
+                editable
+                options
+                description
+                help
+            }
+        }
+    }
+    """
+)

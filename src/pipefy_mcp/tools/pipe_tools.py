@@ -677,6 +677,10 @@ class PipeTools:
                 Success/error status of the deletion.
             """
             # Input validation
+            if not isinstance(card_id, int):
+                return build_delete_card_error_payload(
+                    message=f"Invalid 'card_id'. Expected an integer, got {type(card_id).__name__}."
+                )
             if card_id <= 0:
                 return build_delete_card_error_payload(
                     message="Invalid 'card_id'. Please provide a positive integer."

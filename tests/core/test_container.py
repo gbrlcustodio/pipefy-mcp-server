@@ -1,4 +1,5 @@
 from unittest.mock import Mock, patch
+import pytest
 
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.services.pipefy import PipefyClient
@@ -8,10 +9,15 @@ from pipefy_mcp.settings import PipefySettings, Settings
 class TestServicesContainer:
     """Test cases for ServicesContainer"""
 
+    @pytest.fixture(autouse=True)
+    def reset_singleton(self):
+        """Reset singleton before and after each test"""
+        ServicesContainer._instance = None
+        yield
+        ServicesContainer._instance = None
+
     def test_get_instance_returns_singleton(self):
         """Test that get_instance returns the same instance"""
-        # Reset singleton for test
-        ServicesContainer._instance = None
 
         instance1 = ServicesContainer.get_instance()
         instance2 = ServicesContainer.get_instance()
@@ -21,8 +27,6 @@ class TestServicesContainer:
 
     def test_get_instance_creates_new_instance_when_none(self):
         """Test that get_instance creates a new instance when _instance is None"""
-        # Reset singleton for test
-        ServicesContainer._instance = None
 
         instance = ServicesContainer.get_instance()
 

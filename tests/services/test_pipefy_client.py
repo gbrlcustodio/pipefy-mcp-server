@@ -756,6 +756,7 @@ async def test_get_card_passes_card_id_variable():
             "card": {
                 "id": str(card_id),
                 "title": "Test Card",
+                "current_phase": {"id": "1", "name": "Test Phase"},
                 "pipe": {"id": "123", "name": "Test Pipe"},
             }
         }
@@ -777,6 +778,7 @@ async def test_get_card_passes_card_id_variable():
         "card": {
             "id": str(card_id),
             "title": "Test Card",
+            "current_phase": {"id": "1", "name": "Test Phase"},
             "pipe": {"id": "123", "name": "Test Pipe"},
         }
     }

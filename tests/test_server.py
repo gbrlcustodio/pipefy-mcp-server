@@ -25,9 +25,7 @@ def client_session():
 
 @pytest.mark.anyio
 async def test_register_tools(client_session):
-    # Skip if settings are not properly configured (e.g., no GraphQL URL)
-    if not settings.pipefy.graphql_url:
-        pytest.skip("GraphQL URL not configured for integration tests")
+
 
     expected_tool_names = [
         "add_card_comment",

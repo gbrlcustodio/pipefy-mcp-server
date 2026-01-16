@@ -8,6 +8,7 @@ from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.queries.card_queries import (
     CREATE_CARD_MUTATION,
     CREATE_COMMENT_MUTATION,
+    DELETE_CARD_MUTATION,
     GET_CARD_QUERY,
     GET_CARDS_QUERY,
     MOVE_CARD_TO_PHASE_MUTATION,
@@ -37,6 +38,11 @@ class CardService(BasePipefyClient):
         """Create a text comment on the specified card."""
         variables = {"input": {"card_id": card_id, "text": text}}
         return await self.execute_query(CREATE_COMMENT_MUTATION, variables)
+
+    async def delete_card(self, card_id: int) -> dict:
+        """Delete a card by its ID."""
+        variables = {"input": {"id": card_id}}
+        return await self.execute_query(DELETE_CARD_MUTATION, variables)
 
     async def get_card(self, card_id: int) -> dict:
         """Get a card by its ID."""

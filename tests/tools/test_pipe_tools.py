@@ -521,221 +521,215 @@ class TestFillCardPhaseFieldsTool:
             mock_pipefy_client.update_card.assert_not_called()
 
 
-# =============================================================================
-# Delete Card Tool Tests
-# =============================================================================
-
-
 @pytest.mark.anyio
-@pytest.mark.parametrize(
-    "client_session",
-    [elicitation_callback_for(action="decline")],
-    indirect=True,
-)
-async def test_delete_card_tool_user_declines_confirmation(
-    client_session,
-    mock_pipefy_client,
-):
-    """Test delete_card tool when user declines confirmation via elicitation."""
-    # Setup mock responses
-    mock_pipefy_client.get_card.return_value = {
-        "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
-    }
+class TestDeleteCardTool:
+    """Test cases for delete_card tool."""
 
-    async with client_session as session:
-        result = await session.call_tool(
-            "delete_card",
-            {"card_id": 12345},
-        )
-
-        assert result.isError is False
-        # Should fetch card for preview but not delete when user declines
-        mock_pipefy_client.get_card.assert_called_once_with(12345)
-        mock_pipefy_client.delete_card.assert_not_called()
-
-        payload = _extract_call_tool_payload(result)
-        expected_payload: DeleteCardErrorPayload = {
-            "success": False,
-            "error": "Card deletion cancelled by user.",
-        }
-        assert payload == expected_payload
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("client_session", [None], indirect=True)
-async def test_delete_card_tool_invalid_card_id_returns_error(
-    client_session,
-    mock_pipefy_client,
-):
-    """Test delete_card tool with invalid card_id returns error payload."""
-    async with client_session as session:
-        result = await session.call_tool(
-            "delete_card",
-            {"card_id": 0, "confirm": True},
-        )
-
-        assert result.isError is False
-        # Should not call any client methods for invalid input
-        mock_pipefy_client.get_card.assert_not_called()
-        mock_pipefy_client.delete_card.assert_not_called()
-
-        payload = _extract_call_tool_payload(result)
-        expected_payload: DeleteCardErrorPayload = {
-            "success": False,
-            "error": "Invalid 'card_id'. Please provide a positive integer.",
-        }
-        assert payload == expected_payload
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("client_session", [None], indirect=True)
-async def test_delete_card_tool_resource_not_found_error_mapping(
-    client_session,
-    mock_pipefy_client,
-):
-    """Test delete_card tool maps RESOURCE_NOT_FOUND GraphQL exception to friendly message."""
-    # Simulate GraphQL exception with RESOURCE_NOT_FOUND code
-    from gql.transport.exceptions import TransportQueryError
-
-    error = TransportQueryError(
-        "GraphQL Error",
-        errors=[
-            {"message": "Card not found", "extensions": {"code": "RESOURCE_NOT_FOUND"}}
-        ],
+    @pytest.mark.parametrize(
+        "client_session",
+        [elicitation_callback_for(action="decline")],
+        indirect=True,
     )
-    mock_pipefy_client.get_card.side_effect = error
-
-    async with client_session as session:
-        result = await session.call_tool(
-            "delete_card",
-            {"card_id": 99999, "confirm": True},
-        )
-
-        assert result.isError is False
-        mock_pipefy_client.get_card.assert_called_once_with(99999)
-        mock_pipefy_client.delete_card.assert_not_called()
-
-        payload = _extract_call_tool_payload(result)
-        expected_payload: DeleteCardErrorPayload = {
-            "success": False,
-            "error": "Card with ID 99999 not found. Verify the card exists and you have access permissions.",
+    async def test_user_declines_confirmation(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """Test delete_card tool when user declines confirmation via elicitation."""
+        # Setup mock responses
+        mock_pipefy_client.get_card.return_value = {
+            "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
         }
-        assert payload == expected_payload
 
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card",
+                {"card_id": 12345},
+            )
 
-@pytest.mark.anyio
-@pytest.mark.parametrize("client_session", [None], indirect=True)
-async def test_delete_card_tool_permission_denied_error_mapping(
-    client_session,
-    mock_pipefy_client,
-):
-    """Test delete_card tool maps PERMISSION_DENIED GraphQL exception to friendly message."""
-    # Simulate GraphQL exception with PERMISSION_DENIED code
-    from gql.transport.exceptions import TransportQueryError
+            assert result.isError is False
+            # Should fetch card for preview but not delete when user declines
+            mock_pipefy_client.get_card.assert_called_once_with(12345)
+            mock_pipefy_client.delete_card.assert_not_called()
 
-    mock_pipefy_client.get_card.return_value = {
-        "card": {
-            "id": "12345",
-            "title": "Test Card",
-            "pipe": {"name": "Test Pipe"},
-        }
-    }
-
-    error = TransportQueryError(
-        "GraphQL Error",
-        errors=[
-            {
-                "message": "Permission denied",
-                "extensions": {"code": "PERMISSION_DENIED"},
+            payload = _extract_call_tool_payload(result)
+            expected_payload: DeleteCardErrorPayload = {
+                "success": False,
+                "error": "Card deletion cancelled by user.",
             }
-        ],
+            assert payload == expected_payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_invalid_card_id_returns_error(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """Test delete_card tool with invalid card_id returns error payload."""
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card",
+                {"card_id": 0, "confirm": True},
+            )
+
+            assert result.isError is False
+            # Should not call any client methods for invalid input
+            mock_pipefy_client.get_card.assert_not_called()
+            mock_pipefy_client.delete_card.assert_not_called()
+
+            payload = _extract_call_tool_payload(result)
+            expected_payload: DeleteCardErrorPayload = {
+                "success": False,
+                "error": "Invalid 'card_id'. Please provide a positive integer.",
+            }
+            assert payload == expected_payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_resource_not_found_error_mapping(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """Test delete_card tool maps RESOURCE_NOT_FOUND GraphQL exception to friendly message."""
+        # Simulate GraphQL exception with RESOURCE_NOT_FOUND code
+        from gql.transport.exceptions import TransportQueryError
+
+        error = TransportQueryError(
+            "GraphQL Error",
+            errors=[
+                {"message": "Card not found", "extensions": {"code": "RESOURCE_NOT_FOUND"}}
+            ],
+        )
+        mock_pipefy_client.get_card.side_effect = error
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card",
+                {"card_id": 99999, "confirm": True},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.get_card.assert_called_once_with(99999)
+            mock_pipefy_client.delete_card.assert_not_called()
+
+            payload = _extract_call_tool_payload(result)
+            expected_payload: DeleteCardErrorPayload = {
+                "success": False,
+                "error": "Card with ID 99999 not found. Verify the card exists and you have access permissions.",
+            }
+            assert payload == expected_payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_permission_denied_error_mapping(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """Test delete_card tool maps PERMISSION_DENIED GraphQL exception to friendly message."""
+        # Simulate GraphQL exception with PERMISSION_DENIED code
+        from gql.transport.exceptions import TransportQueryError
+
+        mock_pipefy_client.get_card.return_value = {
+            "card": {
+                "id": "12345",
+                "title": "Test Card",
+                "pipe": {"name": "Test Pipe"},
+            }
+        }
+
+        error = TransportQueryError(
+            "GraphQL Error",
+            errors=[
+                {
+                    "message": "Permission denied",
+                    "extensions": {"code": "PERMISSION_DENIED"},
+                }
+            ],
+        )
+        mock_pipefy_client.delete_card.side_effect = error
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card",
+                {"card_id": 12345, "confirm": True},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.delete_card.assert_called_once_with(12345)
+
+            payload = _extract_call_tool_payload(result)
+            expected_payload: DeleteCardErrorPayload = {
+                "success": False,
+                "error": "You don't have permission to delete card 12345. Please check your access permissions.",
+            }
+            assert payload == expected_payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_deletion_fails_with_success_false(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """Test delete_card tool handles API returning success=False."""
+        mock_pipefy_client.get_card.return_value = {
+            "card": {
+                "id": "12345",
+                "title": "Test Card",
+                "pipe": {"name": "Test Pipe"},
+            }
+        }
+        # API returns success: False without throwing exception
+        mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": False}}
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card",
+                {"card_id": 12345, "confirm": True},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.delete_card.assert_called_once_with(12345)
+
+            payload = _extract_call_tool_payload(result)
+            expected_payload: DeleteCardErrorPayload = {
+                "success": False,
+                "error": "Failed to delete card 'Test Card' (ID: 12345). Please try again or contact support.",
+            }
+            assert payload == expected_payload
+
+    @pytest.mark.parametrize(
+        "client_session",
+        [elicitation_callback_for(action="accept", content={"confirm": True})],
+        indirect=True,
     )
-    mock_pipefy_client.delete_card.side_effect = error
-
-    async with client_session as session:
-        result = await session.call_tool(
-            "delete_card",
-            {"card_id": 12345, "confirm": True},
-        )
-
-        assert result.isError is False
-        mock_pipefy_client.delete_card.assert_called_once_with(12345)
-
-        payload = _extract_call_tool_payload(result)
-        expected_payload: DeleteCardErrorPayload = {
-            "success": False,
-            "error": "You don't have permission to delete card 12345. Please check your access permissions.",
+    async def test_user_confirms_deletion(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """Test delete_card tool when user confirms deletion via elicitation."""
+        # Setup mock responses for both get_card and delete_card
+        mock_pipefy_client.get_card.return_value = {
+            "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
         }
-        assert payload == expected_payload
+        mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": True}}
 
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card",
+                {"card_id": 12345},
+            )
 
-@pytest.mark.anyio
-@pytest.mark.parametrize("client_session", [None], indirect=True)
-async def test_delete_card_tool_deletion_fails_with_success_false(
-    client_session,
-    mock_pipefy_client,
-):
-    """Test delete_card tool handles API returning success=False."""
-    mock_pipefy_client.get_card.return_value = {
-        "card": {
-            "id": "12345",
-            "title": "Test Card",
-            "pipe": {"name": "Test Pipe"},
-        }
-    }
-    # API returns success: False without throwing exception
-    mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": False}}
+            assert result.isError is False
+            # Should execute deletion when user confirms
+            mock_pipefy_client.delete_card.assert_called_once_with(12345)
 
-    async with client_session as session:
-        result = await session.call_tool(
-            "delete_card",
-            {"card_id": 12345, "confirm": True},
-        )
-
-        assert result.isError is False
-        mock_pipefy_client.delete_card.assert_called_once_with(12345)
-
-        payload = _extract_call_tool_payload(result)
-        expected_payload: DeleteCardErrorPayload = {
-            "success": False,
-            "error": "Failed to delete card 'Test Card' (ID: 12345). Please try again or contact support.",
-        }
-        assert payload == expected_payload
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize(
-    "client_session",
-    [elicitation_callback_for(action="accept", content={"confirm": True})],
-    indirect=True,
-)
-async def test_delete_card_tool_user_confirms_deletion(
-    client_session,
-    mock_pipefy_client,
-):
-    """Test delete_card tool when user confirms deletion via elicitation."""
-    # Setup mock responses for both get_card and delete_card
-    mock_pipefy_client.get_card.return_value = {
-        "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
-    }
-    mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": True}}
-
-    async with client_session as session:
-        result = await session.call_tool(
-            "delete_card",
-            {"card_id": 12345},
-        )
-
-        assert result.isError is False
-        # Should execute deletion when user confirms
-        mock_pipefy_client.delete_card.assert_called_once_with(12345)
-
-        payload = _extract_call_tool_payload(result)
-        expected_payload: DeleteCardSuccessPayload = {
-            "success": True,
-            "card_id": 12345,
-            "card_title": "Test Card",
-            "pipe_name": "Test Pipe",
-            "message": "Card 'Test Card' (ID: 12345) from pipe 'Test Pipe' has been permanently deleted.",
-        }
-        assert payload == expected_payload
+            payload = _extract_call_tool_payload(result)
+            expected_payload: DeleteCardSuccessPayload = {
+                "success": True,
+                "card_id": 12345,
+                "card_title": "Test Card",
+                "pipe_name": "Test Pipe",
+                "message": "Card 'Test Card' (ID: 12345) from pipe 'Test Pipe' has been permanently deleted.",
+            }
+            assert payload == expected_payload

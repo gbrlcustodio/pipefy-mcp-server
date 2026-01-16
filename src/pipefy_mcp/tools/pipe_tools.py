@@ -4,7 +4,7 @@ from typing import Any, Literal
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 from typing_extensions import TypedDict
 
 from pipefy_mcp.models.comment import CommentInput
@@ -159,6 +159,14 @@ def build_delete_card_success_payload(
         "pipe_name": pipe_name,
         "message": f"Card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}' has been permanently deleted.",
     }
+
+
+
+class DeleteCardConfirmation(BaseModel):
+    confirm: bool = Field(
+        ...,
+        description="Set to true to confirm deletion, or false to cancel.",
+    )
 
 
 def build_delete_card_error_payload(*, message: str) -> DeleteCardErrorPayload:
@@ -549,7 +557,7 @@ class PipeTools:
             ),
         )
         async def delete_card(
-            card_id: int, confirm: bool = False, debug: bool = False
+            ctx: Context[ServerSession, None], card_id: int, debug: bool = False
         ) -> DeleteCardPayload:
             """Delete a card from Pipefy.
 
@@ -558,11 +566,10 @@ class PipeTools:
 
             Args:
                 card_id: The ID of the card to delete
-                confirm: Set to true to confirm deletion. If false, returns a preview only.
                 debug: When true, appends GraphQL error codes and correlation_id to the error message.
 
             Returns:
-                Preview information when confirm=false, or success/error status when confirm=true.
+                Success/error status of the deletion.
             """
             # Input validation
             if card_id <= 0:
@@ -570,46 +577,61 @@ class PipeTools:
                     message="Invalid 'card_id'. Please provide a positive integer."
                 )
 
-            if not confirm:
-                # Preview mode: fetch card details and return preview
-                try:
-                    card_response = await client.get_card(card_id)
-                    card_data = card_response["card"]
-                    card_title = card_data["title"]
-                    pipe_name = card_data.get("pipe", {}).get("name", "Unknown Pipe")
-
-                    return build_delete_card_preview_payload(
-                        card_id=card_id,
-                        card_title=card_title,
-                        pipe_name=pipe_name,
-                    )
-                except Exception as exc:
-                    codes = _extract_graphql_error_codes(exc)
-                    correlation_id = _extract_graphql_correlation_id(exc)
-                    base = map_delete_card_error_to_message(
-                        card_id=card_id, card_title="Unknown", codes=codes
-                    )
-                    return build_delete_card_error_payload(
-                        message=_with_debug_suffix(
-                            base,
-                            debug=debug,
-                            codes=codes,
-                            correlation_id=correlation_id,
-                        )
-                    )
-
-            # Deletion mode: fetch card details first, then execute the deletion
-            card_title = "Unknown"
-            pipe_name = "Unknown Pipe"
-
+            # Fetch card details for preview/confirmation
             try:
-                # Fetch card details for success message
                 card_response = await client.get_card(card_id)
                 card_data = card_response["card"]
                 card_title = card_data["title"]
                 pipe_name = card_data.get("pipe", {}).get("name", "Unknown Pipe")
+            except Exception as exc:
+                codes = _extract_graphql_error_codes(exc)
+                correlation_id = _extract_graphql_correlation_id(exc)
+                base = map_delete_card_error_to_message(
+                    card_id=card_id, card_title="Unknown", codes=codes
+                )
+                return build_delete_card_error_payload(
+                    message=_with_debug_suffix(
+                        base,
+                        debug=debug,
+                        codes=codes,
+                        correlation_id=correlation_id,
+                    )
+                )
 
-                # Execute the deletion
+            # Sampling/Elicitation for confirmation
+            can_elicit = ctx.session.client_params.capabilities.elicitation
+            if can_elicit:
+                confirmation_message = (
+                    f"⚠️ You are about to permanently delete card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}'. "
+                    "This action is irreversible. Are you sure you want to proceed?"
+                )
+
+                try:
+                    result = await ctx.elicit(
+                        message=confirmation_message,
+                        schema=DeleteCardConfirmation,
+                    )
+
+                    if result.action != "accept":
+                         # User manually cancelled via UI
+                        return build_delete_card_error_payload(
+                            message="Card deletion cancelled by user."
+                        )
+
+                    confirmation_data = result.data.model_dump()
+                    if not confirmation_data.get("confirm"):
+                        return build_delete_card_error_payload(
+                            message="Card deletion cancelled by user."
+                        )
+
+                except Exception as e:
+                     # Fallback if elicitation fails
+                     return build_delete_card_error_payload(
+                         message=f"Failed to request confirmation: {str(e)}"
+                     )
+
+            # Execute the deletion
+            try:
                 delete_response = await client.delete_card(card_id)
 
                 delete_data = delete_response.get("deleteCard", {})
@@ -621,7 +643,6 @@ class PipeTools:
                         pipe_name=pipe_name,
                     )
                 else:
-                    # Deletion failed - API returned success: false
                     return build_delete_card_error_payload(
                         message=f"Failed to delete card '{card_title}' (ID: {card_id}). Please try again or contact support."
                     )

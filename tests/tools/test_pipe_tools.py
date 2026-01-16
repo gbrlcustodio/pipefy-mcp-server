@@ -597,7 +597,10 @@ class TestDeleteCardTool:
         error = TransportQueryError(
             "GraphQL Error",
             errors=[
-                {"message": "Card not found", "extensions": {"code": "RESOURCE_NOT_FOUND"}}
+                {
+                    "message": "Card not found",
+                    "extensions": {"code": "RESOURCE_NOT_FOUND"},
+                }
             ],
         )
         mock_pipefy_client.get_card.side_effect = error

@@ -49,6 +49,15 @@ class BasePipefyClient:
         if self.settings is None:
             raise ValueError("Settings must be provided to create a GraphQL client.")
 
+        if self.settings.graphql_url is None:
+            raise ValueError("GraphQL URL must be provided in settings.")
+        if self.settings.oauth_url is None:
+            raise ValueError("OAuth URL must be provided in settings.")
+        if self.settings.oauth_client is None:
+            raise ValueError("OAuth client ID must be provided in settings.")
+        if self.settings.oauth_secret is None:
+            raise ValueError("OAuth client secret must be provided in settings.")
+
         transport = HTTPXAsyncTransport(
             url=self.settings.graphql_url,
             auth=OAuth2ClientCredentials(
@@ -58,8 +67,9 @@ class BasePipefyClient:
             ),
         )
 
-        kwargs = {"schema": schema} if schema else {"fetch_schema_from_transport": True}
-        return Client(transport=transport, **kwargs)
+        if schema:
+            return Client(transport=transport, schema=schema)
+        return Client(transport=transport, fetch_schema_from_transport=True)
 
     async def execute_query(self, query: Any, variables: dict[str, Any]) -> dict:
         """Execute a GraphQL query/mutation with variables.

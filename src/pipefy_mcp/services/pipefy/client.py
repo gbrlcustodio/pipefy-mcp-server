@@ -79,6 +79,10 @@ class PipefyClient:
             field_updates=field_updates,
         )
 
+    async def delete_card(self, card_id: int) -> dict:
+        """Delete a card by its ID."""
+        return await self._card_service.delete_card(card_id)
+
     async def get_start_form_fields(
         self, pipe_id: int, required_only: bool = False
     ) -> dict:

@@ -173,6 +173,30 @@ def build_delete_card_error_payload(*, message: str) -> DeleteCardErrorPayload:
     return {"success": False, "error": message}
 
 
+def _filter_editable_field_definitions(field_definitions: list) -> list[dict]:
+    """Return only editable field definitions, preserving unknown shapes."""
+    editable_fields: list[dict] = []
+    for field_def in field_definitions:
+        if not isinstance(field_def, dict):
+            continue
+        if field_def.get("editable", True):
+            editable_fields.append(field_def)
+    return editable_fields
+
+
+def _filter_non_editable_field_updates(
+    field_updates: list[dict] | None,
+) -> list[dict] | None:
+    """Remove field updates explicitly marked as non-editable."""
+    if not field_updates:
+        return field_updates
+    return [
+        update
+        for update in field_updates
+        if not (isinstance(update, dict) and update.get("editable") is False)
+    ]
+
+
 def _extract_graphql_error_codes(exc: BaseException) -> list[str]:
     """Extract GraphQL `extensions.code` values from gql/GraphQL exceptions."""
     codes: list[str] = []
@@ -283,7 +307,13 @@ class PipeTools:
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
         ) -> dict:
-            """Create a card in the pipe.
+            """
+            Create a card in the pipe.
+
+            The fields can be interactively elicited, but, if the LLM is aware of the intended values for certain fields,
+            they can be provided in the `fields` argument.
+
+            Importantly, if elicitation is not supported, the provided fields will be used as-is and must be provided.
 
             Args:
                 pipe_id: The ID of the pipe where the card will be created
@@ -294,7 +324,11 @@ class PipeTools:
             form_fields = await client.get_start_form_fields(
                 pipe_id, required_fields_only
             )
-            expected_fields = form_fields.get("start_form_fields", [])
+
+            expected_fields = _filter_editable_field_definitions(
+                form_fields.get("start_form_fields", [])
+            )
+
             await ctx.debug(f"Expected fields for pipe {pipe_id}: {expected_fields}")
             await ctx.debug(f"Provided fields: {fields}")
 
@@ -481,13 +515,14 @@ class PipeTools:
                     {"field_id": "tags", "value": "urgent", "operation": "ADD"}
                 ])
             """
+            filtered_updates = _filter_non_editable_field_updates(field_updates)
             return await client.update_card(
                 card_id=card_id,
                 title=title,
                 assignee_ids=assignee_ids,
                 label_ids=label_ids,
                 due_date=due_date,
-                field_updates=field_updates,
+                field_updates=filtered_updates,
             )
 
         @mcp.tool(
@@ -584,7 +619,9 @@ class PipeTools:
             phase_fields_result = await client.get_phase_fields(
                 phase_id, required_fields_only
             )
-            expected_fields = phase_fields_result.get("fields", [])
+            expected_fields = _filter_editable_field_definitions(
+                phase_fields_result.get("fields", [])
+            )
             phase_name = phase_fields_result.get("phase_name", f"Phase {phase_id}")
 
             await ctx.debug(f"Expected fields for phase {phase_id}: {expected_fields}")

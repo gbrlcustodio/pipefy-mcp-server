@@ -199,7 +199,22 @@ class TestCreateCardTool:
         pipe_id,
     ):
         mock_pipefy_client.get_start_form_fields.return_value = {
-            "start_form_fields": ["field_1", "field_2"]
+            "start_form_fields": [
+                {
+                    "id": "field_1",
+                    "label": "Field 1",
+                    "type": "short_text",
+                    "required": True,
+                    "editable": True,
+                },
+                {
+                    "id": "field_2",
+                    "label": "Field 2",
+                    "type": "short_text",
+                    "required": True,
+                    "editable": True,
+                },
+            ]
         }
         mock_pipefy_client.create_card.return_value = {
             "createCard": {"card": {"id": "789"}}
@@ -519,6 +534,39 @@ class TestFillCardPhaseFieldsTool:
             assert result.isError is True, "Expected tool error for permission denied"
             mock_pipefy_client.get_phase_fields.assert_called_once_with(phase_id, False)
             mock_pipefy_client.update_card.assert_not_called()
+
+
+@pytest.mark.anyio
+class TestUpdateCardTool:
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_filters_non_editable_field_updates(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        mock_pipefy_client.update_card = AsyncMock(return_value={"ok": True})
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_card",
+                {
+                    "card_id": 123,
+                    "field_updates": [
+                        {"field_id": "status", "value": "done"},
+                        {"field_id": "hidden", "value": "nope", "editable": False},
+                    ],
+                },
+            )
+
+            assert result.isError is False, "Unexpected tool error"
+            mock_pipefy_client.update_card.assert_called_once_with(
+                card_id=123,
+                title=None,
+                assignee_ids=None,
+                label_ids=None,
+                due_date=None,
+                field_updates=[{"field_id": "status", "value": "done"}],
+            )
 
 
 @pytest.mark.anyio

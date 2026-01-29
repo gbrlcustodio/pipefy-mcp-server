@@ -539,7 +539,7 @@ class TestFillCardPhaseFieldsTool:
 @pytest.mark.anyio
 class TestUpdateCardTool:
     @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_filters_non_editable_field_updates(
+    async def test_update_card_field(
         self,
         client_session,
         mock_pipefy_client,
@@ -553,7 +553,6 @@ class TestUpdateCardTool:
                     "card_id": 123,
                     "field_updates": [
                         {"field_id": "status", "value": "done"},
-                        {"field_id": "hidden", "value": "nope", "editable": False},
                     ],
                 },
             )

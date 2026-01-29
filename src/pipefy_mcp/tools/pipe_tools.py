@@ -184,19 +184,6 @@ def _filter_editable_field_definitions(field_definitions: list) -> list[dict]:
     return editable_fields
 
 
-def _filter_non_editable_field_updates(
-    field_updates: list[dict] | None,
-) -> list[dict] | None:
-    """Remove field updates explicitly marked as non-editable."""
-    if not field_updates:
-        return field_updates
-    return [
-        update
-        for update in field_updates
-        if not (isinstance(update, dict) and update.get("editable") is False)
-    ]
-
-
 def _extract_graphql_error_codes(exc: BaseException) -> list[str]:
     """Extract GraphQL `extensions.code` values from gql/GraphQL exceptions."""
     codes: list[str] = []
@@ -515,14 +502,13 @@ class PipeTools:
                     {"field_id": "tags", "value": "urgent", "operation": "ADD"}
                 ])
             """
-            filtered_updates = _filter_non_editable_field_updates(field_updates)
             return await client.update_card(
                 card_id=card_id,
                 title=title,
                 assignee_ids=assignee_ids,
                 label_ids=label_ids,
                 due_date=due_date,
-                field_updates=filtered_updates,
+                field_updates=field_updates,
             )
 
         @mcp.tool(

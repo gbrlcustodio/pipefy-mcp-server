@@ -171,7 +171,11 @@ def build_delete_card_error_payload(*, message: str) -> DeleteCardErrorPayload:
 
 
 def _filter_editable_field_definitions(field_definitions: list) -> list[dict]:
-    """Return only editable field definitions, preserving unknown shapes."""
+    """Return only editable field definitions, preserving unknown shapes.
+
+    Note: Fields without an explicit 'editable' key are assumed to be editable
+    (defaults to True), matching Pipefy API behavior.
+    """
     editable_fields: list[dict] = []
     for field_def in field_definitions:
         if not isinstance(field_def, dict):

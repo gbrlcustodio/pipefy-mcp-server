@@ -23,6 +23,9 @@
 - Framework: `pytest` with `pytest-asyncio`, `pytest-cov`, and `pytest-mock`.
 - Keep new tests alongside existing suites in `tests/`, aligned with the module they cover.
 - Use markers `@pytest.mark.unit` or `@pytest.mark.integration` when appropriate.
+- Examples for targeted runs:
+  - Single file: `uv run pytest tests/tools/test_cards.py`
+  - Single test case: `uv run pytest tests/tools/test_cards.py -k "test_create_card"`
 
 ## Commit & Pull Request Guidelines
 - Commit messages follow a conventional style such as `feat:`, `fix:`, `refactor:`, `style:`, `test:`, `docs:` with optional scopes (e.g., `feat(tools): ...`).

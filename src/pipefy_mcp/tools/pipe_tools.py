@@ -1,268 +1,31 @@
-import re
-from typing import Any, Literal
+from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pydantic import BaseModel, Field, ValidationError
-from typing_extensions import TypedDict
+from pydantic import ValidationError
 
 from pipefy_mcp.models.comment import CommentInput
 from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
-
-
-class UserCancelledError(Exception):
-    """Raised when a user cancels an interactive flow."""
-
-    pass
-
-
-class AddCardCommentSuccessPayload(TypedDict):
-    success: Literal[True]
-    comment_id: str
-
-
-class AddCardCommentErrorPayload(TypedDict):
-    success: Literal[False]
-    error: str
-
-
-AddCardCommentPayload = AddCardCommentSuccessPayload | AddCardCommentErrorPayload
-
-
-class DeleteCardPreviewPayload(TypedDict):
-    success: Literal[False]
-    requires_confirmation: Literal[True]
-    card_id: int
-    card_title: str
-    pipe_name: str
-    message: str
-
-
-class DeleteCardSuccessPayload(TypedDict):
-    success: Literal[True]
-    card_id: int
-    card_title: str
-    pipe_name: str
-    message: str
-
-
-class DeleteCardErrorPayload(TypedDict):
-    success: Literal[False]
-    error: str
-
-
-DeleteCardPayload = (
-    DeleteCardPreviewPayload | DeleteCardSuccessPayload | DeleteCardErrorPayload
+from pipefy_mcp.tools.pipe_tool_helpers import (
+    AddCardCommentPayload,
+    DeleteCardConfirmation,
+    DeleteCardPayload,
+    UserCancelledError,
+    _extract_graphql_correlation_id,
+    _extract_graphql_error_codes,
+    _filter_editable_field_definitions,
+    _filter_fields_by_definitions,
+    _with_debug_suffix,
+    build_add_card_comment_error_payload,
+    build_add_card_comment_success_payload,
+    build_delete_card_error_payload,
+    build_delete_card_success_payload,
+    map_add_card_comment_error_to_message,
+    map_delete_card_error_to_message,
 )
-
-
-def build_add_card_comment_success_payload(
-    *, comment_id: object
-) -> AddCardCommentSuccessPayload:
-    """Build the public success payload for add_card_comment."""
-    return {"success": True, "comment_id": str(comment_id)}
-
-
-def _extract_error_strings(exc: BaseException) -> list[str]:
-    """Best-effort extraction of error messages from gql/GraphQL exceptions."""
-    messages: list[str] = []
-
-    raw = str(exc)
-    if raw:
-        messages.append(raw)
-
-    errors = getattr(exc, "errors", None)
-    if isinstance(errors, list):
-        for item in errors:
-            if isinstance(item, dict):
-                msg = item.get("message")
-                if isinstance(msg, str) and msg:
-                    messages.append(msg)
-            elif isinstance(item, str) and item:
-                messages.append(item)
-
-    return messages
-
-
-def map_add_card_comment_error_to_message(exc: BaseException) -> str:
-    """Map a GraphQL exception into a stable, friendly English message."""
-    messages = _extract_error_strings(exc)
-    haystack = " ".join(messages).lower()
-
-    not_found_markers = [
-        "not found",
-        "record not found",
-        "could not find",
-        "does not exist",
-        "doesn't exist",
-    ]
-    permission_markers = [
-        "permission",
-        "not authorized",
-        "unauthorized",
-        "forbidden",
-        "access denied",
-        "not allowed",
-    ]
-    invalid_input_markers = [
-        "invalid",
-        "validation",
-        "must be",
-        "can't be",
-        "cannot be",
-        "required",
-        "blank",
-    ]
-
-    if any(marker in haystack for marker in not_found_markers):
-        return "Card not found. Please verify 'card_id' and access permissions."
-
-    if any(marker in haystack for marker in permission_markers):
-        return "You don't have permission to comment on this card."
-
-    if any(marker in haystack for marker in invalid_input_markers):
-        return "Invalid input. Please provide a valid 'card_id' and non-empty 'text'."
-
-    return "Unexpected error while adding comment. Please try again."
-
-
-def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentErrorPayload:
-    """Build the public error payload for add_card_comment."""
-    return {"success": False, "error": message}
-
-
-def build_delete_card_preview_payload(
-    *, card_id: int, card_title: str, pipe_name: str
-) -> DeleteCardPreviewPayload:
-    """Build the preview payload for delete_card."""
-    return {
-        "success": False,
-        "requires_confirmation": True,
-        "card_id": card_id,
-        "card_title": card_title,
-        "pipe_name": pipe_name,
-        "message": f"⚠️ You are about to permanently delete card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}'. This action is irreversible. Set 'confirm=True' to proceed.",
-    }
-
-
-def build_delete_card_success_payload(
-    *, card_id: int, card_title: str, pipe_name: str
-) -> DeleteCardSuccessPayload:
-    """Build the success payload for delete_card."""
-    return {
-        "success": True,
-        "card_id": card_id,
-        "card_title": card_title,
-        "pipe_name": pipe_name,
-        "message": f"Card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}' has been permanently deleted.",
-    }
-
-
-class DeleteCardConfirmation(BaseModel):
-    confirm: bool = Field(
-        ...,
-        description="Set to true to confirm deletion, or false to cancel.",
-    )
-
-
-def build_delete_card_error_payload(*, message: str) -> DeleteCardErrorPayload:
-    """Build the error payload for delete_card."""
-    return {"success": False, "error": message}
-
-
-def _extract_graphql_error_codes(exc: BaseException) -> list[str]:
-    """Extract GraphQL `extensions.code` values from gql/GraphQL exceptions."""
-    codes: list[str] = []
-
-    errors = getattr(exc, "errors", None)
-    if isinstance(errors, list):
-        for item in errors:
-            if not isinstance(item, dict):
-                continue
-            extensions = item.get("extensions")
-            if not isinstance(extensions, dict):
-                continue
-            code = extensions.get("code")
-            if isinstance(code, str) and code:
-                codes.append(code)
-
-    # Fallback: best-effort parse from exception string (some clients stringify errors)
-    raw = str(exc)
-    if raw:
-        for match in re.findall(r"""['"]code['"]\s*[:=]\s*['"]([A-Z_]+)['"]""", raw):
-            codes.append(match)
-
-    # De-dup while preserving order
-    seen: set[str] = set()
-    unique: list[str] = []
-    for code in codes:
-        if code not in seen:
-            seen.add(code)
-            unique.append(code)
-    return unique
-
-
-def _extract_graphql_correlation_id(exc: BaseException) -> str | None:
-    """Best-effort extraction of correlation_id from GraphQL exception strings."""
-    raw = str(exc)
-    if not raw:
-        return None
-
-    match = re.search(r"""['"]correlation_id['"]\s*[:=]\s*['"]([^'"]+)['"]""", raw)
-    if match:
-        return match.group(1)
-    return None
-
-
-def _with_debug_suffix(
-    message: str, *, debug: bool, codes: list[str], correlation_id: str | None
-) -> str:
-    """Append debug context to a single error string without changing payload shape."""
-    if not debug:
-        return message
-
-    parts: list[str] = []
-    if codes:
-        parts.append(f"codes={','.join(codes)}")
-    if correlation_id:
-        parts.append(f"correlation_id={correlation_id}")
-
-    if not parts:
-        return message
-    return f"{message} (debug: {'; '.join(parts)})"
-
-
-def map_delete_card_error_to_message(
-    *, card_id: int, card_title: str, codes: list[str]
-) -> str:
-    """Map GraphQL error codes to PRD-compliant friendly messages for delete_card."""
-    for code in codes:
-        if code == "RESOURCE_NOT_FOUND":
-            return (
-                f"Card with ID {card_id} not found. "
-                "Verify the card exists and you have access permissions."
-            )
-        if code == "PERMISSION_DENIED":
-            return (
-                f"You don't have permission to delete card {card_id}. "
-                "Please check your access permissions."
-            )
-        if code == "RECORD_NOT_DESTROYED":
-            return (
-                f"Failed to delete card '{card_title}' (ID: {card_id}). "
-                "Please try again or contact support."
-            )
-
-    if codes:
-        return f"Failed to delete card '{card_title}' (ID: {card_id}). Codes: {', '.join(codes)}"
-
-    return (
-        f"Failed to delete card '{card_title}' (ID: {card_id}). "
-        "Please try again or contact support."
-    )
 
 
 class PipeTools:
@@ -283,7 +46,13 @@ class PipeTools:
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
         ) -> dict:
-            """Create a card in the pipe.
+            """
+            Create a card in the pipe.
+
+            The fields can be interactively elicited, but, if the LLM is aware of the intended values for certain fields,
+            they can be provided in the `fields` argument.
+
+            Importantly, if elicitation is not supported, the provided fields will be used as-is and must be provided.
 
             Args:
                 pipe_id: The ID of the pipe where the card will be created
@@ -294,7 +63,11 @@ class PipeTools:
             form_fields = await client.get_start_form_fields(
                 pipe_id, required_fields_only
             )
-            expected_fields = form_fields.get("start_form_fields", [])
+
+            expected_fields = _filter_editable_field_definitions(
+                form_fields.get("start_form_fields", [])
+            )
+
             await ctx.debug(f"Expected fields for pipe {pipe_id}: {expected_fields}")
             await ctx.debug(f"Provided fields: {fields}")
 
@@ -311,6 +84,8 @@ class PipeTools:
                     )
                 except UserCancelledError:
                     return {"error": "Card creation cancelled by user."}
+            elif expected_fields:
+                card_data = _filter_fields_by_definitions(card_data, expected_fields)
 
             result = await client.create_card(pipe_id, card_data)
             card_id = result.get("createCard", {}).get("card", {}).get("id")
@@ -584,7 +359,9 @@ class PipeTools:
             phase_fields_result = await client.get_phase_fields(
                 phase_id, required_fields_only
             )
-            expected_fields = phase_fields_result.get("fields", [])
+            expected_fields = _filter_editable_field_definitions(
+                phase_fields_result.get("fields", [])
+            )
             phase_name = phase_fields_result.get("phase_name", f"Phase {phase_id}")
 
             await ctx.debug(f"Expected fields for phase {phase_id}: {expected_fields}")
@@ -606,6 +383,8 @@ class PipeTools:
                         "success": False,
                         "error": "Phase field update cancelled by user.",
                     }
+            elif expected_fields:
+                field_data = _filter_fields_by_definitions(field_data, expected_fields)
 
             if not field_data:
                 return {

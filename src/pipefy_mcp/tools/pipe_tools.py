@@ -184,6 +184,20 @@ def _filter_editable_field_definitions(field_definitions: list) -> list[dict]:
     return editable_fields
 
 
+def _filter_fields_by_definitions(
+    fields: dict[str, Any] | None, field_definitions: list[dict]
+) -> dict[str, Any]:
+    """Filter provided field values to editable field IDs."""
+    if not fields:
+        return {}
+    editable_ids = {field_def["id"] for field_def in field_definitions}
+    return {
+        field_id: value
+        for field_id, value in fields.items()
+        if field_id in editable_ids
+    }
+
+
 def _extract_graphql_error_codes(exc: BaseException) -> list[str]:
     """Extract GraphQL `extensions.code` values from gql/GraphQL exceptions."""
     codes: list[str] = []
@@ -332,6 +346,8 @@ class PipeTools:
                     )
                 except UserCancelledError:
                     return {"error": "Card creation cancelled by user."}
+            elif expected_fields:
+                card_data = _filter_fields_by_definitions(card_data, expected_fields)
 
             result = await client.create_card(pipe_id, card_data)
             card_id = result.get("createCard", {}).get("card", {}).get("id")
@@ -629,6 +645,8 @@ class PipeTools:
                         "success": False,
                         "error": "Phase field update cancelled by user.",
                     }
+            elif expected_fields:
+                field_data = _filter_fields_by_definitions(field_data, expected_fields)
 
             if not field_data:
                 return {

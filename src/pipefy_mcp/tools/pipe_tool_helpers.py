@@ -181,19 +181,6 @@ def _filter_editable_field_definitions(field_definitions: list) -> list[dict]:
     return editable_fields
 
 
-def _filter_non_editable_field_updates(
-    field_updates: list[dict] | None,
-) -> list[dict] | None:
-    """Remove field updates explicitly marked as non-editable."""
-    if not field_updates:
-        return field_updates
-    return [
-        update
-        for update in field_updates
-        if not (isinstance(update, dict) and update.get("editable") is False)
-    ]
-
-
 def _filter_fields_by_definitions(
     fields: dict[str, object] | None, field_definitions: list[dict]
 ) -> dict[str, object]:

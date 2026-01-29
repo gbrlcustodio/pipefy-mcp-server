@@ -14,18 +14,17 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     DeleteCardConfirmation,
     DeleteCardPayload,
     UserCancelledError,
+    _extract_graphql_correlation_id,
+    _extract_graphql_error_codes,
+    _filter_editable_field_definitions,
+    _filter_fields_by_definitions,
+    _with_debug_suffix,
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
     build_delete_card_success_payload,
     map_add_card_comment_error_to_message,
     map_delete_card_error_to_message,
-    _extract_graphql_correlation_id,
-    _extract_graphql_error_codes,
-    _filter_editable_field_definitions,
-    _filter_fields_by_definitions,
-    _filter_non_editable_field_updates,
-    _with_debug_suffix,
 )
 
 

@@ -246,9 +246,7 @@ def _extract_graphql_correlation_id(exc: BaseException) -> str | None:
     if not raw:
         return None
 
-    match = re.search(
-        r"""['"]correlation_id['"]\s*[:=]\s*['"]([^'"]+)['"]""", raw
-    )
+    match = re.search(r"""['"]correlation_id['"]\s*[:=]\s*['"]([^'"]+)['"]""", raw)
     if match:
         return match.group(1)
     return None

@@ -28,12 +28,14 @@
   - Single test case: `uv run pytest tests/tools/test_cards.py -k "test_create_card"`
 
 ## Adding a New Tool
-When implementing a new tool, follow this checklist:
+When implementing a new tool, follow this checklist (TDD-first):
 
-1. **Implement the tool logic** in `src/pipefy_mcp/tools/` (e.g., `pipe_tools.py` or create a new file if appropriate).
-2. **Register the tool** in `src/pipefy_mcp/server.py` by adding its function or reference to the MCP server setup.
-3. **Add tests** for your new tool in `tests/tools/` mirroring the source structure (e.g., `test_pipe_tools.py`).
-4. **Update the README** if the tool introduces new user-facing functionality or configuration options.
+1. **Write tests first** in `tests/tools/` mirroring the source structure (e.g., `test_pipe_tools.py`).
+2. **Run the tests and confirm they fail** for the new behavior.
+3. **Implement the tool logic** in `src/pipefy_mcp/tools/` (e.g., `pipe_tools.py` or create a new file if appropriate).
+4. **Register the tool** in `src/pipefy_mcp/server.py` by adding its function or reference to the MCP server setup.
+5. **Re-run tests and ensure they pass**.
+6. **Update the README** if the tool introduces new user-facing functionality or configuration options.
 
 ## Commit & Pull Request Guidelines
 - Commit messages follow a conventional style such as `feat:`, `fix:`, `refactor:`, `style:`, `test:`, `docs:` with optional scopes (e.g., `feat(tools): ...`).

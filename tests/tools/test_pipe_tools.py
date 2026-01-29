@@ -404,6 +404,58 @@ class TestFillCardPhaseFieldsTool:
 
     @pytest.mark.parametrize(
         "client_session",
+        [elicitation_callback_for(action="accept", content={"status": "done"})],
+        indirect=True,
+    )
+    async def test_filters_non_editable_fields(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        card_id = 456
+        phase_id = 12345
+        mock_fields = [
+            {
+                "id": "status",
+                "label": "Status",
+                "type": "select",
+                "required": True,
+                "editable": True,
+            },
+            {
+                "id": "internal_notes",
+                "label": "Internal Notes",
+                "type": "long_text",
+                "required": False,
+                "editable": False,
+            },
+        ]
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "phase_id": str(phase_id),
+                "phase_name": "Done",
+                "fields": mock_fields,
+            }
+        )
+        mock_pipefy_client.update_card = AsyncMock(
+            return_value={"updateFieldsValues": {"success": True}}
+        )
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "fill_card_phase_fields",
+                {"card_id": card_id, "phase_id": phase_id},
+            )
+
+            assert result.isError is False, "Unexpected tool error"
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(phase_id, False)
+            mock_pipefy_client.update_card.assert_called_once_with(
+                card_id=card_id,
+                field_updates=[{"field_id": "status", "value": "done"}],
+            )
+
+    @pytest.mark.parametrize(
+        "client_session",
         [elicitation_callback_for(action="decline")],
         indirect=True,
     )

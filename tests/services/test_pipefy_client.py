@@ -839,6 +839,54 @@ async def test_get_cards_with_search_dict_passes_search_as_is():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_cards_with_include_fields_true_passes_include_fields_to_service():
+    """Test get_cards facade passes include_fields=True to CardService.get_cards."""
+    pipe_id = 303181849
+    expected = {"cards": {"edges": []}}
+
+    card_service = AsyncMock()
+    card_service.get_cards = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+    client._pipe_service = MagicMock(spec=PipeService)
+
+    result = await client.get_cards(
+        pipe_id,
+        search=None,
+        include_fields=True,  # type: ignore[attr-defined]
+    )
+
+    card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=True)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards_with_include_fields_false_passes_include_fields_to_service():
+    """Test get_cards facade passes include_fields=False to CardService.get_cards."""
+    pipe_id = 303181849
+    expected = {"cards": {"edges": []}}
+
+    card_service = AsyncMock()
+    card_service.get_cards = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+    client._pipe_service = MagicMock(spec=PipeService)
+
+    result = await client.get_cards(
+        pipe_id,
+        search=None,
+        include_fields=False,  # type: ignore[attr-defined]
+    )
+
+    card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=False)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_add_card_comment_delegates_to_card_service_create_comment():
     """Test add_card_comment delegates unchanged to CardService.create_comment."""
     card_id = 12345

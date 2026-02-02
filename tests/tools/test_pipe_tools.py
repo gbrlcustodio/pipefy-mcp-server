@@ -300,6 +300,29 @@ class TestGetPipeMembersTool:
 
 
 @pytest.mark.anyio
+class TestGetCardsTool:
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_cards_with_include_fields_true_passes_to_client(
+        self, client_session, mock_pipefy_client, pipe_id
+    ):
+        """Integration test: get_cards tool with include_fields=True calls client with include_fields=True."""
+        mock_pipefy_client.get_cards = AsyncMock(
+            return_value={"cards": {"edges": [{"node": {"id": "1", "title": "Card"}}]}}
+        )
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_cards",
+                {"pipe_id": pipe_id, "include_fields": True},
+            )
+
+        assert result.isError is False, "Unexpected tool error"
+        mock_pipefy_client.get_cards.assert_called_once_with(
+            pipe_id, None, include_fields=True
+        )
+
+
+@pytest.mark.anyio
 class TestAddCardCommentTool:
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_success(

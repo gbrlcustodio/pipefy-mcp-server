@@ -141,10 +141,21 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_cards(pipe_id: int, search: CardSearch | None = None) -> dict:
-            """Get all cards in the pipe."""
+        async def get_cards(
+            pipe_id: int,
+            search: CardSearch | None = None,
+            include_fields: bool = False,
+        ) -> dict:
+            """Get all cards in the pipe.
 
-            return await client.get_cards(pipe_id, search)
+            Args:
+                pipe_id: The ID of the pipe.
+                search: Optional search filters.
+                include_fields: If True, include each card's fields (name, value) in the response.
+            """
+            return await client.get_cards(
+                pipe_id, search, include_fields=include_fields
+            )
 
         @mcp.tool(
             annotations=ToolAnnotations(

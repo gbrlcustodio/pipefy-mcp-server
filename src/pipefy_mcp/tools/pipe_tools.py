@@ -142,6 +142,7 @@ class PipeTools:
             ),
         )
         async def get_cards(
+            ctx: Context[ServerSession, None],
             pipe_id: int,
             search: CardSearch | None = None,
             include_fields: bool = False,
@@ -153,6 +154,9 @@ class PipeTools:
                 search: Optional search filters.
                 include_fields: If True, include each card's fields (name, value) in the response.
             """
+            await ctx.debug(
+                f"Getting cards for pipe {pipe_id} (include_fields={include_fields}, search={search})"
+            )
             return await client.get_cards(
                 pipe_id, search, include_fields=include_fields
             )

@@ -847,14 +847,14 @@ async def test_get_cards_with_include_fields_true_passes_include_fields_to_servi
     card_service = AsyncMock()
     card_service.get_cards = AsyncMock(return_value=expected)
 
-    client = PipefyClient.__new__(PipefyClient)
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
     client._card_service = card_service
     client._pipe_service = MagicMock(spec=PipeService)
 
     result = await client.get_cards(
         pipe_id,
         search=None,
-        include_fields=True,  # type: ignore[attr-defined]
+        include_fields=True,
     )
 
     card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=True)
@@ -871,14 +871,14 @@ async def test_get_cards_with_include_fields_false_passes_include_fields_to_serv
     card_service = AsyncMock()
     card_service.get_cards = AsyncMock(return_value=expected)
 
-    client = PipefyClient.__new__(PipefyClient)
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
     client._card_service = card_service
     client._pipe_service = MagicMock(spec=PipeService)
 
     result = await client.get_cards(
         pipe_id,
         search=None,
-        include_fields=False,  # type: ignore[attr-defined]
+        include_fields=False,
     )
 
     card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=False)
@@ -896,10 +896,10 @@ async def test_add_card_comment_delegates_to_card_service_create_comment():
     card_service = AsyncMock()
     card_service.create_comment = AsyncMock(return_value=expected)
 
-    client = PipefyClient.__new__(PipefyClient)
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
     client._card_service = card_service
 
-    result = await client.add_card_comment(card_id, text)  # type: ignore[attr-defined]
+    result = await client.add_card_comment(card_id, text)
 
     assert result == expected
     card_service.create_comment.assert_awaited_once_with(card_id, text)

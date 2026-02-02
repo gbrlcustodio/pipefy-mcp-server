@@ -9,6 +9,10 @@ import pytest
 from gql import Client
 
 from pipefy_mcp.services.pipefy.card_service import CardService
+from pipefy_mcp.services.pipefy.queries.card_queries import (
+    GET_CARDS_QUERY,
+    GET_CARDS_WITH_FIELDS_QUERY,
+)
 
 
 def _create_mock_gql_client(mock_session: AsyncMock) -> MagicMock:
@@ -87,6 +91,44 @@ async def test_get_cards_with_none_search_sends_empty_search():
         "Expected empty search object"
     )
     assert result == {"cards": {"edges": []}}, "Expected cards response"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards_with_include_fields_true_uses_get_cards_with_fields_query():
+    """Test get_cards uses GET_CARDS_WITH_FIELDS_QUERY when include_fields=True."""
+    pipe_id = 303181849
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"cards": {"edges": []}})
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    await service.get_cards(pipe_id, search=None, include_fields=True)
+
+    query_used = mock_session.execute.call_args[0][0]
+    assert query_used is GET_CARDS_WITH_FIELDS_QUERY, (
+        "Expected GET_CARDS_WITH_FIELDS_QUERY when include_fields=True"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards_with_include_fields_false_uses_get_cards_query():
+    """Test get_cards uses GET_CARDS_QUERY when include_fields=False."""
+    pipe_id = 303181849
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"cards": {"edges": []}})
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    await service.get_cards(pipe_id, search=None, include_fields=False)
+
+    query_used = mock_session.execute.call_args[0][0]
+    assert query_used is GET_CARDS_QUERY, (
+        "Expected GET_CARDS_QUERY when include_fields=False"
+    )
 
 
 @pytest.mark.unit

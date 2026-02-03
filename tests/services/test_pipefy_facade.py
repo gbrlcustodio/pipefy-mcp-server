@@ -90,7 +90,6 @@ def test_pipefy_client_injects_same_shared_client_instance_into_services():
         "pipefy_mcp.services.pipefy.base_client.BasePipefyClient._create_client",
         return_value=mock_client_instance,
     ):
-        # Create a real PipefyClient (it will use the mocked _create_client)
         client = PipefyClient(settings=MagicMock(spec=PipefySettings))
 
     # Verify that both services received the same client instance

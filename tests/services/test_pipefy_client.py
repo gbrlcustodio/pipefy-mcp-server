@@ -37,7 +37,6 @@ async def test_create_card_with_dict_fields():
 
     client = _make_facade_client(mock_client)
 
-    # Execute create_card
     result = await client.create_card(pipe_id, fields_dict)
 
     # Verify the session was called with correct variables
@@ -86,7 +85,6 @@ async def test_create_card_with_array_fields():
 
     client = _make_facade_client(mock_client)
 
-    # Execute create_card
     result = await client.create_card(pipe_id, fields_array)
 
     # Verify the session was called with correct variables
@@ -131,7 +129,6 @@ async def test_create_card_with_empty_dict():
 
     client = _make_facade_client(mock_client)
 
-    # Execute create_card
     result = await client.create_card(pipe_id, fields_dict)
 
     # Verify the session was called with empty array
@@ -165,7 +162,6 @@ async def test_create_card_with_single_field():
 
     client = _make_facade_client(mock_client)
 
-    # Execute create_card
     result = await client.create_card(pipe_id, fields_dict)
 
     # Verify the session was called with correct variables
@@ -230,7 +226,6 @@ async def test_get_start_form_fields_returns_all_fields():
 
     client = _make_facade_client(mock_client)
 
-    # Execute get_start_form_fields
     result = await client.get_start_form_fields(pipe_id)
 
     # Verify the session was called with correct variables
@@ -296,7 +291,6 @@ async def test_get_start_form_fields_required_only_filter():
 
     client = _make_facade_client(mock_client)
 
-    # Execute get_start_form_fields with required_only=True
     result = await client.get_start_form_fields(pipe_id, required_only=True)
 
     # Verify only required fields are returned
@@ -323,7 +317,6 @@ async def test_get_start_form_fields_empty_returns_friendly_message():
 
     client = _make_facade_client(mock_client)
 
-    # Execute get_start_form_fields
     result = await client.get_start_form_fields(pipe_id)
 
     # Verify user-friendly message is returned
@@ -373,7 +366,6 @@ async def test_get_start_form_fields_required_only_no_required_fields():
 
     client = _make_facade_client(mock_client)
 
-    # Execute get_start_form_fields with required_only=True
     result = await client.get_start_form_fields(pipe_id, required_only=True)
 
     # Verify user-friendly message is returned for no required fields
@@ -731,7 +723,6 @@ async def test_get_pipe_members_calls_service():
     mock_pipe_service = MagicMock(spec=PipeService)
     mock_pipe_service.get_pipe_members = AsyncMock(return_value=mock_members)
 
-    # Create a PipefyClient instance with the mocked service
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = mock_pipe_service
     client._card_service = MagicMock(spec=CardService)  # Mock CardService as well

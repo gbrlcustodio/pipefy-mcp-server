@@ -1,5 +1,5 @@
 #!/usr/bin/env -S uv run python
-"""Manual verification script for get_cards with include_fields (task 5.2).
+"""Manual verification script for get_cards with include_fields.
 
 Calls get_cards(pipe_id, include_fields=False) and get_cards(pipe_id, include_fields=True)
 via PipefyClient and prints whether card nodes include the 'fields' key when

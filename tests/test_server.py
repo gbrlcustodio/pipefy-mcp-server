@@ -24,7 +24,7 @@ def client_session():
     )
 
 
-# Minimal settings so server lifespan can start without real env (test only lists tools).
+# Minimal settings for server lifespan (test only lists tools).
 _MINIMAL_PIPEFY_SETTINGS = Settings(
     pipefy=PipefySettings(
         graphql_url="https://api.pipefy.com/graphql",

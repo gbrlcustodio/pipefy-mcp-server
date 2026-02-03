@@ -103,12 +103,7 @@ class PipeTools:
             card_id: int,
             include_fields: bool = False,
         ) -> dict:
-            """Get a card by its ID.
-
-            Args:
-                card_id: The ID of the card.
-                include_fields: If True, include the card's fields (name, value) in the response.
-            """
+            """Get a card by its ID. Set include_fields=True to include field names and values."""
             return await client.get_card(card_id, include_fields=include_fields)
 
         @mcp.tool(
@@ -154,13 +149,7 @@ class PipeTools:
             search: CardSearch | None = None,
             include_fields: bool = False,
         ) -> dict:
-            """Get all cards in the pipe.
-
-            Args:
-                pipe_id: The ID of the pipe.
-                search: Optional search filters.
-                include_fields: If True, include each card's fields (name, value) in the response.
-            """
+            """Get all cards in the pipe. Set include_fields=True to include field names and values."""
             await ctx.debug(
                 f"Getting cards for pipe {pipe_id} (include_fields={include_fields}, search={search})"
             )
@@ -535,12 +524,10 @@ class PipeTools:
                         )
 
                 except Exception as e:
-                    # Fallback if elicitation fails
                     return build_delete_card_error_payload(
                         message=f"Failed to request confirmation: {str(e)}"
                     )
 
-            # Execute the deletion
             try:
                 delete_response = await client.delete_card(card_id)
 

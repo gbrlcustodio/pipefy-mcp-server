@@ -215,7 +215,7 @@ def _extract_graphql_error_codes(exc: BaseException) -> list[str]:
             if isinstance(code, str) and code:
                 codes.append(code)
 
-    # Fallback: best-effort parse from exception string (some clients stringify errors)
+    # Best-effort parse from exception string when extensions are missing
     raw = str(exc)
     if raw:
         for match in re.findall(r"""['"]code['"]\s*[:=]\s*['"]([A-Z_]+)['"]""", raw):

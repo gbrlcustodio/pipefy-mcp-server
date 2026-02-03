@@ -99,10 +99,17 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_card(card_id: int) -> dict:
-            """Get a card by its ID."""
+        async def get_card(
+            card_id: int,
+            include_fields: bool = False,
+        ) -> dict:
+            """Get a card by its ID.
 
-            return await client.get_card(card_id)
+            Args:
+                card_id: The ID of the card.
+                include_fields: If True, include the card's fields (name, value) in the response.
+            """
+            return await client.get_card(card_id, include_fields=include_fields)
 
         @mcp.tool(
             annotations=ToolAnnotations(

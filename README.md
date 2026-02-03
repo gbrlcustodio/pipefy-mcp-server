@@ -40,7 +40,7 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
 ### Card Tools
 
 * **`get_cards`**: List and search for cards in a specific pipe (allows the Agent to understand your backlog). Set `include_fields=true` to include each card's custom fields (name and value) in the response.
-* **`get_card`**: Retrieve full details of a specific card.
+* **`get_card`**: Retrieve full details of a specific card. Set `include_fields=true` to include the card's custom fields (name and value) in the response.
 * **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
     * **Elicitation**: Elicitation is an MCP feature that allows the server to request additional information from the user mid-tool-execution. This server uses MCP's elicitation feature to prompt the user for required field values before creating the card.
 * **`delete_card`**: Permanently delete a card from Pipefy.

@@ -11,7 +11,6 @@ from pipefy_mcp.services.pipefy.queries.card_queries import (
     DELETE_CARD_MUTATION,
     GET_CARD_QUERY,
     GET_CARDS_QUERY,
-    GET_CARDS_WITH_FIELDS_QUERY,
     MOVE_CARD_TO_PHASE_MUTATION,
     UPDATE_CARD_FIELD_MUTATION,
     UPDATE_CARD_MUTATION,
@@ -45,9 +44,14 @@ class CardService(BasePipefyClient):
         variables = {"input": {"id": card_id}}
         return await self.execute_query(DELETE_CARD_MUTATION, variables)
 
-    async def get_card(self, card_id: int) -> dict:
-        """Get a card by its ID."""
-        variables = {"card_id": card_id}
+    async def get_card(self, card_id: int, include_fields: bool = False) -> dict:
+        """Get a card by its ID.
+
+        Args:
+            card_id: The ID of the card.
+            include_fields: If True, include the card's fields (name, value) in the response.
+        """
+        variables = {"card_id": card_id, "includeFields": include_fields}
         return await self.execute_query(GET_CARD_QUERY, variables)
 
     async def get_cards(
@@ -63,11 +67,14 @@ class CardService(BasePipefyClient):
             search: Optional search filters.
             include_fields: If True, include each card's fields (name, value) in the response.
         """
-        variables: dict[str, Any] = {"pipe_id": pipe_id, "search": {}}
+        variables: dict[str, Any] = {
+            "pipe_id": pipe_id,
+            "search": {},
+            "includeFields": include_fields,
+        }
         if search is not None:
             variables["search"] = search
-        query = GET_CARDS_WITH_FIELDS_QUERY if include_fields else GET_CARDS_QUERY
-        return await self.execute_query(query, variables)
+        return await self.execute_query(GET_CARDS_QUERY, variables)
 
     async def move_card_to_phase(self, card_id: int, destination_phase_id: int) -> dict:
         """Move a card to a specific phase.

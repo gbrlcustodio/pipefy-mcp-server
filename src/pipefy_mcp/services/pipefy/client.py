@@ -40,9 +40,14 @@ class PipefyClient:
         """Add a text comment to a card by its ID."""
         return await self._card_service.create_comment(card_id, text)
 
-    async def get_card(self, card_id: int) -> dict:
-        """Get a card by its ID."""
-        return await self._card_service.get_card(card_id)
+    async def get_card(self, card_id: int, include_fields: bool = False) -> dict:
+        """Get a card by its ID.
+
+        Args:
+            card_id: The ID of the card.
+            include_fields: If True, include the card's fields (name, value) in the response.
+        """
+        return await self._card_service.get_card(card_id, include_fields=include_fields)
 
     async def get_cards(
         self,

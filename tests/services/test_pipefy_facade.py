@@ -45,7 +45,7 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     card_service.delete_card.assert_awaited_once_with(34)
 
     assert await client.get_card(4) == {"ok": "card"}
-    card_service.get_card.assert_awaited_once_with(4)
+    card_service.get_card.assert_awaited_once_with(4, include_fields=False)
 
     assert await client.get_cards(5, {"title": "x"}) == {"ok": "cards"}
     card_service.get_cards.assert_awaited_once_with(

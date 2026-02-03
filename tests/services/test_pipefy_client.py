@@ -773,7 +773,7 @@ async def test_get_card_passes_card_id_variable():
     mock_session.execute.assert_called_once()
     call_args = mock_session.execute.call_args
     variables = call_args[1]["variable_values"]
-    assert variables == {"card_id": card_id}
+    assert variables == {"card_id": card_id, "includeFields": False}
     assert result == {
         "card": {
             "id": str(card_id),

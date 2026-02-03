@@ -9,10 +9,7 @@ import pytest
 from gql import Client
 
 from pipefy_mcp.services.pipefy.card_service import CardService
-from pipefy_mcp.services.pipefy.queries.card_queries import (
-    GET_CARDS_QUERY,
-    GET_CARDS_WITH_FIELDS_QUERY,
-)
+from pipefy_mcp.services.pipefy.queries.card_queries import GET_CARDS_QUERY
 
 
 def _create_mock_gql_client(mock_session: AsyncMock) -> MagicMock:
@@ -87,16 +84,18 @@ async def test_get_cards_with_none_search_sends_empty_search():
     result = await service.get_cards(pipe_id, None)  # type: ignore[arg-type]
 
     variables = mock_session.execute.call_args[1]["variable_values"]
-    assert variables == {"pipe_id": pipe_id, "search": {}}, (
-        "Expected empty search object"
-    )
+    assert variables == {
+        "pipe_id": pipe_id,
+        "search": {},
+        "includeFields": False,
+    }, "Expected empty search and includeFields=False"
     assert result == {"cards": {"edges": []}}, "Expected cards response"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cards_with_include_fields_true_uses_get_cards_with_fields_query():
-    """Test get_cards uses GET_CARDS_WITH_FIELDS_QUERY when include_fields=True."""
+async def test_get_cards_with_include_fields_true_passes_includeFields_variable():
+    """Test get_cards uses GET_CARDS_QUERY with includeFields=True when include_fields=True."""
     pipe_id = 303181849
 
     mock_session = AsyncMock()
@@ -107,15 +106,15 @@ async def test_get_cards_with_include_fields_true_uses_get_cards_with_fields_que
     await service.get_cards(pipe_id, search=None, include_fields=True)
 
     query_used = mock_session.execute.call_args[0][0]
-    assert query_used is GET_CARDS_WITH_FIELDS_QUERY, (
-        "Expected GET_CARDS_WITH_FIELDS_QUERY when include_fields=True"
-    )
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert query_used is GET_CARDS_QUERY
+    assert variables["includeFields"] is True
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cards_with_include_fields_false_uses_get_cards_query():
-    """Test get_cards uses GET_CARDS_QUERY when include_fields=False."""
+async def test_get_cards_with_include_fields_false_passes_includeFields_variable():
+    """Test get_cards uses GET_CARDS_QUERY with includeFields=False when include_fields=False."""
     pipe_id = 303181849
 
     mock_session = AsyncMock()
@@ -126,9 +125,53 @@ async def test_get_cards_with_include_fields_false_uses_get_cards_query():
     await service.get_cards(pipe_id, search=None, include_fields=False)
 
     query_used = mock_session.execute.call_args[0][0]
-    assert query_used is GET_CARDS_QUERY, (
-        "Expected GET_CARDS_QUERY when include_fields=False"
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert query_used is GET_CARDS_QUERY
+    assert variables["includeFields"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_card_passes_card_id_and_includeFields():
+    """Test get_card passes card_id and includeFields in variable_values."""
+    card_id = 12345
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        return_value={"card": {"id": str(card_id), "title": "Test"}}
     )
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    await service.get_card(card_id, include_fields=False)
+
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert variables == {"card_id": card_id, "includeFields": False}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_card_with_include_fields_true_passes_includeFields():
+    """Test get_card with include_fields=True passes includeFields=True to query."""
+    card_id = 12345
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        return_value={
+            "card": {
+                "id": str(card_id),
+                "title": "Test",
+                "fields": [{"name": "Field", "value": "x"}],
+            }
+        }
+    )
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    await service.get_card(card_id, include_fields=True)
+
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert variables == {"card_id": card_id, "includeFields": True}
 
 
 @pytest.mark.unit

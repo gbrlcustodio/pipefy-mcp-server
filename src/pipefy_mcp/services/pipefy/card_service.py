@@ -44,19 +44,34 @@ class CardService(BasePipefyClient):
         variables = {"input": {"id": card_id}}
         return await self.execute_query(DELETE_CARD_MUTATION, variables)
 
-    async def get_card(self, card_id: int) -> dict:
-        """Get a card by its ID."""
-        variables = {"card_id": card_id}
+    async def get_card(self, card_id: int, include_fields: bool = False) -> dict:
+        """Get a card by its ID.
+
+        Args:
+            card_id: The ID of the card.
+            include_fields: If True, include the card's custom fields (name, value) in the response.
+        """
+        variables = {"card_id": card_id, "includeFields": include_fields}
         return await self.execute_query(GET_CARD_QUERY, variables)
 
-    async def get_cards(self, pipe_id: int, search: CardSearch | None = None) -> dict:
-        """Get all cards in the specified pipe.
+    async def get_cards(
+        self,
+        pipe_id: int,
+        search: CardSearch | None = None,
+        include_fields: bool = False,
+    ) -> dict:
+        """Get all cards in the pipe.
 
         Args:
             pipe_id: The ID of the pipe.
             search: Optional search filters.
+            include_fields: If True, include each card's custom fields (name, value) in the response.
         """
-        variables: dict[str, Any] = {"pipe_id": pipe_id, "search": {}}
+        variables: dict[str, Any] = {
+            "pipe_id": pipe_id,
+            "search": {},
+            "includeFields": include_fields,
+        }
         if search is not None:
             variables["search"] = search
         return await self.execute_query(GET_CARDS_QUERY, variables)

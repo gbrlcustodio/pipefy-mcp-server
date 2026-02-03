@@ -37,7 +37,6 @@ async def test_create_card_with_dict_fields():
 
     client = _make_facade_client(mock_client)
 
-    # Execute create_card
     result = await client.create_card(pipe_id, fields_dict)
 
     # Verify the session was called with correct variables
@@ -86,7 +85,6 @@ async def test_create_card_with_array_fields():
 
     client = _make_facade_client(mock_client)
 
-    # Execute create_card
     result = await client.create_card(pipe_id, fields_array)
 
     # Verify the session was called with correct variables
@@ -131,7 +129,6 @@ async def test_create_card_with_empty_dict():
 
     client = _make_facade_client(mock_client)
 
-    # Execute create_card
     result = await client.create_card(pipe_id, fields_dict)
 
     # Verify the session was called with empty array
@@ -165,7 +162,6 @@ async def test_create_card_with_single_field():
 
     client = _make_facade_client(mock_client)
 
-    # Execute create_card
     result = await client.create_card(pipe_id, fields_dict)
 
     # Verify the session was called with correct variables
@@ -230,7 +226,6 @@ async def test_get_start_form_fields_returns_all_fields():
 
     client = _make_facade_client(mock_client)
 
-    # Execute get_start_form_fields
     result = await client.get_start_form_fields(pipe_id)
 
     # Verify the session was called with correct variables
@@ -296,7 +291,6 @@ async def test_get_start_form_fields_required_only_filter():
 
     client = _make_facade_client(mock_client)
 
-    # Execute get_start_form_fields with required_only=True
     result = await client.get_start_form_fields(pipe_id, required_only=True)
 
     # Verify only required fields are returned
@@ -323,7 +317,6 @@ async def test_get_start_form_fields_empty_returns_friendly_message():
 
     client = _make_facade_client(mock_client)
 
-    # Execute get_start_form_fields
     result = await client.get_start_form_fields(pipe_id)
 
     # Verify user-friendly message is returned
@@ -373,7 +366,6 @@ async def test_get_start_form_fields_required_only_no_required_fields():
 
     client = _make_facade_client(mock_client)
 
-    # Execute get_start_form_fields with required_only=True
     result = await client.get_start_form_fields(pipe_id, required_only=True)
 
     # Verify user-friendly message is returned for no required fields
@@ -731,7 +723,6 @@ async def test_get_pipe_members_calls_service():
     mock_pipe_service = MagicMock(spec=PipeService)
     mock_pipe_service.get_pipe_members = AsyncMock(return_value=mock_members)
 
-    # Create a PipefyClient instance with the mocked service
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = mock_pipe_service
     client._card_service = MagicMock(spec=CardService)  # Mock CardService as well
@@ -773,7 +764,7 @@ async def test_get_card_passes_card_id_variable():
     mock_session.execute.assert_called_once()
     call_args = mock_session.execute.call_args
     variables = call_args[1]["variable_values"]
-    assert variables == {"card_id": card_id}
+    assert variables == {"card_id": card_id, "includeFields": False}
     assert result == {
         "card": {
             "id": str(card_id),
@@ -839,6 +830,54 @@ async def test_get_cards_with_search_dict_passes_search_as_is():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_cards_with_include_fields_true_passes_include_fields_to_service():
+    """Test get_cards facade passes include_fields=True to CardService.get_cards."""
+    pipe_id = 303181849
+    expected = {"cards": {"edges": []}}
+
+    card_service = AsyncMock()
+    card_service.get_cards = AsyncMock(return_value=expected)
+
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+    client._pipe_service = MagicMock(spec=PipeService)
+
+    result = await client.get_cards(
+        pipe_id,
+        search=None,
+        include_fields=True,
+    )
+
+    card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=True)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards_with_include_fields_false_passes_include_fields_to_service():
+    """Test get_cards facade passes include_fields=False to CardService.get_cards."""
+    pipe_id = 303181849
+    expected = {"cards": {"edges": []}}
+
+    card_service = AsyncMock()
+    card_service.get_cards = AsyncMock(return_value=expected)
+
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+    client._pipe_service = MagicMock(spec=PipeService)
+
+    result = await client.get_cards(
+        pipe_id,
+        search=None,
+        include_fields=False,
+    )
+
+    card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=False)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_add_card_comment_delegates_to_card_service_create_comment():
     """Test add_card_comment delegates unchanged to CardService.create_comment."""
     card_id = 12345
@@ -848,10 +887,10 @@ async def test_add_card_comment_delegates_to_card_service_create_comment():
     card_service = AsyncMock()
     card_service.create_comment = AsyncMock(return_value=expected)
 
-    client = PipefyClient.__new__(PipefyClient)
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
     client._card_service = card_service
 
-    result = await client.add_card_comment(card_id, text)  # type: ignore[attr-defined]
+    result = await client.add_card_comment(card_id, text)
 
     assert result == expected
     card_service.create_comment.assert_awaited_once_with(card_id, text)

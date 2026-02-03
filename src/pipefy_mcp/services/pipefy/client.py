@@ -40,13 +40,31 @@ class PipefyClient:
         """Add a text comment to a card by its ID."""
         return await self._card_service.create_comment(card_id, text)
 
-    async def get_card(self, card_id: int) -> dict:
-        """Get a card by its ID."""
-        return await self._card_service.get_card(card_id)
+    async def get_card(self, card_id: int, include_fields: bool = False) -> dict:
+        """Get a card by its ID.
 
-    async def get_cards(self, pipe_id: int, search: CardSearch | None = None) -> dict:
-        """Get all cards in the specified pipe with optional search filters."""
-        return await self._card_service.get_cards(pipe_id, search)
+        Args:
+            card_id: The ID of the card.
+            include_fields: If True, include the card's custom fields (name, value) in the response.
+        """
+        return await self._card_service.get_card(card_id, include_fields=include_fields)
+
+    async def get_cards(
+        self,
+        pipe_id: int,
+        search: CardSearch | None = None,
+        include_fields: bool = False,
+    ) -> dict:
+        """Get all cards in the pipe with optional search filters.
+
+        Args:
+            pipe_id: The ID of the pipe.
+            search: Optional search filters.
+            include_fields: If True, include each card's custom fields (name, value) in the response.
+        """
+        return await self._card_service.get_cards(
+            pipe_id, search, include_fields=include_fields
+        )
 
     async def move_card_to_phase(self, card_id: int, destination_phase_id: int) -> dict:
         """Move a card to a specific phase."""

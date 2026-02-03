@@ -45,10 +45,12 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     card_service.delete_card.assert_awaited_once_with(34)
 
     assert await client.get_card(4) == {"ok": "card"}
-    card_service.get_card.assert_awaited_once_with(4)
+    card_service.get_card.assert_awaited_once_with(4, include_fields=False)
 
     assert await client.get_cards(5, {"title": "x"}) == {"ok": "cards"}
-    card_service.get_cards.assert_awaited_once_with(5, {"title": "x"})
+    card_service.get_cards.assert_awaited_once_with(
+        5, {"title": "x"}, include_fields=False
+    )
 
     assert await client.move_card_to_phase(6, 7) == {"ok": "move"}
     card_service.move_card_to_phase.assert_awaited_once_with(6, 7)
@@ -88,7 +90,6 @@ def test_pipefy_client_injects_same_shared_client_instance_into_services():
         "pipefy_mcp.services.pipefy.base_client.BasePipefyClient._create_client",
         return_value=mock_client_instance,
     ):
-        # Create a real PipefyClient (it will use the mocked _create_client)
         client = PipefyClient(settings=MagicMock(spec=PipefySettings))
 
     # Verify that both services received the same client instance

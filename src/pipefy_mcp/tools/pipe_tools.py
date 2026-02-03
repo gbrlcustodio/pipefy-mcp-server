@@ -99,10 +99,17 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_card(card_id: int) -> dict:
-            """Get a card by its ID."""
+        async def get_card(
+            card_id: int,
+            include_fields: bool = False,
+        ) -> dict:
+            """Get a card by its ID.
 
-            return await client.get_card(card_id)
+            Args:
+                card_id: The ID of the card.
+                include_fields: If True, include the card's custom fields (name, value) in the response.
+            """
+            return await client.get_card(card_id, include_fields=include_fields)
 
         @mcp.tool(
             annotations=ToolAnnotations(
@@ -141,10 +148,25 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_cards(pipe_id: int, search: CardSearch | None = None) -> dict:
-            """Get all cards in the pipe."""
+        async def get_cards(
+            ctx: Context[ServerSession, None],
+            pipe_id: int,
+            search: CardSearch | None = None,
+            include_fields: bool = False,
+        ) -> dict:
+            """Get all cards in the pipe.
 
-            return await client.get_cards(pipe_id, search)
+            Args:
+                pipe_id: The ID of the pipe.
+                search: Optional search filters.
+                include_fields: If True, include each card's custom fields (name, value) in the response.
+            """
+            await ctx.debug(
+                f"Getting cards for pipe {pipe_id} (include_fields={include_fields}, search={search})"
+            )
+            return await client.get_cards(
+                pipe_id, search, include_fields=include_fields
+            )
 
         @mcp.tool(
             annotations=ToolAnnotations(
@@ -513,12 +535,10 @@ class PipeTools:
                         )
 
                 except Exception as e:
-                    # Fallback if elicitation fails
                     return build_delete_card_error_payload(
                         message=f"Failed to request confirmation: {str(e)}"
                     )
 
-            # Execute the deletion
             try:
                 delete_response = await client.delete_card(card_id)
 

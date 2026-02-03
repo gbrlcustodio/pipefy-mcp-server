@@ -17,12 +17,8 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
     """Lifespan function to manage the lifecycle of the server."""
     try:
         logger.info("Initializing services")
-
-        # Initialize services
         services_container = ServicesContainer.get_instance()
         services_container.initialize_services(settings)
-
-        # Register tools
         mcp = ToolRegistry(
             mcp=app,
             services_container=services_container,
@@ -37,7 +33,6 @@ PIPEFY_INSTRUCTIONS = textwrap.dedent("""
     You are connected to a Pipefy MCP server for managing Kanban-style workflow processes.
     """).strip()
 
-# Create an MCP server
 mcp = FastMCP("pipefy", instructions=PIPEFY_INSTRUCTIONS, lifespan=lifespan)
 
 

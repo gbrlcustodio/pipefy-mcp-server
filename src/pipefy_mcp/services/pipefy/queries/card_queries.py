@@ -38,7 +38,7 @@ DELETE_CARD_MUTATION = gql(
 
 GET_CARD_QUERY = gql(
     """
-    query ($card_id: ID!) {
+    query ($card_id: ID!, $includeFields: Boolean!) {
         card(id: $card_id) {
             id
             title
@@ -50,6 +50,10 @@ GET_CARD_QUERY = gql(
                 id
                 name
             }
+            fields @include(if: $includeFields) {
+                name
+                value
+            }
         }
     }
     """
@@ -57,7 +61,7 @@ GET_CARD_QUERY = gql(
 
 GET_CARDS_QUERY = gql(
     """
-    query ($pipe_id: ID!, $search: CardSearch) {
+    query ($pipe_id: ID!, $search: CardSearch, $includeFields: Boolean!) {
         cards(pipe_id: $pipe_id, search: $search) {
             edges {
                 node {
@@ -66,6 +70,10 @@ GET_CARDS_QUERY = gql(
                     current_phase {
                         id
                         name
+                    }
+                    fields @include(if: $includeFields) {
+                        name
+                        value
                     }
                 }
             }

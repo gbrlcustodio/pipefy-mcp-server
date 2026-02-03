@@ -103,7 +103,12 @@ class PipeTools:
             card_id: int,
             include_fields: bool = False,
         ) -> dict:
-            """Get a card by its ID. Set include_fields=True to include field names and values."""
+            """Get a card by its ID.
+
+            Args:
+                card_id: The ID of the card.
+                include_fields: If True, include the card's custom fields (name, value) in the response.
+            """
             return await client.get_card(card_id, include_fields=include_fields)
 
         @mcp.tool(
@@ -149,7 +154,13 @@ class PipeTools:
             search: CardSearch | None = None,
             include_fields: bool = False,
         ) -> dict:
-            """Get all cards in the pipe. Set include_fields=True to include field names and values."""
+            """Get all cards in the pipe.
+
+            Args:
+                pipe_id: The ID of the pipe.
+                search: Optional search filters.
+                include_fields: If True, include each card's custom fields (name, value) in the response.
+            """
             await ctx.debug(
                 f"Getting cards for pipe {pipe_id} (include_fields={include_fields}, search={search})"
             )

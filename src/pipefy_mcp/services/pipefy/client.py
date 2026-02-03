@@ -41,7 +41,12 @@ class PipefyClient:
         return await self._card_service.create_comment(card_id, text)
 
     async def get_card(self, card_id: int, include_fields: bool = False) -> dict:
-        """Get a card by its ID. Set include_fields=True to include field names and values."""
+        """Get a card by its ID.
+
+        Args:
+            card_id: The ID of the card.
+            include_fields: If True, include the card's custom fields (name, value) in the response.
+        """
         return await self._card_service.get_card(card_id, include_fields=include_fields)
 
     async def get_cards(
@@ -50,7 +55,13 @@ class PipefyClient:
         search: CardSearch | None = None,
         include_fields: bool = False,
     ) -> dict:
-        """Get all cards in the pipe with optional search. Set include_fields=True for field names and values."""
+        """Get all cards in the pipe with optional search filters.
+
+        Args:
+            pipe_id: The ID of the pipe.
+            search: Optional search filters.
+            include_fields: If True, include each card's custom fields (name, value) in the response.
+        """
         return await self._card_service.get_cards(
             pipe_id, search, include_fields=include_fields
         )

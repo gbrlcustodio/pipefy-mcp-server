@@ -9,6 +9,7 @@ from pipefy_mcp.services.pipefy.queries.card_queries import (
     CREATE_CARD_MUTATION,
     CREATE_COMMENT_MUTATION,
     DELETE_CARD_MUTATION,
+    FIND_CARDS_QUERY,
     GET_CARD_QUERY,
     GET_CARDS_QUERY,
     MOVE_CARD_TO_PHASE_MUTATION,
@@ -75,6 +76,28 @@ class CardService(BasePipefyClient):
         if search is not None:
             variables["search"] = search
         return await self.execute_query(GET_CARDS_QUERY, variables)
+
+    async def find_cards(
+        self,
+        pipe_id: int,
+        field_id: str,
+        field_value: str,
+        include_fields: bool = False,
+    ) -> dict:
+        """Find cards in the pipe where the given field equals the given value.
+
+        Args:
+            pipe_id: The ID of the pipe to search in.
+            field_id: Pipefy field identifier (e.g. from get_start_form_fields or get_phase_fields).
+            field_value: Value to match for that field (string; use format expected by field type).
+            include_fields: If True, include each card's custom fields (name, value) in the response.
+        """
+        variables: dict[str, Any] = {
+            "pipeId": pipe_id,
+            "search": {"fieldId": field_id, "fieldValue": field_value},
+            "includeFields": include_fields,
+        }
+        return await self.execute_query(FIND_CARDS_QUERY, variables)
 
     async def move_card_to_phase(self, card_id: int, destination_phase_id: int) -> dict:
         """Move a card to a specific phase.

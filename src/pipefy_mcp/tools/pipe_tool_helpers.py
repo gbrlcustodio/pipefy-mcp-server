@@ -48,6 +48,9 @@ DeleteCardPayload = (
     DeleteCardPreviewPayload | DeleteCardSuccessPayload | DeleteCardErrorPayload
 )
 
+# Message returned by find_cards tool when the API returns no matching cards.
+FIND_CARDS_EMPTY_MESSAGE = "No cards found for this field/value."
+
 
 class DeleteCardConfirmation(BaseModel):
     confirm: bool = Field(

@@ -12,3 +12,10 @@ class CardSearch(TypedDict, total=False):
     title: str
     inbox_emails_read: bool
     include_done: bool
+
+
+class FindCardsSearch(TypedDict):
+    """findCards search (fieldId + fieldValue)."""
+
+    field_id: str
+    field_value: str

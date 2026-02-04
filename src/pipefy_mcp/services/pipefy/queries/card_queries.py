@@ -82,6 +82,29 @@ GET_CARDS_QUERY = gql(
     """
 )
 
+FIND_CARDS_QUERY = gql(
+    """
+    query ($pipeId: ID!, $search: FindCards!, $includeFields: Boolean!) {
+        findCards(pipeId: $pipeId, search: $search) {
+            edges {
+                node {
+                    id
+                    title
+                    current_phase {
+                        id
+                        name
+                    }
+                    fields @include(if: $includeFields) {
+                        name
+                        value
+                    }
+                }
+            }
+        }
+    }
+    """
+)
+
 MOVE_CARD_TO_PHASE_MUTATION = gql(
     """
     mutation ($input: MoveCardToPhaseInput!) {

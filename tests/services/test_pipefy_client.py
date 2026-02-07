@@ -878,6 +878,58 @@ async def test_get_cards_with_include_fields_false_passes_include_fields_to_serv
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_find_cards_delegates_to_card_service_with_include_fields_true():
+    """Test find_cards facade delegates to CardService.find_cards with include_fields=True."""
+    pipe_id = 303181849
+    field_id = "status"
+    field_value = "In Progress"
+    expected = {"findCards": {"edges": []}}
+
+    card_service = AsyncMock()
+    card_service.find_cards = AsyncMock(return_value=expected)
+
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+    client._pipe_service = MagicMock(spec=PipeService)
+
+    result = await client.find_cards(
+        pipe_id, field_id, field_value, include_fields=True
+    )
+
+    card_service.find_cards.assert_awaited_once_with(
+        pipe_id, field_id, field_value, include_fields=True
+    )
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_find_cards_delegates_to_card_service_with_include_fields_false():
+    """Test find_cards facade delegates to CardService.find_cards with include_fields=False."""
+    pipe_id = 1
+    field_id = "field_1"
+    field_value = "Value 1"
+    expected = {"findCards": {"edges": [{"node": {"id": "1", "title": "Card"}}]}}
+
+    card_service = AsyncMock()
+    card_service.find_cards = AsyncMock(return_value=expected)
+
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+    client._pipe_service = MagicMock(spec=PipeService)
+
+    result = await client.find_cards(
+        pipe_id, field_id, field_value, include_fields=False
+    )
+
+    card_service.find_cards.assert_awaited_once_with(
+        pipe_id, field_id, field_value, include_fields=False
+    )
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_add_card_comment_delegates_to_card_service_create_comment():
     """Test add_card_comment delegates unchanged to CardService.create_comment."""
     card_id = 12345

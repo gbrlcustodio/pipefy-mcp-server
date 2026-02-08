@@ -898,6 +898,45 @@ async def test_add_card_comment_delegates_to_card_service_create_comment():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_update_comment_delegates_to_card_service_update_comment():
+    """Test update_comment delegates unchanged to CardService.update_comment."""
+    comment_id = 42
+    text = "Updated comment text"
+    expected = {"updateComment": {"comment": {"id": "42"}}}
+
+    card_service = AsyncMock()
+    card_service.update_comment = AsyncMock(return_value=expected)
+
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+
+    result = await client.update_comment(comment_id, text)
+
+    assert result == expected
+    card_service.update_comment.assert_awaited_once_with(comment_id, text)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_comment_delegates_to_card_service_delete_comment():
+    """Test delete_comment delegates unchanged to CardService.delete_comment."""
+    comment_id = 99
+    expected = {"deleteComment": {"success": True}}
+
+    card_service = AsyncMock()
+    card_service.delete_comment = AsyncMock(return_value=expected)
+
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+
+    result = await client.delete_comment(comment_id)
+
+    assert result == expected
+    card_service.delete_comment.assert_awaited_once_with(comment_id)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_move_card_to_phase_variable_shape():
     """Test move_card_to_phase sends input with card_id and destination_phase_id."""
     card_id = 12345

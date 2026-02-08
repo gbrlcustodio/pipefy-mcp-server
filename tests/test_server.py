@@ -43,6 +43,7 @@ async def test_register_tools(client_session):
         "delete_card",
         "delete_comment",
         "fill_card_phase_fields",
+        "find_cards",
         "get_card",
         "get_cards",
         "get_phase_fields",

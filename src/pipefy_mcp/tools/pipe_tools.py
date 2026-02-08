@@ -14,6 +14,7 @@ from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
 from pipefy_mcp.tools.pipe_tool_helpers import (
+    FIND_CARDS_EMPTY_MESSAGE,
     AddCardCommentPayload,
     DeleteCardConfirmation,
     DeleteCardPayload,
@@ -38,6 +39,8 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     map_delete_comment_error_to_message,
     map_update_comment_error_to_message,
 )
+
+FIND_CARDS_RESPONSE_KEY = "findCards"
 
 
 class PipeTools:
@@ -253,6 +256,38 @@ class PipeTools:
             return await client.get_cards(
                 pipe_id, search, include_fields=include_fields
             )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def find_cards(
+            pipe_id: int,
+            field_id: str,
+            field_value: str,
+            include_fields: bool = False,
+        ) -> dict:
+            """Find cards in the pipe where a specific field equals a given value.
+
+            Use this when you need to filter cards by a custom field (e.g. Status = In Progress)
+            rather than by title or assignees. The field_id can be obtained from
+            get_start_form_fields or get_phase_fields.
+
+            Args:
+                pipe_id: The ID of the pipe to search in.
+                field_id: Pipefy field identifier (e.g. from get_start_form_fields or get_phase_fields).
+                field_value: Value to match for that field (string; use the format expected by the field type).
+                include_fields: If True, include each card's custom fields (name, value) in the response.
+            """
+            response = await client.find_cards(
+                pipe_id, field_id, field_value, include_fields=include_fields
+            )
+            edges = response.get(FIND_CARDS_RESPONSE_KEY, {}).get("edges")
+            if not edges:
+                response = dict(response)
+                response["message"] = FIND_CARDS_EMPTY_MESSAGE
+            return response
 
         @mcp.tool(
             annotations=ToolAnnotations(

@@ -73,6 +73,8 @@ DeleteCardPayload = (
     DeleteCardPreviewPayload | DeleteCardSuccessPayload | DeleteCardErrorPayload
 )
 
+FIND_CARDS_EMPTY_MESSAGE = "No cards found for this field/value."
+
 
 class DeleteCardConfirmation(BaseModel):
     confirm: bool = Field(

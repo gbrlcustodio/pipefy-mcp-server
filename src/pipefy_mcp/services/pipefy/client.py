@@ -74,6 +74,25 @@ class PipefyClient:
             pipe_id, search, include_fields=include_fields
         )
 
+    async def find_cards(
+        self,
+        pipe_id: int,
+        field_id: str,
+        field_value: str,
+        include_fields: bool = False,
+    ) -> dict:
+        """Find cards in the pipe where the given field equals the given value.
+
+        Args:
+            pipe_id: The ID of the pipe to search in.
+            field_id: Pipefy field identifier (e.g. from get_start_form_fields or get_phase_fields).
+            field_value: Value to match for that field (string; use format expected by field type).
+            include_fields: If True, include each card's custom fields (name, value) in the response.
+        """
+        return await self._card_service.find_cards(
+            pipe_id, field_id, field_value, include_fields=include_fields
+        )
+
     async def move_card_to_phase(self, card_id: int, destination_phase_id: int) -> dict:
         """Move a card to a specific phase."""
         return await self._card_service.move_card_to_phase(

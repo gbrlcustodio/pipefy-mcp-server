@@ -9,11 +9,13 @@ from pipefy_mcp.services.pipefy.queries.card_queries import (
     CREATE_CARD_MUTATION,
     CREATE_COMMENT_MUTATION,
     DELETE_CARD_MUTATION,
+    DELETE_COMMENT_MUTATION,
     GET_CARD_QUERY,
     GET_CARDS_QUERY,
     MOVE_CARD_TO_PHASE_MUTATION,
     UPDATE_CARD_FIELD_MUTATION,
     UPDATE_CARD_MUTATION,
+    UPDATE_COMMENT_MUTATION,
     UPDATE_FIELDS_VALUES_MUTATION,
 )
 from pipefy_mcp.services.pipefy.types import CardSearch
@@ -38,6 +40,16 @@ class CardService(BasePipefyClient):
         """Create a text comment on the specified card."""
         variables = {"input": {"card_id": card_id, "text": text}}
         return await self.execute_query(CREATE_COMMENT_MUTATION, variables)
+
+    async def update_comment(self, comment_id: int, text: str) -> dict:
+        """Update an existing comment by its ID."""
+        variables = {"input": {"id": comment_id, "text": text}}
+        return await self.execute_query(UPDATE_COMMENT_MUTATION, variables)
+
+    async def delete_comment(self, comment_id: int) -> dict:
+        """Delete a comment by its ID."""
+        variables = {"input": {"id": comment_id}}
+        return await self.execute_query(DELETE_COMMENT_MUTATION, variables)
 
     async def delete_card(self, card_id: int) -> dict:
         """Delete a card by its ID."""

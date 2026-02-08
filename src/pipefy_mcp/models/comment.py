@@ -27,3 +27,36 @@ class CommentInput(BaseModel):
         if v.strip() == "":
             raise ValueError("text must not be blank")
         return v
+
+
+class UpdateCommentInput(BaseModel):
+    """Validated input for updating an existing comment.
+
+    Attributes:
+        comment_id: The ID of the comment to update (must be positive).
+        text: The new comment text (1-1000 characters, cannot be blank).
+    """
+
+    comment_id: int = Field(gt=0, description="Comment ID must be a positive integer")
+    text: str = Field(
+        min_length=1,
+        max_length=MAX_COMMENT_TEXT_LENGTH,
+        description="Comment text (1-1000 characters)",
+    )
+
+    @field_validator("text")
+    @classmethod
+    def text_not_blank(cls, v: str) -> str:
+        if v.strip() == "":
+            raise ValueError("text must not be blank")
+        return v
+
+
+class DeleteCommentInput(BaseModel):
+    """Validated input for deleting a comment.
+
+    Attributes:
+        comment_id: The ID of the comment to delete (must be positive).
+    """
+
+    comment_id: int = Field(gt=0, description="Comment ID must be a positive integer")

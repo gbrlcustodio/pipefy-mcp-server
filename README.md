@@ -71,6 +71,12 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
 * **`update_card_field`**: Update a single field of an existing card via `updateCardField` (simple, full replacement of that field's value).
 * **`update_card`**: Update card attributes (title, assignees, labels, due date) and/or multiple custom fields using `updateCard` and `updateFieldsValues`.
 
+### Comment Tools
+
+* **`add_card_comment`**: Add a text comment to a card (1–1000 characters).
+* **`update_comment`**: Change the text of an existing comment by its ID.
+* **`delete_comment`**: Remove a comment by its ID.
+
 ### Card update tools: when to use each
 
 - **Use `update_card_field`** when you only need to change *one* field on a card (for example, updating a status, a text field, or a single label value) and you are fine replacing the entire value for that field in one shot.

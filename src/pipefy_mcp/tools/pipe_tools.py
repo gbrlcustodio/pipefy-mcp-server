@@ -5,7 +5,11 @@ from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
-from pipefy_mcp.models.comment import CommentInput
+from pipefy_mcp.models.comment import (
+    CommentInput,
+    DeleteCommentInput,
+    UpdateCommentInput,
+)
 from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
@@ -13,6 +17,8 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     AddCardCommentPayload,
     DeleteCardConfirmation,
     DeleteCardPayload,
+    DeleteCommentPayload,
+    UpdateCommentPayload,
     UserCancelledError,
     _extract_graphql_correlation_id,
     _extract_graphql_error_codes,
@@ -23,8 +29,14 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
     build_delete_card_success_payload,
+    build_delete_comment_error_payload,
+    build_delete_comment_success_payload,
+    build_update_comment_error_payload,
+    build_update_comment_success_payload,
     map_add_card_comment_error_to_message,
     map_delete_card_error_to_message,
+    map_delete_comment_error_to_message,
+    map_update_comment_error_to_message,
 )
 
 
@@ -142,6 +154,80 @@ class PipeTools:
                 )
 
             return build_add_card_comment_success_payload(comment_id=comment_id)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                idempotentHint=False,
+            ),
+        )
+        async def update_comment(comment_id: int, text: str) -> UpdateCommentPayload:
+            """Change the text of an existing comment by its ID.
+
+            Args:
+                comment_id: The ID of the comment to update
+                text: The new comment text (1-1000 characters)
+            """
+            try:
+                comment_input = UpdateCommentInput(comment_id=comment_id, text=text)
+            except ValidationError:
+                return build_update_comment_error_payload(
+                    message="Invalid input. Please provide a valid 'comment_id' and non-empty 'text'."
+                )
+
+            try:
+                response = await client.update_comment(
+                    comment_id=comment_input.comment_id,
+                    text=comment_input.text,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return build_update_comment_error_payload(
+                    message=map_update_comment_error_to_message(exc)
+                )
+
+            comment_data = (response.get("updateComment", {}) or {}).get(
+                "comment"
+            ) or {}
+            comment_id_res = comment_data.get("id")
+            if not comment_id_res:
+                return build_update_comment_error_payload(
+                    message="Unexpected response from Pipefy. Comment may not have been updated."
+                )
+
+            return build_update_comment_success_payload(comment_id=comment_id_res)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                idempotentHint=False,
+            ),
+        )
+        async def delete_comment(comment_id: int) -> DeleteCommentPayload:
+            """Remove a comment by its ID.
+
+            Args:
+                comment_id: The ID of the comment to delete
+            """
+            try:
+                comment_input = DeleteCommentInput(comment_id=comment_id)
+            except ValidationError:
+                return build_delete_comment_error_payload(
+                    message="Invalid input. Please provide a valid 'comment_id'."
+                )
+
+            try:
+                response = await client.delete_comment(
+                    comment_id=comment_input.comment_id
+                )
+            except Exception as exc:  # noqa: BLE001
+                return build_delete_comment_error_payload(
+                    message=map_delete_comment_error_to_message(exc)
+                )
+
+            delete_data = response.get("deleteComment", {})
+            if delete_data.get("success"):
+                return build_delete_comment_success_payload()
+            return build_delete_comment_error_payload(
+                message="Failed to delete comment. Please try again or verify the comment exists."
+            )
 
         @mcp.tool(
             annotations=ToolAnnotations(

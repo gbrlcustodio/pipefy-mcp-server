@@ -68,6 +68,10 @@ def mock_pipefy_client():
     client.add_card_comment = AsyncMock(
         return_value={"createComment": {"comment": {"id": "c_987"}}}
     )
+    client.update_comment = AsyncMock(
+        return_value={"updateComment": {"comment": {"id": "42"}}}
+    )
+    client.delete_comment = AsyncMock(return_value={"deleteComment": {"success": True}})
     client.get_card = AsyncMock()
     client.delete_card = AsyncMock()
 
@@ -362,6 +366,500 @@ class TestAddCardCommentTool:
                 "success": False,
                 "error": "Invalid input. Please provide a valid 'card_id' and non-empty 'text'.",
             }
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    @pytest.mark.parametrize("card_id,text", [(0, "valid"), (-1, "valid"), (1, "")])
+    async def test_validation_error_returns_error_payload_client_not_called(
+        self, client_session, mock_pipefy_client, card_id, text
+    ):
+        """add_card_comment with invalid card_id or blank text returns error, client not called."""
+        async with client_session as session:
+            result = await session.call_tool(
+                "add_card_comment",
+                {"card_id": card_id, "text": text},
+            )
+        payload = _extract_call_tool_payload(result)
+        assert payload["success"] is False
+        mock_pipefy_client.add_card_comment.assert_not_called()
+
+
+@pytest.mark.anyio
+class TestUpdateCommentAndDeleteCommentMcpRegistration:
+    """In-memory MCP tests: validate update_comment and delete_comment are registered and response contract (same pattern as add_card_comment)."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_update_comment_and_delete_comment_tools_registered(
+        self,
+        client_session,
+    ):
+        """list_tools() must include update_comment and delete_comment when PipeTools.register runs."""
+        async with client_session as session:
+            result = await session.list_tools()
+        tool_names = [t.name for t in result.tools]
+        assert "update_comment" in tool_names, (
+            "update_comment should be registered on MCP server"
+        )
+        assert "delete_comment" in tool_names, (
+            "delete_comment should be registered on MCP server"
+        )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_update_comment_call_tool_response_contract(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """call_tool('update_comment', ...) returns success payload with comment_id (in-memory MCP)."""
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_comment",
+                {"comment_id": 42, "text": "Updated text"},
+            )
+        assert result.isError is False
+        payload = _extract_call_tool_payload(result)
+        assert payload.get("success") is True
+        assert "comment_id" in payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_delete_comment_call_tool_response_contract(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """call_tool('delete_comment', ...) returns success payload (in-memory MCP)."""
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_comment",
+                {"comment_id": 99},
+            )
+        assert result.isError is False
+        payload = _extract_call_tool_payload(result)
+        assert payload.get("success") is True
+
+
+@pytest.mark.anyio
+class TestUpdateCommentTool:
+    """Tests for update_comment tool."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_success_returns_success_payload_with_comment_id(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """update_comment with valid input returns {"success": true, "comment_id": "<id>"}."""
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_comment",
+                {"comment_id": 42, "text": "Updated comment text"},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.update_comment.assert_called_once_with(
+                comment_id=42, text="Updated comment text"
+            )
+            payload = _extract_call_tool_payload(result)
+            assert payload == {"success": True, "comment_id": "42"}
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    @pytest.mark.parametrize("comment_id", [0, -1])
+    async def test_validation_comment_id_zero_or_negative_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+        comment_id,
+    ):
+        """update_comment with comment_id <= 0 returns error payload, client not called."""
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_comment",
+                {"comment_id": comment_id, "text": "valid text"},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.update_comment.assert_not_called()
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "error" in payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    @pytest.mark.parametrize("text", ["", "   ", "\n\t"])
+    async def test_validation_blank_text_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+        text,
+    ):
+        """update_comment with blank/whitespace text returns error payload, client not called."""
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_comment",
+                {"comment_id": 1, "text": text},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.update_comment.assert_not_called()
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "error" in payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_validation_text_over_max_length_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """update_comment with text > 1000 chars returns error payload, client not called."""
+        from pipefy_mcp.models.comment import MAX_COMMENT_TEXT_LENGTH
+
+        too_long = "a" * (MAX_COMMENT_TEXT_LENGTH + 1)
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_comment",
+                {"comment_id": 1, "text": too_long},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.update_comment.assert_not_called()
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "error" in payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_error_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """update_comment when client raises returns {"success": false, "error": "..."}."""
+        mock_pipefy_client.update_comment.side_effect = Exception("Comment not found")
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_comment",
+                {"comment_id": 999, "text": "some text"},
+            )
+
+            assert result.isError is False
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "error" in payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_malformed_response_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """update_comment when response has missing/null comment returns error payload."""
+        mock_pipefy_client.update_comment.return_value = {
+            "updateComment": {"comment": None},
+        }
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_comment",
+                {"comment_id": 42, "text": "updated text"},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.update_comment.assert_called_once_with(
+                comment_id=42, text="updated text"
+            )
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "error" in payload
+            assert (
+                "unexpected" in payload["error"].lower()
+                or "pipefy" in payload["error"].lower()
+            )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_error_mapping_comment_not_found(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """update_comment maps comment-not-found exception to friendly English message."""
+        from gql.transport.exceptions import TransportQueryError
+
+        error = TransportQueryError(
+            "GraphQL Error",
+            errors=[
+                {
+                    "message": "Comment not found",
+                    "extensions": {"code": "RESOURCE_NOT_FOUND"},
+                }
+            ],
+        )
+        mock_pipefy_client.update_comment.side_effect = error
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_comment",
+                {"comment_id": 999, "text": "updated text"},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.update_comment.assert_called_once_with(
+                comment_id=999, text="updated text"
+            )
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "comment" in payload["error"].lower()
+            assert (
+                "not found" in payload["error"].lower()
+                or "comment_id" in payload["error"]
+            )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_error_mapping_permission_denied(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """update_comment maps PERMISSION_DENIED exception to friendly English message."""
+        from gql.transport.exceptions import TransportQueryError
+
+        error = TransportQueryError(
+            "GraphQL Error",
+            errors=[
+                {
+                    "message": "Permission denied",
+                    "extensions": {"code": "PERMISSION_DENIED"},
+                }
+            ],
+        )
+        mock_pipefy_client.update_comment.side_effect = error
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_comment",
+                {"comment_id": 42, "text": "updated text"},
+            )
+
+            assert result.isError is False
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "permission" in payload["error"].lower()
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_error_mapping_invalid_input(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """update_comment maps invalid-input exception to friendly English message."""
+        from gql.transport.exceptions import TransportQueryError
+
+        error = TransportQueryError(
+            "GraphQL Error",
+            errors=[{"message": "Invalid comment id"}],
+        )
+        mock_pipefy_client.update_comment.side_effect = error
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_comment",
+                {"comment_id": 1, "text": "text"},
+            )
+
+            assert result.isError is False
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "error" in payload
+            assert (
+                "invalid" in payload["error"].lower()
+                or "comment" in payload["error"].lower()
+            )
+
+
+@pytest.mark.anyio
+class TestDeleteCommentTool:
+    """Tests for delete_comment tool."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_success_returns_success_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """delete_comment with valid comment_id returns {"success": true}."""
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_comment",
+                {"comment_id": 99},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.delete_comment.assert_called_once_with(comment_id=99)
+            payload = _extract_call_tool_payload(result)
+            assert payload == {"success": True}
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    @pytest.mark.parametrize("comment_id", [0, -1])
+    async def test_validation_comment_id_zero_or_negative_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+        comment_id,
+    ):
+        """delete_comment with comment_id <= 0 returns error payload, client not called."""
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_comment",
+                {"comment_id": comment_id},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.delete_comment.assert_not_called()
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "error" in payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_error_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """delete_comment when client raises returns {"success": false, "error": "..."}."""
+        mock_pipefy_client.delete_comment.side_effect = Exception("Comment not found")
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_comment",
+                {"comment_id": 999},
+            )
+
+            assert result.isError is False
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "error" in payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_response_success_false_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """delete_comment when deleteComment.success is false returns error payload."""
+        mock_pipefy_client.delete_comment.return_value = {
+            "deleteComment": {"success": False},
+        }
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_comment",
+                {"comment_id": 99},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.delete_comment.assert_called_once_with(comment_id=99)
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "error" in payload
+            assert (
+                "delete" in payload["error"].lower()
+                or "comment" in payload["error"].lower()
+            )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_error_mapping_comment_not_found(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """delete_comment maps comment-not-found exception to friendly English message."""
+        from gql.transport.exceptions import TransportQueryError
+
+        error = TransportQueryError(
+            "GraphQL Error",
+            errors=[
+                {
+                    "message": "Comment not found",
+                    "extensions": {"code": "RESOURCE_NOT_FOUND"},
+                }
+            ],
+        )
+        mock_pipefy_client.delete_comment.side_effect = error
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_comment",
+                {"comment_id": 999},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.delete_comment.assert_called_once_with(comment_id=999)
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "comment" in payload["error"].lower()
+            assert (
+                "not found" in payload["error"].lower()
+                or "comment_id" in payload["error"]
+            )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_error_mapping_permission_denied(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """delete_comment maps PERMISSION_DENIED exception to friendly English message."""
+        from gql.transport.exceptions import TransportQueryError
+
+        error = TransportQueryError(
+            "GraphQL Error",
+            errors=[
+                {
+                    "message": "Permission denied",
+                    "extensions": {"code": "PERMISSION_DENIED"},
+                }
+            ],
+        )
+        mock_pipefy_client.delete_comment.side_effect = error
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_comment",
+                {"comment_id": 42},
+            )
+
+            assert result.isError is False
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "permission" in payload["error"].lower()
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_error_mapping_invalid_input(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """delete_comment maps invalid-input exception to friendly English message."""
+        from gql.transport.exceptions import TransportQueryError
+
+        error = TransportQueryError(
+            "GraphQL Error",
+            errors=[{"message": "Invalid comment id"}],
+        )
+        mock_pipefy_client.delete_comment.side_effect = error
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_comment",
+                {"comment_id": 1},
+            )
+
+            assert result.isError is False
+            payload = _extract_call_tool_payload(result)
+            assert payload["success"] is False
+            assert "error" in payload
+            assert (
+                "invalid" in payload["error"].lower()
+                or "comment" in payload["error"].lower()
+            )
 
 
 @pytest.mark.anyio

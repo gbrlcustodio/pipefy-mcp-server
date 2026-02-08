@@ -1,7 +1,7 @@
 import json
 from datetime import timedelta
 from random import randint
-from typing import Any, Literal
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
@@ -15,33 +15,15 @@ from mcp.types import (
     ElicitRequestParams,
     ElicitResult,
 )
-from typing_extensions import TypedDict
 
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.tools.pipe_tool_helpers import FIND_CARDS_EMPTY_MESSAGE
+from pipefy_mcp.tools.pipe_tool_helpers import (
+    FIND_CARDS_EMPTY_MESSAGE,
+    DeleteCardErrorPayload,
+    DeleteCardSuccessPayload,
+)
 from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
-
-# =============================================================================
-# Delete Card Tool Test Types
-# =============================================================================
-
-
-class DeleteCardSuccessPayload(TypedDict):
-    success: Literal[True]
-    card_id: int
-    card_title: str
-    pipe_name: str
-    message: str
-
-
-class DeleteCardErrorPayload(TypedDict):
-    success: Literal[False]
-    error: str
-
-
-DeleteCardPayload = DeleteCardSuccessPayload | DeleteCardErrorPayload
-
 
 # =============================================================================
 # Fixtures
@@ -113,6 +95,19 @@ def elicitation_callback_for(action, content=None):
         params: ElicitRequestParams,
     ) -> ElicitResult:
         return ElicitResult(action=action, content=content)
+
+    return callback
+
+
+def elicitation_callback_raises(exc=None):
+    """Return an elicitation callback that raises the given exception (for testing error paths)."""
+    _exc = exc if exc is not None else RuntimeError("elicit failed")
+
+    async def callback(
+        context: RequestContext[ClientSession, Any],
+        params: ElicitRequestParams,
+    ) -> ElicitResult:
+        raise _exc
 
     return callback
 
@@ -304,6 +299,92 @@ class TestGetPipeMembersTool:
 
             assert result.isError is False, "Unexpected tool result"
             mock_pipefy_client.get_pipe_members.assert_called_once_with(pipe_id)
+
+
+@pytest.mark.anyio
+class TestGetCardTool:
+    """Direct tests for get_card tool."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_card_forwards_params_to_client(
+        self, client_session, mock_pipefy_client
+    ):
+        """get_card tool forwards card_id and include_fields to client."""
+        mock_pipefy_client.get_card = AsyncMock(
+            return_value={"card": {"id": "123", "title": "A Card"}}
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_card", {"card_id": 123, "include_fields": True}
+            )
+        assert result.isError is False
+        mock_pipefy_client.get_card.assert_called_once_with(123, include_fields=True)
+        payload = _extract_call_tool_payload(result)
+        assert payload["card"]["id"] == "123"
+
+
+@pytest.mark.anyio
+class TestGetPipeTool:
+    """Direct tests for get_pipe tool."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_pipe_forwards_pipe_id_to_client(
+        self, client_session, mock_pipefy_client, pipe_id
+    ):
+        """get_pipe tool forwards pipe_id to client."""
+        mock_pipefy_client.get_pipe = AsyncMock(
+            return_value={"pipe": {"id": pipe_id, "name": "My Pipe"}}
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_pipe", {"pipe_id": pipe_id})
+        assert result.isError is False
+        mock_pipefy_client.get_pipe.assert_called_once_with(pipe_id)
+        payload = _extract_call_tool_payload(result)
+        assert payload["pipe"]["name"] == "My Pipe"
+
+
+@pytest.mark.anyio
+class TestMoveCardToPhaseTool:
+    """Direct tests for move_card_to_phase tool."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_move_card_to_phase_forwards_params_to_client(
+        self, client_session, mock_pipefy_client
+    ):
+        """move_card_to_phase tool forwards card_id and destination_phase_id to client."""
+        mock_pipefy_client.move_card_to_phase = AsyncMock(
+            return_value={"moveCardToPhase": {"card": {"id": "1"}}}
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "move_card_to_phase",
+                {"card_id": 100, "destination_phase_id": 200},
+            )
+        assert result.isError is False
+        mock_pipefy_client.move_card_to_phase.assert_called_once_with(100, 200)
+
+
+@pytest.mark.anyio
+class TestGetStartFormFieldsTool:
+    """Direct tests for get_start_form_fields tool."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_start_form_fields_forwards_params_to_client(
+        self, client_session, mock_pipefy_client, pipe_id
+    ):
+        """get_start_form_fields tool forwards pipe_id and required_only to client."""
+        mock_pipefy_client.get_start_form_fields = AsyncMock(
+            return_value={"start_form_fields": [{"id": "title", "label": "Title"}]}
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_start_form_fields",
+                {"pipe_id": pipe_id, "required_only": True},
+            )
+        assert result.isError is False
+        mock_pipefy_client.get_start_form_fields.assert_called_once_with(pipe_id, True)
+        payload = _extract_call_tool_payload(result)
+        assert "start_form_fields" in payload
 
 
 @pytest.mark.anyio
@@ -531,6 +612,38 @@ class TestAddCardCommentTool:
         payload = _extract_call_tool_payload(result)
         assert payload["success"] is False
         mock_pipefy_client.add_card_comment.assert_not_called()
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_api_exception_returns_mapped_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """When add_card_comment API raises, tool returns error payload with mapped message."""
+        from gql.transport.exceptions import TransportQueryError
+
+        mock_pipefy_client.add_card_comment.side_effect = TransportQueryError(
+            "GraphQL Error",
+            errors=[
+                {
+                    "message": "Record not found",
+                    "extensions": {"code": "RESOURCE_NOT_FOUND"},
+                }
+            ],
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "add_card_comment",
+                {"card_id": 123, "text": "hello"},
+            )
+        assert result.isError is False
+        mock_pipefy_client.add_card_comment.assert_called_once_with(
+            card_id=123, text="hello"
+        )
+        payload = _extract_call_tool_payload(result)
+        assert payload["success"] is False
+        assert "error" in payload
+        assert "Card not found" in payload["error"] or "card_id" in payload["error"]
 
 
 @pytest.mark.anyio
@@ -1600,3 +1713,59 @@ class TestDeleteCardTool:
                 "message": "Card 'Test Card' (ID: 12345) from pipe 'Test Pipe' has been permanently deleted.",
             }
             assert payload == expected_payload
+
+    @pytest.mark.parametrize(
+        "client_session",
+        [elicitation_callback_raises(RuntimeError("confirmation request failed"))],
+        indirect=True,
+    )
+    async def test_elicitation_raises_returns_failed_request_confirmation(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """When elicitation for confirmation raises, tool returns error with 'Failed to request confirmation'."""
+        mock_pipefy_client.get_card.return_value = {
+            "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
+        }
+        async with client_session as session:
+            result = await session.call_tool("delete_card", {"card_id": 12345})
+        assert result.isError is False
+        mock_pipefy_client.get_card.assert_called_once_with(12345)
+        mock_pipefy_client.delete_card.assert_not_called()
+        payload = _extract_call_tool_payload(result)
+        assert payload["success"] is False
+        assert "Failed to request confirmation" in payload["error"]
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_debug_true_appends_codes_and_correlation_id_to_error(
+        self,
+        client_session,
+        mock_pipefy_client,
+    ):
+        """When debug=True and client raises, error message includes codes and correlation_id."""
+        from gql.transport.exceptions import TransportQueryError
+
+        error = TransportQueryError(
+            '{"code": "PERMISSION_DENIED", "correlation_id": "corr-xyz"}',
+            errors=[
+                {
+                    "message": "Denied",
+                    "extensions": {"code": "PERMISSION_DENIED"},
+                }
+            ],
+        )
+        mock_pipefy_client.get_card.return_value = {
+            "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
+        }
+        mock_pipefy_client.delete_card.side_effect = error
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card", {"card_id": 12345, "debug": True}
+            )
+        assert result.isError is False
+        payload = _extract_call_tool_payload(result)
+        assert payload["success"] is False
+        assert "error" in payload
+        assert "codes=" in payload["error"] or "correlation_id=" in payload["error"]
+        assert "PERMISSION_DENIED" in payload["error"]

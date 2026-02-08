@@ -40,6 +40,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     map_update_comment_error_to_message,
 )
 
+# Key for findCards response; used when reading edges and adding empty message.
 FIND_CARDS_RESPONSE_KEY = "findCards"
 
 

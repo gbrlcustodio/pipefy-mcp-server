@@ -9,7 +9,10 @@ import pytest
 from gql import Client
 
 from pipefy_mcp.services.pipefy.card_service import CardService
-from pipefy_mcp.services.pipefy.queries.card_queries import GET_CARDS_QUERY
+from pipefy_mcp.services.pipefy.queries.card_queries import (
+    FIND_CARDS_QUERY,
+    GET_CARDS_QUERY,
+)
 
 
 def _create_mock_gql_client(mock_session: AsyncMock) -> MagicMock:
@@ -128,6 +131,50 @@ async def test_get_cards_with_include_fields_false_passes_includeFields_variable
     variables = mock_session.execute.call_args[1]["variable_values"]
     assert query_used is GET_CARDS_QUERY
     assert variables["includeFields"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_find_cards_sends_pipeId_search_and_includeFields():
+    """Test find_cards uses FIND_CARDS_QUERY with pipeId, search.fieldId, search.fieldValue, includeFields."""
+    pipe_id = 303181849
+    field_id = "status"
+    field_value = "In Progress"
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"findCards": {"edges": []}})
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    await service.find_cards(pipe_id, field_id, field_value, include_fields=True)
+
+    query_used = mock_session.execute.call_args[0][0]
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert query_used is FIND_CARDS_QUERY
+    assert variables["pipeId"] == pipe_id
+    assert variables["search"] == {"fieldId": field_id, "fieldValue": field_value}
+    assert variables["includeFields"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_find_cards_returns_raw_findCards_response():
+    """Test find_cards returns the raw findCards GraphQL response."""
+    pipe_id = 1
+    field_id = "field_1"
+    field_value = "Value 1"
+    expected = {"findCards": {"edges": [{"node": {"id": "1", "title": "Card"}}]}}
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=expected)
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    result = await service.find_cards(
+        pipe_id, field_id, field_value, include_fields=False
+    )
+
+    assert result == expected
 
 
 @pytest.mark.unit

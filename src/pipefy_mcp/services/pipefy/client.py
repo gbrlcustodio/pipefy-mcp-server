@@ -42,6 +42,14 @@ class PipefyClient:
         """Add a text comment to a card by its ID."""
         return await self._card_service.create_comment(card_id, text)
 
+    async def update_comment(self, comment_id: int, text: str) -> dict:
+        """Update an existing comment by its ID."""
+        return await self._card_service.update_comment(comment_id, text)
+
+    async def delete_comment(self, comment_id: int) -> dict:
+        """Delete a comment by its ID."""
+        return await self._card_service.delete_comment(comment_id)
+
     async def get_card(self, card_id: int, include_fields: bool = False) -> dict:
         """Get a card by its ID.
 

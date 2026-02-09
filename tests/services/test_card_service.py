@@ -355,6 +355,53 @@ async def test_create_comment_variable_shape_and_return_passthrough():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_update_comment_variable_shape_and_return_structure():
+    """Test update_comment sends correct input shape and returns response with comment id."""
+    comment_id = 12345
+    text = "Updated comment text"
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        return_value={"updateComment": {"comment": {"id": "c_999"}}}
+    )
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    result = await service.update_comment(comment_id, text)
+
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert variables == {"input": {"id": comment_id, "text": text}}, (
+        "Expected correct input shape"
+    )
+    assert result == {"updateComment": {"comment": {"id": "c_999"}}}, (
+        "Expected updateComment response with comment id"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_comment_variable_shape_and_success_return():
+    """Test delete_comment sends correct input shape and returns success."""
+    comment_id = 12345
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(
+        return_value={"deleteComment": {"success": True}}
+    )
+    mock_client = _create_mock_gql_client(mock_session)
+
+    service = CardService(client=mock_client)
+    result = await service.delete_comment(comment_id)
+
+    variables = mock_session.execute.call_args[1]["variable_values"]
+    assert variables == {"input": {"id": comment_id}}, "Expected correct input shape"
+    assert result == {"deleteComment": {"success": True}}, (
+        "Expected deleteComment success response"
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_delete_card_success_scenario():
     """Test delete_card sends correct input and returns success response."""
     card_id = 12345

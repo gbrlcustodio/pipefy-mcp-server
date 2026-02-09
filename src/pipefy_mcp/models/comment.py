@@ -5,6 +5,13 @@ from pydantic import BaseModel, Field, field_validator
 MAX_COMMENT_TEXT_LENGTH = 1000
 
 
+def _text_not_blank(v: str) -> str:
+    """Ensure text is not blank or whitespace-only. Shared by comment input models."""
+    if v.strip() == "":
+        raise ValueError("text must not be blank")
+    return v
+
+
 class CommentInput(BaseModel):
     """Validated input for creating a comment on a Pipefy card.
 
@@ -24,6 +31,36 @@ class CommentInput(BaseModel):
     @classmethod
     def text_not_blank(cls, v: str) -> str:
         """Ensure text is not blank or whitespace-only."""
-        if v.strip() == "":
-            raise ValueError("text must not be blank")
-        return v
+        return _text_not_blank(v)
+
+
+class UpdateCommentInput(BaseModel):
+    """Validated input for updating an existing comment.
+
+    Attributes:
+        comment_id: The ID of the comment to update (must be positive).
+        text: The new comment text (1-1000 characters, cannot be blank).
+    """
+
+    comment_id: int = Field(gt=0, description="Comment ID must be a positive integer")
+    text: str = Field(
+        min_length=1,
+        max_length=MAX_COMMENT_TEXT_LENGTH,
+        description="Comment text (1-1000 characters)",
+    )
+
+    @field_validator("text")
+    @classmethod
+    def text_not_blank(cls, v: str) -> str:
+        """Ensure text is not blank or whitespace-only."""
+        return _text_not_blank(v)
+
+
+class DeleteCommentInput(BaseModel):
+    """Validated input for deleting a comment.
+
+    Attributes:
+        comment_id: The ID of the comment to delete (must be positive).
+    """
+
+    comment_id: int = Field(gt=0, description="Comment ID must be a positive integer")

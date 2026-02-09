@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from gql import Client
 from gql.transport.httpx import HTTPXAsyncTransport
@@ -79,5 +79,4 @@ class BasePipefyClient:
         """
 
         async with self.client as session:
-            result = await session.execute(query, variable_values=variables)
-            return cast(dict[Any, Any], result)
+            return await session.execute(query, variable_values=variables)

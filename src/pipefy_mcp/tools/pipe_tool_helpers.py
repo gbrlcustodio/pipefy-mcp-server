@@ -209,9 +209,7 @@ def build_update_comment_success_payload(
     return {"success": True, "comment_id": str(comment_id)}
 
 
-def build_update_comment_error_payload(
-    *, message: str
-) -> UpdateCommentErrorPayload:
+def build_update_comment_error_payload(*, message: str) -> UpdateCommentErrorPayload:
     """Build the public error payload for update_comment."""
     return {"success": False, "error": message}
 

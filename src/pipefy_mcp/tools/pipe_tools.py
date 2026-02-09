@@ -177,9 +177,7 @@ class PipeTools:
             """
             # Privacy: do not log full comment text.
             try:
-                update_input = UpdateCommentInput(
-                    comment_id=comment_id, text=text
-                )
+                update_input = UpdateCommentInput(comment_id=comment_id, text=text)
             except ValidationError:
                 return build_update_comment_error_payload(
                     message="Invalid input. Please provide a valid 'comment_id' and non-empty 'text'."

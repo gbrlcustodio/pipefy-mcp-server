@@ -84,7 +84,7 @@ async def test_get_cards_with_none_search_sends_empty_search():
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)
-    result = await service.get_cards(pipe_id, None)  # type: ignore[arg-type]
+    result = await service.get_cards(pipe_id, None)
 
     variables = mock_session.execute.call_args[1]["variable_values"]
     assert variables == {
@@ -342,7 +342,7 @@ async def test_create_comment_variable_shape_and_return_passthrough():
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)
-    result = await service.create_comment(card_id=card_id, text=text)  # type: ignore[attr-defined]
+    result = await service.create_comment(card_id=card_id, text=text)
 
     variables = mock_session.execute.call_args[1]["variable_values"]
     assert variables == {"input": {"card_id": card_id, "text": text}}, (

@@ -296,8 +296,8 @@ class TestGetPipeMembersTool:
 
 
 @pytest.mark.anyio
-class TestGetCardTool:
-    """Direct tests for get_card tool."""
+class TestDirectToolCalls:
+    """Direct tests for tools that simply forward params to the client."""
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_card_forwards_params_to_client(
@@ -316,11 +316,6 @@ class TestGetCardTool:
         payload = _extract_call_tool_payload(result)
         assert payload["card"]["id"] == "123"
 
-
-@pytest.mark.anyio
-class TestGetPipeTool:
-    """Direct tests for get_pipe tool."""
-
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_pipe_forwards_pipe_id_to_client(
         self, client_session, mock_pipefy_client, pipe_id
@@ -335,11 +330,6 @@ class TestGetPipeTool:
         mock_pipefy_client.get_pipe.assert_called_once_with(pipe_id)
         payload = _extract_call_tool_payload(result)
         assert payload["pipe"]["name"] == "My Pipe"
-
-
-@pytest.mark.anyio
-class TestMoveCardToPhaseTool:
-    """Direct tests for move_card_to_phase tool."""
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_move_card_to_phase_forwards_params_to_client(
@@ -356,11 +346,6 @@ class TestMoveCardToPhaseTool:
             )
         assert result.isError is False
         mock_pipefy_client.move_card_to_phase.assert_called_once_with(100, 200)
-
-
-@pytest.mark.anyio
-class TestGetStartFormFieldsTool:
-    """Direct tests for get_start_form_fields tool."""
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_start_form_fields_forwards_params_to_client(
@@ -925,7 +910,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-    ):
+    ) -> None:
         """Test delete_card tool when user declines confirmation via elicitation."""
         # Setup mock responses
         mock_pipefy_client.get_card.return_value = {
@@ -955,7 +940,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-    ):
+    ) -> None:
         """Test delete_card tool with invalid card_id returns error payload."""
         async with client_session as session:
             result = await session.call_tool(
@@ -980,7 +965,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-    ):
+    ) -> None:
         """Test delete_card tool maps RESOURCE_NOT_FOUND GraphQL exception to friendly message."""
         # Simulate GraphQL exception with RESOURCE_NOT_FOUND code
         from gql.transport.exceptions import TransportQueryError
@@ -1018,7 +1003,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-    ):
+    ) -> None:
         """Test delete_card tool maps PERMISSION_DENIED GraphQL exception to friendly message."""
         # Simulate GraphQL exception with PERMISSION_DENIED code
         from gql.transport.exceptions import TransportQueryError
@@ -1063,7 +1048,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-    ):
+    ) -> None:
         """Test delete_card tool handles API returning success=False."""
         mock_pipefy_client.get_card.return_value = {
             "card": {
@@ -1100,7 +1085,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-    ):
+    ) -> None:
         """Test delete_card tool when user confirms deletion via elicitation."""
         # Setup mock responses for both get_card and delete_card
         mock_pipefy_client.get_card.return_value = {
@@ -1137,7 +1122,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-    ):
+    ) -> None:
         """When elicitation for confirmation raises, tool returns error with 'Failed to request confirmation'."""
         mock_pipefy_client.get_card.return_value = {
             "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
@@ -1156,7 +1141,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
-    ):
+    ) -> None:
         """When debug=True and client raises, error message includes codes and correlation_id."""
         from gql.transport.exceptions import TransportQueryError
 

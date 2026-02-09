@@ -30,7 +30,9 @@ class CardService(BasePipefyClient):
     def __init__(self, client: Client) -> None:
         super().__init__(client=client)
 
-    async def create_card(self, pipe_id: int, fields: dict) -> dict:
+    async def create_card(
+        self, pipe_id: int, fields: dict[str, Any] | list[dict[str, Any]]
+    ) -> dict:
         """Create a card in the specified pipe with the given fields."""
         variables = {"pipe_id": pipe_id, "fields": convert_fields_to_array(fields)}
         return await self.execute_query(CREATE_CARD_MUTATION, variables)

@@ -34,7 +34,7 @@ def convert_fields_to_array(fields: Any) -> list[dict[str, Any]]:
                 normalized.append(item)
             else:
                 # Legacy: allow non-dict items for backward compatibility.
-                normalized.append(item)  # type: ignore[list-item]
+                normalized.append(item)
         return normalized
 
     return [fields] if fields else []

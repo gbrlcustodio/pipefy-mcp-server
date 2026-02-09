@@ -19,6 +19,7 @@ pipefy-mcp-server = "pipefy_mcp.main:main"
 [dependency-groups]
 dev = [
     "aiohttp>=3.11.16",
+    "mypy>=1.13.0",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.1.1",
@@ -59,3 +60,10 @@ markers = [
     "unit: marks a test as a unit test",
     "integration: marks a test as an integration test that requires database access"
 ]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_ignores = true
+ignore_missing_imports = true
+disallow_untyped_defs = false

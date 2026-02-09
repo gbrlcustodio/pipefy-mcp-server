@@ -1,3 +1,4 @@
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -20,7 +21,7 @@ def _make_facade_client(mock_client: MagicMock) -> PipefyClient:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_with_dict_fields():
+async def test_create_card_with_dict_fields() -> None:
     """Test create_card converts dict fields to FieldValueInput array format."""
     pipe_id = 303181849
     fields_dict = {"title": "Teste-MCP", "description": "Test description"}
@@ -65,7 +66,7 @@ async def test_create_card_with_dict_fields():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_with_array_fields():
+async def test_create_card_with_array_fields() -> None:
     """Test create_card works with already formatted array fields."""
     pipe_id = 303181849
     fields_array = [
@@ -112,10 +113,10 @@ async def test_create_card_with_array_fields():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_with_empty_dict():
+async def test_create_card_with_empty_dict() -> None:
     """Test create_card handles empty dict fields."""
     pipe_id = 303181849
-    fields_dict = {}
+    fields_dict: dict[str, Any] = {}
 
     # Mock the GraphQL client and session
     mock_session = AsyncMock()
@@ -145,7 +146,7 @@ async def test_create_card_with_empty_dict():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_with_single_field():
+async def test_create_card_with_single_field() -> None:
     """Test create_card with a single field."""
     pipe_id = 303181849
     fields_dict = {"title": "Teste-MCP"}
@@ -188,7 +189,7 @@ async def test_create_card_with_single_field():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_start_form_fields_returns_all_fields():
+async def test_get_start_form_fields_returns_all_fields() -> None:
     """Test get_start_form_fields returns all fields correctly."""
     pipe_id = 303181849
     mock_fields = [
@@ -243,7 +244,7 @@ async def test_get_start_form_fields_returns_all_fields():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_start_form_fields_required_only_filter():
+async def test_get_start_form_fields_required_only_filter() -> None:
     """Test get_start_form_fields with required_only=True filters correctly."""
     pipe_id = 303181849
     mock_fields = [
@@ -303,7 +304,7 @@ async def test_get_start_form_fields_required_only_filter():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_start_form_fields_empty_returns_friendly_message():
+async def test_get_start_form_fields_empty_returns_friendly_message() -> None:
     """Test get_start_form_fields returns user-friendly message when no fields configured."""
     pipe_id = 303181849
 
@@ -328,7 +329,7 @@ async def test_get_start_form_fields_empty_returns_friendly_message():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_start_form_fields_required_only_no_required_fields():
+async def test_get_start_form_fields_required_only_no_required_fields() -> None:
     """Test get_start_form_fields with required_only=True when all fields are optional."""
     pipe_id = 303181849
     mock_fields = [
@@ -382,7 +383,7 @@ async def test_get_start_form_fields_required_only_no_required_fields():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_card_field_success():
+async def test_update_card_field_success() -> None:
     """Test update_card_field updates a single field successfully."""
     card_id = 12345
     field_id = "status"
@@ -434,12 +435,12 @@ async def test_update_card_field_success():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_card_replacement_mode_with_title():
+async def test_update_card_replacement_mode_with_title() -> None:
     """Test update_card uses updateCard mutation when title is provided."""
     card_id = 12345
     new_title = "Updated Card Title"
 
-    mock_response = {
+    mock_response: dict[str, Any] = {
         "updateCard": {
             "card": {
                 "id": "12345",
@@ -476,7 +477,7 @@ async def test_update_card_replacement_mode_with_title():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_card_with_fields_dict_uses_update_fields_values():
+async def test_update_card_with_fields_dict_uses_update_fields_values() -> None:
     """Test update_card with field_updates list uses updateFieldsValues mutation."""
     card_id = 12345
     field_updates = [
@@ -523,7 +524,7 @@ async def test_update_card_with_fields_dict_uses_update_fields_values():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_card_replacement_mode_with_assignees_and_labels():
+async def test_update_card_replacement_mode_with_assignees_and_labels() -> None:
     """Test update_card with assignee_ids and label_ids."""
     card_id = 12345
     assignee_ids = [100, 200]
@@ -572,7 +573,7 @@ async def test_update_card_replacement_mode_with_assignees_and_labels():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_card_incremental_mode_with_add_operation():
+async def test_update_card_incremental_mode_with_add_operation() -> None:
     """Test update_card uses updateFieldsValues mutation when ADD operation is present."""
     card_id = 12345
     values = [{"field_id": "assignees", "value": [123], "operation": "ADD"}]
@@ -612,7 +613,7 @@ async def test_update_card_incremental_mode_with_add_operation():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_card_incremental_mode_with_remove_operation():
+async def test_update_card_incremental_mode_with_remove_operation() -> None:
     """Test update_card uses updateFieldsValues mutation when REMOVE operation is present."""
     card_id = 12345
     values = [{"field_id": "labels", "value": [456], "operation": "REMOVE"}]
@@ -646,7 +647,7 @@ async def test_update_card_incremental_mode_with_remove_operation():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_card_incremental_mode_value_format_conversion():
+async def test_update_card_incremental_mode_value_format_conversion() -> None:
     """Test update_card converts values to camelCase format with generatedByAi."""
     card_id = 12345
     values = [{"field_id": "field_1", "value": "New Value", "operation": "ADD"}]
@@ -681,7 +682,7 @@ async def test_update_card_incremental_mode_value_format_conversion():
 
 
 @pytest.mark.unit
-def test_public_import_path_exports_pipefy_client():
+def test_public_import_path_exports_pipefy_client() -> None:
     """Test public import path stays stable: from pipefy_mcp.services.pipefy import PipefyClient."""
     from pipefy_mcp.services.pipefy import PipefyClient as PublicPipefyClient
 
@@ -690,7 +691,7 @@ def test_public_import_path_exports_pipefy_client():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_passes_pipe_id_variable():
+async def test_get_pipe_passes_pipe_id_variable() -> None:
     """Test get_pipe passes pipe_id under variable_values unchanged."""
     pipe_id = 303181849
 
@@ -714,7 +715,7 @@ async def test_get_pipe_passes_pipe_id_variable():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_members_calls_service():
+async def test_get_pipe_members_calls_service() -> None:
     """Test get_pipe_members calls the pipe service with the correct pipe_id."""
     pipe_id = 123
     mock_members = [{"user": {"id": "1", "name": "Test User"}}]
@@ -737,7 +738,7 @@ async def test_get_pipe_members_calls_service():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_card_passes_card_id_variable():
+async def test_get_card_passes_card_id_variable() -> None:
     """Test get_card passes card_id under variable_values unchanged."""
     card_id = 12345
 
@@ -777,7 +778,7 @@ async def test_get_card_passes_card_id_variable():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cards_with_none_search_sends_empty_search_dict():
+async def test_get_cards_with_none_search_sends_empty_search_dict() -> None:
     """Test get_cards sends an empty search object when search is None."""
     pipe_id = 303181849
 
@@ -790,7 +791,7 @@ async def test_get_cards_with_none_search_sends_empty_search_dict():
 
     client = _make_facade_client(mock_client)
 
-    result = await client.get_cards(pipe_id, None)  # type: ignore[arg-type]
+    result = await client.get_cards(pipe_id, None)
 
     mock_session.execute.assert_called_once()
     call_args = mock_session.execute.call_args
@@ -803,7 +804,7 @@ async def test_get_cards_with_none_search_sends_empty_search_dict():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cards_with_search_dict_passes_search_as_is():
+async def test_get_cards_with_search_dict_passes_search_as_is() -> None:
     """Test get_cards passes search dict unchanged when provided."""
     pipe_id = 303181849
     search = {"title": "Test"}
@@ -830,10 +831,12 @@ async def test_get_cards_with_search_dict_passes_search_as_is():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cards_with_include_fields_true_passes_include_fields_to_service():
+async def test_get_cards_with_include_fields_true_passes_include_fields_to_service() -> (
+    None
+):
     """Test get_cards facade passes include_fields=True to CardService.get_cards."""
     pipe_id = 303181849
-    expected = {"cards": {"edges": []}}
+    expected: dict[str, Any] = {"cards": {"edges": []}}
 
     card_service = AsyncMock()
     card_service.get_cards = AsyncMock(return_value=expected)
@@ -854,10 +857,12 @@ async def test_get_cards_with_include_fields_true_passes_include_fields_to_servi
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cards_with_include_fields_false_passes_include_fields_to_service():
+async def test_get_cards_with_include_fields_false_passes_include_fields_to_service() -> (
+    None
+):
     """Test get_cards facade passes include_fields=False to CardService.get_cards."""
     pipe_id = 303181849
-    expected = {"cards": {"edges": []}}
+    expected: dict[str, Any] = {"cards": {"edges": []}}
 
     card_service = AsyncMock()
     card_service.get_cards = AsyncMock(return_value=expected)
@@ -878,12 +883,12 @@ async def test_get_cards_with_include_fields_false_passes_include_fields_to_serv
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_find_cards_delegates_to_card_service_with_include_fields_true():
+async def test_find_cards_delegates_to_card_service_with_include_fields_true() -> None:
     """Test find_cards facade delegates to CardService.find_cards with include_fields=True."""
     pipe_id = 303181849
     field_id = "status"
     field_value = "In Progress"
-    expected = {"findCards": {"edges": []}}
+    expected: dict[str, Any] = {"findCards": {"edges": []}}
 
     card_service = AsyncMock()
     card_service.find_cards = AsyncMock(return_value=expected)
@@ -904,7 +909,7 @@ async def test_find_cards_delegates_to_card_service_with_include_fields_true():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_find_cards_delegates_to_card_service_with_include_fields_false():
+async def test_find_cards_delegates_to_card_service_with_include_fields_false() -> None:
     """Test find_cards facade delegates to CardService.find_cards with include_fields=False."""
     pipe_id = 1
     field_id = "field_1"
@@ -930,7 +935,7 @@ async def test_find_cards_delegates_to_card_service_with_include_fields_false():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_add_card_comment_delegates_to_card_service_create_comment():
+async def test_add_card_comment_delegates_to_card_service_create_comment() -> None:
     """Test add_card_comment delegates unchanged to CardService.create_comment."""
     card_id = 12345
     text = "This is a comment"
@@ -950,7 +955,7 @@ async def test_add_card_comment_delegates_to_card_service_create_comment():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_move_card_to_phase_variable_shape():
+async def test_move_card_to_phase_variable_shape() -> None:
     """Test move_card_to_phase sends input with card_id and destination_phase_id."""
     card_id = 12345
     destination_phase_id = 678
@@ -979,10 +984,10 @@ async def test_move_card_to_phase_variable_shape():
 
 
 @pytest.mark.asyncio
-async def test_search_pipes_delegates_to_pipe_service():
+async def test_search_pipes_delegates_to_pipe_service() -> None:
     """Test search_pipes delegates unchanged to PipeService.search_pipes."""
     pipe_name = "test pipe"
-    expected = {"pipes": []}
+    expected: dict[str, Any] = {"pipes": []}
 
     pipe_service = AsyncMock()
     pipe_service.search_pipes = AsyncMock(return_value=expected)

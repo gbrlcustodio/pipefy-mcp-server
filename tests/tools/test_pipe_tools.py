@@ -54,9 +54,7 @@ def mock_pipefy_client():
     client.update_comment = AsyncMock(
         return_value={"updateComment": {"comment": {"id": "c_999"}}}
     )
-    client.delete_comment = AsyncMock(
-        return_value={"deleteComment": {"success": True}}
-    )
+    client.delete_comment = AsyncMock(return_value={"deleteComment": {"success": True}})
     client.get_card = AsyncMock()
     client.delete_card = AsyncMock()
 
@@ -618,7 +616,9 @@ class TestUpdateCommentTool:
 
         mock_pipefy_client.update_comment.side_effect = TransportQueryError(
             "GraphQL Error",
-            errors=[{"message": "Comment not found", "extensions": {"code": "NOT_FOUND"}}],
+            errors=[
+                {"message": "Comment not found", "extensions": {"code": "NOT_FOUND"}}
+            ],
         )
         async with client_session as session:
             result = await session.call_tool(

@@ -385,9 +385,7 @@ async def test_delete_comment_variable_shape_and_success_return():
     comment_id = 12345
 
     mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={"deleteComment": {"success": True}}
-    )
+    mock_session.execute = AsyncMock(return_value={"deleteComment": {"success": True}})
     mock_client = _create_mock_gql_client(mock_session)
 
     service = CardService(client=mock_client)

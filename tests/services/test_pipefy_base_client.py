@@ -168,9 +168,11 @@ async def test_execute_query_concurrent_calls_do_not_raise_transport_already_con
         return None
 
     mock_session = AsyncMock()
+
     async def execute_mock(*args, **kwargs):
         await asyncio.sleep(0)  # Yield so the second concurrent call can hit __aenter__
         return result_payload
+
     mock_session.execute = execute_mock
 
     mock_client = MagicMock(spec=Client)

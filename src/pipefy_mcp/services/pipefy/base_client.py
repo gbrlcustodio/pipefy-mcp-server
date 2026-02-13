@@ -47,7 +47,9 @@ class BasePipefyClient:
 
         self.settings = settings
         self.client: Client = client or self._create_client(schema)
-        self._client_lock: asyncio.Lock = client_lock if client_lock is not None else asyncio.Lock()
+        self._client_lock: asyncio.Lock = (
+            client_lock if client_lock is not None else asyncio.Lock()
+        )
 
     def _create_client(self, schema: str | None) -> Client:
         """Create and configure a `gql.Client` using project settings.
@@ -81,7 +83,9 @@ class BasePipefyClient:
             return Client(transport=transport, schema=schema)
         return Client(transport=transport, fetch_schema_from_transport=True)
 
-    async def execute_query(self, query: Any, variables: dict[str, Any]) -> dict[str, Any]:
+    async def execute_query(
+        self, query: Any, variables: dict[str, Any]
+    ) -> dict[str, Any]:
         """Execute a GraphQL query/mutation with variables.
 
         This method standardizes session usage and preserves current behavior by

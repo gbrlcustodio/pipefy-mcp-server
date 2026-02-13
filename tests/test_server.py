@@ -43,6 +43,7 @@ async def test_register_tools(client_session):
         "add_card_comment",
         "create_card",
         "delete_card",
+        "delete_comment",
         "fill_card_phase_fields",
         "find_cards",
         "get_card",
@@ -55,6 +56,7 @@ async def test_register_tools(client_session):
         "search_pipes",
         "update_card",
         "update_card_field",
+        "update_comment",
     ]
 
     with patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS):

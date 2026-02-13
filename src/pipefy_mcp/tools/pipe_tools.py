@@ -5,7 +5,11 @@ from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
-from pipefy_mcp.models.comment import CommentInput
+from pipefy_mcp.models.comment import (
+    CommentInput,
+    DeleteCommentInput,
+    UpdateCommentInput,
+)
 from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
@@ -14,6 +18,10 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     AddCardCommentPayload,
     DeleteCardConfirmation,
     DeleteCardPayload,
+    DeleteCommentErrorPayload,
+    DeleteCommentSuccessPayload,
+    UpdateCommentErrorPayload,
+    UpdateCommentSuccessPayload,
     UserCancelledError,
     _extract_graphql_correlation_id,
     _extract_graphql_error_codes,
@@ -24,8 +32,14 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
     build_delete_card_success_payload,
+    build_delete_comment_error_payload,
+    build_delete_comment_success_payload,
+    build_update_comment_error_payload,
+    build_update_comment_success_payload,
     map_add_card_comment_error_to_message,
     map_delete_card_error_to_message,
+    map_delete_comment_error_to_message,
+    map_update_comment_error_to_message,
 )
 
 # Key for findCards response; used when reading edges and adding empty message.
@@ -146,6 +160,69 @@ class PipeTools:
                 )
 
             return build_add_card_comment_success_payload(comment_id=comment_id)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                idempotentHint=False,
+            ),
+        )
+        async def update_comment(
+            comment_id: int, text: str
+        ) -> UpdateCommentSuccessPayload | UpdateCommentErrorPayload:
+            """Update an existing comment by its ID.
+
+            Args:
+                comment_id: The ID of the comment to update.
+                text: The new comment text (1-1000 characters).
+            """
+            # Privacy: do not log full comment text.
+            try:
+                update_input = UpdateCommentInput(comment_id=comment_id, text=text)
+            except ValidationError:
+                return build_update_comment_error_payload(
+                    message="Invalid input. Please provide a valid 'comment_id' and non-empty 'text'."
+                )
+
+            try:
+                response = await client.update_comment(
+                    update_input.comment_id, update_input.text
+                )
+                comment_id_out = response["updateComment"]["comment"]["id"]
+            except Exception as exc:  # noqa: BLE001
+                return build_update_comment_error_payload(
+                    message=map_update_comment_error_to_message(exc)
+                )
+
+            return build_update_comment_success_payload(comment_id=comment_id_out)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                idempotentHint=False,
+            ),
+        )
+        async def delete_comment(
+            comment_id: int,
+        ) -> DeleteCommentSuccessPayload | DeleteCommentErrorPayload:
+            """Delete a comment by its ID.
+
+            Args:
+                comment_id: The ID of the comment to delete.
+            """
+            try:
+                delete_input = DeleteCommentInput(comment_id=comment_id)
+            except ValidationError:
+                return build_delete_comment_error_payload(
+                    message="Invalid input. Please provide a valid 'comment_id'."
+                )
+
+            try:
+                await client.delete_comment(delete_input.comment_id)
+            except Exception as exc:  # noqa: BLE001
+                return build_delete_comment_error_payload(
+                    message=map_delete_comment_error_to_message(exc)
+                )
+
+            return build_delete_comment_success_payload()
 
         @mcp.tool(
             annotations=ToolAnnotations(

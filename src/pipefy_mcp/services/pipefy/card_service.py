@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from gql import Client
@@ -9,12 +10,14 @@ from pipefy_mcp.services.pipefy.queries.card_queries import (
     CREATE_CARD_MUTATION,
     CREATE_COMMENT_MUTATION,
     DELETE_CARD_MUTATION,
+    DELETE_COMMENT_MUTATION,
     FIND_CARDS_QUERY,
     GET_CARD_QUERY,
     GET_CARDS_QUERY,
     MOVE_CARD_TO_PHASE_MUTATION,
     UPDATE_CARD_FIELD_MUTATION,
     UPDATE_CARD_MUTATION,
+    UPDATE_COMMENT_MUTATION,
     UPDATE_FIELDS_VALUES_MUTATION,
 )
 from pipefy_mcp.services.pipefy.types import CardSearch
@@ -27,10 +30,12 @@ from pipefy_mcp.services.pipefy.utils.formatters import (
 class CardService(BasePipefyClient):
     """Service for Card-related operations."""
 
-    def __init__(self, client: Client) -> None:
-        super().__init__(client=client)
+    def __init__(self, client: Client, client_lock: asyncio.Lock | None = None) -> None:
+        super().__init__(client=client, client_lock=client_lock)
 
-    async def create_card(self, pipe_id: int, fields: dict) -> dict:
+    async def create_card(
+        self, pipe_id: int, fields: dict[str, Any] | list[dict[str, Any]]
+    ) -> dict:
         """Create a card in the specified pipe with the given fields."""
         variables = {"pipe_id": pipe_id, "fields": convert_fields_to_array(fields)}
         return await self.execute_query(CREATE_CARD_MUTATION, variables)
@@ -39,6 +44,16 @@ class CardService(BasePipefyClient):
         """Create a text comment on the specified card."""
         variables = {"input": {"card_id": card_id, "text": text}}
         return await self.execute_query(CREATE_COMMENT_MUTATION, variables)
+
+    async def update_comment(self, comment_id: int, text: str) -> dict:
+        """Update an existing comment by its ID. Returns raw GraphQL response (see issue #23)."""
+        variables = {"input": {"id": comment_id, "text": text}}
+        return await self.execute_query(UPDATE_COMMENT_MUTATION, variables)
+
+    async def delete_comment(self, comment_id: int) -> dict:
+        """Delete a comment by its ID. Returns raw GraphQL response (see issue #23)."""
+        variables = {"input": {"id": comment_id}}
+        return await self.execute_query(DELETE_COMMENT_MUTATION, variables)
 
     async def delete_card(self, card_id: int) -> dict:
         """Delete a card by its ID."""

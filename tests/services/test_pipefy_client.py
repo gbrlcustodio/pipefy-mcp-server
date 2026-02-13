@@ -8,7 +8,7 @@ from pipefy_mcp.services.pipefy.client import PipefyClient
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 
 
-def _make_facade_client(mock_client: MagicMock) -> PipefyClient:
+def _make_facade_client(mock_client):
     client = PipefyClient.__new__(PipefyClient)
     # Keep public attr for backward compatibility
     client.client = mock_client
@@ -790,7 +790,7 @@ async def test_get_cards_with_none_search_sends_empty_search_dict():
 
     client = _make_facade_client(mock_client)
 
-    result = await client.get_cards(pipe_id, None)  # type: ignore[arg-type]
+    result = await client.get_cards(pipe_id, None)
 
     mock_session.execute.assert_called_once()
     call_args = mock_session.execute.call_args
@@ -830,7 +830,9 @@ async def test_get_cards_with_search_dict_passes_search_as_is():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cards_with_include_fields_true_passes_include_fields_to_service():
+async def test_get_cards_with_include_fields_true_passes_include_fields_to_service() -> (
+    None
+):
     """Test get_cards facade passes include_fields=True to CardService.get_cards."""
     pipe_id = 303181849
     expected = {"cards": {"edges": []}}
@@ -854,7 +856,9 @@ async def test_get_cards_with_include_fields_true_passes_include_fields_to_servi
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cards_with_include_fields_false_passes_include_fields_to_service():
+async def test_get_cards_with_include_fields_false_passes_include_fields_to_service() -> (
+    None
+):
     """Test get_cards facade passes include_fields=False to CardService.get_cards."""
     pipe_id = 303181849
     expected = {"cards": {"edges": []}}
@@ -946,6 +950,45 @@ async def test_add_card_comment_delegates_to_card_service_create_comment():
 
     assert result == expected
     card_service.create_comment.assert_awaited_once_with(card_id, text)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_comment_delegates_to_card_service_update_comment():
+    """Test update_comment delegates unchanged to CardService.update_comment."""
+    comment_id = 12345
+    text = "Updated comment text"
+    expected = {"updateComment": {"comment": {"id": "c_999"}}}
+
+    card_service = AsyncMock()
+    card_service.update_comment = AsyncMock(return_value=expected)
+
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+
+    result = await client.update_comment(comment_id, text)
+
+    assert result == expected
+    card_service.update_comment.assert_awaited_once_with(comment_id, text)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_comment_delegates_to_card_service_delete_comment():
+    """Test delete_comment delegates unchanged to CardService.delete_comment."""
+    comment_id = 12345
+    expected = {"deleteComment": {"success": True}}
+
+    card_service = AsyncMock()
+    card_service.delete_comment = AsyncMock(return_value=expected)
+
+    client: PipefyClient = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+
+    result = await client.delete_comment(comment_id)
+
+    assert result == expected
+    card_service.delete_comment.assert_awaited_once_with(comment_id)
 
 
 @pytest.mark.unit

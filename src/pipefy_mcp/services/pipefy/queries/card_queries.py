@@ -26,6 +26,28 @@ CREATE_COMMENT_MUTATION = gql(
     """
 )
 
+UPDATE_COMMENT_MUTATION = gql(
+    """
+    mutation ($input: UpdateCommentInput!) {
+        updateComment(input: $input) {
+            comment {
+                id
+            }
+        }
+    }
+    """
+)
+
+DELETE_COMMENT_MUTATION = gql(
+    """
+    mutation ($input: DeleteCommentInput!) {
+        deleteComment(input: $input) {
+            success
+        }
+    }
+    """
+)
+
 DELETE_CARD_MUTATION = gql(
     """
     mutation ($input: DeleteCardInput!) {

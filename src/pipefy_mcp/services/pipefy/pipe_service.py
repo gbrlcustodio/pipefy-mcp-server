@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from gql import Client
 from rapidfuzz import fuzz
 
@@ -16,8 +18,8 @@ from pipefy_mcp.services.pipefy.queries.pipe_queries import (
 class PipeService(BasePipefyClient):
     """Service for Pipe-related operations."""
 
-    def __init__(self, client: Client) -> None:
-        super().__init__(client=client)
+    def __init__(self, client: Client, client_lock: asyncio.Lock | None = None) -> None:
+        super().__init__(client=client, client_lock=client_lock)
 
     async def get_pipe(self, pipe_id: int) -> dict:
         """Get a pipe by its ID, including phases, labels, and start form fields."""

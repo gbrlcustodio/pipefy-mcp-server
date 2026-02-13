@@ -20,9 +20,11 @@ class PipefyClient:
         # Keep `client` as a public attribute for backward compatibility.
         self.client: Client = graphql.client
 
+        # Share the same lock so concurrent tool calls (e.g. get_pipe + get_start_form_fields)
+        # do not trigger "Transport is already connected" on the gql client.
         # Service layer (domain logic lives here).
-        self._pipe_service = PipeService(self.client)
-        self._card_service = CardService(self.client)
+        self._pipe_service = PipeService(self.client, graphql._client_lock)
+        self._card_service = CardService(self.client, graphql._client_lock)
 
     async def get_pipe(self, pipe_id: int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
@@ -32,13 +34,23 @@ class PipefyClient:
         """Get the members of a pipe."""
         return await self._pipe_service.get_pipe_members(pipe_id)
 
-    async def create_card(self, pipe_id: int, fields: dict) -> dict:
+    async def create_card(
+        self, pipe_id: int, fields: dict[str, Any] | list[dict[str, Any]]
+    ) -> dict:
         """Create a card in the specified pipe with the given fields."""
         return await self._card_service.create_card(pipe_id, fields)
 
     async def add_card_comment(self, card_id: int, text: str) -> dict:
         """Add a text comment to a card by its ID."""
         return await self._card_service.create_comment(card_id, text)
+
+    async def update_comment(self, comment_id: int, text: str) -> dict:
+        """Update an existing comment by its ID."""
+        return await self._card_service.update_comment(comment_id, text)
+
+    async def delete_comment(self, comment_id: int) -> dict:
+        """Delete a comment by its ID."""
+        return await self._card_service.delete_comment(comment_id)
 
     async def get_card(self, card_id: int, include_fields: bool = False) -> dict:
         """Get a card by its ID.

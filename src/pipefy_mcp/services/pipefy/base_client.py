@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 from gql import Client
 from gql.transport.httpx import HTTPXAsyncTransport
+from httpx import Timeout
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.settings import PipefySettings
@@ -16,6 +17,8 @@ class BasePipefyClient:
     This class centralizes GraphQL client creation so services can reuse a single
     underlying `gql.Client` instance via constructor injection.
     """
+
+    GRAPHQL_REQUEST_TIMEOUT_SECONDS: ClassVar[int] = 30
 
     def __init__(
         self,
@@ -71,6 +74,7 @@ class BasePipefyClient:
                 client_id=self.settings.oauth_client,
                 client_secret=self.settings.oauth_secret,
             ),
+            timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
         )
 
         if schema:

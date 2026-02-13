@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from gql import Client
@@ -29,8 +30,8 @@ from pipefy_mcp.services.pipefy.utils.formatters import (
 class CardService(BasePipefyClient):
     """Service for Card-related operations."""
 
-    def __init__(self, client: Client) -> None:
-        super().__init__(client=client)
+    def __init__(self, client: Client, client_lock: asyncio.Lock | None = None) -> None:
+        super().__init__(client=client, client_lock=client_lock)
 
     async def create_card(
         self, pipe_id: int, fields: dict[str, Any] | list[dict[str, Any]]

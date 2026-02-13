@@ -1,7 +1,9 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql import Client
+from gql.transport.exceptions import TransportAlreadyConnected
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.settings import PipefySettings
@@ -133,3 +135,54 @@ def test_init_raises_when_oauth_secret_is_none():
         BasePipefyClient(settings=settings)
 
     assert "OAuth client secret must be provided in settings" in str(exc.value)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_concurrent_calls_do_not_raise_transport_already_connected():
+    """Two concurrent execute_query calls must not raise Transport is already connected.
+
+    When get_start_form_fields and get_pipe (or any two tools) are invoked in parallel
+    by the MCP client, both use the same shared gql Client. The client's transport
+    allows only one active session (connect) at a time; a second concurrent
+    ``async with client`` triggers TransportAlreadyConnected. This test uses a
+    mock client that reproduces that behavior and asserts that BasePipefyClient
+    serializes access (e.g. with a lock) so both calls succeed.
+    """
+    query = object()
+    variables = {"pipe_id": 123}
+    result_payload = {"pipe": {}}
+
+    connected = False
+
+    async def aenter(self):
+        nonlocal connected
+        if connected:
+            raise TransportAlreadyConnected("Transport is already connected")
+        connected = True
+        return mock_session
+
+    async def aexit(self, *args):
+        nonlocal connected
+        connected = False
+        return None
+
+    mock_session = AsyncMock()
+    async def execute_mock(*args, **kwargs):
+        await asyncio.sleep(0)  # Yield so the second concurrent call can hit __aenter__
+        return result_payload
+    mock_session.execute = execute_mock
+
+    mock_client = MagicMock(spec=Client)
+    mock_client.__aenter__ = aenter
+    mock_client.__aexit__ = aexit
+
+    base = BasePipefyClient(client=mock_client)
+
+    results = await asyncio.gather(
+        base.execute_query(query, variables),
+        base.execute_query(query, variables),
+    )
+
+    assert results[0] == result_payload
+    assert results[1] == result_payload

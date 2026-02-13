@@ -1,5 +1,5 @@
 import re
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
@@ -32,6 +32,9 @@ class UpdateCommentErrorPayload(TypedDict):
     error: str
 
 
+UpdateCommentPayload = UpdateCommentSuccessPayload | UpdateCommentErrorPayload
+
+
 class DeleteCommentSuccessPayload(TypedDict):
     success: Literal[True]
 
@@ -39,6 +42,9 @@ class DeleteCommentSuccessPayload(TypedDict):
 class DeleteCommentErrorPayload(TypedDict):
     success: Literal[False]
     error: str
+
+
+DeleteCommentPayload = DeleteCommentSuccessPayload | DeleteCommentErrorPayload
 
 
 class DeleteCardPreviewPayload(TypedDict):
@@ -156,9 +162,9 @@ def _map_comment_like_error(
     markers = invalid_markers if invalid_markers is not None else _INVALID_INPUT_MARKERS
     if any(m in haystack for m in _NOT_FOUND_MARKERS):
         return not_found_msg
-    if any(m in haystack for m in _PERMISSION_MARKERS):
+    elif any(m in haystack for m in _PERMISSION_MARKERS):
         return permission_msg
-    if any(m in haystack for m in markers):
+    elif any(m in haystack for m in markers):
         return invalid_msg
     return fallback_msg
 
@@ -197,9 +203,14 @@ def map_delete_comment_error_to_message(exc: BaseException) -> str:
     )
 
 
+def _build_comment_error_payload(message: str) -> dict:
+    """Build the common error payload for comment tools (success=False, error=message)."""
+    return {"success": False, "error": message}
+
+
 def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentErrorPayload:
     """Build the public error payload for add_card_comment."""
-    return {"success": False, "error": message}
+    return cast(AddCardCommentErrorPayload, _build_comment_error_payload(message))
 
 
 def build_update_comment_success_payload(
@@ -211,7 +222,7 @@ def build_update_comment_success_payload(
 
 def build_update_comment_error_payload(*, message: str) -> UpdateCommentErrorPayload:
     """Build the public error payload for update_comment."""
-    return {"success": False, "error": message}
+    return cast(UpdateCommentErrorPayload, _build_comment_error_payload(message))
 
 
 def build_delete_comment_success_payload() -> DeleteCommentSuccessPayload:
@@ -221,7 +232,7 @@ def build_delete_comment_success_payload() -> DeleteCommentSuccessPayload:
 
 def build_delete_comment_error_payload(*, message: str) -> DeleteCommentErrorPayload:
     """Build the public error payload for delete_comment."""
-    return {"success": False, "error": message}
+    return cast(DeleteCommentErrorPayload, _build_comment_error_payload(message))
 
 
 def build_delete_card_preview_payload(

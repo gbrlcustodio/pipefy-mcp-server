@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import asyncio
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar
 
 from gql import Client
 from gql.transport.httpx import HTTPXAsyncTransport
@@ -25,16 +24,12 @@ class BasePipefyClient:
         settings: PipefySettings | None = None,
         schema: str | None = None,
         client: Client | None = None,
-        client_lock: asyncio.Lock | None = None,
     ) -> None:
         """Create a base client.
 
         Args:
             schema: Optional schema string to pass to `gql.Client`.
             client: Optional pre-built `gql.Client` to reuse (preferred for shared wiring).
-            client_lock: Optional lock to serialize access to the shared client; use when
-                multiple services share the same client so concurrent tool calls do not
-                trigger \"Transport is already connected\".
 
         Raises:
             ValueError: If both schema and client are provided, as schema would be ignored.
@@ -47,9 +42,6 @@ class BasePipefyClient:
 
         self.settings = settings
         self.client: Client = client or self._create_client(schema)
-        self._client_lock: asyncio.Lock = (
-            client_lock if client_lock is not None else asyncio.Lock()
-        )
 
     def _create_client(self, schema: str | None) -> Client:
         """Create and configure a `gql.Client` using project settings.
@@ -83,18 +75,11 @@ class BasePipefyClient:
             return Client(transport=transport, schema=schema)
         return Client(transport=transport, fetch_schema_from_transport=True)
 
-    async def execute_query(
-        self, query: Any, variables: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def execute_query(self, query: Any, variables: dict[str, Any]) -> dict:
         """Execute a GraphQL query/mutation with variables.
 
         This method standardizes session usage and preserves current behavior by
-        passing `variable_values` through without transformation. Access to the
-        shared gql Client is serialized with a lock so that concurrent tool
-        calls (e.g. get_pipe and get_start_form_fields in parallel) do not
-        trigger \"Transport is already connected\" from the underlying transport.
+        passing `variable_values` through without transformation.
         """
-        async with self._client_lock:
-            async with self.client as session:
-                result = await session.execute(query, variable_values=variables)
-                return cast(dict[str, Any], result)
+        async with self.client as session:
+            return await session.execute(query, variable_values=variables)

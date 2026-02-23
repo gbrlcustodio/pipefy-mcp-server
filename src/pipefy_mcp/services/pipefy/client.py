@@ -20,11 +20,9 @@ class PipefyClient:
         # Keep `client` as a public attribute for backward compatibility.
         self.client: Client = graphql.client
 
-        # Share the same lock so concurrent tool calls (e.g. get_pipe + get_start_form_fields)
-        # do not trigger "Transport is already connected" on the gql client.
         # Service layer (domain logic lives here).
-        self._pipe_service = PipeService(self.client, graphql._client_lock)
-        self._card_service = CardService(self.client, graphql._client_lock)
+        self._pipe_service = PipeService(self.client)
+        self._card_service = CardService(self.client)
 
     async def get_pipe(self, pipe_id: int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""

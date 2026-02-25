@@ -44,6 +44,9 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
 * **`get_card`**: Retrieve full details of a specific card. Set `include_fields=true` to include the card's custom fields (name and value) in the response.
 * **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
     * **Elicitation**: Elicitation is an MCP feature that allows the server to request additional information from the user mid-tool-execution. This server uses MCP's elicitation feature to prompt the user for required field values before creating the card.
+* **`add_card_comment`**: Add a text comment to a card by its ID. Requires `card_id` and `text` (1–1000 characters).
+* **`update_comment`**: Update an existing comment by its ID. Requires `comment_id` and `text` (1–1000 characters).
+* **`delete_comment`**: Delete a comment by its ID. Requires `comment_id`.
 * **`delete_card`**: Permanently delete a card from Pipefy.
     * **⚠️ Destructive Operation**: This action cannot be undone. Use with extreme caution.
     * **Two-Step Process**: By default, returns a preview showing card details and pipe name. Set `confirm=true` to actually delete the card.

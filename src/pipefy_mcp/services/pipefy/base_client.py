@@ -81,5 +81,6 @@ class BasePipefyClient:
         This method standardizes session usage and preserves current behavior by
         passing `variable_values` through without transformation.
         """
+
         async with self.client as session:
             return await session.execute(query, variable_values=variables)

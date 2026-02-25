@@ -181,7 +181,7 @@ def map_add_card_comment_error_to_message(exc: BaseException) -> str:
 
 
 def map_update_comment_error_to_message(exc: BaseException) -> str:
-    """Map a GraphQL exception into a stable, friendly English message for update_comment."""
+    """Map a GraphQL exception into a stable, friendly English message."""
     return _map_comment_like_error(
         exc,
         not_found_msg="Comment not found. Please verify 'comment_id' and access permissions.",
@@ -192,7 +192,7 @@ def map_update_comment_error_to_message(exc: BaseException) -> str:
 
 
 def map_delete_comment_error_to_message(exc: BaseException) -> str:
-    """Map a GraphQL exception into a stable, friendly English message for delete_comment."""
+    """Map a GraphQL exception into a stable, friendly English message."""
     return _map_comment_like_error(
         exc,
         not_found_msg="Comment not found. Please verify 'comment_id' and access permissions.",
@@ -204,7 +204,6 @@ def map_delete_comment_error_to_message(exc: BaseException) -> str:
 
 
 def _build_comment_error_payload(message: str) -> dict:
-    """Build the common error payload for comment tools (success=False, error=message)."""
     return {"success": False, "error": message}
 
 

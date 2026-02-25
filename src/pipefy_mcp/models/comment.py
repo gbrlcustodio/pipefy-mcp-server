@@ -6,7 +6,7 @@ from pydantic import BaseModel, BeforeValidator, Field
 
 MAX_COMMENT_TEXT_LENGTH = 1000
 
-# Strip whitespace before length checks so blank/whitespace-only text fails min_length=1.
+# Strip first so blank/whitespace-only fails min_length.
 _CommentText = Annotated[
     str,
     BeforeValidator(str.strip),

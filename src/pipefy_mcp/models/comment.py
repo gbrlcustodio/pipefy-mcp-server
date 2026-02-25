@@ -1,8 +1,21 @@
 """Pydantic models for comment-related entities."""
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Annotated
+
+from pydantic import BaseModel, BeforeValidator, Field
 
 MAX_COMMENT_TEXT_LENGTH = 1000
+
+# Strip first so blank/whitespace-only fails min_length.
+_CommentText = Annotated[
+    str,
+    BeforeValidator(str.strip),
+    Field(
+        min_length=1,
+        max_length=MAX_COMMENT_TEXT_LENGTH,
+        description="Comment text (1-1000 characters)",
+    ),
+]
 
 
 class CommentInput(BaseModel):
@@ -14,16 +27,26 @@ class CommentInput(BaseModel):
     """
 
     card_id: int = Field(gt=0, description="Card ID must be a positive integer")
-    text: str = Field(
-        min_length=1,
-        max_length=MAX_COMMENT_TEXT_LENGTH,
-        description="Comment text (1-1000 characters)",
-    )
+    text: _CommentText
 
-    @field_validator("text")
-    @classmethod
-    def text_not_blank(cls, v: str) -> str:
-        """Ensure text is not blank or whitespace-only."""
-        if v.strip() == "":
-            raise ValueError("text must not be blank")
-        return v
+
+class UpdateCommentInput(BaseModel):
+    """Validated input for updating an existing comment.
+
+    Attributes:
+        comment_id: The ID of the comment to update (must be positive).
+        text: The new comment text (1-1000 characters, cannot be blank).
+    """
+
+    comment_id: int = Field(gt=0, description="Comment ID must be a positive integer")
+    text: _CommentText
+
+
+class DeleteCommentInput(BaseModel):
+    """Validated input for deleting a comment.
+
+    Attributes:
+        comment_id: The ID of the comment to delete (must be positive).
+    """
+
+    comment_id: int = Field(gt=0, description="Comment ID must be a positive integer")

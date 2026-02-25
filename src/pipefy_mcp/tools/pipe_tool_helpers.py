@@ -1,5 +1,5 @@
 import re
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
@@ -20,6 +20,31 @@ class AddCardCommentErrorPayload(TypedDict):
 
 
 AddCardCommentPayload = AddCardCommentSuccessPayload | AddCardCommentErrorPayload
+
+
+class UpdateCommentSuccessPayload(TypedDict):
+    success: Literal[True]
+    comment_id: str
+
+
+class UpdateCommentErrorPayload(TypedDict):
+    success: Literal[False]
+    error: str
+
+
+UpdateCommentPayload = UpdateCommentSuccessPayload | UpdateCommentErrorPayload
+
+
+class DeleteCommentSuccessPayload(TypedDict):
+    success: Literal[True]
+
+
+class DeleteCommentErrorPayload(TypedDict):
+    success: Literal[False]
+    error: str
+
+
+DeleteCommentPayload = DeleteCommentSuccessPayload | DeleteCommentErrorPayload
 
 
 class DeleteCardPreviewPayload(TypedDict):
@@ -87,51 +112,126 @@ def _extract_error_strings(exc: BaseException) -> list[str]:
     return messages
 
 
-def map_add_card_comment_error_to_message(exc: BaseException) -> str:
-    """Map a GraphQL exception into a stable, friendly English message."""
+# Markers for mapping GraphQL errors to user-friendly messages.
+_NOT_FOUND_MARKERS = [
+    "not found",
+    "record not found",
+    "could not find",
+    "does not exist",
+    "doesn't exist",
+]
+_PERMISSION_MARKERS = [
+    "permission",
+    "not authorized",
+    "unauthorized",
+    "forbidden",
+    "access denied",
+    "not allowed",
+]
+_INVALID_INPUT_MARKERS = [
+    "invalid",
+    "validation",
+    "must be",
+    "can't be",
+    "cannot be",
+    "required",
+    "blank",
+]
+_INVALID_INPUT_MARKERS_NO_BLANK = [
+    "invalid",
+    "validation",
+    "must be",
+    "can't be",
+    "cannot be",
+    "required",
+]
+
+
+def _map_comment_like_error(
+    exc: BaseException,
+    *,
+    not_found_msg: str,
+    permission_msg: str,
+    invalid_msg: str,
+    fallback_msg: str,
+    invalid_markers: list[str] | None = None,
+) -> str:
+    """Map exception to a friendly message using shared not-found/permission/invalid markers."""
     messages = _extract_error_strings(exc)
     haystack = " ".join(messages).lower()
+    markers = invalid_markers if invalid_markers is not None else _INVALID_INPUT_MARKERS
+    if any(m in haystack for m in _NOT_FOUND_MARKERS):
+        return not_found_msg
+    elif any(m in haystack for m in _PERMISSION_MARKERS):
+        return permission_msg
+    elif any(m in haystack for m in markers):
+        return invalid_msg
+    return fallback_msg
 
-    not_found_markers = [
-        "not found",
-        "record not found",
-        "could not find",
-        "does not exist",
-        "doesn't exist",
-    ]
-    permission_markers = [
-        "permission",
-        "not authorized",
-        "unauthorized",
-        "forbidden",
-        "access denied",
-        "not allowed",
-    ]
-    invalid_input_markers = [
-        "invalid",
-        "validation",
-        "must be",
-        "can't be",
-        "cannot be",
-        "required",
-        "blank",
-    ]
 
-    if any(marker in haystack for marker in not_found_markers):
-        return "Card not found. Please verify 'card_id' and access permissions."
+def map_add_card_comment_error_to_message(exc: BaseException) -> str:
+    """Map a GraphQL exception into a stable, friendly English message."""
+    return _map_comment_like_error(
+        exc,
+        not_found_msg="Card not found. Please verify 'card_id' and access permissions.",
+        permission_msg="You don't have permission to comment on this card.",
+        invalid_msg="Invalid input. Please provide a valid 'card_id' and non-empty 'text'.",
+        fallback_msg="Unexpected error while adding comment. Please try again.",
+    )
 
-    if any(marker in haystack for marker in permission_markers):
-        return "You don't have permission to comment on this card."
 
-    if any(marker in haystack for marker in invalid_input_markers):
-        return "Invalid input. Please provide a valid 'card_id' and non-empty 'text'."
+def map_update_comment_error_to_message(exc: BaseException) -> str:
+    """Map a GraphQL exception into a stable, friendly English message."""
+    return _map_comment_like_error(
+        exc,
+        not_found_msg="Comment not found. Please verify 'comment_id' and access permissions.",
+        permission_msg="You don't have permission to update this comment.",
+        invalid_msg="Invalid input. Please provide a valid 'comment_id' and non-empty 'text'.",
+        fallback_msg="Unexpected error while updating comment. Please try again.",
+    )
 
-    return "Unexpected error while adding comment. Please try again."
+
+def map_delete_comment_error_to_message(exc: BaseException) -> str:
+    """Map a GraphQL exception into a stable, friendly English message."""
+    return _map_comment_like_error(
+        exc,
+        not_found_msg="Comment not found. Please verify 'comment_id' and access permissions.",
+        permission_msg="You don't have permission to delete this comment.",
+        invalid_msg="Invalid input. Please provide a valid 'comment_id'.",
+        fallback_msg="Unexpected error while deleting comment. Please try again.",
+        invalid_markers=_INVALID_INPUT_MARKERS_NO_BLANK,
+    )
+
+
+def _build_comment_error_payload(message: str) -> dict:
+    return {"success": False, "error": message}
 
 
 def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentErrorPayload:
     """Build the public error payload for add_card_comment."""
-    return {"success": False, "error": message}
+    return cast(AddCardCommentErrorPayload, _build_comment_error_payload(message))
+
+
+def build_update_comment_success_payload(
+    *, comment_id: object
+) -> UpdateCommentSuccessPayload:
+    """Build the public success payload for update_comment."""
+    return {"success": True, "comment_id": str(comment_id)}
+
+
+def build_update_comment_error_payload(*, message: str) -> UpdateCommentErrorPayload:
+    """Build the public error payload for update_comment."""
+    return cast(UpdateCommentErrorPayload, _build_comment_error_payload(message))
+
+
+def build_delete_comment_success_payload() -> DeleteCommentSuccessPayload:
+    """Build the public success payload for delete_comment."""
+    return {"success": True}
+
+
+def build_delete_comment_error_payload(*, message: str) -> DeleteCommentErrorPayload:
+    """Build the public error payload for delete_comment."""
+    return cast(DeleteCommentErrorPayload, _build_comment_error_payload(message))
 
 
 def build_delete_card_preview_payload(

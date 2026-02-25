@@ -43,6 +43,8 @@ version-file = "src/pipefy_mcp/_version.py"
 
 [tool.ruff]
 lint.extend-select = ["I"]
+lint.exclude = ["src/pipefy_mcp/_version.py"]
+format.exclude = ["src/pipefy_mcp/_version.py"]
 
 [tool.pytest]
 testpaths = ["tests"]

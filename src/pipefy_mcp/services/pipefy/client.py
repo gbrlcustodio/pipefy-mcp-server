@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from gql import Client
-
-from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.types import CardSearch
@@ -14,15 +11,9 @@ from pipefy_mcp.settings import PipefySettings
 class PipefyClient:
     """Facade client for Pipefy API operations (pure delegation)."""
 
-    def __init__(self, settings: PipefySettings, schema: str | None = None):
-        graphql = BasePipefyClient(settings=settings, schema=schema)
-
-        # Keep `client` as a public attribute for backward compatibility.
-        self.client: Client = graphql.client
-
-        # Service layer (domain logic lives here).
-        self._pipe_service = PipeService(self.client)
-        self._card_service = CardService(self.client)
+    def __init__(self, settings: PipefySettings):
+        self._pipe_service = PipeService(settings=settings)
+        self._card_service = CardService(settings=settings)
 
     async def get_pipe(self, pipe_id: int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""

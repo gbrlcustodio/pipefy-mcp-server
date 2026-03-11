@@ -13,74 +13,42 @@ from pipefy_mcp.settings import PipefySettings
 class BasePipefyClient:
     """Base infrastructure for Pipefy GraphQL operations.
 
-    This class centralizes GraphQL client creation so services can reuse a single
-    underlying `gql.Client` instance via constructor injection.
+    Creates a fresh transport per execute_query() call so parallel requests
+    never share mutable transport state (avoids TransportAlreadyConnected).
+    The OAuth2 auth instance is shared across calls to reuse the token cache.
     """
 
     GRAPHQL_REQUEST_TIMEOUT_SECONDS: ClassVar[int] = 30
 
-    def __init__(
-        self,
-        settings: PipefySettings | None = None,
-        schema: str | None = None,
-        client: Client | None = None,
-    ) -> None:
-        """Create a base client.
-
-        Args:
-            schema: Optional schema string to pass to `gql.Client`.
-            client: Optional pre-built `gql.Client` to reuse (preferred for shared wiring).
-
-        Raises:
-            ValueError: If both schema and client are provided, as schema would be ignored.
-        """
-        if schema is not None and client is not None:
-            raise ValueError(
-                "Cannot specify both 'schema' and 'client'. "
-                "When reusing an existing client, its schema is already configured."
-            )
-
-        self.settings = settings
-        self.client: Client = client or self._create_client(schema)
-
-    def _create_client(self, schema: str | None) -> Client:
-        """Create and configure a `gql.Client` using project settings.
-
-        Note: This preserves the current behavior from `PipefyClient._create_client`.
-        """
-
-        if self.settings is None:
+    def __init__(self, settings: PipefySettings) -> None:
+        if settings is None:
             raise ValueError("Settings must be provided to create a GraphQL client.")
-
-        if self.settings.graphql_url is None:
+        if settings.graphql_url is None:
             raise ValueError("GraphQL URL must be provided in settings.")
-        if self.settings.oauth_url is None:
+        if settings.oauth_url is None:
             raise ValueError("OAuth URL must be provided in settings.")
-        if self.settings.oauth_client is None:
+        if settings.oauth_client is None:
             raise ValueError("OAuth client ID must be provided in settings.")
-        if self.settings.oauth_secret is None:
+        if settings.oauth_secret is None:
             raise ValueError("OAuth client secret must be provided in settings.")
 
-        transport = HTTPXAsyncTransport(
-            url=self.settings.graphql_url,
-            auth=OAuth2ClientCredentials(
-                token_url=self.settings.oauth_url,
-                client_id=self.settings.oauth_client,
-                client_secret=self.settings.oauth_secret,
-            ),
-            timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
+        self.settings = settings
+        self._auth = OAuth2ClientCredentials(
+            token_url=settings.oauth_url,
+            client_id=settings.oauth_client,
+            client_secret=settings.oauth_secret,
         )
-
-        if schema:
-            return Client(transport=transport, schema=schema)
-        return Client(transport=transport, fetch_schema_from_transport=True)
 
     async def execute_query(self, query: Any, variables: dict[str, Any]) -> dict:
         """Execute a GraphQL query/mutation with variables.
 
-        This method standardizes session usage and preserves current behavior by
-        passing `variable_values` through without transformation.
+        A fresh HTTPXAsyncTransport is created per call so concurrent invocations
+        each get their own isolated connection state.
         """
-
-        async with self.client as session:
+        transport = HTTPXAsyncTransport(
+            url=self.settings.graphql_url,
+            auth=self._auth,
+            timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
+        )
+        async with Client(transport=transport, fetch_schema_from_transport=False) as session:
             return await session.execute(query, variable_values=variables)

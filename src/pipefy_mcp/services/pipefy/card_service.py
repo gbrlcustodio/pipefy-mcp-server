@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from gql import Client
-
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
+from pipefy_mcp.settings import PipefySettings
 from pipefy_mcp.services.pipefy.queries.card_queries import (
     CREATE_CARD_MUTATION,
     CREATE_COMMENT_MUTATION,
@@ -29,8 +28,8 @@ from pipefy_mcp.services.pipefy.utils.formatters import (
 class CardService(BasePipefyClient):
     """Service for Card-related operations."""
 
-    def __init__(self, client: Client) -> None:
-        super().__init__(client=client)
+    def __init__(self, settings: PipefySettings) -> None:
+        super().__init__(settings=settings)
 
     async def create_card(
         self, pipe_id: int, fields: dict[str, Any] | list[dict[str, Any]]

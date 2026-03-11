@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from gql import Client
 from rapidfuzz import fuzz
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
+from pipefy_mcp.settings import PipefySettings
 from pipefy_mcp.services.pipefy.queries.pipe_queries import (
     GET_PHASE_FIELDS_QUERY,
     GET_PIPE_MEMBERS_QUERY,
@@ -16,8 +16,8 @@ from pipefy_mcp.services.pipefy.queries.pipe_queries import (
 class PipeService(BasePipefyClient):
     """Service for Pipe-related operations."""
 
-    def __init__(self, client: Client) -> None:
-        super().__init__(client=client)
+    def __init__(self, settings: PipefySettings) -> None:
+        super().__init__(settings=settings)
 
     async def get_pipe(self, pipe_id: int) -> dict:
         """Get a pipe by its ID, including phases, labels, and start form fields."""

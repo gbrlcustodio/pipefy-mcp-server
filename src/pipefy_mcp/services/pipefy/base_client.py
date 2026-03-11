@@ -50,5 +50,7 @@ class BasePipefyClient:
             auth=self._auth,
             timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
         )
-        async with Client(transport=transport, fetch_schema_from_transport=False) as session:
+        async with Client(
+            transport=transport, fetch_schema_from_transport=False
+        ) as session:
             return await session.execute(query, variable_values=variables)

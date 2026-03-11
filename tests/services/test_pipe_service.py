@@ -90,7 +90,9 @@ async def test_get_start_form_fields_empty_returns_message(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_start_form_fields_required_only_filters_and_returns_message_when_none(mock_settings):
+async def test_get_start_form_fields_required_only_filters_and_returns_message_when_none(
+    mock_settings,
+):
     """Test get_start_form_fields with required_only=True returns message when all optional."""
     pipe_id = 303181849
     mock_fields = [

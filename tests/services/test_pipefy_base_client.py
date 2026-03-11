@@ -26,9 +26,7 @@ async def test_execute_query_passes_variables_to_session(valid_settings):
     mock_session = AsyncMock()
     mock_session.execute = AsyncMock(return_value={"ok": True})
 
-    with patch(
-        "pipefy_mcp.services.pipefy.base_client.Client"
-    ) as mock_client_cls:
+    with patch("pipefy_mcp.services.pipefy.base_client.Client") as mock_client_cls:
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
@@ -50,9 +48,7 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged(valid_settings)
     mock_session = AsyncMock()
     mock_session.execute = AsyncMock(side_effect=expected_error)
 
-    with patch(
-        "pipefy_mcp.services.pipefy.base_client.Client"
-    ) as mock_client_cls:
+    with patch("pipefy_mcp.services.pipefy.base_client.Client") as mock_client_cls:
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 

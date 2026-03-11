@@ -41,7 +41,9 @@ async def test_create_card_with_dict_fields():
     pipe_id = 303181849
     fields_dict = {"title": "Teste-MCP", "description": "Test description"}
 
-    client, mock_execute = _make_facade_client({"createCard": {"card": {"id": "12345"}}})
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
+    )
     result = await client.create_card(pipe_id, fields_dict)
 
     mock_execute.assert_called_once()
@@ -72,7 +74,9 @@ async def test_create_card_with_array_fields():
         {"field_id": "description", "field_value": "Test description"},
     ]
 
-    client, mock_execute = _make_facade_client({"createCard": {"card": {"id": "12345"}}})
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
+    )
     result = await client.create_card(pipe_id, fields_array)
 
     mock_execute.assert_called_once()
@@ -98,7 +102,9 @@ async def test_create_card_with_empty_dict():
     """Test create_card handles empty dict fields."""
     pipe_id = 303181849
 
-    client, mock_execute = _make_facade_client({"createCard": {"card": {"id": "12345"}}})
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
+    )
     result = await client.create_card(pipe_id, {})
 
     mock_execute.assert_called_once()
@@ -115,7 +121,9 @@ async def test_create_card_with_single_field():
     pipe_id = 303181849
     fields_dict = {"title": "Teste-MCP"}
 
-    client, mock_execute = _make_facade_client({"createCard": {"card": {"id": "12345"}}})
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
+    )
     result = await client.create_card(pipe_id, fields_dict)
 
     mock_execute.assert_called_once()
@@ -163,7 +171,9 @@ async def test_get_start_form_fields_returns_all_fields():
         },
     ]
 
-    client, mock_execute = _make_facade_client({"pipe": {"start_form_fields": mock_fields}})
+    client, mock_execute = _make_facade_client(
+        {"pipe": {"start_form_fields": mock_fields}}
+    )
     result = await client.get_start_form_fields(pipe_id)
 
     mock_execute.assert_called_once()
@@ -181,12 +191,36 @@ async def test_get_start_form_fields_required_only_filter():
     """Test get_start_form_fields with required_only=True filters correctly."""
     pipe_id = 303181849
     mock_fields = [
-        {"id": "title", "label": "Title", "type": "short_text", "required": True,
-         "editable": True, "options": None, "description": None, "help": None},
-        {"id": "priority", "label": "Priority", "type": "select", "required": False,
-         "editable": True, "options": ["Low", "Medium", "High"], "description": None, "help": None},
-        {"id": "due_date", "label": "Due Date", "type": "date", "required": True,
-         "editable": True, "options": None, "description": None, "help": None},
+        {
+            "id": "title",
+            "label": "Title",
+            "type": "short_text",
+            "required": True,
+            "editable": True,
+            "options": None,
+            "description": None,
+            "help": None,
+        },
+        {
+            "id": "priority",
+            "label": "Priority",
+            "type": "select",
+            "required": False,
+            "editable": True,
+            "options": ["Low", "Medium", "High"],
+            "description": None,
+            "help": None,
+        },
+        {
+            "id": "due_date",
+            "label": "Due Date",
+            "type": "date",
+            "required": True,
+            "editable": True,
+            "options": None,
+            "description": None,
+            "help": None,
+        },
     ]
 
     client, _ = _make_facade_client({"pipe": {"start_form_fields": mock_fields}})
@@ -220,10 +254,26 @@ async def test_get_start_form_fields_required_only_no_required_fields():
     """Test get_start_form_fields with required_only=True when all fields are optional."""
     pipe_id = 303181849
     mock_fields = [
-        {"id": "priority", "label": "Priority", "type": "select", "required": False,
-         "editable": True, "options": ["Low", "Medium", "High"], "description": None, "help": None},
-        {"id": "notes", "label": "Notes", "type": "long_text", "required": False,
-         "editable": True, "options": None, "description": None, "help": None},
+        {
+            "id": "priority",
+            "label": "Priority",
+            "type": "select",
+            "required": False,
+            "editable": True,
+            "options": ["Low", "Medium", "High"],
+            "description": None,
+            "help": None,
+        },
+        {
+            "id": "notes",
+            "label": "Notes",
+            "type": "long_text",
+            "required": False,
+            "editable": True,
+            "options": None,
+            "description": None,
+            "help": None,
+        },
     ]
 
     client, _ = _make_facade_client({"pipe": {"start_form_fields": mock_fields}})
@@ -253,7 +303,12 @@ async def test_update_card_field_success():
             "card": {
                 "id": "12345",
                 "title": "Test Card",
-                "fields": [{"field": {"id": "status", "label": "Status"}, "value": "In Progress"}],
+                "fields": [
+                    {
+                        "field": {"id": "status", "label": "Status"},
+                        "value": "In Progress",
+                    }
+                ],
                 "updated_at": "2024-12-16T10:00:00Z",
             },
             "success": True,
@@ -357,15 +412,23 @@ async def test_update_card_replacement_mode_with_assignees_and_labels():
             "card": {
                 "id": "12345",
                 "title": "Test Card",
-                "assignees": [{"id": "100", "name": "User 1"}, {"id": "200", "name": "User 2"}],
-                "labels": [{"id": "300", "name": "Label 1"}, {"id": "400", "name": "Label 2"}],
+                "assignees": [
+                    {"id": "100", "name": "User 1"},
+                    {"id": "200", "name": "User 2"},
+                ],
+                "labels": [
+                    {"id": "300", "name": "Label 1"},
+                    {"id": "400", "name": "Label 2"},
+                ],
             },
             "clientMutationId": None,
         }
     }
 
     client, mock_execute = _make_facade_client(mock_response)
-    result = await client.update_card(card_id, assignee_ids=assignee_ids, label_ids=label_ids)
+    result = await client.update_card(
+        card_id, assignee_ids=assignee_ids, label_ids=label_ids
+    )
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
@@ -386,7 +449,11 @@ async def test_update_card_incremental_mode_with_add_operation():
         "updateFieldsValues": {
             "success": True,
             "userErrors": [],
-            "updatedNode": {"id": "12345", "title": "Test Card", "updated_at": "2024-12-16T10:00:00Z"},
+            "updatedNode": {
+                "id": "12345",
+                "title": "Test Card",
+                "updated_at": "2024-12-16T10:00:00Z",
+            },
         }
     }
 
@@ -431,7 +498,9 @@ async def test_update_card_incremental_mode_value_format_conversion():
     card_id = 12345
     values = [{"field_id": "field_1", "value": "New Value", "operation": "ADD"}]
 
-    client, mock_execute = _make_facade_client({"updateFieldsValues": {"success": True, "userErrors": []}})
+    client, mock_execute = _make_facade_client(
+        {"updateFieldsValues": {"success": True, "userErrors": []}}
+    )
     await client.update_card(card_id, field_updates=values)
 
     variables = mock_execute.call_args[0][1]
@@ -603,7 +672,9 @@ async def test_find_cards_delegates_to_card_service_with_include_fields_true():
     client._card_service = card_service
     client._pipe_service = MagicMock(spec=PipeService)
 
-    result = await client.find_cards(pipe_id, field_id, field_value, include_fields=True)
+    result = await client.find_cards(
+        pipe_id, field_id, field_value, include_fields=True
+    )
 
     card_service.find_cards.assert_awaited_once_with(
         pipe_id, field_id, field_value, include_fields=True
@@ -627,7 +698,9 @@ async def test_find_cards_delegates_to_card_service_with_include_fields_false():
     client._card_service = card_service
     client._pipe_service = MagicMock(spec=PipeService)
 
-    result = await client.find_cards(pipe_id, field_id, field_value, include_fields=False)
+    result = await client.find_cards(
+        pipe_id, field_id, field_value, include_fields=False
+    )
 
     card_service.find_cards.assert_awaited_once_with(
         pipe_id, field_id, field_value, include_fields=False
@@ -701,7 +774,9 @@ async def test_move_card_to_phase_variable_shape():
     card_id = 12345
     destination_phase_id = 678
 
-    client, mock_execute = _make_facade_client({"moveCardToPhase": {"clientMutationId": None}})
+    client, mock_execute = _make_facade_client(
+        {"moveCardToPhase": {"clientMutationId": None}}
+    )
     result = await client.move_card_to_phase(card_id, destination_phase_id)
 
     mock_execute.assert_called_once()

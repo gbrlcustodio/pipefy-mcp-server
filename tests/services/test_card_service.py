@@ -89,7 +89,9 @@ async def test_get_cards_with_none_search_sends_empty_search(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cards_with_include_fields_true_passes_includeFields_variable(mock_settings):
+async def test_get_cards_with_include_fields_true_passes_includeFields_variable(
+    mock_settings,
+):
     """Test get_cards uses GET_CARDS_QUERY with includeFields=True when include_fields=True."""
     pipe_id = 303181849
 
@@ -104,7 +106,9 @@ async def test_get_cards_with_include_fields_true_passes_includeFields_variable(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_cards_with_include_fields_false_passes_includeFields_variable(mock_settings):
+async def test_get_cards_with_include_fields_false_passes_includeFields_variable(
+    mock_settings,
+):
     """Test get_cards uses GET_CARDS_QUERY with includeFields=False when include_fields=False."""
     pipe_id = 303181849
 
@@ -146,7 +150,9 @@ async def test_find_cards_returns_raw_findCards_response(mock_settings):
     expected = {"findCards": {"edges": [{"node": {"id": "1", "title": "Card"}}]}}
 
     service = _make_service(mock_settings, expected)
-    result = await service.find_cards(pipe_id, field_id, field_value, include_fields=False)
+    result = await service.find_cards(
+        pipe_id, field_id, field_value, include_fields=False
+    )
 
     assert result == expected
 
@@ -157,7 +163,9 @@ async def test_get_card_passes_card_id_and_includeFields(mock_settings):
     """Test get_card passes card_id and includeFields in variable_values."""
     card_id = 12345
 
-    service = _make_service(mock_settings, {"card": {"id": str(card_id), "title": "Test"}})
+    service = _make_service(
+        mock_settings, {"card": {"id": str(card_id), "title": "Test"}}
+    )
     await service.get_card(card_id, include_fields=False)
 
     variables = service.execute_query.call_args[0][1]
@@ -172,7 +180,13 @@ async def test_get_card_with_include_fields_true_passes_includeFields(mock_setti
 
     service = _make_service(
         mock_settings,
-        {"card": {"id": str(card_id), "title": "Test", "fields": [{"name": "Field", "value": "x"}]}},
+        {
+            "card": {
+                "id": str(card_id),
+                "title": "Test",
+                "fields": [{"name": "Field", "value": "x"}],
+            }
+        },
     )
     await service.get_card(card_id, include_fields=True)
 
@@ -187,7 +201,9 @@ async def test_move_card_to_phase_variable_shape(mock_settings):
     card_id = 12345
     destination_phase_id = 678
 
-    service = _make_service(mock_settings, {"moveCardToPhase": {"clientMutationId": None}})
+    service = _make_service(
+        mock_settings, {"moveCardToPhase": {"clientMutationId": None}}
+    )
     result = await service.move_card_to_phase(card_id, destination_phase_id)
 
     variables = service.execute_query.call_args[0][1]
@@ -270,7 +286,9 @@ async def test_create_comment_variable_shape_and_return_passthrough(mock_setting
     card_id = 12345
     text = "This is a comment"
 
-    service = _make_service(mock_settings, {"createComment": {"comment": {"id": "c_987"}}})
+    service = _make_service(
+        mock_settings, {"createComment": {"comment": {"id": "c_987"}}}
+    )
     result = await service.create_comment(card_id=card_id, text=text)
 
     variables = service.execute_query.call_args[0][1]
@@ -289,7 +307,9 @@ async def test_update_comment_variable_shape_and_return_structure(mock_settings)
     comment_id = 12345
     text = "Updated comment text"
 
-    service = _make_service(mock_settings, {"updateComment": {"comment": {"id": "c_999"}}})
+    service = _make_service(
+        mock_settings, {"updateComment": {"comment": {"id": "c_999"}}}
+    )
     result = await service.update_comment(comment_id, text)
 
     variables = service.execute_query.call_args[0][1]

@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
-from pipefy_mcp.settings import PipefySettings
 from pipefy_mcp.services.pipefy.queries.card_queries import (
     CREATE_CARD_MUTATION,
     CREATE_COMMENT_MUTATION,
@@ -23,6 +22,7 @@ from pipefy_mcp.services.pipefy.utils.formatters import (
     convert_fields_to_array,
     convert_values_to_camel_case,
 )
+from pipefy_mcp.settings import PipefySettings
 
 
 class CardService(BasePipefyClient):

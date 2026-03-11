@@ -3,7 +3,6 @@ from __future__ import annotations
 from rapidfuzz import fuzz
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
-from pipefy_mcp.settings import PipefySettings
 from pipefy_mcp.services.pipefy.queries.pipe_queries import (
     GET_PHASE_FIELDS_QUERY,
     GET_PIPE_MEMBERS_QUERY,
@@ -11,6 +10,7 @@ from pipefy_mcp.services.pipefy.queries.pipe_queries import (
     GET_START_FORM_FIELDS_QUERY,
     SEARCH_PIPES_QUERY,
 )
+from pipefy_mcp.settings import PipefySettings
 
 
 class PipeService(BasePipefyClient):

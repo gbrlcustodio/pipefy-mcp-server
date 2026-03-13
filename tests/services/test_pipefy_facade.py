@@ -2,7 +2,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
+from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -79,8 +81,6 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 @pytest.mark.unit
 def test_pipefy_client_creates_services_with_shared_auth():
     """Test PipefyClient creates services that share the same OAuth auth instance."""
-    from pipefy_mcp.services.pipefy.card_service import CardService
-    from pipefy_mcp.services.pipefy.pipe_service import PipeService
 
     settings = PipefySettings(
         graphql_url="https://api.pipefy.com/graphql",
@@ -92,6 +92,9 @@ def test_pipefy_client_creates_services_with_shared_auth():
 
     assert isinstance(client._pipe_service, PipeService)
     assert isinstance(client._card_service, CardService)
-    # Each service holds its own auth instance that reuses the token cache
-    assert client._pipe_service._auth is not None
-    assert client._card_service._auth is not None
+    assert client._pipe_service._auth is not None, (
+        "PipeService should have an auth instance"
+    )
+    assert client._card_service._auth is not None, (
+        "CardService should have an auth instance"
+    )

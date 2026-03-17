@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from typing_extensions import TypedDict
 
 
@@ -12,3 +14,18 @@ class CardSearch(TypedDict, total=False):
     title: str
     inbox_emails_read: bool
     include_done: bool
+
+
+class AgentServiceResult(TypedDict):
+    agent_uuid: str
+    message: str
+
+
+class AutomationServiceResult(TypedDict):
+    automation_id: str
+    message: str
+
+
+class ToggleAgentStatusResult(TypedDict):
+    success: Literal[True]
+    message: str

@@ -7,6 +7,7 @@ GET_PIPE_QUERY = gql(
     query ($pipe_id: ID!) {
         pipe(id: $pipe_id) {
             id
+            uuid
             name
             phases {
                 id

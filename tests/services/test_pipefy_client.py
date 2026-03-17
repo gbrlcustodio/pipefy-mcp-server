@@ -1,21 +1,37 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from gql import Client
 
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.settings import PipefySettings
 
 
-def _make_facade_client(mock_client):
+def _mock_settings() -> PipefySettings:
+    return PipefySettings(
+        graphql_url="https://api.pipefy.com/graphql",
+        oauth_url="https://auth.pipefy.com/oauth/token",
+        oauth_client="client_id",
+        oauth_secret="client_secret",
+    )
+
+
+def _make_facade_client(execute_return_value: dict):
+    """Create a PipefyClient with execute_query mocked on both services.
+
+    Returns (client, mock_execute_query) so tests can inspect call args.
+    """
+    settings = _mock_settings()
     client = PipefyClient.__new__(PipefyClient)
-    # Keep public attr for backward compatibility
-    client.client = mock_client
-    # Real services with injected client (so behavior stays identical)
-    client._pipe_service = PipeService(mock_client)
-    client._card_service = CardService(mock_client)
-    return client
+    client._pipe_service = PipeService(settings=settings)
+    client._card_service = CardService(settings=settings)
+
+    mock_execute = AsyncMock(return_value=execute_return_value)
+    client._pipe_service.execute_query = mock_execute
+    client._card_service.execute_query = mock_execute
+
+    return client, mock_execute
 
 
 @pytest.mark.unit
@@ -25,26 +41,13 @@ async def test_create_card_with_dict_fields():
     pipe_id = 303181849
     fields_dict = {"title": "Teste-MCP", "description": "Test description"}
 
-    # Mock the GraphQL client and session
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={"createCard": {"card": {"id": "12345"}}}
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
     )
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
     result = await client.create_card(pipe_id, fields_dict)
 
-    # Verify the session was called with correct variables
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-
-    # Check that fields were converted to array format
-    variables = call_args[1]["variable_values"]
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["pipe_id"] == pipe_id
     assert isinstance(variables["fields"], list)
     assert len(variables["fields"]) == 2
@@ -58,8 +61,6 @@ async def test_create_card_with_dict_fields():
         "field_value": "Test description",
         "generated_by_ai": True,
     }
-
-    # Verify result
     assert result == {"createCard": {"card": {"id": "12345"}}}
 
 
@@ -73,26 +74,13 @@ async def test_create_card_with_array_fields():
         {"field_id": "description", "field_value": "Test description"},
     ]
 
-    # Mock the GraphQL client and session
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={"createCard": {"card": {"id": "12345"}}}
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
     )
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
     result = await client.create_card(pipe_id, fields_array)
 
-    # Verify the session was called with correct variables
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-
-    # Check that fields array was used and generated_by_ai was added
-    variables = call_args[1]["variable_values"]
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["pipe_id"] == pipe_id
     assert len(variables["fields"]) == 2
     assert variables["fields"][0] == {
@@ -105,8 +93,6 @@ async def test_create_card_with_array_fields():
         "field_value": "Test description",
         "generated_by_ai": True,
     }
-
-    # Verify result
     assert result == {"createCard": {"card": {"id": "12345"}}}
 
 
@@ -115,31 +101,16 @@ async def test_create_card_with_array_fields():
 async def test_create_card_with_empty_dict():
     """Test create_card handles empty dict fields."""
     pipe_id = 303181849
-    fields_dict = {}
 
-    # Mock the GraphQL client and session
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={"createCard": {"card": {"id": "12345"}}}
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
     )
+    result = await client.create_card(pipe_id, {})
 
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
-    result = await client.create_card(pipe_id, fields_dict)
-
-    # Verify the session was called with empty array
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-
-    variables = call_args[1]["variable_values"]
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["pipe_id"] == pipe_id
     assert variables["fields"] == []
-
-    # Verify result
     assert result == {"createCard": {"card": {"id": "12345"}}}
 
 
@@ -150,25 +121,13 @@ async def test_create_card_with_single_field():
     pipe_id = 303181849
     fields_dict = {"title": "Teste-MCP"}
 
-    # Mock the GraphQL client and session
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={"createCard": {"card": {"id": "12345"}}}
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
     )
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
     result = await client.create_card(pipe_id, fields_dict)
 
-    # Verify the session was called with correct variables
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-
-    variables = call_args[1]["variable_values"]
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["pipe_id"] == pipe_id
     assert len(variables["fields"]) == 1
     assert variables["fields"][0] == {
@@ -176,8 +135,6 @@ async def test_create_card_with_single_field():
         "field_value": "Teste-MCP",
         "generated_by_ai": True,
     }
-
-    # Verify result
     assert result == {"createCard": {"card": {"id": "12345"}}}
 
 
@@ -214,27 +171,14 @@ async def test_get_start_form_fields_returns_all_fields():
         },
     ]
 
-    # Mock the GraphQL client and session
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={"pipe": {"start_form_fields": mock_fields}}
+    client, mock_execute = _make_facade_client(
+        {"pipe": {"start_form_fields": mock_fields}}
     )
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
     result = await client.get_start_form_fields(pipe_id)
 
-    # Verify the session was called with correct variables
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["pipe_id"] == pipe_id
-
-    # Verify result contains all fields
     assert "start_form_fields" in result
     assert len(result["start_form_fields"]) == 2
     assert result["start_form_fields"][0]["id"] == "title"
@@ -279,21 +223,9 @@ async def test_get_start_form_fields_required_only_filter():
         },
     ]
 
-    # Mock the GraphQL client and session
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={"pipe": {"start_form_fields": mock_fields}}
-    )
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, _ = _make_facade_client({"pipe": {"start_form_fields": mock_fields}})
     result = await client.get_start_form_fields(pipe_id, required_only=True)
 
-    # Verify only required fields are returned
     assert "start_form_fields" in result
     assert len(result["start_form_fields"]) == 2
     assert all(field["required"] for field in result["start_form_fields"])
@@ -307,19 +239,9 @@ async def test_get_start_form_fields_empty_returns_friendly_message():
     """Test get_start_form_fields returns user-friendly message when no fields configured."""
     pipe_id = 303181849
 
-    # Mock the GraphQL client and session with empty fields
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"pipe": {"start_form_fields": []}})
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, _ = _make_facade_client({"pipe": {"start_form_fields": []}})
     result = await client.get_start_form_fields(pipe_id)
 
-    # Verify user-friendly message is returned
     assert "message" in result
     assert result["message"] == "This pipe has no start form fields configured."
     assert "start_form_fields" in result
@@ -354,21 +276,9 @@ async def test_get_start_form_fields_required_only_no_required_fields():
         },
     ]
 
-    # Mock the GraphQL client and session
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={"pipe": {"start_form_fields": mock_fields}}
-    )
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, _ = _make_facade_client({"pipe": {"start_form_fields": mock_fields}})
     result = await client.get_start_form_fields(pipe_id, required_only=True)
 
-    # Verify user-friendly message is returned for no required fields
     assert "message" in result
     assert result["message"] == "This pipe has no required fields in the start form."
     assert "start_form_fields" in result
@@ -406,21 +316,11 @@ async def test_update_card_field_success():
         }
     }
 
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value=mock_response)
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, mock_execute = _make_facade_client(mock_response)
     result = await client.update_card_field(card_id, field_id, new_value)
 
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
-
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["input"]["card_id"] == card_id
     assert variables["input"]["field_id"] == field_id
     assert variables["input"]["new_value"] == new_value
@@ -454,21 +354,11 @@ async def test_update_card_replacement_mode_with_title():
         }
     }
 
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value=mock_response)
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, mock_execute = _make_facade_client(mock_response)
     result = await client.update_card(card_id, title=new_title)
 
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
-
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["input"]["id"] == card_id
     assert variables["input"]["title"] == new_title
     assert result == mock_response
@@ -492,27 +382,15 @@ async def test_update_card_with_fields_dict_uses_update_fields_values():
         }
     }
 
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value=mock_response)
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, mock_execute = _make_facade_client(mock_response)
     result = await client.update_card(card_id, field_updates=field_updates)
 
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
-
-    # Fields are converted to updateFieldsValues format
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["input"]["nodeId"] == card_id
     assert "values" in variables["input"]
     values = variables["input"]["values"]
     assert len(values) == 2
-    # Check that fields were converted to camelCase format with generatedByAi
     field_ids = [v["fieldId"] for v in values]
     assert "field_1" in field_ids
     assert "field_2" in field_ids
@@ -547,23 +425,13 @@ async def test_update_card_replacement_mode_with_assignees_and_labels():
         }
     }
 
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value=mock_response)
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, mock_execute = _make_facade_client(mock_response)
     result = await client.update_card(
         card_id, assignee_ids=assignee_ids, label_ids=label_ids
     )
 
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
-
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["input"]["id"] == card_id
     assert variables["input"]["assignee_ids"] == assignee_ids
     assert variables["input"]["label_ids"] == label_ids
@@ -584,27 +452,16 @@ async def test_update_card_incremental_mode_with_add_operation():
             "updatedNode": {
                 "id": "12345",
                 "title": "Test Card",
-                "assignees": [{"id": "123", "name": "New User"}],
                 "updated_at": "2024-12-16T10:00:00Z",
             },
         }
     }
 
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value=mock_response)
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, mock_execute = _make_facade_client(mock_response)
     result = await client.update_card(card_id, field_updates=values)
 
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
-
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["input"]["nodeId"] == card_id
     assert "values" in variables["input"]
     assert result == mock_response
@@ -625,21 +482,11 @@ async def test_update_card_incremental_mode_with_remove_operation():
         }
     }
 
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value=mock_response)
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, mock_execute = _make_facade_client(mock_response)
     result = await client.update_card(card_id, field_updates=values)
 
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
-
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["input"]["nodeId"] == card_id
     assert result == mock_response
 
@@ -651,23 +498,13 @@ async def test_update_card_incremental_mode_value_format_conversion():
     card_id = 12345
     values = [{"field_id": "field_1", "value": "New Value", "operation": "ADD"}]
 
-    mock_response = {"updateFieldsValues": {"success": True, "userErrors": []}}
-
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value=mock_response)
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, mock_execute = _make_facade_client(
+        {"updateFieldsValues": {"success": True, "userErrors": []}}
+    )
     await client.update_card(card_id, field_updates=values)
 
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
+    variables = mock_execute.call_args[0][1]
     formatted_values = variables["input"]["values"]
-
     assert len(formatted_values) == 1
     assert formatted_values[0]["fieldId"] == "field_1"
     assert formatted_values[0]["value"] == "New Value"
@@ -694,20 +531,11 @@ async def test_get_pipe_passes_pipe_id_variable():
     """Test get_pipe passes pipe_id under variable_values unchanged."""
     pipe_id = 303181849
 
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"pipe": {"id": str(pipe_id)}})
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, mock_execute = _make_facade_client({"pipe": {"id": str(pipe_id)}})
     result = await client.get_pipe(pipe_id)
 
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables == {"pipe_id": pipe_id}
     assert result == {"pipe": {"id": str(pipe_id)}}
 
@@ -719,18 +547,15 @@ async def test_get_pipe_members_calls_service():
     pipe_id = 123
     mock_members = [{"user": {"id": "1", "name": "Test User"}}]
 
-    # Mock PipeService and its get_pipe_members method
     mock_pipe_service = MagicMock(spec=PipeService)
     mock_pipe_service.get_pipe_members = AsyncMock(return_value=mock_members)
 
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = mock_pipe_service
-    client._card_service = MagicMock(spec=CardService)  # Mock CardService as well
+    client._card_service = MagicMock(spec=CardService)
 
-    # Call the method
     result = await client.get_pipe_members(pipe_id)
 
-    # Assert that the service method was called with the correct argument
     mock_pipe_service.get_pipe_members.assert_called_once_with(pipe_id)
     assert result == mock_members
 
@@ -740,32 +565,7 @@ async def test_get_pipe_members_calls_service():
 async def test_get_card_passes_card_id_variable():
     """Test get_card passes card_id under variable_values unchanged."""
     card_id = 12345
-
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={
-            "card": {
-                "id": str(card_id),
-                "title": "Test Card",
-                "current_phase": {"id": "1", "name": "Test Phase"},
-                "pipe": {"id": "123", "name": "Test Pipe"},
-            }
-        }
-    )
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
-    result = await client.get_card(card_id)
-
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
-    assert variables == {"card_id": card_id, "includeFields": False}
-    assert result == {
+    mock_response = {
         "card": {
             "id": str(card_id),
             "title": "Test Card",
@@ -774,6 +574,14 @@ async def test_get_card_passes_card_id_variable():
         }
     }
 
+    client, mock_execute = _make_facade_client(mock_response)
+    result = await client.get_card(card_id)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables == {"card_id": card_id, "includeFields": False}
+    assert result == mock_response
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -781,21 +589,11 @@ async def test_get_cards_with_none_search_sends_empty_search_dict():
     """Test get_cards sends an empty search object when search is None."""
     pipe_id = 303181849
 
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"cards": {"edges": []}})
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, mock_execute = _make_facade_client({"cards": {"edges": []}})
     result = await client.get_cards(pipe_id, None)
 
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
-
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["pipe_id"] == pipe_id
     assert variables["search"] == {}
     assert result == {"cards": {"edges": []}}
@@ -808,21 +606,11 @@ async def test_get_cards_with_search_dict_passes_search_as_is():
     pipe_id = 303181849
     search = {"title": "Test"}
 
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"cards": {"edges": []}})
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
+    client, mock_execute = _make_facade_client({"cards": {"edges": []}})
     result = await client.get_cards(pipe_id, search)
 
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
-
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables["pipe_id"] == pipe_id
     assert variables["search"] == search
     assert result == {"cards": {"edges": []}}
@@ -842,11 +630,7 @@ async def test_get_cards_with_include_fields_true_passes_include_fields_to_servi
     client._card_service = card_service
     client._pipe_service = MagicMock(spec=PipeService)
 
-    result = await client.get_cards(
-        pipe_id,
-        search=None,
-        include_fields=True,
-    )
+    result = await client.get_cards(pipe_id, search=None, include_fields=True)
 
     card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=True)
     assert result == expected
@@ -866,11 +650,7 @@ async def test_get_cards_with_include_fields_false_passes_include_fields_to_serv
     client._card_service = card_service
     client._pipe_service = MagicMock(spec=PipeService)
 
-    result = await client.get_cards(
-        pipe_id,
-        search=None,
-        include_fields=False,
-    )
+    result = await client.get_cards(pipe_id, search=None, include_fields=False)
 
     card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=False)
     assert result == expected
@@ -994,23 +774,13 @@ async def test_move_card_to_phase_variable_shape():
     card_id = 12345
     destination_phase_id = 678
 
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(
-        return_value={"moveCardToPhase": {"clientMutationId": None}}
+    client, mock_execute = _make_facade_client(
+        {"moveCardToPhase": {"clientMutationId": None}}
     )
-
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    client = _make_facade_client(mock_client)
-
     result = await client.move_card_to_phase(card_id, destination_phase_id)
 
-    mock_session.execute.assert_called_once()
-    call_args = mock_session.execute.call_args
-    variables = call_args[1]["variable_values"]
-
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
     assert variables == {
         "input": {"card_id": card_id, "destination_phase_id": destination_phase_id}
     }

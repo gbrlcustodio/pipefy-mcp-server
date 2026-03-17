@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from gql import Client
+from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.queries.card_queries import (
@@ -24,13 +24,18 @@ from pipefy_mcp.services.pipefy.utils.formatters import (
     convert_fields_to_array,
     convert_values_to_camel_case,
 )
+from pipefy_mcp.settings import PipefySettings
 
 
 class CardService(BasePipefyClient):
     """Service for Card-related operations."""
 
-    def __init__(self, client: Client) -> None:
-        super().__init__(client=client)
+    def __init__(
+        self,
+        settings: PipefySettings,
+        auth: OAuth2ClientCredentials | None = None,
+    ) -> None:
+        super().__init__(settings=settings, auth=auth)
 
     async def create_card(
         self, pipe_id: int, fields: dict[str, Any] | list[dict[str, Any]]

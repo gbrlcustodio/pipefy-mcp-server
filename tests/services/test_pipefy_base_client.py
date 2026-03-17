@@ -1,28 +1,37 @@
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from gql import Client
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.settings import PipefySettings
 
 
+@pytest.fixture
+def valid_settings() -> PipefySettings:
+    return PipefySettings(
+        graphql_url="https://api.pipefy.com/graphql",
+        oauth_url="https://auth.pipefy.com/oauth/token",
+        oauth_client="client_id",
+        oauth_secret="client_secret",
+    )
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_uses_injected_client_and_passthrough_variables():
-    """Test execute_query uses the injected client and passes variable_values unchanged."""
+async def test_execute_query_passes_variables_to_session(valid_settings):
+    """Test execute_query creates a session and passes variable_values unchanged."""
     query = object()
     variables = {"a": 1, "nested": {"b": 2}}
 
     mock_session = AsyncMock()
     mock_session.execute = AsyncMock(return_value={"ok": True})
 
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+    with patch("pipefy_mcp.services.pipefy.base_client.Client") as mock_client_cls:
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-    base = BasePipefyClient(client=mock_client)
-    result = await base.execute_query(query, variables)
+        base = BasePipefyClient(settings=valid_settings)
+        result = await base.execute_query(query, variables)
 
     mock_session.execute.assert_called_once_with(query, variable_values=variables)
     assert result == {"ok": True}
@@ -30,7 +39,7 @@ async def test_execute_query_uses_injected_client_and_passthrough_variables():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_bubbles_up_execute_errors_unchanged():
+async def test_execute_query_bubbles_up_execute_errors_unchanged(valid_settings):
     """Test execute_query does not wrap exceptions raised by the GraphQL session."""
     query = object()
     variables = {"x": 1}
@@ -39,36 +48,16 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged():
     mock_session = AsyncMock()
     mock_session.execute = AsyncMock(side_effect=expected_error)
 
-    mock_client = MagicMock(spec=Client)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_session)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+    with patch("pipefy_mcp.services.pipefy.base_client.Client") as mock_client_cls:
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-    base = BasePipefyClient(client=mock_client)
+        base = BasePipefyClient(settings=valid_settings)
 
-    with pytest.raises(RuntimeError) as exc:
-        await base.execute_query(query, variables)
+        with pytest.raises(RuntimeError) as exc:
+            await base.execute_query(query, variables)
 
     assert exc.value is expected_error
-
-
-@pytest.mark.unit
-def test_base_pipefy_client_raises_when_both_schema_and_client_provided():
-    """Test that providing both schema and client raises ValueError."""
-    mock_client = MagicMock(spec=Client)
-
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(schema="some_schema", client=mock_client)
-
-    assert "Cannot specify both 'schema' and 'client'" in str(exc.value)
-
-
-@pytest.mark.unit
-def test_init_raises_when_settings_is_none_and_no_client_provided():
-    """Test that __init__ raises ValueError when settings is None and no client provided."""
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=None, client=None)
-
-    assert "Settings must be provided to create a GraphQL client" in str(exc.value)
 
 
 @pytest.mark.unit

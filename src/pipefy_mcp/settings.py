@@ -8,6 +8,11 @@ class PipefySettings(BaseModel):
         description="GraphQL URL for Pipefy",
     )
 
+    internal_api_url: str = Field(
+        default="https://app.pipefy.com/internal_api",
+        description="Internal API URL for AI Automation endpoints",
+    )
+
     oauth_url: str | None = Field(
         default=None,
         description="OAuth URL for Pipefy",

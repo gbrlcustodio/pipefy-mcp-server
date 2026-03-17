@@ -1,0 +1,171 @@
+"""Tests for AI Automation MCP tools."""
+
+from datetime import timedelta
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from mcp.server.fastmcp import FastMCP
+from mcp.shared.memory import (
+    create_connected_server_and_client_session as create_client_session,
+)
+
+from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture
+def mock_ai_automation_service():
+    service = MagicMock()
+    service.create_automation = AsyncMock()
+    service.update_automation = AsyncMock()
+    return service
+
+
+@pytest.fixture
+def mcp_server(mock_ai_automation_service):
+    mcp = FastMCP("AI Automation Tools Test")
+    AiAutomationTools.register(mcp, mock_ai_automation_service)
+    return mcp
+
+
+@pytest.fixture
+def client_session(mcp_server):
+    return create_client_session(
+        mcp_server,
+        read_timeout_seconds=timedelta(seconds=10),
+        raise_exceptions=True,
+    )
+
+
+@pytest.mark.anyio
+class TestCreateAiAutomation:
+    async def test_success(
+        self,
+        client_session,
+        mock_ai_automation_service,
+        extract_payload,
+    ):
+        mock_ai_automation_service.create_automation.return_value = {
+            "automation_id": "123",
+            "message": "AI Automation created successfully. ID: 123",
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_automation",
+                {
+                    "name": "My Auto",
+                    "event_id": "card_created",
+                    "pipe_id": "303",
+                    "prompt": "Summarize",
+                    "field_ids": ["133"],
+                },
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload == {
+            "success": True,
+            "automation_id": "123",
+            "message": "AI Automation created successfully. ID: 123",
+        }
+        assert isinstance(payload["message"], str)
+        assert isinstance(payload["automation_id"], str)
+
+    async def test_service_error_returns_error_payload(
+        self,
+        client_session,
+        mock_ai_automation_service,
+        extract_payload,
+    ):
+        mock_ai_automation_service.create_automation.side_effect = RuntimeError(
+            "GraphQL error"
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_automation",
+                {
+                    "name": "My Auto",
+                    "event_id": "card_created",
+                    "pipe_id": "303",
+                    "prompt": "Summarize",
+                    "field_ids": ["133"],
+                },
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "error" in payload
+        assert isinstance(payload["error"], str)
+
+    async def test_validation_error_returns_error_payload(
+        self,
+        client_session,
+        mock_ai_automation_service,
+        extract_payload,
+    ):
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_automation",
+                {
+                    "name": "",
+                    "event_id": "card_created",
+                    "pipe_id": "303",
+                    "prompt": "Summarize",
+                    "field_ids": ["133"],
+                },
+            )
+        assert result.isError is False
+        mock_ai_automation_service.create_automation.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "error" in payload
+
+
+@pytest.mark.anyio
+class TestUpdateAiAutomation:
+    async def test_success(
+        self,
+        client_session,
+        mock_ai_automation_service,
+        extract_payload,
+    ):
+        mock_ai_automation_service.update_automation.return_value = {
+            "automation_id": "789",
+            "message": "AI Automation updated successfully. ID: 789",
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_ai_automation",
+                {"automation_id": "789", "name": "Updated", "active": False},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload == {
+            "success": True,
+            "automation_id": "789",
+            "message": "AI Automation updated successfully. ID: 789",
+        }
+        assert isinstance(payload["message"], str)
+        assert isinstance(payload["automation_id"], str)
+
+    async def test_service_error_returns_error_payload(
+        self,
+        client_session,
+        mock_ai_automation_service,
+        extract_payload,
+    ):
+        mock_ai_automation_service.update_automation.side_effect = ValueError(
+            "Network error"
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_ai_automation",
+                {"automation_id": "789", "name": "Updated", "active": False},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "error" in payload

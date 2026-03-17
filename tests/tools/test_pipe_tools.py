@@ -110,31 +110,6 @@ def elicitation_callback_raises(exc=None):
     return callback
 
 
-def _extract_call_tool_payload(result) -> dict:
-    """Extract tool payload from CallToolResult across MCP SDK versions."""
-    structured = getattr(result, "structuredContent", None)
-    if structured is not None:
-        if isinstance(structured, dict) and "result" in structured:
-            payload = structured.get("result")
-            if isinstance(payload, dict):
-                return payload
-        if isinstance(structured, dict):
-            return structured
-
-    content = getattr(result, "content", None) or []
-    for item in content:
-        if getattr(item, "type", None) == "text":
-            text = getattr(item, "text", "")
-            try:
-                payload = json.loads(text)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(payload, dict):
-                return payload
-
-    raise AssertionError("Could not extract tool payload from CallToolResult")
-
-
 @pytest.mark.anyio
 class TestCreateCardTool:
     @pytest.mark.parametrize(
@@ -305,7 +280,7 @@ class TestDirectToolCalls:
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_card_forwards_params_to_client(
-        self, client_session, mock_pipefy_client
+        self, client_session, mock_pipefy_client, extract_payload
     ):
         """get_card tool forwards card_id and include_fields to client."""
         mock_pipefy_client.get_card = AsyncMock(
@@ -317,12 +292,12 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.get_card.assert_called_once_with(123, include_fields=True)
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["card"]["id"] == "123"
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_pipe_forwards_pipe_id_to_client(
-        self, client_session, mock_pipefy_client, pipe_id
+        self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
         """get_pipe tool forwards pipe_id to client."""
         mock_pipefy_client.get_pipe = AsyncMock(
@@ -332,7 +307,7 @@ class TestDirectToolCalls:
             result = await session.call_tool("get_pipe", {"pipe_id": pipe_id})
         assert result.isError is False
         mock_pipefy_client.get_pipe.assert_called_once_with(pipe_id)
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["pipe"]["name"] == "My Pipe"
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -353,7 +328,7 @@ class TestDirectToolCalls:
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_start_form_fields_forwards_params_to_client(
-        self, client_session, mock_pipefy_client, pipe_id
+        self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
         """get_start_form_fields tool forwards pipe_id and required_only to client."""
         mock_pipefy_client.get_start_form_fields = AsyncMock(
@@ -366,7 +341,7 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.get_start_form_fields.assert_called_once_with(pipe_id, True)
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert "start_form_fields" in payload
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -374,6 +349,7 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         """update_comment with valid input returns success payload with comment_id."""
         async with client_session as session:
@@ -383,7 +359,7 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.update_comment.assert_called_once_with(456, "Updated text")
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload == {"success": True, "comment_id": "c_999"}
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -391,6 +367,7 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         """update_comment with comment_id <= 0 returns error payload without calling API."""
         async with client_session as session:
@@ -400,7 +377,7 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.update_comment.assert_not_called()
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
 
@@ -409,6 +386,7 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         """update_comment with blank text returns error payload without calling API."""
         async with client_session as session:
@@ -418,7 +396,7 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.update_comment.assert_not_called()
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
 
@@ -427,6 +405,7 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         """update_comment with text > 1000 chars returns error payload without calling API."""
         from pipefy_mcp.models.comment import MAX_COMMENT_TEXT_LENGTH
@@ -438,7 +417,7 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.update_comment.assert_not_called()
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
 
@@ -447,6 +426,7 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         """When update_comment API raises, tool returns error payload with friendly message."""
         from gql.transport.exceptions import TransportQueryError
@@ -464,7 +444,7 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.update_comment.assert_called_once_with(99999, "hello")
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
         assert "comment" in payload["error"].lower() or "comment_id" in payload["error"]
@@ -474,6 +454,7 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         """delete_comment with valid comment_id returns success payload."""
         async with client_session as session:
@@ -483,7 +464,7 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.delete_comment.assert_called_once_with(456)
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload == {"success": True}
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -491,6 +472,7 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         """delete_comment with comment_id <= 0 returns error payload without calling API."""
         async with client_session as session:
@@ -500,7 +482,7 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.delete_comment.assert_not_called()
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
 
@@ -509,6 +491,7 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         """When delete_comment API raises, tool returns error payload with friendly message."""
         from gql.transport.exceptions import TransportQueryError
@@ -529,7 +512,7 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.delete_comment.assert_called_once_with(12345)
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
         assert "permission" in payload["error"].lower()
@@ -539,6 +522,7 @@ class TestDirectToolCalls:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         """When delete_comment API returns not found, tool returns friendly error payload."""
         from gql.transport.exceptions import TransportQueryError
@@ -554,7 +538,7 @@ class TestDirectToolCalls:
             )
         assert result.isError is False
         mock_pipefy_client.delete_comment.assert_called_once_with(99999)
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
         assert "comment" in payload["error"].lower() or "not found" in payload["error"]
@@ -587,7 +571,7 @@ class TestGetCardsTool:
 class TestFindCardsTool:
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_find_cards_forwards_params_to_client(
-        self, client_session, mock_pipefy_client, pipe_id
+        self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
         """Integration test: find_cards tool forwards pipe_id, field_id, field_value, include_fields to client."""
         mock_pipefy_client.find_cards = AsyncMock(
@@ -615,13 +599,13 @@ class TestFindCardsTool:
         mock_pipefy_client.find_cards.assert_called_once_with(
             pipe_id, field_id, field_value, include_fields=True
         )
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert FIND_CARDS_RESPONSE_KEY in payload
         assert payload[FIND_CARDS_RESPONSE_KEY]["edges"]
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_find_cards_empty_edges_includes_message(
-        self, client_session, mock_pipefy_client, pipe_id
+        self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
         """When findCards returns empty edges, tool response includes FIND_CARDS_EMPTY_MESSAGE."""
         mock_pipefy_client.find_cards = AsyncMock(
@@ -639,7 +623,7 @@ class TestFindCardsTool:
             )
 
         assert result.isError is False
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload.get("message") == FIND_CARDS_EMPTY_MESSAGE
         assert payload.get(FIND_CARDS_RESPONSE_KEY, {}).get("edges") == []
 
@@ -651,6 +635,7 @@ class TestAddCardCommentTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         async with client_session as session:
             result = await session.call_tool(
@@ -662,7 +647,7 @@ class TestAddCardCommentTool:
             mock_pipefy_client.add_card_comment.assert_called_once_with(
                 card_id=123, text="hello"
             )
-            payload = _extract_call_tool_payload(result)
+            payload = extract_payload(result)
             assert payload == {"success": True, "comment_id": "c_987"}
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -670,6 +655,7 @@ class TestAddCardCommentTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         async with client_session as session:
             result = await session.call_tool(
@@ -679,7 +665,7 @@ class TestAddCardCommentTool:
 
             assert result.isError is False  # Tool returns error payload, not exception
             mock_pipefy_client.add_card_comment.assert_not_called()
-            payload = _extract_call_tool_payload(result)
+            payload = extract_payload(result)
             assert payload == {
                 "success": False,
                 "error": "Invalid input. Please provide a valid 'card_id' and non-empty 'text'.",
@@ -690,6 +676,7 @@ class TestAddCardCommentTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         """When add_card_comment API raises, tool returns error payload with mapped message."""
         from gql.transport.exceptions import TransportQueryError
@@ -712,7 +699,7 @@ class TestAddCardCommentTool:
         mock_pipefy_client.add_card_comment.assert_called_once_with(
             card_id=123, text="hello"
         )
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
         assert "Card not found" in payload["error"] or "card_id" in payload["error"]
@@ -729,7 +716,7 @@ class TestGetPhaseFieldsTool:
         indirect=["client_session"],
     )
     async def test_returns_phase_fields(
-        self, client_session, mock_pipefy_client, required_only
+        self, client_session, mock_pipefy_client, required_only, extract_payload
     ):
         phase_id = 12345
         mock_fields = [
@@ -754,7 +741,7 @@ class TestGetPhaseFieldsTool:
             mock_pipefy_client.get_phase_fields.assert_called_once_with(
                 phase_id, required_only
             )
-            response = _extract_call_tool_payload(result)
+            response = extract_payload(result)
             assert response["phase_id"] == str(phase_id)
             assert response["phase_name"] == "In Progress"
             assert response["fields"] == mock_fields
@@ -883,6 +870,7 @@ class TestFillCardPhaseFieldsTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         card_id = 456
         phase_id = 12345
@@ -906,7 +894,7 @@ class TestFillCardPhaseFieldsTool:
 
             assert result.isError is False
             mock_pipefy_client.update_card.assert_not_called()
-            response = _extract_call_tool_payload(result)
+            response = extract_payload(result)
             assert response == {
                 "success": False,
                 "error": "Phase field update cancelled by user.",
@@ -1006,6 +994,7 @@ class TestFillCardPhaseFieldsTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ):
         card_id = 456
         phase_id = 12345
@@ -1027,7 +1016,7 @@ class TestFillCardPhaseFieldsTool:
 
             assert result.isError is False
             mock_pipefy_client.update_card.assert_not_called()
-            response = _extract_call_tool_payload(result)
+            response = extract_payload(result)
             assert response.get("message") == "No fields to update."
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -1104,6 +1093,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ) -> None:
         """Test delete_card tool when user declines confirmation via elicitation."""
         # Setup mock responses
@@ -1122,7 +1112,7 @@ class TestDeleteCardTool:
             mock_pipefy_client.get_card.assert_called_once_with(12345)
             mock_pipefy_client.delete_card.assert_not_called()
 
-            payload = _extract_call_tool_payload(result)
+            payload = extract_payload(result)
             expected_payload: DeleteCardErrorPayload = {
                 "success": False,
                 "error": "Card deletion cancelled by user.",
@@ -1134,6 +1124,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ) -> None:
         """Test delete_card tool with invalid card_id returns error payload."""
         async with client_session as session:
@@ -1147,7 +1138,7 @@ class TestDeleteCardTool:
             mock_pipefy_client.get_card.assert_not_called()
             mock_pipefy_client.delete_card.assert_not_called()
 
-            payload = _extract_call_tool_payload(result)
+            payload = extract_payload(result)
             expected_payload: DeleteCardErrorPayload = {
                 "success": False,
                 "error": "Invalid 'card_id'. Please provide a positive integer.",
@@ -1159,6 +1150,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ) -> None:
         """Test delete_card tool maps RESOURCE_NOT_FOUND GraphQL exception to friendly message."""
         # Simulate GraphQL exception with RESOURCE_NOT_FOUND code
@@ -1185,7 +1177,7 @@ class TestDeleteCardTool:
             mock_pipefy_client.get_card.assert_called_once_with(99999)
             mock_pipefy_client.delete_card.assert_not_called()
 
-            payload = _extract_call_tool_payload(result)
+            payload = extract_payload(result)
             expected_payload: DeleteCardErrorPayload = {
                 "success": False,
                 "error": "Card with ID 99999 not found. Verify the card exists and you have access permissions.",
@@ -1197,6 +1189,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ) -> None:
         """Test delete_card tool maps PERMISSION_DENIED GraphQL exception to friendly message."""
         # Simulate GraphQL exception with PERMISSION_DENIED code
@@ -1230,7 +1223,7 @@ class TestDeleteCardTool:
             assert result.isError is False
             mock_pipefy_client.delete_card.assert_called_once_with(12345)
 
-            payload = _extract_call_tool_payload(result)
+            payload = extract_payload(result)
             expected_payload: DeleteCardErrorPayload = {
                 "success": False,
                 "error": "You don't have permission to delete card 12345. Please check your access permissions.",
@@ -1242,6 +1235,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ) -> None:
         """Test delete_card tool handles API returning success=False."""
         mock_pipefy_client.get_card.return_value = {
@@ -1263,7 +1257,7 @@ class TestDeleteCardTool:
             assert result.isError is False
             mock_pipefy_client.delete_card.assert_called_once_with(12345)
 
-            payload = _extract_call_tool_payload(result)
+            payload = extract_payload(result)
             expected_payload: DeleteCardErrorPayload = {
                 "success": False,
                 "error": "Failed to delete card 'Test Card' (ID: 12345). Please try again or contact support.",
@@ -1279,6 +1273,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ) -> None:
         """Test delete_card tool when user confirms deletion via elicitation."""
         # Setup mock responses for both get_card and delete_card
@@ -1297,7 +1292,7 @@ class TestDeleteCardTool:
             # Should execute deletion when user confirms
             mock_pipefy_client.delete_card.assert_called_once_with(12345)
 
-            payload = _extract_call_tool_payload(result)
+            payload = extract_payload(result)
             expected_payload: DeleteCardSuccessPayload = {
                 "success": True,
                 "card_id": 12345,
@@ -1316,6 +1311,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ) -> None:
         """When elicitation for confirmation raises, tool returns error with 'Failed to request confirmation'."""
         mock_pipefy_client.get_card.return_value = {
@@ -1326,7 +1322,7 @@ class TestDeleteCardTool:
         assert result.isError is False
         mock_pipefy_client.get_card.assert_called_once_with(12345)
         mock_pipefy_client.delete_card.assert_not_called()
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["success"] is False
         assert "Failed to request confirmation" in payload["error"]
 
@@ -1335,6 +1331,7 @@ class TestDeleteCardTool:
         self,
         client_session,
         mock_pipefy_client,
+        extract_payload,
     ) -> None:
         """When debug=True and client raises, error message includes codes and correlation_id."""
         from gql.transport.exceptions import TransportQueryError
@@ -1357,7 +1354,7 @@ class TestDeleteCardTool:
                 "delete_card", {"card_id": 12345, "debug": True}
             )
         assert result.isError is False
-        payload = _extract_call_tool_payload(result)
+        payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
         assert "codes=" in payload["error"] or "correlation_id=" in payload["error"]

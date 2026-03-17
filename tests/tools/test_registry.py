@@ -48,3 +48,32 @@ class TestToolRegistry:
         assert "Pipefy client is not initialized in services container" in str(
             exc.value
         )
+
+    @patch("pipefy_mcp.tools.registry.AiAgentTools.register")
+    @patch("pipefy_mcp.tools.registry.AiAutomationTools.register")
+    @patch("pipefy_mcp.tools.registry.PipeTools.register")
+    def test_register_tools_calls_ai_tools_register(
+        self,
+        mock_pipe_tools_register,
+        mock_ai_automation_tools_register,
+        mock_ai_agent_tools_register,
+    ):
+        mock_mcp = Mock(spec=FastMCP)
+        mock_client = Mock()
+        mock_ai_automation_service = Mock()
+        mock_ai_agent_service = Mock()
+        mock_container = Mock(spec=ServicesContainer)
+        mock_container.pipefy_client = mock_client
+        mock_container.ai_automation_service = mock_ai_automation_service
+        mock_container.ai_agent_service = mock_ai_agent_service
+
+        registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
+        registry.register_tools()
+
+        mock_pipe_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_ai_automation_tools_register.assert_called_once_with(
+            mock_mcp, mock_ai_automation_service
+        )
+        mock_ai_agent_tools_register.assert_called_once_with(
+            mock_mcp, mock_ai_agent_service
+        )

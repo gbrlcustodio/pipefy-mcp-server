@@ -41,10 +41,20 @@ class TestServicesContainer:
 
         assert container.pipefy_client is None
 
+    @patch("pipefy_mcp.core.container.AiAgentService")
+    @patch("pipefy_mcp.core.container.AiAutomationService")
+    @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.PipefyClient")
-    def test_initialize_services_creates_pipefy_client(self, mock_pipefy_client_class):
+    def test_initialize_services_creates_pipefy_client(
+        self,
+        mock_pipefy_client_class,
+        mock_internal_api_client_class,
+        mock_ai_automation_service_class,
+        mock_ai_agent_service_class,
+    ):
         """Test that initialize_services creates and assigns PipefyClient"""
         mock_client = Mock(spec=PipefyClient)
+        mock_client.client = Mock()
         mock_pipefy_client_class.return_value = mock_client
 
         settings = Settings(
@@ -68,3 +78,33 @@ class TestServicesContainer:
 
         # Should not raise any exception
         container.shutdown()
+
+    @patch("pipefy_mcp.core.container.InternalApiClient")
+    @patch("pipefy_mcp.core.container.AiAutomationService")
+    @patch("pipefy_mcp.core.container.AiAgentService")
+    @patch("pipefy_mcp.core.container.PipefyClient")
+    def test_initialize_services_creates_ai_services(
+        self,
+        mock_pipefy_client_class,
+        mock_ai_agent_service_class,
+        mock_ai_automation_service_class,
+        mock_internal_api_client_class,
+    ):
+        settings = Settings(
+            pipefy=PipefySettings(
+                graphql_url="https://api.pipefy.com/graphql",
+                oauth_url="https://auth.pipefy.com/oauth/token",
+                oauth_client="client_id",
+                oauth_secret="client_secret",
+            )
+        )
+
+        container = ServicesContainer()
+        container.initialize_services(settings)
+
+        assert container.internal_api_client is not None
+        assert container.ai_automation_service is not None
+        assert container.ai_agent_service is not None
+        mock_internal_api_client_class.assert_called_once()
+        mock_ai_automation_service_class.assert_called_once()
+        mock_ai_agent_service_class.assert_called_once()

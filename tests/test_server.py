@@ -41,6 +41,9 @@ _MINIMAL_PIPEFY_SETTINGS = Settings(
 async def test_register_tools(client_session):
     expected_tool_names = [
         "add_card_comment",
+        "create_ai_agent",
+        "create_ai_automation",
+        "toggle_ai_agent_status",
         "create_card",
         "delete_card",
         "delete_comment",
@@ -54,6 +57,8 @@ async def test_register_tools(client_session):
         "get_start_form_fields",
         "move_card_to_phase",
         "search_pipes",
+        "update_ai_agent",
+        "update_ai_automation",
         "update_card",
         "update_card_field",
         "update_comment",

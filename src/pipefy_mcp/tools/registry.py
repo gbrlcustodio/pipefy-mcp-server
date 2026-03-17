@@ -1,24 +1,31 @@
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
+from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
 from pipefy_mcp.tools.pipe_tools import PipeTools
 
 
 class ToolRegistry:
-    """Responsible for registering tools with the MCP server"""
+    """Responsible for registering tools with the MCP server."""
 
     def __init__(self, mcp: FastMCP, services_container: ServicesContainer):
         self.mcp = mcp
         self.services_container = services_container
 
     def register_tools(self) -> FastMCP:
-        """Register tools with the MCP server"""
-
+        """Register tools with the MCP server."""
         if self.services_container.pipefy_client is None:
             raise ValueError("Pipefy client is not initialized in services container")
 
         PipeTools.register(self.mcp, self.services_container.pipefy_client)
 
-        mcp = self.mcp
+        if self.services_container.ai_automation_service is not None:
+            AiAutomationTools.register(
+                self.mcp, self.services_container.ai_automation_service
+            )
 
-        return mcp
+        if self.services_container.ai_agent_service is not None:
+            AiAgentTools.register(self.mcp, self.services_container.ai_agent_service)
+
+        return self.mcp

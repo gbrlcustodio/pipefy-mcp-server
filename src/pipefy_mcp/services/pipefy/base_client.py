@@ -16,13 +16,17 @@ class BasePipefyClient:
     Creates a fresh transport per execute_query() call so parallel requests
     never share mutable transport state (avoids TransportAlreadyConnected).
     The OAuth2 auth instance is shared across calls to reuse the token cache.
+    Pass a pre-built auth instance to share it across multiple service instances
+    (e.g. from PipefyClient) so only one token cache exists for the whole client.
     """
 
     GRAPHQL_REQUEST_TIMEOUT_SECONDS: ClassVar[int] = 30
 
-    def __init__(self, settings: PipefySettings) -> None:
-        if settings is None:
-            raise ValueError("Settings must be provided to create a GraphQL client.")
+    def __init__(
+        self,
+        settings: PipefySettings,
+        auth: OAuth2ClientCredentials | None = None,
+    ) -> None:
         if settings.graphql_url is None:
             raise ValueError("GraphQL URL must be provided in settings.")
         if settings.oauth_url is None:
@@ -33,7 +37,7 @@ class BasePipefyClient:
             raise ValueError("OAuth client secret must be provided in settings.")
 
         self.settings = settings
-        self._auth = OAuth2ClientCredentials(
+        self._auth = auth or OAuth2ClientCredentials(
             token_url=settings.oauth_url,
             client_id=settings.oauth_client,
             client_secret=settings.oauth_secret,
@@ -51,6 +55,6 @@ class BasePipefyClient:
             timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
         )
         async with Client(
-            transport=transport, fetch_schema_from_transport=False
+            transport=transport, fetch_schema_from_transport=True
         ) as session:
             return await session.execute(query, variable_values=variables)

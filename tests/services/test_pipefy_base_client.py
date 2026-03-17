@@ -61,15 +61,6 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged(valid_settings)
 
 
 @pytest.mark.unit
-def test_init_raises_when_settings_is_none():
-    """Test that __init__ raises ValueError when settings is None."""
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=None)
-
-    assert "Settings must be provided to create a GraphQL client" in str(exc.value)
-
-
-@pytest.mark.unit
 def test_init_raises_when_graphql_url_is_none():
     """Test that __init__ raises ValueError when graphql_url is None."""
     settings = PipefySettings(

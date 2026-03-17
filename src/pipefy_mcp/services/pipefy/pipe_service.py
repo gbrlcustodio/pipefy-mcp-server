@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from httpx_auth import OAuth2ClientCredentials
 from rapidfuzz import fuzz
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
@@ -16,8 +17,12 @@ from pipefy_mcp.settings import PipefySettings
 class PipeService(BasePipefyClient):
     """Service for Pipe-related operations."""
 
-    def __init__(self, settings: PipefySettings) -> None:
-        super().__init__(settings=settings)
+    def __init__(
+        self,
+        settings: PipefySettings,
+        auth: OAuth2ClientCredentials | None = None,
+    ) -> None:
+        super().__init__(settings=settings, auth=auth)
 
     async def get_pipe(self, pipe_id: int) -> dict:
         """Get a pipe by its ID, including phases, labels, and start form fields."""

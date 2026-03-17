@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/gbrlcustodio/pipefy-mcp-server/actions"><img src="https://github.com/gbrlcustodio/pipefy-mcp-server/workflows/CI/badge.svg" alt="CI Status" /></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%2B-blue.svg" alt="Python 3.12+" /></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+" /></a>
   <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/uv-package%20manager-blueviolet" alt="uv package manager" /></a>
   <a href="https://modelcontextprotocol.io/introduction"><img src="https://img.shields.io/badge/MCP-Server-orange" alt="MCP Server" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
@@ -81,11 +81,47 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
 - **Use `update_card` with `field_updates`** when you want to update **one or more custom fields at once** by ID, replacing their values (the server converts this to `updateFieldsValues` with `REPLACE` under the hood).
 - **Use `update_card` with attribute parameters** (`title`, `assignee_ids`, `label_ids`, `due_date`) when you need to update card metadata. These can be combined with `field_updates` in a single call.
 
+### AI Automation Tools
+
+* **`create_ai_automation`**: Create a simple AI automation that generates content with a prompt and writes the result to one or more card fields. Best for straightforward field-filling use cases (e.g. summarize, classify, extract data into a field). Requires AI to be enabled for the pipe in Pipefy UI.
+    * `name` (str): Automation name.
+    * `event_id` (str): Event trigger (e.g. `card_created`, `card_moved`).
+    * `pipe_id` (str): Pipe ID where the automation runs.
+    * `prompt` (str): AI prompt text that generates the content.
+    * `field_ids` (list[str]): List of field internal IDs to write the result to.
+    * `condition` (dict, optional): Condition structure for the automation trigger.
+
+* **`update_ai_automation`**: Update an existing AI automation's name, prompt, destination fields, or active state.
+    * `automation_id` (str): ID of the automation to update.
+    * `name` (str, optional): New automation name.
+    * `active` (bool, optional): Whether the automation is active.
+    * `prompt` (str, optional): New AI prompt text.
+    * `field_ids` (list[str], optional): New list of field internal IDs.
+    * `condition` (dict, optional): New condition structure.
+
+### AI Agent Tools
+
+* **`create_ai_agent`**: Create an AI Agent (empty, no behaviors) attached to a pipe. Use `update_ai_agent` to configure 1 to 5 behaviors. `repo_uuid` is the pipe's unique identifier — not the numeric pipe ID from the URL. Resolve it via the `get_pipe` tool.
+    * `name` (str): Agent display name.
+    * `repo_uuid` (str): UUID of the pipe the agent belongs to.
+
+* **`update_ai_agent`**: Update an AI Agent with an instruction and 1 to 5 behaviors that can execute complex actions (e.g. move card, update fields conditionally). The API replaces the entire agent payload, so always send the complete list of behaviors.
+    * `uuid` (str): UUID of the agent to update.
+    * `name` (str): Agent display name.
+    * `repo_uuid` (str): UUID of the pipe the agent belongs to.
+    * `instruction` (str): Global instruction for the agent.
+    * `behaviors` (list[dict]): List of 1 to 5 behavior dicts (`name` and `event_id` required per behavior).
+    * `data_source_ids` (list[str], optional): List of data source IDs.
+
+* **`toggle_ai_agent_status`**: Enable or disable an AI Agent without resending its configuration. Agents are created inactive by default; use this after configuring behaviors to activate them.
+    * `uuid` (str): UUID of the agent to enable/disable.
+    * `active` (bool): `true` to activate, `false` to deactivate.
+
 ## Getting Started
 
 ### Prerequisites
 Installing the server requires the following on your system:
-- Python 3.12+
+- Python 3.11+
 - A **Pipefy Service Account Token** (Generate in Admin Panel > Service Accounts).
 - Rembember to add the Service account to the pipe you want the AI to use.
 

@@ -5,7 +5,7 @@
 - `tests/` mirrors the source layout with unit tests for tools, services, models, and the server entrypoints.
 - `README.md` documents usage, tool behavior, and local development notes.
 
-## Build, Test, and Development Commands
+## Build, Test and Development Commands
 - `uv sync` installs dependencies using `uv` (recommended in this repo).
 - `uv run pipefy-mcp-server` runs the MCP server locally via the project script.
 - `uv run pytest` runs the full test suite.
@@ -24,8 +24,8 @@
 - Keep new tests alongside existing suites in `tests/`, aligned with the module they cover.
 - Use markers `@pytest.mark.unit` or `@pytest.mark.integration` when appropriate.
 - Examples for targeted runs:
-  - Single file: `uv run pytest tests/tools/test_cards.py`
-  - Single test case: `uv run pytest tests/tools/test_cards.py -k "test_create_card"`
+  - Single file: `uv run pytest tests/tools/test_pipe_tools.py`
+  - Single test case: `uv run pytest tests/tools/test_pipe_tools.py -k "test_create_card"`
 
 ## Adding a New Tool
 When implementing a new tool, follow this checklist (TDD-first):

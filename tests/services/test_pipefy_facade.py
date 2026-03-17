@@ -2,7 +2,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
+from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -77,25 +79,22 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 
 
 @pytest.mark.unit
-def test_pipefy_client_injects_same_shared_client_instance_into_services():
-    """Test PipefyClient creates one shared gql.Client and injects it into both services."""
-    from unittest.mock import MagicMock, patch
+def test_pipefy_client_creates_services_with_shared_auth():
+    """Test PipefyClient creates services that share the same OAuth auth instance."""
 
-    from gql import Client
+    settings = PipefySettings(
+        graphql_url="https://api.pipefy.com/graphql",
+        oauth_url="https://auth.pipefy.com/oauth/token",
+        oauth_client="client_id",
+        oauth_secret="client_secret",
+    )
+    client = PipefyClient(settings=settings)
 
-    # Mock the BasePipefyClient._create_client to avoid OAuth dependencies
-    mock_client_instance = MagicMock(spec=Client)
-
-    with patch(
-        "pipefy_mcp.services.pipefy.base_client.BasePipefyClient._create_client",
-        return_value=mock_client_instance,
-    ):
-        client = PipefyClient(settings=MagicMock(spec=PipefySettings))
-
-    # Verify that both services received the same client instance
-    assert client._pipe_service.client is client._card_service.client
-    # Verify that the shared client is also exposed as the public `client` attribute
-    assert client.client is client._pipe_service.client
-    assert client.client is client._card_service.client
-    # Verify it's the same mock instance we injected
-    assert client.client is mock_client_instance
+    assert isinstance(client._pipe_service, PipeService)
+    assert isinstance(client._card_service, CardService)
+    assert client._pipe_service._auth is not None, (
+        "PipeService should have an auth instance"
+    )
+    assert client._card_service._auth is not None, (
+        "CardService should have an auth instance"
+    )

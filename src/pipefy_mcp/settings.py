@@ -1,0 +1,43 @@
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class PipefySettings(BaseModel):
+    graphql_url: str | None = Field(
+        default=None,
+        description="GraphQL URL for Pipefy",
+    )
+
+    internal_api_url: str = Field(
+        default="https://app.pipefy.com/internal_api",
+        description="Internal API URL for AI Automation endpoints",
+    )
+
+    oauth_url: str | None = Field(
+        default=None,
+        description="OAuth URL for Pipefy",
+    )
+
+    oauth_client: str | None = Field(
+        default=None,
+        description="OAuth client ID for Pipefy",
+    )
+
+    oauth_secret: str | None = Field(
+        default=None,
+        description="OAuth client secret for Pipefy",
+    )
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_nested_delimiter="_",
+        env_nested_max_split=1,
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
+
+    pipefy: PipefySettings = Field(default_factory=PipefySettings)
+
+
+settings = Settings()

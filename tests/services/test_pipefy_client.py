@@ -1,0 +1,805 @@
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from pipefy_mcp.services.pipefy.card_service import CardService
+from pipefy_mcp.services.pipefy.client import PipefyClient
+from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.settings import PipefySettings
+
+
+def _mock_settings() -> PipefySettings:
+    return PipefySettings(
+        graphql_url="https://api.pipefy.com/graphql",
+        oauth_url="https://auth.pipefy.com/oauth/token",
+        oauth_client="client_id",
+        oauth_secret="client_secret",
+    )
+
+
+def _make_facade_client(execute_return_value: dict):
+    """Create a PipefyClient with execute_query mocked on both services.
+
+    Returns (client, mock_execute_query) so tests can inspect call args.
+    """
+    settings = _mock_settings()
+    client = PipefyClient.__new__(PipefyClient)
+    client._pipe_service = PipeService(settings=settings)
+    client._card_service = CardService(settings=settings)
+
+    mock_execute = AsyncMock(return_value=execute_return_value)
+    client._pipe_service.execute_query = mock_execute
+    client._card_service.execute_query = mock_execute
+
+    return client, mock_execute
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_card_with_dict_fields():
+    """Test create_card converts dict fields to FieldValueInput array format."""
+    pipe_id = 303181849
+    fields_dict = {"title": "Teste-MCP", "description": "Test description"}
+
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
+    )
+    result = await client.create_card(pipe_id, fields_dict)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["pipe_id"] == pipe_id
+    assert isinstance(variables["fields"], list)
+    assert len(variables["fields"]) == 2
+    assert variables["fields"][0] == {
+        "field_id": "title",
+        "field_value": "Teste-MCP",
+        "generated_by_ai": True,
+    }
+    assert variables["fields"][1] == {
+        "field_id": "description",
+        "field_value": "Test description",
+        "generated_by_ai": True,
+    }
+    assert result == {"createCard": {"card": {"id": "12345"}}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_card_with_array_fields():
+    """Test create_card works with already formatted array fields."""
+    pipe_id = 303181849
+    fields_array = [
+        {"field_id": "title", "field_value": "Teste-MCP"},
+        {"field_id": "description", "field_value": "Test description"},
+    ]
+
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
+    )
+    result = await client.create_card(pipe_id, fields_array)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["pipe_id"] == pipe_id
+    assert len(variables["fields"]) == 2
+    assert variables["fields"][0] == {
+        "field_id": "title",
+        "field_value": "Teste-MCP",
+        "generated_by_ai": True,
+    }
+    assert variables["fields"][1] == {
+        "field_id": "description",
+        "field_value": "Test description",
+        "generated_by_ai": True,
+    }
+    assert result == {"createCard": {"card": {"id": "12345"}}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_card_with_empty_dict():
+    """Test create_card handles empty dict fields."""
+    pipe_id = 303181849
+
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
+    )
+    result = await client.create_card(pipe_id, {})
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["pipe_id"] == pipe_id
+    assert variables["fields"] == []
+    assert result == {"createCard": {"card": {"id": "12345"}}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_card_with_single_field():
+    """Test create_card with a single field."""
+    pipe_id = 303181849
+    fields_dict = {"title": "Teste-MCP"}
+
+    client, mock_execute = _make_facade_client(
+        {"createCard": {"card": {"id": "12345"}}}
+    )
+    result = await client.create_card(pipe_id, fields_dict)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["pipe_id"] == pipe_id
+    assert len(variables["fields"]) == 1
+    assert variables["fields"][0] == {
+        "field_id": "title",
+        "field_value": "Teste-MCP",
+        "generated_by_ai": True,
+    }
+    assert result == {"createCard": {"card": {"id": "12345"}}}
+
+
+# ============================================================================
+# Tests for get_start_form_fields
+# ============================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_start_form_fields_returns_all_fields():
+    """Test get_start_form_fields returns all fields correctly."""
+    pipe_id = 303181849
+    mock_fields = [
+        {
+            "id": "title",
+            "label": "Title",
+            "type": "short_text",
+            "required": True,
+            "editable": True,
+            "options": None,
+            "description": "Enter the card title",
+            "help": None,
+        },
+        {
+            "id": "priority",
+            "label": "Priority",
+            "type": "select",
+            "required": False,
+            "editable": True,
+            "options": ["Low", "Medium", "High"],
+            "description": None,
+            "help": "Select the priority level",
+        },
+    ]
+
+    client, mock_execute = _make_facade_client(
+        {"pipe": {"start_form_fields": mock_fields}}
+    )
+    result = await client.get_start_form_fields(pipe_id)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["pipe_id"] == pipe_id
+    assert "start_form_fields" in result
+    assert len(result["start_form_fields"]) == 2
+    assert result["start_form_fields"][0]["id"] == "title"
+    assert result["start_form_fields"][1]["id"] == "priority"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_start_form_fields_required_only_filter():
+    """Test get_start_form_fields with required_only=True filters correctly."""
+    pipe_id = 303181849
+    mock_fields = [
+        {
+            "id": "title",
+            "label": "Title",
+            "type": "short_text",
+            "required": True,
+            "editable": True,
+            "options": None,
+            "description": None,
+            "help": None,
+        },
+        {
+            "id": "priority",
+            "label": "Priority",
+            "type": "select",
+            "required": False,
+            "editable": True,
+            "options": ["Low", "Medium", "High"],
+            "description": None,
+            "help": None,
+        },
+        {
+            "id": "due_date",
+            "label": "Due Date",
+            "type": "date",
+            "required": True,
+            "editable": True,
+            "options": None,
+            "description": None,
+            "help": None,
+        },
+    ]
+
+    client, _ = _make_facade_client({"pipe": {"start_form_fields": mock_fields}})
+    result = await client.get_start_form_fields(pipe_id, required_only=True)
+
+    assert "start_form_fields" in result
+    assert len(result["start_form_fields"]) == 2
+    assert all(field["required"] for field in result["start_form_fields"])
+    assert result["start_form_fields"][0]["id"] == "title"
+    assert result["start_form_fields"][1]["id"] == "due_date"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_start_form_fields_empty_returns_friendly_message():
+    """Test get_start_form_fields returns user-friendly message when no fields configured."""
+    pipe_id = 303181849
+
+    client, _ = _make_facade_client({"pipe": {"start_form_fields": []}})
+    result = await client.get_start_form_fields(pipe_id)
+
+    assert "message" in result
+    assert result["message"] == "This pipe has no start form fields configured."
+    assert "start_form_fields" in result
+    assert result["start_form_fields"] == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_start_form_fields_required_only_no_required_fields():
+    """Test get_start_form_fields with required_only=True when all fields are optional."""
+    pipe_id = 303181849
+    mock_fields = [
+        {
+            "id": "priority",
+            "label": "Priority",
+            "type": "select",
+            "required": False,
+            "editable": True,
+            "options": ["Low", "Medium", "High"],
+            "description": None,
+            "help": None,
+        },
+        {
+            "id": "notes",
+            "label": "Notes",
+            "type": "long_text",
+            "required": False,
+            "editable": True,
+            "options": None,
+            "description": None,
+            "help": None,
+        },
+    ]
+
+    client, _ = _make_facade_client({"pipe": {"start_form_fields": mock_fields}})
+    result = await client.get_start_form_fields(pipe_id, required_only=True)
+
+    assert "message" in result
+    assert result["message"] == "This pipe has no required fields in the start form."
+    assert "start_form_fields" in result
+    assert result["start_form_fields"] == []
+
+
+# ============================================================================
+# Tests for update_card_field
+# ============================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_card_field_success():
+    """Test update_card_field updates a single field successfully."""
+    card_id = 12345
+    field_id = "status"
+    new_value = "In Progress"
+
+    mock_response = {
+        "updateCardField": {
+            "card": {
+                "id": "12345",
+                "title": "Test Card",
+                "fields": [
+                    {
+                        "field": {"id": "status", "label": "Status"},
+                        "value": "In Progress",
+                    }
+                ],
+                "updated_at": "2024-12-16T10:00:00Z",
+            },
+            "success": True,
+            "clientMutationId": None,
+        }
+    }
+
+    client, mock_execute = _make_facade_client(mock_response)
+    result = await client.update_card_field(card_id, field_id, new_value)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["input"]["card_id"] == card_id
+    assert variables["input"]["field_id"] == field_id
+    assert variables["input"]["new_value"] == new_value
+    assert result == mock_response
+
+
+# ============================================================================
+# Tests for update_card
+# ============================================================================
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_card_replacement_mode_with_title():
+    """Test update_card uses updateCard mutation when title is provided."""
+    card_id = 12345
+    new_title = "Updated Card Title"
+
+    mock_response = {
+        "updateCard": {
+            "card": {
+                "id": "12345",
+                "title": "Updated Card Title",
+                "current_phase": {"id": "1", "name": "In Progress"},
+                "assignees": [],
+                "labels": [],
+                "due_date": None,
+                "updated_at": "2024-12-16T10:00:00Z",
+            },
+            "clientMutationId": None,
+        }
+    }
+
+    client, mock_execute = _make_facade_client(mock_response)
+    result = await client.update_card(card_id, title=new_title)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["input"]["id"] == card_id
+    assert variables["input"]["title"] == new_title
+    assert result == mock_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_card_with_fields_dict_uses_update_fields_values():
+    """Test update_card with field_updates list uses updateFieldsValues mutation."""
+    card_id = 12345
+    field_updates = [
+        {"field_id": "field_1", "value": "Value 1"},
+        {"field_id": "field_2", "value": "Value 2"},
+    ]
+
+    mock_response = {
+        "updateFieldsValues": {
+            "success": True,
+            "userErrors": [],
+            "updatedNode": {"id": "12345", "title": "Test Card"},
+        }
+    }
+
+    client, mock_execute = _make_facade_client(mock_response)
+    result = await client.update_card(card_id, field_updates=field_updates)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["input"]["nodeId"] == card_id
+    assert "values" in variables["input"]
+    values = variables["input"]["values"]
+    assert len(values) == 2
+    field_ids = [v["fieldId"] for v in values]
+    assert "field_1" in field_ids
+    assert "field_2" in field_ids
+    assert all(v["generatedByAi"] is True for v in values)
+    assert all(v["operation"] == "REPLACE" for v in values)
+    assert result == mock_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_card_replacement_mode_with_assignees_and_labels():
+    """Test update_card with assignee_ids and label_ids."""
+    card_id = 12345
+    assignee_ids = [100, 200]
+    label_ids = [300, 400]
+
+    mock_response = {
+        "updateCard": {
+            "card": {
+                "id": "12345",
+                "title": "Test Card",
+                "assignees": [
+                    {"id": "100", "name": "User 1"},
+                    {"id": "200", "name": "User 2"},
+                ],
+                "labels": [
+                    {"id": "300", "name": "Label 1"},
+                    {"id": "400", "name": "Label 2"},
+                ],
+            },
+            "clientMutationId": None,
+        }
+    }
+
+    client, mock_execute = _make_facade_client(mock_response)
+    result = await client.update_card(
+        card_id, assignee_ids=assignee_ids, label_ids=label_ids
+    )
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["input"]["id"] == card_id
+    assert variables["input"]["assignee_ids"] == assignee_ids
+    assert variables["input"]["label_ids"] == label_ids
+    assert result == mock_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_card_incremental_mode_with_add_operation():
+    """Test update_card uses updateFieldsValues mutation when ADD operation is present."""
+    card_id = 12345
+    values = [{"field_id": "assignees", "value": [123], "operation": "ADD"}]
+
+    mock_response = {
+        "updateFieldsValues": {
+            "success": True,
+            "userErrors": [],
+            "updatedNode": {
+                "id": "12345",
+                "title": "Test Card",
+                "updated_at": "2024-12-16T10:00:00Z",
+            },
+        }
+    }
+
+    client, mock_execute = _make_facade_client(mock_response)
+    result = await client.update_card(card_id, field_updates=values)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["input"]["nodeId"] == card_id
+    assert "values" in variables["input"]
+    assert result == mock_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_card_incremental_mode_with_remove_operation():
+    """Test update_card uses updateFieldsValues mutation when REMOVE operation is present."""
+    card_id = 12345
+    values = [{"field_id": "labels", "value": [456], "operation": "REMOVE"}]
+
+    mock_response = {
+        "updateFieldsValues": {
+            "success": True,
+            "userErrors": [],
+            "updatedNode": {"id": "12345", "title": "Test Card", "labels": []},
+        }
+    }
+
+    client, mock_execute = _make_facade_client(mock_response)
+    result = await client.update_card(card_id, field_updates=values)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["input"]["nodeId"] == card_id
+    assert result == mock_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_card_incremental_mode_value_format_conversion():
+    """Test update_card converts values to camelCase format with generatedByAi."""
+    card_id = 12345
+    values = [{"field_id": "field_1", "value": "New Value", "operation": "ADD"}]
+
+    client, mock_execute = _make_facade_client(
+        {"updateFieldsValues": {"success": True, "userErrors": []}}
+    )
+    await client.update_card(card_id, field_updates=values)
+
+    variables = mock_execute.call_args[0][1]
+    formatted_values = variables["input"]["values"]
+    assert len(formatted_values) == 1
+    assert formatted_values[0]["fieldId"] == "field_1"
+    assert formatted_values[0]["value"] == "New Value"
+    assert formatted_values[0]["operation"] == "ADD"
+    assert formatted_values[0]["generatedByAi"] is True
+
+
+# ============================================================================
+# Regression tests for remaining public API methods (lock compatibility)
+# ============================================================================
+
+
+@pytest.mark.unit
+def test_public_import_path_exports_pipefy_client():
+    """Test public import path stays stable: from pipefy_mcp.services.pipefy import PipefyClient."""
+    from pipefy_mcp.services.pipefy import PipefyClient as PublicPipefyClient
+
+    assert PublicPipefyClient is PipefyClient
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_pipe_passes_pipe_id_variable():
+    """Test get_pipe passes pipe_id under variable_values unchanged."""
+    pipe_id = 303181849
+
+    client, mock_execute = _make_facade_client({"pipe": {"id": str(pipe_id)}})
+    result = await client.get_pipe(pipe_id)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables == {"pipe_id": pipe_id}
+    assert result == {"pipe": {"id": str(pipe_id)}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_pipe_members_calls_service():
+    """Test get_pipe_members calls the pipe service with the correct pipe_id."""
+    pipe_id = 123
+    mock_members = [{"user": {"id": "1", "name": "Test User"}}]
+
+    mock_pipe_service = MagicMock(spec=PipeService)
+    mock_pipe_service.get_pipe_members = AsyncMock(return_value=mock_members)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._pipe_service = mock_pipe_service
+    client._card_service = MagicMock(spec=CardService)
+
+    result = await client.get_pipe_members(pipe_id)
+
+    mock_pipe_service.get_pipe_members.assert_called_once_with(pipe_id)
+    assert result == mock_members
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_card_passes_card_id_variable():
+    """Test get_card passes card_id under variable_values unchanged."""
+    card_id = 12345
+    mock_response = {
+        "card": {
+            "id": str(card_id),
+            "title": "Test Card",
+            "current_phase": {"id": "1", "name": "Test Phase"},
+            "pipe": {"id": "123", "name": "Test Pipe"},
+        }
+    }
+
+    client, mock_execute = _make_facade_client(mock_response)
+    result = await client.get_card(card_id)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables == {"card_id": card_id, "includeFields": False}
+    assert result == mock_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards_with_none_search_sends_empty_search_dict():
+    """Test get_cards sends an empty search object when search is None."""
+    pipe_id = 303181849
+
+    client, mock_execute = _make_facade_client({"cards": {"edges": []}})
+    result = await client.get_cards(pipe_id, None)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["pipe_id"] == pipe_id
+    assert variables["search"] == {}
+    assert result == {"cards": {"edges": []}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards_with_search_dict_passes_search_as_is():
+    """Test get_cards passes search dict unchanged when provided."""
+    pipe_id = 303181849
+    search = {"title": "Test"}
+
+    client, mock_execute = _make_facade_client({"cards": {"edges": []}})
+    result = await client.get_cards(pipe_id, search)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables["pipe_id"] == pipe_id
+    assert variables["search"] == search
+    assert result == {"cards": {"edges": []}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards_with_include_fields_true_passes_include_fields_to_service():
+    """Test get_cards facade passes include_fields=True to CardService.get_cards."""
+    pipe_id = 303181849
+    expected = {"cards": {"edges": []}}
+
+    card_service = AsyncMock()
+    card_service.get_cards = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+    client._pipe_service = MagicMock(spec=PipeService)
+
+    result = await client.get_cards(pipe_id, search=None, include_fields=True)
+
+    card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=True)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_cards_with_include_fields_false_passes_include_fields_to_service():
+    """Test get_cards facade passes include_fields=False to CardService.get_cards."""
+    pipe_id = 303181849
+    expected = {"cards": {"edges": []}}
+
+    card_service = AsyncMock()
+    card_service.get_cards = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+    client._pipe_service = MagicMock(spec=PipeService)
+
+    result = await client.get_cards(pipe_id, search=None, include_fields=False)
+
+    card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=False)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_find_cards_delegates_to_card_service_with_include_fields_true():
+    """Test find_cards facade delegates to CardService.find_cards with include_fields=True."""
+    pipe_id = 303181849
+    field_id = "status"
+    field_value = "In Progress"
+    expected = {"findCards": {"edges": []}}
+
+    card_service = AsyncMock()
+    card_service.find_cards = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+    client._pipe_service = MagicMock(spec=PipeService)
+
+    result = await client.find_cards(
+        pipe_id, field_id, field_value, include_fields=True
+    )
+
+    card_service.find_cards.assert_awaited_once_with(
+        pipe_id, field_id, field_value, include_fields=True
+    )
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_find_cards_delegates_to_card_service_with_include_fields_false():
+    """Test find_cards facade delegates to CardService.find_cards with include_fields=False."""
+    pipe_id = 1
+    field_id = "field_1"
+    field_value = "Value 1"
+    expected = {"findCards": {"edges": [{"node": {"id": "1", "title": "Card"}}]}}
+
+    card_service = AsyncMock()
+    card_service.find_cards = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+    client._pipe_service = MagicMock(spec=PipeService)
+
+    result = await client.find_cards(
+        pipe_id, field_id, field_value, include_fields=False
+    )
+
+    card_service.find_cards.assert_awaited_once_with(
+        pipe_id, field_id, field_value, include_fields=False
+    )
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_add_card_comment_delegates_to_card_service_create_comment():
+    """Test add_card_comment delegates unchanged to CardService.create_comment."""
+    card_id = 12345
+    text = "This is a comment"
+    expected = {"createComment": {"comment": {"id": "c_987"}}}
+
+    card_service = AsyncMock()
+    card_service.create_comment = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+
+    result = await client.add_card_comment(card_id, text)
+
+    assert result == expected
+    card_service.create_comment.assert_awaited_once_with(card_id, text)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_comment_delegates_to_card_service_update_comment():
+    """Test update_comment delegates unchanged to CardService.update_comment."""
+    comment_id = 12345
+    text = "Updated comment text"
+    expected = {"updateComment": {"comment": {"id": "c_999"}}}
+
+    card_service = AsyncMock()
+    card_service.update_comment = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+
+    result = await client.update_comment(comment_id, text)
+
+    assert result == expected
+    card_service.update_comment.assert_awaited_once_with(comment_id, text)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_comment_delegates_to_card_service_delete_comment():
+    """Test delete_comment delegates unchanged to CardService.delete_comment."""
+    comment_id = 12345
+    expected = {"deleteComment": {"success": True}}
+
+    card_service = AsyncMock()
+    card_service.delete_comment = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._card_service = card_service
+
+    result = await client.delete_comment(comment_id)
+
+    assert result == expected
+    card_service.delete_comment.assert_awaited_once_with(comment_id)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_move_card_to_phase_variable_shape():
+    """Test move_card_to_phase sends input with card_id and destination_phase_id."""
+    card_id = 12345
+    destination_phase_id = 678
+
+    client, mock_execute = _make_facade_client(
+        {"moveCardToPhase": {"clientMutationId": None}}
+    )
+    result = await client.move_card_to_phase(card_id, destination_phase_id)
+
+    mock_execute.assert_called_once()
+    variables = mock_execute.call_args[0][1]
+    assert variables == {
+        "input": {"card_id": card_id, "destination_phase_id": destination_phase_id}
+    }
+    assert result == {"moveCardToPhase": {"clientMutationId": None}}
+
+
+@pytest.mark.asyncio
+async def test_search_pipes_delegates_to_pipe_service():
+    """Test search_pipes delegates unchanged to PipeService.search_pipes."""
+    pipe_name = "test pipe"
+    expected = {"pipes": []}
+
+    pipe_service = AsyncMock()
+    pipe_service.search_pipes = AsyncMock(return_value=expected)
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._pipe_service = pipe_service
+
+    result = await client.search_pipes(pipe_name)
+
+    pipe_service.search_pipes.assert_called_once_with(pipe_name)
+    assert result == expected

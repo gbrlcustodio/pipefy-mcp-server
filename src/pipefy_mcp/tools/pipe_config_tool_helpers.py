@@ -5,11 +5,11 @@ from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
 
-from pipefy_mcp.tools.pipe_tool_helpers import (
-    _extract_error_strings,
-    _extract_graphql_correlation_id,
-    _extract_graphql_error_codes,
-    _with_debug_suffix,
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_error_strings,
+    extract_graphql_correlation_id,
+    extract_graphql_error_codes,
+    with_debug_suffix,
 )
 
 
@@ -64,14 +64,14 @@ def handle_pipe_config_tool_graphql_error(
         fallback_msg: Message when no extractable error strings exist.
         debug: When True, append GraphQL codes and correlation_id to the message.
     """
-    msgs = _extract_error_strings(exc)
+    msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else fallback_msg
     if not debug:
         return build_pipe_tool_error_payload(message=base)
-    codes = _extract_graphql_error_codes(exc)
-    cid = _extract_graphql_correlation_id(exc)
+    codes = extract_graphql_error_codes(exc)
+    cid = extract_graphql_correlation_id(exc)
     return build_pipe_tool_error_payload(
-        message=_with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid),
+        message=with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid),
     )
 
 

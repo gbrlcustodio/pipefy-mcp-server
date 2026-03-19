@@ -7,11 +7,11 @@ from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
 
-from pipefy_mcp.tools.pipe_tool_helpers import (
-    _extract_error_strings,
-    _extract_graphql_correlation_id,
-    _extract_graphql_error_codes,
-    _with_debug_suffix,
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_error_strings,
+    extract_graphql_correlation_id,
+    extract_graphql_error_codes,
+    with_debug_suffix,
 )
 
 
@@ -110,33 +110,6 @@ def build_table_mutation_error_payload(*, message: str) -> dict[str, Any]:
     return {"success": False, "error": message}
 
 
-def mutation_error_if_not_optional_dict(
-    value: Any,
-    *,
-    arg_name: str,
-) -> dict[str, Any] | None:
-    """Return a mutation error payload if ``value`` is present but not a mapping.
-
-    MCP callers may send malformed JSON (e.g. list or string); tools should not
-    raise ``AttributeError`` from ``.items()`` on those values.
-
-    Args:
-        value: Optional ``extra_input``-style argument from the tool boundary.
-        arg_name: Parameter name for the error message (e.g. ``extra_input``).
-
-    Returns:
-        Error payload dict when validation fails; ``None`` when the value is
-        omitted or is already a ``dict``.
-    """
-    if value is not None and not isinstance(value, dict):
-        return build_table_mutation_error_payload(
-            message=(
-                f"Invalid '{arg_name}': provide a JSON object (dict) when supplied."
-            ),
-        )
-    return None
-
-
 def build_delete_table_preview_payload(
     *,
     table_id: str | int,
@@ -221,12 +194,12 @@ def handle_table_tool_graphql_error(
         fallback_msg: Message when no extractable error strings exist.
         debug: When True, append GraphQL codes and correlation_id to the message.
     """
-    msgs = _extract_error_strings(exc)
+    msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else fallback_msg
     if not debug:
         return build_table_read_error_payload(message=base)
-    codes = _extract_graphql_error_codes(exc)
-    cid = _extract_graphql_correlation_id(exc)
+    codes = extract_graphql_error_codes(exc)
+    cid = extract_graphql_correlation_id(exc)
     return build_table_read_error_payload(
-        message=_with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid),
+        message=with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid),
     )

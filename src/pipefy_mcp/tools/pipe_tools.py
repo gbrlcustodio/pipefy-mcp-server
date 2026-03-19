@@ -13,6 +13,11 @@ from pipefy_mcp.models.comment import (
 from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_graphql_correlation_id,
+    extract_graphql_error_codes,
+    with_debug_suffix,
+)
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     AddCardCommentPayload,
@@ -23,11 +28,8 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     UpdateCommentErrorPayload,
     UpdateCommentSuccessPayload,
     UserCancelledError,
-    _extract_graphql_correlation_id,
-    _extract_graphql_error_codes,
     _filter_editable_field_definitions,
     _filter_fields_by_definitions,
-    _with_debug_suffix,
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
@@ -607,13 +609,13 @@ class PipeTools:
                 card_title = card_data["title"]
                 pipe_name = card_data.get("pipe", {}).get("name", "Unknown Pipe")
             except Exception as exc:
-                codes = _extract_graphql_error_codes(exc)
-                correlation_id = _extract_graphql_correlation_id(exc)
+                codes = extract_graphql_error_codes(exc)
+                correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_card_error_to_message(
                     card_id=card_id, card_title="Unknown", codes=codes
                 )
                 return build_delete_card_error_payload(
-                    message=_with_debug_suffix(
+                    message=with_debug_suffix(
                         base,
                         debug=debug,
                         codes=codes,
@@ -668,13 +670,13 @@ class PipeTools:
                         message=f"Failed to delete card '{card_title}' (ID: {card_id}). Please try again or contact support."
                     )
             except Exception as exc:
-                codes = _extract_graphql_error_codes(exc)
-                correlation_id = _extract_graphql_correlation_id(exc)
+                codes = extract_graphql_error_codes(exc)
+                correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_card_error_to_message(
                     card_id=card_id, card_title=card_title, codes=codes
                 )
                 return build_delete_card_error_payload(
-                    message=_with_debug_suffix(
+                    message=with_debug_suffix(
                         base,
                         debug=debug,
                         codes=codes,

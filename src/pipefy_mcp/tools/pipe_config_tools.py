@@ -6,6 +6,11 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_graphql_correlation_id,
+    extract_graphql_error_codes,
+    with_debug_suffix,
+)
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
     build_delete_pipe_error_payload,
     build_delete_pipe_preview_payload,
@@ -14,11 +19,6 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     build_pipe_tool_error_payload,
     handle_pipe_config_tool_graphql_error,
     map_delete_pipe_error_to_message,
-)
-from pipefy_mcp.tools.pipe_tool_helpers import (
-    _extract_graphql_correlation_id,
-    _extract_graphql_error_codes,
-    _with_debug_suffix,
 )
 
 _CREATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"phase_id", "label", "type"})
@@ -162,15 +162,15 @@ class PipeConfigTools:
                 pipe_data = pipe_response.get("pipe") or {}
                 pipe_name = pipe_data.get("name") or "Unknown"
             except Exception as exc:
-                codes = _extract_graphql_error_codes(exc)
-                correlation_id = _extract_graphql_correlation_id(exc)
+                codes = extract_graphql_error_codes(exc)
+                correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_pipe_error_to_message(
                     pipe_id=pipe_id,
                     pipe_name=pipe_name,
                     codes=codes,
                 )
                 return build_delete_pipe_error_payload(
-                    message=_with_debug_suffix(
+                    message=with_debug_suffix(
                         base,
                         debug=debug,
                         codes=codes,
@@ -198,15 +198,15 @@ class PipeConfigTools:
                     )
                 )
             except Exception as exc:
-                codes = _extract_graphql_error_codes(exc)
-                correlation_id = _extract_graphql_correlation_id(exc)
+                codes = extract_graphql_error_codes(exc)
+                correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_pipe_error_to_message(
                     pipe_id=pipe_id,
                     pipe_name=pipe_name,
                     codes=codes,
                 )
                 return build_delete_pipe_error_payload(
-                    message=_with_debug_suffix(
+                    message=with_debug_suffix(
                         base,
                         debug=debug,
                         codes=codes,

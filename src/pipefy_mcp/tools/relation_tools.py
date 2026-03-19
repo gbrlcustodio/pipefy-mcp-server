@@ -14,15 +14,10 @@ from pipefy_mcp.tools.relation_tool_helpers import (
     build_relation_read_success_payload,
     handle_relation_tool_graphql_error,
 )
-from pipefy_mcp.tools.table_tool_helpers import mutation_error_if_not_optional_dict
-
-
-def _valid_repo_id(value: str | int) -> bool:
-    if isinstance(value, int):
-        return value > 0
-    if isinstance(value, str):
-        return bool(value.strip())
-    return False
+from pipefy_mcp.tools.validation_helpers import (
+    mutation_error_if_not_optional_dict,
+    valid_repo_id,
+)
 
 
 class RelationTools:
@@ -39,7 +34,7 @@ class RelationTools:
             Args:
                 pipe_id: Pipe ID.
             """
-            if not _valid_repo_id(pipe_id):
+            if not valid_repo_id(pipe_id):
                 return build_relation_error_payload(
                     message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
                 )
@@ -67,7 +62,7 @@ class RelationTools:
                 return build_relation_error_payload(
                     message="Invalid 'relation_ids': provide a non-empty list of table relation IDs.",
                 )
-            if not all(_valid_repo_id(rid) for rid in relation_ids):
+            if not all(valid_repo_id(rid) for rid in relation_ids):
                 return build_relation_error_payload(
                     message="Each relation ID must be a non-empty string or positive integer.",
                 )
@@ -89,7 +84,7 @@ class RelationTools:
             parent_id: str | int,
             child_id: str | int,
             name: str,
-            extra_input: dict[str, Any] | None = None,
+            extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Create a parent-child relation between two pipes.
@@ -103,7 +98,7 @@ class RelationTools:
                 extra_input: Optional extra fields for the mutation input.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(parent_id) or not _valid_repo_id(child_id):
+            if not valid_repo_id(parent_id) or not valid_repo_id(child_id):
                 return build_relation_error_payload(
                     message="Invalid 'parent_id' or 'child_id': use non-empty strings or positive integers.",
                 )
@@ -138,7 +133,7 @@ class RelationTools:
         async def update_pipe_relation(
             relation_id: str | int,
             name: str,
-            extra_input: dict[str, Any] | None = None,
+            extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Update an existing pipe relation (name, auto-fill, connection flags).
@@ -151,7 +146,7 @@ class RelationTools:
                 extra_input: Optional extra fields for the mutation input.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(relation_id):
+            if not valid_repo_id(relation_id):
                 return build_relation_error_payload(
                     message="Invalid 'relation_id': use a non-empty string or positive integer.",
                 )
@@ -197,7 +192,7 @@ class RelationTools:
                 relation_id: Pipe relation ID to delete.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(relation_id):
+            if not valid_repo_id(relation_id):
                 return build_relation_error_payload(
                     message="Invalid 'relation_id': use a non-empty string or positive integer.",
                 )
@@ -219,7 +214,7 @@ class RelationTools:
             parent_id: str | int,
             child_id: str | int,
             source_id: str | int,
-            extra_input: dict[str, Any] | None = None,
+            extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Connect a child card to a parent card using an existing pipe relation.
@@ -233,11 +228,11 @@ class RelationTools:
                 extra_input: Optional ``CreateCardRelationInput`` fields (camelCase), e.g. ``sourceType`` (default ``PipeRelation``).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(parent_id) or not _valid_repo_id(child_id):
+            if not valid_repo_id(parent_id) or not valid_repo_id(child_id):
                 return build_relation_error_payload(
                     message="Invalid 'parent_id' or 'child_id': use non-empty strings or positive integers.",
                 )
-            if not _valid_repo_id(source_id):
+            if not valid_repo_id(source_id):
                 return build_relation_error_payload(
                     message="Invalid 'source_id': use a non-empty string or positive integer (pipe relation ID).",
                 )

@@ -1,0 +1,186 @@
+from gql import gql
+
+# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
+
+CREATE_PIPE_MUTATION = gql(
+    """
+    mutation ($input: CreatePipeInput!) {
+        createPipe(input: $input) {
+            pipe {
+                id
+                name
+            }
+        }
+    }
+    """
+)
+
+UPDATE_PIPE_MUTATION = gql(
+    """
+    mutation ($input: UpdatePipeInput!) {
+        updatePipe(input: $input) {
+            pipe {
+                id
+                name
+            }
+        }
+    }
+    """
+)
+
+DELETE_PIPE_MUTATION = gql(
+    """
+    mutation ($input: DeletePipeInput!) {
+        deletePipe(input: $input) {
+            success
+        }
+    }
+    """
+)
+
+CLONE_PIPE_MUTATION = gql(
+    """
+    mutation ($input: ClonePipesInput!) {
+        clonePipes(input: $input) {
+            pipes {
+                id
+                name
+                phases {
+                    id
+                    name
+                }
+            }
+        }
+    }
+    """
+)
+
+CREATE_PHASE_MUTATION = gql(
+    """
+    mutation ($input: CreatePhaseInput!) {
+        createPhase(input: $input) {
+            phase {
+                id
+                name
+                done
+            }
+        }
+    }
+    """
+)
+
+UPDATE_PHASE_MUTATION = gql(
+    """
+    mutation ($input: UpdatePhaseInput!) {
+        updatePhase(input: $input) {
+            phase {
+                id
+                name
+                done
+            }
+        }
+    }
+    """
+)
+
+DELETE_PHASE_MUTATION = gql(
+    """
+    mutation ($input: DeletePhaseInput!) {
+        deletePhase(input: $input) {
+            success
+        }
+    }
+    """
+)
+
+CREATE_PHASE_FIELD_MUTATION = gql(
+    """
+    mutation ($input: CreatePhaseFieldInput!) {
+        createPhaseField(input: $input) {
+            phase_field {
+                id
+                label
+                type
+            }
+        }
+    }
+    """
+)
+
+UPDATE_PHASE_FIELD_MUTATION = gql(
+    """
+    mutation ($input: UpdatePhaseFieldInput!) {
+        updatePhaseField(input: $input) {
+            phase_field {
+                id
+                label
+                type
+            }
+        }
+    }
+    """
+)
+
+DELETE_PHASE_FIELD_MUTATION = gql(
+    """
+    mutation ($input: DeletePhaseFieldInput!) {
+        deletePhaseField(input: $input) {
+            success
+        }
+    }
+    """
+)
+
+CREATE_LABEL_MUTATION = gql(
+    """
+    mutation ($input: CreateLabelInput!) {
+        createLabel(input: $input) {
+            label {
+                id
+                name
+                color
+            }
+        }
+    }
+    """
+)
+
+UPDATE_LABEL_MUTATION = gql(
+    """
+    mutation ($input: UpdateLabelInput!) {
+        updateLabel(input: $input) {
+            label {
+                id
+                name
+                color
+            }
+        }
+    }
+    """
+)
+
+DELETE_LABEL_MUTATION = gql(
+    """
+    mutation ($input: DeleteLabelInput!) {
+        deleteLabel(input: $input) {
+            success
+        }
+    }
+    """
+)
+
+__all__ = [
+    "CLONE_PIPE_MUTATION",
+    "CREATE_LABEL_MUTATION",
+    "CREATE_PHASE_FIELD_MUTATION",
+    "CREATE_PHASE_MUTATION",
+    "CREATE_PIPE_MUTATION",
+    "DELETE_LABEL_MUTATION",
+    "DELETE_PHASE_FIELD_MUTATION",
+    "DELETE_PHASE_MUTATION",
+    "DELETE_PIPE_MUTATION",
+    "UPDATE_LABEL_MUTATION",
+    "UPDATE_PHASE_FIELD_MUTATION",
+    "UPDATE_PHASE_MUTATION",
+    "UPDATE_PIPE_MUTATION",
+]

@@ -15,6 +15,10 @@ def extract_payload():
             if isinstance(structured, dict) and "result" in structured:
                 payload = structured.get("result")
                 if isinstance(payload, dict):
+                    if "success" in payload or "error" in payload:
+                        return payload
+                    if "success" in structured or "error" in structured:
+                        return structured
                     return payload
             if isinstance(structured, dict):
                 return structured

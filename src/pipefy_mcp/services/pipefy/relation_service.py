@@ -32,9 +32,13 @@ _PIPE_RELATION_CONSTRAINT_DEFAULTS: dict[str, Any] = {
 # Pipefy `CreateCardRelationInput.sourceType`: PipeRelation | Field
 _DEFAULT_CARD_RELATION_SOURCE_TYPE = "PipeRelation"
 
+# Merged ``**attrs`` / ``extra_input``: keys with value ``None`` are skipped so the field is omitted
+# from the GraphQL input (leave unchanged). Explicit API ``null`` to clear a field is not supported
+# here — same choice as ``PipeConfigService`` / ``TableService``.
+
 
 class RelationService(BasePipefyClient):
-    """Pipe/table relation reads and mutations."""
+    """Reads and mutations for pipe relations, table relations (by relation ID), and card links."""
 
     def __init__(
         self,

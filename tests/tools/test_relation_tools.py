@@ -105,6 +105,21 @@ async def test_get_pipe_relations_invalid_pipe_id(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("relation_session", [None], indirect=True)
+async def test_get_pipe_relations_rejects_pipe_id_zero(
+    relation_session, mock_relation_client, extract_payload
+):
+    async with relation_session as session:
+        result = await session.call_tool("get_pipe_relations", {"pipe_id": 0})
+
+    assert result.isError is False
+    mock_relation_client.get_pipe_relations.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "pipe_id" in p["error"].lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_get_table_relations_success(
     relation_session, mock_relation_client, extract_payload
 ):
@@ -358,3 +373,65 @@ async def test_create_card_relation_invalid_source_id(
 
     mock_relation_client.create_card_relation.assert_not_called()
     assert extract_payload(result)["success"] is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("relation_session", [None], indirect=True)
+async def test_create_pipe_relation_rejects_non_dict_extra_input(
+    relation_session, mock_relation_client, extract_payload
+):
+    async with relation_session as session:
+        result = await session.call_tool(
+            "create_pipe_relation",
+            {
+                "parent_id": 1,
+                "child_id": 2,
+                "name": "L",
+                "extra_input": "not-a-dict",
+            },
+        )
+
+    mock_relation_client.create_pipe_relation.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "extra_input" in p["error"]
+    assert "dict" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("relation_session", [None], indirect=True)
+async def test_update_pipe_relation_rejects_non_dict_extra_input(
+    relation_session, mock_relation_client, extract_payload
+):
+    async with relation_session as session:
+        result = await session.call_tool(
+            "update_pipe_relation",
+            {"relation_id": 1, "name": "N", "extra_input": []},
+        )
+
+    mock_relation_client.update_pipe_relation.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "extra_input" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("relation_session", [None], indirect=True)
+async def test_create_card_relation_rejects_non_dict_extra_input(
+    relation_session, mock_relation_client, extract_payload
+):
+    async with relation_session as session:
+        result = await session.call_tool(
+            "create_card_relation",
+            {
+                "parent_id": 1,
+                "child_id": 2,
+                "source_id": 3,
+                "extra_input": 123,
+            },
+        )
+
+    mock_relation_client.create_card_relation.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "extra_input" in p["error"]

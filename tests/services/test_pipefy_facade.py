@@ -291,8 +291,22 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     }
     relation_service.create_pipe_relation.assert_awaited_once_with(1, 2, "R")
 
+    assert await client.create_pipe_relation(
+        1, 2, "R", extra_input={"canCreateNewItems": False}
+    ) == {"ok": "create_pipe_relation"}
+    relation_service.create_pipe_relation.assert_awaited_with(
+        1, 2, "R", canCreateNewItems=False
+    )
+
     assert await client.update_pipe_relation(9, "N") == {"ok": "update_pipe_relation"}
     relation_service.update_pipe_relation.assert_awaited_once_with(9, "N")
+
+    assert await client.update_pipe_relation(
+        9, "N", extra_input={"canConnectExistingItems": False}
+    ) == {"ok": "update_pipe_relation"}
+    relation_service.update_pipe_relation.assert_awaited_with(
+        9, "N", canConnectExistingItems=False
+    )
 
     assert await client.delete_pipe_relation(3) == {"ok": "delete_pipe_relation"}
     relation_service.delete_pipe_relation.assert_awaited_once_with(3)

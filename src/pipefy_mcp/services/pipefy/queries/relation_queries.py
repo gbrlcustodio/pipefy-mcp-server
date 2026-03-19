@@ -5,10 +5,7 @@ from __future__ import annotations
 from gql import gql
 
 # NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
-#
-# Schema note: `Pipe` exposes relations as `parentsRelations` and `childrenRelations`
-# (`[PipeRelation]`), not `pipe_relations`. `Table` has no embedded relation list in
-# the public schema; use root `table_relations(ids: [ID!]!)` to batch-fetch by relation ID.
+# Schema: Pipe uses parentsRelations/childrenRelations (not pipe_relations); tables use root table_relations(ids: [ID!]!).
 
 _REPO_TYPES_ID_NAME = """... on Pipe {
     id

@@ -5,6 +5,7 @@ from .card_service import CardService
 from .client import PipefyClient
 from .internal_api_client import InternalApiClient
 from .pipe_service import PipeService
+from .schema_introspection_service import SchemaIntrospectionService
 
 __all__ = [
     "AiAgentService",
@@ -14,4 +15,5 @@ __all__ = [
     "InternalApiClient",
     "PipefyClient",
     "PipeService",
+    "SchemaIntrospectionService",
 ]

@@ -117,6 +117,19 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
     * `uuid` (str): UUID of the agent to enable/disable.
     * `active` (bool): `true` to activate, `false` to deactivate.
 
+### Introspection & raw GraphQL
+
+When no dedicated tool fits or Pipefy changes the schema, these tools support **discovery** and a **last-resort execution path**. They use the same service-account GraphQL client as the other tools.
+
+| Tool | Read-only hint | Purpose |
+|------|----------------|--------|
+| **`introspect_type`** | Yes | Inspect a GraphQL type: `fields`, `inputFields`, or `enumValues` (e.g. `Card`, `CreateCardInput`). |
+| **`introspect_mutation`** | Yes | Inspect a root mutation: arguments, defaults, return type (e.g. `createCard`). |
+| **`search_schema`** | Yes | Keyword search over type **names** and **descriptions** (case-insensitive; `__` introspection types excluded). |
+| **`execute_graphql`** | **No** | Run an arbitrary query or mutation. Syntax is validated before the request. **Prefer dedicated tools when they exist.** Use **`introspect_mutation`** (and related types) before sending mutations. |
+
+Responses use `success` / `result` (JSON text) or `error`. GraphQL errors from the transport are surfaced explicitly.
+
 ## Getting Started
 
 ### Prerequisites

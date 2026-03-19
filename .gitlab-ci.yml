@@ -47,4 +47,5 @@ test:
     PIPEFY_OAUTH_CLIENT: "CLIENT"
     PIPEFY_OAUTH_SECRET: "SECRET"
   script:
-    - uv run pytest
+    # Exclude live-Pipefy integration tests (need real credentials; placeholders would run otherwise)
+    - uv run pytest -m "not integration"

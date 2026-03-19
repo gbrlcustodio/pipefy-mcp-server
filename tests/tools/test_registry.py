@@ -20,9 +20,12 @@ class TestToolRegistry:
         assert registry.mcp is mock_mcp
         assert registry.services_container is mock_container
 
+    @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
     @patch("pipefy_mcp.tools.registry.PipeTools.register")
-    def test_register_tools_calls_pipe_tools_register(self, mock_pipe_tools_register):
-        """Test that register_tools calls PipeTools.register with correct arguments"""
+    def test_register_tools_calls_pipe_and_introspection_tools_register(
+        self, mock_pipe_tools_register, mock_introspection_tools_register
+    ):
+        """Test that register_tools calls PipeTools and IntrospectionTools with the client."""
         mock_mcp = Mock(spec=FastMCP)
         mock_client = Mock()
         mock_container = Mock(spec=ServicesContainer)
@@ -32,6 +35,7 @@ class TestToolRegistry:
         result = registry.register_tools()
 
         mock_pipe_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
         assert result is mock_mcp
 
     def test_register_tools_raises_when_pipefy_client_is_none(self):
@@ -49,6 +53,7 @@ class TestToolRegistry:
             exc.value
         )
 
+    @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
     @patch("pipefy_mcp.tools.registry.AiAgentTools.register")
     @patch("pipefy_mcp.tools.registry.AiAutomationTools.register")
     @patch("pipefy_mcp.tools.registry.PipeTools.register")
@@ -57,6 +62,7 @@ class TestToolRegistry:
         mock_pipe_tools_register,
         mock_ai_automation_tools_register,
         mock_ai_agent_tools_register,
+        mock_introspection_tools_register,
     ):
         mock_mcp = Mock(spec=FastMCP)
         mock_client = Mock()
@@ -71,6 +77,7 @@ class TestToolRegistry:
         registry.register_tools()
 
         mock_pipe_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_ai_automation_tools_register.assert_called_once_with(
             mock_mcp, mock_ai_automation_service
         )

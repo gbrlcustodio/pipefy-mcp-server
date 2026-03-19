@@ -1,10 +1,12 @@
 [project]
 name = "pipeclaw"
-version = "0.1.0"
-description = "Pipeclaw — MCP server for Pipefy: AI agents manage pipes, cards, fields, and automations with safety controls."
+description = "Pipeclaw — MCP server for Pipefy: AI agents manage pipes, cards, fields, automations, and schema discovery with safety controls."
 readme = "README.md"
 requires-python = ">=3.12"
-keywords = ["pipefy", "mcp", "model-context-protocol", "ai-agents", "automation"]
+license = { text = "Apache-2.0" }
+keywords = ["pipefy", "mcp", "model-context-protocol", "ai-agents", "automation", "pipeclaw"]
+# Set at build time from git tags via hatch-vcs (see [tool.hatch.version]).
+dynamic = ["version"]
 dependencies = [
     "gql[httpx]>=3.5.2",
     "httpx-auth>=0.23.1",
@@ -55,18 +57,15 @@ lint.extend-select = ["I"]
 lint.exclude = ["src/pipefy_mcp/_version.py"]
 format.exclude = ["src/pipefy_mcp/_version.py"]
 
-[tool.pytest]
+[tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --no-header --tb=short"
-
-[tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "module"
-
 markers = [
     "unit: marks a test as a unit test",
-    "integration: marks a test as an integration test that requires database access"
+    "integration: marks tests that need live services (e.g. Pipefy API + OAuth in .env)",
 ]

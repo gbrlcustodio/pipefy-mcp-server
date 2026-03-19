@@ -6,6 +6,9 @@ from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.services.pipefy.schema_introspection_service import (
+    SchemaIntrospectionService,
+)
 from pipefy_mcp.services.pipefy.types import CardSearch
 from pipefy_mcp.settings import PipefySettings
 
@@ -21,6 +24,9 @@ class PipefyClient:
         )
         self._pipe_service = PipeService(settings=settings, auth=auth)
         self._card_service = CardService(settings=settings, auth=auth)
+        self._introspection_service = SchemaIntrospectionService(
+            settings=settings, auth=auth
+        )
 
     async def get_pipe(self, pipe_id: int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
@@ -143,3 +149,38 @@ class PipefyClient:
     ) -> dict:
         """Get the fields available in a specific phase."""
         return await self._pipe_service.get_phase_fields(phase_id, required_only)
+
+    async def introspect_type(self, type_name: str) -> dict[str, Any]:
+        """Introspect a GraphQL type by name (fields, inputFields, or enumValues).
+
+        Args:
+            type_name: Schema type name (e.g. Card, CreateCardInput).
+        """
+        return await self._introspection_service.introspect_type(type_name)
+
+    async def introspect_mutation(self, mutation_name: str) -> dict[str, Any]:
+        """Introspect a root mutation field (arguments and return type).
+
+        Args:
+            mutation_name: Mutation field name as exposed on the Mutation type.
+        """
+        return await self._introspection_service.introspect_mutation(mutation_name)
+
+    async def search_schema(self, keyword: str) -> dict[str, Any]:
+        """Search schema types by keyword (name or description).
+
+        Args:
+            keyword: Case-insensitive substring to match.
+        """
+        return await self._introspection_service.search_schema(keyword)
+
+    async def execute_graphql(
+        self, query: str, variables: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Execute arbitrary GraphQL after syntax validation (fallback / advanced use).
+
+        Args:
+            query: GraphQL document string.
+            variables: Optional variables for the operation.
+        """
+        return await self._introspection_service.execute_graphql(query, variables)

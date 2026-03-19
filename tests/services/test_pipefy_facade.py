@@ -1,10 +1,13 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.services.pipefy.schema_introspection_service import (
+    SchemaIntrospectionService,
+)
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -92,9 +95,48 @@ def test_pipefy_client_creates_services_with_shared_auth():
 
     assert isinstance(client._pipe_service, PipeService)
     assert isinstance(client._card_service, CardService)
+    assert isinstance(client._introspection_service, SchemaIntrospectionService)
     assert client._pipe_service._auth is not None, (
         "PipeService should have an auth instance"
     )
     assert client._card_service._auth is not None, (
         "CardService should have an auth instance"
     )
+    assert client._introspection_service._auth is not None, (
+        "SchemaIntrospectionService should have an auth instance"
+    )
+    assert client._pipe_service._auth is client._card_service._auth
+    assert client._pipe_service._auth is client._introspection_service._auth
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_pipefy_client_introspection_methods_delegate_to_introspection_service():
+    """Facade forwards introspection and raw GraphQL calls unchanged."""
+    intro = AsyncMock()
+    intro.introspect_type = AsyncMock(return_value={"name": "T"})
+    intro.introspect_mutation = AsyncMock(return_value={"name": "m"})
+    intro.search_schema = AsyncMock(return_value={"types": []})
+    intro.execute_graphql = AsyncMock(return_value={"data": True})
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._pipe_service = MagicMock()
+    client._card_service = MagicMock()
+    client._introspection_service = intro
+
+    assert await client.introspect_type("Card") == {"name": "T"}
+    intro.introspect_type.assert_awaited_once_with("Card")
+
+    assert await client.introspect_mutation("createCard") == {"name": "m"}
+    intro.introspect_mutation.assert_awaited_once_with("createCard")
+
+    assert await client.search_schema("pipe") == {"types": []}
+    intro.search_schema.assert_awaited_once_with("pipe")
+
+    assert await client.execute_graphql("query { x }", {"a": 1}) == {"data": True}
+    intro.execute_graphql.assert_awaited_once_with("query { x }", {"a": 1})
+
+    intro.execute_graphql.reset_mock()
+    intro.execute_graphql.return_value = {"ok": 2}
+    assert await client.execute_graphql("query { y }", None) == {"ok": 2}
+    intro.execute_graphql.assert_awaited_once_with("query { y }", None)

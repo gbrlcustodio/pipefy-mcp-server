@@ -9,6 +9,7 @@ from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
 )
+from pipefy_mcp.services.pipefy.table_service import TableService
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -19,6 +20,7 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     pipe_service = AsyncMock()
     card_service = AsyncMock()
     pipe_config_service = AsyncMock()
+    table_service = AsyncMock()
 
     pipe_service.get_pipe = AsyncMock(return_value={"ok": "pipe"})
     pipe_service.get_start_form_fields = AsyncMock(return_value={"ok": "fields"})
@@ -52,10 +54,43 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     pipe_config_service.update_label = AsyncMock(return_value={"ok": "update_label"})
     pipe_config_service.delete_label = AsyncMock(return_value={"ok": "delete_label"})
 
+    table_service.get_table = AsyncMock(return_value={"ok": "get_table"})
+    table_service.get_tables = AsyncMock(return_value={"ok": "get_tables"})
+    table_service.get_table_records = AsyncMock(
+        return_value={"ok": "get_table_records"}
+    )
+    table_service.get_table_record = AsyncMock(return_value={"ok": "get_table_record"})
+    table_service.find_records = AsyncMock(return_value={"ok": "find_records"})
+    table_service.create_table = AsyncMock(return_value={"ok": "create_table"})
+    table_service.update_table = AsyncMock(return_value={"ok": "update_table"})
+    table_service.delete_table = AsyncMock(return_value={"ok": "delete_table"})
+    table_service.create_table_record = AsyncMock(
+        return_value={"ok": "create_table_record"}
+    )
+    table_service.update_table_record = AsyncMock(
+        return_value={"ok": "update_table_record"}
+    )
+    table_service.delete_table_record = AsyncMock(
+        return_value={"ok": "delete_table_record"}
+    )
+    table_service.set_table_record_field_value = AsyncMock(
+        return_value={"ok": "set_table_record_field_value"}
+    )
+    table_service.create_table_field = AsyncMock(
+        return_value={"ok": "create_table_field"}
+    )
+    table_service.update_table_field = AsyncMock(
+        return_value={"ok": "update_table_field"}
+    )
+    table_service.delete_table_field = AsyncMock(
+        return_value={"ok": "delete_table_field"}
+    )
+
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = pipe_service
     client._card_service = card_service
     client._pipe_config_service = pipe_config_service
+    client._table_service = table_service
 
     assert await client.get_pipe(1) == {"ok": "pipe"}
     pipe_service.get_pipe.assert_awaited_once_with(1)
@@ -158,6 +193,69 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.delete_label(16) == {"ok": "delete_label"}
     pipe_config_service.delete_label.assert_awaited_once_with(16)
 
+    assert await client.get_table("t1") == {"ok": "get_table"}
+    table_service.get_table.assert_awaited_once_with("t1")
+
+    assert await client.get_tables([1, 2]) == {"ok": "get_tables"}
+    table_service.get_tables.assert_awaited_once_with([1, 2])
+
+    assert await client.get_table_records(9, first=20, after="c") == {
+        "ok": "get_table_records"
+    }
+    table_service.get_table_records.assert_awaited_once_with(9, first=20, after="c")
+
+    assert await client.get_table_record("r") == {"ok": "get_table_record"}
+    table_service.get_table_record.assert_awaited_once_with("r")
+
+    assert await client.find_records(1, "f", "v", first=10) == {"ok": "find_records"}
+    table_service.find_records.assert_awaited_once_with(
+        1, "f", "v", first=10, after=None
+    )
+
+    assert await client.create_table("N", 7, description="D") == {"ok": "create_table"}
+    table_service.create_table.assert_awaited_once_with("N", 7, description="D")
+
+    assert await client.update_table("tid", name="X") == {"ok": "update_table"}
+    table_service.update_table.assert_awaited_once_with("tid", name="X")
+
+    assert await client.delete_table(99) == {"ok": "delete_table"}
+    table_service.delete_table.assert_awaited_once_with(99)
+
+    assert await client.create_table_record(3, {"a": "b"}, title="T") == {
+        "ok": "create_table_record"
+    }
+    table_service.create_table_record.assert_awaited_once_with(3, {"a": "b"}, title="T")
+
+    assert await client.update_table_record("r1", {"title": "Z"}) == {
+        "ok": "update_table_record"
+    }
+    table_service.update_table_record.assert_awaited_once_with("r1", {"title": "Z"})
+
+    assert await client.delete_table_record(55) == {"ok": "delete_table_record"}
+    table_service.delete_table_record.assert_awaited_once_with(55)
+
+    assert await client.set_table_record_field_value(1, "f", "v") == {
+        "ok": "set_table_record_field_value"
+    }
+    table_service.set_table_record_field_value.assert_awaited_once_with(1, "f", "v")
+
+    assert await client.create_table_field("t", "Lab", "short_text", required=True) == {
+        "ok": "create_table_field"
+    }
+    table_service.create_table_field.assert_awaited_once_with(
+        "t", "Lab", "short_text", required=True
+    )
+
+    assert await client.update_table_field("fid", label="X") == {
+        "ok": "update_table_field"
+    }
+    table_service.update_table_field.assert_awaited_once_with(
+        "fid", table_id=None, label="X"
+    )
+
+    assert await client.delete_table_field(9) == {"ok": "delete_table_field"}
+    table_service.delete_table_field.assert_awaited_once_with(9)
+
 
 @pytest.mark.unit
 def test_pipefy_client_creates_services_with_shared_auth():
@@ -174,6 +272,7 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert isinstance(client._pipe_service, PipeService)
     assert isinstance(client._card_service, CardService)
     assert isinstance(client._pipe_config_service, PipeConfigService)
+    assert isinstance(client._table_service, TableService)
     assert isinstance(client._introspection_service, SchemaIntrospectionService)
     assert client._pipe_service._auth is not None, (
         "PipeService should have an auth instance"
@@ -187,8 +286,12 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert client._pipe_config_service._auth is not None, (
         "PipeConfigService should have an auth instance"
     )
+    assert client._table_service._auth is not None, (
+        "TableService should have an auth instance"
+    )
     assert client._pipe_service._auth is client._card_service._auth
     assert client._pipe_service._auth is client._pipe_config_service._auth
+    assert client._pipe_service._auth is client._table_service._auth
     assert client._pipe_service._auth is client._introspection_service._auth
 
 

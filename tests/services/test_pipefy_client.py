@@ -534,6 +534,14 @@ def test_public_import_path_exports_pipefy_client():
 
 
 @pytest.mark.unit
+def test_public_import_path_exports_table_service():
+    from pipefy_mcp.services.pipefy import TableService as PublicTableService
+    from pipefy_mcp.services.pipefy.table_service import TableService
+
+    assert PublicTableService is TableService
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_pipe_passes_pipe_id_variable():
     """Test get_pipe passes pipe_id under variable_values unchanged."""

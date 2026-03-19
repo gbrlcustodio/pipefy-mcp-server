@@ -10,6 +10,7 @@ from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
 )
+from pipefy_mcp.services.pipefy.table_service import TableService
 from pipefy_mcp.services.pipefy.types import CardSearch
 from pipefy_mcp.settings import PipefySettings
 
@@ -26,6 +27,7 @@ class PipefyClient:
         self._pipe_service = PipeService(settings=settings, auth=auth)
         self._card_service = CardService(settings=settings, auth=auth)
         self._pipe_config_service = PipeConfigService(settings=settings, auth=auth)
+        self._table_service = TableService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
@@ -116,6 +118,118 @@ class PipefyClient:
     async def delete_label(self, label_id: int) -> dict:
         """Delete a label by ID (permanent)."""
         return await self._pipe_config_service.delete_label(label_id)
+
+    async def get_table(self, table_id: str | int) -> dict:
+        """Get a database table by ID (metadata, fields, authorization)."""
+        return await self._table_service.get_table(table_id)
+
+    async def get_tables(self, table_ids: list[str | int]) -> dict:
+        """Get multiple database tables by ID."""
+        return await self._table_service.get_tables(table_ids)
+
+    async def get_table_records(
+        self,
+        table_id: str | int,
+        first: int = 50,
+        after: str | None = None,
+    ) -> dict:
+        """List table records with cursor pagination (see `pageInfo` in the response)."""
+        return await self._table_service.get_table_records(
+            table_id, first=first, after=after
+        )
+
+    async def get_table_record(self, record_id: str | int) -> dict:
+        """Get a single table record by ID."""
+        return await self._table_service.get_table_record(record_id)
+
+    async def find_records(
+        self,
+        table_id: str | int,
+        field_id: str,
+        field_value: str,
+        first: int | None = None,
+        after: str | None = None,
+    ) -> dict:
+        """Find table records where the given field equals the given value."""
+        return await self._table_service.find_records(
+            table_id,
+            field_id,
+            field_value,
+            first=first,
+            after=after,
+        )
+
+    async def create_table(self, name: str, organization_id: int, **attrs: Any) -> dict:
+        """Create a database table (see Pipefy `CreateTableInput`)."""
+        return await self._table_service.create_table(name, organization_id, **attrs)
+
+    async def update_table(self, table_id: str | int, **attrs: Any) -> dict:
+        """Update a database table (see Pipefy `UpdateTableInput`)."""
+        return await self._table_service.update_table(table_id, **attrs)
+
+    async def delete_table(self, table_id: str | int) -> dict:
+        """Delete a database table by ID (permanent)."""
+        return await self._table_service.delete_table(table_id)
+
+    async def create_table_record(
+        self,
+        table_id: str | int,
+        fields: dict[str, Any] | list[dict[str, Any]],
+        **attrs: Any,
+    ) -> dict:
+        """Create a record in a database table."""
+        return await self._table_service.create_table_record(table_id, fields, **attrs)
+
+    async def update_table_record(
+        self, record_id: str | int, fields: dict[str, Any]
+    ) -> dict:
+        """Update a table record (title, due_date, status — see `UpdateTableRecordInput`)."""
+        return await self._table_service.update_table_record(record_id, fields)
+
+    async def delete_table_record(self, record_id: str | int) -> dict:
+        """Delete a table record by ID (permanent)."""
+        return await self._table_service.delete_table_record(record_id)
+
+    async def set_table_record_field_value(
+        self,
+        record_id: str | int,
+        field_id: str | int,
+        value: Any,
+    ) -> dict:
+        """Update a single custom field on a table record."""
+        return await self._table_service.set_table_record_field_value(
+            record_id, field_id, value
+        )
+
+    async def create_table_field(
+        self,
+        table_id: str | int,
+        label: str,
+        field_type: str,
+        **attrs: Any,
+    ) -> dict:
+        """Create a field on a database table (see Pipefy `CreateTableFieldInput`)."""
+        return await self._table_service.create_table_field(
+            table_id, label, field_type, **attrs
+        )
+
+    async def update_table_field(
+        self, field_id: str | int, table_id: str | int | None = None, **attrs: Any
+    ) -> dict:
+        """Update a database table field (see Pipefy `UpdateTableFieldInput`).
+
+        Args:
+            field_id: Table field ID to update.
+            table_id: Table ID containing this field (required by API).
+            **attrs: Other UpdateTableFieldInput attributes.
+        """
+        return await self._table_service.update_table_field(
+            field_id, table_id=table_id, **attrs
+        )
+
+    async def delete_table_field(self, field_id: str | int) -> dict:
+        """Delete a database table field by ID (permanent)."""
+        return await self._table_service.delete_table_field(field_id)
 
     async def get_pipe_members(self, pipe_id: int) -> dict:
         """Get the members of a pipe."""

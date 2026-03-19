@@ -6,6 +6,7 @@ from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.services.pipefy.relation_service import RelationService
 from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
 )
@@ -86,11 +87,32 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
         return_value={"ok": "delete_table_field"}
     )
 
+    relation_service = AsyncMock()
+    relation_service.get_pipe_relations = AsyncMock(
+        return_value={"ok": "get_pipe_relations"}
+    )
+    relation_service.get_table_relations = AsyncMock(
+        return_value={"ok": "get_table_relations"}
+    )
+    relation_service.create_pipe_relation = AsyncMock(
+        return_value={"ok": "create_pipe_relation"}
+    )
+    relation_service.update_pipe_relation = AsyncMock(
+        return_value={"ok": "update_pipe_relation"}
+    )
+    relation_service.delete_pipe_relation = AsyncMock(
+        return_value={"ok": "delete_pipe_relation"}
+    )
+    relation_service.create_card_relation = AsyncMock(
+        return_value={"ok": "create_card_relation"}
+    )
+
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = pipe_service
     client._card_service = card_service
     client._pipe_config_service = pipe_config_service
     client._table_service = table_service
+    client._relation_service = relation_service
 
     assert await client.get_pipe(1) == {"ok": "pipe"}
     pipe_service.get_pipe.assert_awaited_once_with(1)
@@ -256,6 +278,35 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.delete_table_field(9) == {"ok": "delete_table_field"}
     table_service.delete_table_field.assert_awaited_once_with(9)
 
+    assert await client.get_pipe_relations(42) == {"ok": "get_pipe_relations"}
+    relation_service.get_pipe_relations.assert_awaited_once_with(42)
+
+    assert await client.get_table_relations(["tr1", "tr2"]) == {
+        "ok": "get_table_relations"
+    }
+    relation_service.get_table_relations.assert_awaited_once_with(["tr1", "tr2"])
+
+    assert await client.create_pipe_relation(1, 2, "R") == {
+        "ok": "create_pipe_relation"
+    }
+    relation_service.create_pipe_relation.assert_awaited_once_with(1, 2, "R")
+
+    assert await client.update_pipe_relation(9, "N") == {"ok": "update_pipe_relation"}
+    relation_service.update_pipe_relation.assert_awaited_once_with(9, "N")
+
+    assert await client.delete_pipe_relation(3) == {"ok": "delete_pipe_relation"}
+    relation_service.delete_pipe_relation.assert_awaited_once_with(3)
+
+    assert await client.create_card_relation(5, 6, 7) == {"ok": "create_card_relation"}
+    relation_service.create_card_relation.assert_awaited_with(5, 6, 7)
+
+    assert await client.create_card_relation(
+        1, 2, 3, extra_input={"sourceType": "Field"}
+    ) == {"ok": "create_card_relation"}
+    relation_service.create_card_relation.assert_awaited_with(
+        1, 2, 3, sourceType="Field"
+    )
+
 
 @pytest.mark.unit
 def test_pipefy_client_creates_services_with_shared_auth():
@@ -273,6 +324,7 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert isinstance(client._card_service, CardService)
     assert isinstance(client._pipe_config_service, PipeConfigService)
     assert isinstance(client._table_service, TableService)
+    assert isinstance(client._relation_service, RelationService)
     assert isinstance(client._introspection_service, SchemaIntrospectionService)
     assert client._pipe_service._auth is not None, (
         "PipeService should have an auth instance"
@@ -289,9 +341,13 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert client._table_service._auth is not None, (
         "TableService should have an auth instance"
     )
+    assert client._relation_service._auth is not None, (
+        "RelationService should have an auth instance"
+    )
     assert client._pipe_service._auth is client._card_service._auth
     assert client._pipe_service._auth is client._pipe_config_service._auth
     assert client._pipe_service._auth is client._table_service._auth
+    assert client._pipe_service._auth is client._relation_service._auth
     assert client._pipe_service._auth is client._introspection_service._auth
 
 
@@ -309,6 +365,7 @@ async def test_pipefy_client_introspection_methods_delegate_to_introspection_ser
     client._pipe_service = MagicMock()
     client._card_service = MagicMock()
     client._pipe_config_service = MagicMock()
+    client._relation_service = MagicMock()
     client._introspection_service = intro
 
     assert await client.introspect_type("Card") == {"name": "T"}

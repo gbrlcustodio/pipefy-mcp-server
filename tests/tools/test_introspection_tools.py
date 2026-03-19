@@ -8,9 +8,9 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 
 
 @pytest.fixture

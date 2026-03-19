@@ -12,7 +12,7 @@ variables:
   image: python:3.12-bookworm
   before_script:
     - pip install --no-cache-dir "uv>=0.10"
-    - uv sync --locked --dev
+    - uv sync --locked --all-extras --dev
 
 lint:
   extends: .lint-test-base
@@ -23,7 +23,7 @@ lint:
     GIT_DEPTH: 0
   before_script:
     - pip install --no-cache-dir "uv>=0.10"
-    - uv sync --locked --dev
+    - uv sync --locked --all-extras --dev
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
   script:
     - |

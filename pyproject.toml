@@ -1,6 +1,6 @@
 [project]
 name = "pipeclaw"
-description = "PipeClaw Tools — MCP tools for PipeClaw: AI agents manage pipes, cards, fields, and automations with safety controls."
+description = "Pipeclaw — MCP server for Pipefy: AI agents manage pipes, cards, fields, automations, and schema discovery with safety controls."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }

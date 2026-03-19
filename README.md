@@ -37,6 +37,41 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
 * **`get_pipe`**: Get details about a pipe's structure, including phases, labels, and start form fields.
 * **`get_start_form_fields`**: Inspect the schema of a pipe's start form. Use this to let the Agent know which fields are required *before* it tries to create a card.
 
+### Pipe building tools
+
+Create and maintain pipe structure (pipes, phases, fields, labels). Write operations; validate IDs and confirm destructive actions with the user when appropriate. Use **`introspect_type`** on inputs such as `CreatePhaseFieldInput` to discover valid field types — types are not validated locally.
+
+On success, mutation tools return a **structured** `result` object (the GraphQL payload dict), not a nested JSON string. Each tool accepts optional **`debug=true`** to append GraphQL error codes and `correlation_id` to failure messages (same idea as `delete_pipe`). Keys in `extra_input` that would duplicate primary arguments (`phase_id`, `label`, `type` on `create_phase_field`; `id` on `update_phase_field` / `update_label`) are ignored so callers never hit opaque `TypeError` from duplicate kwargs.
+
+**Pipe**
+
+* **`create_pipe`**: Create a new pipe in an organization (`name`, `organization_id`).
+* **`update_pipe`**: Update pipe settings (`pipe_id`; optional `name`, `icon`, `color`, `preferences`).
+* **`delete_pipe`**: Delete a pipe permanently.
+    * **⚠️ Destructive**: **Two-step flow** — default returns a preview only; call again with `confirm=true` after explicit user confirmation.
+* **`clone_pipe`**: Clone from a template pipe ID (`pipe_template_id`; optional `organization_id`).
+
+**Phase**
+
+* **`create_phase`**: Add a phase (`pipe_id`, `name`; optional `done`, `index`, `description`).
+* **`update_phase`**: Update a phase (`phase_id` and attributes to change).
+* **`delete_phase`**: Delete a phase permanently.
+    * **⚠️ Destructive**: Cannot be undone. Confirm with the user before calling.
+
+**Phase field**
+
+* **`create_phase_field`**: Add a field (`phase_id`, `label`, `field_type`; optional `extra_input` for additional API fields). `field_type` is passed through to Pipefy as input `type`.
+* **`update_phase_field`**: Update a field (`field_id` and attributes to change; optional `extra_input`). `field_id` is the value returned by `create_phase_field` or `get_phase_fields` (Pipefy uses string slugs such as `detalhe_mcp` or numeric IDs when applicable).
+* **`delete_phase_field`**: Delete a phase field permanently.
+    * **⚠️ Destructive**: Cannot be undone. Confirm with the user before calling.
+
+**Label**
+
+* **`create_label`**: Create a label on a pipe (`pipe_id`, `name`, `color`).
+* **`update_label`**: Update a label (`label_id` and attributes to change; optional `extra_input`).
+* **`delete_label`**: Delete a label permanently.
+    * **⚠️ Destructive**: Cannot be undone. Confirm with the user before calling.
+
 ### Card Tools
 
 * **`get_cards`**: List and search for cards in a specific pipe (allows the Agent to understand your backlog). Set `include_fields=true` to include each card's custom fields (name and value) in the response.
@@ -197,6 +232,30 @@ To inspect servers locally developed or downloaded as a repository, the most com
 
 ```bash
 npx @modelcontextprotocol/inspector uv --directory . run pipeclaw
+```
+
+This is the **same entrypoint Pipeclaw uses** (`pipeclaw` → full FastMCP app, lifespan, and all tools). Use it to exercise `create_pipe`, `create_phase`, `create_phase_field`, `create_label`, etc., with the same JSON arguments the IDE will send.
+
+**Pipe building checks in the Inspector**
+
+- **`create_label`**: `color` must be a **hex string** (e.g. `#FF0000`), not a color name — see `introspect_type` on `CreateLabelInput`.
+- **`delete_pipe`**: first call without confirmation returns a **preview**; second call with `confirm=true` performs the deletion.
+
+### Integration tests (full MCP stack)
+
+Automated tests that call tools through **`pipefy_mcp.server.mcp`** (identical MCP path to production) are in `tests/tools/test_pipe_config_tools_live.py`. They require a `.env` with valid `PIPEFY_*` OAuth settings.
+
+```bash
+# Read-only + any test that only needs creds (e.g. introspect_type)
+uv run pytest tests/tools/test_pipe_config_tools_live.py -m integration -v
+
+# Optional: exercise get_pipe / create_label against a known test pipe
+export PIPE_BUILDING_LIVE_PIPE_ID=123456789
+
+# Optional: exercise create_pipe (creates a new pipe each run)
+export PIPE_BUILDING_LIVE_ORG_ID=300514213
+
+uv run pytest tests/tools/test_pipe_config_tools_live.py -m integration -v
 ```
 
 ### Updating GraphQL Schema

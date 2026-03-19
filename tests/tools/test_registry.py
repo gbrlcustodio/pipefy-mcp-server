@@ -21,11 +21,15 @@ class TestToolRegistry:
         assert registry.services_container is mock_container
 
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
+    @patch("pipefy_mcp.tools.registry.PipeConfigTools.register")
     @patch("pipefy_mcp.tools.registry.PipeTools.register")
     def test_register_tools_calls_pipe_and_introspection_tools_register(
-        self, mock_pipe_tools_register, mock_introspection_tools_register
+        self,
+        mock_pipe_tools_register,
+        mock_pipe_config_tools_register,
+        mock_introspection_tools_register,
     ):
-        """Test that register_tools calls PipeTools and IntrospectionTools with the client."""
+        """Test that register_tools calls Pipe, PipeConfig, and Introspection tools with the client."""
         mock_mcp = Mock(spec=FastMCP)
         mock_client = Mock()
         mock_container = Mock(spec=ServicesContainer)
@@ -35,6 +39,7 @@ class TestToolRegistry:
         result = registry.register_tools()
 
         mock_pipe_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_pipe_config_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
         assert result is mock_mcp
 
@@ -56,10 +61,12 @@ class TestToolRegistry:
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
     @patch("pipefy_mcp.tools.registry.AiAgentTools.register")
     @patch("pipefy_mcp.tools.registry.AiAutomationTools.register")
+    @patch("pipefy_mcp.tools.registry.PipeConfigTools.register")
     @patch("pipefy_mcp.tools.registry.PipeTools.register")
     def test_register_tools_calls_ai_tools_register(
         self,
         mock_pipe_tools_register,
+        mock_pipe_config_tools_register,
         mock_ai_automation_tools_register,
         mock_ai_agent_tools_register,
         mock_introspection_tools_register,
@@ -77,6 +84,7 @@ class TestToolRegistry:
         registry.register_tools()
 
         mock_pipe_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_pipe_config_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_ai_automation_tools_register.assert_called_once_with(
             mock_mcp, mock_ai_automation_service

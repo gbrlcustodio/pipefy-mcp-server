@@ -5,6 +5,7 @@ from typing import Any
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.services.pipefy.card_service import CardService
+from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
@@ -24,6 +25,7 @@ class PipefyClient:
         )
         self._pipe_service = PipeService(settings=settings, auth=auth)
         self._card_service = CardService(settings=settings, auth=auth)
+        self._pipe_config_service = PipeConfigService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
@@ -31,6 +33,89 @@ class PipefyClient:
     async def get_pipe(self, pipe_id: int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
         return await self._pipe_service.get_pipe(pipe_id)
+
+    async def create_pipe(self, name: str, organization_id: int) -> dict:
+        """Create a new pipe in the organization."""
+        return await self._pipe_config_service.create_pipe(name, organization_id)
+
+    async def update_pipe(self, pipe_id: int, **attrs: Any) -> dict:
+        """Update pipe attributes (see Pipefy `UpdatePipeInput`)."""
+        return await self._pipe_config_service.update_pipe(pipe_id, **attrs)
+
+    async def delete_pipe(self, pipe_id: int) -> dict:
+        """Delete a pipe by ID (permanent)."""
+        return await self._pipe_config_service.delete_pipe(pipe_id)
+
+    async def clone_pipe(
+        self,
+        pipe_template_id: int,
+        organization_id: int | None = None,
+    ) -> dict:
+        """Clone a pipe from a template pipe ID."""
+        return await self._pipe_config_service.clone_pipe(
+            pipe_template_id,
+            organization_id=organization_id,
+        )
+
+    async def create_phase(
+        self,
+        pipe_id: int,
+        name: str,
+        done: bool = False,
+        index: float | int | None = None,
+        description: str | None = None,
+    ) -> dict:
+        """Create a phase in a pipe."""
+        return await self._pipe_config_service.create_phase(
+            pipe_id,
+            name,
+            done=done,
+            index=index,
+            description=description,
+        )
+
+    async def update_phase(self, phase_id: int, **attrs: Any) -> dict:
+        """Update phase attributes (see Pipefy `UpdatePhaseInput`)."""
+        return await self._pipe_config_service.update_phase(phase_id, **attrs)
+
+    async def delete_phase(self, phase_id: int) -> dict:
+        """Delete a phase by ID (permanent)."""
+        return await self._pipe_config_service.delete_phase(phase_id)
+
+    async def create_phase_field(
+        self,
+        phase_id: int,
+        label: str,
+        field_type: str,
+        **attrs: Any,
+    ) -> dict:
+        """Create a field on a phase (`field_type` is passed through to the API)."""
+        return await self._pipe_config_service.create_phase_field(
+            phase_id,
+            label,
+            field_type,
+            **attrs,
+        )
+
+    async def update_phase_field(self, field_id: str | int, **attrs: Any) -> dict:
+        """Update a phase field (see Pipefy `UpdatePhaseFieldInput`)."""
+        return await self._pipe_config_service.update_phase_field(field_id, **attrs)
+
+    async def delete_phase_field(self, field_id: str | int) -> dict:
+        """Delete a phase field by ID (permanent)."""
+        return await self._pipe_config_service.delete_phase_field(field_id)
+
+    async def create_label(self, pipe_id: int, name: str, color: str) -> dict:
+        """Create a label on a pipe."""
+        return await self._pipe_config_service.create_label(pipe_id, name, color)
+
+    async def update_label(self, label_id: int, **attrs: Any) -> dict:
+        """Update a label (see Pipefy `UpdateLabelInput`)."""
+        return await self._pipe_config_service.update_label(label_id, **attrs)
+
+    async def delete_label(self, label_id: int) -> dict:
+        """Delete a label by ID (permanent)."""
+        return await self._pipe_config_service.delete_label(label_id)
 
     async def get_pipe_members(self, pipe_id: int) -> dict:
         """Get the members of a pipe."""

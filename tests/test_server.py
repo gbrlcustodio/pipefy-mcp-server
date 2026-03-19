@@ -41,12 +41,21 @@ _MINIMAL_PIPEFY_SETTINGS = Settings(
 async def test_register_tools(client_session):
     expected_tool_names = [
         "add_card_comment",
+        "clone_pipe",
         "create_ai_agent",
         "create_ai_automation",
-        "toggle_ai_agent_status",
         "create_card",
+        "create_label",
+        "create_phase",
+        "create_phase_field",
+        "create_pipe",
+        "toggle_ai_agent_status",
         "delete_card",
         "delete_comment",
+        "delete_label",
+        "delete_phase",
+        "delete_phase_field",
+        "delete_pipe",
         "execute_graphql",
         "fill_card_phase_fields",
         "find_cards",
@@ -66,6 +75,10 @@ async def test_register_tools(client_session):
         "update_card",
         "update_card_field",
         "update_comment",
+        "update_label",
+        "update_phase",
+        "update_phase_field",
+        "update_pipe",
     ]
 
     with patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS):

@@ -583,7 +583,6 @@ wheels = [
 
 [[package]]
 name = "pipeclaw"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "gql", extra = ["httpx"] },

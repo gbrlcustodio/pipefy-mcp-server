@@ -12,7 +12,7 @@ variables:
   image: python:3.12-bookworm
   before_script:
     - pip install --no-cache-dir "uv>=0.10"
-    - uv sync --locked --all-extras --dev
+    - uv sync --locked --dev
 
 lint:
   extends: .lint-test-base
@@ -23,7 +23,7 @@ lint:
     GIT_DEPTH: 0
   before_script:
     - pip install --no-cache-dir "uv>=0.10"
-    - uv sync --locked --all-extras --dev
+    - uv sync --locked --dev
     - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
   script:
     - |
@@ -47,4 +47,5 @@ test:
     PIPEFY_OAUTH_CLIENT: "CLIENT"
     PIPEFY_OAUTH_SECRET: "SECRET"
   script:
-    - uv run pytest
+    # Exclude live-Pipefy integration tests (need real credentials; placeholders would run otherwise)
+    - uv run pytest -m "not integration"

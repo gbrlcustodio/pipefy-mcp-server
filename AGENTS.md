@@ -24,6 +24,10 @@
 - Framework: `pytest` with `pytest-asyncio`, `pytest-cov`, and `pytest-mock`.
 - Keep new tests alongside existing suites in `tests/`, aligned with the module they cover.
 - Use markers `@pytest.mark.unit` or `@pytest.mark.integration` when appropriate.
+- **Integration (live Pipefy):** Tests marked `@pytest.mark.integration` call the real GraphQL API when `PIPEFY_*` credentials are set in `.env` (skips otherwise).
+  - Service layer: `tests/services/pipefy/test_schema_introspection_integration.py`
+  - MCP tools (`call_tool` + real `PipefyClient`): `tests/tools/test_introspection_tools_live.py`
+  - Run both: `uv run pytest tests/services/pipefy/test_schema_introspection_integration.py tests/tools/test_introspection_tools_live.py -m integration -v`. CI-style run without network: `uv run pytest -m "not integration"`.
 - Examples for targeted runs:
   - Single file: `uv run pytest tests/tools/test_pipe_tools.py`
   - Single test case: `uv run pytest tests/tools/test_pipe_tools.py -k "test_create_card"`

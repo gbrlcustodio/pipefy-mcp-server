@@ -1,161 +1,119 @@
-# MCP server for Pipefy
+# PipeClaw 🦞 - The agentic honey badger with claws
 
-<p align="center">
-  <strong>Pipefy MCP is an open-source MCP server that lets your IDE safely create cards, update field information, and use any Pipefy resource — all with built-in safety controls.</strong>
-</p>
+Pipefy's MCP server for **PipeClaw**. It exposes a focused set of **tools** so AI agents can work with pipes, cards, comments, AI automations and AI agents, using the same GraphQL API your org already trusts.
 
-<p align="center">
-  🚧 <strong>Alpha Release:</strong> Building in public. <br>
-  📢 Share your feedback via GitLab issues or at dev@pipefy.com.
-</p>
+**Why we’re building it:** this is the MCP layer we ship for **PipeClaw**—our agent stack on top of Pipefy—can **perform real actions inside the product** (pipes, cards, fields, automations and AI agents) through a single, maintainable tool surface instead of ad hoc integrations. 
 
-<p align="center">
-  <a href="https://gitlab.com/pipefy/vibe-coding/pipeclaw/-/pipelines"><img src="https://gitlab.com/pipefy/vibe-coding/pipeclaw/badges/main/pipeline.svg" alt="CI Status" /></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%2B-blue.svg" alt="Python 3.12+" /></a>
-  <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/uv-package%20manager-blueviolet" alt="uv package manager" /></a>
-  <a href="https://modelcontextprotocol.io/introduction"><img src="https://img.shields.io/badge/MCP-Server-orange" alt="MCP Server" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
-</p>
+The same tools work for other MCP clients (e.g. Cursor). When a dedicated tool is missing or Pipefy’s schema changes, **introspection** and optional **raw GraphQL** keep agents unblocked while still using your service account and the standard GraphQL endpoint.
 
-> **⚠️ Disclaimer:** This is a "Build in public" project primarily aimed at developer workflows. It is **not** the official, supported Pipefy integration for external enterprise clients, but rather a tool to facilitate the development experience for those who use Pipefy for task management.
+## Contents
 
-## Table of contents
-<p align="center">
-  <a href="#feature-overview">Feature overview</a> •
-  <a href="#getting-started">Getting started</a> •
-  <a href="#usage-with-cursor">Usage with Cursor</a> •
-  <a href="#development--testing">Development & Testing</a> •
-  <a href="#contributing">Contributing</a>
-</p>
+- [Tools](#tools)
+  - [Pipe & form fields](#pipe--form-fields)
+  - [Cards & comments](#cards--comments)
+  - [Card updates: which tool?](#card-updates-which-tool)
+  - [Introspection & raw GraphQL](#introspection--raw-graphql)
+  - [AI automation](#ai-automation)
+  - [AI agents](#ai-agents)
+- [Getting started](#getting-started)
+- [Usage with Cursor](#usage-with-cursor)
+- [Development & testing](#development--testing)
 
-## Feature Overview
+## Tools
 
-This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonnet 4.5 inside Cursor) can invoke. The codebase follows a clean architecture with a facade pattern delegating to domain-specific services (Pipe and Card operations), keeping GraphQL queries and utilities organized in separate modules.
+All tools target Pipefy’s **standard GraphQL** endpoint (`PIPEFY_GRAPHQL_URL`). Credentials are scoped by your **service account** (pipes and permissions you grant).
 
-### Pipe Tools
+### Pipe & form fields
 
-* **`get_pipe`**: Get details about a pipe's structure, including phases, labels, and start form fields.
-* **`get_start_form_fields`**: Inspect the schema of a pipe's start form. Use this to let the Agent know which fields are required *before* it tries to create a card.
+| Tool | Purpose |
+|------|--------|
+| **`get_pipe`** | Pipe structure: phases, labels, start form fields. |
+| **`get_pipe_members`** | Members of a pipe. |
+| **`get_start_form_fields`** | Start form field definitions (types, required, options). Use before **`create_card`**. |
+| **`get_phase_fields`** | Fields for a phase (for phase-specific updates). |
+| **`search_pipes`** | Find pipes across organizations (optional name filter). |
 
-### Card Tools
+### Cards & comments
 
-* **`get_cards`**: List and search for cards in a specific pipe (allows the Agent to understand your backlog). Set `include_fields=true` to include each card's custom fields (name and value) in the response.
-* **`find_cards`**: Find cards in a pipe where a specific field equals a given value (e.g. Status = In Progress). Use `pipe_id`, `field_id`, and `field_value`; set `include_fields=true` to include each card's custom fields. Get `field_id` from `get_start_form_fields` or `get_phase_fields`.
-* **`get_card`**: Retrieve full details of a specific card. Set `include_fields=true` to include the card's custom fields (name and value) in the response.
-* **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
-    * **Elicitation**: Elicitation is an MCP feature that allows the server to request additional information from the user mid-tool-execution. This server uses MCP's elicitation feature to prompt the user for required field values before creating the card.
-* **`add_card_comment`**: Add a text comment to a card by its ID. Requires `card_id` and `text` (1–1000 characters).
-* **`update_comment`**: Update an existing comment by its ID. Requires `comment_id` and `text` (1–1000 characters).
-* **`delete_comment`**: Delete a comment by its ID. Requires `comment_id`.
-* **`delete_card`**: Permanently delete a card from Pipefy.
-    * **⚠️ Destructive Operation**: This action cannot be undone. Use with extreme caution.
-    * **Two-Step Process**: By default, returns a preview showing card details and pipe name. Set `confirm=true` to actually delete the card.
-    * **Safety Features**: Includes input validation and detailed error messages for permission issues.
+| Tool | Purpose |
+|------|--------|
+| **`get_cards`** | List/search cards in a pipe. Use `include_fields=true` for custom field name/value on each card. |
+| **`find_cards`** | Cards where a field equals a value (`pipe_id`, `field_id`, `field_value`). Optional `include_fields`. |
+| **`get_card`** | One card by ID. Optional `include_fields`. |
+| **`create_card`** | Create a card; may use MCP **elicitation** for required fields when supported. |
+| **`add_card_comment`** / **`update_comment`** / **`delete_comment`** | Comment lifecycle by `card_id` / `comment_id` and text where applicable. |
+| **`move_card_to_phase`** | Move a card to another phase. |
+| **`delete_card`** | **Destructive.** Preview first; set `confirm=true` to delete. |
+| **`fill_card_phase_fields`** | Fill phase fields (with elicitation when available). |
+| **`update_card_field`** | Update a **single** custom field (`updateCardField`). |
+| **`update_card`** | Card metadata (`title`, assignees, labels, due date) and/or multiple fields via `field_updates` (`updateCard` / `updateFieldsValues`). |
 
-    ```mermaid
-    sequenceDiagram
-        participant U as User
-        participant A as Agent
-        participant S as MCP Server
-        participant P as Pipefy API
+### Card updates: which tool?
 
-        U->>A: "Create a new card in pipe 123"
-        A->>S: create_card(pipe_id=123)
-        S->>P: Get required fields for pipe 123
-        S-->>A: Elicit(fields=["title", "due_date"])
-        A-->>U: I need more information: Title, Due Date
-        U-->>A: "Fix bug in login", "2025-12-31"
-        A->>S: create_card(pipe_id=123, title="Fix bug in login", due_date="2025-12-31")
-        S->>P: mutation createCard(...)
-        P-->>S: {"data": {"createCard": ...}}
-        S-->>A: {"success": true, "card_id": 456}
-    ```
+- **`update_card_field`** — one field, full replacement for that field.
+- **`update_card`** with **`field_updates`** — several custom fields in one call.
+- **`update_card`** with **title / assignee_ids / label_ids / due_date** — metadata (can combine with `field_updates`).
 
-* **`move_card_to_phase`**: Move a card to a different phase (e.g., move a task to "Code Review" after pushing a PR).
-* **`update_card_field`**: Update a single field of an existing card via `updateCardField` (simple, full replacement of that field's value).
-* **`update_card`**: Update card attributes (title, assignees, labels, due date) and/or multiple custom fields using `updateCard` and `updateFieldsValues`.
+### Introspection & raw GraphQL
 
-### Card update tools: when to use each
+These tools support **discovery** and a **last-resort execution path** when no dedicated tool fits or Pipefy changes the schema. They use the same OAuth-backed GraphQL client as the rest of Pipeclaw.
 
-- **Use `update_card_field`** when you only need to change *one* field on a card (for example, updating a status, a text field, or a single label value) and you are fine replacing the entire value for that field in one shot.
-- **Use `update_card` with `field_updates`** when you want to update **one or more custom fields at once** by ID, replacing their values (the server converts this to `updateFieldsValues` with `REPLACE` under the hood).
-- **Use `update_card` with attribute parameters** (`title`, `assignee_ids`, `label_ids`, `due_date`) when you need to update card metadata. These can be combined with `field_updates` in a single call.
+| Tool | Read-only hint | Purpose |
+|------|----------------|--------|
+| **`introspect_type`** | Yes | Inspect a GraphQL type: `fields`, `inputFields`, or `enumValues` (e.g. `Card`, `CreateCardInput`). |
+| **`introspect_mutation`** | Yes | Inspect a root mutation: arguments, defaults, return type (e.g. `createCard`). |
+| **`search_schema`** | Yes | Keyword search over type **names** and **descriptions** (case-insensitive; `__` introspection types excluded). |
+| **`execute_graphql`** | **No** | Run an arbitrary query or mutation. Syntax is validated before the request. **Prefer dedicated tools when they exist.** Use **`introspect_mutation`** (and related types) before sending mutations. |
 
-### AI Automation Tools
+Responses are JSON formatted for readability in the agent (`success` / `result` or `error`). GraphQL **errors** from the transport are surfaced explicitly, not swallowed.
 
-* **`create_ai_automation`**: Create a simple AI automation that generates content with a prompt and writes the result to one or more card fields. Best for straightforward field-filling use cases (e.g. summarize, classify, extract data into a field). Requires AI to be enabled for the pipe in Pipefy UI.
-    * `name` (str): Automation name.
-    * `event_id` (str): Event trigger (e.g. `card_created`, `card_moved`).
-    * `pipe_id` (str): Pipe ID where the automation runs.
-    * `prompt` (str): AI prompt text that generates the content.
-    * `field_ids` (list[str]): List of field internal IDs to write the result to.
-    * `condition` (dict, optional): Condition structure for the automation trigger.
+### AI automation
 
-* **`update_ai_automation`**: Update an existing AI automation's name, prompt, destination fields, or active state.
-    * `automation_id` (str): ID of the automation to update.
-    * `name` (str, optional): New automation name.
-    * `active` (bool, optional): Whether the automation is active.
-    * `prompt` (str, optional): New AI prompt text.
-    * `field_ids` (list[str], optional): New list of field internal IDs.
-    * `condition` (dict, optional): New condition structure.
+| Tool | Purpose |
+|------|--------|
+| **`create_ai_automation`** | Create a prompt-driven automation writing to card fields (requires AI enabled on the pipe). |
+| **`update_ai_automation`** | Update name, prompt, fields, condition, or active flag. |
 
-### AI Agent Tools
+### AI agents
 
-* **`create_ai_agent`**: Create an AI Agent (empty, no behaviors) attached to a pipe. Use `update_ai_agent` to configure 1 to 5 behaviors. `repo_uuid` is the pipe's unique identifier — not the numeric pipe ID from the URL. Resolve it via the `get_pipe` tool.
-    * `name` (str): Agent display name.
-    * `repo_uuid` (str): UUID of the pipe the agent belongs to.
+| Tool | Purpose |
+|------|--------|
+| **`create_ai_agent`** | Create an agent on a pipe (`repo_uuid` from **`get_pipe`**, not the numeric URL id). |
+| **`update_ai_agent`** | Full agent payload: instruction + 1–5 behaviors (API replaces the whole config). |
+| **`toggle_ai_agent_status`** | Enable or disable an agent without resending full configuration. |
 
-* **`update_ai_agent`**: Update an AI Agent with an instruction and 1 to 5 behaviors that can execute complex actions (e.g. move card, update fields conditionally). The API replaces the entire agent payload, so always send the complete list of behaviors.
-    * `uuid` (str): UUID of the agent to update.
-    * `name` (str): Agent display name.
-    * `repo_uuid` (str): UUID of the pipe the agent belongs to.
-    * `instruction` (str): Global instruction for the agent.
-    * `behaviors` (list[dict]): List of 1 to 5 behavior dicts (`name` and `event_id` required per behavior).
-    * `data_source_ids` (list[str], optional): List of data source IDs.
-
-* **`toggle_ai_agent_status`**: Enable or disable an AI Agent without resending its configuration. Agents are created inactive by default; use this after configuring behaviors to activate them.
-    * `uuid` (str): UUID of the agent to enable/disable.
-    * `active` (bool): `true` to activate, `false` to deactivate.
-
-## Getting Started
+## Getting started
 
 ### Prerequisites
-Installing the server requires the following on your system:
-- Python 3.12+
-- A **Pipefy Service Account Token** (Generate in Admin Panel > Service Accounts).
-- Rembember to add the Service account to the pipe you want the AI to use.
 
-### Installation
-We recommend using `uv` for dependency management. Ensure it's [installed](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_1).
+- Python **3.12+**
+- A **Pipefy service account** (Admin → Service Accounts) with access to the pipes the agent should use.
+
+### Install
 
 ```sh
-# Clone the repository
 git clone https://gitlab.com/pipefy/vibe-coding/pipeclaw.git
 cd pipeclaw
-
-# Sync dependencies
 uv sync
 ```
-## Usage with Cursor
-To use this with Cursor, you need to register it as an MCP server in your settings.
 
-1. Open Cursor.
-1. Navigate to Cursor Settings > Features > MCP Servers.
-1. Click + Add New MCP Server.
-1. Fill in the details as shown in the configuration block below.
+Run the server locally:
+
+```sh
+uv run pipeclaw
+```
+
+## Usage with Cursor
+
+Register Pipeclaw as an MCP server (Cursor **Settings → MCP**).
 
 ```json
 {
     "mcpServers": {
-        "pipefy": {
+        "pipeclaw": {
             "cwd": "/absolute/path/to/pipeclaw",
             "command": "uv",
-            "args": [
-                "run",
-                "--directory",
-                ".",
-                "pipeclaw"
-            ],
+            "args": ["run", "--directory", ".", "pipeclaw"],
             "env": {
                 "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
                 "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
@@ -167,45 +125,17 @@ To use this with Cursor, you need to register it as an MCP server in your settin
 }
 ```
 
-## Development & Testing
-
-### Running Tests
+## Development & testing
 
 ```bash
-# Run all tests
 uv run pytest
-
-# Run with coverage report
 uv run pytest --cov=src/pipefy_mcp/services/pipefy --cov-report=term-missing
 ```
 
-### Inspecting locally developed servers
-To inspect servers locally developed or downloaded as a repository, the most common way is using the MCP Inspector:
+**MCP Inspector**
 
 ```bash
 npx @modelcontextprotocol/inspector uv --directory . run pipeclaw
 ```
 
-### Updating GraphQL Schema
-If you are contributing and need to update the Pipefy GraphQL definitions:
-
-```bash
-uv run gql-cli https://app.pipefy.com/graphql --print-schema --schema-download --headers 'Authorization: Bearer <AUTH_TOKEN>' > tests/services/pipefy/schema.graphql
-```
-
-### Code Quality
-
-```bash
-# Lint code
-uv run ruff check src/
-
-# Format code
-uv run ruff format src/
-```
-
-## Contributing
-We are building this in public and we need your feedback!
-
-- **Field mapping:** If you encounter a complex field type that the Agent doesn't fill correctly, please open an issue.
-- **New tools:** What other Pipefy actions would improve your workflow? Feel free to open an issue or a PR explaining what it is and how you would use it.
-
+**Built with [Cursor](https://cursor.com/)** using Composer 2.0, Claude Opus 4.6, GPT 5.3 Codex, Gemini 3.1 Pro and Kimi K2.5.

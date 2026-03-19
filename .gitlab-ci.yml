@@ -1,0 +1,50 @@
+# Pipeclaw — GitLab CI (Python 3.12, uv)
+# Lint runs only on merge requests (changed .py files). Tests run on all pipelines.
+
+stages:
+  - lint
+  - test
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+.lint-test-base:
+  image: python:3.12-bookworm
+  before_script:
+    - pip install --no-cache-dir "uv>=0.10"
+    - uv sync --locked --all-extras --dev
+
+lint:
+  extends: .lint-test-base
+  stage: lint
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: 0
+  before_script:
+    - pip install --no-cache-dir "uv>=0.10"
+    - uv sync --locked --all-extras --dev
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+  script:
+    - |
+      set -eu
+      RANGE="origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}...HEAD"
+      CHANGED=$(git diff --name-only --diff-filter=ACMRT "$RANGE" | grep '\.py$' || true)
+      if [ -z "$CHANGED" ]; then
+        echo "No Python files in MR diff; skipping ruff."
+        exit 0
+      fi
+      echo "Ruff on: $CHANGED"
+      uv run ruff check $CHANGED
+      uv run ruff format --check $CHANGED
+
+test:
+  extends: .lint-test-base
+  stage: test
+  variables:
+    PIPEFY_GRAPHQL_URL: "GRAPHQL_URL"
+    PIPEFY_OAUTH_URL: "OAUTH_URL"
+    PIPEFY_OAUTH_CLIENT: "CLIENT"
+    PIPEFY_OAUTH_SECRET: "SECRET"
+  script:
+    - uv run pytest

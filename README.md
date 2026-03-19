@@ -1,93 +1,211 @@
-# pipeclaw
+# MCP server for Pipefy
 
+<p align="center">
+  <strong>Pipefy MCP is an open-source MCP server that lets your IDE safely create cards, update field information, and use any Pipefy resource — all with built-in safety controls.</strong>
+</p>
 
+<p align="center">
+  🚧 <strong>Alpha Release:</strong> Building in public. <br>
+  📢 Share your feedback via GitLab issues or at dev@pipefy.com.
+</p>
 
-## Getting started
+<p align="center">
+  <a href="https://gitlab.com/pipefy/vibe-coding/pipeclaw/-/pipelines"><img src="https://gitlab.com/pipefy/vibe-coding/pipeclaw/badges/main/pipeline.svg" alt="CI Status" /></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%2B-blue.svg" alt="Python 3.12+" /></a>
+  <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/uv-package%20manager-blueviolet" alt="uv package manager" /></a>
+  <a href="https://modelcontextprotocol.io/introduction"><img src="https://img.shields.io/badge/MCP-Server-orange" alt="MCP Server" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
+</p>
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+> **⚠️ Disclaimer:** This is a "Build in public" project primarily aimed at developer workflows. It is **not** the official, supported Pipefy integration for external enterprise clients, but rather a tool to facilitate the development experience for those who use Pipefy for task management.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Table of contents
+<p align="center">
+  <a href="#feature-overview">Feature overview</a> •
+  <a href="#getting-started">Getting started</a> •
+  <a href="#usage-with-cursor">Usage with Cursor</a> •
+  <a href="#development--testing">Development & Testing</a> •
+  <a href="#contributing">Contributing</a>
+</p>
 
-## Add your files
+## Feature Overview
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonnet 4.5 inside Cursor) can invoke. The codebase follows a clean architecture with a facade pattern delegating to domain-specific services (Pipe and Card operations), keeping GraphQL queries and utilities organized in separate modules.
 
+### Pipe Tools
+
+* **`get_pipe`**: Get details about a pipe's structure, including phases, labels, and start form fields.
+* **`get_start_form_fields`**: Inspect the schema of a pipe's start form. Use this to let the Agent know which fields are required *before* it tries to create a card.
+
+### Card Tools
+
+* **`get_cards`**: List and search for cards in a specific pipe (allows the Agent to understand your backlog). Set `include_fields=true` to include each card's custom fields (name and value) in the response.
+* **`find_cards`**: Find cards in a pipe where a specific field equals a given value (e.g. Status = In Progress). Use `pipe_id`, `field_id`, and `field_value`; set `include_fields=true` to include each card's custom fields. Get `field_id` from `get_start_form_fields` or `get_phase_fields`.
+* **`get_card`**: Retrieve full details of a specific card. Set `include_fields=true` to include the card's custom fields (name and value) in the response.
+* **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
+    * **Elicitation**: Elicitation is an MCP feature that allows the server to request additional information from the user mid-tool-execution. This server uses MCP's elicitation feature to prompt the user for required field values before creating the card.
+* **`add_card_comment`**: Add a text comment to a card by its ID. Requires `card_id` and `text` (1–1000 characters).
+* **`update_comment`**: Update an existing comment by its ID. Requires `comment_id` and `text` (1–1000 characters).
+* **`delete_comment`**: Delete a comment by its ID. Requires `comment_id`.
+* **`delete_card`**: Permanently delete a card from Pipefy.
+    * **⚠️ Destructive Operation**: This action cannot be undone. Use with extreme caution.
+    * **Two-Step Process**: By default, returns a preview showing card details and pipe name. Set `confirm=true` to actually delete the card.
+    * **Safety Features**: Includes input validation and detailed error messages for permission issues.
+
+    ```mermaid
+    sequenceDiagram
+        participant U as User
+        participant A as Agent
+        participant S as MCP Server
+        participant P as Pipefy API
+
+        U->>A: "Create a new card in pipe 123"
+        A->>S: create_card(pipe_id=123)
+        S->>P: Get required fields for pipe 123
+        S-->>A: Elicit(fields=["title", "due_date"])
+        A-->>U: I need more information: Title, Due Date
+        U-->>A: "Fix bug in login", "2025-12-31"
+        A->>S: create_card(pipe_id=123, title="Fix bug in login", due_date="2025-12-31")
+        S->>P: mutation createCard(...)
+        P-->>S: {"data": {"createCard": ...}}
+        S-->>A: {"success": true, "card_id": 456}
+    ```
+
+* **`move_card_to_phase`**: Move a card to a different phase (e.g., move a task to "Code Review" after pushing a PR).
+* **`update_card_field`**: Update a single field of an existing card via `updateCardField` (simple, full replacement of that field's value).
+* **`update_card`**: Update card attributes (title, assignees, labels, due date) and/or multiple custom fields using `updateCard` and `updateFieldsValues`.
+
+### Card update tools: when to use each
+
+- **Use `update_card_field`** when you only need to change *one* field on a card (for example, updating a status, a text field, or a single label value) and you are fine replacing the entire value for that field in one shot.
+- **Use `update_card` with `field_updates`** when you want to update **one or more custom fields at once** by ID, replacing their values (the server converts this to `updateFieldsValues` with `REPLACE` under the hood).
+- **Use `update_card` with attribute parameters** (`title`, `assignee_ids`, `label_ids`, `due_date`) when you need to update card metadata. These can be combined with `field_updates` in a single call.
+
+### AI Automation Tools
+
+* **`create_ai_automation`**: Create a simple AI automation that generates content with a prompt and writes the result to one or more card fields. Best for straightforward field-filling use cases (e.g. summarize, classify, extract data into a field). Requires AI to be enabled for the pipe in Pipefy UI.
+    * `name` (str): Automation name.
+    * `event_id` (str): Event trigger (e.g. `card_created`, `card_moved`).
+    * `pipe_id` (str): Pipe ID where the automation runs.
+    * `prompt` (str): AI prompt text that generates the content.
+    * `field_ids` (list[str]): List of field internal IDs to write the result to.
+    * `condition` (dict, optional): Condition structure for the automation trigger.
+
+* **`update_ai_automation`**: Update an existing AI automation's name, prompt, destination fields, or active state.
+    * `automation_id` (str): ID of the automation to update.
+    * `name` (str, optional): New automation name.
+    * `active` (bool, optional): Whether the automation is active.
+    * `prompt` (str, optional): New AI prompt text.
+    * `field_ids` (list[str], optional): New list of field internal IDs.
+    * `condition` (dict, optional): New condition structure.
+
+### AI Agent Tools
+
+* **`create_ai_agent`**: Create an AI Agent (empty, no behaviors) attached to a pipe. Use `update_ai_agent` to configure 1 to 5 behaviors. `repo_uuid` is the pipe's unique identifier — not the numeric pipe ID from the URL. Resolve it via the `get_pipe` tool.
+    * `name` (str): Agent display name.
+    * `repo_uuid` (str): UUID of the pipe the agent belongs to.
+
+* **`update_ai_agent`**: Update an AI Agent with an instruction and 1 to 5 behaviors that can execute complex actions (e.g. move card, update fields conditionally). The API replaces the entire agent payload, so always send the complete list of behaviors.
+    * `uuid` (str): UUID of the agent to update.
+    * `name` (str): Agent display name.
+    * `repo_uuid` (str): UUID of the pipe the agent belongs to.
+    * `instruction` (str): Global instruction for the agent.
+    * `behaviors` (list[dict]): List of 1 to 5 behavior dicts (`name` and `event_id` required per behavior).
+    * `data_source_ids` (list[str], optional): List of data source IDs.
+
+* **`toggle_ai_agent_status`**: Enable or disable an AI Agent without resending its configuration. Agents are created inactive by default; use this after configuring behaviors to activate them.
+    * `uuid` (str): UUID of the agent to enable/disable.
+    * `active` (bool): `true` to activate, `false` to deactivate.
+
+## Getting Started
+
+### Prerequisites
+Installing the server requires the following on your system:
+- Python 3.12+
+- A **Pipefy Service Account Token** (Generate in Admin Panel > Service Accounts).
+- Rembember to add the Service account to the pipe you want the AI to use.
+
+### Installation
+We recommend using `uv` for dependency management. Ensure it's [installed](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_1).
+
+```sh
+# Clone the repository
+git clone https://gitlab.com/pipefy/vibe-coding/pipeclaw.git
+cd pipeclaw
+
+# Sync dependencies
+uv sync
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/pipefy/vibe-coding/pipeclaw.git
-git branch -M main
-git push -uf origin main
+## Usage with Cursor
+To use this with Cursor, you need to register it as an MCP server in your settings.
+
+1. Open Cursor.
+1. Navigate to Cursor Settings > Features > MCP Servers.
+1. Click + Add New MCP Server.
+1. Fill in the details as shown in the configuration block below.
+
+```json
+{
+    "mcpServers": {
+        "pipefy": {
+            "cwd": "/absolute/path/to/pipeclaw",
+            "command": "uv",
+            "args": [
+                "run",
+                "--directory",
+                ".",
+                "pipeclaw"
+            ],
+            "env": {
+                "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
+                "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
+                "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
+                "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
+            }
+        }
+    }
+}
 ```
 
-## Integrate with your tools
+## Development & Testing
 
-* [Set up project integrations](https://gitlab.com/pipefy/vibe-coding/pipeclaw/-/settings/integrations)
+### Running Tests
 
-## Collaborate with your team
+```bash
+# Run all tests
+uv run pytest
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+# Run with coverage report
+uv run pytest --cov=src/pipefy_mcp/services/pipefy --cov-report=term-missing
+```
 
-## Test and Deploy
+### Inspecting locally developed servers
+To inspect servers locally developed or downloaded as a repository, the most common way is using the MCP Inspector:
 
-Use the built-in continuous integration in GitLab.
+```bash
+npx @modelcontextprotocol/inspector uv --directory . run pipeclaw
+```
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+### Updating GraphQL Schema
+If you are contributing and need to update the Pipefy GraphQL definitions:
 
-***
+```bash
+uv run gql-cli https://app.pipefy.com/graphql --print-schema --schema-download --headers 'Authorization: Bearer <AUTH_TOKEN>' > tests/services/pipefy/schema.graphql
+```
 
-# Editing this README
+### Code Quality
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+```bash
+# Lint code
+uv run ruff check src/
 
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+# Format code
+uv run ruff format src/
+```
 
 ## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+We are building this in public and we need your feedback!
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+- **Field mapping:** If you encounter a complex field type that the Agent doesn't fill correctly, please open an issue.
+- **New tools:** What other Pipefy actions would improve your workflow? Feel free to open an issue or a PR explaining what it is and how you would use it.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.

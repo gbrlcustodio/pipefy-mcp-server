@@ -22,6 +22,7 @@
 ## Table of contents
 <p align="center">
   <a href="#feature-overview">Feature overview</a> •
+  <a href="#mcp-tools-at-a-glance">MCP tools at a glance</a> •
   <a href="#getting-started">Getting started</a> •
   <a href="#usage-with-cursor">Usage with Cursor</a> •
   <a href="#development--testing">Development & Testing</a> •
@@ -30,140 +31,107 @@
 
 ## Feature Overview
 
-This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonnet 4.5 inside Cursor) can invoke. The codebase follows a clean architecture with a facade pattern delegating to domain-specific services (Pipe and Card operations), keeping GraphQL queries and utilities organized in separate modules.
+This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor). The codebase uses a facade over domain services (pipes, cards, pipe configuration, **database tables**, schema introspection), with GraphQL documents in dedicated modules.
 
-### Pipe Tools
+**Discoverability:** Each tool has a docstring consumed by clients for routing and parameters—treat those as the source of truth for arguments. This README summarizes **what exists** and **cross-cutting behavior** (pagination, destructive flows, introspection); it does not duplicate every parameter.
 
-* **`get_pipe`**: Get details about a pipe's structure, including phases, labels, and start form fields.
-* **`get_start_form_fields`**: Inspect the schema of a pipe's start form. Use this to let the Agent know which fields are required *before* it tries to create a card.
+---
 
-### Pipe building tools
+## MCP tools at a glance
 
-Create and maintain pipe structure (pipes, phases, fields, labels). Write operations; validate IDs and confirm destructive actions with the user when appropriate. Use **`introspect_type`** on inputs such as `CreatePhaseFieldInput` to discover valid field types — types are not validated locally.
+### Reads & search
 
-On success, mutation tools return a **structured** `result` object (the GraphQL payload dict), not a nested JSON string. Each tool accepts optional **`debug=true`** to append GraphQL error codes and `correlation_id` to failure messages (same idea as `delete_pipe`). Keys in `extra_input` that would duplicate primary arguments (`phase_id`, `label`, `type` on `create_phase_field`; `id` on `update_phase_field` / `update_label`) are ignored so callers never hit opaque `TypeError` from duplicate kwargs.
+| Area | Tools |
+|------|--------|
+| **Pipe** | `get_pipe`, `get_start_form_fields`, `get_phase_fields`, `get_pipe_members`, `search_pipes` |
+| **Cards** | `get_cards`, `get_card`, `find_cards` — use `include_fields` when you need custom field name/value on each card. |
+| **Database tables** | `get_table`, `get_tables`, `get_table_records`, `get_table_record`, `find_records` |
 
-**Pipe**
+### Pipe building (structure & labels)
 
-* **`create_pipe`**: Create a new pipe in an organization (`name`, `organization_id`).
-* **`update_pipe`**: Update pipe settings (`pipe_id`; optional `name`, `icon`, `color`, `preferences`).
-* **`delete_pipe`**: Delete a pipe permanently.
-    * **⚠️ Destructive**: **Two-step flow** — default returns a preview only; call again with `confirm=true` after explicit user confirmation.
-* **`clone_pipe`**: Clone from a template pipe ID (`pipe_template_id`; optional `organization_id`).
+Create and update pipes, phases, phase fields, and labels. **Field types** are not validated locally—use **`introspect_type`** (e.g. on `CreatePhaseFieldInput`) for allowed values.
 
-**Phase**
+Successful mutations return a **structured** `result` (GraphQL payload). Most write tools support optional **`debug=true`** on errors (GraphQL codes + `correlation_id`). **`extra_input`** merges extra API keys; keys that would duplicate primary arguments are ignored (same pattern as table-field tools).
 
-* **`create_phase`**: Add a phase (`pipe_id`, `name`; optional `done`, `index`, `description`).
-* **`update_phase`**: Update a phase (`phase_id` and attributes to change).
-* **`delete_phase`**: Delete a phase permanently.
-    * **⚠️ Destructive**: Cannot be undone. Confirm with the user before calling.
+| Group | Tools | Notes |
+|-------|--------|--------|
+| Pipe | `create_pipe`, `update_pipe`, `delete_pipe`, `clone_pipe` | **`delete_pipe`**: two-step — preview first, then `confirm=true` after user approval. |
+| Phase | `create_phase`, `update_phase`, `delete_phase` | Destructive deletes: confirm with the user. |
+| Phase field | `create_phase_field`, `update_phase_field`, `delete_phase_field` | `field_type` maps to API `type`; `field_id` may be a slug or numeric ID. |
+| Label | `create_label`, `update_label`, `delete_label` | **`color`** must be a **hex** string (e.g. `#FF0000`), not a name. |
 
-**Phase field**
+### Cards (lifecycle & comments)
 
-* **`create_phase_field`**: Add a field (`phase_id`, `label`, `field_type`; optional `extra_input` for additional API fields). `field_type` is passed through to Pipefy as input `type`.
-* **`update_phase_field`**: Update a field (`field_id` and attributes to change; optional `extra_input`). `field_id` is the value returned by `create_phase_field` or `get_phase_fields` (Pipefy uses string slugs such as `detalhe_mcp` or numeric IDs when applicable).
-* **`delete_phase_field`**: Delete a phase field permanently.
-    * **⚠️ Destructive**: Cannot be undone. Confirm with the user before calling.
+| Tool | Role |
+|------|------|
+| `create_card` | Create a card; may use **elicitation** to ask the user for required fields mid-call. |
+| `add_card_comment`, `update_comment`, `delete_comment` | Comments (`text` length limits enforced). |
+| `move_card_to_phase` | Move card to another phase. |
+| `update_card_field` | Single-field update (`updateCardField`). |
+| `update_card` | Metadata (`title`, assignees, labels, due date) **and/or** multiple custom fields via `field_updates`. |
+| `delete_card` | **Two-step**: default preview; `confirm=true` after explicit user confirmation. |
 
-**Label**
+**Choosing card updates:** `update_card_field` = one field, full replacement. `update_card` + `field_updates` = several custom fields at once. `update_card` with attribute args = metadata (combinable with `field_updates`).
 
-* **`create_label`**: Create a label on a pipe (`pipe_id`, `name`, `color`).
-* **`update_label`**: Update a label (`label_id` and attributes to change; optional `extra_input`).
-* **`delete_label`**: Delete a label permanently.
-    * **⚠️ Destructive**: Cannot be undone. Confirm with the user before calling.
+<details>
+<summary><strong>Optional:</strong> sequence diagram for <code>create_card</code> + elicitation</summary>
 
-### Card Tools
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant A as Agent
+    participant S as MCP Server
+    participant P as Pipefy API
 
-* **`get_cards`**: List and search for cards in a specific pipe (allows the Agent to understand your backlog). Set `include_fields=true` to include each card's custom fields (name and value) in the response.
-* **`find_cards`**: Find cards in a pipe where a specific field equals a given value (e.g. Status = In Progress). Use `pipe_id`, `field_id`, and `field_value`; set `include_fields=true` to include each card's custom fields. Get `field_id` from `get_start_form_fields` or `get_phase_fields`.
-* **`get_card`**: Retrieve full details of a specific card. Set `include_fields=true` to include the card's custom fields (name and value) in the response.
-* **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
-    * **Elicitation**: Elicitation is an MCP feature that allows the server to request additional information from the user mid-tool-execution. This server uses MCP's elicitation feature to prompt the user for required field values before creating the card.
-* **`add_card_comment`**: Add a text comment to a card by its ID. Requires `card_id` and `text` (1–1000 characters).
-* **`update_comment`**: Update an existing comment by its ID. Requires `comment_id` and `text` (1–1000 characters).
-* **`delete_comment`**: Delete a comment by its ID. Requires `comment_id`.
-* **`delete_card`**: Permanently delete a card from Pipefy.
-    * **⚠️ Destructive Operation**: This action cannot be undone. Use with extreme caution.
-    * **Two-Step Process**: By default, returns a preview showing card details and pipe name. Set `confirm=true` to actually delete the card.
-    * **Safety Features**: Includes input validation and detailed error messages for permission issues.
+    U->>A: "Create a new card in pipe 123"
+    A->>S: create_card(pipe_id=123)
+    S->>P: Get required fields for pipe 123
+    S-->>A: Elicit(fields=["title", "due_date"])
+    A-->>U: I need more information: Title, Due Date
+    U-->>A: "Fix bug in login", "2025-12-31"
+    A->>S: create_card(pipe_id=123, title="Fix bug in login", due_date="2025-12-31")
+    S->>P: mutation createCard(...)
+    P-->>S: {"data": {"createCard": ...}}
+    S-->>A: {"success": true, "card_id": 456}
+```
 
-    ```mermaid
-    sequenceDiagram
-        participant U as User
-        participant A as Agent
-        participant S as MCP Server
-        participant P as Pipefy API
+</details>
 
-        U->>A: "Create a new card in pipe 123"
-        A->>S: create_card(pipe_id=123)
-        S->>P: Get required fields for pipe 123
-        S-->>A: Elicit(fields=["title", "due_date"])
-        A-->>U: I need more information: Title, Due Date
-        U-->>A: "Fix bug in login", "2025-12-31"
-        A->>S: create_card(pipe_id=123, title="Fix bug in login", due_date="2025-12-31")
-        S->>P: mutation createCard(...)
-        P-->>S: {"data": {"createCard": ...}}
-        S-->>A: {"success": true, "card_id": 456}
-    ```
+### Database tables (reference data)
 
-* **`move_card_to_phase`**: Move a card to a different phase (e.g., move a task to "Code Review" after pushing a PR).
-* **`update_card_field`**: Update a single field of an existing card via `updateCardField` (simple, full replacement of that field's value).
-* **`update_card`**: Update card attributes (title, assignees, labels, due date) and/or multiple custom fields using `updateCard` and `updateFieldsValues`.
+**15 tools** for org **Database Tables**: metadata, rows (records), and **schema columns** (table fields). Same conventions as pipe building: **`introspect_type`** on inputs such as `CreateTableFieldInput` / `UpdateTableFieldInput`, **`debug=true`** on mutations, **`extra_input`** where the tool exposes it.
 
-### Card update tools: when to use each
+| Domain | Tools |
+|--------|--------|
+| **Read** | `get_table`, `get_tables`, `get_table_records`, `get_table_record`, `find_records` |
+| **Table CRUD** | `create_table`, `update_table`, `delete_table` — **`delete_table`** uses preview + `confirm=true` (like `delete_pipe`). |
+| **Record CRUD** | `create_table_record`, `update_table_record`, `delete_table_record`, `set_table_record_field_value` |
+| **Field CRUD** | `create_table_field`, `update_table_field`, `delete_table_field` — schema columns; **`delete_table_field`** is destructive (confirm with the user). |
 
-- **Use `update_card_field`** when you only need to change *one* field on a card (for example, updating a status, a text field, or a single label value) and you are fine replacing the entire value for that field in one shot.
-- **Use `update_card` with `field_updates`** when you want to update **one or more custom fields at once** by ID, replacing their values (the server converts this to `updateFieldsValues` with `REPLACE` under the hood).
-- **Use `update_card` with attribute parameters** (`title`, `assignee_ids`, `label_ids`, `due_date`) when you need to update card metadata. These can be combined with `field_updates` in a single call.
+**Pagination:** `get_table_records` and `find_records` support **`first`** / **`after`**. Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the tool response and pass `after=endCursor` for the next page (default page size for listing records is 50; caps apply—see tool docstrings).
 
-### AI Automation Tools
+### AI automations & agents
 
-* **`create_ai_automation`**: Create a simple AI automation that generates content with a prompt and writes the result to one or more card fields. Best for straightforward field-filling use cases (e.g. summarize, classify, extract data into a field). Requires AI to be enabled for the pipe in Pipefy UI.
-    * `name` (str): Automation name.
-    * `event_id` (str): Event trigger (e.g. `card_created`, `card_moved`).
-    * `pipe_id` (str): Pipe ID where the automation runs.
-    * `prompt` (str): AI prompt text that generates the content.
-    * `field_ids` (list[str]): List of field internal IDs to write the result to.
-    * `condition` (dict, optional): Condition structure for the automation trigger.
-
-* **`update_ai_automation`**: Update an existing AI automation's name, prompt, destination fields, or active state.
-    * `automation_id` (str): ID of the automation to update.
-    * `name` (str, optional): New automation name.
-    * `active` (bool, optional): Whether the automation is active.
-    * `prompt` (str, optional): New AI prompt text.
-    * `field_ids` (list[str], optional): New list of field internal IDs.
-    * `condition` (dict, optional): New condition structure.
-
-### AI Agent Tools
-
-* **`create_ai_agent`**: Create an AI Agent (empty, no behaviors) attached to a pipe. Use `update_ai_agent` to configure 1 to 5 behaviors. `repo_uuid` is the pipe's unique identifier — not the numeric pipe ID from the URL. Resolve it via the `get_pipe` tool.
-    * `name` (str): Agent display name.
-    * `repo_uuid` (str): UUID of the pipe the agent belongs to.
-
-* **`update_ai_agent`**: Update an AI Agent with an instruction and 1 to 5 behaviors that can execute complex actions (e.g. move card, update fields conditionally). The API replaces the entire agent payload, so always send the complete list of behaviors.
-    * `uuid` (str): UUID of the agent to update.
-    * `name` (str): Agent display name.
-    * `repo_uuid` (str): UUID of the pipe the agent belongs to.
-    * `instruction` (str): Global instruction for the agent.
-    * `behaviors` (list[dict]): List of 1 to 5 behavior dicts (`name` and `event_id` required per behavior).
-    * `data_source_ids` (list[str], optional): List of data source IDs.
-
-* **`toggle_ai_agent_status`**: Enable or disable an AI Agent without resending its configuration. Agents are created inactive by default; use this after configuring behaviors to activate them.
-    * `uuid` (str): UUID of the agent to enable/disable.
-    * `active` (bool): `true` to activate, `false` to deactivate.
+| Tool | Purpose |
+|------|---------|
+| `create_ai_automation` | Prompt-driven automation writing to one or more card fields (AI must be enabled on the pipe in Pipefy). |
+| `update_ai_automation` | Change name, `active`, prompt, `field_ids`, or `condition`. |
+| `create_ai_agent` | Create an agent on a pipe; **`repo_uuid`** is the pipe UUID from `get_pipe`, not the URL numeric id alone. |
+| `update_ai_agent` | Replaces full agent config; send the **complete** `behaviors` list (1–5). |
+| `toggle_ai_agent_status` | Enable/disable without resending configuration. |
 
 ### Introspection & raw GraphQL
 
-When no dedicated tool fits or Pipefy changes the schema, these tools support **discovery** and a **last-resort execution path**. They use the same service-account GraphQL client as the other tools.
+When the schema shifts or no dedicated tool exists: **discovery** tools plus a **last-resort** executor (same OAuth client as everything else).
 
 | Tool | Read-only hint | Purpose |
 |------|----------------|--------|
-| **`introspect_type`** | Yes | Inspect a GraphQL type: `fields`, `inputFields`, or `enumValues` (e.g. `Card`, `CreateCardInput`). |
-| **`introspect_mutation`** | Yes | Inspect a root mutation: arguments, defaults, return type (e.g. `createCard`). |
-| **`search_schema`** | Yes | Keyword search over type **names** and **descriptions** (case-insensitive; `__` introspection types excluded). |
-| **`execute_graphql`** | **No** | Run an arbitrary query or mutation. Syntax is validated before the request. **Prefer dedicated tools when they exist.** Use **`introspect_mutation`** (and related types) before sending mutations. |
+| `introspect_type` | Yes | Type shape: `fields`, `inputFields`, `enumValues`. |
+| `introspect_mutation` | Yes | Mutation arguments and return type. |
+| `search_schema` | Yes | Keyword search on type names/descriptions. |
+| `execute_graphql` | **No** | Arbitrary document (syntax-checked). **Prefer dedicated tools.** |
 
-Responses use `success` / `result` (JSON text) or `error`. GraphQL errors from the transport are surfaced explicitly.
+Responses: `success` / `result` or `error`; transport GraphQL errors are surfaced clearly.
 
 ## Getting Started
 
@@ -171,7 +139,7 @@ Responses use `success` / `result` (JSON text) or `error`. GraphQL errors from t
 Installing the server requires the following on your system:
 - Python 3.11+
 - A **Pipefy Service Account Token** (Generate in Admin Panel > Service Accounts).
-- Rembember to add the Service account to the pipe you want the AI to use.
+- Remember to add the service account to the pipe you want the AI to use.
 
 ### Installation
 We recommend using `uv` for dependency management. Ensure it's [installed](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_1).
@@ -234,12 +202,12 @@ To inspect servers locally developed or downloaded as a repository, the most com
 npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server
 ```
 
-This is the **same entrypoint** (`pipefy-mcp-server` → full FastMCP app, lifespan, and all tools). Use it to exercise `create_pipe`, `create_phase`, `create_phase_field`, `create_label`, etc., with the same JSON arguments the IDE will send.
+This is the **same entrypoint** (`pipefy-mcp-server` → full FastMCP app, lifespan, and all tools). Use it to call any registered tool with the same JSON arguments the IDE will send (pipe building, cards, **database tables**, introspection, etc.).
 
-**Pipe building checks in the Inspector**
+**Quick Inspector checks**
 
-- **`create_label`**: `color` must be a **hex string** (e.g. `#FF0000`), not a color name — see `introspect_type` on `CreateLabelInput`.
-- **`delete_pipe`**: first call without confirmation returns a **preview**; second call with `confirm=true` performs the deletion.
+- **`create_label`**: `color` must be a **hex string** (e.g. `#FF0000`) — see `introspect_type` on `CreateLabelInput`.
+- **`delete_pipe`** / **`delete_table`**: first call without `confirm` returns a **preview**; call again with `confirm=true` after user approval to delete.
 
 ### Integration tests (full MCP stack)
 

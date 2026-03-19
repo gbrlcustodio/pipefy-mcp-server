@@ -6,6 +6,7 @@ from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.pipe_tools import PipeTools
+from pipefy_mcp.tools.table_tools import TableTools
 
 
 class ToolRegistry:
@@ -22,6 +23,7 @@ class ToolRegistry:
 
         PipeTools.register(self.mcp, self.services_container.pipefy_client)
         PipeConfigTools.register(self.mcp, self.services_container.pipefy_client)
+        TableTools.register(self.mcp, self.services_container.pipefy_client)
         IntrospectionTools.register(self.mcp, self.services_container.pipefy_client)
 
         if self.services_container.ai_automation_service is not None:

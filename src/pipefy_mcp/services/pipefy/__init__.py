@@ -7,6 +7,7 @@ from .internal_api_client import InternalApiClient
 from .pipe_config_service import PipeConfigService
 from .pipe_service import PipeService
 from .schema_introspection_service import SchemaIntrospectionService
+from .table_service import TableService
 
 __all__ = [
     "AiAgentService",
@@ -18,4 +19,5 @@ __all__ = [
     "PipefyClient",
     "PipeService",
     "SchemaIntrospectionService",
+    "TableService",
 ]

@@ -3,6 +3,8 @@ from mcp.server.fastmcp import FastMCP
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
+from pipefy_mcp.tools.introspection_tools import IntrospectionTools
+from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.pipe_tools import PipeTools
 
 
@@ -19,6 +21,8 @@ class ToolRegistry:
             raise ValueError("Pipefy client is not initialized in services container")
 
         PipeTools.register(self.mcp, self.services_container.pipefy_client)
+        PipeConfigTools.register(self.mcp, self.services_container.pipefy_client)
+        IntrospectionTools.register(self.mcp, self.services_container.pipefy_client)
 
         if self.services_container.ai_automation_service is not None:
             AiAutomationTools.register(

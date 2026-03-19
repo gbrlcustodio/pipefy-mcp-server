@@ -1,0 +1,195 @@
+from __future__ import annotations
+
+from typing import Any
+
+from httpx_auth import OAuth2ClientCredentials
+
+from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
+from pipefy_mcp.services.pipefy.queries.pipe_config_queries import (
+    CLONE_PIPE_MUTATION,
+    CREATE_LABEL_MUTATION,
+    CREATE_PHASE_FIELD_MUTATION,
+    CREATE_PHASE_MUTATION,
+    CREATE_PIPE_MUTATION,
+    DELETE_LABEL_MUTATION,
+    DELETE_PHASE_FIELD_MUTATION,
+    DELETE_PHASE_MUTATION,
+    DELETE_PIPE_MUTATION,
+    UPDATE_LABEL_MUTATION,
+    UPDATE_PHASE_FIELD_MUTATION,
+    UPDATE_PHASE_MUTATION,
+    UPDATE_PIPE_MUTATION,
+)
+from pipefy_mcp.settings import PipefySettings
+
+
+class PipeConfigService(BasePipefyClient):
+    """GraphQL mutations for pipe configuration (create, update, delete, clone)."""
+
+    def __init__(
+        self,
+        settings: PipefySettings,
+        auth: OAuth2ClientCredentials | None = None,
+    ) -> None:
+        super().__init__(settings=settings, auth=auth)
+
+    async def create_pipe(self, name: str, organization_id: int) -> dict:
+        """Create a pipe in the organization."""
+        variables: dict[str, Any] = {
+            "input": {"name": name, "organization_id": organization_id},
+        }
+        return await self.execute_query(CREATE_PIPE_MUTATION, variables)
+
+    async def update_pipe(self, pipe_id: int, **attrs: Any) -> dict:
+        """Update a pipe by ID. Pass only Pipefy `UpdatePipeInput` fields (e.g. name, icon, color, preferences)."""
+        payload: dict[str, Any] = {"id": pipe_id}
+        for key, value in attrs.items():
+            if value is not None:
+                payload[key] = value
+        variables = {"input": payload}
+        return await self.execute_query(UPDATE_PIPE_MUTATION, variables)
+
+    async def delete_pipe(self, pipe_id: int) -> dict:
+        """Delete a pipe by ID (permanent). Caller must enforce preview/confirm UX."""
+        variables: dict[str, Any] = {"input": {"id": pipe_id}}
+        return await self.execute_query(DELETE_PIPE_MUTATION, variables)
+
+    async def clone_pipe(
+        self,
+        pipe_template_id: int,
+        organization_id: int | None = None,
+    ) -> dict:
+        """Clone pipe(s) from template ID(s). Optionally scopes clone to an organization."""
+        input_obj: dict[str, Any] = {"pipe_template_ids": [pipe_template_id]}
+        if organization_id is not None:
+            input_obj["organization_id"] = organization_id
+        variables = {"input": input_obj}
+        return await self.execute_query(CLONE_PIPE_MUTATION, variables)
+
+    async def create_phase(
+        self,
+        pipe_id: int,
+        name: str,
+        done: bool = False,
+        index: float | int | None = None,
+        description: str | None = None,
+    ) -> dict:
+        """Create a phase in a pipe."""
+        input_obj: dict[str, Any] = {
+            "pipe_id": pipe_id,
+            "name": name,
+            "done": done,
+        }
+        if index is not None:
+            input_obj["index"] = float(index)
+        if description is not None:
+            input_obj["description"] = description
+        return await self.execute_query(CREATE_PHASE_MUTATION, {"input": input_obj})
+
+    async def update_phase(self, phase_id: int, **attrs: Any) -> dict:
+        """Update a phase by ID. Pass only Pipefy `UpdatePhaseInput` fields (e.g. name, description, done)."""
+        payload: dict[str, Any] = {"id": phase_id}
+        for key, value in attrs.items():
+            if value is not None:
+                payload[key] = value
+        return await self.execute_query(UPDATE_PHASE_MUTATION, {"input": payload})
+
+    async def delete_phase(self, phase_id: int) -> dict:
+        """Delete a phase by ID (permanent)."""
+        return await self.execute_query(
+            DELETE_PHASE_MUTATION, {"input": {"id": phase_id}}
+        )
+
+    async def create_phase_field(
+        self,
+        phase_id: int,
+        label: str,
+        field_type: str,
+        **attrs: Any,
+    ) -> dict:
+        """Create a field on a phase.
+
+        Args:
+            phase_id: Phase that will receive the field.
+            label: Field label shown in the UI.
+            field_type: Pipefy field type string (maps to `type` on `CreatePhaseFieldInput`; not validated here).
+            **attrs: Additional `CreatePhaseFieldInput` fields (e.g. description, required), when not None.
+        """
+        input_obj: dict[str, Any] = {
+            "phase_id": phase_id,
+            "label": label,
+            "type": field_type,
+        }
+        for key, value in attrs.items():
+            if value is not None:
+                input_obj[key] = value
+        return await self.execute_query(
+            CREATE_PHASE_FIELD_MUTATION, {"input": input_obj}
+        )
+
+    async def update_phase_field(self, field_id: str | int, **attrs: Any) -> dict:
+        """Update a phase field by ID.
+
+        Args:
+            field_id: Phase field ID (Pipefy may return string slugs from create; integers still supported).
+            **attrs: `UpdatePhaseFieldInput` fields to set (omit or pass None to skip).
+        """
+        payload: dict[str, Any] = {"id": field_id}
+        for key, value in attrs.items():
+            if value is not None:
+                payload[key] = value
+        return await self.execute_query(UPDATE_PHASE_FIELD_MUTATION, {"input": payload})
+
+    async def delete_phase_field(self, field_id: str | int) -> dict:
+        """Delete a phase field by ID (permanent).
+
+        Args:
+            field_id: Phase field ID to delete (slug or numeric).
+        """
+        return await self.execute_query(
+            DELETE_PHASE_FIELD_MUTATION,
+            {"input": {"id": field_id}},
+        )
+
+    async def create_label(
+        self,
+        pipe_id: int,
+        name: str,
+        color: str,
+    ) -> dict:
+        """Create a label on a pipe.
+
+        Args:
+            pipe_id: Pipe that will receive the label.
+            name: Label name.
+            color: Label color (per API).
+        """
+        input_obj: dict[str, Any] = {
+            "pipe_id": pipe_id,
+            "name": name,
+            "color": color,
+        }
+        return await self.execute_query(CREATE_LABEL_MUTATION, {"input": input_obj})
+
+    async def update_label(self, label_id: int, **attrs: Any) -> dict:
+        """Update a label by ID.
+
+        Args:
+            label_id: Label ID.
+            **attrs: `UpdateLabelInput` fields to set (omit or pass None to skip).
+        """
+        payload: dict[str, Any] = {"id": label_id}
+        for key, value in attrs.items():
+            if value is not None:
+                payload[key] = value
+        return await self.execute_query(UPDATE_LABEL_MUTATION, {"input": payload})
+
+    async def delete_label(self, label_id: int) -> dict:
+        """Delete a label by ID (permanent).
+
+        Args:
+            label_id: Label ID to delete.
+        """
+        return await self.execute_query(
+            DELETE_LABEL_MUTATION, {"input": {"id": label_id}}
+        )

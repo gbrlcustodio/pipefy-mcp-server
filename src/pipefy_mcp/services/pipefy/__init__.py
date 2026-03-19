@@ -4,7 +4,9 @@ from .base_client import BasePipefyClient
 from .card_service import CardService
 from .client import PipefyClient
 from .internal_api_client import InternalApiClient
+from .pipe_config_service import PipeConfigService
 from .pipe_service import PipeService
+from .schema_introspection_service import SchemaIntrospectionService
 
 __all__ = [
     "AiAgentService",
@@ -12,6 +14,8 @@ __all__ = [
     "BasePipefyClient",
     "CardService",
     "InternalApiClient",
+    "PipeConfigService",
     "PipefyClient",
     "PipeService",
+    "SchemaIntrospectionService",
 ]

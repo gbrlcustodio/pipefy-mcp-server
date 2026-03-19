@@ -4,6 +4,7 @@ import pytest
 
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
+from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
@@ -29,11 +30,13 @@ def _make_facade_client(execute_return_value: dict):
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = PipeService(settings=settings)
     client._card_service = CardService(settings=settings)
+    client._pipe_config_service = PipeConfigService(settings=settings)
     client._introspection_service = SchemaIntrospectionService(settings=settings)
 
     mock_execute = AsyncMock(return_value=execute_return_value)
     client._pipe_service.execute_query = mock_execute
     client._card_service.execute_query = mock_execute
+    client._pipe_config_service.execute_query = mock_execute
     client._introspection_service.execute_query = mock_execute
 
     return client, mock_execute

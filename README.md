@@ -31,7 +31,7 @@
 
 ## Feature Overview
 
-This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor). The codebase uses a facade over domain services (pipes, cards, pipe configuration, **database tables**, schema introspection), with GraphQL documents in dedicated modules.
+This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor). The codebase uses a facade over domain services (pipes, cards, pipe configuration, **database tables**, **pipe/table relations and card links**, schema introspection), with GraphQL documents in dedicated modules.
 
 **Discoverability:** Each tool has a docstring consumed by clients for routing and parameters—treat those as the source of truth for arguments. This README summarizes **what exists** and **cross-cutting behavior** (pagination, destructive flows, introspection); it does not duplicate every parameter.
 
@@ -46,6 +46,7 @@ This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor)
 | **Pipe** | `get_pipe`, `get_start_form_fields`, `get_phase_fields`, `get_pipe_members`, `search_pipes` |
 | **Cards** | `get_cards`, `get_card`, `find_cards` — use `include_fields` when you need custom field name/value on each card. |
 | **Database tables** | `get_table`, `get_tables`, `get_table_records`, `get_table_record`, `find_records` |
+| **Relations** | `get_pipe_relations`, `get_table_relations` |
 
 ### Pipe building (structure & labels)
 
@@ -109,6 +110,23 @@ sequenceDiagram
 | **Field CRUD** | `create_table_field`, `update_table_field`, `delete_table_field` — schema columns; **`delete_table_field`** is destructive (confirm with the user). |
 
 **Pagination:** `get_table_records` and `find_records` support **`first`** / **`after`**. Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the tool response and pass `after=endCursor` for the next page (default page size for listing records is 50; caps apply—see tool docstrings).
+
+### Connections & relation tools
+
+**Six tools** link processes and cards across workflows:
+
+- **Pipe relations** define parent/child structure between pipes (who connects to whom, constraints, auto-fill). Use **`get_pipe_relations`** on a pipe to list relation IDs and metadata.
+- **Card relations** connect individual cards through an existing pipe relation: pass **`source_id`** = that pipe relation’s ID (from `get_pipe_relations`). Default **`sourceType`** is `PipeRelation`; use **`extra_input`** (e.g. `sourceType: Field`) when the API requires a field-based link—see **`introspect_type`** on `CreateCardRelationInput`.
+- **Table relations** in GraphQL are loaded by **table-relation ID**, not by database table ID: **`get_table_relations`** takes a non-empty list of those IDs (root `table_relations` query).
+
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `get_pipe_relations` | Yes | Lists parent/child pipe relations for a pipe. |
+| `get_table_relations` | Yes | Batch-loads table relations by **relation** ID list. |
+| `create_pipe_relation` | No | Creates a parent–child relation between two pipes; optional **`extra_input`** (camelCase) for `CreatePipeRelationInput`. |
+| `update_pipe_relation` | No | Updates relation config; **`name`** required; optional **`extra_input`** for other `UpdatePipeRelationInput` keys. |
+| `delete_pipe_relation` | No | Permanently deletes a pipe relation (**`destructiveHint=True`** — confirm with the user first). |
+| `create_card_relation` | No | Links a child card to a parent card via **`source_id`** (pipe relation ID); optional **`extra_input`** for `CreateCardRelationInput`. Mutations support **`debug=true`** on errors like other write tools. |
 
 ### AI automations & agents
 

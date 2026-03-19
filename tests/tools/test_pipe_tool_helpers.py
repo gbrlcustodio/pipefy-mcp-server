@@ -6,15 +6,17 @@ without invoking the MCP server or Pipefy client.
 
 import pytest
 
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_error_strings,
+    extract_graphql_correlation_id,
+    extract_graphql_error_codes,
+    with_debug_suffix,
+)
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     UserCancelledError,
-    _extract_error_strings,
-    _extract_graphql_correlation_id,
-    _extract_graphql_error_codes,
     _filter_editable_field_definitions,
     _filter_fields_by_definitions,
-    _with_debug_suffix,
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
@@ -62,7 +64,7 @@ def test_build_add_card_comment_success_payload_accepts_str_comment_id():
 
 
 # =============================================================================
-# _extract_error_strings
+# extract_error_strings
 # =============================================================================
 
 
@@ -70,14 +72,14 @@ def test_build_add_card_comment_success_payload_accepts_str_comment_id():
 def test_extract_error_strings_empty_exception():
     """Empty exception string yields no messages."""
     exc = Exception("")
-    assert _extract_error_strings(exc) == []
+    assert extract_error_strings(exc) == []
 
 
 @pytest.mark.unit
 def test_extract_error_strings_uses_str_exc():
     """Raw str(exc) is included when non-empty."""
     exc = Exception("something went wrong")
-    assert _extract_error_strings(exc) == ["something went wrong"]
+    assert extract_error_strings(exc) == ["something went wrong"]
 
 
 @pytest.mark.unit
@@ -85,7 +87,7 @@ def test_extract_error_strings_from_errors_list_dict_message():
     """Errors list with dict items extracts 'message'."""
     exc = Exception("outer")
     exc.errors = [{"message": "GraphQL error"}]
-    result = _extract_error_strings(exc)
+    result = extract_error_strings(exc)
     assert "outer" in result
     assert "GraphQL error" in result
 
@@ -95,7 +97,7 @@ def test_extract_error_strings_from_errors_list_string_items():
     """Errors list with string items includes them."""
     exc = Exception("outer")
     exc.errors = ["first", "second"]
-    result = _extract_error_strings(exc)
+    result = extract_error_strings(exc)
     assert "outer" in result
     assert "first" in result
     assert "second" in result
@@ -106,7 +108,7 @@ def test_extract_error_strings_skips_empty_message_and_blank_strings():
     """Dict with empty message or blank string items are skipped."""
     exc = Exception("")
     exc.errors = [{"message": ""}, {"message": "ok"}, ""]
-    result = _extract_error_strings(exc)
+    result = extract_error_strings(exc)
     assert result == ["ok"]
 
 
@@ -290,7 +292,7 @@ def test_filter_fields_by_definitions_keeps_only_editable_ids():
 
 
 # =============================================================================
-# _extract_graphql_error_codes
+# extract_graphql_error_codes
 # =============================================================================
 
 
@@ -298,7 +300,7 @@ def test_filter_fields_by_definitions_keeps_only_editable_ids():
 def test_extract_graphql_error_codes_no_errors():
     """Exception without errors attribute returns empty list."""
     exc = Exception("foo")
-    assert _extract_graphql_error_codes(exc) == []
+    assert extract_graphql_error_codes(exc) == []
 
 
 @pytest.mark.unit
@@ -309,7 +311,7 @@ def test_extract_graphql_error_codes_from_extensions():
         {"extensions": {"code": "RESOURCE_NOT_FOUND"}},
         {"extensions": {"code": "PERMISSION_DENIED"}},
     ]
-    assert _extract_graphql_error_codes(exc) == [
+    assert extract_graphql_error_codes(exc) == [
         "RESOURCE_NOT_FOUND",
         "PERMISSION_DENIED",
     ]
@@ -325,14 +327,14 @@ def test_extract_graphql_error_codes_skips_invalid_items():
         {"extensions": None},
         {"extensions": {"code": ""}},
     ]
-    assert _extract_graphql_error_codes(exc) == ["OK"]
+    assert extract_graphql_error_codes(exc) == ["OK"]
 
 
 @pytest.mark.unit
 def test_extract_graphql_error_codes_from_string_regex():
     """Codes are parsed from exception string when extensions missing."""
     exc = Exception('{"code": "CUSTOM_CODE"}')
-    result = _extract_graphql_error_codes(exc)
+    result = extract_graphql_error_codes(exc)
     assert "CUSTOM_CODE" in result
 
 
@@ -345,11 +347,11 @@ def test_extract_graphql_error_codes_dedup_preserves_order():
         {"extensions": {"code": "B"}},
         {"extensions": {"code": "A"}},
     ]
-    assert _extract_graphql_error_codes(exc) == ["A", "B"]
+    assert extract_graphql_error_codes(exc) == ["A", "B"]
 
 
 # =============================================================================
-# _extract_graphql_correlation_id
+# extract_graphql_correlation_id
 # =============================================================================
 
 
@@ -357,25 +359,25 @@ def test_extract_graphql_error_codes_dedup_preserves_order():
 def test_extract_graphql_correlation_id_empty_string_returns_none():
     """Empty exception string returns None."""
     exc = Exception("")
-    assert _extract_graphql_correlation_id(exc) is None
+    assert extract_graphql_correlation_id(exc) is None
 
 
 @pytest.mark.unit
 def test_extract_graphql_correlation_id_no_match_returns_none():
     """String without correlation_id pattern returns None."""
     exc = Exception("some error")
-    assert _extract_graphql_correlation_id(exc) is None
+    assert extract_graphql_correlation_id(exc) is None
 
 
 @pytest.mark.unit
 def test_extract_graphql_correlation_id_extracts_value():
     """Correlation ID is extracted from string."""
     exc = Exception('{"correlation_id": "abc-123"}')
-    assert _extract_graphql_correlation_id(exc) == "abc-123"
+    assert extract_graphql_correlation_id(exc) == "abc-123"
 
 
 # =============================================================================
-# _with_debug_suffix
+# with_debug_suffix
 # =============================================================================
 
 
@@ -383,14 +385,14 @@ def test_extract_graphql_correlation_id_extracts_value():
 def test_with_debug_suffix_debug_false_returns_message_unchanged():
     """When debug=False, message is returned unchanged."""
     msg = "Something failed"
-    assert _with_debug_suffix(msg, debug=False, codes=[], correlation_id=None) == msg
+    assert with_debug_suffix(msg, debug=False, codes=[], correlation_id=None) == msg
 
 
 @pytest.mark.unit
 def test_with_debug_suffix_debug_true_with_codes_and_correlation_id():
     """When debug=True, codes and correlation_id are appended."""
     msg = "Error"
-    result = _with_debug_suffix(
+    result = with_debug_suffix(
         msg,
         debug=True,
         codes=["A", "B"],
@@ -405,7 +407,7 @@ def test_with_debug_suffix_debug_true_with_codes_and_correlation_id():
 def test_with_debug_suffix_debug_true_empty_parts_returns_message():
     """When debug=True but no codes or correlation_id, message unchanged."""
     msg = "Error"
-    result = _with_debug_suffix(msg, debug=True, codes=[], correlation_id=None)
+    result = with_debug_suffix(msg, debug=True, codes=[], correlation_id=None)
     assert result == msg
 
 

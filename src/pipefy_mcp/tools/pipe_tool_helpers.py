@@ -1,8 +1,9 @@
-import re
 from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
+
+from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 
 
 class UserCancelledError(Exception):
@@ -91,27 +92,6 @@ def build_add_card_comment_success_payload(
     return {"success": True, "comment_id": str(comment_id)}
 
 
-def _extract_error_strings(exc: BaseException) -> list[str]:
-    """Best-effort extraction of error messages from gql/GraphQL exceptions."""
-    messages: list[str] = []
-
-    raw = str(exc)
-    if raw:
-        messages.append(raw)
-
-    errors = getattr(exc, "errors", None)
-    if isinstance(errors, list):
-        for item in errors:
-            if isinstance(item, dict):
-                msg = item.get("message")
-                if isinstance(msg, str) and msg:
-                    messages.append(msg)
-            elif isinstance(item, str) and item:
-                messages.append(item)
-
-    return messages
-
-
 # Markers for mapping GraphQL errors to user-friendly messages.
 _NOT_FOUND_MARKERS = [
     "not found",
@@ -157,7 +137,7 @@ def _map_comment_like_error(
     invalid_markers: list[str] | None = None,
 ) -> str:
     """Map exception to a friendly message using shared not-found/permission/invalid markers."""
-    messages = _extract_error_strings(exc)
+    messages = extract_error_strings(exc)
     haystack = " ".join(messages).lower()
     markers = invalid_markers if invalid_markers is not None else _INVALID_INPUT_MARKERS
     if any(m in haystack for m in _NOT_FOUND_MARKERS):
@@ -300,68 +280,6 @@ def _filter_fields_by_definitions(
         for field_id, value in fields.items()
         if field_id in editable_ids
     }
-
-
-def _extract_graphql_error_codes(exc: BaseException) -> list[str]:
-    """Extract GraphQL `extensions.code` values from gql/GraphQL exceptions."""
-    codes: list[str] = []
-
-    errors = getattr(exc, "errors", None)
-    if isinstance(errors, list):
-        for item in errors:
-            if not isinstance(item, dict):
-                continue
-            extensions = item.get("extensions")
-            if not isinstance(extensions, dict):
-                continue
-            code = extensions.get("code")
-            if isinstance(code, str) and code:
-                codes.append(code)
-
-    # Best-effort parse from exception string when extensions are missing
-    raw = str(exc)
-    if raw:
-        for match in re.findall(r"""['"]code['"]\s*[:=]\s*['"]([A-Z_]+)['"]""", raw):
-            codes.append(match)
-
-    # De-dup while preserving order
-    seen: set[str] = set()
-    unique: list[str] = []
-    for code in codes:
-        if code not in seen:
-            seen.add(code)
-            unique.append(code)
-    return unique
-
-
-def _extract_graphql_correlation_id(exc: BaseException) -> str | None:
-    """Best-effort extraction of correlation_id from GraphQL exception strings."""
-    raw = str(exc)
-    if not raw:
-        return None
-
-    match = re.search(r"""['"]correlation_id['"]\s*[:=]\s*['"]([^'"]+)['"]""", raw)
-    if match:
-        return match.group(1)
-    return None
-
-
-def _with_debug_suffix(
-    message: str, *, debug: bool, codes: list[str], correlation_id: str | None
-) -> str:
-    """Append debug context to a single error string without changing payload shape."""
-    if not debug:
-        return message
-
-    parts: list[str] = []
-    if codes:
-        parts.append(f"codes={','.join(codes)}")
-    if correlation_id:
-        parts.append(f"correlation_id={correlation_id}")
-
-    if not parts:
-        return message
-    return f"{message} (debug: {'; '.join(parts)})"
 
 
 def map_delete_card_error_to_message(

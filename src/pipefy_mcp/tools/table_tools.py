@@ -12,10 +12,10 @@ from pipefy_mcp.services.pipefy.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
 )
-from pipefy_mcp.tools.pipe_tool_helpers import (
-    _extract_graphql_correlation_id,
-    _extract_graphql_error_codes,
-    _with_debug_suffix,
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_graphql_correlation_id,
+    extract_graphql_error_codes,
+    with_debug_suffix,
 )
 from pipefy_mcp.tools.table_tool_helpers import (
     build_delete_table_error_payload,
@@ -27,19 +27,14 @@ from pipefy_mcp.tools.table_tool_helpers import (
     build_table_read_success_payload,
     handle_table_tool_graphql_error,
     map_delete_table_error_to_message,
+)
+from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
+    valid_repo_id,
 )
 
 _TABLE_RECORDS_FIRST_MIN = 1
 _TABLE_RECORDS_FIRST_MAX = 200
-
-
-def _valid_repo_id(value: str | int) -> bool:
-    if isinstance(value, int):
-        return value > 0
-    if isinstance(value, str):
-        return bool(value.strip())
-    return False
 
 
 def _valid_table_field_id(value: str | int) -> bool:
@@ -71,7 +66,7 @@ class TableTools:
             Args:
                 table_id: Pipefy database table ID.
             """
-            if not _valid_repo_id(table_id):
+            if not valid_repo_id(table_id):
                 return build_table_read_error_payload(
                     message="Invalid 'table_id': provide a non-empty string or positive integer.",
                 )
@@ -97,7 +92,7 @@ class TableTools:
                 return build_table_read_error_payload(
                     message="Invalid 'table_ids': provide a non-empty list of IDs.",
                 )
-            if not all(_valid_repo_id(tid) for tid in table_ids):
+            if not all(valid_repo_id(tid) for tid in table_ids):
                 return build_table_read_error_payload(
                     message="Each table ID must be a non-empty string or positive integer.",
                 )
@@ -129,7 +124,7 @@ class TableTools:
                 first: Page size (1–200, default 50).
                 after: Cursor from the previous page (`endCursor`), if any.
             """
-            if not _valid_repo_id(table_id):
+            if not valid_repo_id(table_id):
                 return build_table_read_error_payload(
                     message="Invalid 'table_id': provide a non-empty string or positive integer.",
                 )
@@ -172,7 +167,7 @@ class TableTools:
             Args:
                 record_id: Table record ID.
             """
-            if not _valid_repo_id(record_id):
+            if not valid_repo_id(record_id):
                 return build_table_read_error_payload(
                     message="Invalid 'record_id': provide a non-empty string or positive integer.",
                 )
@@ -207,7 +202,7 @@ class TableTools:
                 first: Optional page size for pagination.
                 after: Optional cursor from a previous response.
             """
-            if not _valid_repo_id(table_id):
+            if not valid_repo_id(table_id):
                 return build_table_read_error_payload(
                     message="Invalid 'table_id': provide a non-empty string or positive integer.",
                 )
@@ -313,7 +308,7 @@ class TableTools:
                 extra_input: Other `UpdateTableInput` keys to merge (e.g. public, icon).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(table_id):
+            if not valid_repo_id(table_id):
                 return build_table_mutation_error_payload(
                     message="Invalid 'table_id': provide a non-empty string or positive integer.",
                 )
@@ -370,7 +365,7 @@ class TableTools:
                 confirm: When True, performs deletion after explicit user confirmation.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(table_id):
+            if not valid_repo_id(table_id):
                 return build_delete_table_error_payload(
                     message="Invalid 'table_id': provide a non-empty string or positive integer.",
                 )
@@ -381,15 +376,15 @@ class TableTools:
                 table_data = table_response.get("table") or {}
                 table_name = table_data.get("name") or "Unknown"
             except Exception as exc:
-                codes = _extract_graphql_error_codes(exc)
-                correlation_id = _extract_graphql_correlation_id(exc)
+                codes = extract_graphql_error_codes(exc)
+                correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_table_error_to_message(
                     table_id=table_id,
                     table_name=table_name,
                     codes=codes,
                 )
                 return build_delete_table_error_payload(
-                    message=_with_debug_suffix(
+                    message=with_debug_suffix(
                         base,
                         debug=debug,
                         codes=codes,
@@ -417,15 +412,15 @@ class TableTools:
                     )
                 )
             except Exception as exc:
-                codes = _extract_graphql_error_codes(exc)
-                correlation_id = _extract_graphql_correlation_id(exc)
+                codes = extract_graphql_error_codes(exc)
+                correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_table_error_to_message(
                     table_id=table_id,
                     table_name=table_name,
                     codes=codes,
                 )
                 return build_delete_table_error_payload(
-                    message=_with_debug_suffix(
+                    message=with_debug_suffix(
                         base,
                         debug=debug,
                         codes=codes,
@@ -452,7 +447,7 @@ class TableTools:
                 extra_input: Other `CreateTableRecordInput` keys (e.g. label_ids).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(table_id):
+            if not valid_repo_id(table_id):
                 return build_table_mutation_error_payload(
                     message="Invalid 'table_id': provide a non-empty string or positive integer.",
                 )
@@ -523,7 +518,7 @@ class TableTools:
                 fields: Keys may include title, due_date, status_id (or statusId).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(record_id):
+            if not valid_repo_id(record_id):
                 return build_table_mutation_error_payload(
                     message="Invalid 'record_id': provide a non-empty string or positive integer.",
                 )
@@ -565,7 +560,7 @@ class TableTools:
                 record_id: Record ID to delete.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(record_id):
+            if not valid_repo_id(record_id):
                 return build_table_mutation_error_payload(
                     message="Invalid 'record_id': provide a non-empty string or positive integer.",
                 )
@@ -597,7 +592,7 @@ class TableTools:
                 value: New value (string/number/list as required by the field type).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(record_id):
+            if not valid_repo_id(record_id):
                 return build_table_mutation_error_payload(
                     message="Invalid 'record_id': provide a non-empty string or positive integer.",
                 )
@@ -653,7 +648,7 @@ class TableTools:
                 extra_input: Additional CreateTableFieldInput keys to merge (e.g. required, options).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_repo_id(table_id):
+            if not valid_repo_id(table_id):
                 return build_table_mutation_error_payload(
                     message="Invalid 'table_id': provide a non-empty string or positive integer.",
                 )

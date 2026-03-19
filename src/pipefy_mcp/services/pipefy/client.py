@@ -7,6 +7,7 @@ from httpx_auth import OAuth2ClientCredentials
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.services.pipefy.relation_service import RelationService
 from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
 )
@@ -28,6 +29,7 @@ class PipefyClient:
         self._card_service = CardService(settings=settings, auth=auth)
         self._pipe_config_service = PipeConfigService(settings=settings, auth=auth)
         self._table_service = TableService(settings=settings, auth=auth)
+        self._relation_service = RelationService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
@@ -230,6 +232,53 @@ class PipefyClient:
     async def delete_table_field(self, field_id: str | int) -> dict:
         """Delete a database table field by ID (permanent)."""
         return await self._table_service.delete_table_field(field_id)
+
+    async def get_pipe_relations(self, pipe_id: str | int) -> dict:
+        """Get parent and child pipe relations for a pipe."""
+        return await self._relation_service.get_pipe_relations(pipe_id)
+
+    async def get_table_relations(self, relation_ids: list[str | int]) -> dict:
+        """Batch-fetch table relations by table-relation ID (see Pipefy `table_relations`)."""
+        return await self._relation_service.get_table_relations(relation_ids)
+
+    async def create_pipe_relation(
+        self,
+        parent_id: str | int,
+        child_id: str | int,
+        name: str,
+        extra_input: dict[str, Any] | None = None,
+    ) -> dict:
+        """Create a parent-child pipe relation (optional ``extra_input`` uses CreatePipeRelationInput camelCase keys)."""
+        return await self._relation_service.create_pipe_relation(
+            parent_id, child_id, name, **(extra_input or {})
+        )
+
+    async def update_pipe_relation(
+        self,
+        relation_id: str | int,
+        name: str,
+        extra_input: dict[str, Any] | None = None,
+    ) -> dict:
+        """Update a pipe relation (optional ``extra_input`` uses UpdatePipeRelationInput camelCase keys)."""
+        return await self._relation_service.update_pipe_relation(
+            relation_id, name, **(extra_input or {})
+        )
+
+    async def delete_pipe_relation(self, relation_id: str | int) -> dict:
+        """Delete a pipe relation by ID (permanent)."""
+        return await self._relation_service.delete_pipe_relation(relation_id)
+
+    async def create_card_relation(
+        self,
+        parent_id: str | int,
+        child_id: str | int,
+        source_id: str | int,
+        extra_input: dict[str, Any] | None = None,
+    ) -> dict:
+        """Connect a child card to a parent card via a pipe relation (optional ``extra_input`` for CreateCardRelationInput)."""
+        return await self._relation_service.create_card_relation(
+            parent_id, child_id, source_id, **(extra_input or {})
+        )
 
     async def get_pipe_members(self, pipe_id: int) -> dict:
         """Get the members of a pipe."""

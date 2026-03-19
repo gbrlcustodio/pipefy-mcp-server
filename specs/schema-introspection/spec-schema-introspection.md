@@ -66,7 +66,7 @@ The system SHALL allow keyword search across the GraphQL schema, returning match
 #### Scenario: Search with no matches
 - GIVEN a keyword that matches nothing in the schema
 - WHEN `search_schema` is called
-- THEN the tool returns an empty result set with a clear message
+- THEN the tool returns an empty list of matching types (e.g. `types: []` in the payload), without requiring a dedicated human-readable message
 
 ### Requirement: Raw GraphQL execution
 The system SHALL allow execution of arbitrary GraphQL queries and mutations with variables, returning the raw JSON response.
@@ -127,14 +127,14 @@ Follows existing patterns:
 | Service | `services/pipefy/schema_introspection_service.py` | Methods: `introspect_type()`, `introspect_mutation()`, `search_schema()`, `execute_graphql()` |
 | Facade | `services/pipefy/client.py` | Delegate to `SchemaIntrospectionService` |
 | Tools | `tools/introspection_tools.py` | Register 4 tools via `@mcp.tool()`, delegate to `PipefyClient` |
-| Helpers | `tools/introspection_tool_helpers.py` | Payload builders for introspection responses |
+| Helpers | `tools/introspection_tool_helpers.py` | `build_success_payload` / `build_error_payload` (JSON text for MCP); legacy names (`build_introspection_*`, `build_execute_*`) may alias the same implementations |
 
 ### Service design
 
 - `SchemaIntrospectionService` extends `BasePipefyClient` (receives `PipefySettings` + shared `auth`).
 - `execute_graphql` accepts a raw query string, wraps it with `gql(query_string)` internally to validate syntax, then calls `execute_query`.
 - Returns raw `dict` responses (no TypedDict — response shape is dynamic by nature).
-- Error handling: catch `gql.TransportQueryError` and surface GraphQL errors clearly.
+- Error handling: catch `TransportQueryError` and `GraphQLError` from the `gql`/GraphQL stack and surface errors clearly in the response (do not swallow them).
 
 ### Wiring
 
@@ -142,9 +142,14 @@ Follows existing patterns:
 - `ToolRegistry.register_tools()` calls `IntrospectionTools.register(mcp, client)`.
 - `ServicesContainer` — no changes needed (service lives inside `PipefyClient`).
 
-### PR scope
+### Delivery note
 
-Single PR — 4 tools, self-contained, no dependencies on other phases. Target: ≤10 files, ≤300 lines.
+Initial planning suggested a small PR (≤10 files, ≤300 lines). The shipped capability merged to `main` with a fuller test matrix: unit tests, MCP scenario tests, optional live Pipefy integration (`@pytest.mark.integration`), and MCP `call_tool` smoke tests against a real client when credentials exist.
+
+### Verification and CI
+
+- Tests marked `@pytest.mark.integration` may call the live Pipefy GraphQL API when `PIPEFY_*` credentials are configured (they skip otherwise).
+- Default CI runs `pytest -m "not integration"` so pipelines do not depend on secrets or external availability.
 
 ## Open Questions
 

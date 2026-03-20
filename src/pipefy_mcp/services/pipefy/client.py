@@ -4,6 +4,16 @@ from typing import Any
 
 from httpx_auth import OAuth2ClientCredentials
 
+from pipefy_mcp.services.pipefy.automation_graphql_types import (
+    AutomationActionRow,
+    AutomationEventRow,
+    AutomationRuleRecord,
+    AutomationRuleSummary,
+    CreateAutomationMutationResult,
+    DeleteAutomationServiceResult,
+    UpdateAutomationMutationResult,
+)
+from pipefy_mcp.services.pipefy.automation_service import AutomationService
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
@@ -30,6 +40,7 @@ class PipefyClient:
         self._pipe_config_service = PipeConfigService(settings=settings, auth=auth)
         self._table_service = TableService(settings=settings, auth=auth)
         self._relation_service = RelationService(settings=settings, auth=auth)
+        self._automation_service = AutomationService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
@@ -279,6 +290,76 @@ class PipefyClient:
         return await self._relation_service.create_card_relation(
             parent_id, child_id, source_id, **(extra_input or {})
         )
+
+    async def get_automation(self, automation_id: str) -> AutomationRuleRecord:
+        """Get a traditional automation rule by ID (trigger, actions, status)."""
+        return await self._automation_service.get_automation(automation_id)
+
+    async def get_automations(
+        self,
+        organization_id: str | None = None,
+        pipe_id: str | None = None,
+    ) -> list[AutomationRuleSummary]:
+        """List traditional automation rules for an organization and/or pipe."""
+        return await self._automation_service.get_automations(
+            organization_id=organization_id,
+            pipe_id=pipe_id,
+        )
+
+    async def get_automation_actions(self, pipe_id: str) -> list[AutomationActionRow]:
+        """List available automation action types for a pipe (for building create/update payloads)."""
+        return await self._automation_service.get_automation_actions(pipe_id)
+
+    async def get_automation_events(self, pipe_id: str) -> list[AutomationEventRow]:
+        """List available automation trigger events for a pipe (for building create/update payloads)."""
+        return await self._automation_service.get_automation_events(pipe_id)
+
+    async def create_automation(
+        self,
+        pipe_id: str,
+        name: str,
+        trigger_id: str,
+        action_id: str,
+        *,
+        active: bool = True,
+        extra_input: dict[str, Any] | None = None,
+    ) -> CreateAutomationMutationResult:
+        """Create a traditional automation rule (optional ``extra_input`` uses CreateAutomationInput field names).
+
+        Args:
+            pipe_id: Pipe ID.
+            name: Rule name.
+            trigger_id: Event ID.
+            action_id: Action ID.
+            active: When True (default), create the rule enabled. Set False to start disabled, or use ``extra_input`` / ``update_automation`` later.
+            extra_input: Extra ``CreateAutomationInput`` keys; ``active`` here overrides the ``active`` argument when both are set.
+        """
+        merged: dict[str, Any] = dict(extra_input or {})
+        if "active" not in merged:
+            merged["active"] = active
+        return await self._automation_service.create_automation(
+            pipe_id,
+            name,
+            trigger_id,
+            action_id,
+            **merged,
+        )
+
+    async def update_automation(
+        self,
+        automation_id: str,
+        extra_input: dict[str, Any] | None = None,
+    ) -> UpdateAutomationMutationResult:
+        """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names)."""
+        return await self._automation_service.update_automation(
+            automation_id, **(extra_input or {})
+        )
+
+    async def delete_automation(
+        self, automation_id: str
+    ) -> DeleteAutomationServiceResult:
+        """Delete a traditional automation rule by ID (permanent)."""
+        return await self._automation_service.delete_automation(automation_id)
 
     async def get_pipe_members(self, pipe_id: int) -> dict:
         """Get the members of a pipe."""

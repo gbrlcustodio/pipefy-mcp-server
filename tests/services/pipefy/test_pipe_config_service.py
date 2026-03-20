@@ -3,18 +3,22 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from gql.transport.exceptions import TransportQueryError
 
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.queries.pipe_config_queries import (
     CLONE_PIPE_MUTATION,
+    CREATE_FIELD_CONDITION_MUTATION,
     CREATE_LABEL_MUTATION,
     CREATE_PHASE_FIELD_MUTATION,
     CREATE_PHASE_MUTATION,
     CREATE_PIPE_MUTATION,
+    DELETE_FIELD_CONDITION_MUTATION,
     DELETE_LABEL_MUTATION,
     DELETE_PHASE_FIELD_MUTATION,
     DELETE_PHASE_MUTATION,
     DELETE_PIPE_MUTATION,
+    UPDATE_FIELD_CONDITION_MUTATION,
     UPDATE_LABEL_MUTATION,
     UPDATE_PHASE_FIELD_MUTATION,
     UPDATE_PHASE_MUTATION,
@@ -361,3 +365,123 @@ async def test_create_pipe_propagates_execute_query_errors(mock_settings):
         await service.create_pipe("X", 1)
 
     service.execute_query.assert_awaited_once()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_field_condition_success(mock_settings):
+    expr = {
+        "expressions": [
+            {
+                "field_address": "trigger_field",
+                "operation": "equals",
+                "value": "yes",
+            },
+        ],
+    }
+    act = [{"phaseFieldId": "308821043", "whenEvaluator": True}]
+    service = _make_service(
+        mock_settings,
+        {
+            "createFieldCondition": {
+                "fieldCondition": {"id": "cond-1"},
+            },
+        },
+    )
+    result = await service.create_field_condition(
+        99,
+        expr,
+        act,
+        name="Rule A",
+        index=None,
+    )
+
+    query, variables = service.execute_query.call_args[0]
+    assert query is CREATE_FIELD_CONDITION_MUTATION
+    assert variables == {
+        "input": {
+            "phaseId": "99",
+            "condition": expr,
+            "actions": act,
+            "name": "Rule A",
+        },
+    }
+    assert result == {
+        "createFieldCondition": {"fieldCondition": {"id": "cond-1"}},
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_field_condition_transport_error(mock_settings):
+    service = PipeConfigService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "invalid"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.create_field_condition(
+            "pf-1",
+            {"expressions": []},
+            [{"phaseFieldId": "x"}],
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_field_condition_success(mock_settings):
+    service = _make_service(
+        mock_settings,
+        {
+            "updateFieldCondition": {
+                "fieldCondition": {"id": "cond-2"},
+            },
+        },
+    )
+    result = await service.update_field_condition(
+        "cond-2",
+        name="Updated label",
+        ignored=None,
+    )
+
+    query, variables = service.execute_query.call_args[0]
+    assert query is UPDATE_FIELD_CONDITION_MUTATION
+    assert variables == {
+        "input": {"id": "cond-2", "name": "Updated label"},
+    }
+    assert result == {
+        "updateFieldCondition": {"fieldCondition": {"id": "cond-2"}},
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_field_condition_transport_error(mock_settings):
+    service = PipeConfigService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.update_field_condition("missing-id", name=None, phase_id="88")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_field_condition_success(mock_settings):
+    service = _make_service(mock_settings, {"deleteFieldCondition": {"success": True}})
+    result = await service.delete_field_condition("cond-9")
+
+    query, variables = service.execute_query.call_args[0]
+    assert query is DELETE_FIELD_CONDITION_MUTATION
+    assert variables == {"input": {"id": "cond-9"}}
+    assert result == {"success": True}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_field_condition_transport_error(mock_settings):
+    service = PipeConfigService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.delete_field_condition("cond-x")

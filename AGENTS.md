@@ -12,7 +12,10 @@
 - `uv run pytest --cov=src/pipefy_mcp/services/pipefy --cov-report=term-missing` generates a coverage report for Pipefy services.
 - `uv run ruff check src/` runs linting.
 - `uv run ruff format src/` auto-formats code.
-- `npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server` launches the MCP Inspector for manual tool testing.
+
+### Manual tool testing (E2E)
+- **Preferred:** Use **Cursor’s MCP integration** (add this server in Cursor MCP settings, run `pipefy-mcp-server`, then invoke tools from the chat / MCP panel). This matches how maintainers and agents exercise the server in daily use.
+- **Optional:** `npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server` — MCP Inspector is fine for protocol debugging or when Cursor is not in the loop; it is not the primary sign-off for “tools work for us.”
 
 ## Coding Style & Naming Conventions
 - Python 3.11+ code lives under `src/` and follows standard module naming (`snake_case` files, `PascalCase` classes).
@@ -28,6 +31,7 @@
   - MCP tools (`call_tool` + real `PipefyClient`): `tests/tools/test_introspection_tools_live.py`
   - Full MCP app (`pipefy_mcp.server.mcp` + lifespan + ToolRegistry): `tests/tools/test_pipe_config_tools_live.py` (optional `PIPE_BUILDING_LIVE_PIPE_ID`, `PIPE_BUILDING_LIVE_ORG_ID` — see README).
   - Run both: `uv run pytest tests/services/pipefy/test_schema_introspection_integration.py tests/tools/test_introspection_tools_live.py -m integration -v`. CI-style run without network: `uv run pytest -m "not integration"`.
+- **Manual E2E:** After meaningful tool or server changes, smoke-test the affected tools via **Cursor MCP** (see “Manual tool testing” above). Document that in PRs when relevant.
 - Examples for targeted runs:
   - Single file: `uv run pytest tests/tools/test_pipe_tools.py`
   - Single test case: `uv run pytest tests/tools/test_pipe_tools.py -k "test_create_card"`

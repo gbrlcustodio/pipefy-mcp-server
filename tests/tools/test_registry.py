@@ -21,6 +21,7 @@ class TestToolRegistry:
         assert registry.services_container is mock_container
 
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
+    @patch("pipefy_mcp.tools.registry.AutomationTools.register")
     @patch("pipefy_mcp.tools.registry.RelationTools.register")
     @patch("pipefy_mcp.tools.registry.TableTools.register")
     @patch("pipefy_mcp.tools.registry.PipeConfigTools.register")
@@ -31,6 +32,7 @@ class TestToolRegistry:
         mock_pipe_config_tools_register,
         mock_table_tools_register,
         mock_relation_tools_register,
+        mock_automation_tools_register,
         mock_introspection_tools_register,
     ):
         """Test that register_tools calls Pipe, PipeConfig, Table, Relation, and Introspection tools."""
@@ -46,6 +48,7 @@ class TestToolRegistry:
         mock_pipe_config_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_table_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_relation_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
         assert result is mock_mcp
 
@@ -67,6 +70,7 @@ class TestToolRegistry:
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
     @patch("pipefy_mcp.tools.registry.AiAgentTools.register")
     @patch("pipefy_mcp.tools.registry.AiAutomationTools.register")
+    @patch("pipefy_mcp.tools.registry.AutomationTools.register")
     @patch("pipefy_mcp.tools.registry.RelationTools.register")
     @patch("pipefy_mcp.tools.registry.TableTools.register")
     @patch("pipefy_mcp.tools.registry.PipeConfigTools.register")
@@ -77,6 +81,7 @@ class TestToolRegistry:
         mock_pipe_config_tools_register,
         mock_table_tools_register,
         mock_relation_tools_register,
+        mock_automation_tools_register,
         mock_ai_automation_tools_register,
         mock_ai_agent_tools_register,
         mock_introspection_tools_register,
@@ -97,6 +102,7 @@ class TestToolRegistry:
         mock_pipe_config_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_table_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_relation_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_ai_automation_tools_register.assert_called_once_with(
             mock_mcp, mock_ai_automation_service

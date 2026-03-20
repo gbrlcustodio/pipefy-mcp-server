@@ -31,7 +31,7 @@
 
 ## Feature Overview
 
-This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor). The codebase uses a facade over domain services (pipes, cards, pipe configuration, **database tables**, **pipe/table relations and card links**, schema introspection), with GraphQL documents in dedicated modules.
+This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor). The codebase uses a facade over domain services (pipes, cards, pipe configuration, **database tables**, **pipe/table relations and card links**, **traditional automations** (event/action rules), schema introspection), with GraphQL documents in dedicated modules.
 
 **Discoverability:** Each tool has a docstring consumed by clients for routing and parameters—treat those as the source of truth for arguments. This README summarizes **what exists** and **cross-cutting behavior** (pagination, destructive flows, introspection); it does not duplicate every parameter.
 
@@ -47,6 +47,7 @@ This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor)
 | **Cards** | `get_cards`, `get_card`, `find_cards` — use `include_fields` when you need custom field name/value on each card. |
 | **Database tables** | `get_table`, `get_tables`, `get_table_records`, `get_table_record`, `find_records` |
 | **Relations** | `get_pipe_relations`, `get_table_relations` |
+| **Automations (traditional)** | `get_automation`, `get_automations`, `get_automation_actions`, `get_automation_events` |
 
 ### Pipe building (structure & labels)
 
@@ -128,7 +129,25 @@ sequenceDiagram
 | `delete_pipe_relation` | No | Permanently deletes a pipe relation (**`destructiveHint=True`** — confirm with the user first). |
 | `create_card_relation` | No | Links a child card to a parent card via **`source_id`** (pipe relation ID); optional **`extra_input`** for `CreateCardRelationInput`. Mutations support **`debug=true`** on errors like other write tools. |
 
+### Traditional automation tools (rules engine)
+
+**Seven tools** manage Pipefy **traditional automations**: if/then rules bound to a pipe (trigger events and actions via the **standard GraphQL** API). These are **not** the same as **AI automations** in the next section—those are prompt-driven and use the **internal** API (`create_ai_automation`, etc.).
+
+**Tip:** Call **`get_automation_events`** (global event catalog in the current API) and **`get_automation_actions`** with the target pipe (**`repoId`**) before **`create_automation`** to pick valid **`trigger_id`** / **`action_id`** values. For full rule shape, use **`get_automation`**. Writes accept optional **`extra_input`** (camelCase API keys) and **`debug=true`** on errors (GraphQL codes + `correlation_id`), like relation tools.
+
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `get_automation` | Yes | Loads one rule by ID (trigger, actions, `active`). |
+| `get_automations` | Yes | Lists rules; optional **`organization_id`** and/or **`pipe_id`**. |
+| `get_automation_actions` | Yes | Catalog of action types for a pipe (IDs and field metadata). |
+| `get_automation_events` | Yes | Catalog of trigger event definitions (global list; tool still takes `pipe_id` for context). |
+| `create_automation` | No | Creates a rule: **`pipe_id`**, **`name`**, **`trigger_id`**, **`action_id`**; **`active`** defaults to **true** (enabled). Set **`active: false`** to create disabled, or use **`extra_input.active`** to override. Toggle later with **`update_automation`**. |
+| `update_automation` | No | Patches a rule via **`extra_input`** (`UpdateAutomationInput` fields). |
+| `delete_automation` | No | Permanently deletes a rule (**`destructiveHint=True`** — irreversible; confirm with the user first). |
+
 ### AI automations & agents
+
+**AI automations** (below) are separate from **traditional** rules above.
 
 | Tool | Purpose |
 |------|---------|

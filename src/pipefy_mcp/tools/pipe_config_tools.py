@@ -20,18 +20,11 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     handle_pipe_config_tool_graphql_error,
     map_delete_pipe_error_to_message,
 )
+from pipefy_mcp.tools.pipe_config_validators import valid_phase_field_id
 
 _CREATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"phase_id", "label", "type"})
 _UPDATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"id"})
 _UPDATE_LABEL_EXTRA_RESERVED = frozenset({"id"})
-
-
-def _valid_phase_field_id(field_id: str | int) -> bool:
-    if isinstance(field_id, int):
-        return field_id > 0
-    if isinstance(field_id, str):
-        return bool(field_id.strip())
-    return False
 
 
 class PipeConfigTools:
@@ -507,7 +500,7 @@ class PipeConfigTools:
                 extra_input: Additional UpdatePhaseFieldInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_phase_field_id(field_id):
+            if not valid_phase_field_id(field_id):
                 return build_pipe_tool_error_payload(
                     message=(
                         "Invalid 'field_id'. Use a non-empty string (field slug) "
@@ -561,7 +554,7 @@ class PipeConfigTools:
                 field_id: Phase field ID to delete (slug string or positive integer).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_phase_field_id(field_id):
+            if not valid_phase_field_id(field_id):
                 return build_pipe_tool_error_payload(
                     message=(
                         "Invalid 'field_id'. Use a non-empty string (field slug) "

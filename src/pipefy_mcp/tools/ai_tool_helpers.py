@@ -6,6 +6,8 @@ from typing import Literal
 
 from typing_extensions import TypedDict
 
+from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload
+
 
 class CreateAiAutomationSuccessPayload(TypedDict):
     success: Literal[True]
@@ -32,6 +34,21 @@ class UpdateAiAgentSuccessPayload(TypedDict):
 
 
 class ToggleAiAgentStatusSuccessPayload(TypedDict):
+    success: Literal[True]
+    message: str
+
+
+class GetAiAgentSuccessPayload(TypedDict):
+    success: Literal[True]
+    agent: AiAgentGraphPayload
+
+
+class GetAiAgentsSuccessPayload(TypedDict):
+    success: Literal[True]
+    agents: list[AiAgentGraphPayload]
+
+
+class DeleteAiAgentSuccessPayload(TypedDict):
     success: Literal[True]
     message: str
 
@@ -73,6 +90,23 @@ def build_toggle_agent_status_success(
     *, message: str
 ) -> ToggleAiAgentStatusSuccessPayload:
     """Build success payload for toggle_ai_agent_status."""
+    return {"success": True, "message": message}
+
+
+def build_get_agent_success(agent: AiAgentGraphPayload) -> GetAiAgentSuccessPayload:
+    """Build success payload for get_ai_agent."""
+    return {"success": True, "agent": agent}
+
+
+def build_get_agents_success(
+    agents: list[AiAgentGraphPayload],
+) -> GetAiAgentsSuccessPayload:
+    """Build success payload for get_ai_agents."""
+    return {"success": True, "agents": agents}
+
+
+def build_delete_agent_success(*, message: str) -> DeleteAiAgentSuccessPayload:
+    """Build success payload for delete_ai_agent."""
     return {"success": True, "message": message}
 
 

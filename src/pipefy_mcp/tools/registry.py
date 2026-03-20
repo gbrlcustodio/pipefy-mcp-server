@@ -4,6 +4,7 @@ from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
 from pipefy_mcp.tools.automation_tools import AutomationTools
+from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.pipe_tools import PipeTools
@@ -25,6 +26,7 @@ class ToolRegistry:
 
         PipeTools.register(self.mcp, self.services_container.pipefy_client)
         PipeConfigTools.register(self.mcp, self.services_container.pipefy_client)
+        FieldConditionTools.register(self.mcp, self.services_container.pipefy_client)
         TableTools.register(self.mcp, self.services_container.pipefy_client)
         RelationTools.register(self.mcp, self.services_container.pipefy_client)
         AutomationTools.register(self.mcp, self.services_container.pipefy_client)

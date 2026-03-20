@@ -1,4 +1,4 @@
-"""MCP tools for AI Agent operations (create + update)."""
+"""MCP tools for AI Agent operations (create, read, update, delete)."""
 
 from __future__ import annotations
 
@@ -11,17 +11,26 @@ from pipefy_mcp.services.pipefy.ai_agent_service import AiAgentService
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
     build_create_agent_success,
+    build_delete_agent_success,
+    build_get_agent_success,
+    build_get_agents_success,
     build_toggle_agent_status_success,
     build_update_agent_success,
 )
+from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 
 
 class AiAgentTools:
-    """Declares MCP tools for AI Agent create and update."""
+    """Declares MCP tools for AI Agent CRUD and status."""
 
     @staticmethod
     def register(mcp: FastMCP, service: AiAgentService) -> None:
         """Register AI Agent tools on the MCP server."""
+
+        def error_payload_from_exception(exc: BaseException) -> dict:
+            msgs = extract_error_strings(exc)
+            text = "; ".join(msgs) if msgs else str(exc)
+            return build_ai_tool_error(text)
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
@@ -135,3 +144,68 @@ class AiAgentTools:
                 return build_ai_tool_error(str(exc))
 
             return build_toggle_agent_status_success(message=result["message"])
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+        )
+        async def get_ai_agent(ctx: Context, uuid: str) -> dict:
+            """Get an AI Agent by UUID. Use get_pipe to find the pipe's uuid field, then get_ai_agents to list agents.
+
+            Args:
+                uuid: Agent UUID.
+            """
+            agent_uuid = uuid.strip()
+            ctx.debug(f"get_ai_agent: uuid={agent_uuid}")
+            if not agent_uuid:
+                return build_ai_tool_error("uuid must not be blank")
+            try:
+                agent = await service.get_agent(agent_uuid)
+            except Exception as exc:  # noqa: BLE001
+                return error_payload_from_exception(exc)
+            if not agent:
+                return build_ai_tool_error(f"AI Agent not found: {agent_uuid}")
+            return build_get_agent_success(agent)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+        )
+        async def get_ai_agents(ctx: Context, repo_uuid: str) -> dict:
+            """List all AI Agents for a pipe. Use before creating an agent to avoid duplicates.
+
+            Args:
+                repo_uuid: UUID of the pipe.
+            """
+            pipe_uuid = repo_uuid.strip()
+            ctx.debug(f"get_ai_agents: repo_uuid={pipe_uuid}")
+            if not pipe_uuid:
+                return build_ai_tool_error("repo_uuid must not be blank")
+            try:
+                agents = await service.get_agents(pipe_uuid)
+            except Exception as exc:  # noqa: BLE001
+                return error_payload_from_exception(exc)
+            return build_get_agents_success(agents)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+        )
+        async def delete_ai_agent(ctx: Context, uuid: str) -> dict:
+            """Delete an AI Agent permanently. This action is irreversible. Always confirm with the user before executing.
+
+            Args:
+                uuid: Agent UUID.
+            """
+            agent_uuid = uuid.strip()
+            ctx.debug(f"delete_ai_agent: uuid={agent_uuid}")
+            if not agent_uuid:
+                return build_ai_tool_error("uuid must not be blank")
+            try:
+                result = await service.delete_agent(agent_uuid)
+            except Exception as exc:  # noqa: BLE001
+                return error_payload_from_exception(exc)
+            if not result.get("success"):
+                return build_ai_tool_error(
+                    "delete_ai_agent failed: API returned success=false"
+                )
+            return build_delete_agent_success(
+                message=f"AI Agent deleted successfully. UUID: {agent_uuid}",
+            )

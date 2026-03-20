@@ -169,16 +169,53 @@ DELETE_LABEL_MUTATION = gql(
     """
 )
 
+CREATE_FIELD_CONDITION_MUTATION = gql(
+    """
+    mutation ($input: createFieldConditionInput!) {
+        createFieldCondition(input: $input) {
+            fieldCondition {
+                id
+            }
+        }
+    }
+    """
+)
+
+UPDATE_FIELD_CONDITION_MUTATION = gql(
+    """
+    mutation ($input: UpdateFieldConditionInput!) {
+        updateFieldCondition(input: $input) {
+            fieldCondition {
+                id
+            }
+        }
+    }
+    """
+)
+
+DELETE_FIELD_CONDITION_MUTATION = gql(
+    """
+    mutation ($input: DeleteFieldConditionInput!) {
+        deleteFieldCondition(input: $input) {
+            success
+        }
+    }
+    """
+)
+
 __all__ = [
     "CLONE_PIPE_MUTATION",
+    "CREATE_FIELD_CONDITION_MUTATION",
     "CREATE_LABEL_MUTATION",
     "CREATE_PHASE_FIELD_MUTATION",
     "CREATE_PHASE_MUTATION",
     "CREATE_PIPE_MUTATION",
+    "DELETE_FIELD_CONDITION_MUTATION",
     "DELETE_LABEL_MUTATION",
     "DELETE_PHASE_FIELD_MUTATION",
     "DELETE_PHASE_MUTATION",
     "DELETE_PIPE_MUTATION",
+    "UPDATE_FIELD_CONDITION_MUTATION",
     "UPDATE_LABEL_MUTATION",
     "UPDATE_PHASE_FIELD_MUTATION",
     "UPDATE_PHASE_MUTATION",

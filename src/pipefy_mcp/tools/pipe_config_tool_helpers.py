@@ -45,6 +45,30 @@ class PipeMutationSuccessPayload(TypedDict):
     result: dict[str, Any]
 
 
+class FieldConditionMutationSuccessPayload(TypedDict):
+    """Structured success response for create/update field condition tools."""
+
+    success: Literal[True]
+    condition_id: str
+    action: str
+    message: str
+
+
+class FieldConditionDeleteSuccessPayload(TypedDict):
+    success: Literal[True]
+    message: str
+
+
+class FieldConditionDeleteFailurePayload(TypedDict):
+    success: Literal[False]
+    message: str
+
+
+FieldConditionDeletePayload = (
+    FieldConditionDeleteSuccessPayload | FieldConditionDeleteFailurePayload
+)
+
+
 def _to_readable_json(data: Any) -> str:
     return json.dumps(data, indent=2, default=str, ensure_ascii=False)
 
@@ -90,6 +114,42 @@ def build_pipe_mutation_success_payload(
 
 def build_pipe_tool_error_payload(*, message: str) -> dict[str, Any]:
     return {"success": False, "error": message}
+
+
+def build_field_condition_success_payload(
+    condition_id: str, action: str
+) -> FieldConditionMutationSuccessPayload:
+    """Build a success payload for create_field_condition / update_field_condition.
+
+    Args:
+        condition_id: Field condition ID returned by the API.
+        action: ``'created'`` or ``'updated'`` (passed through for clients).
+    """
+    return {
+        "success": True,
+        "condition_id": condition_id,
+        "action": action,
+        "message": f"Field condition {action} (ID: {condition_id}).",
+    }
+
+
+def build_field_condition_delete_payload(
+    success: bool,
+) -> FieldConditionDeletePayload:
+    """Build a payload for delete_field_condition after the API responds.
+
+    Args:
+        success: Whether ``deleteFieldCondition`` reported success.
+    """
+    if success:
+        return {
+            "success": True,
+            "message": "Field condition was permanently deleted.",
+        }
+    return {
+        "success": False,
+        "message": "Field condition could not be deleted.",
+    }
 
 
 def build_delete_pipe_preview_payload(
@@ -168,10 +228,16 @@ __all__ = [
     "DeletePipePayload",
     "DeletePipePreviewPayload",
     "DeletePipeSuccessPayload",
+    "FieldConditionDeleteFailurePayload",
+    "FieldConditionDeletePayload",
+    "FieldConditionDeleteSuccessPayload",
+    "FieldConditionMutationSuccessPayload",
     "PipeMutationSuccessPayload",
     "build_delete_pipe_error_payload",
     "build_delete_pipe_preview_payload",
     "build_delete_pipe_success_payload",
+    "build_field_condition_delete_payload",
+    "build_field_condition_success_payload",
     "build_pipe_mutation_success_payload",
     "build_pipe_tool_error_payload",
     "handle_pipe_config_tool_graphql_error",

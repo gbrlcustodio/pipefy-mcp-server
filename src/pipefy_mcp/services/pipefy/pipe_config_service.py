@@ -7,14 +7,17 @@ from httpx_auth import OAuth2ClientCredentials
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.queries.pipe_config_queries import (
     CLONE_PIPE_MUTATION,
+    CREATE_FIELD_CONDITION_MUTATION,
     CREATE_LABEL_MUTATION,
     CREATE_PHASE_FIELD_MUTATION,
     CREATE_PHASE_MUTATION,
     CREATE_PIPE_MUTATION,
+    DELETE_FIELD_CONDITION_MUTATION,
     DELETE_LABEL_MUTATION,
     DELETE_PHASE_FIELD_MUTATION,
     DELETE_PHASE_MUTATION,
     DELETE_PIPE_MUTATION,
+    UPDATE_FIELD_CONDITION_MUTATION,
     UPDATE_LABEL_MUTATION,
     UPDATE_PHASE_FIELD_MUTATION,
     UPDATE_PHASE_MUTATION,
@@ -193,3 +196,67 @@ class PipeConfigService(BasePipefyClient):
         return await self.execute_query(
             DELETE_LABEL_MUTATION, {"input": {"id": label_id}}
         )
+
+    async def create_field_condition(
+        self,
+        phase_id: str | int,
+        condition: dict[str, Any],
+        actions: list[dict[str, Any]],
+        **attrs: Any,
+    ) -> dict:
+        """Create a field condition (Pipefy ``createFieldConditionInput``).
+
+        Args:
+            phase_id: Phase ID (sent as ``phaseId`` on the mutation input).
+            condition: ``ConditionInput`` (e.g. ``expressions``, ``expressions_structure``).
+            actions: Non-empty list of ``FieldConditionActionInput`` dicts (use ``phaseFieldId``).
+            **attrs: Optional fields such as ``name``, ``index``, ``clientMutationId``;
+                keys with value ``None`` are omitted.
+        """
+        phase_key = phase_id.strip() if isinstance(phase_id, str) else str(phase_id)
+        input_obj: dict[str, Any] = {
+            "phaseId": phase_key,
+            "condition": condition,
+            "actions": actions,
+        }
+        for key, value in attrs.items():
+            if value is not None:
+                input_obj[key] = value
+        return await self.execute_query(
+            CREATE_FIELD_CONDITION_MUTATION, {"input": input_obj}
+        )
+
+    async def update_field_condition(
+        self,
+        condition_id: str,
+        **attrs: Any,
+    ) -> dict:
+        """Update an existing field condition (`UpdateFieldConditionInput`).
+
+        Args:
+            condition_id: Field condition ID.
+            **attrs: Fields to set; keys with value ``None`` are omitted.
+        """
+        payload: dict[str, Any] = {"id": condition_id}
+        for key, value in attrs.items():
+            if value is not None:
+                payload[key] = value
+        return await self.execute_query(
+            UPDATE_FIELD_CONDITION_MUTATION, {"input": payload}
+        )
+
+    async def delete_field_condition(self, condition_id: str) -> dict:
+        """Delete a field condition permanently (`DeleteFieldConditionInput`).
+
+        Args:
+            condition_id: Field condition ID.
+
+        Returns:
+            Dict with ``success`` bool from ``deleteFieldCondition``.
+        """
+        response = await self.execute_query(
+            DELETE_FIELD_CONDITION_MUTATION,
+            {"input": {"id": condition_id}},
+        )
+        payload = response.get("deleteFieldCondition", {})
+        return {"success": bool(payload.get("success"))}

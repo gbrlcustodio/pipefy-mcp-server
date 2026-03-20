@@ -4,6 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from gql.transport.exceptions import TransportQueryError
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -23,6 +24,9 @@ def mock_ai_agent_service():
     service.create_agent = AsyncMock()
     service.update_agent = AsyncMock()
     service.toggle_agent_status = AsyncMock()
+    service.get_agent = AsyncMock()
+    service.get_agents = AsyncMock()
+    service.delete_agent = AsyncMock()
     return service
 
 
@@ -274,3 +278,204 @@ class TestToggleAiAgentStatus:
         assert payload["success"] is False
         assert "error" in payload
         assert isinstance(payload["error"], str)
+
+
+@pytest.mark.anyio
+class TestGetAiAgent:
+    async def test_success(
+        self,
+        client_session,
+        mock_ai_agent_service,
+        extract_payload,
+    ):
+        agent = {
+            "uuid": "agent-1",
+            "name": "Assistant",
+            "instruction": "Help",
+            "disabledAt": None,
+            "needReview": False,
+        }
+        mock_ai_agent_service.get_agent.return_value = agent
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_ai_agent",
+                {"uuid": "agent-1"},
+            )
+        assert result.isError is False
+        mock_ai_agent_service.get_agent.assert_awaited_once_with("agent-1")
+        payload = extract_payload(result)
+        assert payload == {"success": True, "agent": agent}
+
+    async def test_not_found_returns_error_payload(
+        self,
+        client_session,
+        mock_ai_agent_service,
+        extract_payload,
+    ):
+        mock_ai_agent_service.get_agent.return_value = {}
+        async with client_session as session:
+            result = await session.call_tool("get_ai_agent", {"uuid": "missing-uuid"})
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "not found" in payload["error"].lower()
+
+    async def test_blank_uuid_returns_error_payload(
+        self, client_session, mock_ai_agent_service, extract_payload
+    ):
+        async with client_session as session:
+            result = await session.call_tool("get_ai_agent", {"uuid": "  "})
+        mock_ai_agent_service.get_agent.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "blank" in payload["error"].lower()
+
+    async def test_graphql_error_returns_error_payload(
+        self,
+        client_session,
+        mock_ai_agent_service,
+        extract_payload,
+    ):
+        mock_ai_agent_service.get_agent.side_effect = TransportQueryError(
+            "failed", errors=[{"message": "not found"}]
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_ai_agent", {"uuid": "missing"})
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "not found" in payload["error"]
+
+
+@pytest.mark.anyio
+class TestGetAiAgents:
+    async def test_success(
+        self,
+        client_session,
+        mock_ai_agent_service,
+        extract_payload,
+    ):
+        agents = [{"uuid": "a1", "name": "One"}]
+        mock_ai_agent_service.get_agents.return_value = agents
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_ai_agents",
+                {"repo_uuid": "pipe-uuid-9"},
+            )
+        assert result.isError is False
+        mock_ai_agent_service.get_agents.assert_awaited_once_with("pipe-uuid-9")
+        payload = extract_payload(result)
+        assert payload == {"success": True, "agents": agents}
+
+    async def test_blank_repo_uuid_returns_error_payload(
+        self, client_session, mock_ai_agent_service, extract_payload
+    ):
+        async with client_session as session:
+            result = await session.call_tool("get_ai_agents", {"repo_uuid": ""})
+        mock_ai_agent_service.get_agents.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "blank" in payload["error"].lower()
+
+    async def test_graphql_error_returns_error_payload(
+        self,
+        client_session,
+        mock_ai_agent_service,
+        extract_payload,
+    ):
+        mock_ai_agent_service.get_agents.side_effect = TransportQueryError(
+            "failed", errors=[{"message": "denied"}]
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_ai_agents",
+                {"repo_uuid": "repo-x"},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "denied" in payload["error"]
+
+
+@pytest.mark.anyio
+class TestDeleteAiAgent:
+    async def test_success(
+        self,
+        client_session,
+        mock_ai_agent_service,
+        extract_payload,
+    ):
+        mock_ai_agent_service.delete_agent.return_value = {"success": True}
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_ai_agent",
+                {"uuid": "to-delete"},
+            )
+        assert result.isError is False
+        mock_ai_agent_service.delete_agent.assert_awaited_once_with("to-delete")
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert isinstance(payload["message"], str)
+        assert len(payload["message"]) > 0
+
+    async def test_api_returns_false(
+        self,
+        client_session,
+        mock_ai_agent_service,
+        extract_payload,
+    ):
+        mock_ai_agent_service.delete_agent.return_value = {"success": False}
+        async with client_session as session:
+            result = await session.call_tool("delete_ai_agent", {"uuid": "fail"})
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "success=false" in payload["error"].lower()
+
+    async def test_blank_uuid_returns_error_payload(
+        self, client_session, mock_ai_agent_service, extract_payload
+    ):
+        async with client_session as session:
+            result = await session.call_tool("delete_ai_agent", {"uuid": "\t"})
+        mock_ai_agent_service.delete_agent.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "blank" in payload["error"].lower()
+
+    async def test_graphql_error_returns_error_payload(
+        self,
+        client_session,
+        mock_ai_agent_service,
+        extract_payload,
+    ):
+        mock_ai_agent_service.delete_agent.side_effect = TransportQueryError(
+            "failed", errors=[{"message": "gone"}]
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_ai_agent",
+                {"uuid": "bad"},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "gone" in payload["error"]
+
+    async def test_has_destructive_hint(self, client_session):
+        async with client_session as session:
+            listed = await session.list_tools()
+        delete_tool = next(t for t in listed.tools if t.name == "delete_ai_agent")
+        assert delete_tool.annotations is not None
+        assert delete_tool.annotations.destructiveHint is True
+        assert delete_tool.annotations.readOnlyHint is False
+
+
+@pytest.mark.anyio
+async def test_get_ai_agent_tools_have_read_only_hint(client_session):
+    async with client_session as session:
+        listed = await session.list_tools()
+    by_name = {t.name: t for t in listed.tools}
+    for name in ("get_ai_agent", "get_ai_agents"):
+        tool = by_name[name]
+        assert tool.annotations is not None
+        assert tool.annotations.readOnlyHint is True
+        assert tool.annotations.destructiveHint is False

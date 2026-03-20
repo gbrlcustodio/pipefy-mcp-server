@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pipefy_mcp.services.pipefy.ai_agent_service import AiAgentService
 from pipefy_mcp.services.pipefy.automation_service import AutomationService
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
@@ -55,6 +56,15 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     pipe_config_service.create_label = AsyncMock(return_value={"ok": "create_label"})
     pipe_config_service.update_label = AsyncMock(return_value={"ok": "update_label"})
     pipe_config_service.delete_label = AsyncMock(return_value={"ok": "delete_label"})
+    pipe_config_service.create_field_condition = AsyncMock(
+        return_value={"ok": "create_field_condition"}
+    )
+    pipe_config_service.update_field_condition = AsyncMock(
+        return_value={"ok": "update_field_condition"}
+    )
+    pipe_config_service.delete_field_condition = AsyncMock(
+        return_value={"ok": "delete_field_condition"}
+    )
 
     table_service.get_table = AsyncMock(return_value={"ok": "get_table"})
     table_service.get_tables = AsyncMock(return_value={"ok": "get_tables"})
@@ -129,6 +139,11 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
         return_value={"ok": "delete_automation"}
     )
 
+    ai_agent_service = AsyncMock()
+    ai_agent_service.get_agent = AsyncMock(return_value={"ok": "get_ai_agent"})
+    ai_agent_service.get_agents = AsyncMock(return_value=[{"uuid": "u1"}])
+    ai_agent_service.delete_agent = AsyncMock(return_value={"success": True})
+
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = pipe_service
     client._card_service = card_service
@@ -136,6 +151,7 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     client._table_service = table_service
     client._relation_service = relation_service
     client._automation_service = automation_service
+    client._ai_agent_service = ai_agent_service
 
     assert await client.get_pipe(1) == {"ok": "pipe"}
     pipe_service.get_pipe.assert_awaited_once_with(1)
@@ -237,6 +253,32 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 
     assert await client.delete_label(16) == {"ok": "delete_label"}
     pipe_config_service.delete_label.assert_awaited_once_with(16)
+
+    expr = {"expressions": [], "expressions_structure": []}
+    acts = [{"phaseFieldId": "pf-target"}]
+    assert await client.create_field_condition(
+        "pf-1",
+        expr,
+        acts,
+        name="R1",
+    ) == {"ok": "create_field_condition"}
+    pipe_config_service.create_field_condition.assert_awaited_once_with(
+        "pf-1",
+        expr,
+        acts,
+        name="R1",
+    )
+
+    assert await client.update_field_condition("c1", name="N") == {
+        "ok": "update_field_condition"
+    }
+    pipe_config_service.update_field_condition.assert_awaited_once_with(
+        "c1",
+        name="N",
+    )
+
+    assert await client.delete_field_condition("c2") == {"ok": "delete_field_condition"}
+    pipe_config_service.delete_field_condition.assert_awaited_once_with("c2")
 
     assert await client.get_table("t1") == {"ok": "get_table"}
     table_service.get_table.assert_awaited_once_with("t1")
@@ -399,6 +441,15 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.delete_automation("rm") == {"ok": "delete_automation"}
     automation_service.delete_automation.assert_awaited_once_with("rm")
 
+    assert await client.get_ai_agent("au-1") == {"ok": "get_ai_agent"}
+    ai_agent_service.get_agent.assert_awaited_once_with("au-1")
+
+    assert await client.get_ai_agents("repo-9") == [{"uuid": "u1"}]
+    ai_agent_service.get_agents.assert_awaited_once_with("repo-9")
+
+    assert await client.delete_ai_agent("del-1") == {"success": True}
+    ai_agent_service.delete_agent.assert_awaited_once_with("del-1")
+
 
 @pytest.mark.unit
 def test_pipefy_client_creates_services_with_shared_auth():
@@ -418,6 +469,7 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert isinstance(client._table_service, TableService)
     assert isinstance(client._relation_service, RelationService)
     assert isinstance(client._automation_service, AutomationService)
+    assert isinstance(client._ai_agent_service, AiAgentService)
     assert isinstance(client._introspection_service, SchemaIntrospectionService)
     assert client._pipe_service._auth is not None, (
         "PipeService should have an auth instance"
@@ -440,6 +492,10 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert client._automation_service._auth is not None, (
         "AutomationService should have an auth instance"
     )
+    assert client._ai_agent_service._auth is not None, (
+        "AiAgentService should have an auth instance"
+    )
+    assert client._pipe_config_service._auth is client._ai_agent_service._auth
     assert client._pipe_service._auth is client._card_service._auth
     assert client._pipe_service._auth is client._pipe_config_service._auth
     assert client._pipe_service._auth is client._table_service._auth

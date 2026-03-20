@@ -1,8 +1,57 @@
-"""GraphQL mutations for AI Agent operations."""
+"""GraphQL queries and mutations for AI Agent operations."""
 
 from gql import gql
 
 # NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
+
+GET_AI_AGENT_QUERY = gql(
+    """
+    query aiAgent($uuid: ID!) {
+        aiAgent(uuid: $uuid) {
+            uuid
+            name
+            instruction
+            repoUuid
+            dataSourceIds
+            disabledAt
+            needReview
+            behaviors {
+                id
+                name
+                active
+            }
+        }
+    }
+    """
+)
+
+GET_AI_AGENTS_QUERY = gql(
+    """
+    query aiAgents($repoUuid: ID!) {
+        aiAgents(repoUuid: $repoUuid) {
+            edges {
+                node {
+                    uuid
+                    name
+                    instruction
+                    repoUuid
+                    disabledAt
+                }
+            }
+        }
+    }
+    """
+)
+
+DELETE_AI_AGENT_MUTATION = gql(
+    """
+    mutation deleteAiAgent($uuid: ID!) {
+        deleteAiAgent(input: { uuid: $uuid }) {
+            success
+        }
+    }
+    """
+)
 
 CREATE_AI_AGENT_MUTATION = gql(
     """

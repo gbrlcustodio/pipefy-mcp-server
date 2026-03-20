@@ -89,6 +89,8 @@ GET_PHASE_FIELDS_QUERY = gql(
             name
             fields {
                 id
+                internal_id
+                uuid
                 label
                 type
                 required

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
@@ -14,6 +14,18 @@ class CardSearch(TypedDict, total=False):
     title: str
     inbox_emails_read: bool
     include_done: bool
+
+
+class AiAgentGraphPayload(TypedDict, total=False):
+    """Common fields returned by Pipefy ``aiAgent`` (additional keys may be present)."""
+
+    uuid: str
+    name: str
+    instruction: str
+    disabledAt: str | None
+    needReview: bool
+    behaviors: list[dict[str, Any]]
+    dataSourceIds: list[str]
 
 
 class AgentServiceResult(TypedDict):

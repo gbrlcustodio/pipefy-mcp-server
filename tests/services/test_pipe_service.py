@@ -6,8 +6,10 @@ Tests validate the pipe-related operations without requiring real API credential
 from unittest.mock import AsyncMock
 
 import pytest
+from graphql import print_ast
 
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.services.pipefy.queries.pipe_queries import GET_PHASE_FIELDS_QUERY
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -359,6 +361,13 @@ async def test_search_pipes_all_organizations_empty(mock_settings):
 
 
 @pytest.mark.unit
+def test_get_phase_fields_query_selects_internal_id_and_uuid():
+    printed = print_ast(GET_PHASE_FIELDS_QUERY)
+    assert "internal_id" in printed
+    assert "uuid" in printed
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 class TestGetPhaseFields:
     """Tests for get_phase_fields method."""
@@ -379,8 +388,22 @@ class TestGetPhaseFields:
     async def test_returns_all_fields(self, mock_phase_service):
         """Test get_phase_fields returns all fields for a phase."""
         mock_fields = [
-            {"id": "status", "label": "Status", "type": "select", "required": True},
-            {"id": "notes", "label": "Notes", "type": "long_text", "required": False},
+            {
+                "id": "status",
+                "internal_id": "308111001",
+                "uuid": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                "label": "Status",
+                "type": "select",
+                "required": True,
+            },
+            {
+                "id": "notes",
+                "internal_id": "308111002",
+                "uuid": "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22",
+                "label": "Notes",
+                "type": "long_text",
+                "required": False,
+            },
         ]
         service, mock_eq = mock_phase_service(
             {"id": str(self.PHASE_ID), "name": "In Progress", "fields": mock_fields}
@@ -389,6 +412,7 @@ class TestGetPhaseFields:
         result = await service.get_phase_fields(self.PHASE_ID)
 
         mock_eq.assert_called_once()
+        assert mock_eq.call_args[0][0] is GET_PHASE_FIELDS_QUERY
         variables = mock_eq.call_args[0][1]
         assert variables == {"phase_id": self.PHASE_ID}, (
             "Expected phase_id in variables"
@@ -402,10 +426,26 @@ class TestGetPhaseFields:
     async def test_required_only_filters_correctly(self, mock_phase_service):
         """Test get_phase_fields with required_only=True filters correctly."""
         mock_fields = [
-            {"id": "status", "label": "Status", "type": "select", "required": True},
-            {"id": "notes", "label": "Notes", "type": "long_text", "required": False},
+            {
+                "id": "status",
+                "internal_id": "1",
+                "uuid": "u1",
+                "label": "Status",
+                "type": "select",
+                "required": True,
+            },
+            {
+                "id": "notes",
+                "internal_id": "2",
+                "uuid": "u2",
+                "label": "Notes",
+                "type": "long_text",
+                "required": False,
+            },
             {
                 "id": "resolution",
+                "internal_id": "3",
+                "uuid": "u3",
                 "label": "Resolution",
                 "type": "short_text",
                 "required": True,
@@ -418,9 +458,18 @@ class TestGetPhaseFields:
         result = await service.get_phase_fields(self.PHASE_ID, required_only=True)
 
         expected_fields = [
-            {"id": "status", "label": "Status", "type": "select", "required": True},
+            {
+                "id": "status",
+                "internal_id": "1",
+                "uuid": "u1",
+                "label": "Status",
+                "type": "select",
+                "required": True,
+            },
             {
                 "id": "resolution",
+                "internal_id": "3",
+                "uuid": "u3",
                 "label": "Resolution",
                 "type": "short_text",
                 "required": True,

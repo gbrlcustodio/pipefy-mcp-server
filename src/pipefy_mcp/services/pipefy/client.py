@@ -4,6 +4,7 @@ from typing import Any
 
 from httpx_auth import OAuth2ClientCredentials
 
+from pipefy_mcp.services.pipefy.ai_agent_service import AiAgentService
 from pipefy_mcp.services.pipefy.automation_graphql_types import (
     AutomationActionRow,
     AutomationEventRow,
@@ -22,7 +23,7 @@ from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
 )
 from pipefy_mcp.services.pipefy.table_service import TableService
-from pipefy_mcp.services.pipefy.types import CardSearch
+from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload, CardSearch
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -41,6 +42,7 @@ class PipefyClient:
         self._table_service = TableService(settings=settings, auth=auth)
         self._relation_service = RelationService(settings=settings, auth=auth)
         self._automation_service = AutomationService(settings=settings, auth=auth)
+        self._ai_agent_service = AiAgentService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
@@ -131,6 +133,28 @@ class PipefyClient:
     async def delete_label(self, label_id: int) -> dict:
         """Delete a label by ID (permanent)."""
         return await self._pipe_config_service.delete_label(label_id)
+
+    async def create_field_condition(
+        self,
+        phase_id: str | int,
+        condition: dict[str, Any],
+        actions: list[dict[str, Any]],
+        **attrs: Any,
+    ) -> dict:
+        """Create a field condition (``createFieldCondition`` / ``createFieldConditionInput``)."""
+        return await self._pipe_config_service.create_field_condition(
+            phase_id, condition, actions, **attrs
+        )
+
+    async def update_field_condition(self, condition_id: str, **attrs: Any) -> dict:
+        """Update an existing field condition."""
+        return await self._pipe_config_service.update_field_condition(
+            condition_id, **attrs
+        )
+
+    async def delete_field_condition(self, condition_id: str) -> dict:
+        """Delete a field condition by ID (permanent)."""
+        return await self._pipe_config_service.delete_field_condition(condition_id)
 
     async def get_table(self, table_id: str | int) -> dict:
         """Get a database table by ID (metadata, fields, authorization)."""
@@ -360,6 +384,18 @@ class PipefyClient:
     ) -> DeleteAutomationServiceResult:
         """Delete a traditional automation rule by ID (permanent)."""
         return await self._automation_service.delete_automation(automation_id)
+
+    async def get_ai_agent(self, agent_uuid: str) -> AiAgentGraphPayload:
+        """Get an AI Agent by UUID (name, instruction, behaviors)."""
+        return await self._ai_agent_service.get_agent(agent_uuid)
+
+    async def get_ai_agents(self, repo_uuid: str) -> list[AiAgentGraphPayload]:
+        """List AI Agents for a pipe UUID (`repoUuid` in the API)."""
+        return await self._ai_agent_service.get_agents(repo_uuid)
+
+    async def delete_ai_agent(self, agent_uuid: str) -> dict:
+        """Delete an AI Agent by UUID (permanent)."""
+        return await self._ai_agent_service.delete_agent(agent_uuid)
 
     async def get_pipe_members(self, pipe_id: int) -> dict:
         """Get the members of a pipe."""

@@ -29,8 +29,9 @@
 - **Integration (live Pipefy):** Tests marked `@pytest.mark.integration` call the real GraphQL API when `PIPEFY_*` credentials are set in `.env` (skips otherwise).
   - Service layer: `tests/services/pipefy/test_schema_introspection_integration.py`
   - MCP tools (`call_tool` + real `PipefyClient`): `tests/tools/test_introspection_tools_live.py`
-  - Full MCP app (`pipefy_mcp.server.mcp` + lifespan + ToolRegistry): `tests/tools/test_pipe_config_tools_live.py` (optional `PIPE_BUILDING_LIVE_PIPE_ID`, `PIPE_BUILDING_LIVE_ORG_ID` — see README).
+  - Full MCP app (`pipefy_mcp.server.mcp` + lifespan + ToolRegistry): `tests/tools/test_pipe_config_tools_live.py` (optional `PIPE_BUILDING_LIVE_PIPE_ID`, `PIPE_BUILDING_LIVE_ORG_ID` — see README); field conditions-only path: `tests/tools/test_field_conditions_tools_live.py` (optional `PIPE_FIELD_CONDITION_LIVE_PHASE_ID`).
   - Run both: `uv run pytest tests/services/pipefy/test_schema_introspection_integration.py tests/tools/test_introspection_tools_live.py -m integration -v`. CI-style run without network: `uv run pytest -m "not integration"`.
+  - **Task 6 (release sign-off):** Automated slice `tests/tools/test_task6_mcp_signoff_live.py` + field-condition live test (see README); manual Cursor steps in `.cursor/dev-planning/specs/ai-agents-field-conditions/TASK_6_SIGNOFF.md`.
 - **Manual E2E:** After meaningful tool or server changes, smoke-test the affected tools via **Cursor MCP** (see “Manual tool testing” above). Document that in PRs when relevant.
 - Examples for targeted runs:
   - Single file: `uv run pytest tests/tools/test_pipe_tools.py`
@@ -49,7 +50,8 @@ When implementing a new tool, follow this checklist (TDD-first):
 ## Commit & Pull Request Guidelines
 - Commit messages follow a conventional style such as `feat:`, `fix:`, `refactor:`, `style:`, `test:`, `docs:` with optional scopes (e.g., `feat(tools): ...`).
 - PRs should include a short summary, testing performed (commands and results), and any relevant issue links. Add docs updates if tool behavior or configuration changes.
+- **GraphQL-heavy PRs (field conditions, AI Agent read/delete):** Follow the **Schema hygiene checklist** in `README.md` (refresh `tests/services/pipefy/schema.graphql` when needed, run `diff_context.py`, verify `gql()` with live introspection, integration tests). See `.cursor/dev-planning/specs/ai-agents-field-conditions/decisions/ADR-001-schema-hygiene-for-field-conditions-and-ai-agents.md`.
 
 ## Security & Configuration Tips
 - Local runs require Pipefy service account credentials via env vars (`PIPEFY_OAUTH_CLIENT`, `PIPEFY_OAUTH_SECRET`, etc.). Avoid committing secrets; use local env files or your shell.
-- GraphQL schema updates use `uv run gql-cli ...` and should update `tests/services/pipefy/schema.graphql` when needed.
+- GraphQL schema updates use `uv run gql-cli ...` and should update `tests/services/pipefy/schema.graphql` when needed; see README **Schema hygiene checklist** for field-condition / AI-agent changes.

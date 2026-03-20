@@ -43,10 +43,11 @@ This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor)
 
 | Area | Tools |
 |------|--------|
-| **Pipe** | `get_pipe`, `get_start_form_fields`, `get_phase_fields`, `get_pipe_members`, `search_pipes` |
+| **Pipe** | `get_pipe`, `get_start_form_fields`, `get_phase_fields` (each phase field includes **`id`**, **`internal_id`**, **`uuid`**), `get_pipe_members`, `search_pipes` |
 | **Cards** | `get_cards`, `get_card`, `find_cards` — use `include_fields` when you need custom field name/value on each card. |
 | **Database tables** | `get_table`, `get_tables`, `get_table_records`, `get_table_record`, `find_records` |
 | **Relations** | `get_pipe_relations`, `get_table_relations` |
+| **AI agents** | `get_ai_agent`, `get_ai_agents` — list or load agents by pipe **`repo_uuid`** (pipe UUID from `get_pipe`). |
 | **Automations (traditional)** | `get_automation`, `get_automations`, `get_automation_actions`, `get_automation_events` |
 
 ### Pipe building (structure & labels)
@@ -60,6 +61,7 @@ Successful mutations return a **structured** `result` (GraphQL payload). Most wr
 | Pipe | `create_pipe`, `update_pipe`, `delete_pipe`, `clone_pipe` | **`delete_pipe`**: two-step — preview first, then `confirm=true` after user approval. |
 | Phase | `create_phase`, `update_phase`, `delete_phase` | Destructive deletes: confirm with the user. |
 | Phase field | `create_phase_field`, `update_phase_field`, `delete_phase_field` | `field_type` maps to API `type`; `field_id` may be a slug or numeric ID. |
+| Field condition | `create_field_condition`, `update_field_condition`, `delete_field_condition` | **`create_field_condition`** maps to **`createFieldConditionInput`**: **`phase_id`**, **`condition`**, **`actions`** (see Field condition tools). **`delete_field_condition`** is **`destructiveHint=True`** (confirm first). |
 | Label | `create_label`, `update_label`, `delete_label` | **`color`** must be a **hex** string (e.g. `#FF0000`), not a name. |
 
 ### Cards (lifecycle & comments)
@@ -157,6 +159,73 @@ sequenceDiagram
 | `update_ai_agent` | Replaces full agent config; send the **complete** `behaviors` list (1–5). |
 | `toggle_ai_agent_status` | Enable/disable without resending configuration. |
 
+#### AI Agent read & delete
+
+Inspect and remove agents without changing Pipefy’s UI. Use **`get_ai_agents`** with the pipe’s **`uuid`** (same as **`repo_uuid`** when creating an agent) before **`create_ai_agent`** to avoid duplicates.
+
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `get_ai_agent` | Yes | Loads one agent by UUID (**`uuid`**): name, instruction, behaviors. |
+| `get_ai_agents` | Yes | Lists agents for a pipe (**`repo_uuid`** = pipe UUID). |
+| `delete_ai_agent` | No | Permanently deletes an agent (**`destructiveHint=True`** — irreversible; confirm with the user first). **`uuid`** is the agent id. |
+
+### Field condition tools
+
+**Three tools** configure **conditional visibility** on **phase fields** (standard GraphQL mutations). **`create_field_condition`** sends **`phaseId`**, **`condition`** (`ConditionInput`), and **`actions`** (`FieldConditionActionInput` list); action entries use **`phaseFieldId`** with the target field’s **`internal_id`** from **`get_phase_fields`** (not the slug **`id`**). The tool rejects an empty **`condition`**, an empty **`expressions`** list inside **`condition`**, and if **`phaseFieldId`** looks like a **slug**, it returns an error pointing here instead of calling the API.
+
+- Use **`introspect_type('createFieldConditionInput')`** / **`UpdateFieldConditionInput`** for optional keys in **`extra_input`** when you need uncommon fields.
+- **`create_field_condition`** and **`update_field_condition`** accept optional **`extra_input`** and **`debug=true`** on errors (GraphQL codes + `correlation_id`), like other pipe-config writes.
+
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `create_field_condition` | No | Creates a rule: **`phase_id`**, **`condition`** (dict), **`actions`** (list of dicts), optional **`extra_input`**. |
+| `update_field_condition` | No | Patches an existing rule: **`condition_id`** and at least one of **`condition`**, **`actions`**, or **`extra_input`** (same shapes as create for **`condition`** / **`actions`**). |
+| `delete_field_condition` | No | Deletes a rule (**`destructiveHint=True`** — confirm with the user first). |
+
+#### Field conditions cookbook (tools-first happy path)
+
+Use this flow for standard **show/hide** rules instead of **`execute_graphql`** or deep introspection.
+
+1. **`get_pipe(pipe_id)`** — Note the **`phases`** list and the numeric **`id`** of the phase you are configuring.
+2. **`get_phase_fields(phase_id)`** — For the field that **triggers** the rule and the field whose visibility you **control**, copy **`internal_id`** (and optionally **`uuid`**) from each row. Do **not** use the slug **`id`** for **`phaseFieldId`** in **`actions`**.
+3. Build **`condition`** as a **`ConditionInput`** object: a non-empty dict with **`expressions`** (list of **`ConditionExpressionInput`**) and usually **`expressions_structure`** (list of lists grouping by **`structure_id`**). Each expression needs **`field_address`**, **`operation`**, **`value`**, and **`structure_id`**. Do **not** send **`id`** in expressions on create — the tool strips it automatically because the API treats it as a persisted primary key.
+4. Build **`actions`** — at least one object such as **`{ "phaseFieldId": "<target internal_id>", "whenEvaluator": true, "actionId": "hide" }`**. **`actionId`** is required: use **`hide`** or **`show`** (legacy **`hidden`** is mapped to **`hide`** automatically).
+5. Call **`create_field_condition`** with **`phase_id`**, **`condition`**, **`actions`**, and optional **`extra_input`** (e.g. **`name`**, **`index`**).
+6. Adjust with **`update_field_condition`** or remove with **`delete_field_condition`** when needed.
+
+**Minimal example** (replace placeholders with IDs from **`get_pipe`** / **`get_phase_fields`**):
+
+```json
+{
+  "phase_id": "YOUR_PHASE_NUMERIC_ID",
+  "condition": {
+    "expressions": [
+      {
+        "field_address": "TRIGGER_FIELD_INTERNAL_ID",
+        "operation": "equals",
+        "value": "Yes",
+        "structure_id": "s1"
+      }
+    ],
+    "expressions_structure": [["s1"]]
+  },
+  "actions": [
+    {
+      "phaseFieldId": "TARGET_FIELD_INTERNAL_ID",
+      "whenEvaluator": true,
+      "actionId": "hide"
+    }
+  ],
+  "extra_input": {
+    "name": "Hide target when trigger is Yes"
+  }
+}
+```
+
+**When to use introspection / raw GraphQL:** **`introspect_type`**, **`introspect_mutation`**, and **`execute_graphql`** are for **edge cases**, **schema discovery**, or **incidents**—not the default path for building standard field conditions. Prefer **`get_phase_fields`** + the tools above first.
+
+**Known gaps (live API):** Introspection does not document `ConditionExpressionInput.operation` values or full `expressions_structure` semantics. The tool strips **`id`** from expressions on create (persisted PK, not a client token) and maps legacy **`actionId` `hidden`** to **`hide`**. See **[Field conditions API limitations](.cursor/dev-planning/specs/ai-agents-field-conditions/FIELD_CONDITIONS_API_LIMITATIONS.md)** for detailed notes.
+
 ### Introspection & raw GraphQL
 
 When the schema shifts or no dedicated tool exists: **discovery** tools plus a **last-resort** executor (same OAuth client as everything else).
@@ -248,7 +317,7 @@ This is the **same entrypoint** (`pipefy-mcp-server` → full FastMCP app, lifes
 
 ### Integration tests (full MCP stack)
 
-Automated tests that call tools through **`pipefy_mcp.server.mcp`** (identical MCP path to production) are in `tests/tools/test_pipe_config_tools_live.py`. They require a `.env` with valid `PIPEFY_*` OAuth settings.
+Automated tests that call tools through **`pipefy_mcp.server.mcp`** (identical MCP path to production) are in `tests/tools/test_pipe_config_tools_live.py` and related modules. They require a `.env` with valid `PIPEFY_*` OAuth settings.
 
 ```bash
 # Read-only + any test that only needs creds (e.g. introspect_type)
@@ -261,7 +330,19 @@ export PIPE_BUILDING_LIVE_PIPE_ID=123456789
 export PIPE_BUILDING_LIVE_ORG_ID=300514213
 
 uv run pytest tests/tools/test_pipe_config_tools_live.py -m integration -v
+
+# Optional: field conditions tools-only path (get_phase_fields → create → delete)
+# Requires a phase with at least two fields; see tests/tools/test_field_conditions_tools_live.py
+export PIPE_FIELD_CONDITION_LIVE_PHASE_ID=123456789
+uv run pytest tests/tools/test_field_conditions_tools_live.py -m integration -v
+
+# Task 6 sign-off (automated slice: get_pipe, get_ai_agents, phase field IDs, optional field-condition cycle)
+export TASK6_SIGNOFF_PIPE_ID=123456789
+# Optional: export TASK6_SIGNOFF_AGENT_UUID=<uuid> for get_ai_agent integration test
+uv run pytest tests/tools/test_task6_mcp_signoff_live.py tests/tools/test_field_conditions_tools_live.py -m integration -v
 ```
+
+Manual **Cursor MCP** checklist and **6.4–6.5** recording: `.cursor/dev-planning/specs/ai-agents-field-conditions/TASK_6_SIGNOFF.md`.
 
 ### Updating GraphQL Schema
 If you are contributing and need to update the Pipefy GraphQL definitions:
@@ -269,6 +350,22 @@ If you are contributing and need to update the Pipefy GraphQL definitions:
 ```bash
 uv run gql-cli https://app.pipefy.com/graphql --print-schema --schema-download --headers 'Authorization: Bearer <AUTH_TOKEN>' > tests/services/pipefy/schema.graphql
 ```
+
+### Schema hygiene checklist (field conditions & AI agents)
+
+Use this before merging PRs that change **GraphQL operations** or **input shapes** for **field conditions** (`createFieldCondition`, `createFieldConditionInput`, `PhaseField`, related mutations) or **AI Agents** (`aiAgent`, `aiAgents`, `deleteAiAgent`, related types).
+
+1. **Checked-in schema** — If your change depends on new or renamed API types/fields, refresh `tests/services/pipefy/schema.graphql` with the `gql-cli` command above and commit the diff.
+2. **Context docs vs live API** — Run  
+   `uv run python3 .cursor/skills/pipefy-graphql-introspection/scripts/diff_context.py`  
+   (optional: `--verbose`) and fix stale references under `.cursor/context/` when reported.
+3. **`gql()` accuracy** — Confirm operation signatures match production (variable types, field selections). Prefer the introspection skill, e.g.  
+   `uv run python3 .cursor/skills/pipefy-graphql-introspection/scripts/introspect.py mutation createFieldCondition`  
+   or `… type createFieldConditionInput` — do not assume PascalCase without checking.
+4. **Tests** — Add or update unit tests; extend **`@pytest.mark.integration`** coverage when the real API happy path must stay green (e.g. `tests/tools/test_field_conditions_tools_live.py` for field conditions; see *Integration tests* above).
+5. **User-facing docs** — Update tool descriptions, this README (including the **Field conditions cookbook** if payloads change), and `AGENTS.md` integration notes when behavior or env vars change.
+
+**Rationale:** Recorded as [ADR-001](.cursor/dev-planning/specs/ai-agents-field-conditions/decisions/ADR-001-schema-hygiene-for-field-conditions-and-ai-agents.md). Maintainer task list: `.cursor/dev-planning/specs/ai-agents-field-conditions/tasks/tasks-ai-agents-field-conditions.md` (Phase 5).
 
 ### Code Quality
 

@@ -6,11 +6,18 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from gql.transport.exceptions import TransportQueryError
 
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_mcp.services.pipefy.ai_agent_service import (
     AiAgentService,
     inject_reference_ids,
+)
+from pipefy_mcp.services.pipefy.base_client import unwrap_relay_connection_nodes
+from pipefy_mcp.services.pipefy.queries.ai_agent_queries import (
+    DELETE_AI_AGENT_MUTATION,
+    GET_AI_AGENT_QUERY,
+    GET_AI_AGENTS_QUERY,
 )
 from pipefy_mcp.settings import PipefySettings
 
@@ -410,3 +417,105 @@ async def test_toggle_agent_status_api_returns_failure():
 
     with pytest.raises(ValueError, match="failed|unexpected"):
         await service.toggle_agent_status("agent-uuid", True)
+
+
+@pytest.mark.unit
+def test_unwrap_relay_connection_nodes_skips_invalid_edges():
+    conn = {"edges": [{"node": {"id": "1"}}, {"x": 1}, {"node": "not-a-dict"}]}
+    assert unwrap_relay_connection_nodes(conn) == [{"id": "1"}]
+    assert unwrap_relay_connection_nodes({}) == []
+    assert unwrap_relay_connection_nodes(None) == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_agent_success():
+    agent_payload = {
+        "uuid": "agent-1",
+        "name": "Assistant",
+        "instruction": "Help users",
+        "disabledAt": None,
+        "needReview": False,
+    }
+    service = _create_mock_service({"aiAgent": agent_payload})
+
+    result = await service.get_agent("agent-1")
+
+    service.execute_query.assert_awaited_once()
+    query, variables = service.execute_query.call_args[0]
+    assert query is GET_AI_AGENT_QUERY
+    assert variables == {"uuid": "agent-1"}
+    assert result == agent_payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_agent_returns_empty_when_ai_agent_null():
+    service = _create_mock_service({"aiAgent": None})
+
+    result = await service.get_agent("missing")
+
+    assert result == {}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_agent_transport_error():
+    service = AiAgentService(settings=_MOCK_SETTINGS)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.get_agent("agent-1")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_agents_success():
+    rows = [{"uuid": "a1", "name": "N1"}, {"uuid": "a2", "name": "N2"}]
+    connection = {"edges": [{"node": row} for row in rows]}
+    service = _create_mock_service({"aiAgents": connection})
+
+    result = await service.get_agents("repo-uuid-99")
+
+    service.execute_query.assert_awaited_once()
+    query, variables = service.execute_query.call_args[0]
+    assert query is GET_AI_AGENTS_QUERY
+    assert variables == {"repoUuid": "repo-uuid-99"}
+    assert result == rows
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_agents_transport_error():
+    service = AiAgentService(settings=_MOCK_SETTINGS)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "missing"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.get_agents("repo-1")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_agent_success():
+    service = _create_mock_service({"deleteAiAgent": {"success": True}})
+
+    result = await service.delete_agent("agent-to-delete")
+
+    service.execute_query.assert_awaited_once()
+    query, variables = service.execute_query.call_args[0]
+    assert query is DELETE_AI_AGENT_MUTATION
+    assert variables == {"uuid": "agent-to-delete"}
+    assert result == {"success": True}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_agent_transport_error():
+    service = AiAgentService(settings=_MOCK_SETTINGS)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.delete_agent("agent-1")

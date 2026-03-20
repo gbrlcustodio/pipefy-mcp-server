@@ -1,4 +1,4 @@
-"""Service for AI Agent create and update operations."""
+"""Service for AI Agent create, read, update, and delete operations."""
 
 from __future__ import annotations
 
@@ -8,13 +8,23 @@ import uuid
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
-from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
+from pipefy_mcp.services.pipefy.base_client import (
+    BasePipefyClient,
+    unwrap_relay_connection_nodes,
+)
 from pipefy_mcp.services.pipefy.queries.ai_agent_queries import (
     CREATE_AI_AGENT_MUTATION,
+    DELETE_AI_AGENT_MUTATION,
+    GET_AI_AGENT_QUERY,
+    GET_AI_AGENTS_QUERY,
     TOGGLE_AI_AGENT_STATUS_MUTATION,
     UPDATE_AI_AGENT_MUTATION,
 )
-from pipefy_mcp.services.pipefy.types import AgentServiceResult, ToggleAgentStatusResult
+from pipefy_mcp.services.pipefy.types import (
+    AgentServiceResult,
+    AiAgentGraphPayload,
+    ToggleAgentStatusResult,
+)
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -57,7 +67,7 @@ def inject_reference_ids(behaviors: list[dict]) -> list[dict]:
 
 
 class AiAgentService(BasePipefyClient):
-    """Service for creating and updating AI Agents via GraphQL."""
+    """Service for AI Agent CRUD via GraphQL."""
 
     def __init__(
         self,
@@ -178,3 +188,45 @@ class AiAgentService(BasePipefyClient):
             "success": True,
             "message": f"AI Agent {action} successfully.",
         }
+
+    async def get_agent(self, agent_uuid: str) -> AiAgentGraphPayload:
+        """Load a single AI Agent by UUID.
+
+        Args:
+            agent_uuid: Agent UUID.
+
+        Returns:
+            ``aiAgent`` fields when found; empty dict when the API returns null or a non-object.
+        """
+        response = await self.execute_query(GET_AI_AGENT_QUERY, {"uuid": agent_uuid})
+        agent = response.get("aiAgent")
+        return agent if isinstance(agent, dict) else {}
+
+    async def get_agents(self, repo_uuid: str) -> list[AiAgentGraphPayload]:
+        """List AI Agents for a pipe (repo).
+
+        Args:
+            repo_uuid: Pipe UUID (`repoUuid` in the API).
+
+        Returns:
+            List of agent dicts from `aiAgents`.
+        """
+        response = await self.execute_query(
+            GET_AI_AGENTS_QUERY, {"repoUuid": repo_uuid}
+        )
+        return unwrap_relay_connection_nodes(response.get("aiAgents"))
+
+    async def delete_agent(self, agent_uuid: str) -> dict:
+        """Delete an AI Agent permanently.
+
+        Args:
+            agent_uuid: Agent UUID.
+
+        Returns:
+            Dict with `success` bool from `deleteAiAgent`.
+        """
+        response = await self.execute_query(
+            DELETE_AI_AGENT_MUTATION, {"uuid": agent_uuid}
+        )
+        payload = response.get("deleteAiAgent", {})
+        return {"success": bool(payload.get("success"))}

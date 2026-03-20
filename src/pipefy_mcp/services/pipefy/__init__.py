@@ -1,5 +1,6 @@
 from .ai_agent_service import AiAgentService
 from .ai_automation_service import AiAutomationService
+from .automation_service import AutomationService
 from .base_client import BasePipefyClient
 from .card_service import CardService
 from .client import PipefyClient
@@ -13,6 +14,7 @@ from .table_service import TableService
 __all__ = [
     "AiAgentService",
     "AiAutomationService",
+    "AutomationService",
     "BasePipefyClient",
     "CardService",
     "InternalApiClient",

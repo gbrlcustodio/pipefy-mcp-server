@@ -455,6 +455,8 @@ class PipeTools:
             Returns:
                 dict: Contains phase info and 'fields' array with field properties:
                       - id: Field identifier (slug) used when updating cards
+                      - internal_id: Stable numeric-style ID (use for mutations such as field conditions)
+                      - uuid: Field UUID
                       - label: Display name of the field
                       - type: Field type (short_text, select, date, etc.)
                       - required: Whether the field is mandatory

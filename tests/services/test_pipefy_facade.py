@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from pipefy_mcp.services.pipefy.automation_service import AutomationService
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
@@ -107,12 +108,34 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
         return_value={"ok": "create_card_relation"}
     )
 
+    automation_service = AsyncMock()
+    automation_service.get_automation = AsyncMock(return_value={"ok": "get_automation"})
+    automation_service.get_automations = AsyncMock(
+        return_value={"ok": "get_automations"}
+    )
+    automation_service.get_automation_actions = AsyncMock(
+        return_value={"ok": "get_automation_actions"}
+    )
+    automation_service.get_automation_events = AsyncMock(
+        return_value={"ok": "get_automation_events"}
+    )
+    automation_service.create_automation = AsyncMock(
+        return_value={"ok": "create_automation"}
+    )
+    automation_service.update_automation = AsyncMock(
+        return_value={"ok": "update_automation"}
+    )
+    automation_service.delete_automation = AsyncMock(
+        return_value={"ok": "delete_automation"}
+    )
+
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = pipe_service
     client._card_service = card_service
     client._pipe_config_service = pipe_config_service
     client._table_service = table_service
     client._relation_service = relation_service
+    client._automation_service = automation_service
 
     assert await client.get_pipe(1) == {"ok": "pipe"}
     pipe_service.get_pipe.assert_awaited_once_with(1)
@@ -321,6 +344,61 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
         1, 2, 3, sourceType="Field"
     )
 
+    assert await client.get_automation("aid") == {"ok": "get_automation"}
+    automation_service.get_automation.assert_awaited_once_with("aid")
+
+    assert await client.get_automations(pipe_id="pid") == {"ok": "get_automations"}
+    automation_service.get_automations.assert_awaited_once_with(
+        organization_id=None, pipe_id="pid"
+    )
+
+    assert await client.get_automation_actions("p1") == {"ok": "get_automation_actions"}
+    automation_service.get_automation_actions.assert_awaited_once_with("p1")
+
+    assert await client.get_automation_events("p2") == {"ok": "get_automation_events"}
+    automation_service.get_automation_events.assert_awaited_once_with("p2")
+
+    assert await client.create_automation("p1", "Rule", "ev", "act") == {
+        "ok": "create_automation"
+    }
+    automation_service.create_automation.assert_awaited_once_with(
+        "p1", "Rule", "ev", "act", active=True
+    )
+
+    assert await client.create_automation(
+        "p1", "Rule", "ev", "act", extra_input={"customKey": "v"}
+    ) == {"ok": "create_automation"}
+    automation_service.create_automation.assert_awaited_with(
+        "p1", "Rule", "ev", "act", active=True, customKey="v"
+    )
+
+    assert await client.create_automation("p1", "Rule", "ev", "act", active=False) == {
+        "ok": "create_automation"
+    }
+    automation_service.create_automation.assert_awaited_with(
+        "p1", "Rule", "ev", "act", active=False
+    )
+
+    assert await client.create_automation(
+        "p1",
+        "Rule",
+        "ev",
+        "act",
+        active=True,
+        extra_input={"active": False},
+    ) == {"ok": "create_automation"}
+    automation_service.create_automation.assert_awaited_with(
+        "p1", "Rule", "ev", "act", active=False
+    )
+
+    assert await client.update_automation("a1", extra_input={"name": "N"}) == {
+        "ok": "update_automation"
+    }
+    automation_service.update_automation.assert_awaited_once_with("a1", name="N")
+
+    assert await client.delete_automation("rm") == {"ok": "delete_automation"}
+    automation_service.delete_automation.assert_awaited_once_with("rm")
+
 
 @pytest.mark.unit
 def test_pipefy_client_creates_services_with_shared_auth():
@@ -339,6 +417,7 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert isinstance(client._pipe_config_service, PipeConfigService)
     assert isinstance(client._table_service, TableService)
     assert isinstance(client._relation_service, RelationService)
+    assert isinstance(client._automation_service, AutomationService)
     assert isinstance(client._introspection_service, SchemaIntrospectionService)
     assert client._pipe_service._auth is not None, (
         "PipeService should have an auth instance"
@@ -358,10 +437,14 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert client._relation_service._auth is not None, (
         "RelationService should have an auth instance"
     )
+    assert client._automation_service._auth is not None, (
+        "AutomationService should have an auth instance"
+    )
     assert client._pipe_service._auth is client._card_service._auth
     assert client._pipe_service._auth is client._pipe_config_service._auth
     assert client._pipe_service._auth is client._table_service._auth
     assert client._pipe_service._auth is client._relation_service._auth
+    assert client._pipe_service._auth is client._automation_service._auth
     assert client._pipe_service._auth is client._introspection_service._auth
 
 

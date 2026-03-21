@@ -6,6 +6,7 @@ from pipefy_mcp.services.pipefy.ai_agent_service import AiAgentService
 from pipefy_mcp.services.pipefy.automation_service import AutomationService
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
+from pipefy_mcp.services.pipefy.member_service import MemberService
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.relation_service import RelationService
@@ -13,6 +14,7 @@ from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
 )
 from pipefy_mcp.services.pipefy.table_service import TableService
+from pipefy_mcp.services.pipefy.webhook_service import WebhookService
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -465,6 +467,10 @@ def test_pipefy_client_creates_services_with_shared_auth():
 
     assert isinstance(client._pipe_service, PipeService)
     assert isinstance(client._card_service, CardService)
+    assert isinstance(client._member_service, MemberService)
+    assert isinstance(client._webhook_service, WebhookService)
+    assert client._member_service._pipe_service is client._pipe_service
+    assert client._webhook_service._card_service is client._card_service
     assert isinstance(client._pipe_config_service, PipeConfigService)
     assert isinstance(client._table_service, TableService)
     assert isinstance(client._relation_service, RelationService)

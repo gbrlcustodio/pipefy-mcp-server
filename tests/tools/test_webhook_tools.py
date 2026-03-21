@@ -211,6 +211,72 @@ async def test_send_email_with_template_graphql_error(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_send_email_with_template_rejects_non_numeric_card_id(
+    webhook_session, mock_webhook_client, extract_payload
+):
+    mock_webhook_client.send_email_with_template.side_effect = ValueError(
+        "card_id must be a numeric card ID, got '550e8400-e29b-41d4-a716-446655440000'."
+    )
+
+    async with webhook_session as session:
+        result = await session.call_tool(
+            "send_email_with_template",
+            {
+                "card_id": "550e8400-e29b-41d4-a716-446655440000",
+                "email_template_id": "42",
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "numeric card ID" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_create_webhook_rejects_http_url(
+    webhook_session, mock_webhook_client, extract_payload
+):
+    mock_webhook_client.create_webhook.side_effect = ValueError(
+        "Invalid 'url': must be HTTPS. HTTP URLs are not allowed."
+    )
+
+    async with webhook_session as session:
+        result = await session.call_tool(
+            "create_webhook",
+            {
+                "pipe_id": "pipe-1",
+                "url": "http://insecure.example.com/hook",
+                "actions": ["card.create"],
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "HTTPS" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_get_card_inbox_emails_invalid_email_type(
+    webhook_session, extract_payload
+):
+    async with webhook_session as session:
+        result = await session.call_tool(
+            "get_card_inbox_emails",
+            {"card_id": "12345", "email_type": "draft"},
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "email_type" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -357,7 +423,7 @@ async def test_get_card_inbox_emails_success(
 
     assert result.isError is False
     mock_webhook_client.get_card_inbox_emails.assert_awaited_once_with(
-        "12345", type=None
+        "12345", email_type=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -376,12 +442,12 @@ async def test_get_card_inbox_emails_with_type_filter(
     async with webhook_session as session:
         result = await session.call_tool(
             "get_card_inbox_emails",
-            {"card_id": "12345", "type": "received"},
+            {"card_id": "12345", "email_type": "received"},
         )
 
     assert result.isError is False
     mock_webhook_client.get_card_inbox_emails.assert_awaited_once_with(
-        "12345", type="received"
+        "12345", email_type="received"
     )
     payload = extract_payload(result)
     assert payload["success"] is True

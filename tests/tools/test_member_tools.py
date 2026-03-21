@@ -48,6 +48,40 @@ def member_session(member_mcp_server, request):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_invite_members_rejects_empty_members(
+    member_session, extract_payload
+):
+    async with member_session as session:
+        result = await session.call_tool(
+            "invite_members",
+            {"pipe_id": "pipe-1", "members": []},
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "members" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_remove_member_from_pipe_rejects_empty_user_ids(
+    member_session, extract_payload
+):
+    async with member_session as session:
+        result = await session.call_tool(
+            "remove_member_from_pipe",
+            {"pipe_id": "pipe-1", "user_ids": []},
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "user_ids" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_success(
     member_session, mock_member_client, extract_payload
 ):
@@ -98,6 +132,27 @@ async def test_invite_members_graphql_error(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid email" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_remove_member_from_pipe_value_error_from_client(
+    member_session, mock_member_client, extract_payload
+):
+    mock_member_client.remove_members_from_pipe.side_effect = ValueError(
+        "pipe_id must be a numeric pipe ID or a pipe UUID, got 'bad'."
+    )
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "remove_member_from_pipe",
+            {"pipe_id": "bad", "user_ids": ["u1"]},
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "pipe_id" in payload["error"]
 
 
 @pytest.mark.anyio

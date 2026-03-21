@@ -9,6 +9,7 @@ from pipefy_mcp.services.pipefy.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
     CREATE_WEBHOOK_MUTATION,
     DELETE_WEBHOOK_MUTATION,
+    GET_CARD_INBOX_EMAILS_QUERY,
     GET_EMAIL_TEMPLATES_QUERY,
     GET_PARSED_EMAIL_TEMPLATE_QUERY,
 )
@@ -130,6 +131,62 @@ async def test_send_inbox_email_success(mock_settings):
     assert inp["from"] == "sender@pipefy.com"
     assert inp["text"] == "Hi there"
     assert result == payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_send_email_with_template_success(mock_settings):
+    card_service = AsyncMock()
+    card_service.get_card = AsyncMock(
+        return_value={
+            "card": {
+                "uuid": "550e8400-e29b-41d4-a716-446655440000",
+                "pipe": {"id": "307061640"},
+            }
+        }
+    )
+    service = WebhookService(settings=mock_settings, card_service=card_service)
+    service.execute_query = AsyncMock(
+        side_effect=[
+            {
+                "parsedEmailTemplate": {
+                    "subject": "Hello",
+                    "body": "Body",
+                    "fromEmail": "from@x.com",
+                    "toEmail": "a@x.com,b@x.com",
+                }
+            },
+            {
+                "createAndSendInboxEmail": {
+                    "emailSent": True,
+                    "errors": [],
+                    "inboxEmail": {"id": "e1"},
+                }
+            },
+        ]
+    )
+    result = await service.send_email_with_template("1320616225", "tmpl-42")
+
+    assert card_service.get_card.await_count == 1
+    card_service.get_card.assert_awaited_once_with(1320616225)
+    assert service.execute_query.await_count == 2
+    first_q, first_vars = service.execute_query.call_args_list[0][0]
+    second_q, second_inp = service.execute_query.call_args_list[1][0]
+    assert first_q is GET_PARSED_EMAIL_TEMPLATE_QUERY
+    assert second_q is CREATE_AND_SEND_INBOX_EMAIL_MUTATION
+    assert second_inp["input"]["repoId"] == "307061640"
+    assert second_inp["input"]["text"] == "Body"
+    assert "html" not in second_inp["input"]
+    assert result["createAndSendInboxEmail"]["emailSent"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_send_email_with_template_rejects_non_numeric_card_id(mock_settings):
+    service = WebhookService(settings=mock_settings)
+    service.execute_query = AsyncMock()
+    with pytest.raises(ValueError, match="numeric card ID"):
+        await service.send_email_with_template("not-a-number", "tmpl-1")
 
 
 @pytest.mark.unit
@@ -256,7 +313,8 @@ async def test_get_card_inbox_emails_success(mock_settings):
     result = await service.get_card_inbox_emails("12345")
 
     service.execute_query.assert_awaited_once()
-    _, variables = service.execute_query.call_args[0]
+    query, variables = service.execute_query.call_args[0]
+    assert query is GET_CARD_INBOX_EMAILS_QUERY
     assert variables["card_id"] == "12345"
     assert result == payload
     assert len(result["card"]["inbox_emails"]) == 2
@@ -275,7 +333,7 @@ async def test_get_card_inbox_emails_filter_by_sent(mock_settings):
         }
     }
     service = _make_service(mock_settings, payload)
-    result = await service.get_card_inbox_emails("12345", type="sent")
+    result = await service.get_card_inbox_emails("12345", email_type="sent")
 
     assert result["card"]["inbox_emails"] == [
         {"id": "e1", "type": "sent", "subject": "Out"}
@@ -295,7 +353,7 @@ async def test_get_card_inbox_emails_filter_by_received(mock_settings):
         }
     }
     service = _make_service(mock_settings, payload)
-    result = await service.get_card_inbox_emails("12345", type="received")
+    result = await service.get_card_inbox_emails("12345", email_type="received")
 
     assert result["card"]["inbox_emails"] == [
         {"id": "e2", "type": "received", "subject": "In"}

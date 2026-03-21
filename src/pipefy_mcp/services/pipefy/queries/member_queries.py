@@ -20,7 +20,10 @@ INVITE_MEMBERS_MUTATION = gql(
                 id
                 email
             }
-            errors
+            errors {
+                index
+                message
+            }
         }
     }
     """

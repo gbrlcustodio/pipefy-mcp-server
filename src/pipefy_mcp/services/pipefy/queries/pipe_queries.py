@@ -71,6 +71,7 @@ GET_PIPE_MEMBERS_QUERY = gql(
             members {
                 user {
                     id
+                    uuid
                     name
                     email
                 }

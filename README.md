@@ -148,7 +148,7 @@ sequenceDiagram
 | Tool | Read-only | Role |
 |------|-----------|------|
 | `get_email_templates` | Yes | List email templates for a pipe or table (**`repo_id`**); optional **`filter_by_name`**. Use before **`send_email_with_template`** to discover template IDs. |
-| `get_card_inbox_emails` | Yes | List emails (sent and received) for a card's inbox. Use **`type: 'received'`** to get only replies (e.g. when someone replies to an email sent from the card). |
+| `get_card_inbox_emails` | Yes | List emails (sent and received) for a card's inbox. Use **`email_type: 'received'`** to get only replies (e.g. when someone replies to an email sent from the card). |
 | `send_inbox_email` | No | Send an email from a card's inbox; requires the card to have an email inbox enabled. **`from_`** (sender) is required. |
 | `send_email_with_template` | No | Send an email from a card's inbox using an **existing** email template. Resolves placeholders (e.g. `{{card.title}}`) for the card. Template must exist (created in Pipefy UI). **`card_id`**, **`email_template_id`** required; optional **`to`**, **`from_`** to override template defaults. |
 | `create_webhook` | No | Register a webhook for pipe events; **`url`** must be **HTTPS**; **`actions`** is a list of event names (e.g. `['card.move', 'card.create']`). Use **`introspect_type('WebhookActions')`** for valid actions. |

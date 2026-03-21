@@ -63,6 +63,7 @@ GET_CARD_QUERY = gql(
     query ($card_id: ID!, $includeFields: Boolean!) {
         card(id: $card_id) {
             id
+            uuid
             title
             pipe {
                 id
@@ -184,6 +185,26 @@ UPDATE_CARD_MUTATION = gql(
                 updated_at
             }
             clientMutationId
+        }
+    }
+    """
+)
+
+GET_CARD_INBOX_EMAILS_QUERY = gql(
+    """
+    query ($card_id: ID!) {
+        card(id: $card_id) {
+            id
+            inbox_emails {
+                id
+                type
+                from
+                fromName
+                subject
+                body
+                created_at
+                state
+            }
         }
     }
     """

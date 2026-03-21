@@ -7,10 +7,15 @@ from typing import Any
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
+from pipefy_mcp.services.pipefy.queries.card_queries import (
+    GET_CARD_INBOX_EMAILS_QUERY,
+)
 from pipefy_mcp.services.pipefy.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
     CREATE_WEBHOOK_MUTATION,
     DELETE_WEBHOOK_MUTATION,
+    GET_EMAIL_TEMPLATES_QUERY,
+    GET_PARSED_EMAIL_TEMPLATE_QUERY,
 )
 from pipefy_mcp.settings import PipefySettings
 
@@ -34,6 +39,43 @@ class WebhookService(BasePipefyClient):
         auth: OAuth2ClientCredentials | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
+
+    async def get_email_templates(
+        self,
+        repo_id: str,
+        *,
+        filter_by_name: str | None = None,
+        first: int = 50,
+    ) -> dict[str, Any]:
+        """List email templates for a pipe or table.
+
+        Args:
+            repo_id: Pipe or table ID.
+            filter_by_name: Optional case-insensitive partial match on template name.
+            first: Max templates to return (default 50).
+        """
+        variables: dict[str, Any] = {"repoId": repo_id, "first": first}
+        if filter_by_name is not None and filter_by_name.strip():
+            variables["filterByName"] = filter_by_name.strip()
+        return await self.execute_query(GET_EMAIL_TEMPLATES_QUERY, variables)
+
+    async def get_parsed_email_template(
+        self,
+        email_template_id: str,
+        *,
+        card_uuid: str | None = None,
+    ) -> dict[str, Any]:
+        """Get an email template with dynamic placeholders resolved for a card.
+
+        Args:
+            email_template_id: ID of the email template.
+            card_uuid: Optional card UUID for placeholder resolution (e.g. {{card.title}}).
+                When omitted, returns the template without card-based substitution.
+        """
+        variables: dict[str, Any] = {"emailTemplateId": email_template_id}
+        if card_uuid is not None and card_uuid.strip():
+            variables["cardUuid"] = card_uuid.strip()
+        return await self.execute_query(GET_PARSED_EMAIL_TEMPLATE_QUERY, variables)
 
     async def send_inbox_email(
         self,
@@ -112,3 +154,29 @@ class WebhookService(BasePipefyClient):
             DELETE_WEBHOOK_MUTATION,
             {"input": {"id": webhook_id}},
         )
+
+    async def get_card_inbox_emails(
+        self,
+        card_id: str,
+        *,
+        type: str | None = None,
+    ) -> dict[str, Any]:
+        """List emails (sent and received) for a card's inbox.
+
+        Args:
+            card_id: ID of the card with inbox.
+            type: Optional filter: 'sent' | 'received'. When omitted, returns all.
+        """
+        raw = await self.execute_query(
+            GET_CARD_INBOX_EMAILS_QUERY,
+            {"card_id": card_id},
+        )
+        card_data = raw.get("card") or {}
+        emails = card_data.get("inbox_emails") or []
+
+        if type is not None and type.strip():
+            filter_type = type.strip().lower()
+            emails = [e for e in emails if (e.get("type") or "").lower() == filter_type]
+            card_data = dict(card_data, inbox_emails=emails)
+
+        return {"card": card_data}

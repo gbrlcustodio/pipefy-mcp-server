@@ -190,26 +190,6 @@ UPDATE_CARD_MUTATION = gql(
     """
 )
 
-GET_CARD_INBOX_EMAILS_QUERY = gql(
-    """
-    query ($card_id: ID!) {
-        card(id: $card_id) {
-            id
-            inbox_emails {
-                id
-                type
-                from
-                fromName
-                subject
-                body
-                created_at
-                state
-            }
-        }
-    }
-    """
-)
-
 UPDATE_FIELDS_VALUES_MUTATION = gql(
     """
     mutation ($input: UpdateFieldsValuesInput!) {

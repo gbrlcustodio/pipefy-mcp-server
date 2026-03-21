@@ -7,13 +7,11 @@ from typing import Any
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
-from pipefy_mcp.services.pipefy.queries.card_queries import (
-    GET_CARD_INBOX_EMAILS_QUERY,
-)
 from pipefy_mcp.services.pipefy.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
     CREATE_WEBHOOK_MUTATION,
     DELETE_WEBHOOK_MUTATION,
+    GET_CARD_INBOX_EMAILS_QUERY,
     GET_EMAIL_TEMPLATES_QUERY,
     GET_PARSED_EMAIL_TEMPLATE_QUERY,
 )

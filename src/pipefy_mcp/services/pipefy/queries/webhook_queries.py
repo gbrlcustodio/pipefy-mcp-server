@@ -1,7 +1,8 @@
 """GraphQL mutations and queries for sending inbox emails, email templates, and webhook management.
 
 createAndSendInboxEmail: cardId, from, subject, to (required); html, text, cc, bcc optional.
-emailTemplates: repoId; filterByName, first, after optional.
+emailTemplates: repoId; filterByName, first optional.
+card (inbox_emails): card_id for listing sent/received inbox emails.
 parsedEmailTemplate: emailTemplateId, cardUuid (cardUuid optional — omitted returns template without placeholder resolution).
 CreateWebhookInput: pipe_id/table_id, url, actions, name, etc.
 DeleteWebhookInput: id.
@@ -96,14 +97,31 @@ DELETE_WEBHOOK_MUTATION = gql(
     """
 )
 
-# Alias for tool/service layer (API mutation is createAndSendInboxEmail).
-SEND_INBOX_EMAIL_MUTATION = CREATE_AND_SEND_INBOX_EMAIL_MUTATION
+GET_CARD_INBOX_EMAILS_QUERY = gql(
+    """
+    query ($card_id: ID!) {
+        card(id: $card_id) {
+            id
+            inbox_emails {
+                id
+                type
+                from
+                fromName
+                subject
+                body
+                created_at
+                state
+            }
+        }
+    }
+    """
+)
 
 __all__ = [
     "CREATE_AND_SEND_INBOX_EMAIL_MUTATION",
     "CREATE_WEBHOOK_MUTATION",
     "DELETE_WEBHOOK_MUTATION",
+    "GET_CARD_INBOX_EMAILS_QUERY",
     "GET_EMAIL_TEMPLATES_QUERY",
     "GET_PARSED_EMAIL_TEMPLATE_QUERY",
-    "SEND_INBOX_EMAIL_MUTATION",
 ]

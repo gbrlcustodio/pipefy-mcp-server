@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from httpx_auth import OAuth2ClientCredentials
@@ -28,6 +29,8 @@ from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload, CardSearch
 from pipefy_mcp.services.pipefy.webhook_service import WebhookService
 from pipefy_mcp.settings import PipefySettings
 
+logger = logging.getLogger(__name__)
+
 
 class PipefyClient:
     """Facade client for Pipefy API operations (pure delegation)."""
@@ -43,8 +46,16 @@ class PipefyClient:
         self._pipe_config_service = PipeConfigService(settings=settings, auth=auth)
         self._table_service = TableService(settings=settings, auth=auth)
         self._relation_service = RelationService(settings=settings, auth=auth)
-        self._member_service = MemberService(settings=settings, auth=auth)
-        self._webhook_service = WebhookService(settings=settings, auth=auth)
+        self._member_service = MemberService(
+            settings=settings,
+            auth=auth,
+            pipe_service=self._pipe_service,
+        )
+        self._webhook_service = WebhookService(
+            settings=settings,
+            auth=auth,
+            card_service=self._card_service,
+        )
         self._automation_service = AutomationService(settings=settings, auth=auth)
         self._ai_agent_service = AiAgentService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
@@ -335,43 +346,11 @@ class PipefyClient:
     ) -> dict[str, Any]:
         """Remove one or more users from a pipe.
 
-        pipe_id and user_ids can be numeric IDs or UUIDs; the API requires
-        pipeUuid and usersUuids, so we resolve numeric IDs when needed.
-
         Args:
             pipe_id: ID or UUID of the pipe.
             user_ids: List of user IDs or UUIDs to remove.
         """
-        pipe_obj: dict[str, Any] = {}
-        if "-" not in str(pipe_id) and str(pipe_id).isdigit():
-            pipe_data = await self._pipe_service.get_pipe(int(pipe_id))
-            pipe_obj = pipe_data.get("pipe") or {}
-        elif "-" in str(pipe_id):
-            pipe_data = await self._pipe_service.get_pipe(pipe_id)
-            pipe_obj = pipe_data.get("pipe") or {}
-
-        pipe_uuid = pipe_obj.get("uuid") or pipe_id
-        pipe_numeric_id = pipe_obj.get("id")
-        if isinstance(pipe_numeric_id, str) and pipe_numeric_id.isdigit():
-            pipe_numeric_id = int(pipe_numeric_id)
-
-        user_uuids = list(user_ids)
-        needs_resolution = any(
-            "-" not in str(uid) and str(uid).isdigit() for uid in user_ids
-        )
-        if needs_resolution and pipe_numeric_id is not None:
-            members_data = await self._pipe_service.get_pipe_members(pipe_numeric_id)
-            members = (members_data.get("pipe") or {}).get("members", [])
-            id_to_uuid = {}
-            for m in members:
-                u = m.get("user") if isinstance(m.get("user"), dict) else {}
-                if u and "uuid" in u:
-                    id_to_uuid[str(u.get("id"))] = u["uuid"]
-            user_uuids = [id_to_uuid.get(str(uid), uid) for uid in user_ids]
-
-        return await self._member_service.remove_members_from_pipe(
-            pipe_uuid, user_uuids
-        )
+        return await self._member_service.remove_members_from_pipe(pipe_id, user_ids)
 
     async def set_role(
         self, pipe_id: str, member_id: str, role_name: str
@@ -404,6 +383,10 @@ class PipefyClient:
             body: Email body (plain text).
             from_: Sender email address (required by API).
             **attrs: Extra CreateAndSendInboxEmailInput fields (html, cc, bcc, repoId, etc.).
+
+        When ``repoId`` is omitted and ``card_id`` is numeric, the client best-effort
+        fills ``repoId`` from the card's pipe. Non-numeric ``card_id`` skips this
+        (pass ``repoId`` in ``attrs`` if the API requires it).
         """
         if "repoId" not in attrs and card_id.isdigit():
             try:
@@ -415,8 +398,12 @@ class PipefyClient:
                 )
                 if pipe_id is not None:
                     attrs = dict(attrs, repoId=str(pipe_id))
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "Could not auto-resolve repoId for card %s",
+                    card_id,
+                    exc_info=True,
+                )
         return await self._webhook_service.send_inbox_email(
             card_id, to, subject, body, from_=from_, **attrs
         )
@@ -425,15 +412,17 @@ class PipefyClient:
         self,
         card_id: str,
         *,
-        type: str | None = None,
+        email_type: str | None = None,
     ) -> dict[str, Any]:
         """List emails (sent and received) for a card's inbox.
 
         Args:
             card_id: ID of the card with inbox.
-            type: Optional filter: 'sent' | 'received'. When omitted, returns all.
+            email_type: Optional filter: 'sent' | 'received'. When omitted, returns all.
         """
-        return await self._webhook_service.get_card_inbox_emails(card_id, type=type)
+        return await self._webhook_service.get_card_inbox_emails(
+            card_id, email_type=email_type
+        )
 
     async def get_email_templates(
         self,
@@ -472,53 +461,19 @@ class PipefyClient:
     ) -> dict[str, Any]:
         """Send an email from a card's inbox using an existing email template.
 
-        Fetches the card's UUID, parses the template with placeholder resolution,
-        then sends via createAndSendInboxEmail. Template must exist (created in Pipefy UI).
-
         Args:
-            card_id: ID of the card with inbox.
+            card_id: Numeric ID of the card with inbox.
             email_template_id: ID of the email template.
             to: Optional override for recipients; if omitted, uses template's toEmail.
             from_: Optional override for sender; if omitted, uses template's fromEmail.
             **attrs: Extra CreateAndSendInboxEmailInput fields (cc, bcc, repoId, etc.).
         """
-        card_data = await self._card_service.get_card(int(card_id))
-        card_obj = card_data.get("card") or {}
-        card_uuid = card_obj.get("uuid")
-        if not card_uuid:
-            raise ValueError(
-                f"Card {card_id} has no UUID; cannot resolve template placeholders."
-            )
-        parsed = await self._webhook_service.get_parsed_email_template(
-            email_template_id,
-            card_uuid=card_uuid,
-        )
-        pt = parsed.get("parsedEmailTemplate") or {}
-        subject = pt.get("subject") or ""
-        body = pt.get("body") or ""
-        from_email = from_ or pt.get("fromEmail") or ""
-        if not from_email:
-            raise ValueError("Template has no fromEmail; provide from_ explicitly.")
-        to_emails = to
-        if to_emails is None:
-            raw_to = pt.get("toEmail") or ""
-            to_emails = [e.strip() for e in raw_to.split(",") if e.strip()]
-        if not to_emails:
-            raise ValueError(
-                "Template has no toEmail and no to override; provide recipients."
-            )
-        extra = dict(attrs)
-        pipe_obj = card_obj.get("pipe") or {}
-        if isinstance(pipe_obj, dict) and pipe_obj.get("id"):
-            extra["repoId"] = str(pipe_obj["id"])
-        return await self._webhook_service.send_inbox_email(
+        return await self._webhook_service.send_email_with_template(
             card_id,
-            to_emails,
-            subject,
-            body,
-            from_=from_email,
-            html=body or None,
-            **extra,
+            email_template_id,
+            to=to,
+            from_=from_,
+            **attrs,
         )
 
     async def create_webhook(

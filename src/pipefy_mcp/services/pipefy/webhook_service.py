@@ -7,6 +7,7 @@ from typing import Any
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
+from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
     CREATE_WEBHOOK_MUTATION,
@@ -35,8 +36,11 @@ class WebhookService(BasePipefyClient):
         self,
         settings: PipefySettings,
         auth: OAuth2ClientCredentials | None = None,
+        *,
+        card_service: CardService | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
+        self._card_service = card_service or CardService(settings=settings, auth=auth)
 
     async def get_email_templates(
         self,
@@ -110,6 +114,65 @@ class WebhookService(BasePipefyClient):
             {"input": input_obj},
         )
 
+    async def send_email_with_template(
+        self,
+        card_id: str,
+        email_template_id: str,
+        *,
+        to: list[str] | None = None,
+        from_: str | None = None,
+        **attrs: Any,
+    ) -> dict[str, Any]:
+        """Send an email using a template with placeholders resolved for the card.
+
+        Args:
+            card_id: Numeric card ID (GraphQL ``ID`` as digits).
+            email_template_id: Email template ID.
+            to: Optional recipient override; defaults to template ``toEmail``.
+            from_: Optional sender override; defaults to template ``fromEmail``.
+            **attrs: Extra CreateAndSendInboxEmailInput fields (cc, bcc, repoId, etc.).
+        """
+        card_id_str = str(card_id).strip()
+        if not card_id_str.isdigit():
+            raise ValueError(f"card_id must be a numeric card ID, got {card_id!r}.")
+        card_data = await self._card_service.get_card(int(card_id_str))
+        card_obj = card_data.get("card") or {}
+        card_uuid = card_obj.get("uuid")
+        if not card_uuid:
+            raise ValueError(
+                f"Card {card_id_str} has no UUID; cannot resolve template placeholders."
+            )
+        parsed = await self.get_parsed_email_template(
+            email_template_id,
+            card_uuid=card_uuid,
+        )
+        pt = parsed.get("parsedEmailTemplate") or {}
+        subject = pt.get("subject") or ""
+        body = pt.get("body") or ""
+        from_email = from_ or pt.get("fromEmail") or ""
+        if not from_email:
+            raise ValueError("Template has no fromEmail; provide from_ explicitly.")
+        to_emails = to
+        if to_emails is None:
+            raw_to = pt.get("toEmail") or ""
+            to_emails = [e.strip() for e in raw_to.split(",") if e.strip()]
+        if not to_emails:
+            raise ValueError(
+                "Template has no toEmail and no to override; provide recipients."
+            )
+        extra = dict(attrs)
+        pipe_obj = card_obj.get("pipe") or {}
+        if isinstance(pipe_obj, dict) and pipe_obj.get("id"):
+            extra["repoId"] = str(pipe_obj["id"])
+        return await self.send_inbox_email(
+            card_id_str,
+            to_emails,
+            subject,
+            body,
+            from_=from_email,
+            **extra,
+        )
+
     async def create_webhook(
         self,
         pipe_id: str,
@@ -157,13 +220,13 @@ class WebhookService(BasePipefyClient):
         self,
         card_id: str,
         *,
-        type: str | None = None,
+        email_type: str | None = None,
     ) -> dict[str, Any]:
         """List emails (sent and received) for a card's inbox.
 
         Args:
             card_id: ID of the card with inbox.
-            type: Optional filter: 'sent' | 'received'. When omitted, returns all.
+            email_type: Optional filter: 'sent' | 'received'. When omitted, returns all.
         """
         raw = await self.execute_query(
             GET_CARD_INBOX_EMAILS_QUERY,
@@ -172,8 +235,8 @@ class WebhookService(BasePipefyClient):
         card_data = raw.get("card") or {}
         emails = card_data.get("inbox_emails") or []
 
-        if type is not None and type.strip():
-            filter_type = type.strip().lower()
+        if email_type is not None and email_type.strip():
+            filter_type = email_type.strip().lower()
             emails = [e for e in emails if (e.get("type") or "").lower() == filter_type]
             card_data = dict(card_data, inbox_emails=emails)
 

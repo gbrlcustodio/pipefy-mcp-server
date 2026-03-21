@@ -63,6 +63,7 @@ GET_CARD_QUERY = gql(
     query ($card_id: ID!, $includeFields: Boolean!) {
         card(id: $card_id) {
             id
+            uuid
             title
             pipe {
                 id

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from httpx_auth import OAuth2ClientCredentials
@@ -16,6 +17,7 @@ from pipefy_mcp.services.pipefy.automation_graphql_types import (
 )
 from pipefy_mcp.services.pipefy.automation_service import AutomationService
 from pipefy_mcp.services.pipefy.card_service import CardService
+from pipefy_mcp.services.pipefy.member_service import MemberService
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.relation_service import RelationService
@@ -24,7 +26,10 @@ from pipefy_mcp.services.pipefy.schema_introspection_service import (
 )
 from pipefy_mcp.services.pipefy.table_service import TableService
 from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload, CardSearch
+from pipefy_mcp.services.pipefy.webhook_service import WebhookService
 from pipefy_mcp.settings import PipefySettings
+
+logger = logging.getLogger(__name__)
 
 
 class PipefyClient:
@@ -41,6 +46,16 @@ class PipefyClient:
         self._pipe_config_service = PipeConfigService(settings=settings, auth=auth)
         self._table_service = TableService(settings=settings, auth=auth)
         self._relation_service = RelationService(settings=settings, auth=auth)
+        self._member_service = MemberService(
+            settings=settings,
+            auth=auth,
+            pipe_service=self._pipe_service,
+        )
+        self._webhook_service = WebhookService(
+            settings=settings,
+            auth=auth,
+            card_service=self._card_service,
+        )
         self._automation_service = AutomationService(settings=settings, auth=auth)
         self._ai_agent_service = AiAgentService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
@@ -314,6 +329,179 @@ class PipefyClient:
         return await self._relation_service.create_card_relation(
             parent_id, child_id, source_id, **(extra_input or {})
         )
+
+    async def invite_members(
+        self, pipe_id: str, members: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Invite one or more users to a pipe by email.
+
+        Args:
+            pipe_id: ID of the pipe.
+            members: List of dicts with at least `email` and `role_name`.
+        """
+        return await self._member_service.invite_members(pipe_id, members)
+
+    async def remove_members_from_pipe(
+        self, pipe_id: str, user_ids: list[str]
+    ) -> dict[str, Any]:
+        """Remove one or more users from a pipe.
+
+        Args:
+            pipe_id: ID or UUID of the pipe.
+            user_ids: List of user IDs or UUIDs to remove.
+        """
+        return await self._member_service.remove_members_from_pipe(pipe_id, user_ids)
+
+    async def set_role(
+        self, pipe_id: str, member_id: str, role_name: str
+    ) -> dict[str, Any]:
+        """Set a member's role on a pipe.
+
+        Args:
+            pipe_id: ID of the pipe.
+            member_id: User ID of the member.
+            role_name: New role name (e.g. 'member', 'admin').
+        """
+        return await self._member_service.set_role(pipe_id, member_id, role_name)
+
+    async def send_inbox_email(
+        self,
+        card_id: str,
+        to: list[str],
+        subject: str,
+        body: str,
+        *,
+        from_: str,
+        **attrs: Any,
+    ) -> dict[str, Any]:
+        """Send an email from a card's inbox.
+
+        Args:
+            card_id: ID of the card with inbox.
+            to: List of recipient email addresses.
+            subject: Email subject.
+            body: Email body (plain text).
+            from_: Sender email address (required by API).
+            **attrs: Extra CreateAndSendInboxEmailInput fields (html, cc, bcc, repoId, etc.).
+
+        When ``repoId`` is omitted and ``card_id`` is numeric, the client best-effort
+        fills ``repoId`` from the card's pipe. Non-numeric ``card_id`` skips this
+        (pass ``repoId`` in ``attrs`` if the API requires it).
+        """
+        if "repoId" not in attrs and card_id.isdigit():
+            try:
+                card_data = await self._card_service.get_card(int(card_id))
+                pipe_id = (
+                    card_data.get("card", {}).get("pipe", {}).get("id")
+                    if isinstance(card_data.get("card", {}).get("pipe"), dict)
+                    else None
+                )
+                if pipe_id is not None:
+                    attrs = dict(attrs, repoId=str(pipe_id))
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "Could not auto-resolve repoId for card %s",
+                    card_id,
+                    exc_info=True,
+                )
+        return await self._webhook_service.send_inbox_email(
+            card_id, to, subject, body, from_=from_, **attrs
+        )
+
+    async def get_card_inbox_emails(
+        self,
+        card_id: str,
+        *,
+        email_type: str | None = None,
+    ) -> dict[str, Any]:
+        """List emails (sent and received) for a card's inbox.
+
+        Args:
+            card_id: ID of the card with inbox.
+            email_type: Optional filter: 'sent' | 'received'. When omitted, returns all.
+        """
+        return await self._webhook_service.get_card_inbox_emails(
+            card_id, email_type=email_type
+        )
+
+    async def get_email_templates(
+        self,
+        repo_id: str,
+        *,
+        filter_by_name: str | None = None,
+        first: int = 50,
+    ) -> dict[str, Any]:
+        """List email templates for a pipe or table."""
+        return await self._webhook_service.get_email_templates(
+            repo_id,
+            filter_by_name=filter_by_name,
+            first=first,
+        )
+
+    async def get_parsed_email_template(
+        self,
+        email_template_id: str,
+        *,
+        card_uuid: str | None = None,
+    ) -> dict[str, Any]:
+        """Get an email template with placeholders resolved for a card."""
+        return await self._webhook_service.get_parsed_email_template(
+            email_template_id,
+            card_uuid=card_uuid,
+        )
+
+    async def send_email_with_template(
+        self,
+        card_id: str,
+        email_template_id: str,
+        *,
+        to: list[str] | None = None,
+        from_: str | None = None,
+        **attrs: Any,
+    ) -> dict[str, Any]:
+        """Send an email from a card's inbox using an existing email template.
+
+        Args:
+            card_id: Numeric ID of the card with inbox.
+            email_template_id: ID of the email template.
+            to: Optional override for recipients; if omitted, uses template's toEmail.
+            from_: Optional override for sender; if omitted, uses template's fromEmail.
+            **attrs: Extra CreateAndSendInboxEmailInput fields (cc, bcc, repoId, etc.).
+        """
+        return await self._webhook_service.send_email_with_template(
+            card_id,
+            email_template_id,
+            to=to,
+            from_=from_,
+            **attrs,
+        )
+
+    async def create_webhook(
+        self,
+        pipe_id: str,
+        url: str,
+        actions: list[str],
+        **attrs: Any,
+    ) -> dict[str, Any]:
+        """Create a webhook for pipe events. URL must be HTTPS.
+
+        Args:
+            pipe_id: ID of the pipe.
+            url: HTTPS URL to receive events.
+            actions: List of event action strings (e.g. ['card.create', 'card.move']).
+            **attrs: Extra CreateWebhookInput fields (name, filters, headers, etc.).
+        """
+        return await self._webhook_service.create_webhook(
+            pipe_id, url, actions, **attrs
+        )
+
+    async def delete_webhook(self, webhook_id: str) -> dict[str, Any]:
+        """Delete a webhook by ID (permanent).
+
+        Args:
+            webhook_id: ID of the webhook to delete.
+        """
+        return await self._webhook_service.delete_webhook(webhook_id)
 
     async def get_automation(self, automation_id: str) -> AutomationRuleRecord:
         """Get a traditional automation rule by ID (trigger, actions, status)."""

@@ -131,6 +131,29 @@ sequenceDiagram
 | `delete_pipe_relation` | No | Permanently deletes a pipe relation (**`destructiveHint=True`** — confirm with the user first). |
 | `create_card_relation` | No | Links a child card to a parent card via **`source_id`** (pipe relation ID); optional **`extra_input`** for `CreateCardRelationInput`. Mutations support **`debug=true`** on errors like other write tools. |
 
+### Member management tools
+
+**Three tools** manage pipe membership (invite, remove, set role):
+
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `invite_members` | No | Invite one or more users to a pipe by email; **`members`** is a list of dicts with **`email`** and **`role_name`**. |
+| `remove_member_from_pipe` | No | Permanently remove one or more users from a pipe (**`destructiveHint=True`** — confirm with the user first). |
+| `set_role` | No | Set a member's role on a pipe (**`member_id`**, **`role_name`**). |
+
+### Email & webhook tools
+
+**Six tools** for sending emails from card inboxes, reading inbox replies, and managing webhooks:
+
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `get_email_templates` | Yes | List email templates for a pipe or table (**`repo_id`**); optional **`filter_by_name`**. Use before **`send_email_with_template`** to discover template IDs. |
+| `get_card_inbox_emails` | Yes | List emails (sent and received) for a card's inbox. Use **`email_type: 'received'`** to get only replies (e.g. when someone replies to an email sent from the card). |
+| `send_inbox_email` | No | Send an email from a card's inbox; requires the card to have an email inbox enabled. **`from_`** (sender) is required. |
+| `send_email_with_template` | No | Send an email from a card's inbox using an **existing** email template. Resolves placeholders (e.g. `{{card.title}}`) for the card. Template must exist (created in Pipefy UI). **`card_id`**, **`email_template_id`** required; optional **`to`**, **`from_`** to override template defaults. |
+| `create_webhook` | No | Register a webhook for pipe events; **`url`** must be **HTTPS**; **`actions`** is a list of event names (e.g. `['card.move', 'card.create']`). Use **`introspect_type('WebhookActions')`** for valid actions. |
+| `delete_webhook` | No | Permanently delete a webhook by ID (**`destructiveHint=True`** — irreversible; confirm with the user first). |
+
 ### Traditional automation tools (rules engine)
 
 **Seven tools** manage Pipefy **traditional automations**: if/then rules bound to a pipe (trigger events and actions via the **standard GraphQL** API). These are **not** the same as **AI automations** in the next section—those are prompt-driven and use the **internal** API (`create_ai_automation`, etc.).

@@ -22,6 +22,8 @@ class TestToolRegistry:
 
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
     @patch("pipefy_mcp.tools.registry.AutomationTools.register")
+    @patch("pipefy_mcp.tools.registry.WebhookTools.register")
+    @patch("pipefy_mcp.tools.registry.MemberTools.register")
     @patch("pipefy_mcp.tools.registry.RelationTools.register")
     @patch("pipefy_mcp.tools.registry.TableTools.register")
     @patch("pipefy_mcp.tools.registry.FieldConditionTools.register")
@@ -34,10 +36,12 @@ class TestToolRegistry:
         mock_field_condition_tools_register,
         mock_table_tools_register,
         mock_relation_tools_register,
+        mock_member_tools_register,
+        mock_webhook_tools_register,
         mock_automation_tools_register,
         mock_introspection_tools_register,
     ):
-        """Test that register_tools calls Pipe, PipeConfig, FieldCondition, Table, Relation, and Introspection tools."""
+        """Test that register_tools calls Pipe, PipeConfig, FieldCondition, Table, Relation, Member, Webhook, and Introspection tools."""
         mock_mcp = Mock(spec=FastMCP)
         mock_client = Mock()
         mock_container = Mock(spec=ServicesContainer)
@@ -53,6 +57,8 @@ class TestToolRegistry:
         )
         mock_table_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_relation_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_member_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_webhook_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
         assert result is mock_mcp
@@ -76,6 +82,8 @@ class TestToolRegistry:
     @patch("pipefy_mcp.tools.registry.AiAgentTools.register")
     @patch("pipefy_mcp.tools.registry.AiAutomationTools.register")
     @patch("pipefy_mcp.tools.registry.AutomationTools.register")
+    @patch("pipefy_mcp.tools.registry.WebhookTools.register")
+    @patch("pipefy_mcp.tools.registry.MemberTools.register")
     @patch("pipefy_mcp.tools.registry.RelationTools.register")
     @patch("pipefy_mcp.tools.registry.TableTools.register")
     @patch("pipefy_mcp.tools.registry.FieldConditionTools.register")
@@ -88,6 +96,8 @@ class TestToolRegistry:
         mock_field_condition_tools_register,
         mock_table_tools_register,
         mock_relation_tools_register,
+        mock_member_tools_register,
+        mock_webhook_tools_register,
         mock_automation_tools_register,
         mock_ai_automation_tools_register,
         mock_ai_agent_tools_register,
@@ -112,6 +122,8 @@ class TestToolRegistry:
         )
         mock_table_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_relation_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_member_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_webhook_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_ai_automation_tools_register.assert_called_once_with(

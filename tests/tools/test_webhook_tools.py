@@ -1,0 +1,224 @@
+"""Tests for email and webhook MCP tools (mocked PipefyClient)."""
+
+from datetime import timedelta
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from gql.transport.exceptions import TransportQueryError
+from mcp.server.fastmcp import FastMCP
+from mcp.shared.memory import (
+    create_connected_server_and_client_session as create_client_session,
+)
+
+from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.webhook_tools import WebhookTools
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture
+def mock_webhook_client():
+    client = MagicMock(PipefyClient)
+    client.send_inbox_email = AsyncMock()
+    client.create_webhook = AsyncMock()
+    client.delete_webhook = AsyncMock()
+    return client
+
+
+@pytest.fixture
+def webhook_mcp_server(mock_webhook_client):
+    mcp = FastMCP("Webhook Tools Test")
+    WebhookTools.register(mcp, mock_webhook_client)
+    return mcp
+
+
+@pytest.fixture
+def webhook_session(webhook_mcp_server, request):
+    elicitation = getattr(request, "param", None)
+    return create_client_session(
+        webhook_mcp_server,
+        read_timeout_seconds=timedelta(seconds=10),
+        raise_exceptions=True,
+        elicitation_callback=elicitation,
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_send_inbox_email_success(
+    webhook_session, mock_webhook_client, extract_payload
+):
+    mock_webhook_client.send_inbox_email.return_value = {
+        "createAndSendInboxEmail": {
+            "emailSent": True,
+            "errors": [],
+            "inboxEmail": {"id": "e1"},
+        }
+    }
+
+    async with webhook_session as session:
+        result = await session.call_tool(
+            "send_inbox_email",
+            {
+                "card_id": "card-1",
+                "to": ["a@x.com"],
+                "subject": "Hello",
+                "body": "Hi there",
+                "from_": "sender@pipefy.com",
+            },
+        )
+
+    assert result.isError is False
+    mock_webhook_client.send_inbox_email.assert_awaited_once_with(
+        "card-1",
+        ["a@x.com"],
+        "Hello",
+        "Hi there",
+        from_="sender@pipefy.com",
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["result"]["createAndSendInboxEmail"]["emailSent"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_send_inbox_email_graphql_error(
+    webhook_session, mock_webhook_client, extract_payload
+):
+    mock_webhook_client.send_inbox_email.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "inbox not enabled"}]
+    )
+
+    async with webhook_session as session:
+        result = await session.call_tool(
+            "send_inbox_email",
+            {
+                "card_id": "card-1",
+                "to": ["a@x.com"],
+                "subject": "Hello",
+                "body": "Hi",
+                "from_": "sender@pipefy.com",
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "inbox not enabled" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_create_webhook_success(
+    webhook_session, mock_webhook_client, extract_payload
+):
+    mock_webhook_client.create_webhook.return_value = {
+        "createWebhook": {
+            "webhook": {
+                "id": "w1",
+                "url": "https://example.com/hook",
+                "actions": ["card.create"],
+            }
+        }
+    }
+
+    async with webhook_session as session:
+        result = await session.call_tool(
+            "create_webhook",
+            {
+                "pipe_id": "pipe-1",
+                "url": "https://example.com/hook",
+                "actions": ["card.create"],
+            },
+        )
+
+    assert result.isError is False
+    mock_webhook_client.create_webhook.assert_awaited_once_with(
+        "pipe-1", "https://example.com/hook", ["card.create"]
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["result"]["createWebhook"]["webhook"]["id"] == "w1"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_create_webhook_graphql_error(
+    webhook_session, mock_webhook_client, extract_payload
+):
+    mock_webhook_client.create_webhook.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "invalid url"}]
+    )
+
+    async with webhook_session as session:
+        result = await session.call_tool(
+            "create_webhook",
+            {
+                "pipe_id": "pipe-1",
+                "url": "https://example.com/hook",
+                "actions": ["card.create"],
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "invalid url" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_delete_webhook_success(
+    webhook_session, mock_webhook_client, extract_payload
+):
+    mock_webhook_client.delete_webhook.return_value = {
+        "deleteWebhook": {"success": True}
+    }
+
+    async with webhook_session as session:
+        result = await session.call_tool(
+            "delete_webhook",
+            {"webhook_id": "webhook-1"},
+        )
+
+    assert result.isError is False
+    mock_webhook_client.delete_webhook.assert_awaited_once_with("webhook-1")
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["result"]["deleteWebhook"]["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_delete_webhook_graphql_error(
+    webhook_session, mock_webhook_client, extract_payload
+):
+    mock_webhook_client.delete_webhook.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "webhook not found"}]
+    )
+
+    async with webhook_session as session:
+        result = await session.call_tool(
+            "delete_webhook",
+            {"webhook_id": "w1"},
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "webhook not found" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_delete_webhook_has_destructive_hint(webhook_session):
+    async with webhook_session as session:
+        listed = await session.list_tools()
+    delete_tool = next(t for t in listed.tools if t.name == "delete_webhook")
+    assert delete_tool.annotations is not None
+    assert delete_tool.annotations.destructiveHint is True
+    assert delete_tool.annotations.readOnlyHint is False

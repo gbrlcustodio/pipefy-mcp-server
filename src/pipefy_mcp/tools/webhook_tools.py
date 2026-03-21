@@ -19,11 +19,6 @@ from pipefy_mcp.tools.webhook_tool_helpers import (
 )
 
 
-def _require_https(url: str) -> bool:
-    """Return True if url is HTTPS."""
-    return url.strip().lower().startswith("https://")
-
-
 class WebhookTools:
     """MCP tools for sending emails from card inboxes and managing webhooks."""
 
@@ -73,31 +68,36 @@ class WebhookTools:
         )
         async def get_card_inbox_emails(
             card_id: str,
-            type: str | None = None,
+            email_type: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """List emails (sent and received) for a card's inbox.
 
             When someone replies to an email sent from the card, the reply appears
-            with type 'received'. Use type='received' to get only replies.
+            with type 'received'. Use email_type='received' to get only replies.
 
             Args:
                 card_id: ID of the card with inbox.
-                type: Optional filter: 'sent' or 'received' to get only that type.
+                email_type: Optional filter: 'sent' or 'received' to get only that type.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not valid_repo_id(card_id):
                 return build_webhook_error_payload(
                     message="Invalid 'card_id': provide a non-empty string or positive integer.",
                 )
-            if type is not None and type.strip().lower() not in ("sent", "received"):
+            if email_type is not None and email_type.strip().lower() not in (
+                "sent",
+                "received",
+            ):
                 return build_webhook_error_payload(
-                    message="Invalid 'type': must be 'sent' or 'received' when provided.",
+                    message="Invalid 'email_type': must be 'sent' or 'received' when provided.",
                 )
             try:
                 raw = await client.get_card_inbox_emails(
                     card_id.strip(),
-                    type=type.strip() if type and type.strip() else None,
+                    email_type=email_type.strip()
+                    if email_type and email_type.strip()
+                    else None,
                 )
             except Exception as exc:
                 return handle_webhook_tool_graphql_error(
@@ -274,10 +274,6 @@ class WebhookTools:
                 return build_webhook_error_payload(
                     message="Invalid 'url': provide a non-empty string.",
                 )
-            if not _require_https(url):
-                return build_webhook_error_payload(
-                    message="Invalid 'url': must be HTTPS. HTTP URLs are not allowed.",
-                )
             if not isinstance(actions, list) or not actions:
                 return build_webhook_error_payload(
                     message="Invalid 'actions': provide a non-empty list of event action strings.",
@@ -298,6 +294,8 @@ class WebhookTools:
                     [a.strip() for a in actions],
                     **(extra_input or {}),
                 )
+            except ValueError as exc:
+                return build_webhook_error_payload(message=str(exc))
             except Exception as exc:
                 return handle_webhook_tool_graphql_error(
                     exc, "Create webhook failed.", debug=debug

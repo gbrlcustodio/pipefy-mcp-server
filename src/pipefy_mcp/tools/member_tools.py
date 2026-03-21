@@ -100,6 +100,8 @@ class MemberTools:
                 )
             try:
                 raw = await client.remove_members_from_pipe(pipe_id, user_ids)
+            except ValueError as exc:
+                return build_member_error_payload(message=str(exc))
             except Exception as exc:
                 return handle_member_tool_graphql_error(
                     exc, "Remove members from pipe failed.", debug=debug

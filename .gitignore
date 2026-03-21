@@ -37,6 +37,9 @@ env.bak/
 venv.bak/
 .mise.toml
 
+# Local test scripts (scripts/ kept for ad-hoc testing)
+scripts/
+
 # IDEs and editors
 .cursor/
 .claude/

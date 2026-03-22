@@ -31,7 +31,7 @@
 
 ## Feature Overview
 
-This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor). The codebase uses a facade over domain services (pipes, cards, pipe configuration, **database tables**, **pipe/table relations and card links**, **traditional automations** (event/action rules), schema introspection), with GraphQL documents in dedicated modules.
+This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor). The codebase uses a facade over domain services (pipes, cards, pipe configuration, **database tables**, **pipe/table relations and card links**, **pipe and organization reports** (read, CRUD, export), **traditional automations** (event/action rules), schema introspection), with GraphQL documents in dedicated modules.
 
 **Discoverability:** Each tool has a docstring consumed by clients for routing and parameters—treat those as the source of truth for arguments. This README summarizes **what exists** and **cross-cutting behavior** (pagination, destructive flows, introspection); it does not duplicate every parameter.
 
@@ -47,6 +47,7 @@ This server exposes Pipefy operations as **MCP tools** for LLMs (e.g. in Cursor)
 | **Cards** | `get_cards`, `get_card`, `find_cards` — use `include_fields` when you need custom field name/value on each card. |
 | **Database tables** | `get_table`, `get_tables`, `get_table_records`, `get_table_record`, `find_records` |
 | **Relations** | `get_pipe_relations`, `get_table_relations` |
+| **Reports** | `get_pipe_reports`, `get_organization_reports`, `get_pipe_report_export`, … (see [Report tools](#report-tools)) |
 | **AI agents** | `get_ai_agent`, `get_ai_agents` — list or load agents by pipe **`repo_uuid`** (pipe UUID from `get_pipe`). |
 | **Automations (traditional)** | `get_automation`, `get_automations`, `get_automation_actions`, `get_automation_events` |
 
@@ -130,6 +131,43 @@ sequenceDiagram
 | `update_pipe_relation` | No | Updates relation config; **`name`** required; optional **`extra_input`** for other `UpdatePipeRelationInput` keys. |
 | `delete_pipe_relation` | No | Permanently deletes a pipe relation (**`destructiveHint=True`** — confirm with the user first). |
 | `create_card_relation` | No | Links a child card to a parent card via **`source_id`** (pipe relation ID); optional **`extra_input`** for `CreateCardRelationInput`. Mutations support **`debug=true`** on errors like other write tools. |
+
+### Report tools
+
+**16 tools** cover **pipe reports** and **organization reports**: discovery, CRUD, and async exports. Build **`ReportCardsFilter`** using **`get_pipe_report_columns`** and **`get_pipe_report_filterable_fields`**; use **`introspect_type`** for uncommon inputs. **`get_pipe_reports`** omits **`cardCount`** in the query (Pipefy can error when resolving it). **`debug=true`** on writes like other mutation tools.
+
+#### Report read tools
+
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `get_pipe_reports` | Yes | Lists pipe reports with pagination and optional search (query omits **`cardCount`**). |
+| `get_pipe_report_columns` | Yes | Returns columns (`name`, `label`, `type`, …) for building **`fields`** on create/update. |
+| `get_pipe_report_filterable_fields` | Yes | Returns filterable fields grouped by section/phase (`name`, `label`, `type`, `options`) for **`filter`**. |
+| `get_organization_report` | Yes | Loads one organization report by ID. |
+| `get_organization_reports` | Yes | Lists organization reports with pagination. |
+| `get_pipe_report_export` | Yes | Poll export status after **`export_pipe_report`**; includes **`fileURL`** when **`state`** is done. |
+| `get_organization_report_export` | Yes | Poll export status after **`export_organization_report`**. |
+
+#### Report management tools
+
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `create_pipe_report` | No | Creates a pipe report (name, optional **`fields`**, **`filter`**, **`formulas`**). |
+| `update_pipe_report` | No | Updates a pipe report; only provided arguments are applied. |
+| `delete_pipe_report` | No | Deletes a pipe report (**`destructiveHint=True`** — confirm with the user first). |
+| `create_organization_report` | No | Creates an org-wide report spanning multiple pipes. |
+| `update_organization_report` | No | Updates an organization report. |
+| `delete_organization_report` | No | Deletes an organization report (**`destructiveHint=True`** — confirm first). |
+
+#### Report export tools
+
+Async pattern for report file exports: **trigger** → **poll** the matching **`get_*_report_export`** until **`state`** is done, then use **`fileURL`**. **`export_pipe_audit_logs`** only returns **`success`** (no export ID to poll—the file is delivered to the requesting user per Pipefy).
+
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `export_pipe_report` | No | Starts a pipe report export; returns export id and **`processing`** state. |
+| `export_organization_report` | No | Starts an organization report export; poll with **`get_organization_report_export`**. |
+| `export_pipe_audit_logs` | No | Queues a pipe audit log export; **`success`** only (no polling id). |
 
 ### Member management tools
 

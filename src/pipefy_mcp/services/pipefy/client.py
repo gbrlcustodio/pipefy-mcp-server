@@ -18,6 +18,7 @@ from pipefy_mcp.services.pipefy.automation_graphql_types import (
 from pipefy_mcp.services.pipefy.automation_service import AutomationService
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.member_service import MemberService
+from pipefy_mcp.services.pipefy.observability_service import ObservabilityService
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.relation_service import RelationService
@@ -59,6 +60,7 @@ class PipefyClient:
         )
         self._automation_service = AutomationService(settings=settings, auth=auth)
         self._ai_agent_service = AiAgentService(settings=settings, auth=auth)
+        self._observability_service = ObservabilityService(settings=settings, auth=auth)
         self._report_service = ReportService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
@@ -919,3 +921,161 @@ class PipefyClient:
             variables: Optional variables for the operation.
         """
         return await self._introspection_service.execute_graphql(query, variables)
+
+    # --- Observability: AI agent logs ---
+
+    async def get_ai_agent_logs(
+        self,
+        repo_uuid: str,
+        *,
+        first: int = 30,
+        after: str | None = None,
+        status: str | None = None,
+        search_term: str | None = None,
+    ) -> dict[str, Any]:
+        """List AI agent execution logs for a pipe (paginated).
+
+        Args:
+            repo_uuid: Pipe UUID.
+            first: Page size.
+            after: Cursor for next page.
+            status: AiAgentLogStatus filter (processing, failed, success).
+            search_term: Free-text search.
+        """
+        return await self._observability_service.get_ai_agent_logs(
+            repo_uuid, first=first, after=after, status=status, search_term=search_term
+        )
+
+    async def get_ai_agent_log_details(self, log_uuid: str) -> dict[str, Any]:
+        """Get detailed AI agent execution log with tracing nodes.
+
+        Args:
+            log_uuid: UUID of the AI agent log entry.
+        """
+        return await self._observability_service.get_ai_agent_log_details(log_uuid)
+
+    # --- Observability: Automation logs ---
+
+    async def get_automation_logs(
+        self,
+        automation_id: str,
+        *,
+        first: int = 30,
+        after: str | None = None,
+        status: str | None = None,
+        search_term: str | None = None,
+    ) -> dict[str, Any]:
+        """List execution logs for a specific automation (paginated).
+
+        Args:
+            automation_id: Automation ID.
+            first: Page size.
+            after: Cursor for next page.
+            status: AutomationLogStatus filter (processing, failed, success).
+            search_term: Free-text search.
+        """
+        return await self._observability_service.get_automation_logs(
+            automation_id,
+            first=first,
+            after=after,
+            status=status,
+            search_term=search_term,
+        )
+
+    async def get_automation_logs_by_repo(
+        self,
+        repo_id: str,
+        *,
+        first: int = 30,
+        after: str | None = None,
+        status: str | None = None,
+        search_term: str | None = None,
+    ) -> dict[str, Any]:
+        """List automation logs for all automations in a pipe/repo (paginated).
+
+        Args:
+            repo_id: Pipe/repo ID.
+            first: Page size.
+            after: Cursor for next page.
+            status: AutomationLogStatus filter (processing, failed, success).
+            search_term: Free-text search.
+        """
+        return await self._observability_service.get_automation_logs_by_repo(
+            repo_id, first=first, after=after, status=status, search_term=search_term
+        )
+
+    # --- Observability: Usage & Credits ---
+
+    async def get_agents_usage(
+        self,
+        organization_uuid: str,
+        filter_date: dict[str, str],
+        *,
+        filters: dict[str, Any] | None = None,
+        search: str | None = None,
+        sort: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Get AI agent usage stats for an org within a date range.
+
+        Args:
+            organization_uuid: Organization UUID.
+            filter_date: DateRange dict with ``from`` and ``to`` ISO8601 strings.
+            filters: Optional FilterParams (action, event, pipe, status).
+            search: Free-text search.
+            sort: SortCriteria (field + direction).
+        """
+        return await self._observability_service.get_agents_usage(
+            organization_uuid, filter_date, filters=filters, search=search, sort=sort
+        )
+
+    async def get_automations_usage(
+        self,
+        organization_uuid: str,
+        filter_date: dict[str, str],
+        *,
+        filters: dict[str, Any] | None = None,
+        search: str | None = None,
+        sort: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Get automation usage stats for an org within a date range.
+
+        Args:
+            organization_uuid: Organization UUID.
+            filter_date: DateRange dict with ``from`` and ``to`` ISO8601 strings.
+            filters: Optional FilterParams (action, event, pipe, status).
+            search: Free-text search.
+            sort: SortCriteria (field + direction).
+        """
+        return await self._observability_service.get_automations_usage(
+            organization_uuid, filter_date, filters=filters, search=search, sort=sort
+        )
+
+    async def get_ai_credit_usage(
+        self,
+        organization_uuid: str,
+        period: str,
+    ) -> dict[str, Any]:
+        """Get AI credit usage dashboard for an org.
+
+        Args:
+            organization_uuid: Organization UUID.
+            period: PeriodFilter (current_month, last_month, last_3_months).
+        """
+        return await self._observability_service.get_ai_credit_usage(
+            organization_uuid, period
+        )
+
+    async def export_automation_jobs(
+        self,
+        organization_id: str,
+        period: str,
+    ) -> dict[str, Any]:
+        """Trigger async export of automation job history.
+
+        Args:
+            organization_id: Organization ID.
+            period: PeriodFilter (current_month, last_month, last_3_months).
+        """
+        return await self._observability_service.export_automation_jobs(
+            organization_id, period
+        )

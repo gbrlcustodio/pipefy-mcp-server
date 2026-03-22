@@ -21,6 +21,7 @@ from pipefy_mcp.services.pipefy.member_service import MemberService
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.relation_service import RelationService
+from pipefy_mcp.services.pipefy.report_service import ReportService
 from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
 )
@@ -58,6 +59,7 @@ class PipefyClient:
         )
         self._automation_service = AutomationService(settings=settings, auth=auth)
         self._ai_agent_service = AiAgentService(settings=settings, auth=auth)
+        self._report_service = ReportService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
@@ -702,6 +704,186 @@ class PipefyClient:
     ) -> dict:
         """Get the fields available in a specific phase."""
         return await self._pipe_service.get_phase_fields(phase_id, required_only)
+
+    async def get_pipe_reports(
+        self,
+        pipe_uuid: str,
+        *,
+        first: int = 30,
+        after: str | None = None,
+        search: str | None = None,
+        report_id: str | None = None,
+        order: dict | None = None,
+    ) -> dict:
+        """List pipe reports with pagination and optional search/filter."""
+        return await self._report_service.get_pipe_reports(
+            pipe_uuid,
+            first=first,
+            after=after,
+            search=search,
+            report_id=report_id,
+            order=order,
+        )
+
+    async def get_pipe_report_columns(self, pipe_uuid: str) -> dict:
+        """Get available columns for a pipe report."""
+        return await self._report_service.get_pipe_report_columns(pipe_uuid)
+
+    async def get_pipe_report_filterable_fields(self, pipe_uuid: str) -> dict:
+        """Get filterable fields for a pipe report."""
+        return await self._report_service.get_pipe_report_filterable_fields(pipe_uuid)
+
+    async def get_organization_report(self, report_id: str) -> dict:
+        """Get a single organization report by ID."""
+        return await self._report_service.get_organization_report(report_id)
+
+    async def get_organization_reports(
+        self,
+        organization_id: str,
+        *,
+        first: int = 30,
+        after: str | None = None,
+    ) -> dict:
+        """List organization reports with pagination."""
+        return await self._report_service.get_organization_reports(
+            organization_id, first=first, after=after
+        )
+
+    async def get_pipe_report_export(self, export_id: str) -> dict:
+        """Check the status of a pipe report export."""
+        return await self._report_service.get_pipe_report_export(export_id)
+
+    async def get_organization_report_export(self, export_id: str) -> dict:
+        """Check the status of an organization report export."""
+        return await self._report_service.get_organization_report_export(export_id)
+
+    async def create_pipe_report(
+        self,
+        pipe_id: str,
+        name: str,
+        *,
+        fields: list[str] | None = None,
+        filter: dict | None = None,
+        formulas: list[list[str]] | None = None,
+    ) -> dict:
+        """Create a pipe report with name, fields, and optional filter."""
+        return await self._report_service.create_pipe_report(
+            pipe_id, name, fields=fields, filter=filter, formulas=formulas
+        )
+
+    async def update_pipe_report(
+        self,
+        report_id: str,
+        *,
+        name: str | None = None,
+        color: str | None = None,
+        fields: list[str] | None = None,
+        filter: dict | None = None,
+        formulas: list[list[str]] | None = None,
+        featured_field: str | None = None,
+    ) -> dict:
+        """Update a pipe report. Only provided values are changed."""
+        return await self._report_service.update_pipe_report(
+            report_id,
+            name=name,
+            color=color,
+            fields=fields,
+            filter=filter,
+            formulas=formulas,
+            featured_field=featured_field,
+        )
+
+    async def delete_pipe_report(self, report_id: str) -> dict:
+        """Delete a pipe report by ID (permanent)."""
+        return await self._report_service.delete_pipe_report(report_id)
+
+    async def create_organization_report(
+        self,
+        organization_id: str,
+        name: str,
+        pipe_ids: list[str],
+        *,
+        fields: list[str] | None = None,
+        filter: dict | None = None,
+    ) -> dict:
+        """Create an org-wide report spanning multiple pipes."""
+        return await self._report_service.create_organization_report(
+            organization_id, name, pipe_ids, fields=fields, filter=filter
+        )
+
+    async def update_organization_report(
+        self,
+        report_id: str,
+        *,
+        name: str | None = None,
+        color: str | None = None,
+        fields: list[str] | None = None,
+        filter: dict | None = None,
+        pipe_ids: list[str] | None = None,
+    ) -> dict:
+        """Update an organization report. Only provided values are changed."""
+        return await self._report_service.update_organization_report(
+            report_id,
+            name=name,
+            color=color,
+            fields=fields,
+            filter=filter,
+            pipe_ids=pipe_ids,
+        )
+
+    async def delete_organization_report(self, report_id: str) -> dict:
+        """Delete an organization report by ID (permanent)."""
+        return await self._report_service.delete_organization_report(report_id)
+
+    async def export_pipe_report(
+        self,
+        pipe_id: str,
+        pipe_report_id: str,
+        *,
+        sort_by: dict | None = None,
+        filter: dict | None = None,
+        columns: list[str] | None = None,
+    ) -> dict:
+        """Trigger an async pipe report export."""
+        return await self._report_service.export_pipe_report(
+            pipe_id,
+            pipe_report_id,
+            sort_by=sort_by,
+            filter=filter,
+            columns=columns,
+        )
+
+    async def export_organization_report(
+        self,
+        organization_id: int,
+        *,
+        organization_report_id: int | None = None,
+        pipe_ids: list[int] | None = None,
+        sort_by: dict | None = None,
+        filter: dict | None = None,
+        columns: list[str] | None = None,
+    ) -> dict:
+        """Trigger an async organization report export."""
+        return await self._report_service.export_organization_report(
+            organization_id,
+            organization_report_id=organization_report_id,
+            pipe_ids=pipe_ids,
+            sort_by=sort_by,
+            filter=filter,
+            columns=columns,
+        )
+
+    async def export_pipe_audit_logs(
+        self,
+        pipe_uuid: str,
+        *,
+        search_term: str | None = None,
+    ) -> dict:
+        """Trigger an async pipe audit logs export."""
+        return await self._report_service.export_pipe_audit_logs(
+            pipe_uuid,
+            search_term=search_term,
+        )
 
     async def introspect_type(self, type_name: str) -> dict[str, Any]:
         """Introspect a GraphQL type by name (fields, inputFields, or enumValues).

@@ -9,6 +9,7 @@ from .member_service import MemberService
 from .pipe_config_service import PipeConfigService
 from .pipe_service import PipeService
 from .relation_service import RelationService
+from .report_service import ReportService
 from .schema_introspection_service import SchemaIntrospectionService
 from .table_service import TableService
 from .webhook_service import WebhookService
@@ -25,6 +26,7 @@ __all__ = [
     "PipefyClient",
     "PipeService",
     "RelationService",
+    "ReportService",
     "SchemaIntrospectionService",
     "TableService",
     "WebhookService",

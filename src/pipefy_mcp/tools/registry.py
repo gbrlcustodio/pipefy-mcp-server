@@ -10,6 +10,7 @@ from pipefy_mcp.tools.member_tools import MemberTools
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.pipe_tools import PipeTools
 from pipefy_mcp.tools.relation_tools import RelationTools
+from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.table_tools import TableTools
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 
@@ -31,6 +32,7 @@ class ToolRegistry:
         FieldConditionTools.register(self.mcp, self.services_container.pipefy_client)
         TableTools.register(self.mcp, self.services_container.pipefy_client)
         RelationTools.register(self.mcp, self.services_container.pipefy_client)
+        ReportTools.register(self.mcp, self.services_container.pipefy_client)
         MemberTools.register(self.mcp, self.services_container.pipefy_client)
         WebhookTools.register(self.mcp, self.services_container.pipefy_client)
         AutomationTools.register(self.mcp, self.services_container.pipefy_client)

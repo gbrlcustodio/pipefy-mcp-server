@@ -43,6 +43,7 @@ scripts/
 # IDEs and editors
 .cursor/
 .claude/
+CLAUDE.md
 
 # macOS
 .DS_Store

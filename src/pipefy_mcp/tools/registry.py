@@ -7,6 +7,7 @@ from pipefy_mcp.tools.automation_tools import AutomationTools
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 from pipefy_mcp.tools.member_tools import MemberTools
+from pipefy_mcp.tools.observability_tools import ObservabilityTools
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.pipe_tools import PipeTools
 from pipefy_mcp.tools.relation_tools import RelationTools
@@ -37,6 +38,7 @@ class ToolRegistry:
         WebhookTools.register(self.mcp, self.services_container.pipefy_client)
         AutomationTools.register(self.mcp, self.services_container.pipefy_client)
         IntrospectionTools.register(self.mcp, self.services_container.pipefy_client)
+        ObservabilityTools.register(self.mcp, self.services_container.pipefy_client)
 
         if self.services_container.ai_automation_service is not None:
             AiAutomationTools.register(

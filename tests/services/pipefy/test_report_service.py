@@ -43,8 +43,6 @@ def _make_service(mock_settings, return_value):
     return service
 
 
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_pipe_reports_success(mock_settings):
@@ -116,8 +114,6 @@ async def test_get_pipe_reports_transport_error(mock_settings):
         await service.get_pipe_reports("uuid-123")
 
 
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_pipe_report_columns_success(mock_settings):
@@ -148,8 +144,6 @@ async def test_get_pipe_report_columns_success(mock_settings):
     assert query is GET_PIPE_REPORT_COLUMNS_QUERY
     assert variables == {"pipeUuid": "uuid-456"}
     assert len(result["pipeReportColumns"]) == 2
-
-
 
 
 @pytest.mark.unit
@@ -185,8 +179,6 @@ async def test_get_pipe_report_filterable_fields_success(mock_settings):
     assert inner["type"] == "select"
 
 
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_organization_report_success(mock_settings):
@@ -211,8 +203,6 @@ async def test_get_organization_report_success(mock_settings):
     assert query is GET_ORGANIZATION_REPORT_QUERY
     assert variables == {"id": "or1"}
     assert result["organizationReport"]["name"] == "Org Overview"
-
-
 
 
 @pytest.mark.unit
@@ -252,8 +242,6 @@ async def test_get_organization_reports_success(mock_settings):
     assert len(result["organizationReports"]["edges"]) == 2
 
 
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_pipe_report_export_success(mock_settings):
@@ -279,8 +267,6 @@ async def test_get_pipe_report_export_success(mock_settings):
     )
 
 
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_organization_report_export_success(mock_settings):
@@ -302,8 +288,6 @@ async def test_get_organization_report_export_success(mock_settings):
     assert variables == {"id": "exp2"}
     assert result["organizationReportExport"]["state"] == "processing"
     assert result["organizationReportExport"]["fileURL"] is None
-
-
 
 
 @pytest.mark.unit
@@ -346,8 +330,6 @@ async def test_create_pipe_report_transport_error(mock_settings):
         await service.create_pipe_report("123", "Report")
 
 
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_pipe_report_success(mock_settings):
@@ -377,8 +359,6 @@ async def test_update_pipe_report_skips_none_values(mock_settings):
     assert variables["input"] == {"id": "r10", "name": "Same"}
 
 
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_pipe_report_success(mock_settings):
@@ -390,8 +370,6 @@ async def test_delete_pipe_report_success(mock_settings):
     assert query is DELETE_PIPE_REPORT_MUTATION
     assert variables["input"] == {"id": "r10"}
     assert result["deletePipeReport"]["success"] is True
-
-
 
 
 @pytest.mark.unit
@@ -414,8 +392,6 @@ async def test_create_organization_report_success(mock_settings):
     assert variables["input"]["pipeIds"] == ["p1", "p2"]
     assert variables["input"]["fields"] == ["title"]
     assert result["createOrganizationReport"]["organizationReport"]["id"] == "or5"
-
-
 
 
 @pytest.mark.unit
@@ -442,8 +418,6 @@ async def test_update_organization_report_success(mock_settings):
     )
 
 
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_organization_report_success(mock_settings):
@@ -455,8 +429,6 @@ async def test_delete_organization_report_success(mock_settings):
     assert query is DELETE_ORGANIZATION_REPORT_MUTATION
     assert variables["input"] == {"id": "or5"}
     assert result["deleteOrganizationReport"]["success"] is True
-
-
 
 
 @pytest.mark.unit
@@ -485,8 +457,6 @@ async def test_export_pipe_report_transport_error(mock_settings):
         await service.export_pipe_report("pipe-1", "rep-1")
 
 
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_export_organization_report_success(mock_settings):
@@ -513,8 +483,6 @@ async def test_export_organization_report_success(mock_settings):
     )
 
 
-
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_export_pipe_audit_logs_success(mock_settings):
@@ -526,3 +494,25 @@ async def test_export_pipe_audit_logs_success(mock_settings):
     assert query is EXPORT_PIPE_AUDIT_LOGS_MUTATION
     assert variables["input"] == {"pipeUuid": "uuid-abc", "searchTerm": "audit"}
     assert result["exportPipeAuditLogsReport"]["success"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_pipe_report_columns_transport_error(mock_settings):
+    service = ReportService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.get_pipe_report_columns("uuid-456")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_pipe_report_transport_error(mock_settings):
+    service = ReportService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.update_pipe_report("rep-1", name="N")

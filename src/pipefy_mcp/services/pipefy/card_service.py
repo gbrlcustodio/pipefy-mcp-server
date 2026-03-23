@@ -111,6 +111,9 @@ class CardService(BasePipefyClient):
         field_id: str,
         field_value: str,
         include_fields: bool = False,
+        *,
+        first: int | None = None,
+        after: str | None = None,
     ) -> dict:
         """Find cards in the pipe where the given field equals the given value.
 
@@ -119,12 +122,18 @@ class CardService(BasePipefyClient):
             field_id: Pipefy field identifier (e.g. from get_start_form_fields or get_phase_fields).
             field_value: Value to match for that field (string; use format expected by field type).
             include_fields: If True, include each card's custom fields (name, value) in the response.
+            first: Max cards per page (optional).
+            after: Cursor from ``pageInfo.endCursor`` for the next page (optional).
         """
         variables: dict[str, Any] = {
             "pipeId": pipe_id,
             "search": {"fieldId": field_id, "fieldValue": field_value},
             "includeFields": include_fields,
         }
+        if first is not None:
+            variables["first"] = first
+        if after is not None:
+            variables["after"] = after
         return await self.execute_query(FIND_CARDS_QUERY, variables)
 
     async def move_card_to_phase(self, card_id: int, destination_phase_id: int) -> dict:

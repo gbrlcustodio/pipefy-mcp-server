@@ -142,6 +142,26 @@ async def test_find_cards_sends_pipeId_search_and_includeFields(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_find_cards_passes_first_and_after(mock_settings):
+    pipe_id = 1
+    field_id = "f"
+    field_value = "v"
+    service = _make_service(mock_settings, {"findCards": {"edges": []}})
+    await service.find_cards(
+        pipe_id,
+        field_id,
+        field_value,
+        include_fields=False,
+        first=20,
+        after="c1",
+    )
+    variables = service.execute_query.call_args[0][1]
+    assert variables["first"] == 20
+    assert variables["after"] == "c1"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_find_cards_returns_raw_findCards_response(mock_settings):
     """Test find_cards returns the raw findCards GraphQL response."""
     pipe_id = 1

@@ -116,11 +116,9 @@ class TestToolRegistry:
         mock_mcp = Mock(spec=FastMCP)
         mock_client = Mock()
         mock_ai_automation_service = Mock()
-        mock_ai_agent_service = Mock()
         mock_container = Mock(spec=ServicesContainer)
         mock_container.pipefy_client = mock_client
         mock_container.ai_automation_service = mock_ai_automation_service
-        mock_container.ai_agent_service = mock_ai_agent_service
 
         registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
         registry.register_tools()
@@ -141,6 +139,4 @@ class TestToolRegistry:
         mock_ai_automation_tools_register.assert_called_once_with(
             mock_mcp, mock_ai_automation_service
         )
-        mock_ai_agent_tools_register.assert_called_once_with(
-            mock_mcp, mock_ai_agent_service
-        )
+        mock_ai_agent_tools_register.assert_called_once_with(mock_mcp, mock_client)

@@ -48,9 +48,7 @@ def member_session(member_mcp_server, request):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_invite_members_rejects_empty_members(
-    member_session, extract_payload
-):
+async def test_invite_members_rejects_empty_members(member_session, extract_payload):
     async with member_session as session:
         result = await session.call_tool(
             "invite_members",
@@ -184,8 +182,8 @@ async def test_remove_member_from_pipe_success(
 async def test_remove_member_from_pipe_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
-    mock_member_client.remove_members_from_pipe.side_effect = (
-        TransportQueryError("failed", errors=[{"message": "forbidden"}])
+    mock_member_client.remove_members_from_pipe.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "forbidden"}]
     )
 
     async with member_session as session:
@@ -205,9 +203,7 @@ async def test_remove_member_from_pipe_graphql_error(
 async def test_remove_member_from_pipe_has_destructive_hint(member_session):
     async with member_session as session:
         listed = await session.list_tools()
-    remove_tool = next(
-        t for t in listed.tools if t.name == "remove_member_from_pipe"
-    )
+    remove_tool = next(t for t in listed.tools if t.name == "remove_member_from_pipe")
     assert remove_tool.annotations is not None
     assert remove_tool.annotations.destructiveHint is True
     assert remove_tool.annotations.readOnlyHint is False
@@ -215,9 +211,7 @@ async def test_remove_member_from_pipe_has_destructive_hint(member_session):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_set_role_success(
-    member_session, mock_member_client, extract_payload
-):
+async def test_set_role_success(member_session, mock_member_client, extract_payload):
     mock_member_client.set_role.return_value = {
         "setRole": {
             "member": {
@@ -238,9 +232,7 @@ async def test_set_role_success(
         )
 
     assert result.isError is False
-    mock_member_client.set_role.assert_awaited_once_with(
-        "pipe-1", "member-1", "admin"
-    )
+    mock_member_client.set_role.assert_awaited_once_with("pipe-1", "member-1", "admin")
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["result"]["setRole"]["member"]["role_name"] == "admin"

@@ -1,3 +1,5 @@
+"""MCP tools for GraphQL schema introspection and raw ``execute_graphql``."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -13,7 +15,7 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
 
 
 class IntrospectionTools:
-    """MCP tools for GraphQL schema introspection and raw execution."""
+    """Registers MCP tools for schema introspection and ``execute_graphql``."""
 
     @staticmethod
     def register(mcp: FastMCP, client: PipefyClient) -> None:
@@ -30,7 +32,10 @@ class IntrospectionTools:
             Args:
                 type_name: Schema type name exactly as defined (e.g. Card, Mutation).
             """
-            result = await client.introspect_type(type_name)
+            try:
+                result = await client.introspect_type(type_name)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(str(exc))
             err = result.get("error")
             if isinstance(err, str) and err:
                 return build_error_payload(err)
@@ -47,7 +52,10 @@ class IntrospectionTools:
             Args:
                 mutation_name: Mutation field name on the Mutation type (e.g. createCard).
             """
-            result = await client.introspect_mutation(mutation_name)
+            try:
+                result = await client.introspect_mutation(mutation_name)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(str(exc))
             err = result.get("error")
             if isinstance(err, str) and err:
                 return build_error_payload(err)
@@ -64,7 +72,10 @@ class IntrospectionTools:
             Args:
                 keyword: Substring to find relevant types (e.g. pipe, card, automation).
             """
-            result = await client.search_schema(keyword)
+            try:
+                result = await client.search_schema(keyword)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(str(exc))
             err = result.get("error")
             if isinstance(err, str) and err:
                 return build_error_payload(err)

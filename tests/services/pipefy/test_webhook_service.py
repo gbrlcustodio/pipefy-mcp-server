@@ -57,9 +57,7 @@ async def test_get_email_templates_success(mock_settings):
 async def test_get_email_templates_with_filter(mock_settings):
     payload = {"emailTemplates": {"edges": []}}
     service = _make_service(mock_settings, payload)
-    await service.get_email_templates(
-        "307061640", filter_by_name="Follow", first=10
-    )
+    await service.get_email_templates("307061640", filter_by_name="Follow", first=10)
 
     _, variables = service.execute_query.call_args[0]
     assert variables["filterByName"] == "Follow"
@@ -239,9 +237,7 @@ async def test_create_webhook_transport_error(mock_settings):
         side_effect=TransportQueryError("failed", errors=[{"message": "bad"}])
     )
     with pytest.raises(TransportQueryError):
-        await service.create_webhook(
-            "p1", "https://x.com/hook", ["card.move"]
-        )
+        await service.create_webhook("p1", "https://x.com/hook", ["card.move"])
 
 
 @pytest.mark.unit
@@ -249,9 +245,7 @@ async def test_create_webhook_transport_error(mock_settings):
 async def test_create_webhook_rejects_http_url(mock_settings):
     service = WebhookService(settings=mock_settings)
     with pytest.raises(ValueError, match="HTTPS"):
-        await service.create_webhook(
-            "p1", "http://insecure.com/hook", ["card.create"]
-        )
+        await service.create_webhook("p1", "http://insecure.com/hook", ["card.create"])
 
 
 @pytest.mark.unit

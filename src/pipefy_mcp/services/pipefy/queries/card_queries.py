@@ -111,8 +111,8 @@ GET_CARDS_QUERY = gql(
 
 FIND_CARDS_QUERY = gql(
     """
-    query ($pipeId: ID!, $search: FindCards!, $includeFields: Boolean!) {
-        findCards(pipeId: $pipeId, search: $search) {
+    query ($pipeId: ID!, $search: FindCards!, $includeFields: Boolean!, $first: Int, $after: String) {
+        findCards(pipeId: $pipeId, search: $search, first: $first, after: $after) {
             edges {
                 node {
                     id
@@ -127,6 +127,10 @@ FIND_CARDS_QUERY = gql(
                     }
                 }
             }
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
         }
     }
     """
@@ -135,7 +139,7 @@ FIND_CARDS_QUERY = gql(
 MOVE_CARD_TO_PHASE_MUTATION = gql(
     """
     mutation ($input: MoveCardToPhaseInput!) {
-        moveCardToPhase (input: $input) {
+        moveCardToPhase(input: $input) {
             clientMutationId
         }
     }
@@ -228,3 +232,18 @@ UPDATE_FIELDS_VALUES_MUTATION = gql(
     }
     """
 )
+
+__all__ = [
+    "CREATE_CARD_MUTATION",
+    "CREATE_COMMENT_MUTATION",
+    "DELETE_CARD_MUTATION",
+    "DELETE_COMMENT_MUTATION",
+    "FIND_CARDS_QUERY",
+    "GET_CARD_QUERY",
+    "GET_CARDS_QUERY",
+    "MOVE_CARD_TO_PHASE_MUTATION",
+    "UPDATE_CARD_FIELD_MUTATION",
+    "UPDATE_CARD_MUTATION",
+    "UPDATE_COMMENT_MUTATION",
+    "UPDATE_FIELDS_VALUES_MUTATION",
+]

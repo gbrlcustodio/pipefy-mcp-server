@@ -59,8 +59,6 @@ def report_session(report_mcp_server, request):
     )
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_reports_success(
@@ -103,8 +101,6 @@ async def test_get_pipe_reports_graphql_error(
     assert "not allowed" in payload["error"]
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_columns_success(
@@ -141,8 +137,6 @@ async def test_get_pipe_report_columns_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert len(payload["data"]["pipeReportColumns"]) == 2
-
-
 
 
 @pytest.mark.anyio
@@ -186,8 +180,6 @@ async def test_get_pipe_report_filterable_fields_success(
     assert inner["type"] == "select"
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_organization_report_success(
@@ -211,8 +203,6 @@ async def test_get_organization_report_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["organizationReport"]["name"] == "Org Overview"
-
-
 
 
 @pytest.mark.anyio
@@ -242,8 +232,6 @@ async def test_get_organization_reports_success(
     assert payload["data"]["organizationReports"]["edges"][0]["node"]["id"] == "or1"
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_export_success(
@@ -267,8 +255,6 @@ async def test_get_pipe_report_export_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["pipeReportExport"]["state"] == "done"
-
-
 
 
 @pytest.mark.anyio
@@ -296,8 +282,6 @@ async def test_get_organization_report_export_success(
     assert payload["data"]["organizationReportExport"]["state"] == "processing"
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_all_read_tools_have_readonly_hint(report_session):
@@ -320,8 +304,6 @@ async def test_all_read_tools_have_readonly_hint(report_session):
         assert tool.annotations.readOnlyHint is True, (
             f"{name} should be readOnlyHint=True"
         )
-
-
 
 
 @pytest.mark.anyio
@@ -396,8 +378,6 @@ async def test_create_pipe_report_graphql_error_with_debug(
     assert "PERMISSION_DENIED" in payload["error"]
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_pipe_report_success(
@@ -428,8 +408,6 @@ async def test_update_pipe_report_success(
     assert payload["result"]["updatePipeReport"]["pipeReport"]["name"] == "Updated"
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_delete_pipe_report_success(
@@ -446,8 +424,6 @@ async def test_delete_pipe_report_success(
     mock_report_client.delete_pipe_report.assert_awaited_once_with("r10")
     payload = extract_payload(result)
     assert payload["success"] is True
-
-
 
 
 @pytest.mark.anyio
@@ -483,8 +459,6 @@ async def test_create_organization_report_success(
     )
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_organization_report_success(
@@ -510,8 +484,6 @@ async def test_update_organization_report_success(
     assert payload["success"] is True
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_delete_organization_report_success(
@@ -530,8 +502,6 @@ async def test_delete_organization_report_success(
     mock_report_client.delete_organization_report.assert_awaited_once_with("or5")
     payload = extract_payload(result)
     assert payload["success"] is True
-
-
 
 
 @pytest.mark.anyio
@@ -588,8 +558,6 @@ async def test_export_pipe_report_graphql_error(
     assert "export denied" in payload["error"]
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_organization_report_success(
@@ -630,8 +598,6 @@ async def test_export_organization_report_success(
     )
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_pipe_audit_logs_success(
@@ -657,8 +623,6 @@ async def test_export_pipe_audit_logs_success(
     assert payload["result"]["exportPipeAuditLogsReport"]["success"] is True
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_tools_are_not_readonly(report_session):
@@ -677,8 +641,6 @@ async def test_export_tools_are_not_readonly(report_session):
         assert tool.annotations.readOnlyHint is False, (
             f"{name} should be readOnlyHint=False"
         )
-
-
 
 
 @pytest.mark.anyio

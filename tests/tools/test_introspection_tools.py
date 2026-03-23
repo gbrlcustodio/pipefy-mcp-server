@@ -4,6 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from gql.transport.exceptions import TransportQueryError
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -78,6 +79,22 @@ async def test_introspect_type_not_found_returns_error_payload(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not found" in payload["error"].lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+async def test_introspect_type_transport_error_returns_structured_error(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mock_introspection_client.introspect_type = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+    )
+    async with introspection_session as session:
+        result = await session.call_tool("introspect_type", {"type_name": "Card"})
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert isinstance(payload.get("error"), str)
 
 
 @pytest.mark.anyio

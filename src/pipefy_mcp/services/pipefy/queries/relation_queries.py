@@ -15,7 +15,9 @@ _REPO_TYPES_ID_NAME = """... on Pipe {
     name
 }"""
 
-_PIPE_RELATION_BODY = f"""
+# Composed with string concatenation (constants only; no runtime string building).
+_PIPE_RELATION_BODY = (
+    """
                 id
                 name
                 allChildrenMustBeDoneToFinishParent
@@ -26,17 +28,22 @@ _PIPE_RELATION_BODY = f"""
                 canCreateNewItems
                 childMustExistToFinishParent
                 childMustExistToMoveParent
-                parent {{
-                    {_REPO_TYPES_ID_NAME}
-                }}
-                child {{
-                    {_REPO_TYPES_ID_NAME}
-                }}
-                ownFieldMaps {{
+                parent {
+"""
+    + _REPO_TYPES_ID_NAME
+    + """
+                }
+                child {
+"""
+    + _REPO_TYPES_ID_NAME
+    + """
+                }
+                ownFieldMaps {
                     fieldId
                     inputMode
                     value
-                }}"""
+                }"""
+)
 
 GET_PIPE_RELATIONS_QUERY = gql(
     """

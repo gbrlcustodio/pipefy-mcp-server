@@ -4,6 +4,7 @@ from typing import Any
 
 from httpx_auth import OAuth2ClientCredentials
 
+from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_mcp.services.pipefy.ai_agent_service import AiAgentService
 from pipefy_mcp.services.pipefy.automation_graphql_types import (
     AutomationActionRow,
@@ -26,7 +27,12 @@ from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
 )
 from pipefy_mcp.services.pipefy.table_service import TableService
-from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload, CardSearch
+from pipefy_mcp.services.pipefy.types import (
+    AgentServiceResult,
+    AiAgentGraphPayload,
+    CardSearch,
+    ToggleAgentStatusResult,
+)
 from pipefy_mcp.services.pipefy.webhook_service import WebhookService
 from pipefy_mcp.settings import PipefySettings
 
@@ -484,7 +490,7 @@ class PipefyClient:
         """
         return await self._webhook_service.delete_webhook(webhook_id)
 
-    async def get_automation(self, automation_id: str) -> AutomationRuleRecord:
+    async def get_automation(self, automation_id: str) -> AutomationRuleRecord | None:
         """Get a traditional automation rule by ID (trigger, actions, status)."""
         return await self._automation_service.get_automation(automation_id)
 
@@ -564,6 +570,26 @@ class PipefyClient:
         """Delete an AI Agent by UUID (permanent)."""
         return await self._ai_agent_service.delete_agent(agent_uuid)
 
+    async def create_ai_agent(
+        self, agent_input: CreateAiAgentInput
+    ) -> AgentServiceResult:
+        """Create an AI Agent (empty, no behaviors)."""
+        return await self._ai_agent_service.create_agent(agent_input)
+
+    async def update_ai_agent(
+        self, agent_input: UpdateAiAgentInput
+    ) -> AgentServiceResult:
+        """Replace an AI Agent configuration (instruction and behaviors)."""
+        return await self._ai_agent_service.update_agent(agent_input)
+
+    async def toggle_ai_agent_status(
+        self, agent_uuid: str, *, active: bool
+    ) -> ToggleAgentStatusResult:
+        """Enable or disable an AI Agent."""
+        return await self._ai_agent_service.toggle_agent_status(
+            agent_uuid=agent_uuid, active=active
+        )
+
     async def get_pipe_members(self, pipe_id: int) -> dict:
         """Get the members of a pipe."""
         return await self._pipe_service.get_pipe_members(pipe_id)
@@ -623,6 +649,9 @@ class PipefyClient:
         field_id: str,
         field_value: str,
         include_fields: bool = False,
+        *,
+        first: int | None = None,
+        after: str | None = None,
     ) -> dict:
         """Find cards in the pipe where the given field equals the given value.
 
@@ -631,9 +660,16 @@ class PipefyClient:
             field_id: Pipefy field identifier (e.g. from get_start_form_fields or get_phase_fields).
             field_value: Value to match for that field (string; use format expected by field type).
             include_fields: If True, include each card's custom fields (name, value) in the response.
+            first: Max cards per page (optional).
+            after: Cursor from ``pageInfo.endCursor`` for the next page (optional).
         """
         return await self._card_service.find_cards(
-            pipe_id, field_id, field_value, include_fields=include_fields
+            pipe_id,
+            field_id,
+            field_value,
+            include_fields=include_fields,
+            first=first,
+            after=after,
         )
 
     async def move_card_to_phase(self, card_id: int, destination_phase_id: int) -> dict:

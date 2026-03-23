@@ -47,7 +47,6 @@ class ToolRegistry:
                 self.mcp, self.services_container.ai_automation_service
             )
 
-        if self.services_container.ai_agent_service is not None:
-            AiAgentTools.register(self.mcp, self.services_container.ai_agent_service)
+        AiAgentTools.register(self.mcp, self.services_container.pipefy_client)
 
         return self.mcp

@@ -1,3 +1,5 @@
+"""MCP tools for pipes, cards, comments, and related operations."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -262,6 +264,8 @@ class PipeTools:
             field_id: str,
             field_value: str,
             include_fields: bool = False,
+            first: int | None = None,
+            after: str | None = None,
         ) -> dict:
             """Find cards in the pipe where a specific field equals a given value.
 
@@ -277,9 +281,16 @@ class PipeTools:
                     field slugs for your pipe.
                 field_value: Value to match for that field (string; use the format expected by the field type).
                 include_fields: If True, include each card's custom fields (name, value) in the response.
+                first: Max cards per page (optional).
+                after: Cursor from ``pageInfo.endCursor`` for the next page (optional).
             """
             response = await client.find_cards(
-                pipe_id, field_id, field_value, include_fields=include_fields
+                pipe_id,
+                field_id,
+                field_value,
+                include_fields=include_fields,
+                first=first,
+                after=after,
             )
             edges = response.get(FIND_CARDS_RESPONSE_KEY, {}).get("edges")
             if not edges:
@@ -376,18 +387,13 @@ class PipeTools:
                       phase, assignees, labels, fields, and timestamps
 
             Examples:
-                # Update only card attributes
                 update_card(card_id=123, title="New Title")
-
-                # Update custom fields with REPLACE operation (default)
                 update_card(card_id=123, field_updates=[
                     {"field_id": "status", "value": "In Progress"},
-                    {"field_id": "priority", "value": "High"}
+                    {"field_id": "priority", "value": "High"},
                 ])
-
-                # Update custom fields with ADD operation
                 update_card(card_id=123, field_updates=[
-                    {"field_id": "tags", "value": "urgent", "operation": "ADD"}
+                    {"field_id": "tags", "value": "urgent", "operation": "ADD"},
                 ])
             """
             return await client.update_card(
@@ -589,7 +595,6 @@ class PipeTools:
             Returns:
                 Success/error status of the deletion.
             """
-            # Input validation
             if not isinstance(card_id, int):
                 return build_delete_card_error_payload(
                     message=f"Invalid 'card_id'. Expected an integer, got {type(card_id).__name__}."
@@ -599,7 +604,6 @@ class PipeTools:
                     message="Invalid 'card_id'. Please provide a positive integer."
                 )
 
-            # Fetch card details for preview/confirmation
             try:
                 card_response = await client.get_card(card_id)
                 card_data = card_response["card"]
@@ -620,7 +624,6 @@ class PipeTools:
                     )
                 )
 
-            # Sampling/Elicitation for confirmation
             can_elicit = ctx.session.client_params.capabilities.elicitation
             if can_elicit:
                 confirmation_message = (
@@ -635,7 +638,6 @@ class PipeTools:
                     )
 
                     if result.action != "accept":
-                        # User manually cancelled via UI
                         return build_delete_card_error_payload(
                             message="Card deletion cancelled by user."
                         )

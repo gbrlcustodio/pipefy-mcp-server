@@ -92,8 +92,12 @@ def build_table_read_success_payload(
     )
 
 
-def build_table_read_error_payload(*, message: str) -> dict[str, Any]:
+def build_table_error_payload(*, message: str) -> dict[str, Any]:
     return {"success": False, "error": message}
+
+
+build_table_read_error_payload = build_table_error_payload
+build_table_mutation_error_payload = build_table_error_payload
 
 
 def build_table_mutation_success_payload(
@@ -104,10 +108,6 @@ def build_table_mutation_success_payload(
         TableMutationSuccessPayload,
         {"success": True, "message": message, "result": data},
     )
-
-
-def build_table_mutation_error_payload(*, message: str) -> dict[str, Any]:
-    return {"success": False, "error": message}
 
 
 def build_delete_table_preview_payload(
@@ -197,9 +197,9 @@ def handle_table_tool_graphql_error(
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else fallback_msg
     if not debug:
-        return build_table_read_error_payload(message=base)
+        return build_table_error_payload(message=base)
     codes = extract_graphql_error_codes(exc)
     cid = extract_graphql_correlation_id(exc)
-    return build_table_read_error_payload(
+    return build_table_error_payload(
         message=with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid),
     )

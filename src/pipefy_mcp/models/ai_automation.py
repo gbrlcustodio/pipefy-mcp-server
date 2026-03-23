@@ -34,16 +34,7 @@ _EventId = Annotated[
 
 
 class CreateAiAutomationInput(BaseModel):
-    """Validated input for creating an AI Automation (generate_with_ai).
-
-    Attributes:
-        name: Automation name (non-empty, stripped).
-        event_id: Event trigger (e.g. card_created); scheduler is blacklisted.
-        pipe_id: Pipe ID (event_repo_id / action_repo_id).
-        prompt: AI prompt text (non-empty, stripped).
-        field_ids: Non-empty list of field internal IDs as strings.
-        condition: Optional condition structure; defaults to placeholder.
-    """
+    """Validated input for creating an AI Automation (generate_with_ai)."""
 
     name: NonBlankStr
     event_id: _EventId
@@ -57,18 +48,9 @@ class CreateAiAutomationInput(BaseModel):
 
 
 class UpdateAiAutomationInput(BaseModel):
-    """Validated input for updating an AI Automation.
+    """Validated input for updating an AI Automation."""
 
-    Attributes:
-        automation_id: ID of the automation to update.
-        name: Optional new name.
-        active: Optional active state.
-        prompt: Optional new prompt.
-        field_ids: Optional new field IDs.
-        condition: Optional new condition.
-    """
-
-    automation_id: str = Field(description="Automation ID to update")
+    automation_id: NonBlankStr = Field(description="Automation ID to update")
     name: NonBlankStr | None = None
     active: bool | None = None
     prompt: NonBlankStr | None = None

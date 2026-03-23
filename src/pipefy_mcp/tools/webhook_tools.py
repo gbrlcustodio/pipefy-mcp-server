@@ -85,7 +85,8 @@ class WebhookTools:
                 return build_webhook_error_payload(
                     message="Invalid 'card_id': provide a non-empty string or positive integer.",
                 )
-            if email_type is not None and email_type.strip().lower() not in (
+            trimmed_email_type = email_type.strip() if email_type else None
+            if trimmed_email_type is not None and trimmed_email_type.lower() not in (
                 "sent",
                 "received",
             ):
@@ -95,9 +96,7 @@ class WebhookTools:
             try:
                 raw = await client.get_card_inbox_emails(
                     card_id.strip(),
-                    email_type=email_type.strip()
-                    if email_type and email_type.strip()
-                    else None,
+                    email_type=trimmed_email_type,
                 )
             except Exception as exc:
                 return handle_webhook_tool_graphql_error(

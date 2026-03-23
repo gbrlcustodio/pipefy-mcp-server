@@ -102,6 +102,7 @@ CREATE_AUTOMATION_MUTATION = gql(
                 name
                 active
             }
+            errors
         }
     }
     """
@@ -116,6 +117,7 @@ UPDATE_AUTOMATION_MUTATION = gql(
                 name
                 active
             }
+            errors
         }
     }
     """

@@ -363,16 +363,13 @@ async def test_search_pipes_all_organizations_empty(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_search_pipes_short_keyword_matches_substring(
-    mock_settings, mock_organizations,
+    mock_settings,
+    mock_organizations,
 ):
     """Substring match finds pipes even when fuzzy score is below threshold."""
     service = _make_service(mock_settings, {"organizations": mock_organizations})
     result = await service.search_pipes(pipe_name="pipe")
-    pipe_names = [
-        p["name"]
-        for org in result["organizations"]
-        for p in org["pipes"]
-    ]
+    pipe_names = [p["name"] for org in result["organizations"] for p in org["pipes"]]
     assert "Custaudio pipe" in pipe_names
     assert "Drico pipe" in pipe_names
 
@@ -380,16 +377,13 @@ async def test_search_pipes_short_keyword_matches_substring(
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_search_pipes_case_insensitive_substring(
-    mock_settings, mock_organizations,
+    mock_settings,
+    mock_organizations,
 ):
     """Case-insensitive substring matches correctly."""
     service = _make_service(mock_settings, {"organizations": mock_organizations})
     result = await service.search_pipes(pipe_name="bug")
-    pipe_names = [
-        p["name"]
-        for org in result["organizations"]
-        for p in org["pipes"]
-    ]
+    pipe_names = [p["name"] for org in result["organizations"] for p in org["pipes"]]
     assert "Bug Tracker [v2.0]" in pipe_names
 
 

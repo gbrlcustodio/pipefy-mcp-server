@@ -597,7 +597,12 @@ class TestFindCardsTool:
 
         assert result.isError is False, "Unexpected tool error"
         mock_pipefy_client.find_cards.assert_called_once_with(
-            pipe_id, field_id, field_value, include_fields=True
+            pipe_id,
+            field_id,
+            field_value,
+            include_fields=True,
+            first=None,
+            after=None,
         )
         payload = extract_payload(result)
         assert FIND_CARDS_RESPONSE_KEY in payload
@@ -1096,7 +1101,6 @@ class TestDeleteCardTool:
         extract_payload,
     ) -> None:
         """Test delete_card tool when user declines confirmation via elicitation."""
-        # Setup mock responses
         mock_pipefy_client.get_card.return_value = {
             "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
         }
@@ -1108,7 +1112,6 @@ class TestDeleteCardTool:
             )
 
             assert result.isError is False
-            # Should fetch card for preview but not delete when user declines
             mock_pipefy_client.get_card.assert_called_once_with(12345)
             mock_pipefy_client.delete_card.assert_not_called()
 
@@ -1134,7 +1137,6 @@ class TestDeleteCardTool:
             )
 
             assert result.isError is False
-            # Should not call any client methods for invalid input
             mock_pipefy_client.get_card.assert_not_called()
             mock_pipefy_client.delete_card.assert_not_called()
 
@@ -1276,7 +1278,6 @@ class TestDeleteCardTool:
         extract_payload,
     ) -> None:
         """Test delete_card tool when user confirms deletion via elicitation."""
-        # Setup mock responses for both get_card and delete_card
         mock_pipefy_client.get_card.return_value = {
             "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
         }
@@ -1289,7 +1290,6 @@ class TestDeleteCardTool:
             )
 
             assert result.isError is False
-            # Should execute deletion when user confirms
             mock_pipefy_client.delete_card.assert_called_once_with(12345)
 
             payload = extract_payload(result)

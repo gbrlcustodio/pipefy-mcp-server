@@ -9,10 +9,20 @@ from mcp.types import ToolAnnotations
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.report_tool_helpers import (
+    build_report_error_payload,
     build_report_mutation_success_payload,
     build_report_read_success_payload,
     handle_report_tool_graphql_error,
 )
+
+
+def _blank_field_error(value: str, field: str) -> dict[str, Any] | None:
+    """Return an error payload when ``value`` is missing or blank."""
+    if not isinstance(value, str):
+        return build_report_error_payload(message=f"'{field}' must be a string.")
+    if not value.strip():
+        return build_report_error_payload(message=f"'{field}' must be non-empty.")
+    return None
 
 
 class ReportTools:
@@ -43,6 +53,13 @@ class ReportTools:
                 order: Sort order, e.g. {"field": "name", "direction": "asc"}.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(pipe_uuid, "pipe_uuid")
+            if err is not None:
+                return err
+            if first < 1:
+                return build_report_error_payload(
+                    message="'first' must be a positive integer.",
+                )
             try:
                 raw = await client.get_pipe_reports(
                     pipe_uuid,
@@ -74,6 +91,9 @@ class ReportTools:
                 pipe_uuid: Pipe UUID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(pipe_uuid, "pipe_uuid")
+            if err is not None:
+                return err
             try:
                 raw = await client.get_pipe_report_columns(pipe_uuid)
             except Exception as exc:  # noqa: BLE001
@@ -98,6 +118,9 @@ class ReportTools:
                 pipe_uuid: Pipe UUID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(pipe_uuid, "pipe_uuid")
+            if err is not None:
+                return err
             try:
                 raw = await client.get_pipe_report_filterable_fields(pipe_uuid)
             except Exception as exc:  # noqa: BLE001
@@ -122,6 +145,9 @@ class ReportTools:
                 report_id: Organization report ID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(report_id, "report_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.get_organization_report(report_id)
             except Exception as exc:  # noqa: BLE001
@@ -150,6 +176,13 @@ class ReportTools:
                 after: Cursor for next page.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(organization_id, "organization_id")
+            if err is not None:
+                return err
+            if first < 1:
+                return build_report_error_payload(
+                    message="'first' must be a positive integer.",
+                )
             try:
                 raw = await client.get_organization_reports(
                     organization_id, first=first, after=after
@@ -176,6 +209,9 @@ class ReportTools:
                 export_id: Pipe report export ID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(export_id, "export_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.get_pipe_report_export(export_id)
             except Exception as exc:  # noqa: BLE001
@@ -200,6 +236,9 @@ class ReportTools:
                 export_id: Organization report export ID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(export_id, "export_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.get_organization_report_export(export_id)
             except Exception as exc:  # noqa: BLE001
@@ -232,6 +271,12 @@ class ReportTools:
                 formulas: Formula definitions (list of [field, operator, ...] tuples).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(pipe_id, "pipe_id")
+            if err is not None:
+                return err
+            err = _blank_field_error(name, "name")
+            if err is not None:
+                return err
             try:
                 raw = await client.create_pipe_report(
                     pipe_id, name, fields=fields, filter=filter, formulas=formulas
@@ -270,6 +315,9 @@ class ReportTools:
                 featured_field: Featured field name.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(report_id, "report_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.update_pipe_report(
                     report_id,
@@ -305,6 +353,9 @@ class ReportTools:
                 report_id: Pipe report ID to delete.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(report_id, "report_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.delete_pipe_report(report_id)
             except Exception as exc:  # noqa: BLE001
@@ -337,6 +388,16 @@ class ReportTools:
                 filter: Report filter (ReportCardsFilter shape).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(organization_id, "organization_id")
+            if err is not None:
+                return err
+            err = _blank_field_error(name, "name")
+            if err is not None:
+                return err
+            if not pipe_ids or not isinstance(pipe_ids, list):
+                return build_report_error_payload(
+                    message="'pipe_ids' must be a non-empty list.",
+                )
             try:
                 raw = await client.create_organization_report(
                     organization_id, name, pipe_ids, fields=fields, filter=filter
@@ -373,6 +434,9 @@ class ReportTools:
                 pipe_ids: Pipe IDs to include.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(report_id, "report_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.update_organization_report(
                     report_id,
@@ -407,6 +471,9 @@ class ReportTools:
                 report_id: Organization report ID to delete.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(report_id, "report_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.delete_organization_report(report_id)
             except Exception as exc:  # noqa: BLE001
@@ -439,6 +506,12 @@ class ReportTools:
                 columns: Column field IDs for the export file.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(pipe_id, "pipe_id")
+            if err is not None:
+                return err
+            err = _blank_field_error(pipe_report_id, "pipe_report_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.export_pipe_report(
                     pipe_id,
@@ -479,6 +552,10 @@ class ReportTools:
                 columns: Column field IDs for the export file.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            if organization_id < 1:
+                return build_report_error_payload(
+                    message="'organization_id' must be a positive integer.",
+                )
             try:
                 raw = await client.export_organization_report(
                     organization_id,
@@ -512,6 +589,9 @@ class ReportTools:
                 search_term: Optional filter on audit log content.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            err = _blank_field_error(pipe_uuid, "pipe_uuid")
+            if err is not None:
+                return err
             try:
                 raw = await client.export_pipe_audit_logs(
                     pipe_uuid,

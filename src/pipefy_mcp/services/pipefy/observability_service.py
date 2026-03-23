@@ -135,7 +135,9 @@ class ObservabilityService(BasePipefyClient):
                     f"Organization not found or has no uuid for id: {trimmed}"
                 )
             return str(uuid_value)
-        return trimmed
+        raise ValueError(
+            f"organization identifier must be a UUID or numeric id, got: {trimmed!r}"
+        )
 
     async def get_ai_agent_logs(
         self,

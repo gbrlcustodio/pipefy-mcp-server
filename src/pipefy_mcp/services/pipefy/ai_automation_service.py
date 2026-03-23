@@ -8,8 +8,8 @@ from pipefy_mcp.models.ai_automation import (
 )
 from pipefy_mcp.services.pipefy.internal_api_client import InternalApiClient
 from pipefy_mcp.services.pipefy.queries.ai_automation_queries import (
-    CREATE_AUTOMATION_MUTATION,
-    UPDATE_AUTOMATION_MUTATION,
+    AI_CREATE_AUTOMATION_MUTATION,
+    AI_UPDATE_AUTOMATION_MUTATION,
 )
 from pipefy_mcp.services.pipefy.types import AutomationServiceResult
 
@@ -57,7 +57,7 @@ class AiAutomationService:
         }
 
         response = await self._client.execute_query(
-            CREATE_AUTOMATION_MUTATION, variables
+            AI_CREATE_AUTOMATION_MUTATION, variables
         )
 
         create_result = response.get("data", {}).get("createAutomation", {})
@@ -112,7 +112,7 @@ class AiAutomationService:
         variables = {"input": input_dict}
 
         response = await self._client.execute_query(
-            UPDATE_AUTOMATION_MUTATION, variables
+            AI_UPDATE_AUTOMATION_MUTATION, variables
         )
 
         update_result = response.get("data", {}).get("updateAutomation", {})

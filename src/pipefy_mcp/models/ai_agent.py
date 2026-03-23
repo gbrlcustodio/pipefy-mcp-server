@@ -11,31 +11,14 @@ MAX_BEHAVIORS = 5
 
 
 class CreateAiAgentInput(BaseModel):
-    """Validated input for creating an AI Agent.
-
-    Attributes:
-        name: Agent name (non-empty, stripped).
-        repo_uuid: Repository UUID (non-empty, stripped).
-    """
+    """Validated input for creating an AI Agent."""
 
     name: NonBlankStr
     repo_uuid: NonBlankStr
 
 
 class BehaviorInput(BaseModel):
-    """Validated input for an AI Agent behavior.
-
-    Accepts both snake_case and camelCase field names (e.g. event_id or eventId).
-    Serializes to camelCase for the GraphQL API when using model_dump(by_alias=True).
-
-    Attributes:
-        name: Behavior name (non-empty, stripped).
-        event_id: Event trigger ID (eventId in GraphQL).
-        action_id: Action ID; defaults to ai_behavior (actionId in GraphQL).
-        active: Whether the behavior is active; defaults to True.
-        condition: Optional condition structure.
-        action_params: Optional action parameters (actionParams in GraphQL).
-    """
+    """One AI agent behavior; accepts snake_case or camelCase, dumps with camelCase aliases."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -48,16 +31,7 @@ class BehaviorInput(BaseModel):
 
 
 class UpdateAiAgentInput(BaseModel):
-    """Validated input for updating an AI Agent.
-
-    Attributes:
-        uuid: Agent UUID (non-empty, stripped).
-        name: Agent name (non-empty, stripped).
-        repo_uuid: Repository UUID (non-empty, stripped).
-        behaviors: List of behaviors (1 to MAX_BEHAVIORS).
-        instruction: Optional instruction text.
-        data_source_ids: Optional list of data source IDs.
-    """
+    """Validated input for updating an AI Agent."""
 
     uuid: NonBlankStr
     name: NonBlankStr

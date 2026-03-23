@@ -61,7 +61,9 @@ async def test_invite_members_transport_error(mock_settings):
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
     with pytest.raises(TransportQueryError):
-        await service.invite_members("p1", [{"email": "x@y.com", "role_name": "member"}])
+        await service.invite_members(
+            "p1", [{"email": "x@y.com", "role_name": "member"}]
+        )
 
 
 @pytest.mark.unit
@@ -75,7 +77,11 @@ async def test_remove_members_from_pipe_success(mock_settings):
     service = MemberService(settings=mock_settings, pipe_service=pipe_service)
     service.execute_query = AsyncMock(return_value=payload)
     result = await service.remove_members_from_pipe(
-        "99", ["550e8400-e29b-41d4-a716-446655440001", "550e8400-e29b-41d4-a716-446655440002"]
+        "99",
+        [
+            "550e8400-e29b-41d4-a716-446655440001",
+            "550e8400-e29b-41d4-a716-446655440002",
+        ],
     )
 
     service.execute_query.assert_awaited_once()
@@ -94,15 +100,15 @@ async def test_remove_members_from_pipe_success(mock_settings):
 @pytest.mark.asyncio
 async def test_remove_members_from_pipe_transport_error(mock_settings):
     pipe_service = AsyncMock(spec=PipeService)
-    pipe_service.get_pipe = AsyncMock(
-        return_value={"pipe": {"uuid": "pu", "id": 1}}
-    )
+    pipe_service.get_pipe = AsyncMock(return_value={"pipe": {"uuid": "pu", "id": 1}})
     service = MemberService(settings=mock_settings, pipe_service=pipe_service)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
     )
     with pytest.raises(TransportQueryError):
-        await service.remove_members_from_pipe("1", ["550e8400-e29b-41d4-a716-446655440000"])
+        await service.remove_members_from_pipe(
+            "1", ["550e8400-e29b-41d4-a716-446655440000"]
+        )
 
 
 @pytest.mark.unit

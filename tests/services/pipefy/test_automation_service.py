@@ -70,7 +70,7 @@ async def test_get_automation_when_api_returns_null(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATION_QUERY
     assert variables == {"id": "missing-id"}
-    assert result == {}
+    assert result is None
 
 
 @pytest.mark.unit
@@ -278,6 +278,20 @@ async def test_create_automation_transport_error(mock_settings):
         side_effect=TransportQueryError("failed", errors=[{"message": "reject"}])
     )
     with pytest.raises(TransportQueryError):
+        await service.create_automation("p1", "N", "e", "a")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_automation_raises_when_mutation_returns_errors(mock_settings):
+    payload = {
+        "createAutomation": {
+            "automation": None,
+            "errors": ["Invalid action for this event"],
+        },
+    }
+    service = _make_service(mock_settings, payload)
+    with pytest.raises(ValueError, match="Invalid action"):
         await service.create_automation("p1", "N", "e", "a")
 
 

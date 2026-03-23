@@ -5,7 +5,7 @@ Plain strings (not gql()) since internal_api does not support schema validation.
 
 from __future__ import annotations
 
-CREATE_AUTOMATION_MUTATION = """
+AI_CREATE_AUTOMATION_MUTATION = """
 mutation createAutomation(
   $name: String!,
   $action_id: ID!,
@@ -36,7 +36,7 @@ mutation createAutomation(
 }
 """
 
-UPDATE_AUTOMATION_MUTATION = """
+AI_UPDATE_AUTOMATION_MUTATION = """
 mutation updateAutomation($input: UpdateAutomationInput!) {
   updateAutomation(input: $input) {
     automation {
@@ -50,3 +50,8 @@ mutation updateAutomation($input: UpdateAutomationInput!) {
   }
 }
 """
+
+__all__ = [
+    "AI_CREATE_AUTOMATION_MUTATION",
+    "AI_UPDATE_AUTOMATION_MUTATION",
+]

@@ -11,7 +11,7 @@ from mcp.shared.memory import (
 )
 
 from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.tools.observability_tools import ObservabilityTools, _MAX_PAGE_SIZE
+from pipefy_mcp.tools.observability_tools import _MAX_PAGE_SIZE, ObservabilityTools
 
 
 @pytest.fixture
@@ -53,8 +53,6 @@ def observability_session(observability_mcp_server, request):
     )
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_agent_logs_success(
@@ -82,9 +80,7 @@ async def test_get_ai_agent_logs_success(
     }
 
     async with observability_session as session:
-        result = await session.call_tool(
-            "get_ai_agent_logs", {"repo_uuid": "repo-1"}
-        )
+        result = await session.call_tool("get_ai_agent_logs", {"repo_uuid": "repo-1"})
 
     assert result.isError is False
     mock_observability_client.get_ai_agent_logs.assert_awaited_once_with(
@@ -105,16 +101,12 @@ async def test_get_ai_agent_logs_graphql_error(
     )
 
     async with observability_session as session:
-        result = await session.call_tool(
-            "get_ai_agent_logs", {"repo_uuid": "repo-bad"}
-        )
+        result = await session.call_tool("get_ai_agent_logs", {"repo_uuid": "repo-bad"})
 
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "not authorized" in payload["error"]
-
-
 
 
 @pytest.mark.anyio
@@ -150,8 +142,6 @@ async def test_get_ai_agent_log_details_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["aiAgentLogDetails"]["executionTime"] == 5.2
-
-
 
 
 @pytest.mark.anyio
@@ -191,8 +181,6 @@ async def test_get_automation_logs_success(
     assert payload["data"]["automationLogs"]["totalCount"] == 1
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_logs_by_repo_success(
@@ -230,8 +218,6 @@ async def test_get_automation_logs_by_repo_success(
     assert payload["data"]["automationLogsByRepo"]["totalCount"] == 15
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_log_tools_have_read_only_hint(observability_session):
@@ -248,8 +234,6 @@ async def test_log_tools_have_read_only_hint(observability_session):
         if tool.name in log_tool_names:
             assert tool.annotations is not None, f"{tool.name} missing annotations"
             assert tool.annotations.readOnlyHint is True, f"{tool.name} not read-only"
-
-
 
 
 @pytest.mark.anyio
@@ -291,8 +275,6 @@ async def test_get_agents_usage_success(
     assert payload["data"]["agentsUsageDetails"]["usage"] == 42.5
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automations_usage_success(
@@ -323,8 +305,6 @@ async def test_get_automations_usage_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["automationsUsageDetails"]["usage"] == 500
-
-
 
 
 @pytest.mark.anyio
@@ -406,8 +386,6 @@ async def test_get_ai_credit_usage_value_error_from_client(
     assert "Organization not found" in payload["error"]
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_export_automation_jobs_success(
@@ -435,9 +413,10 @@ async def test_export_automation_jobs_success(
     )
     payload = extract_payload(result)
     assert payload["success"] is True
-    assert payload["result"]["createAutomationJobsExport"]["automationJobsExport"]["id"] == "exp-1"
-
-
+    assert (
+        payload["result"]["createAutomationJobsExport"]["automationJobsExport"]["id"]
+        == "exp-1"
+    )
 
 
 @pytest.mark.anyio
@@ -465,9 +444,7 @@ async def test_get_automation_jobs_export_success(
     )
     payload = extract_payload(result)
     assert payload["success"] is True
-    assert (
-        payload["data"]["automationJobsExport"]["status"] == "finished"
-    )
+    assert payload["data"]["automationJobsExport"]["status"] == "finished"
     assert payload["data"]["automationJobsExport"]["fileUrl"].endswith(".xlsx")
 
 
@@ -509,8 +486,6 @@ async def test_get_automation_jobs_export_rejects_empty_export_id(
     assert "export_id" in p["error"]
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_usage_tools_have_read_only_hint(observability_session):
@@ -548,8 +523,6 @@ async def test_get_automation_jobs_export_read_only_hint(observability_session):
     tool = next(t for t in listed.tools if t.name == "get_automation_jobs_export")
     assert tool.annotations is not None
     assert tool.annotations.readOnlyHint is True
-
-
 
 
 @pytest.mark.anyio
@@ -631,17 +604,13 @@ async def test_get_automation_jobs_export_csv_read_only_hint(observability_sessi
     assert tool.annotations.readOnlyHint is True
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_agent_logs_rejects_invalid_repo_uuid(
     observability_session, mock_observability_client, extract_payload
 ):
     async with observability_session as session:
-        result = await session.call_tool(
-            "get_ai_agent_logs", {"repo_uuid": ""}
-        )
+        result = await session.call_tool("get_ai_agent_logs", {"repo_uuid": ""})
 
     mock_observability_client.get_ai_agent_logs.assert_not_called()
     p = extract_payload(result)
@@ -655,9 +624,7 @@ async def test_get_ai_agent_log_details_rejects_invalid_log_uuid(
     observability_session, mock_observability_client, extract_payload
 ):
     async with observability_session as session:
-        result = await session.call_tool(
-            "get_ai_agent_log_details", {"log_uuid": ""}
-        )
+        result = await session.call_tool("get_ai_agent_log_details", {"log_uuid": ""})
 
     mock_observability_client.get_ai_agent_log_details.assert_not_called()
     p = extract_payload(result)
@@ -724,8 +691,6 @@ async def test_get_agents_usage_rejects_missing_dates(
     assert "filter_date" in p["error"].lower()
 
 
-
-
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 @pytest.mark.parametrize("bad_first", [0, -1, _MAX_PAGE_SIZE + 1])
@@ -741,8 +706,6 @@ async def test_get_ai_agent_logs_rejects_out_of_bounds_first(
     p = extract_payload(result)
     assert p["success"] is False
     assert "first" in p["error"].lower()
-
-
 
 
 @pytest.mark.anyio

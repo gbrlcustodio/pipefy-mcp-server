@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.services.pipefy import PipefyClient
@@ -46,6 +46,7 @@ class FieldConditionTools:
             ),
         )
         async def create_field_condition(
+            ctx: Context,
             phase_id: str | int,
             condition: dict[str, Any],
             actions: list[dict[str, Any]],
@@ -55,6 +56,7 @@ class FieldConditionTools:
             """Create a conditional field rule (Pipefy ``createFieldCondition``).
 
             Args:
+                ctx: MCP context for debug logging.
                 phase_id: Phase ID that owns the condition (``phaseId`` on the API input).
                 condition: ``ConditionInput`` dict (e.g. ``expressions``, ``expressions_structure``).
                 actions: List of ``FieldConditionActionInput`` dicts; use ``phaseFieldId`` (often the
@@ -63,6 +65,9 @@ class FieldConditionTools:
                 extra_input: Optional extra keys for ``createFieldConditionInput`` (e.g. ``name``, ``index``).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            await ctx.debug(
+                f"create_field_condition: phase_id={phase_id!r}, debug={debug}"
+            )
             if not valid_phase_field_id(phase_id):
                 return build_pipe_tool_error_payload(
                     message="Invalid 'phase_id'. Use a non-empty string or a positive integer.",
@@ -124,6 +129,7 @@ class FieldConditionTools:
             ),
         )
         async def update_field_condition(
+            ctx: Context,
             condition_id: str | int,
             condition: dict[str, Any] | None = None,
             actions: list[dict[str, Any]] | None = None,
@@ -137,12 +143,16 @@ class FieldConditionTools:
             carries other ``UpdateFieldConditionInput`` keys (e.g. ``name``, ``index``).
 
             Args:
+                ctx: MCP context for debug logging.
                 condition_id: Field condition ID to update.
                 condition: Optional ``ConditionInput`` dict (same as create).
                 actions: Optional list of ``FieldConditionActionInput`` dicts (same as create).
                 extra_input: Additional fields to merge into ``UpdateFieldConditionInput``.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            await ctx.debug(
+                f"update_field_condition: condition_id={condition_id!r}, debug={debug}"
+            )
             if not valid_phase_field_id(condition_id):
                 return build_pipe_tool_error_payload(
                     message=(
@@ -215,6 +225,7 @@ class FieldConditionTools:
             ),
         )
         async def delete_field_condition(
+            ctx: Context,
             condition_id: str | int,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -223,9 +234,13 @@ class FieldConditionTools:
             This action is irreversible. Always confirm with the user before executing.
 
             Args:
+                ctx: MCP context for debug logging.
                 condition_id: Field condition ID to delete.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            await ctx.debug(
+                f"delete_field_condition: condition_id={condition_id!r}, debug={debug}"
+            )
             if not valid_phase_field_id(condition_id):
                 return build_pipe_tool_error_payload(
                     message=(

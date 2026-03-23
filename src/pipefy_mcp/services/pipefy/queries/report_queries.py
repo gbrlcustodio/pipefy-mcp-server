@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from gql import gql
 
-# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
 # Column/filter discovery uses field `name` (not `id`). pipeReports omits cardCount (resolver errors).
 
 _PIPE_REPORT_FIELDS = """
@@ -30,8 +29,6 @@ _REPORT_EXPORT_FIELDS = """
         id
         name
     }"""
-
-# --- Read queries ---
 
 GET_PIPE_REPORTS_QUERY = gql(
     """
@@ -160,8 +157,6 @@ GET_ORGANIZATION_REPORT_EXPORT_QUERY = gql(
     """
 )
 
-# --- CRUD mutations ---
-
 CREATE_PIPE_REPORT_MUTATION = gql(
     """
     mutation createPipeReport($input: CreatePipeReportInput!) {
@@ -233,8 +228,6 @@ DELETE_ORGANIZATION_REPORT_MUTATION = gql(
     }
     """
 )
-
-# --- Export mutations ---
 
 EXPORT_PIPE_REPORT_MUTATION = gql(
     """

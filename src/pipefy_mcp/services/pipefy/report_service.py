@@ -145,8 +145,6 @@ class ReportService(BasePipefyClient):
             {"id": export_id},
         )
 
-    # --- CRUD mutations ---
-
     async def create_pipe_report(
         self,
         pipe_id: str,
@@ -299,8 +297,6 @@ class ReportService(BasePipefyClient):
         return await self.execute_query(
             DELETE_ORGANIZATION_REPORT_MUTATION, {"input": {"id": report_id}}
         )
-
-    # --- Export mutations ---
 
     async def export_pipe_report(
         self,

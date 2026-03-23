@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from gql import gql
 
-# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
 # Input shapes verified via introspect_mutation / deep-mutation (inviteMembers, removeMembersFromPipe, setRole).
 
 INVITE_MEMBERS_MUTATION = gql(

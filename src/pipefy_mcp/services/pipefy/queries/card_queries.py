@@ -1,7 +1,5 @@
 from gql import gql
 
-# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
-
 CREATE_CARD_MUTATION = gql(
     """
     mutation ($pipe_id: ID!, $fields: [FieldValueInput!]!) {

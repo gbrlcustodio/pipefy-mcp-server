@@ -59,7 +59,6 @@ def report_session(report_mcp_server, request):
     )
 
 
-# --- get_pipe_reports ---
 
 
 @pytest.mark.anyio
@@ -104,7 +103,6 @@ async def test_get_pipe_reports_graphql_error(
     assert "not allowed" in payload["error"]
 
 
-# --- get_pipe_report_columns ---
 
 
 @pytest.mark.anyio
@@ -145,7 +143,6 @@ async def test_get_pipe_report_columns_success(
     assert len(payload["data"]["pipeReportColumns"]) == 2
 
 
-# --- get_pipe_report_filterable_fields ---
 
 
 @pytest.mark.anyio
@@ -189,7 +186,6 @@ async def test_get_pipe_report_filterable_fields_success(
     assert inner["type"] == "select"
 
 
-# --- get_organization_report ---
 
 
 @pytest.mark.anyio
@@ -217,7 +213,6 @@ async def test_get_organization_report_success(
     assert payload["data"]["organizationReport"]["name"] == "Org Overview"
 
 
-# --- get_organization_reports ---
 
 
 @pytest.mark.anyio
@@ -247,7 +242,6 @@ async def test_get_organization_reports_success(
     assert payload["data"]["organizationReports"]["edges"][0]["node"]["id"] == "or1"
 
 
-# --- get_pipe_report_export ---
 
 
 @pytest.mark.anyio
@@ -275,7 +269,6 @@ async def test_get_pipe_report_export_success(
     assert payload["data"]["pipeReportExport"]["state"] == "done"
 
 
-# --- get_organization_report_export ---
 
 
 @pytest.mark.anyio
@@ -303,7 +296,6 @@ async def test_get_organization_report_export_success(
     assert payload["data"]["organizationReportExport"]["state"] == "processing"
 
 
-# --- readOnlyHint annotations ---
 
 
 @pytest.mark.anyio
@@ -330,7 +322,6 @@ async def test_all_read_tools_have_readonly_hint(report_session):
         )
 
 
-# --- create_pipe_report ---
 
 
 @pytest.mark.anyio
@@ -405,7 +396,6 @@ async def test_create_pipe_report_graphql_error_with_debug(
     assert "PERMISSION_DENIED" in payload["error"]
 
 
-# --- update_pipe_report ---
 
 
 @pytest.mark.anyio
@@ -438,7 +428,6 @@ async def test_update_pipe_report_success(
     assert payload["result"]["updatePipeReport"]["pipeReport"]["name"] == "Updated"
 
 
-# --- delete_pipe_report ---
 
 
 @pytest.mark.anyio
@@ -459,7 +448,6 @@ async def test_delete_pipe_report_success(
     assert payload["success"] is True
 
 
-# --- create_organization_report ---
 
 
 @pytest.mark.anyio
@@ -495,7 +483,6 @@ async def test_create_organization_report_success(
     )
 
 
-# --- update_organization_report ---
 
 
 @pytest.mark.anyio
@@ -523,7 +510,6 @@ async def test_update_organization_report_success(
     assert payload["success"] is True
 
 
-# --- delete_organization_report ---
 
 
 @pytest.mark.anyio
@@ -546,7 +532,6 @@ async def test_delete_organization_report_success(
     assert payload["success"] is True
 
 
-# --- export_pipe_report ---
 
 
 @pytest.mark.anyio
@@ -603,7 +588,6 @@ async def test_export_pipe_report_graphql_error(
     assert "export denied" in payload["error"]
 
 
-# --- export_organization_report ---
 
 
 @pytest.mark.anyio
@@ -646,7 +630,6 @@ async def test_export_organization_report_success(
     )
 
 
-# --- export_pipe_audit_logs ---
 
 
 @pytest.mark.anyio
@@ -674,7 +657,6 @@ async def test_export_pipe_audit_logs_success(
     assert payload["result"]["exportPipeAuditLogsReport"]["success"] is True
 
 
-# --- export tool annotations ---
 
 
 @pytest.mark.anyio
@@ -697,7 +679,6 @@ async def test_export_tools_are_not_readonly(report_session):
         )
 
 
-# --- CRUD tool annotations ---
 
 
 @pytest.mark.anyio

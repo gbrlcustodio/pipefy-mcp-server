@@ -524,12 +524,10 @@ class PipefyClient:
             name: Rule name.
             trigger_id: Event ID.
             action_id: Action ID.
-            active: When True (default), create the rule enabled. Set False to start disabled, or use ``extra_input`` / ``update_automation`` later.
-            extra_input: Extra ``CreateAutomationInput`` keys; ``active`` here overrides the ``active`` argument when both are set.
+            active: When True (default), create the rule enabled. Set False to start disabled.
+            extra_input: Extra ``CreateAutomationInput`` keys; ``active`` here overrides the ``active`` argument.
         """
-        merged: dict[str, Any] = dict(extra_input or {})
-        if "active" not in merged:
-            merged["active"] = active
+        merged: dict[str, Any] = {"active": active, **(extra_input or {})}
         return await self._automation_service.create_automation(
             pipe_id,
             name,

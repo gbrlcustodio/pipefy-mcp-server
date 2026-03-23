@@ -19,14 +19,19 @@ _VALID_PERIODS = {"current_month", "last_month", "last_3_months"}
 _MIN_PAGE_SIZE = 1
 _MAX_PAGE_SIZE = 100
 
+_MIN_CSV_CHARS = 256
+_MAX_CSV_CHARS = 2_000_000
+_DEFAULT_CSV_CHARS = 400_000
+_MIN_EXPORT_DOWNLOAD_BYTES = 4096
+_MAX_EXPORT_DOWNLOAD_BYTES = 80 * 1024 * 1024
+_DEFAULT_EXPORT_DOWNLOAD_BYTES = 50 * 1024 * 1024
+
 
 class ObservabilityTools:
     """MCP tools for monitoring AI agent and automation execution."""
 
     @staticmethod
     def register(mcp: FastMCP, client: PipefyClient) -> None:
-        # --- Log tools ---
-
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
@@ -189,8 +194,6 @@ class ObservabilityTools:
                 raw, message="Automation logs by repo retrieved."
             )
 
-        # --- Usage & Credits tools ---
-
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
@@ -296,7 +299,8 @@ class ObservabilityTools:
             """Get AI credit usage dashboard for an org. Shows credit limit, total consumption, per-resource breakdown (AI Agents vs Assistants), addon status, and free credit info. `period`: 'current_month', 'last_month', or 'last_3_months'.
 
             Args:
-                organization_uuid: Organization UUID.
+                organization_uuid: Organization UUID, or numeric organization id (same as in the
+                    Pipefy URL). Numeric ids are resolved to UUID automatically.
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -310,6 +314,8 @@ class ObservabilityTools:
                 )
             try:
                 raw = await client.get_ai_credit_usage(organization_uuid, period)
+            except ValueError as exc:
+                return build_observability_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_observability_tool_graphql_error(
                     exc, "Get AI credit usage failed.", debug=debug
@@ -317,8 +323,6 @@ class ObservabilityTools:
             return build_observability_read_success_payload(
                 raw, message="AI credit usage retrieved."
             )
-
-        # --- Export tool ---
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
@@ -352,4 +356,90 @@ class ObservabilityTools:
             return build_observability_mutation_success_payload(
                 message="Automation jobs export triggered.",
                 data=raw,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
+        async def get_automation_jobs_export(
+            export_id: str,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Poll an automation jobs export by id. Returns `status` (`created`, `processing`, `finished`, `failed`) and `fileUrl` when the API provides a signed download link (often after `finished`). Use after `export_automation_jobs`; repeat until `finished` or `failed`. The tool does not download the file — use `fileUrl` over HTTP if needed.
+
+            Args:
+                export_id: Export id from `export_automation_jobs` result (`automationJobsExport.id`).
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            if not export_id or not isinstance(export_id, str):
+                return build_observability_error_payload(
+                    message="Invalid 'export_id': provide a non-empty string.",
+                )
+            try:
+                raw = await client.get_automation_jobs_export(export_id)
+            except Exception as exc:  # noqa: BLE001
+                return handle_observability_tool_graphql_error(
+                    exc, "Get automation jobs export failed.", debug=debug
+                )
+            return build_observability_read_success_payload(
+                raw, message="Automation jobs export retrieved."
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
+        async def get_automation_jobs_export_csv(
+            export_id: str,
+            max_output_chars: int = _DEFAULT_CSV_CHARS,
+            max_download_bytes: int = _DEFAULT_EXPORT_DOWNLOAD_BYTES,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Download a finished automation jobs export (xlsx) and return the first worksheet as CSV text for LLM consumption. Requires export `status` `finished`. Only https URLs on `*.pipefy.com` from the API are fetched. Large exports are capped by `max_output_chars` and `max_download_bytes`.
+
+            Args:
+                export_id: Export id from `export_automation_jobs` after the export is `finished`.
+                max_output_chars: Max CSV characters returned (256–2_000_000); default 400_000.
+                max_download_bytes: Max xlsx size to download (4 KiB–80 MiB); default 50 MiB.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            if not export_id or not isinstance(export_id, str):
+                return build_observability_error_payload(
+                    message="Invalid 'export_id': provide a non-empty string.",
+                )
+            if not isinstance(max_output_chars, int) or not (
+                _MIN_CSV_CHARS <= max_output_chars <= _MAX_CSV_CHARS
+            ):
+                return build_observability_error_payload(
+                    message=(
+                        f"Invalid 'max_output_chars': must be an integer between "
+                        f"{_MIN_CSV_CHARS} and {_MAX_CSV_CHARS}."
+                    ),
+                )
+            if not isinstance(max_download_bytes, int) or not (
+                _MIN_EXPORT_DOWNLOAD_BYTES
+                <= max_download_bytes
+                <= _MAX_EXPORT_DOWNLOAD_BYTES
+            ):
+                return build_observability_error_payload(
+                    message=(
+                        "Invalid 'max_download_bytes': must be an integer between "
+                        f"{_MIN_EXPORT_DOWNLOAD_BYTES} and {_MAX_EXPORT_DOWNLOAD_BYTES}."
+                    ),
+                )
+            try:
+                raw = await client.get_automation_jobs_export_csv(
+                    export_id,
+                    max_output_chars=max_output_chars,
+                    max_download_bytes=max_download_bytes,
+                )
+            except ValueError as exc:
+                return build_observability_error_payload(message=str(exc))
+            except Exception as exc:  # noqa: BLE001
+                return handle_observability_tool_graphql_error(
+                    exc,
+                    "Get automation jobs export as CSV failed.",
+                    debug=debug,
+                )
+            return build_observability_read_success_payload(
+                raw, message="Automation jobs export converted to CSV (first sheet)."
             )

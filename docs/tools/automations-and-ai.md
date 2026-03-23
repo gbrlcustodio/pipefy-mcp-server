@@ -43,3 +43,9 @@ Use `get_ai_agents` with the pipe's `uuid` (same as `repo_uuid`) before `create_
 | `get_ai_agent` | Yes | Loads one agent by UUID: name, instruction, behaviors. |
 | `get_ai_agents` | Yes | Lists agents for a pipe (`repo_uuid` = pipe UUID). |
 | `delete_ai_agent` | No | Permanently deletes an agent (`destructiveHint=True` — confirm with the user first). |
+
+---
+
+## Execution logs & usage
+
+For **AI agent run history**, **traditional automation logs**, **org-level usage**, and **credit / export** tooling, use the observability tools. See [Observability](observability.md) for how `repo_uuid`, `repo_id`, and `automation_id` differ and for recommended call order (`get_automation_logs_by_repo` vs `get_automation_logs`).

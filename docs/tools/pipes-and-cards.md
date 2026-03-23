@@ -1,6 +1,6 @@
 # Pipes & Cards
 
-Read, create, update, and delete pipes, phases, phase fields, labels, cards, and field conditions. **32 tools.**
+Read, create, update, and delete pipes, phases, phase fields, labels, cards, and field conditions. **33 tools.**
 
 ## Cross-cutting patterns
 

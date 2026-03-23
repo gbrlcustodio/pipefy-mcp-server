@@ -922,8 +922,6 @@ class PipefyClient:
         """
         return await self._introspection_service.execute_graphql(query, variables)
 
-    # --- Observability: AI agent logs ---
-
     async def get_ai_agent_logs(
         self,
         repo_uuid: str,
@@ -953,8 +951,6 @@ class PipefyClient:
             log_uuid: UUID of the AI agent log entry.
         """
         return await self._observability_service.get_ai_agent_log_details(log_uuid)
-
-    # --- Observability: Automation logs ---
 
     async def get_automation_logs(
         self,
@@ -1003,8 +999,6 @@ class PipefyClient:
         return await self._observability_service.get_automation_logs_by_repo(
             repo_id, first=first, after=after, status=status, search_term=search_term
         )
-
-    # --- Observability: Usage & Credits ---
 
     async def get_agents_usage(
         self,
@@ -1058,7 +1052,8 @@ class PipefyClient:
         """Get AI credit usage dashboard for an org.
 
         Args:
-            organization_uuid: Organization UUID.
+            organization_uuid: Organization UUID, or numeric organization id as a string (resolved
+                to UUID before calling the API).
             period: PeriodFilter (current_month, last_month, last_3_months).
         """
         return await self._observability_service.get_ai_credit_usage(
@@ -1074,8 +1069,36 @@ class PipefyClient:
 
         Args:
             organization_id: Organization ID.
-            period: PeriodFilter (current_month, last_month, last_3_months).
+            period: PeriodFilter (current_month, last_month, last_3_months); mapped to GraphQL ``filter``.
         """
         return await self._observability_service.export_automation_jobs(
             organization_id, period
+        )
+
+    async def get_automation_jobs_export(self, export_id: str) -> dict[str, Any]:
+        """Get automation jobs export status and signed file URL when ready.
+
+        Args:
+            export_id: Id from ``export_automation_jobs`` / ``createAutomationJobsExport`` response.
+        """
+        return await self._observability_service.get_automation_jobs_export(export_id)
+
+    async def get_automation_jobs_export_csv(
+        self,
+        export_id: str,
+        *,
+        max_output_chars: int = 400_000,
+        max_download_bytes: int = 50 * 1024 * 1024,
+    ) -> dict[str, Any]:
+        """Download a finished automation jobs export xlsx and return the first sheet as CSV.
+
+        Args:
+            export_id: Id from ``export_automation_jobs`` when status is ``finished``.
+            max_output_chars: Truncate CSV text beyond this length (UTF-8 characters).
+            max_download_bytes: Refuse larger downloads.
+        """
+        return await self._observability_service.get_automation_jobs_export_csv(
+            export_id,
+            max_output_chars=max_output_chars,
+            max_download_bytes=max_download_bytes,
         )

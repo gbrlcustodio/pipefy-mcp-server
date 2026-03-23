@@ -2,30 +2,43 @@
 
 from __future__ import annotations
 
-from typing import Any
+import uuid
+from typing import Any, TypedDict
+from zipfile import BadZipFile
 
-from typing_extensions import TypedDict
+import httpx
+from openpyxl.utils.exceptions import InvalidFileException
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
+from pipefy_mcp.services.pipefy.observability_export_csv import (
+    download_bytes,
+    xlsx_first_sheet_to_csv_limited,
+)
 from pipefy_mcp.services.pipefy.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
     GET_AGENTS_USAGE_QUERY,
     GET_AI_AGENT_LOG_DETAILS_QUERY,
     GET_AI_AGENT_LOGS_QUERY,
     GET_AI_CREDIT_USAGE_QUERY,
+    GET_AUTOMATION_JOBS_EXPORT_QUERY,
     GET_AUTOMATION_LOGS_BY_REPO_QUERY,
     GET_AUTOMATION_LOGS_QUERY,
     GET_AUTOMATIONS_USAGE_QUERY,
+    RESOLVE_ORGANIZATION_UUID_QUERY,
 )
 
 _DEFAULT_PAGE_SIZE = 30
 
 
-class DateRange(TypedDict):
-    """ISO8601 date range for usage queries (``from`` and ``to``)."""
+def _looks_like_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value.strip())
+    except ValueError:
+        return False
+    return True
 
-    from_: str  # serialised as "from" in GraphQL variables
-    to: str
+
+DateRange = TypedDict("DateRange", {"from": str, "to": str})
 
 
 def _build_log_variables(
@@ -89,6 +102,42 @@ def _build_usage_variables(
 
 class ObservabilityService(BasePipefyClient):
     """Reads for AI agent logs, automation logs, usage stats, and credit dashboard."""
+
+    async def _organization_uuid_for_ai_credit_usage(
+        self, organization_identifier: str
+    ) -> str:
+        """Return the organization UUID expected by ``aiCreditUsageStats``.
+
+        Pipefy accepts a numeric organization id in URLs, but ``aiCreditUsageStats`` expects
+        ``organizationUuid``. When the caller passes digits only, resolve via ``organization``.
+
+        Args:
+            organization_identifier: Organization UUID, or numeric organization id as a string.
+
+        Returns:
+            Organization UUID string for GraphQL variables.
+
+        Raises:
+            ValueError: When the identifier is empty, or resolution yields no uuid.
+        """
+        trimmed = organization_identifier.strip()
+        if not trimmed:
+            raise ValueError("organization identifier must be non-empty")
+        if _looks_like_uuid(trimmed):
+            return trimmed
+        if trimmed.isdigit():
+            result = await self.execute_query(
+                RESOLVE_ORGANIZATION_UUID_QUERY,
+                {"id": trimmed},
+            )
+            org = result.get("organization")
+            uuid_value = org.get("uuid") if isinstance(org, dict) else None
+            if not uuid_value:
+                raise ValueError(
+                    f"Organization not found or has no uuid for id: {trimmed}"
+                )
+            return str(uuid_value)
+        return trimmed
 
     async def get_ai_agent_logs(
         self,
@@ -184,8 +233,6 @@ class ObservabilityService(BasePipefyClient):
         )
         return await self.execute_query(GET_AUTOMATION_LOGS_BY_REPO_QUERY, variables)
 
-    # --- Usage & Credits ---
-
     async def get_agents_usage(
         self,
         organization_uuid: str,
@@ -248,15 +295,15 @@ class ObservabilityService(BasePipefyClient):
         """Get AI credit usage dashboard for an org.
 
         Args:
-            organization_uuid: Organization UUID.
+            organization_uuid: Organization UUID, or numeric organization id (string). Numeric ids
+                are resolved to UUID via a short GraphQL query before calling ``aiCreditUsageStats``.
             period: PeriodFilter enum value (current_month, last_month, last_3_months).
         """
+        resolved = await self._organization_uuid_for_ai_credit_usage(organization_uuid)
         return await self.execute_query(
             GET_AI_CREDIT_USAGE_QUERY,
-            {"organizationUuid": organization_uuid, "period": period},
+            {"organizationUuid": resolved, "period": period},
         )
-
-    # --- Export ---
 
     async def export_automation_jobs(
         self,
@@ -267,9 +314,75 @@ class ObservabilityService(BasePipefyClient):
 
         Args:
             organization_id: Organization ID.
-            period: PeriodFilter enum value (current_month, last_month, last_3_months).
+            period: PeriodFilter enum value (current_month, last_month, last_3_months). Sent as
+                GraphQL input field ``filter`` (Pipefy schema no longer exposes ``period`` on this input).
         """
         return await self.execute_query(
             CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
-            {"input": {"organizationId": organization_id, "period": period}},
+            {"input": {"organizationId": organization_id, "filter": period}},
         )
+
+    async def get_automation_jobs_export(self, export_id: str) -> dict[str, Any]:
+        """Load automation jobs export status and download URL by id.
+
+        Args:
+            export_id: Export id returned by ``createAutomationJobsExport`` (same as ``automationJobsExport.id``).
+        """
+        return await self.execute_query(
+            GET_AUTOMATION_JOBS_EXPORT_QUERY,
+            {"id": export_id},
+        )
+
+    async def get_automation_jobs_export_csv(
+        self,
+        export_id: str,
+        *,
+        max_output_chars: int = 400_000,
+        max_download_bytes: int = 50 * 1024 * 1024,
+    ) -> dict[str, Any]:
+        """Resolve a finished export, download the xlsx, and return the first sheet as CSV text.
+
+        Args:
+            export_id: Export id from ``export_automation_jobs`` / ``get_automation_jobs_export``.
+            max_output_chars: Cap on returned CSV size (UTF-8 characters); adds a truncation line if exceeded.
+            max_download_bytes: Refuse downloads larger than this many bytes.
+        """
+        raw = await self.get_automation_jobs_export(export_id)
+        node = raw.get("automationJobsExport")
+        if not isinstance(node, dict):
+            raise ValueError(
+                "Export not found or not visible for this token (automationJobsExport is null)."
+            )
+        status = node.get("status")
+        if status != "finished":
+            raise ValueError(
+                f"Export status is {status!r}; wait until it is 'finished' "
+                "(poll get_automation_jobs_export)."
+            )
+        file_url = node.get("fileUrl")
+        if not file_url or not isinstance(file_url, str):
+            raise ValueError("Export has no fileUrl.")
+
+        try:
+            body = await download_bytes(file_url, max_bytes=max_download_bytes)
+        except httpx.HTTPError as exc:
+            raise ValueError(f"Failed to download export file: {exc}") from exc
+
+        try:
+            csv_text, rows, sheet_name, truncated = xlsx_first_sheet_to_csv_limited(
+                body, max_output_chars=max_output_chars
+            )
+        except (BadZipFile, InvalidFileException, OSError, ValueError) as exc:
+            raise ValueError(
+                "Could not parse export as XLSX (first sheet to CSV)."
+            ) from exc
+
+        return {
+            "export_id": export_id,
+            "status": status,
+            "sheet_name": sheet_name,
+            "row_count": rows,
+            "csv_truncated": truncated,
+            "max_output_chars": max_output_chars,
+            "csv": csv_text,
+        }

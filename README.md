@@ -32,7 +32,7 @@
 
 ## MCP tools
 
-**105 tools** across 8 categories. Each tool has a docstring consumed by LLM clients for routing — treat those as the source of truth for arguments.
+**108 tools** across 8 categories. Each tool has a docstring consumed by LLM clients for routing — treat those as the source of truth for arguments.
 
 **Common patterns across all tools:**
 - **Pagination** — list tools support `first` / `after`. Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response.
@@ -43,12 +43,12 @@
 
 | Category | Tools | Description | Docs |
 |----------|:-----:|-------------|------|
-| **Pipes & cards** | 32 | Read, create, update, and delete pipes, phases, fields, labels, cards, and field conditions. | [Details](docs/tools/pipes-and-cards.md) |
+| **Pipes & cards** | 33 | Read, create, update, and delete pipes, phases, fields, labels, cards, and field conditions. | [Details](docs/tools/pipes-and-cards.md) |
 | **Database tables** | 15 | Tables, records (rows), and schema columns (table fields). | [Details](docs/tools/database-tables.md) |
 | **Relations** | 6 | Link pipes, tables, and cards across workflows. | [Details](docs/tools/relations.md) |
 | **Reports** | 16 | Pipe and organization reports: discovery, CRUD, and async exports. | [Details](docs/tools/reports.md) |
 | **Automations & AI** | 15 | Traditional automations (rules engine) and AI-powered automations and agents. | [Details](docs/tools/automations-and-ai.md) |
-| **Observability** | 8 | AI agent and automation logs, usage stats, credits, and job exports. | [Details](docs/tools/observability.md) |
+| **Observability** | 10 | AI agent and automation logs, usage stats, credits, job exports, status polling, and CSV fetch for finished exports. | [Details](docs/tools/observability.md) |
 | **Members, email & webhooks** | 9 | Pipe membership, card inbox emails, and webhook management. | [Details](docs/tools/members-email-webhooks.md) |
 | **Introspection** | 4 | Schema discovery and raw GraphQL execution. | [Details](docs/tools/introspection.md) |
 

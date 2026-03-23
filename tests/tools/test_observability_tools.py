@@ -30,6 +30,8 @@ def mock_observability_client():
     client.get_automations_usage = AsyncMock()
     client.get_ai_credit_usage = AsyncMock()
     client.export_automation_jobs = AsyncMock()
+    client.get_automation_jobs_export = AsyncMock()
+    client.get_automation_jobs_export_csv = AsyncMock()
     return client
 
 
@@ -51,7 +53,6 @@ def observability_session(observability_mcp_server, request):
     )
 
 
-# --- get_ai_agent_logs ---
 
 
 @pytest.mark.anyio
@@ -114,7 +115,6 @@ async def test_get_ai_agent_logs_graphql_error(
     assert "not authorized" in payload["error"]
 
 
-# --- get_ai_agent_log_details ---
 
 
 @pytest.mark.anyio
@@ -152,7 +152,6 @@ async def test_get_ai_agent_log_details_success(
     assert payload["data"]["aiAgentLogDetails"]["executionTime"] == 5.2
 
 
-# --- get_automation_logs ---
 
 
 @pytest.mark.anyio
@@ -192,7 +191,6 @@ async def test_get_automation_logs_success(
     assert payload["data"]["automationLogs"]["totalCount"] == 1
 
 
-# --- get_automation_logs_by_repo ---
 
 
 @pytest.mark.anyio
@@ -232,7 +230,6 @@ async def test_get_automation_logs_by_repo_success(
     assert payload["data"]["automationLogsByRepo"]["totalCount"] == 15
 
 
-# --- readOnlyHint on all 4 log tools ---
 
 
 @pytest.mark.anyio
@@ -253,7 +250,6 @@ async def test_log_tools_have_read_only_hint(observability_session):
             assert tool.annotations.readOnlyHint is True, f"{tool.name} not read-only"
 
 
-# --- get_agents_usage ---
 
 
 @pytest.mark.anyio
@@ -295,7 +291,6 @@ async def test_get_agents_usage_success(
     assert payload["data"]["agentsUsageDetails"]["usage"] == 42.5
 
 
-# --- get_automations_usage ---
 
 
 @pytest.mark.anyio
@@ -330,7 +325,6 @@ async def test_get_automations_usage_success(
     assert payload["data"]["automationsUsageDetails"]["usage"] == 500
 
 
-# --- get_ai_credit_usage ---
 
 
 @pytest.mark.anyio
@@ -391,7 +385,27 @@ async def test_get_ai_credit_usage_graphql_error(
     assert "forbidden" in payload["error"]
 
 
-# --- export_automation_jobs ---
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_credit_usage_value_error_from_client(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_ai_credit_usage.side_effect = ValueError(
+        "Organization not found or has no uuid for id: 999"
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_credit_usage",
+            {"organization_uuid": "999", "period": "current_month"},
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "Organization not found" in payload["error"]
+
+
 
 
 @pytest.mark.anyio
@@ -424,7 +438,77 @@ async def test_export_automation_jobs_success(
     assert payload["result"]["createAutomationJobsExport"]["automationJobsExport"]["id"] == "exp-1"
 
 
-# --- readOnlyHint on usage tools, not on export ---
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_success(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_automation_jobs_export.return_value = {
+        "automationJobsExport": {
+            "id": "25820",
+            "status": "finished",
+            "fileUrl": "https://app.pipefy.com/storage/signed/example.xlsx",
+        }
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export",
+            {"export_id": "25820"},
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_automation_jobs_export.assert_awaited_once_with(
+        "25820"
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert (
+        payload["data"]["automationJobsExport"]["status"] == "finished"
+    )
+    assert payload["data"]["automationJobsExport"]["fileUrl"].endswith(".xlsx")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_graphql_error(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_automation_jobs_export.side_effect = (
+        TransportQueryError("failed", errors=[{"message": "not found"}])
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export",
+            {"export_id": "999"},
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "not found" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_rejects_empty_export_id(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export",
+            {"export_id": ""},
+        )
+
+    mock_observability_client.get_automation_jobs_export.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "export_id" in p["error"]
+
+
 
 
 @pytest.mark.anyio
@@ -455,7 +539,98 @@ async def test_export_tool_not_read_only(observability_session):
     assert export_tool.annotations.readOnlyHint is False
 
 
-# --- Input-validation edge cases ---
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_read_only_hint(observability_session):
+    async with observability_session as session:
+        listed = await session.list_tools()
+
+    tool = next(t for t in listed.tools if t.name == "get_automation_jobs_export")
+    assert tool.annotations is not None
+    assert tool.annotations.readOnlyHint is True
+
+
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_csv_success(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_automation_jobs_export_csv.return_value = {
+        "export_id": "1",
+        "status": "finished",
+        "sheet_name": "Sheet",
+        "row_count": 2,
+        "csv_truncated": False,
+        "max_output_chars": 400_000,
+        "csv": "a,b\n1,2\n",
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export_csv",
+            {"export_id": "1"},
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_automation_jobs_export_csv.assert_awaited_once_with(
+        "1", max_output_chars=400_000, max_download_bytes=50 * 1024 * 1024
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "1,2" in payload["data"]["csv"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_csv_value_error(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_automation_jobs_export_csv.side_effect = ValueError(
+        "Export status is 'processing'"
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export_csv",
+            {"export_id": "1"},
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "processing" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_csv_rejects_bad_max_chars(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export_csv",
+            {"export_id": "1", "max_output_chars": 10},
+        )
+
+    mock_observability_client.get_automation_jobs_export_csv.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "max_output_chars" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_csv_read_only_hint(observability_session):
+    async with observability_session as session:
+        listed = await session.list_tools()
+
+    tool = next(t for t in listed.tools if t.name == "get_automation_jobs_export_csv")
+    assert tool.annotations is not None
+    assert tool.annotations.readOnlyHint is True
+
+
 
 
 @pytest.mark.anyio
@@ -549,7 +724,6 @@ async def test_get_agents_usage_rejects_missing_dates(
     assert "filter_date" in p["error"].lower()
 
 
-# --- first parameter bounds ---
 
 
 @pytest.mark.anyio
@@ -569,7 +743,6 @@ async def test_get_ai_agent_logs_rejects_out_of_bounds_first(
     assert "first" in p["error"].lower()
 
 
-# --- debug=True error path ---
 
 
 @pytest.mark.anyio

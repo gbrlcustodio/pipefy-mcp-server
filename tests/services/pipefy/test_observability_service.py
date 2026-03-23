@@ -1,13 +1,17 @@
 """Unit tests for ObservabilityService (logs, usage, and export)."""
 
-from unittest.mock import AsyncMock
+import io
+from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
+from openpyxl import Workbook
 from gql.transport.exceptions import TransportQueryError
 
 from pipefy_mcp.services.pipefy.observability_service import ObservabilityService
 from pipefy_mcp.services.pipefy.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
+    GET_AUTOMATION_JOBS_EXPORT_QUERY,
     GET_AGENTS_USAGE_QUERY,
     GET_AI_AGENT_LOG_DETAILS_QUERY,
     GET_AI_AGENT_LOGS_QUERY,
@@ -15,6 +19,7 @@ from pipefy_mcp.services.pipefy.queries.observability_queries import (
     GET_AUTOMATION_LOGS_BY_REPO_QUERY,
     GET_AUTOMATION_LOGS_QUERY,
     GET_AUTOMATIONS_USAGE_QUERY,
+    RESOLVE_ORGANIZATION_UUID_QUERY,
 )
 from pipefy_mcp.settings import PipefySettings
 
@@ -35,7 +40,6 @@ def _make_service(mock_settings, return_value):
     return service
 
 
-# --- AI Agent Logs ---
 
 
 @pytest.mark.unit
@@ -134,7 +138,6 @@ async def test_get_ai_agent_log_details_success(mock_settings):
     assert len(result["aiAgentLogDetails"]["tracingNodes"]) == 2
 
 
-# --- Automation Logs ---
 
 
 @pytest.mark.unit
@@ -195,7 +198,6 @@ async def test_get_automation_logs_by_repo_success(mock_settings):
     assert result["automationLogsByRepo"]["totalCount"] == 15
 
 
-# --- Sad path ---
 
 
 @pytest.mark.unit
@@ -209,7 +211,6 @@ async def test_get_ai_agent_logs_transport_error(mock_settings):
         await service.get_ai_agent_logs("repo-uuid-1")
 
 
-# --- Usage Queries ---
 
 
 @pytest.mark.unit
@@ -297,6 +298,53 @@ async def test_get_ai_credit_usage_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_ai_credit_usage_resolves_numeric_organization_id(mock_settings):
+    resolve_payload = {
+        "organization": {"uuid": "341c1327-261c-4766-bb96-7953e4c3970d"}
+    }
+    credit_payload = {
+        "aiCreditUsageStats": {
+            "active": True,
+            "usage": 10.0,
+            "limit": 0,
+            "hasAddon": False,
+            "updatedAt": "2026-03-20T00:00:00Z",
+            "aiAutomation": {"enabled": True, "usage": 10.0},
+            "assistants": {"enabled": True, "usage": 0.0},
+            "freeAiCredit": None,
+            "filterDate": {
+                "from": "2026-03-01T00:00:00Z",
+                "to": "2026-03-20T00:00:00Z",
+            },
+        }
+    }
+    service = ObservabilityService(settings=mock_settings)
+    service.execute_query = AsyncMock(side_effect=[resolve_payload, credit_payload])
+    result = await service.get_ai_credit_usage("300514213", "current_month")
+
+    assert service.execute_query.call_count == 2
+    calls = service.execute_query.call_args_list
+    assert calls[0][0][0] is RESOLVE_ORGANIZATION_UUID_QUERY
+    assert calls[0][0][1] == {"id": "300514213"}
+    assert calls[1][0][0] is GET_AI_CREDIT_USAGE_QUERY
+    assert calls[1][0][1] == {
+        "organizationUuid": "341c1327-261c-4766-bb96-7953e4c3970d",
+        "period": "current_month",
+    }
+    assert result["aiCreditUsageStats"]["usage"] == 10.0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_ai_credit_usage_resolve_fails_when_organization_missing(mock_settings):
+    service = ObservabilityService(settings=mock_settings)
+    service.execute_query = AsyncMock(return_value={"organization": None})
+    with pytest.raises(ValueError, match="Organization not found"):
+        await service.get_ai_credit_usage("999999999", "current_month")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_export_automation_jobs_success(mock_settings):
     payload = {
         "createAutomationJobsExport": {
@@ -313,9 +361,106 @@ async def test_export_automation_jobs_success(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_AUTOMATION_JOBS_EXPORT_MUTATION
     assert variables == {
-        "input": {"organizationId": "org-123", "period": "last_month"}
+        "input": {"organizationId": "org-123", "filter": "last_month"}
     }
     assert result["createAutomationJobsExport"]["automationJobsExport"]["id"] == "exp-1"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_jobs_export_success(mock_settings):
+    payload = {
+        "automationJobsExport": {
+            "id": "25820",
+            "status": "processing",
+            "fileUrl": None,
+        }
+    }
+    service = _make_service(mock_settings, payload)
+    result = await service.get_automation_jobs_export("25820")
+
+    query, variables = service.execute_query.call_args[0]
+    assert query is GET_AUTOMATION_JOBS_EXPORT_QUERY
+    assert variables == {"id": "25820"}
+    assert result["automationJobsExport"]["status"] == "processing"
+
+
+def _tiny_xlsx_bytes() -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["h"])
+    ws.append(["v"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_jobs_export_csv_success(mock_settings):
+    xlsx = _tiny_xlsx_bytes()
+    service = ObservabilityService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        return_value={
+            "automationJobsExport": {
+                "id": "9",
+                "status": "finished",
+                "fileUrl": "https://app.pipefy.com/storage/x.xlsx",
+            }
+        }
+    )
+    with patch(
+        "pipefy_mcp.services.pipefy.observability_service.download_bytes",
+        new_callable=AsyncMock,
+        return_value=xlsx,
+    ):
+        out = await service.get_automation_jobs_export_csv("9")
+
+    assert out["export_id"] == "9"
+    assert out["status"] == "finished"
+    assert out["row_count"] == 2
+    assert "h" in out["csv"]
+    assert out["csv_truncated"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_jobs_export_csv_not_finished(mock_settings):
+    service = ObservabilityService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        return_value={
+            "automationJobsExport": {
+                "id": "9",
+                "status": "processing",
+                "fileUrl": None,
+            }
+        }
+    )
+    with pytest.raises(ValueError, match="finished"):
+        await service.get_automation_jobs_export_csv("9")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_jobs_export_csv_download_error(mock_settings):
+    service = ObservabilityService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        return_value={
+            "automationJobsExport": {
+                "id": "9",
+                "status": "finished",
+                "fileUrl": "https://app.pipefy.com/storage/x.xlsx",
+            }
+        }
+    )
+    req = httpx.Request("GET", "https://app.pipefy.com/storage/x.xlsx")
+    with patch(
+        "pipefy_mcp.services.pipefy.observability_service.download_bytes",
+        new_callable=AsyncMock,
+        side_effect=httpx.RequestError("boom", request=req),
+    ):
+        with pytest.raises(ValueError, match="Failed to download"):
+            await service.get_automation_jobs_export_csv("9")
 
 
 @pytest.mark.unit

@@ -92,6 +92,8 @@ async def test_register_tools(client_session):
         "get_automation",
         "get_automation_actions",
         "get_automation_events",
+        "get_automation_jobs_export",
+        "get_automation_jobs_export_csv",
         "get_automation_logs",
         "get_automation_logs_by_repo",
         "get_automations",

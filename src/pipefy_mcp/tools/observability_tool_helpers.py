@@ -55,6 +55,7 @@ def build_observability_mutation_success_payload(
 
 
 def build_observability_error_payload(*, message: str) -> dict[str, Any]:
+    """Build a structured error payload for observability tools."""
     return {"success": False, "error": message}
 
 

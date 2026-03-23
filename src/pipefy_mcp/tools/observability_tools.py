@@ -16,6 +16,8 @@ from pipefy_mcp.tools.observability_tool_helpers import (
 )
 
 _VALID_PERIODS = {"current_month", "last_month", "last_3_months"}
+_MIN_PAGE_SIZE = 1
+_MAX_PAGE_SIZE = 100
 
 
 class ObservabilityTools:
@@ -49,6 +51,10 @@ class ObservabilityTools:
             if not repo_uuid or not isinstance(repo_uuid, str):
                 return build_observability_error_payload(
                     message="Invalid 'repo_uuid': provide a non-empty string.",
+                )
+            if not _MIN_PAGE_SIZE <= first <= _MAX_PAGE_SIZE:
+                return build_observability_error_payload(
+                    message=f"Invalid 'first': must be between {_MIN_PAGE_SIZE} and {_MAX_PAGE_SIZE}.",
                 )
             try:
                 raw = await client.get_ai_agent_logs(
@@ -118,6 +124,10 @@ class ObservabilityTools:
                 return build_observability_error_payload(
                     message="Invalid 'automation_id': provide a non-empty string.",
                 )
+            if not _MIN_PAGE_SIZE <= first <= _MAX_PAGE_SIZE:
+                return build_observability_error_payload(
+                    message=f"Invalid 'first': must be between {_MIN_PAGE_SIZE} and {_MAX_PAGE_SIZE}.",
+                )
             try:
                 raw = await client.get_automation_logs(
                     automation_id,
@@ -158,6 +168,10 @@ class ObservabilityTools:
             if not repo_id or not isinstance(repo_id, str):
                 return build_observability_error_payload(
                     message="Invalid 'repo_id': provide a non-empty string.",
+                )
+            if not _MIN_PAGE_SIZE <= first <= _MAX_PAGE_SIZE:
+                return build_observability_error_payload(
+                    message=f"Invalid 'first': must be between {_MIN_PAGE_SIZE} and {_MAX_PAGE_SIZE}.",
                 )
             try:
                 raw = await client.get_automation_logs_by_repo(

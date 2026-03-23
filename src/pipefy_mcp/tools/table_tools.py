@@ -758,14 +758,9 @@ class TableTools:
                 )
             fid = field_id.strip() if isinstance(field_id, str) else field_id
             try:
-                # Always pass table_id if we have it, otherwise let service handle the error
-                if table_id_to_use is not None:
-                    raw = await client.update_table_field(
-                        fid, table_id=table_id_to_use, **update_attrs
-                    )
-                else:
-                    # No table_id provided - API will return error, but we try anyway
-                    raw = await client.update_table_field(fid, **update_attrs)
+                raw = await client.update_table_field(
+                    fid, table_id=table_id_to_use, **update_attrs
+                )
             except Exception as exc:
                 return handle_table_tool_graphql_error(
                     exc, "Update table field failed.", debug=debug

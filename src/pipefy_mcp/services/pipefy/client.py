@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 from httpx_auth import OAuth2ClientCredentials
@@ -30,8 +29,6 @@ from pipefy_mcp.services.pipefy.table_service import TableService
 from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload, CardSearch
 from pipefy_mcp.services.pipefy.webhook_service import WebhookService
 from pipefy_mcp.settings import PipefySettings
-
-logger = logging.getLogger(__name__)
 
 
 class PipefyClient:
@@ -387,27 +384,7 @@ class PipefyClient:
             body: Email body (plain text).
             from_: Sender email address (required by API).
             **attrs: Extra CreateAndSendInboxEmailInput fields (html, cc, bcc, repoId, etc.).
-
-        When ``repoId`` is omitted and ``card_id`` is numeric, the client best-effort
-        fills ``repoId`` from the card's pipe. Non-numeric ``card_id`` skips this
-        (pass ``repoId`` in ``attrs`` if the API requires it).
         """
-        if "repoId" not in attrs and card_id.isdigit():
-            try:
-                card_data = await self._card_service.get_card(int(card_id))
-                pipe_id = (
-                    card_data.get("card", {}).get("pipe", {}).get("id")
-                    if isinstance(card_data.get("card", {}).get("pipe"), dict)
-                    else None
-                )
-                if pipe_id is not None:
-                    attrs = dict(attrs, repoId=str(pipe_id))
-            except Exception:  # noqa: BLE001
-                logger.debug(
-                    "Could not auto-resolve repoId for card %s",
-                    card_id,
-                    exc_info=True,
-                )
         return await self._webhook_service.send_inbox_email(
             card_id, to, subject, body, from_=from_, **attrs
         )

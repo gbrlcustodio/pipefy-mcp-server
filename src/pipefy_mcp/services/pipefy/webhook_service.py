@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from gql.transport.exceptions import TransportQueryError
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
@@ -17,6 +19,8 @@ from pipefy_mcp.services.pipefy.queries.webhook_queries import (
     GET_PARSED_EMAIL_TEMPLATE_QUERY,
 )
 from pipefy_mcp.settings import PipefySettings
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_WEBHOOK_NAME = "Pipefy Webhook"
 
@@ -79,6 +83,34 @@ class WebhookService(BasePipefyClient):
             variables["cardUuid"] = card_uuid.strip()
         return await self.execute_query(GET_PARSED_EMAIL_TEMPLATE_QUERY, variables)
 
+    async def _resolve_repo_id(
+        self, card_id: str, attrs: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Best-effort resolve ``repoId`` from the card's pipe when omitted.
+
+        Args:
+            card_id: Numeric card ID.
+            attrs: Mutable copy of extra input fields.
+
+        Returns:
+            Updated attrs with ``repoId`` if resolution succeeded, unchanged otherwise.
+        """
+        if "repoId" in attrs or not card_id.isdigit():
+            return attrs
+        try:
+            card_data = await self._card_service.get_card(int(card_id))
+            pipe_obj = card_data.get("card", {}).get("pipe")
+            pipe_id = pipe_obj.get("id") if isinstance(pipe_obj, dict) else None
+            if pipe_id is not None:
+                return {**attrs, "repoId": str(pipe_id)}
+        except (TransportQueryError, KeyError, TypeError):
+            logger.debug(
+                "Could not auto-resolve repoId for card %s",
+                card_id,
+                exc_info=True,
+            )
+        return attrs
+
     async def send_inbox_email(
         self,
         card_id: str,
@@ -91,6 +123,9 @@ class WebhookService(BasePipefyClient):
     ) -> dict[str, Any]:
         """Send an email from a card's inbox (createAndSendInboxEmail).
 
+        When ``repoId`` is omitted and ``card_id`` is numeric, the service best-effort
+        fills ``repoId`` from the card's pipe.
+
         Args:
             card_id: ID of the card with inbox.
             to: List of recipient email addresses.
@@ -99,6 +134,7 @@ class WebhookService(BasePipefyClient):
             from_: Sender email address (required by API).
             **attrs: Extra CreateAndSendInboxEmailInput fields (html, cc, bcc, etc.).
         """
+        attrs = await self._resolve_repo_id(card_id, attrs)
         input_obj: dict[str, Any] = {
             "cardId": card_id,
             "from": from_,

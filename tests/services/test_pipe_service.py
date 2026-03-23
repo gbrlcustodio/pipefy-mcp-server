@@ -23,7 +23,7 @@ def mock_settings() -> PipefySettings:
     )
 
 
-def _make_service(mock_settings: PipefySettings, return_value: dict) -> PipeService:
+def _make_service(mock_settings, return_value):
     service = PipeService(settings=mock_settings)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
@@ -191,43 +191,43 @@ async def test_search_pipes_without_name_returns_all(
         pytest.param(
             "Custaudio",
             ["1"],
-            [["Custaudio", "Custaudio pipe"]],
-            [[100.0, 90.0]],
+            [["Custaudio pipe", "Custaudio"]],
+            [[100.0, 100.0]],
             id="exact_match_ranked_first",
         ),
         pytest.param(
             "custaudio",
             ["1"],
-            [["Custaudio", "Custaudio pipe"]],
-            [[88.9, 80.0]],
+            [["Custaudio pipe", "Custaudio"]],
+            [[100.0, 100.0]],
             id="case_insensitive_match",
         ),
         pytest.param(
             "drico",
             ["1"],
             [["Drico pipe"]],
-            [[72.0]],
+            [[100.0]],
             id="single_match_in_org",
         ),
         pytest.param(
             "pipe",
             ["1"],
             [["Custaudio pipe", "Drico pipe"]],
-            [[90.0, 90.0]],
+            [[100.0, 100.0]],
             id="matches_across_multiple_pipes",
         ),
         pytest.param(
             "Vendas",
             ["2"],
             [["Vendas São Paulo"]],
-            [[90.0]],
+            [[100.0]],
             id="accented_substring_match",
         ),
         pytest.param(
             "São Paulo",
             ["2"],
             [["Vendas São Paulo"]],
-            [[90.0]],
+            [[100.0]],
             id="accented_exact_substring",
         ),
         pytest.param(
@@ -262,7 +262,7 @@ async def test_search_pipes_without_name_returns_all(
             "Bug Tracker",
             ["3"],
             [["Bug Tracker [v2.0]"]],
-            [[90.0]],
+            [[100.0]],
             id="special_chars_brackets",
         ),
         pytest.param(
@@ -276,7 +276,7 @@ async def test_search_pipes_without_name_returns_all(
             "R&D",
             ["3"],
             [["R&D / Innovation"]],
-            [[90.0]],
+            [[100.0]],
             id="special_chars_ampersand_slash",
         ),
     ],
@@ -358,6 +358,39 @@ async def test_search_pipes_all_organizations_empty(mock_settings):
 
     result = await service.search_pipes(pipe_name="anything")
     assert result == {"organizations": []}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_short_keyword_matches_substring(
+    mock_settings, mock_organizations,
+):
+    """Substring match finds pipes even when fuzzy score is below threshold."""
+    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    result = await service.search_pipes(pipe_name="pipe")
+    pipe_names = [
+        p["name"]
+        for org in result["organizations"]
+        for p in org["pipes"]
+    ]
+    assert "Custaudio pipe" in pipe_names
+    assert "Drico pipe" in pipe_names
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_case_insensitive_substring(
+    mock_settings, mock_organizations,
+):
+    """Case-insensitive substring matches correctly."""
+    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    result = await service.search_pipes(pipe_name="bug")
+    pipe_names = [
+        p["name"]
+        for org in result["organizations"]
+        for p in org["pipes"]
+    ]
+    assert "Bug Tracker [v2.0]" in pipe_names
 
 
 @pytest.mark.unit

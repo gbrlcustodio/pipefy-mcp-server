@@ -101,11 +101,14 @@ class PipeService(BasePipefyClient):
             matching_pipes = []
             for pipe in org.get("pipes", []):
                 pipe_display_name = pipe.get("name", "")
-                score = fuzz.WRatio(
-                    pipe_name, pipe_display_name, score_cutoff=match_threshold
-                )
-                if score:
-                    matching_pipes.append((score, pipe))
+                if pipe_name.lower() in pipe_display_name.lower():
+                    matching_pipes.append((100.0, pipe))
+                else:
+                    score = fuzz.WRatio(
+                        pipe_name, pipe_display_name, score_cutoff=match_threshold
+                    )
+                    if score:
+                        matching_pipes.append((score, pipe))
 
             if matching_pipes:
                 matching_pipes.sort(key=lambda x: x[0], reverse=True)

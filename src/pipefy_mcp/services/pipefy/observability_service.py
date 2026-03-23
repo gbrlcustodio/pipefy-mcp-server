@@ -103,12 +103,10 @@ def _build_usage_variables(
 class ObservabilityService(BasePipefyClient):
     """Reads for AI agent logs, automation logs, usage stats, and credit dashboard."""
 
-    async def _organization_uuid_for_ai_credit_usage(
-        self, organization_identifier: str
-    ) -> str:
-        """Return the organization UUID expected by ``aiCreditUsageStats``.
+    async def _resolve_organization_uuid(self, organization_identifier: str) -> str:
+        """Return the organization UUID, resolving numeric IDs via GraphQL.
 
-        Pipefy accepts a numeric organization id in URLs, but ``aiCreditUsageStats`` expects
+        Pipefy accepts a numeric organization id in URLs, but several GraphQL queries expect
         ``organizationUuid``. When the caller passes digits only, resolve via ``organization``.
 
         Args:
@@ -245,14 +243,16 @@ class ObservabilityService(BasePipefyClient):
         """Get AI agent usage stats for an org within a date range.
 
         Args:
-            organization_uuid: Organization UUID.
+            organization_uuid: Organization UUID, or numeric organization id (string).
+                Numeric ids are resolved to UUID via a short GraphQL query.
             filter_date: DateRange dict with ``from`` and ``to`` ISO8601 strings.
             filters: Optional FilterParams (action, event, pipe, status).
             search: Free-text search.
             sort: SortCriteria (field + direction).
         """
+        resolved = await self._resolve_organization_uuid(organization_uuid)
         variables = _build_usage_variables(
-            organization_uuid,
+            resolved,
             filter_date,
             filters=filters,
             search=search,
@@ -272,14 +272,16 @@ class ObservabilityService(BasePipefyClient):
         """Get automation usage stats for an org within a date range.
 
         Args:
-            organization_uuid: Organization UUID.
+            organization_uuid: Organization UUID, or numeric organization id (string).
+                Numeric ids are resolved to UUID via a short GraphQL query.
             filter_date: DateRange dict with ``from`` and ``to`` ISO8601 strings.
             filters: Optional FilterParams (action, event, pipe, status).
             search: Free-text search.
             sort: SortCriteria (field + direction).
         """
+        resolved = await self._resolve_organization_uuid(organization_uuid)
         variables = _build_usage_variables(
-            organization_uuid,
+            resolved,
             filter_date,
             filters=filters,
             search=search,
@@ -299,7 +301,7 @@ class ObservabilityService(BasePipefyClient):
                 are resolved to UUID via a short GraphQL query before calling ``aiCreditUsageStats``.
             period: PeriodFilter enum value (current_month, last_month, last_3_months).
         """
-        resolved = await self._organization_uuid_for_ai_credit_usage(organization_uuid)
+        resolved = await self._resolve_organization_uuid(organization_uuid)
         return await self.execute_query(
             GET_AI_CREDIT_USAGE_QUERY,
             {"organizationUuid": resolved, "period": period},

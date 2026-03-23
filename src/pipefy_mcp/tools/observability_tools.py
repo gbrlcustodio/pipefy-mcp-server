@@ -15,10 +15,15 @@ from pipefy_mcp.tools.observability_tool_helpers import (
     handle_observability_tool_graphql_error,
 )
 
+# --- Validation constants ---
+
 _VALID_PERIODS = {"current_month", "last_month", "last_3_months"}
+
+# Pagination
 _MIN_PAGE_SIZE = 1
 _MAX_PAGE_SIZE = 100
 
+# CSV / export download limits
 _MIN_CSV_CHARS = 256
 _MAX_CSV_CHARS = 2_000_000
 _DEFAULT_CSV_CHARS = 400_000
@@ -209,7 +214,7 @@ class ObservabilityTools:
             """Get AI agent usage stats for an org within a date range. Returns total AI credits consumed and per-agent breakdown. `filter_date_from` and `filter_date_to` are ISO8601 datetime strings. Optional `filters` for action/event/pipe/status filtering.
 
             Args:
-                organization_uuid: Organization UUID.
+                organization_uuid: Organization UUID, or numeric organization id (string).
                 filter_date_from: Start of date range (ISO8601).
                 filter_date_to: End of date range (ISO8601).
                 filters: Optional FilterParams dict (action, event, pipe, status keys).
@@ -256,7 +261,7 @@ class ObservabilityTools:
             """Get automation usage stats for an org within a date range. Returns total execution count and per-automation breakdown. Same input shape as `get_agents_usage`.
 
             Args:
-                organization_uuid: Organization UUID.
+                organization_uuid: Organization UUID, or numeric organization id (string).
                 filter_date_from: Start of date range (ISO8601).
                 filter_date_to: End of date range (ISO8601).
                 filters: Optional FilterParams dict (action, event, pipe, status keys).
@@ -394,7 +399,7 @@ class ObservabilityTools:
             max_download_bytes: int = _DEFAULT_EXPORT_DOWNLOAD_BYTES,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Download a finished automation jobs export (xlsx) and return the first worksheet as CSV text for LLM consumption. Requires export `status` `finished`. Only https URLs on `*.pipefy.com` from the API are fetched. Large exports are capped by `max_output_chars` and `max_download_bytes`.
+            """Download a finished automation-jobs export and return the first worksheet as CSV text for LLM consumption. The API provides an xlsx file which is converted to CSV automatically. Requires export ``status`` ``finished``. Only https URLs on ``*.pipefy.com`` from the API are fetched. Large exports are capped by ``max_output_chars`` and ``max_download_bytes``.
 
             Args:
                 export_id: Export id from `export_automation_jobs` after the export is `finished`.

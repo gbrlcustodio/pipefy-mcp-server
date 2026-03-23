@@ -3,6 +3,8 @@
 Plain strings (not gql()) since internal_api does not support schema validation.
 """
 
+from __future__ import annotations
+
 CREATE_AUTOMATION_MUTATION = """
 mutation createAutomation(
   $name: String!,

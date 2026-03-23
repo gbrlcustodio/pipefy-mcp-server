@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .ai_agent_service import AiAgentService
 from .ai_automation_service import AiAutomationService
 from .automation_service import AutomationService

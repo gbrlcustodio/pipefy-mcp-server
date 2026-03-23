@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
+
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
 
 def valid_repo_id(value: object) -> bool:

@@ -648,7 +648,9 @@ async def test_get_cards_with_include_fields_true_passes_include_fields_to_servi
 
     result = await client.get_cards(pipe_id, search=None, include_fields=True)
 
-    card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=True)
+    card_service.get_cards.assert_awaited_once_with(
+        pipe_id, None, include_fields=True, first=None, after=None
+    )
     assert result == expected
 
 
@@ -668,7 +670,9 @@ async def test_get_cards_with_include_fields_false_passes_include_fields_to_serv
 
     result = await client.get_cards(pipe_id, search=None, include_fields=False)
 
-    card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=False)
+    card_service.get_cards.assert_awaited_once_with(
+        pipe_id, None, include_fields=False, first=None, after=None
+    )
     assert result == expected
 
 

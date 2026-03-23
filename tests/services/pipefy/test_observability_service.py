@@ -473,3 +473,55 @@ async def test_get_agents_usage_transport_error(mock_settings):
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
     with pytest.raises(TransportQueryError):
         await service.get_agents_usage("org-uuid-1", filter_date)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_agents_usage_resolves_numeric_organization_id(mock_settings):
+    resolve_payload = {
+        "organization": {"uuid": "341c1327-261c-4766-bb96-7953e4c3970d"}
+    }
+    usage_payload = {
+        "agentsUsage": {
+            "data": [{"agentName": "Bot", "totalCredits": 5.0}],
+            "totalCredits": 5.0,
+        }
+    }
+    service = ObservabilityService(settings=mock_settings)
+    service.execute_query = AsyncMock(side_effect=[resolve_payload, usage_payload])
+    filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
+    result = await service.get_agents_usage("300514213", filter_date)
+
+    assert service.execute_query.call_count == 2
+    calls = service.execute_query.call_args_list
+    assert calls[0][0][0] is RESOLVE_ORGANIZATION_UUID_QUERY
+    assert calls[0][0][1] == {"id": "300514213"}
+    assert calls[1][0][0] is GET_AGENTS_USAGE_QUERY
+    assert calls[1][0][1]["organizationUuid"] == "341c1327-261c-4766-bb96-7953e4c3970d"
+    assert result["agentsUsage"]["totalCredits"] == 5.0
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automations_usage_resolves_numeric_organization_id(mock_settings):
+    resolve_payload = {
+        "organization": {"uuid": "341c1327-261c-4766-bb96-7953e4c3970d"}
+    }
+    usage_payload = {
+        "automationsUsage": {
+            "data": [{"automationName": "Rule 1", "totalExecutions": 42}],
+            "totalExecutions": 42,
+        }
+    }
+    service = ObservabilityService(settings=mock_settings)
+    service.execute_query = AsyncMock(side_effect=[resolve_payload, usage_payload])
+    filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
+    result = await service.get_automations_usage("300514213", filter_date)
+
+    assert service.execute_query.call_count == 2
+    calls = service.execute_query.call_args_list
+    assert calls[0][0][0] is RESOLVE_ORGANIZATION_UUID_QUERY
+    assert calls[0][0][1] == {"id": "300514213"}
+    assert calls[1][0][0] is GET_AUTOMATIONS_USAGE_QUERY
+    assert calls[1][0][1]["organizationUuid"] == "341c1327-261c-4766-bb96-7953e4c3970d"
+    assert result["automationsUsage"]["totalExecutions"] == 42

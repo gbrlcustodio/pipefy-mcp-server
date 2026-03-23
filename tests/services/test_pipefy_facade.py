@@ -175,7 +175,7 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 
     assert await client.get_cards(5, {"title": "x"}) == {"ok": "cards"}
     card_service.get_cards.assert_awaited_once_with(
-        5, {"title": "x"}, include_fields=False
+        5, {"title": "x"}, include_fields=False, first=None, after=None
     )
 
     assert await client.move_card_to_phase(6, 7) == {"ok": "move"}

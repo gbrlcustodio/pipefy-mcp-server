@@ -11,6 +11,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_error_codes,
     with_debug_suffix,
 )
+from pipefy_mcp.tools.validation_helpers import UUID_RE
 
 
 class DeletePipePreviewPayload(TypedDict):
@@ -223,6 +224,104 @@ def map_delete_pipe_error_to_message(
     )
 
 
+def field_condition_phase_field_id_looks_like_slug(value: object) -> bool:
+    """True when ``value`` is probably a phase field slug (``id``) instead of ``internal_id``."""
+    if isinstance(value, int):
+        return False
+    if not isinstance(value, str):
+        return False
+    s = value.strip()
+    if not s:
+        return False
+    if UUID_RE.fullmatch(s):
+        return False
+    if s.isdigit():
+        return False
+    return any(c.isalpha() for c in s)
+
+
+def normalize_field_condition_actions(
+    actions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Shallow-copy each action and map legacy ``hidden`` → ``hide``."""
+    normalized: list[dict[str, Any]] = []
+    for item in actions:
+        row = dict(item)
+        aid = row.get("actionId")
+        if isinstance(aid, str) and aid.strip().lower() == "hidden":
+            row["actionId"] = "hide"
+        normalized.append(row)
+    return normalized
+
+
+def strip_expression_ids_for_create(condition: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of ``condition`` with ``id`` removed and nested ints coerced.
+
+    Output keys mirror the input ``condition`` (typically ``expressions``,
+    ``expressions_structure``, plus any other ``ConditionInput`` fields present).
+
+    ``ConditionExpressionInput.id`` is a persisted primary key — sending arbitrary
+    client tokens on create causes ``RECORD_NOT_FOUND``. ``structure_id`` is coerced
+    to ``int`` for consistency (GraphQL ``ID`` scalar).
+    """
+    expressions = condition.get("expressions")
+
+    def _coerce_int(value: Any) -> Any:
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return value
+
+    if not isinstance(expressions, list):
+        return condition
+    cleaned: list[dict[str, Any]] = []
+    for expr in expressions:
+        row = {k: v for k, v in expr.items() if k != "id"}
+        sid = row.get("structure_id")
+        if sid is not None:
+            try:
+                row["structure_id"] = int(sid)
+            except (ValueError, TypeError):
+                pass
+        cleaned.append(row)
+    es = condition.get("expressions_structure")
+    if isinstance(es, list):
+        coerced_ints: list[list[Any]] = []
+        for group in es:
+            if isinstance(group, list):
+                coerced_ints.append([_coerce_int(v) for v in group])
+            else:
+                coerced_ints.append([_coerce_int(group)])
+        return {
+            **condition,
+            "expressions": cleaned,
+            "expressions_structure": coerced_ints,
+        }
+    return {**condition, "expressions": cleaned}
+
+
+def field_condition_actions_error_message(
+    actions: list[dict[str, Any]],
+) -> str | None:
+    """Return an error string when ``actions`` fails validation, else ``None``."""
+    if not isinstance(actions, list) or not actions:
+        return "Invalid 'actions': provide a non-empty list of action objects."
+    if not all(isinstance(item, dict) for item in actions):
+        return "Invalid 'actions': each item must be an object/dict."
+    for index, item in enumerate(actions):
+        raw_id = item.get("phaseFieldId")
+        if raw_id is None:
+            continue
+        if field_condition_phase_field_id_looks_like_slug(raw_id):
+            return (
+                f"Invalid actions[{index}] 'phaseFieldId': value looks like a field "
+                "slug (the `id` from get_phase_fields), but Pipefy expects "
+                "`internal_id` from get_phase_fields for field-condition actions. "
+                "See README (Field condition tools)."
+            )
+    return None
+
+
 __all__ = [
     "DeletePipeErrorPayload",
     "DeletePipePayload",
@@ -240,6 +339,10 @@ __all__ = [
     "build_field_condition_success_payload",
     "build_pipe_mutation_success_payload",
     "build_pipe_tool_error_payload",
+    "field_condition_actions_error_message",
+    "field_condition_phase_field_id_looks_like_slug",
     "handle_pipe_config_tool_graphql_error",
     "map_delete_pipe_error_to_message",
+    "normalize_field_condition_actions",
+    "strip_expression_ids_for_create",
 ]

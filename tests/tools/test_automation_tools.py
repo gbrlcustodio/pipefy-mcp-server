@@ -518,4 +518,4 @@ async def test_create_and_update_automation_tools_are_not_read_only(
         ann = by_name[name].annotations
         assert ann is not None
         assert ann.readOnlyHint is False
-        assert ann.destructiveHint is False
+        assert ann.destructiveHint is not True

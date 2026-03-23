@@ -563,7 +563,7 @@ class TestGetCardsTool:
 
         assert result.isError is False, "Unexpected tool error"
         mock_pipefy_client.get_cards.assert_called_once_with(
-            pipe_id, None, include_fields=True
+            pipe_id, None, include_fields=True, first=None, after=None
         )
 
 

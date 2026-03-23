@@ -11,14 +11,12 @@ from mcp.shared.memory import (
 )
 
 from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.tools.field_condition_tools import (
-    FieldConditionTools,
-    field_condition_phase_field_id_looks_like_slug,
-)
+from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
     DeletePipeErrorPayload,
     build_field_condition_delete_payload,
     build_field_condition_success_payload,
+    field_condition_phase_field_id_looks_like_slug,
 )
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 

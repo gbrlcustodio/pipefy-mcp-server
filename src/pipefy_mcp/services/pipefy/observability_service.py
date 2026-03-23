@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from httpx_auth import OAuth2ClientCredentials
+from typing_extensions import TypedDict
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.queries.observability_queries import (
@@ -17,20 +17,78 @@ from pipefy_mcp.services.pipefy.queries.observability_queries import (
     GET_AUTOMATION_LOGS_QUERY,
     GET_AUTOMATIONS_USAGE_QUERY,
 )
-from pipefy_mcp.settings import PipefySettings
 
 _DEFAULT_PAGE_SIZE = 30
 
 
+class DateRange(TypedDict):
+    """ISO8601 date range for usage queries (``from`` and ``to``)."""
+
+    from_: str  # serialised as "from" in GraphQL variables
+    to: str
+
+
+def _build_log_variables(
+    primary_key: str,
+    primary_value: str,
+    *,
+    first: int,
+    after: str | None,
+    status: str | None,
+    search_term: str | None,
+) -> dict[str, Any]:
+    """Build the GraphQL variables dict shared by all paginated log queries.
+
+    Args:
+        primary_key: GraphQL variable name for the main identifier (e.g. ``repoUuid``).
+        primary_value: Value for that identifier.
+        first: Page size.
+        after: Cursor for next page.
+        status: Optional status filter.
+        search_term: Optional free-text search.
+    """
+    variables: dict[str, Any] = {primary_key: primary_value, "first": first}
+    if after is not None:
+        variables["after"] = after
+    if status is not None:
+        variables["status"] = status
+    if search_term is not None:
+        variables["searchTerm"] = search_term
+    return variables
+
+
+def _build_usage_variables(
+    organization_uuid: str,
+    filter_date: dict[str, str],
+    *,
+    filters: dict[str, Any] | None,
+    search: str | None,
+    sort: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build the GraphQL variables dict shared by usage-stats queries.
+
+    Args:
+        organization_uuid: Organization UUID.
+        filter_date: DateRange dict with ``from`` and ``to`` ISO8601 strings.
+        filters: Optional FilterParams (action, event, pipe, status).
+        search: Free-text search.
+        sort: SortCriteria (field + direction).
+    """
+    variables: dict[str, Any] = {
+        "organizationUuid": organization_uuid,
+        "filterDate": filter_date,
+    }
+    if filters is not None:
+        variables["filters"] = filters
+    if search is not None:
+        variables["search"] = search
+    if sort is not None:
+        variables["sort"] = sort
+    return variables
+
+
 class ObservabilityService(BasePipefyClient):
     """Reads for AI agent logs, automation logs, usage stats, and credit dashboard."""
-
-    def __init__(
-        self,
-        settings: PipefySettings,
-        auth: OAuth2ClientCredentials | None = None,
-    ) -> None:
-        super().__init__(settings=settings, auth=auth)
 
     async def get_ai_agent_logs(
         self,
@@ -50,13 +108,14 @@ class ObservabilityService(BasePipefyClient):
             status: Filter by AiAgentLogStatus (processing, failed, success).
             search_term: Free-text search within logs.
         """
-        variables: dict[str, Any] = {"repoUuid": repo_uuid, "first": first}
-        if after is not None:
-            variables["after"] = after
-        if status is not None:
-            variables["status"] = status
-        if search_term is not None:
-            variables["searchTerm"] = search_term
+        variables = _build_log_variables(
+            "repoUuid",
+            repo_uuid,
+            first=first,
+            after=after,
+            status=status,
+            search_term=search_term,
+        )
         return await self.execute_query(GET_AI_AGENT_LOGS_QUERY, variables)
 
     async def get_ai_agent_log_details(self, log_uuid: str) -> dict[str, Any]:
@@ -87,13 +146,14 @@ class ObservabilityService(BasePipefyClient):
             status: Filter by AutomationLogStatus (processing, failed, success).
             search_term: Free-text search within logs.
         """
-        variables: dict[str, Any] = {"automationId": automation_id, "first": first}
-        if after is not None:
-            variables["after"] = after
-        if status is not None:
-            variables["status"] = status
-        if search_term is not None:
-            variables["searchTerm"] = search_term
+        variables = _build_log_variables(
+            "automationId",
+            automation_id,
+            first=first,
+            after=after,
+            status=status,
+            search_term=search_term,
+        )
         return await self.execute_query(GET_AUTOMATION_LOGS_QUERY, variables)
 
     async def get_automation_logs_by_repo(
@@ -114,13 +174,14 @@ class ObservabilityService(BasePipefyClient):
             status: Filter by AutomationLogStatus (processing, failed, success).
             search_term: Free-text search within logs.
         """
-        variables: dict[str, Any] = {"repoId": repo_id, "first": first}
-        if after is not None:
-            variables["after"] = after
-        if status is not None:
-            variables["status"] = status
-        if search_term is not None:
-            variables["searchTerm"] = search_term
+        variables = _build_log_variables(
+            "repoId",
+            repo_id,
+            first=first,
+            after=after,
+            status=status,
+            search_term=search_term,
+        )
         return await self.execute_query(GET_AUTOMATION_LOGS_BY_REPO_QUERY, variables)
 
     # --- Usage & Credits ---
@@ -143,16 +204,13 @@ class ObservabilityService(BasePipefyClient):
             search: Free-text search.
             sort: SortCriteria (field + direction).
         """
-        variables: dict[str, Any] = {
-            "organizationUuid": organization_uuid,
-            "filterDate": filter_date,
-        }
-        if filters is not None:
-            variables["filters"] = filters
-        if search is not None:
-            variables["search"] = search
-        if sort is not None:
-            variables["sort"] = sort
+        variables = _build_usage_variables(
+            organization_uuid,
+            filter_date,
+            filters=filters,
+            search=search,
+            sort=sort,
+        )
         return await self.execute_query(GET_AGENTS_USAGE_QUERY, variables)
 
     async def get_automations_usage(
@@ -173,16 +231,13 @@ class ObservabilityService(BasePipefyClient):
             search: Free-text search.
             sort: SortCriteria (field + direction).
         """
-        variables: dict[str, Any] = {
-            "organizationUuid": organization_uuid,
-            "filterDate": filter_date,
-        }
-        if filters is not None:
-            variables["filters"] = filters
-        if search is not None:
-            variables["search"] = search
-        if sort is not None:
-            variables["sort"] = sort
+        variables = _build_usage_variables(
+            organization_uuid,
+            filter_date,
+            filters=filters,
+            search=search,
+            sort=sort,
+        )
         return await self.execute_query(GET_AUTOMATIONS_USAGE_QUERY, variables)
 
     async def get_ai_credit_usage(

@@ -84,3 +84,9 @@ SCHEMA_TYPES_QUERY = gql(
     }
     """
 )
+
+__all__ = [
+    "INTROSPECT_MUTATION_QUERY",
+    "INTROSPECT_TYPE_QUERY",
+    "SCHEMA_TYPES_QUERY",
+]

@@ -174,7 +174,7 @@ def test_run_server_calls_logger_and_mcp_run():
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_lifespan_logs_error_when_initialization_raises():
-    """When lifespan initialization raises, logger.error is called with the exception."""
+    """When lifespan initialization raises, logger.exception runs and the error propagates."""
     from pipefy_mcp.server import lifespan
 
     app = FastMCP("test")
@@ -187,11 +187,10 @@ async def test_lifespan_logs_error_when_initialization_raises():
         mock_container.initialize_services.side_effect = ValueError("init failed")
         mock_get_instance.return_value = mock_container
 
-        with pytest.raises(RuntimeError, match="didn't yield"):
+        with pytest.raises(ValueError, match="init failed"):
             async with lifespan(app):
                 pass
 
-        mock_logger.error.assert_called_once()
-        call_msg = mock_logger.error.call_args[0][0]
-        assert "Error during server lifespan" in call_msg
-        assert "init failed" in call_msg
+        mock_logger.exception.assert_called_once()
+        call_msg = mock_logger.exception.call_args[0][0]
+        assert "Fatal error during server lifespan" in call_msg

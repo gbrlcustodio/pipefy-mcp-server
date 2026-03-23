@@ -697,7 +697,12 @@ async def test_find_cards_delegates_to_card_service_with_include_fields_true():
     )
 
     card_service.find_cards.assert_awaited_once_with(
-        pipe_id, field_id, field_value, include_fields=True
+        pipe_id,
+        field_id,
+        field_value,
+        include_fields=True,
+        first=None,
+        after=None,
     )
     assert result == expected
 
@@ -723,7 +728,12 @@ async def test_find_cards_delegates_to_card_service_with_include_fields_false():
     )
 
     card_service.find_cards.assert_awaited_once_with(
-        pipe_id, field_id, field_value, include_fields=False
+        pipe_id,
+        field_id,
+        field_value,
+        include_fields=False,
+        first=None,
+        after=None,
     )
     assert result == expected
 

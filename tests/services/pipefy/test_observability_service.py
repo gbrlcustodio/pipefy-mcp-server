@@ -5,23 +5,25 @@ from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
-from openpyxl import Workbook
 from gql.transport.exceptions import TransportQueryError
+from openpyxl import Workbook
 
 from pipefy_mcp.services.pipefy.observability_service import ObservabilityService
 from pipefy_mcp.services.pipefy.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
-    GET_AUTOMATION_JOBS_EXPORT_QUERY,
     GET_AGENTS_USAGE_QUERY,
     GET_AI_AGENT_LOG_DETAILS_QUERY,
     GET_AI_AGENT_LOGS_QUERY,
     GET_AI_CREDIT_USAGE_QUERY,
+    GET_AUTOMATION_JOBS_EXPORT_QUERY,
     GET_AUTOMATION_LOGS_BY_REPO_QUERY,
     GET_AUTOMATION_LOGS_QUERY,
     GET_AUTOMATIONS_USAGE_QUERY,
     RESOLVE_ORGANIZATION_UUID_QUERY,
 )
 from pipefy_mcp.settings import PipefySettings
+
+_ORG_UUID_FOR_TESTS = "341c1327-261c-4766-bb96-7953e4c3970d"
 
 
 @pytest.fixture
@@ -38,8 +40,6 @@ def _make_service(mock_settings, return_value):
     service = ObservabilityService(settings=mock_settings)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
-
-
 
 
 @pytest.mark.unit
@@ -99,9 +99,7 @@ async def test_get_ai_agent_logs_with_status_filter(mock_settings):
         }
     }
     service = _make_service(mock_settings, payload)
-    await service.get_ai_agent_logs(
-        "repo-uuid-1", status="failed", search_term="error"
-    )
+    await service.get_ai_agent_logs("repo-uuid-1", status="failed", search_term="error")
 
     _, variables = service.execute_query.call_args[0]
     assert variables["status"] == "failed"
@@ -136,8 +134,6 @@ async def test_get_ai_agent_log_details_success(mock_settings):
     assert query is GET_AI_AGENT_LOG_DETAILS_QUERY
     assert variables == {"uuid": "log-1"}
     assert len(result["aiAgentLogDetails"]["tracingNodes"]) == 2
-
-
 
 
 @pytest.mark.unit
@@ -190,14 +186,14 @@ async def test_get_automation_logs_by_repo_success(mock_settings):
         }
     }
     service = _make_service(mock_settings, payload)
-    result = await service.get_automation_logs_by_repo("repo-5", first=10, after="cur-0")
+    result = await service.get_automation_logs_by_repo(
+        "repo-5", first=10, after="cur-0"
+    )
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATION_LOGS_BY_REPO_QUERY
     assert variables == {"repoId": "repo-5", "first": 10, "after": "cur-0"}
     assert result["automationLogsByRepo"]["totalCount"] == 15
-
-
 
 
 @pytest.mark.unit
@@ -209,8 +205,6 @@ async def test_get_ai_agent_logs_transport_error(mock_settings):
     )
     with pytest.raises(TransportQueryError):
         await service.get_ai_agent_logs("repo-uuid-1")
-
-
 
 
 @pytest.mark.unit
@@ -230,11 +224,14 @@ async def test_get_agents_usage_success(mock_settings):
     }
     service = _make_service(mock_settings, payload)
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
-    result = await service.get_agents_usage("org-uuid-1", filter_date)
+    result = await service.get_agents_usage(_ORG_UUID_FOR_TESTS, filter_date)
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AGENTS_USAGE_QUERY
-    assert variables == {"organizationUuid": "org-uuid-1", "filterDate": filter_date}
+    assert variables == {
+        "organizationUuid": _ORG_UUID_FOR_TESTS,
+        "filterDate": filter_date,
+    }
     assert result["agentsUsageDetails"]["usage"] == 42.5
     assert result["agentsUsageDetails"]["agents"]["totalCount"] == 3
 
@@ -257,12 +254,12 @@ async def test_get_automations_usage_success(mock_settings):
     service = _make_service(mock_settings, payload)
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
     result = await service.get_automations_usage(
-        "org-uuid-1", filter_date, search="Rule"
+        _ORG_UUID_FOR_TESTS, filter_date, search="Rule"
     )
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATIONS_USAGE_QUERY
-    assert variables["organizationUuid"] == "org-uuid-1"
+    assert variables["organizationUuid"] == _ORG_UUID_FOR_TESTS
     assert variables["filterDate"] == filter_date
     assert variables["search"] == "Rule"
     assert result["automationsUsageDetails"]["usage"] == 500
@@ -288,20 +285,21 @@ async def test_get_ai_credit_usage_success(mock_settings):
         }
     }
     service = _make_service(mock_settings, payload)
-    result = await service.get_ai_credit_usage("org-uuid-1", "current_month")
+    result = await service.get_ai_credit_usage(_ORG_UUID_FOR_TESTS, "current_month")
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AI_CREDIT_USAGE_QUERY
-    assert variables == {"organizationUuid": "org-uuid-1", "period": "current_month"}
+    assert variables == {
+        "organizationUuid": _ORG_UUID_FOR_TESTS,
+        "period": "current_month",
+    }
     assert result["aiCreditUsageStats"]["usage"] == 150.0
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_ai_credit_usage_resolves_numeric_organization_id(mock_settings):
-    resolve_payload = {
-        "organization": {"uuid": "341c1327-261c-4766-bb96-7953e4c3970d"}
-    }
+    resolve_payload = {"organization": {"uuid": "341c1327-261c-4766-bb96-7953e4c3970d"}}
     credit_payload = {
         "aiCreditUsageStats": {
             "active": True,
@@ -336,7 +334,9 @@ async def test_get_ai_credit_usage_resolves_numeric_organization_id(mock_setting
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_ai_credit_usage_resolve_fails_when_organization_missing(mock_settings):
+async def test_get_ai_credit_usage_resolve_fails_when_organization_missing(
+    mock_settings,
+):
     service = ObservabilityService(settings=mock_settings)
     service.execute_query = AsyncMock(return_value={"organization": None})
     with pytest.raises(ValueError, match="Organization not found"):
@@ -360,9 +360,7 @@ async def test_export_automation_jobs_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_AUTOMATION_JOBS_EXPORT_MUTATION
-    assert variables == {
-        "input": {"organizationId": "org-123", "filter": "last_month"}
-    }
+    assert variables == {"input": {"organizationId": "org-123", "filter": "last_month"}}
     assert result["createAutomationJobsExport"]["automationJobsExport"]["id"] == "exp-1"
 
 
@@ -472,15 +470,32 @@ async def test_get_agents_usage_transport_error(mock_settings):
     )
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
     with pytest.raises(TransportQueryError):
-        await service.get_agents_usage("org-uuid-1", filter_date)
+        await service.get_agents_usage(_ORG_UUID_FOR_TESTS, filter_date)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_resolve_organization_uuid_rejects_non_uuid_non_numeric(mock_settings):
+    service = ObservabilityService(settings=mock_settings)
+    with pytest.raises(ValueError, match="must be a UUID or numeric id"):
+        await service._resolve_organization_uuid("not-a-uuid-or-digits")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_logs_transport_error(mock_settings):
+    service = ObservabilityService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.get_automation_logs("auto-1")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_agents_usage_resolves_numeric_organization_id(mock_settings):
-    resolve_payload = {
-        "organization": {"uuid": "341c1327-261c-4766-bb96-7953e4c3970d"}
-    }
+    resolve_payload = {"organization": {"uuid": "341c1327-261c-4766-bb96-7953e4c3970d"}}
     usage_payload = {
         "agentsUsage": {
             "data": [{"agentName": "Bot", "totalCredits": 5.0}],
@@ -504,9 +519,7 @@ async def test_get_agents_usage_resolves_numeric_organization_id(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automations_usage_resolves_numeric_organization_id(mock_settings):
-    resolve_payload = {
-        "organization": {"uuid": "341c1327-261c-4766-bb96-7953e4c3970d"}
-    }
+    resolve_payload = {"organization": {"uuid": "341c1327-261c-4766-bb96-7953e4c3970d"}}
     usage_payload = {
         "automationsUsage": {
             "data": [{"automationName": "Rule 1", "totalExecutions": 42}],

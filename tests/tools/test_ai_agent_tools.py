@@ -19,21 +19,21 @@ def anyio_backend():
 
 
 @pytest.fixture
-def mock_ai_agent_service():
-    service = MagicMock()
-    service.create_agent = AsyncMock()
-    service.update_agent = AsyncMock()
-    service.toggle_agent_status = AsyncMock()
-    service.get_agent = AsyncMock()
-    service.get_agents = AsyncMock()
-    service.delete_agent = AsyncMock()
-    return service
+def mock_pipefy_client():
+    client = MagicMock()
+    client.create_ai_agent = AsyncMock()
+    client.update_ai_agent = AsyncMock()
+    client.toggle_ai_agent_status = AsyncMock()
+    client.get_ai_agent = AsyncMock()
+    client.get_ai_agents = AsyncMock()
+    client.delete_ai_agent = AsyncMock()
+    return client
 
 
 @pytest.fixture
-def mcp_server(mock_ai_agent_service):
+def mcp_server(mock_pipefy_client):
     mcp = FastMCP("AI Agent Tools Test")
-    AiAgentTools.register(mcp, mock_ai_agent_service)
+    AiAgentTools.register(mcp, mock_pipefy_client)
     return mcp
 
 
@@ -51,10 +51,10 @@ class TestCreateAiAgent:
     async def test_success(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.create_agent.return_value = {
+        mock_pipefy_client.create_ai_agent.return_value = {
             "agent_uuid": "abc-123",
             "message": "AI Agent created successfully. UUID: abc-123",
         }
@@ -76,10 +76,10 @@ class TestCreateAiAgent:
     async def test_service_error_returns_error_payload(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.create_agent.side_effect = RuntimeError("GraphQL error")
+        mock_pipefy_client.create_ai_agent.side_effect = RuntimeError("GraphQL error")
         async with client_session as session:
             result = await session.call_tool(
                 "create_ai_agent",
@@ -94,7 +94,7 @@ class TestCreateAiAgent:
     async def test_validation_error_returns_error_payload(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
         async with client_session as session:
@@ -103,7 +103,7 @@ class TestCreateAiAgent:
                 {"name": "", "repo_uuid": "repo-456"},
             )
         assert result.isError is False
-        mock_ai_agent_service.create_agent.assert_not_called()
+        mock_pipefy_client.create_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -114,10 +114,10 @@ class TestUpdateAiAgent:
     async def test_success(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.update_agent.return_value = {
+        mock_pipefy_client.update_ai_agent.return_value = {
             "agent_uuid": "agent-uuid",
             "message": "AI Agent updated successfully. UUID: agent-uuid",
         }
@@ -145,7 +145,7 @@ class TestUpdateAiAgent:
     async def test_zero_behaviors_returns_error_payload(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
         async with client_session as session:
@@ -160,7 +160,7 @@ class TestUpdateAiAgent:
                 },
             )
         assert result.isError is False
-        mock_ai_agent_service.update_agent.assert_not_called()
+        mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -168,7 +168,7 @@ class TestUpdateAiAgent:
     async def test_six_behaviors_returns_error_payload(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
         async with client_session as session:
@@ -185,7 +185,7 @@ class TestUpdateAiAgent:
                 },
             )
         assert result.isError is False
-        mock_ai_agent_service.update_agent.assert_not_called()
+        mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -193,10 +193,10 @@ class TestUpdateAiAgent:
     async def test_service_error_returns_error_payload(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.update_agent.side_effect = ValueError("Network error")
+        mock_pipefy_client.update_ai_agent.side_effect = ValueError("Network error")
         async with client_session as session:
             result = await session.call_tool(
                 "update_ai_agent",
@@ -219,10 +219,10 @@ class TestToggleAiAgentStatus:
     async def test_activate_success(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.toggle_agent_status.return_value = {
+        mock_pipefy_client.toggle_ai_agent_status.return_value = {
             "success": True,
             "message": "AI Agent activated successfully.",
         }
@@ -242,10 +242,10 @@ class TestToggleAiAgentStatus:
     async def test_deactivate_success(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.toggle_agent_status.return_value = {
+        mock_pipefy_client.toggle_ai_agent_status.return_value = {
             "success": True,
             "message": "AI Agent deactivated successfully.",
         }
@@ -262,10 +262,10 @@ class TestToggleAiAgentStatus:
     async def test_service_error_returns_error_payload(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.toggle_agent_status.side_effect = RuntimeError(
+        mock_pipefy_client.toggle_ai_agent_status.side_effect = RuntimeError(
             "API error"
         )
         async with client_session as session:
@@ -285,7 +285,7 @@ class TestGetAiAgent:
     async def test_success(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
         agent = {
@@ -295,24 +295,24 @@ class TestGetAiAgent:
             "disabledAt": None,
             "needReview": False,
         }
-        mock_ai_agent_service.get_agent.return_value = agent
+        mock_pipefy_client.get_ai_agent.return_value = agent
         async with client_session as session:
             result = await session.call_tool(
                 "get_ai_agent",
                 {"uuid": "agent-1"},
             )
         assert result.isError is False
-        mock_ai_agent_service.get_agent.assert_awaited_once_with("agent-1")
+        mock_pipefy_client.get_ai_agent.assert_awaited_once_with("agent-1")
         payload = extract_payload(result)
         assert payload == {"success": True, "agent": agent}
 
     async def test_not_found_returns_error_payload(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.get_agent.return_value = {}
+        mock_pipefy_client.get_ai_agent.return_value = {}
         async with client_session as session:
             result = await session.call_tool("get_ai_agent", {"uuid": "missing-uuid"})
         assert result.isError is False
@@ -321,11 +321,11 @@ class TestGetAiAgent:
         assert "not found" in payload["error"].lower()
 
     async def test_blank_uuid_returns_error_payload(
-        self, client_session, mock_ai_agent_service, extract_payload
+        self, client_session, mock_pipefy_client, extract_payload
     ):
         async with client_session as session:
             result = await session.call_tool("get_ai_agent", {"uuid": "  "})
-        mock_ai_agent_service.get_agent.assert_not_called()
+        mock_pipefy_client.get_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "blank" in payload["error"].lower()
@@ -333,10 +333,10 @@ class TestGetAiAgent:
     async def test_graphql_error_returns_error_payload(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.get_agent.side_effect = TransportQueryError(
+        mock_pipefy_client.get_ai_agent.side_effect = TransportQueryError(
             "failed", errors=[{"message": "not found"}]
         )
         async with client_session as session:
@@ -352,27 +352,27 @@ class TestGetAiAgents:
     async def test_success(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
         agents = [{"uuid": "a1", "name": "One"}]
-        mock_ai_agent_service.get_agents.return_value = agents
+        mock_pipefy_client.get_ai_agents.return_value = agents
         async with client_session as session:
             result = await session.call_tool(
                 "get_ai_agents",
                 {"repo_uuid": "pipe-uuid-9"},
             )
         assert result.isError is False
-        mock_ai_agent_service.get_agents.assert_awaited_once_with("pipe-uuid-9")
+        mock_pipefy_client.get_ai_agents.assert_awaited_once_with("pipe-uuid-9")
         payload = extract_payload(result)
         assert payload == {"success": True, "agents": agents}
 
     async def test_blank_repo_uuid_returns_error_payload(
-        self, client_session, mock_ai_agent_service, extract_payload
+        self, client_session, mock_pipefy_client, extract_payload
     ):
         async with client_session as session:
             result = await session.call_tool("get_ai_agents", {"repo_uuid": ""})
-        mock_ai_agent_service.get_agents.assert_not_called()
+        mock_pipefy_client.get_ai_agents.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "blank" in payload["error"].lower()
@@ -380,10 +380,10 @@ class TestGetAiAgents:
     async def test_graphql_error_returns_error_payload(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.get_agents.side_effect = TransportQueryError(
+        mock_pipefy_client.get_ai_agents.side_effect = TransportQueryError(
             "failed", errors=[{"message": "denied"}]
         )
         async with client_session as session:
@@ -402,17 +402,17 @@ class TestDeleteAiAgent:
     async def test_success(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.delete_agent.return_value = {"success": True}
+        mock_pipefy_client.delete_ai_agent.return_value = {"success": True}
         async with client_session as session:
             result = await session.call_tool(
                 "delete_ai_agent",
                 {"uuid": "to-delete"},
             )
         assert result.isError is False
-        mock_ai_agent_service.delete_agent.assert_awaited_once_with("to-delete")
+        mock_pipefy_client.delete_ai_agent.assert_awaited_once_with("to-delete")
         payload = extract_payload(result)
         assert payload["success"] is True
         assert isinstance(payload["message"], str)
@@ -421,10 +421,10 @@ class TestDeleteAiAgent:
     async def test_api_returns_false(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.delete_agent.return_value = {"success": False}
+        mock_pipefy_client.delete_ai_agent.return_value = {"success": False}
         async with client_session as session:
             result = await session.call_tool("delete_ai_agent", {"uuid": "fail"})
         payload = extract_payload(result)
@@ -432,11 +432,11 @@ class TestDeleteAiAgent:
         assert "success=false" in payload["error"].lower()
 
     async def test_blank_uuid_returns_error_payload(
-        self, client_session, mock_ai_agent_service, extract_payload
+        self, client_session, mock_pipefy_client, extract_payload
     ):
         async with client_session as session:
             result = await session.call_tool("delete_ai_agent", {"uuid": "\t"})
-        mock_ai_agent_service.delete_agent.assert_not_called()
+        mock_pipefy_client.delete_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "blank" in payload["error"].lower()
@@ -444,10 +444,10 @@ class TestDeleteAiAgent:
     async def test_graphql_error_returns_error_payload(
         self,
         client_session,
-        mock_ai_agent_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_agent_service.delete_agent.side_effect = TransportQueryError(
+        mock_pipefy_client.delete_ai_agent.side_effect = TransportQueryError(
             "failed", errors=[{"message": "gone"}]
         )
         async with client_session as session:

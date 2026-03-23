@@ -543,3 +543,58 @@ async def test_pipefy_client_introspection_methods_delegate_to_introspection_ser
     intro.execute_graphql.return_value = {"ok": 2}
     assert await client.execute_graphql("query { y }", None) == {"ok": 2}
     intro.execute_graphql.assert_awaited_once_with("query { y }", None)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service():
+    """Facade forwards create/update/toggle AI agent to AiAgentService."""
+    from pipefy_mcp.models.ai_agent import (
+        BehaviorInput,
+        CreateAiAgentInput,
+        UpdateAiAgentInput,
+    )
+
+    ai_agent_service = AsyncMock()
+    ai_agent_service.create_agent = AsyncMock(
+        return_value={"agent_uuid": "new-1", "message": "created"}
+    )
+    ai_agent_service.update_agent = AsyncMock(
+        return_value={"agent_uuid": "new-1", "message": "updated"}
+    )
+    ai_agent_service.toggle_agent_status = AsyncMock(
+        return_value={"success": True, "message": "ok"}
+    )
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._ai_agent_service = ai_agent_service
+
+    cin = CreateAiAgentInput(
+        name="n",
+        repo_uuid="00000000-0000-0000-0000-000000000001",
+    )
+    assert await client.create_ai_agent(cin) == {
+        "agent_uuid": "new-1",
+        "message": "created",
+    }
+    ai_agent_service.create_agent.assert_awaited_once_with(cin)
+
+    uin = UpdateAiAgentInput(
+        uuid="00000000-0000-0000-0000-000000000002",
+        name="n",
+        repo_uuid="00000000-0000-0000-0000-000000000001",
+        behaviors=[BehaviorInput(name="b", event_id="evt")],
+    )
+    assert await client.update_ai_agent(uin) == {
+        "agent_uuid": "new-1",
+        "message": "updated",
+    }
+    ai_agent_service.update_agent.assert_awaited_once_with(uin)
+
+    assert await client.toggle_ai_agent_status(agent_uuid="a", active=True) == {
+        "success": True,
+        "message": "ok",
+    }
+    ai_agent_service.toggle_agent_status.assert_awaited_once_with(
+        agent_uuid="a", active=True
+    )

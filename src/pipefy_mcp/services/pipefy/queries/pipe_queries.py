@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from gql import gql
 
 GET_PIPE_QUERY = gql(

@@ -1,5 +1,7 @@
 """GraphQL queries and mutations for AI Agent operations."""
 
+from __future__ import annotations
+
 from gql import gql
 
 GET_AI_AGENT_QUERY = gql(

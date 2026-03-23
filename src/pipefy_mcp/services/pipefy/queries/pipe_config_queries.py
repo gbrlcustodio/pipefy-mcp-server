@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from gql import gql
 
 CREATE_PIPE_MUTATION = gql(

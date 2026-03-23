@@ -11,7 +11,7 @@ from mcp.shared.memory import (
 )
 
 from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.tools.observability_tools import ObservabilityTools
+from pipefy_mcp.tools.observability_tools import ObservabilityTools, _MAX_PAGE_SIZE
 
 
 @pytest.fixture
@@ -453,3 +453,178 @@ async def test_export_tool_not_read_only(observability_session):
     export_tool = next(t for t in listed.tools if t.name == "export_automation_jobs")
     assert export_tool.annotations is not None
     assert export_tool.annotations.readOnlyHint is False
+
+
+# --- Input-validation edge cases ---
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_agent_logs_rejects_invalid_repo_uuid(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_agent_logs", {"repo_uuid": ""}
+        )
+
+    mock_observability_client.get_ai_agent_logs.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "repo_uuid" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_agent_log_details_rejects_invalid_log_uuid(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_agent_log_details", {"log_uuid": ""}
+        )
+
+    mock_observability_client.get_ai_agent_log_details.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "log_uuid" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_credit_usage_rejects_invalid_period(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_credit_usage",
+            {"organization_uuid": "org-1", "period": "invalid_period"},
+        )
+
+    mock_observability_client.get_ai_credit_usage.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "period" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_agents_usage_rejects_empty_org_uuid(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_agents_usage",
+            {
+                "organization_uuid": "",
+                "filter_date_from": "2026-03-01T00:00:00Z",
+                "filter_date_to": "2026-03-31T23:59:59Z",
+            },
+        )
+
+    mock_observability_client.get_agents_usage.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "organization_uuid" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_agents_usage_rejects_missing_dates(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_agents_usage",
+            {
+                "organization_uuid": "org-1",
+                "filter_date_from": "",
+                "filter_date_to": "2026-03-31T23:59:59Z",
+            },
+        )
+
+    mock_observability_client.get_agents_usage.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "filter_date" in p["error"].lower()
+
+
+# --- first parameter bounds ---
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+@pytest.mark.parametrize("bad_first", [0, -1, _MAX_PAGE_SIZE + 1])
+async def test_get_ai_agent_logs_rejects_out_of_bounds_first(
+    observability_session, mock_observability_client, extract_payload, bad_first
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_agent_logs", {"repo_uuid": "repo-1", "first": bad_first}
+        )
+
+    mock_observability_client.get_ai_agent_logs.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "first" in p["error"].lower()
+
+
+# --- debug=True error path ---
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_agent_logs_debug_true_appends_codes(
+    observability_session, mock_observability_client, extract_payload
+):
+    error = TransportQueryError(
+        '{"code": "PERMISSION_DENIED", "correlation_id": "corr-abc"}',
+        errors=[
+            {
+                "message": "not authorized",
+                "extensions": {"code": "PERMISSION_DENIED"},
+            }
+        ],
+    )
+    mock_observability_client.get_ai_agent_logs.side_effect = error
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_agent_logs", {"repo_uuid": "repo-1", "debug": True}
+        )
+
+    assert result.isError is False
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "not authorized" in p["error"]
+    assert "codes=" in p["error"] or "correlation_id=" in p["error"]
+    assert "PERMISSION_DENIED" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_credit_usage_debug_true_appends_codes(
+    observability_session, mock_observability_client, extract_payload
+):
+    error = TransportQueryError(
+        '{"code": "FORBIDDEN", "correlation_id": "corr-xyz"}',
+        errors=[
+            {
+                "message": "forbidden",
+                "extensions": {"code": "FORBIDDEN"},
+            }
+        ],
+    )
+    mock_observability_client.get_ai_credit_usage.side_effect = error
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_credit_usage",
+            {"organization_uuid": "org-1", "period": "current_month", "debug": True},
+        )
+
+    assert result.isError is False
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "forbidden" in p["error"]
+    assert "FORBIDDEN" in p["error"]

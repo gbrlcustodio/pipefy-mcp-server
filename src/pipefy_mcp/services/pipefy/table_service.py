@@ -250,10 +250,8 @@ class TableService(BasePipefyClient):
             **attrs: Attributes to change (omit or pass None to skip). If table_id is not provided as a parameter, it can be passed here.
         """
         payload: dict[str, Any] = {"id": field_id}
-        # table_id is required by the API; use parameter if provided, otherwise check attrs
         if table_id is not None:
             payload["table_id"] = table_id
-        # attrs may also contain table_id; if parameter was not provided, use from attrs
         for key, value in attrs.items():
             if value is not None:
                 payload[key] = value

@@ -27,14 +27,50 @@ from pipefy_mcp.services.pipefy.queries.automation_queries import (
 )
 
 
+def _format_automation_mutation_errors(errors: Any) -> str:
+    if errors is None:
+        return ""
+    if isinstance(errors, str):
+        return errors
+    if isinstance(errors, list):
+        parts: list[str] = []
+        for item in errors:
+            if isinstance(item, str) and item:
+                parts.append(item)
+            elif isinstance(item, dict):
+                msg = item.get("message")
+                if isinstance(msg, str) and msg:
+                    parts.append(msg)
+        return "; ".join(parts)
+    return str(errors)
+
+
+def _raise_if_automation_mutation_has_errors(
+    mutation_key: str,
+    raw: dict[str, Any],
+) -> None:
+    block = raw.get(mutation_key)
+    if not isinstance(block, dict):
+        return
+    err_val = block.get("errors")
+    if not err_val:
+        return
+    text = _format_automation_mutation_errors(err_val)
+    if text:
+        raise ValueError(text)
+
+
 class AutomationService(BasePipefyClient):
     """Reads and mutations for traditional pipe automations (rules engine)."""
 
-    async def get_automation(self, automation_id: str) -> AutomationRuleRecord:
+    async def get_automation(self, automation_id: str) -> AutomationRuleRecord | None:
         """Fetch one automation by ID.
 
         Args:
             automation_id: Automation rule ID (non-empty string; validate at MCP boundary).
+
+        Returns:
+            The automation row, or ``None`` when not found.
         """
         payload = await self.execute_query(
             GET_AUTOMATION_QUERY,
@@ -42,7 +78,7 @@ class AutomationService(BasePipefyClient):
         )
         row = payload.get("automation")
         if row is None or not isinstance(row, dict):
-            return {}
+            return None
         return cast(AutomationRuleRecord, row)
 
     async def get_automations(
@@ -161,6 +197,7 @@ class AutomationService(BasePipefyClient):
             CREATE_AUTOMATION_MUTATION,
             {"input": input_obj},
         )
+        _raise_if_automation_mutation_has_errors("createAutomation", raw)
         return cast(CreateAutomationMutationResult, raw)
 
     async def update_automation(
@@ -182,6 +219,7 @@ class AutomationService(BasePipefyClient):
             UPDATE_AUTOMATION_MUTATION,
             {"input": input_obj},
         )
+        _raise_if_automation_mutation_has_errors("updateAutomation", raw)
         return cast(UpdateAutomationMutationResult, raw)
 
     async def delete_automation(

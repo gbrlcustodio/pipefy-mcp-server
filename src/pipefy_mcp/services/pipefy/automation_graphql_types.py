@@ -15,7 +15,7 @@ class AutomationEventRepoRef(TypedDict, total=False):
 
 
 class AutomationRuleRecord(TypedDict, total=False):
-    """Single automation from ``GET_AUTOMATION_QUERY`` (empty dict when not found)."""
+    """Single automation from ``GET_AUTOMATION_QUERY``."""
 
     id: str
     name: str
@@ -68,6 +68,7 @@ class AutomationMutationSnapshot(TypedDict, total=False):
 
 class CreateAutomationMutationBlock(TypedDict, total=False):
     automation: AutomationMutationSnapshot
+    errors: list[str] | list[Any]
 
 
 class CreateAutomationMutationResult(TypedDict, total=False):
@@ -76,6 +77,7 @@ class CreateAutomationMutationResult(TypedDict, total=False):
 
 class UpdateAutomationMutationBlock(TypedDict, total=False):
     automation: AutomationMutationSnapshot
+    errors: list[str] | list[Any]
 
 
 class UpdateAutomationMutationResult(TypedDict, total=False):

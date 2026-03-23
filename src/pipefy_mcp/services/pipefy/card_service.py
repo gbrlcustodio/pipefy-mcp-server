@@ -79,13 +79,18 @@ class CardService(BasePipefyClient):
         pipe_id: int,
         search: CardSearch | None = None,
         include_fields: bool = False,
+        *,
+        first: int | None = None,
+        after: str | None = None,
     ) -> dict:
-        """Get all cards in the pipe.
+        """Get cards in the pipe with optional pagination.
 
         Args:
             pipe_id: The ID of the pipe.
             search: Optional search filters.
             include_fields: If True, include each card's custom fields (name, value) in the response.
+            first: Max cards to return per page.
+            after: Cursor for fetching the next page (from ``pageInfo.endCursor``).
         """
         variables: dict[str, Any] = {
             "pipe_id": pipe_id,
@@ -94,6 +99,10 @@ class CardService(BasePipefyClient):
         }
         if search is not None:
             variables["search"] = search
+        if first is not None:
+            variables["first"] = first
+        if after is not None:
+            variables["after"] = after
         return await self.execute_query(GET_CARDS_QUERY, variables)
 
     async def find_cards(

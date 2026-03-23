@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from gql import gql
 
 CREATE_CARD_MUTATION = gql(
@@ -82,8 +84,8 @@ GET_CARD_QUERY = gql(
 
 GET_CARDS_QUERY = gql(
     """
-    query ($pipe_id: ID!, $search: CardSearch, $includeFields: Boolean!) {
-        cards(pipe_id: $pipe_id, search: $search) {
+    query ($pipe_id: ID!, $search: CardSearch, $first: Int, $after: String, $includeFields: Boolean!) {
+        cards(pipe_id: $pipe_id, search: $search, first: $first, after: $after) {
             edges {
                 node {
                     id
@@ -97,6 +99,10 @@ GET_CARDS_QUERY = gql(
                         value
                     }
                 }
+            }
+            pageInfo {
+                hasNextPage
+                endCursor
             }
         }
     }

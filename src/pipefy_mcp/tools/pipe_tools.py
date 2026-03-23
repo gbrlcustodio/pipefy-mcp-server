@@ -238,19 +238,26 @@ class PipeTools:
             pipe_id: int,
             search: CardSearch | None = None,
             include_fields: bool = False,
+            first: int | None = None,
+            after: str | None = None,
         ) -> dict:
-            """Get all cards in the pipe.
+            """Get cards in the pipe with optional pagination.
+
+            Use ``first`` and ``after`` (from ``pageInfo.endCursor``) to paginate through
+            large result sets. Without pagination params, returns the API default page.
 
             Args:
                 pipe_id: The ID of the pipe.
                 search: Optional search filters.
                 include_fields: If True, include each card's custom fields (name, value) in the response.
+                first: Max cards to return per page.
+                after: Cursor for fetching the next page (from ``pageInfo.endCursor`` of a previous call).
             """
             await ctx.debug(
                 f"Getting cards for pipe {pipe_id} (include_fields={include_fields}, search={search})"
             )
             return await client.get_cards(
-                pipe_id, search, include_fields=include_fields
+                pipe_id, search, include_fields=include_fields, first=first, after=after
             )
 
         @mcp.tool(

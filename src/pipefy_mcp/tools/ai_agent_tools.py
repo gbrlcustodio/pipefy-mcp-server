@@ -146,7 +146,7 @@ class AiAgentTools:
             return build_toggle_agent_status_success(message=result["message"])
 
         @mcp.tool(
-            annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_ai_agent(ctx: Context, uuid: str) -> dict:
             """Get an AI Agent by UUID. Use get_pipe to find the pipe's uuid field, then get_ai_agents to list agents.
@@ -167,7 +167,7 @@ class AiAgentTools:
             return build_get_agent_success(agent)
 
         @mcp.tool(
-            annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_ai_agents(ctx: Context, repo_uuid: str) -> dict:
             """List all AI Agents for a pipe. Use before creating an agent to avoid duplicates.

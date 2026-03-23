@@ -192,7 +192,7 @@ class AutomationTools:
             )
 
         @mcp.tool(
-            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def create_automation(
             ctx: Context,
@@ -257,7 +257,7 @@ class AutomationTools:
             return build_automation_mutation_success_payload(automation, "created")
 
         @mcp.tool(
-            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+            annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_automation(
             ctx: Context,

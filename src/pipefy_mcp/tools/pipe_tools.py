@@ -58,9 +58,7 @@ class PipeTools:
         """Register the tools in the MCP server"""
 
         @mcp.tool(
-            annotations=ToolAnnotations(
-                idempotentHint=False,
-            ),
+            annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def create_card(
             ctx: Context[ServerSession, None],
@@ -134,9 +132,7 @@ class PipeTools:
             return await client.get_card(card_id, include_fields=include_fields)
 
         @mcp.tool(
-            annotations=ToolAnnotations(
-                idempotentHint=False,
-            ),
+            annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def add_card_comment(card_id: int, text: str) -> AddCardCommentPayload:
             """Add a text comment to a Pipefy card.
@@ -166,9 +162,7 @@ class PipeTools:
             return build_add_card_comment_success_payload(comment_id=comment_id)
 
         @mcp.tool(
-            annotations=ToolAnnotations(
-                idempotentHint=False,
-            ),
+            annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_comment(
             comment_id: int, text: str
@@ -200,9 +194,7 @@ class PipeTools:
             return build_update_comment_success_payload(comment_id=comment_id_out)
 
         @mcp.tool(
-            annotations=ToolAnnotations(
-                idempotentHint=False,
-            ),
+            annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def delete_comment(
             comment_id: int,
@@ -279,7 +271,10 @@ class PipeTools:
 
             Args:
                 pipe_id: The ID of the pipe to search in.
-                field_id: Pipefy field identifier (e.g. from get_start_form_fields or get_phase_fields).
+                field_id: Pipefy field slug (e.g. "status", "id_da_solicita_o") — the ``id``
+                    value returned by get_start_form_fields or get_phase_fields, NOT the
+                    human-readable label. Call get_start_form_fields first to discover valid
+                    field slugs for your pipe.
                 field_value: Value to match for that field (string; use the format expected by the field type).
                 include_fields: If True, include each card's custom fields (name, value) in the response.
             """
@@ -313,10 +308,7 @@ class PipeTools:
             return await client.get_pipe_members(pipe_id)
 
         @mcp.tool(
-            annotations=ToolAnnotations(
-                destructiveHint=False,
-                idempotentHint=True,
-            ),
+            annotations=ToolAnnotations(idempotentHint=True),
         )
         async def move_card_to_phase(card_id: int, destination_phase_id: int) -> dict:
             """Move a card to a specific phase."""
@@ -324,9 +316,7 @@ class PipeTools:
             return await client.move_card_to_phase(card_id, destination_phase_id)
 
         @mcp.tool(
-            annotations=ToolAnnotations(
-                idempotentHint=False,
-            ),
+            annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_card_field(
             card_id: int, field_id: str, new_value: Any
@@ -348,9 +338,7 @@ class PipeTools:
             return await client.update_card_field(card_id, field_id, new_value)
 
         @mcp.tool(
-            annotations=ToolAnnotations(
-                idempotentHint=False,
-            ),
+            annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_card(
             card_id: int,
@@ -477,9 +465,7 @@ class PipeTools:
             return await client.get_phase_fields(phase_id, required_only)
 
         @mcp.tool(
-            annotations=ToolAnnotations(
-                idempotentHint=False,
-            ),
+            annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def fill_card_phase_fields(
             ctx: Context[ServerSession, None],

@@ -478,4 +478,3 @@ async def test_get_ai_agent_tools_have_read_only_hint(client_session):
         tool = by_name[name]
         assert tool.annotations is not None
         assert tool.annotations.readOnlyHint is True
-        assert tool.annotations.destructiveHint is False

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "gql[httpx]>=3.5.2",
+    "openpyxl>=3.1.5",
     "httpx-auth>=0.23.1",
     "mcp[cli]>=1.25.0",
     "pydantic>=2.11.3",

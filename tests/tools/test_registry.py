@@ -20,6 +20,7 @@ class TestToolRegistry:
         assert registry.mcp is mock_mcp
         assert registry.services_container is mock_container
 
+    @patch("pipefy_mcp.tools.registry.ObservabilityTools.register")
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
     @patch("pipefy_mcp.tools.registry.AutomationTools.register")
     @patch("pipefy_mcp.tools.registry.WebhookTools.register")
@@ -42,8 +43,9 @@ class TestToolRegistry:
         mock_webhook_tools_register,
         mock_automation_tools_register,
         mock_introspection_tools_register,
+        mock_observability_tools_register,
     ):
-        """Test that register_tools calls Pipe, PipeConfig, FieldCondition, Table, Relation, Report, Member, Webhook, and Introspection tools."""
+        """Test that register_tools calls Pipe, PipeConfig, FieldCondition, Table, Relation, Report, Member, Webhook, Introspection, and Observability tools."""
         mock_mcp = Mock(spec=FastMCP)
         mock_client = Mock()
         mock_container = Mock(spec=ServicesContainer)
@@ -64,6 +66,7 @@ class TestToolRegistry:
         mock_webhook_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_observability_tools_register.assert_called_once_with(mock_mcp, mock_client)
         assert result is mock_mcp
 
     def test_register_tools_raises_when_pipefy_client_is_none(self):
@@ -81,6 +84,7 @@ class TestToolRegistry:
             exc.value
         )
 
+    @patch("pipefy_mcp.tools.registry.ObservabilityTools.register")
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
     @patch("pipefy_mcp.tools.registry.AiAgentTools.register")
     @patch("pipefy_mcp.tools.registry.AiAutomationTools.register")
@@ -107,6 +111,7 @@ class TestToolRegistry:
         mock_ai_automation_tools_register,
         mock_ai_agent_tools_register,
         mock_introspection_tools_register,
+        mock_observability_tools_register,
     ):
         mock_mcp = Mock(spec=FastMCP)
         mock_client = Mock()
@@ -132,6 +137,7 @@ class TestToolRegistry:
         mock_webhook_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_observability_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_ai_automation_tools_register.assert_called_once_with(
             mock_mcp, mock_ai_automation_service
         )

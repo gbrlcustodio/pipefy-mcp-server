@@ -211,8 +211,6 @@ class ReportTools:
                 message="Organization report export status retrieved.",
             )
 
-        # --- CRUD tools ---
-
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
         )
@@ -419,8 +417,6 @@ class ReportTools:
                 message="Organization report deleted.",
                 data=raw,
             )
-
-        # --- Export tools ---
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),

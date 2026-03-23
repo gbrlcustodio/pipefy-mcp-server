@@ -1,7 +1,5 @@
 from gql import gql
 
-# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
-
 CREATE_PIPE_MUTATION = gql(
     """
     mutation ($input: CreatePipeInput!) {

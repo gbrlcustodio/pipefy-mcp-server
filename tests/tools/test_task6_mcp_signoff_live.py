@@ -1,10 +1,9 @@
-"""Task 6 sign-off — automated slice of MCP stack smoke (opt-in integration).
+"""Live MCP smoke tests for pipe config and field-condition tooling (opt-in integration).
 
-Task 6 in ``tasks-ai-agents-field-conditions.md`` also requires **manual** steps in **Cursor MCP**
-(operator + LLM UX, ``destructiveHint`` gating, recording outcome). This module covers the
-pieces that can run in CI/agent sandboxes via ``call_tool`` on ``pipefy_mcp.server.mcp``.
+Exercises ``call_tool`` against ``pipefy_mcp.server.mcp`` with real credentials. Full release
+checklists may still require manual validation in an MCP client (e.g. destructive-hint UX).
 
-**Run (after ``.env`` with ``PIPEFY_*`` + a disposable test pipe):**
+Run (``.env`` with ``PIPEFY_*`` and a disposable test pipe):
 
     export TASK6_SIGNOFF_PIPE_ID=123456789
     export PIPE_FIELD_CONDITION_LIVE_PHASE_ID=987654321
@@ -13,9 +12,8 @@ pieces that can run in CI/agent sandboxes via ``call_tool`` on ``pipefy_mcp.serv
 ``TASK6_SIGNOFF_PIPE_ID`` falls back to ``PIPE_BUILDING_LIVE_PIPE_ID`` if unset.
 ``PIPE_FIELD_CONDITION_LIVE_PHASE_ID`` falls back to ``TASK6_SIGNOFF_PHASE_ID``.
 
-**Also run** (field condition create/delete cycle): ``tests/tools/test_field_conditions_tools_live.py``.
-
-**Manual only (Cursor):** Task 6.4–6.5 — UI parity, destructive confirmation UX, PR/ticket note.
+Also run field-condition create/delete coverage: ``tests/tools/test_field_conditions_tools_live.py``.
+See ``.cursor/dev-planning/specs/ai-agents-field-conditions/TASK_6_SIGNOFF.md`` for the full sign-off list.
 """
 
 from __future__ import annotations
@@ -170,8 +168,8 @@ async def test_task6_6_3_get_phase_fields_includes_internal_id_and_uuid(
 
     for idx, field in enumerate(fields[:5]):
         assert field.get("internal_id") is not None, (
-            f"fields[{idx}] missing internal_id (Task 5.3 / GET_PHASE_FIELDS_QUERY)"
+            f"fields[{idx}] missing internal_id (get_phase_fields / GET_PHASE_FIELDS_QUERY)"
         )
         assert field.get("uuid") is not None, (
-            f"fields[{idx}] missing uuid (Task 5.3 / GET_PHASE_FIELDS_QUERY)"
+            f"fields[{idx}] missing uuid (get_phase_fields / GET_PHASE_FIELDS_QUERY)"
         )

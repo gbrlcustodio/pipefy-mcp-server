@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from gql import gql
 
-# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
-
 INTROSPECT_TYPE_QUERY = gql(
     """
     query IntrospectType($typeName: String!) {

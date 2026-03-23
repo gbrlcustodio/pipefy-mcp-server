@@ -285,7 +285,7 @@ def _filter_fields_by_definitions(
 def map_delete_card_error_to_message(
     *, card_id: int, card_title: str, codes: list[str]
 ) -> str:
-    """Map GraphQL error codes to PRD-compliant friendly messages for delete_card."""
+    """Map GraphQL error codes to short, actionable messages for delete_card."""
     for code in codes:
         if code == "RESOURCE_NOT_FOUND":
             return (

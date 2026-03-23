@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from gql import gql
 
-# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
 # API uses createAndSendInboxEmail (not sendInboxEmail); verified via introspection.
 
 GET_EMAIL_TEMPLATES_QUERY = gql(

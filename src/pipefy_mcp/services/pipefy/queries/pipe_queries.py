@@ -1,7 +1,5 @@
 from gql import gql
 
-# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
-
 GET_PIPE_QUERY = gql(
     """
     query ($pipe_id: ID!) {

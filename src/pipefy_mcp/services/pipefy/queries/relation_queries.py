@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from gql import gql
 
-# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
 # Schema: Pipe uses parentsRelations/childrenRelations (not pipe_relations); tables use root table_relations(ids: [ID!]!).
 
 _REPO_TYPES_ID_NAME = """... on Pipe {

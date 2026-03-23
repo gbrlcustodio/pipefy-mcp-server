@@ -6,6 +6,7 @@ from .card_service import CardService
 from .client import PipefyClient
 from .internal_api_client import InternalApiClient
 from .member_service import MemberService
+from .observability_service import DateRange, ObservabilityService
 from .pipe_config_service import PipeConfigService
 from .pipe_service import PipeService
 from .relation_service import RelationService
@@ -20,8 +21,10 @@ __all__ = [
     "AutomationService",
     "BasePipefyClient",
     "CardService",
+    "DateRange",
     "InternalApiClient",
     "MemberService",
+    "ObservabilityService",
     "PipeConfigService",
     "PipefyClient",
     "PipeService",

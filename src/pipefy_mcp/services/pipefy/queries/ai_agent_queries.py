@@ -2,8 +2,6 @@
 
 from gql import gql
 
-# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
-
 GET_AI_AGENT_QUERY = gql(
     """
     query aiAgent($uuid: ID!) {

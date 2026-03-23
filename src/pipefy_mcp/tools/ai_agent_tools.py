@@ -7,7 +7,7 @@ from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
-from pipefy_mcp.services.pipefy.ai_agent_service import AiAgentService
+from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
     build_create_agent_success,
@@ -24,7 +24,7 @@ class AiAgentTools:
     """Declares MCP tools for AI Agent CRUD and status."""
 
     @staticmethod
-    def register(mcp: FastMCP, service: AiAgentService) -> None:
+    def register(mcp: FastMCP, client: PipefyClient) -> None:
         """Register AI Agent tools on the MCP server."""
 
         def error_payload_from_exception(exc: BaseException) -> dict:
@@ -57,7 +57,7 @@ class AiAgentTools:
                 return build_ai_tool_error(str(exc))
 
             try:
-                result = await service.create_agent(validated)
+                result = await client.create_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
                 return build_ai_tool_error(str(exc))
 
@@ -105,7 +105,7 @@ class AiAgentTools:
                 return build_ai_tool_error(str(exc))
 
             try:
-                result = await service.update_agent(validated)
+                result = await client.update_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
                 return build_ai_tool_error(str(exc))
 
@@ -137,7 +137,7 @@ class AiAgentTools:
                 return build_ai_tool_error("uuid must not be blank")
 
             try:
-                result = await service.toggle_agent_status(
+                result = await client.toggle_ai_agent_status(
                     agent_uuid=agent_uuid, active=active
                 )
             except Exception as exc:  # noqa: BLE001
@@ -159,7 +159,7 @@ class AiAgentTools:
             if not agent_uuid:
                 return build_ai_tool_error("uuid must not be blank")
             try:
-                agent = await service.get_agent(agent_uuid)
+                agent = await client.get_ai_agent(agent_uuid)
             except Exception as exc:  # noqa: BLE001
                 return error_payload_from_exception(exc)
             if not agent:
@@ -180,7 +180,7 @@ class AiAgentTools:
             if not pipe_uuid:
                 return build_ai_tool_error("repo_uuid must not be blank")
             try:
-                agents = await service.get_agents(pipe_uuid)
+                agents = await client.get_ai_agents(pipe_uuid)
             except Exception as exc:  # noqa: BLE001
                 return error_payload_from_exception(exc)
             return build_get_agents_success(agents)
@@ -199,7 +199,7 @@ class AiAgentTools:
             if not agent_uuid:
                 return build_ai_tool_error("uuid must not be blank")
             try:
-                result = await service.delete_agent(agent_uuid)
+                result = await client.delete_ai_agent(agent_uuid)
             except Exception as exc:  # noqa: BLE001
                 return error_payload_from_exception(exc)
             if not result.get("success"):

@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from httpx_auth import OAuth2ClientCredentials
-
 from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.services.pipefy.ai_agent_service import AiAgentService
 from pipefy_mcp.services.pipefy.ai_automation_service import AiAutomationService
 from pipefy_mcp.services.pipefy.internal_api_client import InternalApiClient
 from pipefy_mcp.settings import Settings
@@ -18,7 +15,6 @@ class ServicesContainer:
     pipefy_client: PipefyClient | None = None
     internal_api_client: InternalApiClient | None = None
     ai_automation_service: AiAutomationService | None = None
-    ai_agent_service: AiAgentService | None = None
 
     @classmethod
     def get_instance(cls) -> Self:
@@ -52,15 +48,6 @@ class ServicesContainer:
             )
             self.ai_automation_service = AiAutomationService(
                 client=self.internal_api_client
-            )
-            auth = OAuth2ClientCredentials(
-                token_url=oauth_url,
-                client_id=oauth_client,
-                client_secret=oauth_secret,
-            )
-            self.ai_agent_service = AiAgentService(
-                settings=settings.pipefy,
-                auth=auth,
             )
 
     def shutdown(self) -> None:

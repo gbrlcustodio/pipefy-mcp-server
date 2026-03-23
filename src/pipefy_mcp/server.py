@@ -23,10 +23,18 @@ def _clear_fastmcp_tools_if_repeat_visit(app: FastMCP) -> None:
     In-process MCP sessions (tests, Cursor) can enter lifespan multiple times;
     ``initialize_services`` then updates the container but tools would still call
     the old client unless we remove stale tools before ``register_tools``.
+
+    NOTE: Uses private ``app._tool_manager`` (tested with mcp[cli]>=1.25.0).
     """
     if getattr(app, _PIPEFY_APP_TOOLS_ATTR, False):
-        for tool in list(app._tool_manager.list_tools()):
-            app._tool_manager.remove_tool(tool.name)
+        try:
+            for tool in list(app._tool_manager.list_tools()):
+                app._tool_manager.remove_tool(tool.name)
+        except AttributeError:
+            logger.warning(
+                "FastMCP internal API changed; could not clear stale tools. "
+                "Tool re-registration may produce duplicates."
+            )
     setattr(app, _PIPEFY_APP_TOOLS_ATTR, True)
 
 
@@ -44,8 +52,9 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
         ).register_tools()
 
         yield mcp
-    except Exception as e:
-        logger.error(f"Error during server lifespan: {e}")
+    except Exception:
+        logger.exception("Fatal error during server lifespan")
+        raise
 
 
 PIPEFY_INSTRUCTIONS = textwrap.dedent("""

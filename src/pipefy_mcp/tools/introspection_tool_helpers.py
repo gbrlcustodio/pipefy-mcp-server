@@ -31,9 +31,3 @@ def build_error_payload(error_message: str) -> dict[str, Any]:
         "success": False,
         "error": error_message,
     }
-
-
-build_introspection_success_payload = build_success_payload
-build_execute_success_payload = build_success_payload
-build_introspection_error_payload = build_error_payload
-build_execute_error_payload = build_error_payload

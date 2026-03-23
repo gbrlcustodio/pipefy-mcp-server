@@ -736,7 +736,6 @@ class TableTools:
                 update_attrs["required"] = required
             if options is not None:
                 update_attrs["options"] = options
-            # Validate that we have something to update
             has_updates = bool(update_attrs) or any(
                 x is not None for x in (label, description, required, options)
             )
@@ -744,12 +743,9 @@ class TableTools:
                 return build_table_mutation_error_payload(
                     message="Provide at least one attribute to update and table_id (required by API).",
                 )
-            # table_id can come from parameter or extra_input; parameter takes precedence
-            # If in extra_input, remove it from update_attrs to pass as parameter instead
             table_id_to_use = table_id
             if table_id_to_use is None and "table_id" in update_attrs:
                 table_id_to_use = update_attrs.pop("table_id")
-            # Ensure table_id is not None when we have updates (API requirement)
             if table_id_to_use is None and update_attrs:
                 return build_table_mutation_error_payload(
                     message=(

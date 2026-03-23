@@ -172,7 +172,7 @@ def build_delete_pipe_preview_payload(
             }
         ),
         "message": (
-            "⚠️ You are about to permanently delete pipe "
+            "Warning: You are about to permanently delete pipe "
             f"'{pipe_name}' (ID: {pipe_id}). "
             "This cannot be undone. Confirm with the user, then call again with confirm=True."
         ),

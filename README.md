@@ -30,7 +30,7 @@
 
 ## Feature Overview
 
-This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonnet 4.5 inside Cursor) can invoke. The codebase follows a clean architecture with a facade pattern delegating to domain-specific services (Pipe and Card operations), keeping GraphQL queries and utilities organized in separate modules.
+This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonnet 4.5 inside Cursor) can invoke. The codebase follows a clean architecture with a facade pattern delegating to domain-specific services (Pipe, Card, and Database operations), keeping GraphQL queries and utilities organized in separate modules.
 
 ### Pipe Tools
 
@@ -74,6 +74,17 @@ This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonn
 * **`move_card_to_phase`**: Move a card to a different phase (e.g., move a task to "Code Review" after pushing a PR).
 * **`update_card_field`**: Update a single field of an existing card via `updateCardField` (simple, full replacement of that field's value).
 * **`update_card`**: Update card attributes (title, assignees, labels, due date) and/or multiple custom fields using `updateCard` and `updateFieldsValues`.
+
+### Database Tools
+
+Pipefy Databases (also called Tables) are structured records that live outside pipes — useful for storing reference data like suppliers, clients, or products.
+
+All database tools are **read-only** (`readOnlyHint=true`) and will never modify your data.
+
+* **`search_tables`**: Search for databases across all organizations using fuzzy name matching. Omit `table_name` to list all tables. Returns organizations with their matching tables and a `match_score`.
+* **`get_table`**: Get the schema of a database by its ID, including all field definitions (`id`, `label`, `type`, `required`, `options`).
+* **`get_table_records`**: List records from a database with cursor-based pagination. Use `first` (default: 50) to control page size and `after` (the `end_cursor` from a previous response) to paginate.
+* **`get_table_record`**: Get a specific database record by its ID, including all field values.
 
 ### Card update tools: when to use each
 

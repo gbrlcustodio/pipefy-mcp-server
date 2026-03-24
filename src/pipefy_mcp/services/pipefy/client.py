@@ -5,6 +5,7 @@ from typing import Any
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.services.pipefy.card_service import CardService
+from pipefy_mcp.services.pipefy.database_service import DatabaseService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.types import CardSearch
 from pipefy_mcp.settings import PipefySettings
@@ -21,6 +22,7 @@ class PipefyClient:
         )
         self._pipe_service = PipeService(settings=settings, auth=auth)
         self._card_service = CardService(settings=settings, auth=auth)
+        self._database_service = DatabaseService(settings=settings, auth=auth)
 
     async def get_pipe(self, pipe_id: int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
@@ -143,3 +145,21 @@ class PipefyClient:
     ) -> dict:
         """Get the fields available in a specific phase."""
         return await self._pipe_service.get_phase_fields(phase_id, required_only)
+
+    async def get_table(self, table_id: str) -> dict:
+        """Get a database (table) by its ID, including its fields schema."""
+        return await self._database_service.get_table(table_id)
+
+    async def get_table_records(
+        self, table_id: str, first: int = 50, after: str | None = None
+    ) -> dict:
+        """Get records from a database (table) with cursor-based pagination."""
+        return await self._database_service.get_table_records(table_id, first, after)
+
+    async def get_table_record(self, record_id: str) -> dict:
+        """Get a specific database record by its ID."""
+        return await self._database_service.get_table_record(record_id)
+
+    async def search_tables(self, table_name: str | None = None) -> dict:
+        """Search for databases (tables) across all organizations."""
+        return await self._database_service.search_tables(table_name)

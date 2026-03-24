@@ -4,6 +4,7 @@ import pytest
 
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
+from pipefy_mcp.services.pipefy.database_service import DatabaseService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.settings import PipefySettings
 
@@ -802,4 +803,113 @@ async def test_search_pipes_delegates_to_pipe_service():
     result = await client.search_pipes(pipe_name)
 
     pipe_service.search_pipes.assert_called_once_with(pipe_name)
+    assert result == expected
+
+
+# ============================================================================
+# Tests for database facade delegation
+# ============================================================================
+
+
+def _make_db_client():
+    """Create a PipefyClient with a mocked DatabaseService."""
+    db_service = AsyncMock(spec=DatabaseService)
+    client = PipefyClient.__new__(PipefyClient)
+    client._database_service = db_service
+    return client, db_service
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_table_delegates_to_database_service():
+    """Test get_table delegates unchanged to DatabaseService.get_table."""
+    table_id = "EX5gLJtH"
+    expected = {"table": {"id": table_id, "name": "Clients", "description": None, "table_fields": []}}
+
+    client, db_service = _make_db_client()
+    db_service.get_table = AsyncMock(return_value=expected)
+
+    result = await client.get_table(table_id)
+
+    db_service.get_table.assert_awaited_once_with(table_id)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_table_records_delegates_with_defaults():
+    """Test get_table_records delegates to DatabaseService with default first/after."""
+    table_id = "EX5gLJtH"
+    expected = {"records": [], "total_count": 0, "has_next_page": False, "end_cursor": None}
+
+    client, db_service = _make_db_client()
+    db_service.get_table_records = AsyncMock(return_value=expected)
+
+    result = await client.get_table_records(table_id)
+
+    db_service.get_table_records.assert_awaited_once_with(table_id, 50, None)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_table_records_delegates_with_pagination_args():
+    """Test get_table_records passes first and after cursor to DatabaseService."""
+    table_id = "T1"
+    cursor = "cursor_xyz"
+    expected = {"records": [], "total_count": 5, "has_next_page": False, "end_cursor": None}
+
+    client, db_service = _make_db_client()
+    db_service.get_table_records = AsyncMock(return_value=expected)
+
+    result = await client.get_table_records(table_id, first=10, after=cursor)
+
+    db_service.get_table_records.assert_awaited_once_with(table_id, 10, cursor)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_table_record_delegates_to_database_service():
+    """Test get_table_record delegates unchanged to DatabaseService.get_table_record."""
+    record_id = "TR_abc123"
+    expected = {"id": record_id, "title": "Some record", "record_fields": []}
+
+    client, db_service = _make_db_client()
+    db_service.get_table_record = AsyncMock(return_value=expected)
+
+    result = await client.get_table_record(record_id)
+
+    db_service.get_table_record.assert_awaited_once_with(record_id)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_tables_delegates_to_database_service():
+    """Test search_tables delegates unchanged to DatabaseService.search_tables."""
+    table_name = "Clients"
+    expected = {"organizations": [{"id": "org1", "name": "Acme", "tables": []}]}
+
+    client, db_service = _make_db_client()
+    db_service.search_tables = AsyncMock(return_value=expected)
+
+    result = await client.search_tables(table_name)
+
+    db_service.search_tables.assert_awaited_once_with(table_name)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_tables_without_name_delegates_with_none():
+    """Test search_tables without argument passes None to DatabaseService."""
+    expected = {"organizations": []}
+
+    client, db_service = _make_db_client()
+    db_service.search_tables = AsyncMock(return_value=expected)
+
+    result = await client.search_tables()
+
+    db_service.search_tables.assert_awaited_once_with(None)
     assert result == expected

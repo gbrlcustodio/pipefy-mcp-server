@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.tools.database_tools import DatabaseTools
 from pipefy_mcp.tools.pipe_tools import PipeTools
 
 
@@ -18,6 +19,7 @@ class ToolRegistry:
             raise ValueError("Pipefy client is not initialized in services container")
 
         PipeTools.register(self.mcp, self.services_container.pipefy_client)
+        DatabaseTools.register(self.mcp, self.services_container.pipefy_client)
 
         mcp = self.mcp
 

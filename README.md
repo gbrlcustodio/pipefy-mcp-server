@@ -24,6 +24,8 @@
   <a href="#mcp-tools">MCP tools</a> •
   <a href="#getting-started">Getting started</a> •
   <a href="#usage-with-cursor">Usage with Cursor</a> •
+  <a href="#usage-with-claude-desktop">Usage with Claude Desktop</a> •
+  <a href="#usage-with-claude-code">Usage with Claude Code</a> •
   <a href="#development--testing">Development & Testing</a> •
   <a href="#contributing">Contributing</a>
 </p>
@@ -103,6 +105,87 @@ To use this with Cursor, you need to register it as an MCP server in your settin
     }
 }
 ```
+
+## Usage with Claude Desktop
+
+Claude Desktop discovers MCP servers via a configuration file. Copy [`.env.example`](.env.example) to `.env` at the repo root and fill in your Service Account credentials (same variables as in the `env` block below).
+
+**Config file location**
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+    "mcpServers": {
+        "pipefy": {
+            "command": "uv",
+            "args": [
+                "run",
+                "--directory",
+                "/absolute/path/to/pipefy-mcp-server",
+                "pipefy-mcp-server"
+            ],
+            "env": {
+                "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
+                "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
+                "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
+                "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
+                "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
+            }
+        }
+    }
+}
+```
+
+Replace `/absolute/path/to/pipefy-mcp-server` with your clone path. For the full variable list and placeholders, see [`.env.example`](.env.example).
+
+## Usage with Claude Code
+
+Copy [`.env.example`](.env.example) to `.env` and set credentials, or pass the same keys via `claude mcp add-env` as shown below.
+
+**CLI (per project)**
+
+```bash
+claude mcp add --scope project pipefy \
+  -- uv run --directory /absolute/path/to/pipefy-mcp-server pipefy-mcp-server
+```
+
+Then set environment variables (repeat for each key from [`.env.example`](.env.example)):
+
+```bash
+claude mcp add-env pipefy PIPEFY_OAUTH_CLIENT <YOUR_CLIENT_ID>
+claude mcp add-env pipefy PIPEFY_OAUTH_SECRET <YOUR_CLIENT_SECRET>
+claude mcp add-env pipefy PIPEFY_GRAPHQL_URL https://app.pipefy.com/graphql
+claude mcp add-env pipefy PIPEFY_INTERNAL_API_URL https://app.pipefy.com/internal_api
+claude mcp add-env pipefy PIPEFY_OAUTH_URL https://app.pipefy.com/oauth/token
+```
+
+**`.mcp.json` (project root)**
+
+```json
+{
+    "mcpServers": {
+        "pipefy": {
+            "command": "uv",
+            "args": [
+                "run",
+                "--directory",
+                "/absolute/path/to/pipefy-mcp-server",
+                "pipefy-mcp-server"
+            ],
+            "env": {
+                "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
+                "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
+                "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
+                "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
+                "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
+            }
+        }
+    }
+}
+```
+
+The CLI approach is quicker for testing. The `.mcp.json` approach is better for teams — commit it to the repo and everyone gets the same config (use placeholders for secrets or inject them via your environment).
 
 ## Development & Testing
 

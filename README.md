@@ -73,7 +73,13 @@ cd pipefy-mcp-server
 
 # Sync dependencies
 uv sync
+
+# Optional: local credentials (see also MCP client env blocks below)
+cp .env.example .env
+# Edit .env with your Service Account client ID and secret.
 ```
+
+The MCP server loads configuration with **Pydantic Settings** (`pipefy_mcp.settings.Settings`): it reads a `.env` file in the **current working directory** (when you run `uv run pipefy-mcp-server` from the repo root, that is the project `.env`) and merges **process environment variables**, which **override** values from `.env`. The nested `pipefy` block maps to variables named `PIPEFY_GRAPHQL_URL`, `PIPEFY_INTERNAL_API_URL`, `PIPEFY_OAUTH_URL`, `PIPEFY_OAUTH_CLIENT`, and `PIPEFY_OAUTH_SECRET` — the same keys as in [`.env.example`](.env.example). For details on nested env names and priority, see the [Pydantic settings docs](https://docs.pydantic.dev/latest/concepts/pydantic_settings/).
 
 ## Usage with Cursor
 To use this with Cursor, you need to register it as an MCP server in your settings.

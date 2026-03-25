@@ -1,7 +1,7 @@
 # MCP server for Pipefy
 
 <p align="center">
-  <strong>Pipefy MCP is an open-source MCP server that lets your IDE safely create cards, update field information, and use any Pipefy resource — all with built-in safety controls.</strong>
+  <strong>Open-source MCP for Pipefy: 108 tools across pipes, cards, tables, relations, reports, automations, AI agents and observability — built for your IDE, with pagination, introspection and safe deletes.</strong>
 </p>
 
 <p align="center">
@@ -23,9 +23,7 @@
 <p align="center">
   <a href="#mcp-tools">MCP tools</a> •
   <a href="#getting-started">Getting started</a> •
-  <a href="#usage-with-cursor">Usage with Cursor</a> •
-  <a href="#usage-with-claude-desktop">Usage with Claude Desktop</a> •
-  <a href="#usage-with-claude-code">Usage with Claude Code</a> •
+  <a href="#mcp-clients">MCP clients</a> •
   <a href="#development--testing">Development & Testing</a> •
   <a href="#contributing">Contributing</a>
 </p>
@@ -36,12 +34,12 @@
 
 **108 tools** across 8 categories. Each tool has a docstring consumed by LLM clients for routing — treat those as the source of truth for arguments.
 
-**Common patterns across all tools:**
-- **Pagination** — list tools support `first` / `after`. Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response.
-- **`debug=true`** — on errors, appends GraphQL codes and `correlation_id` to the error message.
-- **`extra_input`** — merges extra API keys (camelCase) into the mutation input. Keys that duplicate primary arguments are ignored.
-- **Destructive deletes** — two-step: first call returns a preview, second call with `confirm=true` executes the delete.
-- **`introspect_type`** — discover allowed field types, enum values, and input shapes from the live API schema.
+**Shared conventions (many tools):**
+- **Pagination** — List endpoints accept `first` and `after`. Use `pageInfo.hasNextPage` and `pageInfo.endCursor` to fetch the next page.
+- **`debug=true`** — Failed calls may include extra detail: GraphQL error codes and a `correlation_id` for support.
+- **`extra_input`** — Optional map of extra mutation fields (camelCase keys). Values that overlap the tool’s main parameters are ignored.
+- **Destructive deletes** — Two steps by default: the first response is a preview; call again with `confirm=true` to run the delete.
+- **`introspect_type`** — Ask the live schema for a type: fields, enums, and input shapes (for discovery, not for business data).
 
 | Category | Tools | Description | Docs |
 |----------|:-----:|-------------|------|
@@ -61,7 +59,8 @@
 ### Prerequisites
 - Python 3.11+
 - A **Pipefy Service Account Token** (Generate in Admin Panel > Service Accounts).
-- Remember to add the service account to the pipe you want the AI to use.
+
+Remember to add the service account to the pipe you want the AI to use.
 
 ### Installation
 We recommend using `uv` for dependency management. Ensure it's [installed](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_1).
@@ -74,124 +73,21 @@ cd pipefy-mcp-server
 # Sync dependencies
 uv sync
 
-# Optional: local credentials (see also MCP client env blocks below)
+# Optional: copy template and edit (see docs/configuration.md)
 cp .env.example .env
-# Edit .env with your Service Account client ID and secret.
 ```
 
-The MCP server loads configuration with **Pydantic Settings** (`pipefy_mcp.settings.Settings`): it reads a `.env` file in the **current working directory** (when you run `uv run pipefy-mcp-server` from the repo root, that is the project `.env`) and merges **process environment variables**, which **override** values from `.env`. The nested `pipefy` block maps to variables named `PIPEFY_GRAPHQL_URL`, `PIPEFY_INTERNAL_API_URL`, `PIPEFY_OAUTH_URL`, `PIPEFY_OAUTH_CLIENT`, and `PIPEFY_OAUTH_SECRET` — the same keys as in [`.env.example`](.env.example). For details on nested env names and priority, see the [Pydantic settings docs](https://docs.pydantic.dev/latest/concepts/pydantic_settings/).
+**Environment variables:** names, placeholders, and how `.env` interacts with Pydantic Settings are documented in **[Configuration](docs/configuration.md)** (keys themselves live only in [`.env.example`](.env.example)).
 
-## Usage with Cursor
-To use this with Cursor, you need to register it as an MCP server in your settings.
+## MCP clients
 
-1. Open Cursor.
-1. Navigate to Cursor Settings > Features > MCP Servers.
-1. Click + Add New MCP Server.
-1. Fill in the details as shown in the configuration block below.
+Step-by-step JSON samples and CLI examples live in **[MCP client setup](docs/mcp-client-setup.md)**:
 
-```json
-{
-    "mcpServers": {
-        "pipefy": {
-            "cwd": "/absolute/path/to/pipefy-mcp-server",
-            "command": "uv",
-            "args": [
-                "run",
-                "--directory",
-                ".",
-                "pipefy-mcp-server"
-            ],
-            "env": {
-                "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
-                "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
-                "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
-                "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
-            }
-        }
-    }
-}
-```
-
-## Usage with Claude Desktop
-
-Claude Desktop discovers MCP servers via a configuration file. Copy [`.env.example`](.env.example) to `.env` at the repo root and fill in your Service Account credentials (same variables as in the `env` block below).
-
-**Config file location**
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-    "mcpServers": {
-        "pipefy": {
-            "command": "uv",
-            "args": [
-                "run",
-                "--directory",
-                "/absolute/path/to/pipefy-mcp-server",
-                "pipefy-mcp-server"
-            ],
-            "env": {
-                "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
-                "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
-                "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
-                "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
-                "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
-            }
-        }
-    }
-}
-```
-
-Replace `/absolute/path/to/pipefy-mcp-server` with your clone path. For the full variable list and placeholders, see [`.env.example`](.env.example).
-
-## Usage with Claude Code
-
-Copy [`.env.example`](.env.example) to `.env` and set credentials, or pass the same keys via `claude mcp add-env` as shown below.
-
-**CLI (per project)**
-
-```bash
-claude mcp add --scope project pipefy \
-  -- uv run --directory /absolute/path/to/pipefy-mcp-server pipefy-mcp-server
-```
-
-Then set environment variables (repeat for each key from [`.env.example`](.env.example)):
-
-```bash
-claude mcp add-env pipefy PIPEFY_OAUTH_CLIENT <YOUR_CLIENT_ID>
-claude mcp add-env pipefy PIPEFY_OAUTH_SECRET <YOUR_CLIENT_SECRET>
-claude mcp add-env pipefy PIPEFY_GRAPHQL_URL https://app.pipefy.com/graphql
-claude mcp add-env pipefy PIPEFY_INTERNAL_API_URL https://app.pipefy.com/internal_api
-claude mcp add-env pipefy PIPEFY_OAUTH_URL https://app.pipefy.com/oauth/token
-```
-
-**`.mcp.json` (project root)**
-
-```json
-{
-    "mcpServers": {
-        "pipefy": {
-            "command": "uv",
-            "args": [
-                "run",
-                "--directory",
-                "/absolute/path/to/pipefy-mcp-server",
-                "pipefy-mcp-server"
-            ],
-            "env": {
-                "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
-                "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
-                "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
-                "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
-                "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
-            }
-        }
-    }
-}
-```
-
-The CLI approach is quicker for testing. The `.mcp.json` approach is better for teams — commit it to the repo and everyone gets the same config (use placeholders for secrets or inject them via your environment).
+| Client | Doc |
+|--------|-----|
+| **Cursor** | [Cursor](docs/mcp-client-setup.md#cursor) |
+| **Claude Desktop** | [Claude Desktop](docs/mcp-client-setup.md#claude-desktop) |
+| **Claude Code** | [Claude Code](docs/mcp-client-setup.md#claude-code) |
 
 ## Development & Testing
 

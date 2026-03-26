@@ -257,6 +257,25 @@ __all__ = [
     "GET_TABLES_QUERY",
     "SET_TABLE_RECORD_FIELD_VALUE_MUTATION",
     "UPDATE_TABLE_FIELD_MUTATION",
+    "SEARCH_TABLES_QUERY",
     "UPDATE_TABLE_MUTATION",
     "UPDATE_TABLE_RECORD_MUTATION",
 ]
+
+SEARCH_TABLES_QUERY = gql(
+    """
+    {
+        organizations {
+            id
+            name
+            tables {
+                nodes {
+                    id
+                    name
+                    description
+                }
+            }
+        }
+    }
+    """
+)

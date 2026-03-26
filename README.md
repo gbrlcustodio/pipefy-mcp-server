@@ -44,7 +44,7 @@
 | Category | Tools | Description | Docs |
 |----------|:-----:|-------------|------|
 | **Pipes & cards** | 33 | Read, create, update, and delete pipes, phases, fields, labels, cards, and field conditions. | [Details](docs/tools/pipes-and-cards.md) |
-| **Database tables** | 15 | Tables, records (rows), and schema columns (table fields). | [Details](docs/tools/database-tables.md) |
+| **Database tables** | 16 | Tables, records (rows), schema columns (table fields), and org-wide table discovery. | [Details](docs/tools/database-tables.md) |
 | **Relations** | 6 | Link pipes, tables, and cards across workflows. | [Details](docs/tools/relations.md) |
 | **Reports** | 16 | Pipe and organization reports: discovery, CRUD, and async exports. | [Details](docs/tools/reports.md) |
 | **Automations & AI** | 15 | Traditional automations (rules engine) and AI-powered automations and agents. | [Details](docs/tools/automations-and-ai.md) |

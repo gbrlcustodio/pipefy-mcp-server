@@ -60,6 +60,18 @@ class TableTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
+        async def search_tables(table_name: str | None = None) -> dict[str, Any]:
+            """Search for databases (tables) across all organizations.
+
+            Args:
+                table_name: Optional name to search for (fuzzy match, 70% threshold).
+                            If not provided, returns all tables in all organizations.
+            """
+            return await client.search_tables(table_name)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
         async def get_table(table_id: str | int) -> dict[str, Any]:
             """Load one database table: name, description, fields, and authorization.
 

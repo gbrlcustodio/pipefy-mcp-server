@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from httpx_auth import OAuth2ClientCredentials
+from rapidfuzz import fuzz
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.queries.table_queries import (
@@ -19,6 +20,7 @@ from pipefy_mcp.services.pipefy.queries.table_queries import (
     GET_TABLE_RECORD_QUERY,
     GET_TABLE_RECORDS_QUERY,
     GET_TABLES_QUERY,
+    SEARCH_TABLES_QUERY,
     SET_TABLE_RECORD_FIELD_VALUE_MUTATION,
     UPDATE_TABLE_FIELD_MUTATION,
     UPDATE_TABLE_MUTATION,
@@ -270,3 +272,59 @@ class TableService(BasePipefyClient):
             DELETE_TABLE_FIELD_MUTATION,
             {"input": {"id": field_id}},
         )
+
+    async def search_tables(
+        self, table_name: str | None = None, match_threshold: int = 70
+    ) -> dict[str, Any]:
+        """Search for databases (tables) across all organizations using fuzzy matching.
+
+        Args:
+            table_name: Optional table name to search for (fuzzy match).
+                        Supports partial matches.
+                        If not provided, returns all tables.
+            match_threshold: Minimum fuzzy match score (0-100). Default: 70.
+
+        Returns:
+            dict: Organizations with their matching tables, sorted by match score.
+        """
+        result = await self.execute_query(SEARCH_TABLES_QUERY, {})
+        organizations = result.get("organizations", [])
+
+        if not table_name:
+            return {
+                "organizations": [
+                    {
+                        "id": org.get("id"),
+                        "name": org.get("name"),
+                        "tables": org.get("tables", {}).get("nodes", []),
+                    }
+                    for org in organizations
+                ]
+            }
+
+        filtered_orgs = []
+
+        for org in organizations:
+            matching_tables = []
+            for table in org.get("tables", {}).get("nodes", []):
+                table_display_name = table.get("name", "")
+                score = fuzz.WRatio(
+                    table_name, table_display_name, score_cutoff=match_threshold
+                )
+                if score:
+                    matching_tables.append((score, table))
+
+            if matching_tables:
+                matching_tables.sort(key=lambda x: x[0], reverse=True)
+                filtered_orgs.append(
+                    {
+                        "id": org.get("id"),
+                        "name": org.get("name"),
+                        "tables": [
+                            {**table, "match_score": round(score, 1)}
+                            for score, table in matching_tables
+                        ],
+                    }
+                )
+
+        return {"organizations": filtered_orgs}

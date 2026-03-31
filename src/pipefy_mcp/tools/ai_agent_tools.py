@@ -80,7 +80,7 @@ class AiAgentTools:
 
             Known ``actionType`` values and their required ``metadata``:
               - ``move_card`` → ``{"destinationPhaseId": "<phase_id>"}``
-              - ``update_card_field`` → ``{"fieldsAttributes": [{"fieldId": "...", "value": "..."}]}``
+              - ``update_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [{"fieldId": "...", "inputMode": "fill_with_ai", "value": ""}]}``
               - ``create_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
               - ``create_connected_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
 

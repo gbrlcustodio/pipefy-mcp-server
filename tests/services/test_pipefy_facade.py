@@ -554,6 +554,7 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
         CreateAiAgentInput,
         UpdateAiAgentInput,
     )
+    from tests.ai_agent_test_payloads import minimal_behavior_dict
 
     ai_agent_service = AsyncMock()
     ai_agent_service.create_agent = AsyncMock(
@@ -572,6 +573,10 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
     cin = CreateAiAgentInput(
         name="n",
         repo_uuid="00000000-0000-0000-0000-000000000001",
+        instruction="purpose",
+        behaviors=[
+            BehaviorInput.model_validate(minimal_behavior_dict(name="b", event_id="evt"))
+        ],
     )
     assert await client.create_ai_agent(cin) == {
         "agent_uuid": "new-1",
@@ -583,7 +588,9 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
         uuid="00000000-0000-0000-0000-000000000002",
         name="n",
         repo_uuid="00000000-0000-0000-0000-000000000001",
-        behaviors=[BehaviorInput(name="b", event_id="evt")],
+        behaviors=[
+            BehaviorInput.model_validate(minimal_behavior_dict(name="b", event_id="evt"))
+        ],
     )
     assert await client.update_ai_agent(uin) == {
         "agent_uuid": "new-1",

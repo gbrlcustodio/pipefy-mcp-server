@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from gql.transport.exceptions import TransportQueryError
 
+from tests.ai_agent_test_payloads import minimal_behavior_dict
+
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_mcp.services.pipefy.ai_agent_service import (
     AiAgentService,
@@ -235,7 +237,12 @@ async def test_create_agent_calls_execute_query_with_correct_variables():
     service = _create_mock_service(
         {"createAiAgent": {"agent": {"uuid": "new-uuid-123"}}}
     )
-    inp = CreateAiAgentInput(name="My Agent", repo_uuid="repo-456")
+    inp = CreateAiAgentInput(
+        name="My Agent",
+        repo_uuid="repo-456",
+        instruction="Purpose",
+        behaviors=[minimal_behavior_dict(name="B")],
+    )
 
     result = await service.create_agent(inp)
 
@@ -255,7 +262,12 @@ async def test_create_agent_calls_execute_query_with_correct_variables():
 async def test_create_agent_returns_success_format():
     """create_agent returns agent_uuid and message in success format."""
     service = _create_mock_service({"createAiAgent": {"agent": {"uuid": "xyz-789"}}})
-    inp = CreateAiAgentInput(name="Test", repo_uuid="repo-1")
+    inp = CreateAiAgentInput(
+        name="Test",
+        repo_uuid="repo-1",
+        instruction="Purpose",
+        behaviors=[minimal_behavior_dict(name="B")],
+    )
 
     result = await service.create_agent(inp)
 
@@ -276,7 +288,7 @@ async def test_update_agent_calls_execute_query_with_correct_variables():
         repo_uuid="repo-456",
         instruction="Do things",
         data_source_ids=["ds1"],
-        behaviors=[{"name": "B1", "event_id": "card_created"}],
+        behaviors=[minimal_behavior_dict(name="B1")],
     )
 
     result = await service.update_agent(inp)
@@ -304,7 +316,7 @@ async def test_update_agent_calls_inject_reference_ids():
         uuid="agent-uuid",
         name="Agent",
         repo_uuid="repo-1",
-        behaviors=[{"name": "B1", "event_id": "card_created"}],
+        behaviors=[minimal_behavior_dict(name="B1")],
     )
 
     with patch(
@@ -321,7 +333,12 @@ async def test_create_agent_propagates_execute_query_error():
     """create_agent propagates errors when execute_query raises."""
     service = _create_mock_service()
     service.execute_query = AsyncMock(side_effect=ValueError("GraphQL error"))
-    inp = CreateAiAgentInput(name="Test", repo_uuid="repo-1")
+    inp = CreateAiAgentInput(
+        name="Test",
+        repo_uuid="repo-1",
+        instruction="Purpose",
+        behaviors=[minimal_behavior_dict(name="B")],
+    )
 
     with pytest.raises(ValueError, match="GraphQL error"):
         await service.create_agent(inp)
@@ -337,7 +354,7 @@ async def test_update_agent_propagates_execute_query_error():
         uuid="agent-uuid",
         name="Agent",
         repo_uuid="repo-1",
-        behaviors=[{"name": "B1", "event_id": "card_created"}],
+        behaviors=[minimal_behavior_dict(name="B1")],
     )
 
     with pytest.raises(RuntimeError, match="Network error"):
@@ -349,7 +366,12 @@ async def test_update_agent_propagates_execute_query_error():
 async def test_create_agent_missing_uuid_returns_clear_error():
     """create_agent returns clear error when API response missing agent.uuid."""
     service = _create_mock_service({"createAiAgent": {}})
-    inp = CreateAiAgentInput(name="Test", repo_uuid="repo-1")
+    inp = CreateAiAgentInput(
+        name="Test",
+        repo_uuid="repo-1",
+        instruction="Purpose",
+        behaviors=[minimal_behavior_dict(name="B")],
+    )
 
     with pytest.raises(ValueError, match="agent.*uuid|unexpected.*payload"):
         await service.create_agent(inp)
@@ -364,7 +386,7 @@ async def test_update_agent_missing_uuid_returns_clear_error():
         uuid="agent-uuid",
         name="Agent",
         repo_uuid="repo-1",
-        behaviors=[{"name": "B1", "event_id": "card_created"}],
+        behaviors=[minimal_behavior_dict(name="B1")],
     )
 
     with pytest.raises(ValueError, match="agent.*uuid|unexpected.*payload"):

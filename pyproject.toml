@@ -49,6 +49,8 @@ format.exclude = ["src/pipefy_mcp/_version.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Root on pythonpath so tests can import shared helpers (e.g. tests.ai_agent_test_payloads)
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

@@ -30,9 +30,50 @@ AI automations are separate from traditional rules above. They are prompt-driven
 |------|------|
 | `create_ai_automation` | Prompt-driven automation writing to one or more card fields (AI must be enabled on the pipe). |
 | `update_ai_automation` | Change name, `active`, prompt, `field_ids`, or `condition`. |
-| `create_ai_agent` | Create an agent on a pipe; `repo_uuid` is the pipe UUID from `get_pipe`. |
+| `create_ai_agent` | Creates and configures an AI agent with `instruction` (= Pipefy UI "Description") and 1–5 `behaviors` in one call. `repo_uuid` is the pipe UUID from `get_pipe`. Optional: `data_source_ids`. |
 | `update_ai_agent` | Replaces full agent config; send the complete `behaviors` list (1-5). |
 | `toggle_ai_agent_status` | Enable/disable without resending configuration. |
+
+**Tip:** Pipefy UI **Description** maps to the API/tool field `instruction` (agent-level purpose). The per-behavior prompt in the UI maps to `actionParams.aiBehaviorParams.instruction` on each behavior (behavior-level).
+
+**Tip:** For `create_ai_agent` / `update_ai_agent`, each behavior must include `actionParams.aiBehaviorParams.actionsAttributes` with **at least one** action. The API returns *"The instructions must contain at least 1 action"* if this list is missing or empty.
+
+**Discovery workflow** — call these tools before `create_ai_agent`:
+
+1. `get_pipe(pipe_id)` → get the pipe `uuid` (use as `repo_uuid`) and its phase IDs.
+2. `get_ai_agents(repo_uuid)` → check existing agents to avoid duplicates.
+3. `get_automation_events(pipe_id)` → pick a valid `event_id` for the behavior trigger.
+4. `get_automation_actions(pipe_id)` → find available action types for `actionsAttributes`.
+
+### Behavior dict shape
+
+```json
+{
+  "name": "When card is created: move to Doing",
+  "event_id": "card_created",
+  "actionParams": {
+    "aiBehaviorParams": {
+      "instruction": "Analyze the card and summarize key points.",
+      "actionsAttributes": [
+        {
+          "name": "Move to Doing",
+          "actionType": "move_card",
+          "metadata": { "destinationPhaseId": "<phase_id>" }
+        }
+      ]
+    }
+  }
+}
+```
+
+### Known `actionType` values
+
+| `actionType` | Required `metadata` |
+|---|---|
+| `move_card` | `{ "destinationPhaseId": "<phase_id>" }` |
+| `update_card_field` | `{ "fieldsAttributes": [{ "fieldId": "...", "value": "..." }] }` |
+| `create_card` | `{ "pipeId": "<pipe_id>", "fieldsAttributes": [...] }` |
+| `create_connected_card` | `{ "pipeId": "<pipe_id>", "fieldsAttributes": [...] }` |
 
 ### AI Agent read & delete
 

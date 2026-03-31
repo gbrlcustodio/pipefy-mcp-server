@@ -10,6 +10,7 @@ from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
+    build_create_agent_partial_failure,
     build_create_agent_success,
     build_delete_agent_success,
     build_get_agent_success,
@@ -39,32 +40,102 @@ class AiAgentTools:
             ctx: Context,
             name: str,
             repo_uuid: str,
+            instruction: str,
+            behaviors: list[dict],
+            data_source_ids: list[str] | None = None,
         ) -> dict:
-            """Create an AI Agent (empty, no behaviors) attached to a pipe.
+            """Create an AI Agent and configure it in one call (GraphQL create + update).
 
-            Use update_ai_agent to configure 1 to 5 behaviors.
-            repo_uuid is the pipe's unique identifier — not the numeric pipe ID from the URL.
-            Resolve it via pipe query.
+            Requires a non-empty instruction and 1–5 behaviors. Instruction maps to the agent's
+            Description field in the Pipefy UI (agent-level purpose). Each behavior's prompt/instruction
+            lives in ``actionParams.aiBehaviorParams.instruction`` when sent to the API.
+
+            Each behavior must also include ``actionParams.aiBehaviorParams.actionsAttributes`` with
+            at least one action; otherwise the API rejects the update.
+
+            Discovery workflow (call these tools first):
+              1. ``get_pipe(pipe_id)`` → obtain ``uuid`` (use as ``repo_uuid``) and phase IDs.
+              2. ``get_automation_events(pipe_id)`` → pick a valid ``event_id`` for the behavior
+                 (e.g. ``card_created``, ``card_moved``, ``field_updated``).
+              3. ``get_automation_actions(pipe_id)`` → find available ``actionType`` values.
+
+            Behavior dict example::
+
+              {
+                "name": "When card is created: move to Doing",
+                "event_id": "card_created",
+                "actionParams": {
+                  "aiBehaviorParams": {
+                    "instruction": "Analyze the card and summarize key points.",
+                    "actionsAttributes": [
+                      {
+                        "name": "Move to Doing",
+                        "actionType": "move_card",
+                        "metadata": {"destinationPhaseId": "<phase_id from get_pipe>"}
+                      }
+                    ]
+                  }
+                }
+              }
+
+            Known ``actionType`` values and their required ``metadata``:
+              - ``move_card`` → ``{"destinationPhaseId": "<phase_id>"}``
+              - ``update_card_field`` → ``{"fieldsAttributes": [{"fieldId": "...", "value": "..."}]}``
+              - ``create_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
+              - ``create_connected_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
 
             Args:
                 name: Agent display name.
-                repo_uuid: UUID of the pipe the agent belongs to.
+                repo_uuid: UUID of the pipe (from ``get_pipe``), not the numeric pipe ID.
+                instruction: Agent-level purpose (Pipefy UI "Description"; API ``instruction``).
+                behaviors: 1–5 behavior dicts. Each requires ``name``, ``event_id``, and
+                    ``actionParams.aiBehaviorParams`` with a non-empty ``actionsAttributes`` list.
+                    See example above for the full shape.
+                data_source_ids: Optional knowledge-source IDs (same as ``update_ai_agent``).
             """
-            ctx.debug(f"create_ai_agent: name={name}, repo_uuid={repo_uuid}")
+            ctx.debug(
+                f"create_ai_agent: name={name}, repo_uuid={repo_uuid}, "
+                f"instruction_len={len(instruction)}, behaviors_count={len(behaviors)}, "
+                f"data_source_ids={data_source_ids!r}"
+            )
             try:
-                validated = CreateAiAgentInput(name=name, repo_uuid=repo_uuid)
+                validated = CreateAiAgentInput(
+                    name=name,
+                    repo_uuid=repo_uuid,
+                    instruction=instruction,
+                    behaviors=behaviors,
+                    data_source_ids=data_source_ids or [],
+                )
             except ValidationError as exc:
                 return build_ai_tool_error(str(exc))
 
             try:
-                result = await client.create_ai_agent(validated)
+                create_result = await client.create_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(str(exc))
+                return error_payload_from_exception(exc)
 
-            return build_create_agent_success(
-                agent_uuid=result["agent_uuid"],
-                message=result["message"],
+            agent_uuid = create_result["agent_uuid"]
+
+            update_input = UpdateAiAgentInput(
+                uuid=agent_uuid,
+                name=validated.name,
+                repo_uuid=validated.repo_uuid,
+                instruction=validated.instruction,
+                behaviors=validated.behaviors,
+                data_source_ids=validated.data_source_ids,
             )
+            try:
+                await client.update_ai_agent(update_input)
+            except Exception as exc:  # noqa: BLE001
+                msgs = extract_error_strings(exc)
+                text = "; ".join(msgs) if msgs else str(exc)
+                return build_create_agent_partial_failure(
+                    agent_uuid=agent_uuid,
+                    error=text,
+                )
+
+            msg = f"AI Agent created and configured successfully. UUID: {agent_uuid}"
+            return build_create_agent_success(agent_uuid=agent_uuid, message=msg)
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
@@ -78,17 +149,19 @@ class AiAgentTools:
             behaviors: list[dict],
             data_source_ids: list[str] | None = None,
         ) -> dict:
-            """Update an AI Agent with an instruction and 1 to 5 behaviors that can execute complex actions (e.g. move card, update fields conditionally).
+            """Update an AI Agent — replaces the entire config, so always send the complete behaviors list.
 
-            The API replaces the entire agent payload, so always send the complete list of behaviors.
-            Other agents (e.g. OpenClaw) can use this tool to configure Pipefy AI Agents programmatically.
+            Each behavior must include ``actionParams.aiBehaviorParams.actionsAttributes`` with at least
+            one action (same constraint and shape as ``create_ai_agent`` — see its docstring for the
+            full behavior dict example, discovery workflow, and known ``actionType`` values).
 
             Args:
                 uuid: UUID of the agent to update.
                 name: Agent display name.
-                repo_uuid: UUID of the pipe the agent belongs to.
-                instruction: Global instruction for the agent.
-                behaviors: List of 1 to 5 behavior dicts (name, event_id required per behavior).
+                repo_uuid: UUID of the pipe (from ``get_pipe``).
+                instruction: Agent-level purpose (Pipefy UI "Description"; API ``instruction``).
+                behaviors: 1–5 behavior dicts. Same shape as ``create_ai_agent``: each needs ``name``,
+                    ``event_id``, and ``actionParams.aiBehaviorParams.actionsAttributes``.
                 data_source_ids: Optional list of data source IDs.
             """
             ctx.debug(f"update_ai_agent: uuid={uuid}, behaviors_count={len(behaviors)}")

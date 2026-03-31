@@ -58,6 +58,12 @@ class AiToolErrorPayload(TypedDict):
     error: str
 
 
+class CreateAgentPartialFailurePayload(TypedDict):
+    success: Literal[False]
+    agent_uuid: str
+    error: str
+
+
 def build_create_automation_success(
     *, automation_id: str, message: str
 ) -> CreateAiAutomationSuccessPayload:
@@ -113,3 +119,15 @@ def build_delete_agent_success(*, message: str) -> DeleteAiAgentSuccessPayload:
 def build_ai_tool_error(message: str) -> AiToolErrorPayload:
     """Build error payload for any AI tool."""
     return {"success": False, "error": message}
+
+
+def build_create_agent_partial_failure(
+    *, agent_uuid: str, error: str
+) -> CreateAgentPartialFailurePayload:
+    """Build payload when create succeeded but chained update failed.
+
+    Args:
+        agent_uuid: UUID of the agent returned by create (for recovery via update/delete).
+        error: Message describing the update failure.
+    """
+    return {"success": False, "agent_uuid": agent_uuid, "error": error}

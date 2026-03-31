@@ -9,6 +9,7 @@ CREATE_PIPE_MUTATION = gql(
             pipe {
                 id
                 name
+                startFormPhaseId
             }
         }
     }

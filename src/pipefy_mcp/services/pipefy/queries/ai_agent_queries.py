@@ -19,6 +19,7 @@ GET_AI_AGENT_QUERY = gql(
                 id
                 name
                 active
+                eventId: event_id
             }
         }
     }

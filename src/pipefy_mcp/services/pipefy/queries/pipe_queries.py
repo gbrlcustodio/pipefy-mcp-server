@@ -9,6 +9,7 @@ GET_PIPE_QUERY = gql(
             id
             uuid
             name
+            startFormPhaseId
             phases {
                 id
                 name

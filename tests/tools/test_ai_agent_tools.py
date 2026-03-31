@@ -10,7 +10,9 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
+from pipefy_mcp.models.ai_agent import UpdateAiAgentInput
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
+from tests.ai_agent_test_payloads import minimal_behavior_dict
 
 
 @pytest.fixture
@@ -48,7 +50,7 @@ def client_session(mcp_server):
 
 @pytest.mark.anyio
 class TestCreateAiAgent:
-    async def test_success(
+    async def test_data_source_ids_defaults_to_empty_list(
         self,
         client_session,
         mock_pipefy_client,
@@ -56,22 +58,28 @@ class TestCreateAiAgent:
     ):
         mock_pipefy_client.create_ai_agent.return_value = {
             "agent_uuid": "abc-123",
-            "message": "AI Agent created successfully. UUID: abc-123",
+            "message": "created",
+        }
+        mock_pipefy_client.update_ai_agent.return_value = {
+            "agent_uuid": "abc-123",
+            "message": "updated",
         }
         async with client_session as session:
             result = await session.call_tool(
                 "create_ai_agent",
-                {"name": "My Agent", "repo_uuid": "repo-456"},
+                {
+                    "name": "My Agent",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Do the thing",
+                    "behaviors": [minimal_behavior_dict(name="B1")],
+                },
             )
         assert result.isError is False
         payload = extract_payload(result)
-        assert payload == {
-            "success": True,
-            "agent_uuid": "abc-123",
-            "message": "AI Agent created successfully. UUID: abc-123",
-        }
-        assert isinstance(payload["message"], str)
-        assert isinstance(payload["agent_uuid"], str)
+        assert payload["success"] is True
+        update_arg = mock_pipefy_client.update_ai_agent.call_args[0][0]
+        assert isinstance(update_arg, UpdateAiAgentInput)
+        assert update_arg.data_source_ids == []
 
     async def test_service_error_returns_error_payload(
         self,
@@ -83,13 +91,20 @@ class TestCreateAiAgent:
         async with client_session as session:
             result = await session.call_tool(
                 "create_ai_agent",
-                {"name": "My Agent", "repo_uuid": "repo-456"},
+                {
+                    "name": "My Agent",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Purpose",
+                    "behaviors": [minimal_behavior_dict(name="B1")],
+                },
             )
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
         assert isinstance(payload["error"], str)
+        assert "GraphQL error" in payload["error"]
+        mock_pipefy_client.update_ai_agent.assert_not_called()
 
     async def test_validation_error_returns_error_payload(
         self,
@@ -100,10 +115,159 @@ class TestCreateAiAgent:
         async with client_session as session:
             result = await session.call_tool(
                 "create_ai_agent",
-                {"name": "", "repo_uuid": "repo-456"},
+                {
+                    "name": "",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Purpose",
+                    "behaviors": [minimal_behavior_dict(name="B1")],
+                },
             )
         assert result.isError is False
         mock_pipefy_client.create_ai_agent.assert_not_called()
+        mock_pipefy_client.update_ai_agent.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "error" in payload
+
+    async def test_create_and_configure_success(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.create_ai_agent.return_value = {
+            "agent_uuid": "new-uuid",
+            "message": "created",
+        }
+        mock_pipefy_client.update_ai_agent.return_value = {
+            "agent_uuid": "new-uuid",
+            "message": "updated",
+        }
+        behaviors = [minimal_behavior_dict(name="B1")]
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "Configured Agent",
+                    "repo_uuid": "repo-789",
+                    "instruction": "Tell users about the pipe",
+                    "behaviors": behaviors,
+                    "data_source_ids": ["ds-1", "ds-2"],
+                },
+            )
+        assert result.isError is False
+        mock_pipefy_client.create_ai_agent.assert_awaited_once()
+        mock_pipefy_client.update_ai_agent.assert_awaited_once()
+        update_arg = mock_pipefy_client.update_ai_agent.call_args[0][0]
+        assert isinstance(update_arg, UpdateAiAgentInput)
+        assert update_arg.uuid == "new-uuid"
+        assert update_arg.name == "Configured Agent"
+        assert update_arg.repo_uuid == "repo-789"
+        assert update_arg.instruction == "Tell users about the pipe"
+        assert len(update_arg.behaviors) == 1
+        assert update_arg.behaviors[0].name == "B1"
+        assert update_arg.behaviors[0].event_id == "card_created"
+        assert update_arg.data_source_ids == ["ds-1", "ds-2"]
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["agent_uuid"] == "new-uuid"
+
+    async def test_partial_failure_returns_uuid_and_error(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.create_ai_agent.return_value = {
+            "agent_uuid": "created-uuid",
+            "message": "AI Agent created successfully. UUID: created-uuid",
+        }
+        mock_pipefy_client.update_ai_agent.side_effect = ValueError("update failed")
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "My Agent",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Purpose",
+                    "behaviors": [minimal_behavior_dict(name="B1")],
+                },
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert payload["agent_uuid"] == "created-uuid"
+        assert "error" in payload
+        assert "update failed" in payload["error"]
+
+    async def test_graphql_error_extracts_messages(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.create_ai_agent.side_effect = TransportQueryError(
+            "failed", errors=[{"message": "permission denied"}]
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "My Agent",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Purpose",
+                    "behaviors": [minimal_behavior_dict(name="B1")],
+                },
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "permission denied" in payload["error"]
+        mock_pipefy_client.update_ai_agent.assert_not_called()
+
+    async def test_empty_behaviors_returns_validation_error(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "My Agent",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Purpose",
+                    "behaviors": [],
+                },
+            )
+        assert result.isError is False
+        mock_pipefy_client.create_ai_agent.assert_not_called()
+        mock_pipefy_client.update_ai_agent.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "error" in payload
+
+    async def test_six_behaviors_returns_validation_error(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        six = [minimal_behavior_dict(name=f"B{i}") for i in range(6)]
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "My Agent",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Purpose",
+                    "behaviors": six,
+                },
+            )
+        assert result.isError is False
+        mock_pipefy_client.create_ai_agent.assert_not_called()
+        mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -129,7 +293,7 @@ class TestUpdateAiAgent:
                     "name": "Updated Agent",
                     "repo_uuid": "repo-456",
                     "instruction": "Do things",
-                    "behaviors": [{"name": "B1", "event_id": "card_created"}],
+                    "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
         assert result.isError is False
@@ -180,7 +344,7 @@ class TestUpdateAiAgent:
                     "repo_uuid": "repo-456",
                     "instruction": "Do things",
                     "behaviors": [
-                        {"name": f"B{i}", "event_id": "card_created"} for i in range(6)
+                        minimal_behavior_dict(name=f"B{i}") for i in range(6)
                     ],
                 },
             )
@@ -205,7 +369,7 @@ class TestUpdateAiAgent:
                     "name": "Updated Agent",
                     "repo_uuid": "repo-456",
                     "instruction": "Do things",
-                    "behaviors": [{"name": "B1", "event_id": "card_created"}],
+                    "behaviors": [minimal_behavior_dict(name="B1")],
                 },
             )
         assert result.isError is False

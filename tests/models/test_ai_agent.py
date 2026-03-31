@@ -3,8 +3,6 @@
 import pytest
 from pydantic import ValidationError
 
-from tests.ai_agent_test_payloads import minimal_behavior_dict
-
 from pipefy_mcp.models.ai_agent import (
     ACTION_ID_AI_BEHAVIOR,
     MAX_BEHAVIORS,
@@ -12,6 +10,7 @@ from pipefy_mcp.models.ai_agent import (
     CreateAiAgentInput,
     UpdateAiAgentInput,
 )
+from tests.ai_agent_test_payloads import minimal_behavior_dict
 
 
 def _make_behavior(name="Test Behavior", event_id="card_created"):

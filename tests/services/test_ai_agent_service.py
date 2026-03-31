@@ -8,8 +8,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from gql.transport.exceptions import TransportQueryError
 
-from tests.ai_agent_test_payloads import minimal_behavior_dict
-
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_mcp.services.pipefy.ai_agent_service import (
     AiAgentService,
@@ -22,6 +20,7 @@ from pipefy_mcp.services.pipefy.queries.ai_agent_queries import (
     GET_AI_AGENTS_QUERY,
 )
 from pipefy_mcp.settings import PipefySettings
+from tests.ai_agent_test_payloads import minimal_behavior_dict
 
 UUID_PATTERN = re.compile(r"%\{action:([a-f0-9-]{36})\}")
 

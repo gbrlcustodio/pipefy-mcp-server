@@ -429,15 +429,22 @@ class PipeConfigTools:
         ) -> dict[str, Any]:
             """Create a custom field on a phase.
 
-            `field_type` is passed through to Pipefy (use schema introspection on
-            `CreatePhaseFieldInput` to list valid types). Optional keys in
-            `extra_input` are merged into the mutation input (e.g. description, required).
+            ``field_type`` is passed through to Pipefy (use schema introspection on
+            ``CreatePhaseFieldInput`` to list valid types). Optional keys in
+            ``extra_input`` are merged into the mutation input (e.g. description,
+            required, options).
+
+            **Select / radio / checklist fields:** pass ``options`` inside
+            ``extra_input`` (e.g. ``extra_input={"options": ["Alta", "Média",
+            "Baixa"]}``). If the API rejects options on creation, create the field
+            first and then call ``update_phase_field`` with the ``options`` list.
 
             Args:
                 phase_id: Phase that will receive the field.
                 label: Field label shown in the UI.
-                field_type: Pipefy field type string (API input field `type`).
-                extra_input: Additional CreatePhaseFieldInput fields, if any.
+                field_type: Pipefy field type string (API input field ``type``).
+                extra_input: Additional ``CreatePhaseFieldInput`` fields, if any
+                    (e.g. description, required, options).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not isinstance(phase_id, int) or phase_id <= 0:

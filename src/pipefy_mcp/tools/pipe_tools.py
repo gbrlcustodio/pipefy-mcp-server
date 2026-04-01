@@ -37,6 +37,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
+    build_delete_card_preview_payload,
     build_delete_card_success_payload,
     build_delete_comment_error_payload,
     build_delete_comment_success_payload,
@@ -65,22 +66,32 @@ class PipeTools:
         async def create_card(
             ctx: Context[ServerSession, None],
             pipe_id: int,
+            title: str | None = None,
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
         ) -> dict:
-            """
-            Create a card in the pipe.
+            """Create a card in the pipe.
 
-            The fields can be interactively elicited, but, if the LLM is aware of the intended values for certain fields,
-            they can be provided in the `fields` argument.
+            The fields can be interactively elicited, but, if the LLM is aware of
+            the intended values for certain fields, they can be provided in the
+            ``fields`` argument.
 
-            Importantly, if elicitation is not supported, the provided fields will be used as-is and must be provided.
+            Importantly, if elicitation is not supported, the provided fields will
+            be used as-is and must be provided.
+
+            The Pipefy ``createCard`` mutation does not accept a title directly.
+            If ``title`` is provided, the card is created first and then updated
+            via ``updateCard`` to set the title — this is especially useful when the
+            pipe has no start-form fields, which would otherwise leave the card
+            titled "Draft".
 
             Args:
-                pipe_id: The ID of the pipe where the card will be created
+                pipe_id: The ID of the pipe where the card will be created.
+                title: Optional card title. Applied via updateCard after creation.
                 fields: A dictionary of fields that can be pre-filled on the card.
-                        This argument should be provided when the LLM is aware of the intended values for certain fields.
-                required_fields_only: If True, only elicit required fields. Default: False
+                    This argument should be provided when the LLM is aware of the
+                    intended values for certain fields.
+                required_fields_only: If True, only elicit required fields. Default: False.
             """
             form_fields = await client.get_start_form_fields(
                 pipe_id, required_fields_only
@@ -112,6 +123,9 @@ class PipeTools:
             result = await client.create_card(pipe_id, card_data)
             card_id = result.get("createCard", {}).get("card", {}).get("id")
             if card_id:
+                if title:
+                    await client.update_card(int(card_id), title=title)
+                    result["createCard"]["card"]["title"] = title
                 card_url = f"https://app.pipefy.com/open-cards/{card_id}"
                 result["card_link"] = f"[{card_url}]({card_url})"
             return result
@@ -230,28 +244,46 @@ class PipeTools:
         async def get_cards(
             ctx: Context[ServerSession, None],
             pipe_id: int,
+            title: str | None = None,
             search: CardSearch | None = None,
             include_fields: bool = False,
             first: int | None = None,
             after: str | None = None,
         ) -> dict:
-            """Get cards in the pipe with optional pagination.
+            """Get cards in the pipe with optional search and pagination.
 
-            Use ``first`` and ``after`` (from ``pageInfo.endCursor``) to paginate through
-            large result sets. Without pagination params, returns the API default page.
+            Supports searching by card **title** (use the ``title`` shortcut) as well
+            as by assignees, labels, and other attributes via ``search``.
+
+            Use ``first`` and ``after`` (from ``pageInfo.endCursor``) to paginate
+            through large result sets. Without pagination params, returns the API
+            default page.
 
             Args:
                 pipe_id: The ID of the pipe.
-                search: Optional search filters.
+                title: Filter cards whose title contains this text. Convenience
+                    shortcut — merged into ``search`` automatically.
+                search: Optional search filters (title, assignee_ids, label_ids,
+                    include_done, etc.). See ``CardSearch`` for all supported keys.
                 include_fields: If True, include each card's custom fields (name, value) in the response.
                 first: Max cards to return per page.
                 after: Cursor for fetching the next page (from ``pageInfo.endCursor`` of a previous call).
             """
+            merged_search = dict(search) if search else {}
+            if title:
+                merged_search["title"] = title
+
+            effective_search: CardSearch | None = merged_search or None  # type: ignore[assignment]
+
             await ctx.debug(
-                f"Getting cards for pipe {pipe_id} (include_fields={include_fields}, search={search})"
+                f"Getting cards for pipe {pipe_id} (include_fields={include_fields}, search={effective_search})"
             )
             return await client.get_cards(
-                pipe_id, search, include_fields=include_fields, first=first, after=after
+                pipe_id,
+                effective_search,
+                include_fields=include_fields,
+                first=first,
+                after=after,
             )
 
         @mcp.tool(
@@ -267,11 +299,11 @@ class PipeTools:
             first: int | None = None,
             after: str | None = None,
         ) -> dict:
-            """Find cards in the pipe where a specific field equals a given value.
+            """Find cards in the pipe where a specific custom field equals a given value.
 
-            Use this when you need to filter cards by a custom field (e.g. Status = In Progress)
-            rather than by title or assignees. The field_id can be obtained from
-            get_start_form_fields or get_phase_fields.
+            Use this when you need to filter cards by a **custom field** value
+            (e.g. Status = "In Progress"). This tool does **not** support
+            searching by card title — use ``get_cards(title=...)`` for that.
 
             Args:
                 pipe_id: The ID of the pipe to search in.
@@ -581,15 +613,28 @@ class PipeTools:
             ),
         )
         async def delete_card(
-            ctx: Context[ServerSession, None], card_id: int, debug: bool = False
+            ctx: Context[ServerSession, None],
+            card_id: int,
+            confirm: bool = False,
+            debug: bool = False,
         ) -> DeleteCardPayload:
             """Delete a card from Pipefy.
 
-            This is a destructive operation that permanently removes a card.
-            Use with caution.
+            This is a destructive, two-step operation:
+
+            1. **Preview** — call without ``confirm`` (or ``confirm=False``) to see
+               which card will be deleted.  When the MCP client supports elicitation
+               the user is prompted interactively; otherwise a preview payload is
+               returned and no deletion happens.
+            2. **Execute** — call again with ``confirm=True`` after the user has
+               reviewed the preview.
 
             Args:
-                card_id: The ID of the card to delete
+                card_id: The ID of the card to delete.
+                confirm: Set to True to execute the deletion (step 2).
+                    When the client supports elicitation, ``confirm=True`` still
+                    applies: use it to skip the dialog after explicit user approval
+                    (e.g. agent workflows); omit it to show the interactive prompt.
                 debug: When true, appends GraphQL error codes and correlation_id to the error message.
 
             Returns:
@@ -625,7 +670,14 @@ class PipeTools:
                 )
 
             can_elicit = ctx.session.client_params.capabilities.elicitation
-            if can_elicit:
+            if not can_elicit and not confirm:
+                return build_delete_card_preview_payload(
+                    card_id=card_id,
+                    card_title=card_title,
+                    pipe_name=pipe_name,
+                )
+
+            if can_elicit and not confirm:
                 confirmation_message = (
                     f"⚠️ You are about to permanently delete card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}'. "
                     "This action is irreversible. Are you sure you want to proceed?"

@@ -21,6 +21,7 @@ from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     DeleteCardErrorPayload,
+    DeleteCardPreviewPayload,
     DeleteCardSuccessPayload,
 )
 from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
@@ -57,6 +58,7 @@ def mock_pipefy_client():
     client.delete_comment = AsyncMock(return_value={"deleteComment": {"success": True}})
     client.get_card = AsyncMock()
     client.delete_card = AsyncMock()
+    client.update_card = AsyncMock()
 
     return client
 
@@ -258,6 +260,61 @@ class TestCreateCardTool:
             mock_pipefy_client.create_card.assert_called_once_with(
                 pipe_id, {"field_1": "value_1"}
             )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_title_sets_card_title_after_creation(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """When title is provided, create_card calls update_card to set the title."""
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "789"}}
+        }
+        mock_pipefy_client.update_card.return_value = {
+            "updateCard": {"card": {"id": "789", "title": "Copa América"}}
+        }
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id, "title": "Copa América"},
+            )
+            assert result.isError is False
+            mock_pipefy_client.create_card.assert_called_once_with(pipe_id, {})
+            mock_pipefy_client.update_card.assert_called_once_with(
+                789, title="Copa América"
+            )
+            response = json.loads(result.content[0].text)
+            assert response["createCard"]["card"]["title"] == "Copa América"
+            assert "card_link" in response
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_no_title_skips_update_card(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """When title is not provided, update_card is never called."""
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "789"}}
+        }
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id},
+            )
+            assert result.isError is False
+            mock_pipefy_client.update_card.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -564,6 +621,54 @@ class TestGetCardsTool:
         assert result.isError is False, "Unexpected tool error"
         mock_pipefy_client.get_cards.assert_called_once_with(
             pipe_id, None, include_fields=True, first=None, after=None
+        )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_cards_title_param_merges_into_search(
+        self, client_session, mock_pipefy_client, pipe_id
+    ):
+        """When title is provided, it is merged into the search dict sent to the client."""
+        mock_pipefy_client.get_cards = AsyncMock(return_value={"cards": {"edges": []}})
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_cards",
+                {"pipe_id": pipe_id, "title": "Copa"},
+            )
+
+        assert result.isError is False
+        mock_pipefy_client.get_cards.assert_called_once_with(
+            pipe_id,
+            {"title": "Copa"},
+            include_fields=False,
+            first=None,
+            after=None,
+        )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_cards_title_merges_with_existing_search(
+        self, client_session, mock_pipefy_client, pipe_id
+    ):
+        """When title and search are both provided, title is merged into search."""
+        mock_pipefy_client.get_cards = AsyncMock(return_value={"cards": {"edges": []}})
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_cards",
+                {
+                    "pipe_id": pipe_id,
+                    "title": "Copa",
+                    "search": {"include_done": True},
+                },
+            )
+
+        assert result.isError is False
+        mock_pipefy_client.get_cards.assert_called_once_with(
+            pipe_id,
+            {"include_done": True, "title": "Copa"},
+            include_fields=False,
+            first=None,
+            after=None,
         )
 
 
@@ -1089,6 +1194,47 @@ class TestUpdateCardTool:
 class TestDeleteCardTool:
     """Test cases for delete_card tool."""
 
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_preview_returned_when_no_elicitation_and_no_confirm(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        """Without elicitation and without confirm=True, return a preview payload — never delete."""
+        mock_pipefy_client.get_card.return_value = {
+            "card": {
+                "id": "12345",
+                "title": "Test Card",
+                "pipe": {"name": "Test Pipe"},
+            }
+        }
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card",
+                {"card_id": 12345},
+            )
+
+            assert result.isError is False
+            mock_pipefy_client.get_card.assert_called_once_with(12345)
+            mock_pipefy_client.delete_card.assert_not_called()
+
+            payload = extract_payload(result)
+            expected_payload: DeleteCardPreviewPayload = {
+                "success": False,
+                "requires_confirmation": True,
+                "card_id": 12345,
+                "card_title": "Test Card",
+                "pipe_name": "Test Pipe",
+                "message": (
+                    "⚠️ You are about to permanently delete card "
+                    "'Test Card' (ID: 12345) from pipe 'Test Pipe'. "
+                    "This action is irreversible. Set 'confirm=True' to proceed."
+                ),
+            }
+            assert payload == expected_payload
+
     @pytest.mark.parametrize(
         "client_session",
         [elicitation_callback_for(action="decline")],
@@ -1268,6 +1414,34 @@ class TestDeleteCardTool:
 
     @pytest.mark.parametrize(
         "client_session",
+        [elicitation_callback_raises(RuntimeError("elicit should not run"))],
+        indirect=True,
+    )
+    async def test_confirm_true_bypasses_elicitation(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        """With confirm=True, delete runs without elicitation even if client supports it."""
+        mock_pipefy_client.get_card.return_value = {
+            "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
+        }
+        mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": True}}
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card",
+                {"card_id": 12345, "confirm": True},
+            )
+
+        assert result.isError is False
+        mock_pipefy_client.delete_card.assert_called_once_with(12345)
+        payload = extract_payload(result)
+        assert payload["success"] is True
+
+    @pytest.mark.parametrize(
+        "client_session",
         [elicitation_callback_for(action="accept", content={"confirm": True})],
         indirect=True,
     )
@@ -1351,7 +1525,7 @@ class TestDeleteCardTool:
         mock_pipefy_client.delete_card.side_effect = error
         async with client_session as session:
             result = await session.call_tool(
-                "delete_card", {"card_id": 12345, "debug": True}
+                "delete_card", {"card_id": 12345, "confirm": True, "debug": True}
             )
         assert result.isError is False
         payload = extract_payload(result)

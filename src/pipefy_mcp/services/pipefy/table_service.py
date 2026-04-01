@@ -308,11 +308,14 @@ class TableService(BasePipefyClient):
             matching_tables = []
             for table in org.get("tables", {}).get("nodes", []):
                 table_display_name = table.get("name", "")
-                score = fuzz.WRatio(
-                    table_name, table_display_name, score_cutoff=match_threshold
-                )
-                if score:
-                    matching_tables.append((score, table))
+                if table_name.lower() in table_display_name.lower():
+                    matching_tables.append((100.0, table))
+                else:
+                    score = fuzz.WRatio(
+                        table_name, table_display_name, score_cutoff=match_threshold
+                    )
+                    if score:
+                        matching_tables.append((score, table))
 
             if matching_tables:
                 matching_tables.sort(key=lambda x: x[0], reverse=True)

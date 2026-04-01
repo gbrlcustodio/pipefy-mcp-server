@@ -37,6 +37,7 @@ def mock_table_client():
     client.create_table_field = AsyncMock()
     client.update_table_field = AsyncMock()
     client.delete_table_field = AsyncMock()
+    client.search_tables = AsyncMock()
     return client
 
 
@@ -808,3 +809,56 @@ async def test_delete_table_field_graphql_error(
         result = await session.call_tool("delete_table_field", {"field_id": "x"})
 
     assert extract_payload(result)["success"] is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_search_tables_without_name_calls_client_with_none(
+    table_session, mock_table_client
+):
+    mock_table_client.search_tables.return_value = {
+        "organizations": [{"id": "org1", "name": "Acme", "tables": []}]
+    }
+
+    async with table_session as session:
+        result = await session.call_tool("search_tables", {})
+
+    assert result.isError is False
+    mock_table_client.search_tables.assert_awaited_once_with(None)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_search_tables_with_name_passes_it_to_client(
+    table_session, mock_table_client
+):
+    mock_table_client.search_tables.return_value = {"organizations": []}
+
+    async with table_session as session:
+        result = await session.call_tool("search_tables", {"table_name": "Clients"})
+
+    assert result.isError is False
+    mock_table_client.search_tables.assert_awaited_once_with("Clients")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_search_tables_returns_client_response(
+    table_session, mock_table_client, extract_payload
+):
+    expected = {
+        "organizations": [
+            {
+                "id": "org1",
+                "name": "Acme",
+                "tables": [{"id": "T1", "name": "Clients", "match_score": 100.0}],
+            }
+        ]
+    }
+    mock_table_client.search_tables.return_value = expected
+
+    async with table_session as session:
+        result = await session.call_tool("search_tables", {"table_name": "Clients"})
+
+    payload = extract_payload(result)
+    assert payload == expected

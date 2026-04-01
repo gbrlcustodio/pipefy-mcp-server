@@ -3,8 +3,6 @@
 import pytest
 from pydantic import ValidationError
 
-from tests.ai_agent_test_payloads import minimal_behavior_dict
-
 from pipefy_mcp.models.ai_agent import (
     ACTION_ID_AI_BEHAVIOR,
     MAX_BEHAVIORS,
@@ -12,6 +10,7 @@ from pipefy_mcp.models.ai_agent import (
     CreateAiAgentInput,
     UpdateAiAgentInput,
 )
+from tests.ai_agent_test_payloads import minimal_behavior_dict
 
 
 def _make_behavior(name="Test Behavior", event_id="card_created"):
@@ -301,3 +300,38 @@ def test_update_ai_agent_input_accepts_instruction_and_data_source_ids():
     )
     assert inp.instruction == "Do something"
     assert inp.data_source_ids == ["ds1", "ds2"]
+
+
+@pytest.mark.unit
+def test_behavior_input_accepts_event_params_with_trigger_field_ids():
+    payload = minimal_behavior_dict(event_id="field_updated")
+    payload["eventParams"] = {"triggerFieldIds": ["425829426"]}
+    inp = BehaviorInput.model_validate(payload)
+    assert inp.event_params == {"triggerFieldIds": ["425829426"]}
+
+
+@pytest.mark.unit
+def test_behavior_input_accepts_event_params_with_to_phase_id():
+    payload = minimal_behavior_dict(event_id="card_moved")
+    payload["eventParams"] = {"to_phase_id": "12345678"}
+    inp = BehaviorInput.model_validate(payload)
+    assert inp.event_params == {"to_phase_id": "12345678"}
+
+
+@pytest.mark.unit
+def test_behavior_input_event_params_included_in_alias_dump():
+    payload = minimal_behavior_dict(event_id="field_updated")
+    payload["eventParams"] = {"triggerFieldIds": ["425829426"]}
+    inp = BehaviorInput.model_validate(payload)
+    dumped = inp.model_dump(by_alias=True, exclude_none=True)
+    assert dumped["eventParams"] == {"triggerFieldIds": ["425829426"]}
+    assert "event_params" not in dumped
+
+
+@pytest.mark.unit
+def test_behavior_input_event_params_defaults_none():
+    payload = minimal_behavior_dict()
+    inp = BehaviorInput.model_validate(payload)
+    assert inp.event_params is None
+    dumped = inp.model_dump(by_alias=True, exclude_none=True)
+    assert "eventParams" not in dumped

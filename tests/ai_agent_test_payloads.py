@@ -2,7 +2,11 @@
 
 
 def minimal_behavior_dict(name="Test Behavior", event_id="card_created"):
-    """One behavior with actionParams.aiBehaviorParams.actionsAttributes (required by live API)."""
+    """One behavior with actionParams.aiBehaviorParams.actionsAttributes (required by live API).
+
+    Uses ``update_card`` with realistic metadata matching Pipefy's golden payload shape.
+    The API rejects empty ``metadata: {}`` — it must include at least the required keys.
+    """
     return {
         "name": name,
         "event_id": event_id,
@@ -11,9 +15,19 @@ def minimal_behavior_dict(name="Test Behavior", event_id="card_created"):
                 "instruction": "Test behavior instruction.",
                 "actionsAttributes": [
                     {
-                        "name": "Move card",
-                        "actionType": "move_card",
-                        "metadata": {},
+                        "name": "Update card fields",
+                        "actionType": "update_card",
+                        "metadata": {
+                            "destinationPhaseId": "",
+                            "pipeId": "306996636",
+                            "fieldsAttributes": [
+                                {
+                                    "fieldId": "425829426",
+                                    "inputMode": "fill_with_ai",
+                                    "value": "",
+                                },
+                            ],
+                        },
                     },
                 ],
             }

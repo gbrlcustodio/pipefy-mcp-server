@@ -575,7 +575,9 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
         repo_uuid="00000000-0000-0000-0000-000000000001",
         instruction="purpose",
         behaviors=[
-            BehaviorInput.model_validate(minimal_behavior_dict(name="b", event_id="evt"))
+            BehaviorInput.model_validate(
+                minimal_behavior_dict(name="b", event_id="evt")
+            )
         ],
     )
     assert await client.create_ai_agent(cin) == {
@@ -589,7 +591,9 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
         name="n",
         repo_uuid="00000000-0000-0000-0000-000000000001",
         behaviors=[
-            BehaviorInput.model_validate(minimal_behavior_dict(name="b", event_id="evt"))
+            BehaviorInput.model_validate(
+                minimal_behavior_dict(name="b", event_id="evt")
+            )
         ],
     )
     assert await client.update_ai_agent(uin) == {

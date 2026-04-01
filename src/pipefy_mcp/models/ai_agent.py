@@ -26,6 +26,7 @@ class BehaviorInput(BaseModel):
     action_id: str = Field(default=ACTION_ID_AI_BEHAVIOR, alias="actionId")
     active: bool = True
     condition: dict | None = None
+    event_params: dict | None = Field(default=None, alias="eventParams")
     action_params: dict | None = Field(default=None, alias="actionParams")
 
     @model_validator(mode="after")

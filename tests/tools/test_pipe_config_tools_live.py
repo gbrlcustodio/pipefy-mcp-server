@@ -30,7 +30,14 @@ from pipefy_mcp.settings import settings
 
 def _pipefy_live_configured() -> bool:
     p = settings.pipefy
-    return bool(p.graphql_url and p.oauth_url and p.oauth_client and p.oauth_secret)
+    return bool(
+        p.graphql_url
+        and str(p.graphql_url).startswith(("http://", "https://"))
+        and p.oauth_url
+        and str(p.oauth_url).startswith(("http://", "https://"))
+        and p.oauth_client
+        and p.oauth_secret
+    )
 
 
 def _require_live_creds() -> None:

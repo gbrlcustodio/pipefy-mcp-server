@@ -20,6 +20,47 @@ GET_AI_AGENT_QUERY = gql(
                 name
                 active
                 eventId: event_id
+                eventParams: event_params {
+                    fromPhaseId
+                    inPhaseId
+                    to_phase_id
+                    triggerFieldIds
+                    triggerAutomationId
+                }
+                actionId: action_id
+                condition {
+                    expressions_structure
+                    expressions {
+                        id
+                        field_address
+                        operation
+                        value
+                        structure_id
+                    }
+                }
+                actionParams: action_params {
+                    aiBehaviorParams {
+                        instruction
+                        dataSourceIds
+                        referencedFieldIds
+                        actionsAttributes {
+                            id
+                            name
+                            actionType
+                            referenceId
+                            metadata {
+                                destinationPhaseId
+                                pipeId
+                                tableId
+                                fieldsAttributes {
+                                    fieldId
+                                    inputMode
+                                    value
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -95,6 +136,13 @@ UPDATE_AI_AGENT_MUTATION = gql(
                     name
                     active
                     eventId: event_id
+                    eventParams: event_params {
+                        fromPhaseId
+                        inPhaseId
+                        to_phase_id
+                        triggerFieldIds
+                        triggerAutomationId
+                    }
                     actionId: action_id
                     condition {
                         expressions_structure

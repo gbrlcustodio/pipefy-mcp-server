@@ -75,6 +75,13 @@ AI automations are separate from traditional rules above. They are prompt-driven
 | `create_card` | `{ "pipeId": "<pipe_id>", "fieldsAttributes": [...] }` |
 | `create_connected_card` | `{ "pipeId": "<pipe_id>", "fieldsAttributes": [...] }` |
 
+### Optional `eventParams` (trigger filters)
+
+| `event_id` | `eventParams` key | Purpose |
+|---|---|---|
+| `field_updated` | `triggerFieldIds` | Fire only when specific fields change |
+| `card_moved` | `to_phase_id` | Fire only when card moves to a specific phase |
+
 ### AI Agent read & delete
 
 Use `get_ai_agents` with the pipe's `uuid` (same as `repo_uuid`) before `create_ai_agent` to avoid duplicates.

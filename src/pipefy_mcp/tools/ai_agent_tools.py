@@ -84,12 +84,17 @@ class AiAgentTools:
               - ``create_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
               - ``create_connected_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
 
+            Optional ``eventParams`` per behavior (filters when the trigger fires):
+              - ``field_updated`` event → ``{"triggerFieldIds": ["<field_id>"]}`` to fire only on specific fields.
+              - ``card_moved`` event → ``{"to_phase_id": "<phase_id>"}`` to fire only when moving to a specific phase.
+
             Args:
                 name: Agent display name.
                 repo_uuid: UUID of the pipe (from ``get_pipe``), not the numeric pipe ID.
                 instruction: Agent-level purpose (Pipefy UI "Description"; API ``instruction``).
                 behaviors: 1–5 behavior dicts. Each requires ``name``, ``event_id``, and
                     ``actionParams.aiBehaviorParams`` with a non-empty ``actionsAttributes`` list.
+                    Optional: ``eventParams`` to filter event triggers (e.g. ``triggerFieldIds``, ``to_phase_id``).
                     See example above for the full shape.
                 data_source_ids: Optional knowledge-source IDs (same as ``update_ai_agent``).
             """

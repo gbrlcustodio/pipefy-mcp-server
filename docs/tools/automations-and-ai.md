@@ -71,9 +71,16 @@ AI automations are separate from traditional rules above. They are prompt-driven
 | `actionType` | Required `metadata` |
 |---|---|
 | `move_card` | `{ "destinationPhaseId": "<phase_id>" }` |
-| `update_card_field` | `{ "fieldsAttributes": [{ "fieldId": "...", "value": "..." }] }` |
+| `update_card` | `{ "pipeId": "<pipe_id>", "fieldsAttributes": [{ "fieldId": "...", "inputMode": "fill_with_ai", "value": "" }] }` |
 | `create_card` | `{ "pipeId": "<pipe_id>", "fieldsAttributes": [...] }` |
 | `create_connected_card` | `{ "pipeId": "<pipe_id>", "fieldsAttributes": [...] }` |
+
+### Optional `eventParams` (trigger filters)
+
+| `event_id` | `eventParams` key | Purpose |
+|---|---|---|
+| `field_updated` | `triggerFieldIds` | Fire only when specific fields change |
+| `card_moved` | `to_phase_id` | Fire only when card moves to a specific phase |
 
 ### AI Agent read & delete
 

@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
@@ -391,19 +393,36 @@ class PipeConfigTools:
                 destructiveHint=True,
             ),
         )
-        async def delete_phase(phase_id: int, debug: bool = False) -> dict[str, Any]:
+        async def delete_phase(
+            ctx: Context[ServerSession, None],
+            phase_id: int,
+            confirm: bool = False,
+            debug: bool = False,
+        ) -> dict[str, Any]:
             """Delete a phase permanently.
 
-            Always confirm impact with the human user before calling this tool.
+            Two-step operation: call without ``confirm`` to preview, then with
+            ``confirm=True`` after user approval. When the MCP client supports
+            elicitation, the user is prompted interactively instead.
 
             Args:
                 phase_id: Phase ID to delete.
+                confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not isinstance(phase_id, int) or phase_id <= 0:
                 return build_pipe_tool_error_payload(
                     message="Invalid 'phase_id'. Use a positive integer.",
                 )
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"phase (ID: {phase_id})",
+            )
+            if guard is not None:
+                return guard
+
             try:
                 raw = await client.delete_phase(phase_id)
             except Exception as exc:
@@ -550,15 +569,20 @@ class PipeConfigTools:
             ),
         )
         async def delete_phase_field(
+            ctx: Context[ServerSession, None],
             field_id: str | int,
+            confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete a phase field permanently.
 
-            Always confirm impact with the human user before calling this tool.
+            Two-step operation: call without ``confirm`` to preview, then with
+            ``confirm=True`` after user approval. When the MCP client supports
+            elicitation, the user is prompted interactively instead.
 
             Args:
                 field_id: Phase field ID to delete (slug string or positive integer).
+                confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not valid_phase_field_id(field_id):
@@ -569,6 +593,15 @@ class PipeConfigTools:
                     ),
                 )
             fid = field_id.strip() if isinstance(field_id, str) else field_id
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"phase field (ID: {fid})",
+            )
+            if guard is not None:
+                return guard
+
             try:
                 raw = await client.delete_phase_field(fid)
             except Exception as exc:
@@ -681,19 +714,36 @@ class PipeConfigTools:
                 destructiveHint=True,
             ),
         )
-        async def delete_label(label_id: int, debug: bool = False) -> dict[str, Any]:
+        async def delete_label(
+            ctx: Context[ServerSession, None],
+            label_id: int,
+            confirm: bool = False,
+            debug: bool = False,
+        ) -> dict[str, Any]:
             """Delete a label permanently.
 
-            Always confirm impact with the human user before calling this tool.
+            Two-step operation: call without ``confirm`` to preview, then with
+            ``confirm=True`` after user approval. When the MCP client supports
+            elicitation, the user is prompted interactively instead.
 
             Args:
                 label_id: Label ID to delete.
+                confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not isinstance(label_id, int) or label_id <= 0:
                 return build_pipe_tool_error_payload(
                     message="Invalid 'label_id'. Use a positive integer.",
                 )
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"label (ID: {label_id})",
+            )
+            if guard is not None:
+                return guard
+
             try:
                 raw = await client.delete_label(label_id)
             except Exception as exc:

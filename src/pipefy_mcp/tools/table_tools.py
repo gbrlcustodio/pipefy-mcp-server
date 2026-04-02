@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.services.pipefy import PipefyClient
@@ -12,6 +13,7 @@ from pipefy_mcp.services.pipefy.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
 )
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
@@ -551,19 +553,35 @@ class TableTools:
             ),
         )
         async def delete_table_record(
+            ctx: Context[ServerSession, None],
             record_id: str | int,
+            confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Permanently delete a table record. Confirm with the user before calling.
+            """Delete a table record permanently.
+
+            Two-step operation: call without ``confirm`` to preview, then with
+            ``confirm=True`` after user approval. When the MCP client supports
+            elicitation, the user is prompted interactively instead.
 
             Args:
                 record_id: Record ID to delete.
+                confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not valid_repo_id(record_id):
                 return build_table_mutation_error_payload(
                     message="Invalid 'record_id': provide a non-empty string or positive integer.",
                 )
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"table record (ID: {record_id})",
+            )
+            if guard is not None:
+                return guard
+
             try:
                 raw = await client.delete_table_record(record_id)
             except Exception as exc:
@@ -773,13 +791,20 @@ class TableTools:
             ),
         )
         async def delete_table_field(
+            ctx: Context[ServerSession, None],
             field_id: str | int,
+            confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Permanently remove a column from a database table schema. Confirm with the user first.
+            """Delete a database table field (column) permanently.
+
+            Two-step operation: call without ``confirm`` to preview, then with
+            ``confirm=True`` after user approval. When the MCP client supports
+            elicitation, the user is prompted interactively instead.
 
             Args:
                 field_id: Table field ID to delete.
+                confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not _valid_table_field_id(field_id):
@@ -789,6 +814,15 @@ class TableTools:
                     ),
                 )
             fid = field_id.strip() if isinstance(field_id, str) else field_id
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"table field (ID: {field_id})",
+            )
+            if guard is not None:
+                return guard
+
             try:
                 raw = await client.delete_table_field(fid)
             except Exception as exc:

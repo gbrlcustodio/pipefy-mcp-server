@@ -468,7 +468,7 @@ async def test_delete_automation_success(
     async with automation_session as session:
         result = await session.call_tool(
             "delete_automation",
-            {"automation_id": "rm-1", "debug": False},
+            {"automation_id": "rm-1", "confirm": True, "debug": False},
         )
 
     assert result.isError is False
@@ -488,7 +488,7 @@ async def test_delete_automation_error(
     async with automation_session as session:
         result = await session.call_tool(
             "delete_automation",
-            {"automation_id": "z"},
+            {"automation_id": "z", "confirm": True},
         )
 
     assert extract_payload(result)["success"] is False

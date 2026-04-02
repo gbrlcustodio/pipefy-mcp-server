@@ -418,7 +418,9 @@ async def test_delete_pipe_report_success(
     }
 
     async with report_session as session:
-        result = await session.call_tool("delete_pipe_report", {"report_id": "r10"})
+        result = await session.call_tool(
+            "delete_pipe_report", {"report_id": "r10", "confirm": True}
+        )
 
     assert result.isError is False
     mock_report_client.delete_pipe_report.assert_awaited_once_with("r10")
@@ -495,7 +497,7 @@ async def test_delete_organization_report_success(
 
     async with report_session as session:
         result = await session.call_tool(
-            "delete_organization_report", {"report_id": "or5"}
+            "delete_organization_report", {"report_id": "or5", "confirm": True}
         )
 
     assert result.isError is False

@@ -336,6 +336,27 @@ async def test_create_webhook_graphql_error(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("webhook_session", [None], indirect=True)
+async def test_delete_webhook_preview_does_not_delete(
+    webhook_session, mock_webhook_client, extract_payload
+):
+    async with webhook_session as session:
+        result = await session.call_tool(
+            "delete_webhook",
+            {"webhook_id": "webhook-1"},
+        )
+
+    assert result.isError is False
+    mock_webhook_client.delete_webhook.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["requires_confirmation"] is True
+    assert payload["resource"] == "webhook (ID: webhook-1)"
+    assert "⚠️" in payload["message"]
+    assert "confirm=True" in payload["message"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_delete_webhook_success(
     webhook_session, mock_webhook_client, extract_payload
 ):
@@ -346,7 +367,7 @@ async def test_delete_webhook_success(
     async with webhook_session as session:
         result = await session.call_tool(
             "delete_webhook",
-            {"webhook_id": "webhook-1"},
+            {"webhook_id": "webhook-1", "confirm": True},
         )
 
     assert result.isError is False
@@ -368,7 +389,7 @@ async def test_delete_webhook_graphql_error(
     async with webhook_session as session:
         result = await session.call_tool(
             "delete_webhook",
-            {"webhook_id": "w1"},
+            {"webhook_id": "w1", "confirm": True},
         )
 
     assert result.isError is False

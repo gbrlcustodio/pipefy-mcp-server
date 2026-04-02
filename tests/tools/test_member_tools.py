@@ -144,7 +144,7 @@ async def test_remove_member_from_pipe_value_error_from_client(
     async with member_session as session:
         result = await session.call_tool(
             "remove_member_from_pipe",
-            {"pipe_id": "bad", "user_ids": ["u1"]},
+            {"pipe_id": "bad", "user_ids": ["u1"], "confirm": True},
         )
 
     assert result.isError is False
@@ -165,7 +165,7 @@ async def test_remove_member_from_pipe_success(
     async with member_session as session:
         result = await session.call_tool(
             "remove_member_from_pipe",
-            {"pipe_id": "pipe-1", "user_ids": ["user-1", "user-2"]},
+            {"pipe_id": "pipe-1", "user_ids": ["user-1", "user-2"], "confirm": True},
         )
 
     assert result.isError is False
@@ -189,7 +189,7 @@ async def test_remove_member_from_pipe_graphql_error(
     async with member_session as session:
         result = await session.call_tool(
             "remove_member_from_pipe",
-            {"pipe_id": "p1", "user_ids": ["u1"]},
+            {"pipe_id": "p1", "user_ids": ["u1"], "confirm": True},
         )
 
     assert result.isError is False

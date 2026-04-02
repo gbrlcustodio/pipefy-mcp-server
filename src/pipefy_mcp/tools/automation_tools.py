@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.services.pipefy import PipefyClient
@@ -14,6 +15,7 @@ from pipefy_mcp.tools.automation_tool_helpers import (
     build_automation_read_success_payload,
     handle_automation_tool_graphql_error,
 )
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     valid_repo_id,
@@ -305,14 +307,20 @@ class AutomationTools:
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
         )
         async def delete_automation(
-            ctx: Context,
+            ctx: Context[ServerSession, None],
             automation_id: str | int,
+            confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Delete an automation rule. This action is irreversible. Always confirm with the user before executing.
+            """Delete an automation rule permanently.
+
+            Two-step operation: call without ``confirm`` to preview, then with
+            ``confirm=True`` after user approval. When the MCP client supports
+            elicitation, the user is prompted interactively instead.
 
             Args:
                 automation_id: Automation rule ID to delete.
+                confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             rid = _normalize_required_id(automation_id)
@@ -323,6 +331,15 @@ class AutomationTools:
                         "positive integer."
                     ),
                 )
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"automation (ID: {automation_id})",
+            )
+            if guard is not None:
+                return guard
+
             try:
                 raw = await client.delete_automation(rid)
             except Exception as exc:

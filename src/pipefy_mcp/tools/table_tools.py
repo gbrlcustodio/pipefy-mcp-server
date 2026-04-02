@@ -62,6 +62,37 @@ class TableTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
+        async def search_tables(table_name: str | None = None) -> dict[str, Any]:
+            """Search for all accessible databases (tables) across all organizations.
+
+            Use this tool to find a table's ID when you only know its name.
+            Returns all tables from all organizations, optionally filtered by name.
+
+            When filtering by name, uses substring matching first (score 100) and
+            falls back to fuzzy matching with a 70% similarity threshold.
+            Only tables with a match score of 70 or higher are included in results.
+            Results are sorted by match score (best matches first).
+
+            Args:
+                table_name: Optional table name to search for (case-insensitive partial match).
+                            If not provided, returns all available tables.
+
+            Returns:
+                dict: Contains 'organizations' array, each with:
+                      - id: Organization ID
+                      - name: Organization name
+                      - tables: Array of tables in the organization, each with:
+                          - id: Table ID (use this for get_table, get_table_records, etc.)
+                          - name: Table name
+                          - description: Table description
+                          - match_score: Match score (0-100) when table_name is provided,
+                                         100 for substring matches, fuzzy score otherwise.
+            """
+            return await client.search_tables(table_name)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
         async def get_table(table_id: str | int) -> dict[str, Any]:
             """Load one database table: name, description, fields, and authorization.
 

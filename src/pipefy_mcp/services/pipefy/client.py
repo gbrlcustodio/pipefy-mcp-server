@@ -717,6 +717,10 @@ class PipefyClient:
         """Search for pipes across all organizations"""
         return await self._pipe_service.search_pipes(pipe_name)
 
+    async def search_tables(self, table_name: str | None = None) -> dict:
+        """Search for databases (tables) across all organizations"""
+        return await self._table_service.search_tables(table_name)
+
     async def get_phase_fields(
         self, phase_id: int, required_only: bool = False
     ) -> dict:

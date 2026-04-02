@@ -573,7 +573,7 @@ class TestDeleteAiAgent:
         async with client_session as session:
             result = await session.call_tool(
                 "delete_ai_agent",
-                {"uuid": "to-delete"},
+                {"uuid": "to-delete", "confirm": True},
             )
         assert result.isError is False
         mock_pipefy_client.delete_ai_agent.assert_awaited_once_with("to-delete")
@@ -590,7 +590,9 @@ class TestDeleteAiAgent:
     ):
         mock_pipefy_client.delete_ai_agent.return_value = {"success": False}
         async with client_session as session:
-            result = await session.call_tool("delete_ai_agent", {"uuid": "fail"})
+            result = await session.call_tool(
+                "delete_ai_agent", {"uuid": "fail", "confirm": True}
+            )
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "success=false" in payload["error"].lower()
@@ -617,7 +619,7 @@ class TestDeleteAiAgent:
         async with client_session as session:
             result = await session.call_tool(
                 "delete_ai_agent",
-                {"uuid": "bad"},
+                {"uuid": "bad", "confirm": True},
             )
         assert result.isError is False
         payload = extract_payload(result)

@@ -18,6 +18,7 @@ from pipefy_mcp.tools.ai_tool_helpers import (
     build_toggle_agent_status_success,
     build_update_agent_success,
 )
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 
 
@@ -266,16 +267,32 @@ class AiAgentTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
         )
-        async def delete_ai_agent(ctx: Context, uuid: str) -> dict:
-            """Delete an AI Agent permanently. This action is irreversible. Always confirm with the user before executing.
+        async def delete_ai_agent(
+            ctx: Context, uuid: str, confirm: bool = False
+        ) -> dict:
+            """Delete an AI Agent permanently. This action is irreversible.
+
+            Two-step operation: call without ``confirm`` to preview, then with
+            ``confirm=True`` after user approval. When the MCP client supports
+            elicitation, the user is prompted interactively instead.
 
             Args:
                 uuid: Agent UUID.
+                confirm: Set to True to execute the deletion (step 2).
             """
             agent_uuid = uuid.strip()
             ctx.debug(f"delete_ai_agent: uuid={agent_uuid}")
             if not agent_uuid:
                 return build_ai_tool_error("uuid must not be blank")
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"AI agent (UUID: {agent_uuid})",
+            )
+            if guard is not None:
+                return guard
+
             try:
                 result = await client.delete_ai_agent(agent_uuid)
             except Exception as exc:  # noqa: BLE001

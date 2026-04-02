@@ -764,3 +764,111 @@ async def test_get_ai_credit_usage_debug_true_appends_codes(
     assert p["success"] is False
     assert "forbidden" in p["error"]
     assert "FORBIDDEN" in p["error"]
+
+
+# --- Int-to-str coercion tests ---
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_export_automation_jobs_coerces_int_organization_id(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.export_automation_jobs.return_value = {
+        "createAutomationJobsExport": {
+            "automationJobsExport": {"id": "exp-1", "status": "processing"}
+        }
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "export_automation_jobs",
+            {"organization_id": 302398434, "period": "last_month"},
+        )
+
+    assert result.isError is False
+    mock_observability_client.export_automation_jobs.assert_awaited_once_with(
+        "302398434", "last_month"
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_agents_usage_coerces_int_organization_uuid(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_agents_usage.return_value = {
+        "agentsUsageDetails": {"usage": 0, "agents": {"nodes": [], "totalCount": 0}}
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_agents_usage",
+            {
+                "organization_uuid": 302398434,
+                "filter_date_from": "2026-03-01T00:00:00Z",
+                "filter_date_to": "2026-03-31T23:59:59Z",
+            },
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_agents_usage.assert_awaited_once_with(
+        "302398434",
+        {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"},
+        filters=None,
+        search=None,
+        sort=None,
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automations_usage_coerces_int_organization_uuid(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_automations_usage.return_value = {
+        "automationsUsageDetails": {
+            "usage": 0,
+            "automations": {"nodes": [], "totalCount": 0},
+        }
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automations_usage",
+            {
+                "organization_uuid": 302398434,
+                "filter_date_from": "2026-03-01T00:00:00Z",
+                "filter_date_to": "2026-03-31T23:59:59Z",
+            },
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_automations_usage.assert_awaited_once_with(
+        "302398434",
+        {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"},
+        filters=None,
+        search=None,
+        sort=None,
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_credit_usage_coerces_int_organization_uuid(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_ai_credit_usage.return_value = {
+        "aiCreditUsage": {"creditLimit": 100, "totalConsumption": 50}
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_credit_usage",
+            {"organization_uuid": 302398434, "period": "current_month"},
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_ai_credit_usage.assert_awaited_once_with(
+        "302398434", "current_month"
+    )

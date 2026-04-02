@@ -642,7 +642,7 @@ async def test_delete_table_record_success(
     async with table_session as session:
         result = await session.call_tool(
             "delete_table_record",
-            {"record_id": 99},
+            {"record_id": 99, "confirm": True},
         )
 
     mock_table_client.delete_table_record.assert_awaited_once_with(99)
@@ -659,7 +659,9 @@ async def test_delete_table_record_graphql_error(
     )
 
     async with table_session as session:
-        result = await session.call_tool("delete_table_record", {"record_id": 1})
+        result = await session.call_tool(
+            "delete_table_record", {"record_id": 1, "confirm": True}
+        )
 
     assert extract_payload(result)["success"] is False
 
@@ -789,7 +791,9 @@ async def test_delete_table_field_success(
     }
 
     async with table_session as session:
-        result = await session.call_tool("delete_table_field", {"field_id": 88})
+        result = await session.call_tool(
+            "delete_table_field", {"field_id": 88, "confirm": True}
+        )
 
     mock_table_client.delete_table_field.assert_awaited_once_with(88)
     assert extract_payload(result)["success"] is True
@@ -805,6 +809,8 @@ async def test_delete_table_field_graphql_error(
     )
 
     async with table_session as session:
-        result = await session.call_tool("delete_table_field", {"field_id": "x"})
+        result = await session.call_tool(
+            "delete_table_field", {"field_id": "x", "confirm": True}
+        )
 
     assert extract_payload(result)["success"] is False

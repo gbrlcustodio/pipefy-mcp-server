@@ -278,7 +278,7 @@ async def test_delete_pipe_relation_success(
     async with relation_session as session:
         result = await session.call_tool(
             "delete_pipe_relation",
-            {"relation_id": 100},
+            {"relation_id": 100, "confirm": True},
         )
 
     assert result.isError is False
@@ -298,7 +298,7 @@ async def test_delete_pipe_relation_graphql_error(
     async with relation_session as session:
         result = await session.call_tool(
             "delete_pipe_relation",
-            {"relation_id": 1},
+            {"relation_id": 1, "confirm": True},
         )
 
     assert extract_payload(result)["success"] is False

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.relation_tool_helpers import (
     build_relation_error_payload,
     build_relation_mutation_success_payload,
@@ -181,21 +183,35 @@ class RelationTools:
             ),
         )
         async def delete_pipe_relation(
+            ctx: Context[ServerSession, None],
             relation_id: str | int,
+            confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Permanently delete a pipe relation by ID.
 
-            Always confirm with the user before calling — deletion cannot be undone.
+            Two-step operation: call without ``confirm`` to preview, then with
+            ``confirm=True`` after user approval. When the MCP client supports
+            elicitation, the user is prompted interactively instead.
 
             Args:
                 relation_id: Pipe relation ID to delete.
+                confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not valid_repo_id(relation_id):
                 return build_relation_error_payload(
                     message="Invalid 'relation_id': use a non-empty string or positive integer.",
                 )
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"pipe relation (ID: {relation_id})",
+            )
+            if guard is not None:
+                return guard
+
             try:
                 raw = await client.delete_pipe_relation(relation_id)
             except Exception as exc:

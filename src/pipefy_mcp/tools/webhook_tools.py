@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     valid_repo_id,
@@ -311,21 +313,36 @@ class WebhookTools:
             ),
         )
         async def delete_webhook(
+            ctx: Context[ServerSession, None],
             webhook_id: str,
+            confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Permanently delete a webhook by ID.
+            """Delete a webhook permanently.
 
-            Always confirm with the user before calling — deletion cannot be undone.
+            Two-step operation: call without ``confirm`` to preview, then with
+            ``confirm=True`` after user approval. When the MCP client supports
+            elicitation, the user is prompted interactively instead.
 
             Args:
+                ctx: MCP context for debug logging.
                 webhook_id: ID of the webhook to delete.
+                confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not isinstance(webhook_id, str) or not webhook_id.strip():
                 return build_webhook_error_payload(
                     message="Invalid 'webhook_id': provide a non-empty string.",
                 )
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"webhook (ID: {webhook_id})",
+            )
+            if guard is not None:
+                return guard
+
             try:
                 raw = await client.delete_webhook(webhook_id.strip())
             except Exception as exc:

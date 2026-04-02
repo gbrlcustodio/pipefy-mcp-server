@@ -319,7 +319,8 @@ class PipeConfigTools:
             """Update a phase.
 
             Pipefy requires the phase name on update. Omit `name` to keep the current
-            name (resolved via get_phase_fields).
+            name (resolved via get_phase_fields). Values identical to the current state
+            are accepted but result in a no-op API call.
 
             Args:
                 phase_id: Phase ID to update.

@@ -203,7 +203,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_agents_usage(
-            organization_uuid: str,
+            organization_uuid: str | int,
             filter_date_from: str,
             filter_date_to: str,
             filters: dict[str, Any] | None = None,
@@ -214,7 +214,7 @@ class ObservabilityTools:
             """Get AI agent usage stats for an org within a date range. Returns total AI credits consumed and per-agent breakdown. `filter_date_from` and `filter_date_to` are ISO8601 datetime strings. Optional `filters` for action/event/pipe/status filtering.
 
             Args:
-                organization_uuid: Organization UUID, or numeric organization id (string).
+                organization_uuid: Organization UUID, or numeric organization id.
                 filter_date_from: Start of date range (ISO8601).
                 filter_date_to: End of date range (ISO8601).
                 filters: Optional FilterParams dict (action, event, pipe, status keys).
@@ -222,10 +222,11 @@ class ObservabilityTools:
                 sort: SortCriteria dict (field + direction).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_uuid or not isinstance(organization_uuid, str):
+            if not organization_uuid or not isinstance(organization_uuid, (str, int)):
                 return build_observability_error_payload(
-                    message="Invalid 'organization_uuid': provide a non-empty string.",
+                    message="Invalid 'organization_uuid': provide a non-empty string or integer.",
                 )
+            organization_uuid = str(organization_uuid)
             if not filter_date_from or not filter_date_to:
                 return build_observability_error_payload(
                     message="Both 'filter_date_from' and 'filter_date_to' are required.",
@@ -250,7 +251,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_automations_usage(
-            organization_uuid: str,
+            organization_uuid: str | int,
             filter_date_from: str,
             filter_date_to: str,
             filters: dict[str, Any] | None = None,
@@ -261,7 +262,7 @@ class ObservabilityTools:
             """Get automation usage stats for an org within a date range. Returns total execution count and per-automation breakdown. Same input shape as `get_agents_usage`.
 
             Args:
-                organization_uuid: Organization UUID, or numeric organization id (string).
+                organization_uuid: Organization UUID, or numeric organization id.
                 filter_date_from: Start of date range (ISO8601).
                 filter_date_to: End of date range (ISO8601).
                 filters: Optional FilterParams dict (action, event, pipe, status keys).
@@ -269,10 +270,11 @@ class ObservabilityTools:
                 sort: SortCriteria dict (field + direction).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_uuid or not isinstance(organization_uuid, str):
+            if not organization_uuid or not isinstance(organization_uuid, (str, int)):
                 return build_observability_error_payload(
-                    message="Invalid 'organization_uuid': provide a non-empty string.",
+                    message="Invalid 'organization_uuid': provide a non-empty string or integer.",
                 )
+            organization_uuid = str(organization_uuid)
             if not filter_date_from or not filter_date_to:
                 return build_observability_error_payload(
                     message="Both 'filter_date_from' and 'filter_date_to' are required.",
@@ -297,7 +299,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_ai_credit_usage(
-            organization_uuid: str,
+            organization_uuid: str | int,
             period: str,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -309,10 +311,11 @@ class ObservabilityTools:
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_uuid or not isinstance(organization_uuid, str):
+            if not organization_uuid or not isinstance(organization_uuid, (str, int)):
                 return build_observability_error_payload(
-                    message="Invalid 'organization_uuid': provide a non-empty string.",
+                    message="Invalid 'organization_uuid': provide a non-empty string or integer.",
                 )
+            organization_uuid = str(organization_uuid)
             if period not in _VALID_PERIODS:
                 return build_observability_error_payload(
                     message=f"Invalid 'period': must be one of {sorted(_VALID_PERIODS)}.",
@@ -333,21 +336,22 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def export_automation_jobs(
-            organization_id: str,
+            organization_id: str | int,
             period: str,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Trigger async export of automation job history for an org. `period`: 'current_month', 'last_month', or 'last_3_months'. The export file is delivered to the requesting user.
 
             Args:
-                organization_id: Organization ID.
+                organization_id: Organization ID (string or numeric).
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_id or not isinstance(organization_id, str):
+            if not organization_id or not isinstance(organization_id, (str, int)):
                 return build_observability_error_payload(
-                    message="Invalid 'organization_id': provide a non-empty string.",
+                    message="Invalid 'organization_id': provide a non-empty string or integer.",
                 )
+            organization_id = str(organization_id)
             if period not in _VALID_PERIODS:
                 return build_observability_error_payload(
                     message=f"Invalid 'period': must be one of {sorted(_VALID_PERIODS)}.",

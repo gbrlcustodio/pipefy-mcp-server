@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
     build_field_condition_delete_payload,
     build_field_condition_success_payload,
@@ -225,17 +227,21 @@ class FieldConditionTools:
             ),
         )
         async def delete_field_condition(
-            ctx: Context,
+            ctx: Context[ServerSession, None],
             condition_id: str | int,
+            confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete a field condition permanently.
 
-            This action is irreversible. Always confirm with the user before executing.
+            Two-step operation: call without ``confirm`` to preview, then with
+            ``confirm=True`` after user approval. When the MCP client supports
+            elicitation, the user is prompted interactively instead.
 
             Args:
                 ctx: MCP context for debug logging.
                 condition_id: Field condition ID to delete.
+                confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             await ctx.debug(
@@ -247,6 +253,15 @@ class FieldConditionTools:
                         "Invalid 'condition_id'. Use a non-empty string or a positive integer."
                     ),
                 )
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"field condition (ID: {condition_id})",
+            )
+            if guard is not None:
+                return guard
+
             cid_key = (
                 condition_id.strip()
                 if isinstance(condition_id, str)

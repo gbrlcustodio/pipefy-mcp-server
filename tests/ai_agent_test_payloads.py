@@ -33,3 +33,25 @@ def minimal_behavior_dict(name="Test Behavior", event_id="card_created"):
             }
         },
     }
+
+
+def behavior_with_action(
+    action_type, metadata, *, name="Test Behavior", event_id="card_created"
+):
+    """Build a behavior dict with a single action of the given type and metadata."""
+    return {
+        "name": name,
+        "event_id": event_id,
+        "actionParams": {
+            "aiBehaviorParams": {
+                "instruction": "Test instruction.",
+                "actionsAttributes": [
+                    {
+                        "name": f"{action_type} action",
+                        "actionType": action_type,
+                        "metadata": metadata,
+                    },
+                ],
+            }
+        },
+    }

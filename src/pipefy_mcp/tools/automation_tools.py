@@ -71,7 +71,7 @@ class AutomationTools:
                 )
             try:
                 raw = await client.get_automation(aid)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_automation_tool_graphql_error(exc, ctx, False)
             message = (
                 "No automation found for the given ID."
@@ -122,7 +122,7 @@ class AutomationTools:
                     organization_id=org,
                     pipe_id=pipe,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_automation_tool_graphql_error(exc, ctx, False)
             return build_automation_read_success_payload(
                 rows,
@@ -154,7 +154,7 @@ class AutomationTools:
                 )
             try:
                 rows = await client.get_automation_actions(pid)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_automation_tool_graphql_error(exc, ctx, False)
             return build_automation_read_success_payload(
                 rows,
@@ -186,7 +186,7 @@ class AutomationTools:
                 )
             try:
                 rows = await client.get_automation_events(pid)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_automation_tool_graphql_error(exc, ctx, False)
             return build_automation_read_success_payload(
                 rows,
@@ -203,6 +203,7 @@ class AutomationTools:
             trigger_id: str | int,
             action_id: str | int,
             active: bool = True,
+            action_repo_id: str | int | None = None,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -213,13 +214,20 @@ class AutomationTools:
             ``CreateAutomationInput`` (camelCase keys). Use ``update_automation`` with ``active: false``
             to disable a rule after creation.
 
+            **Cross-pipe actions** (e.g. ``create_connected_card``, ``move_card_to_pipe``):
+            set ``action_repo_id`` to the **destination** pipe ID. When omitted it defaults to
+            ``pipe_id`` (same-pipe automation). Cross-pipe actions typically require
+            ``action_params`` inside ``extra_input`` — for example, ``create_connected_card`` needs
+            ``{"action_params": {"pipeId": "<child_pipe_id>", "fieldsAttributes": [...]}}``.
+
             Args:
-                pipe_id: Pipe ID (automation context).
+                pipe_id: Pipe ID where the trigger event fires (source pipe).
                 name: Rule name.
                 trigger_id: Event ID from ``get_automation_events``.
                 action_id: Action type ID from ``get_automation_actions``.
                 active: When True (default), the rule is created **enabled**. Set False to start disabled. If ``extra_input`` includes ``active``, that value wins.
-                extra_input: Optional extra fields for the mutation input.
+                action_repo_id: Pipe ID where the action executes (destination pipe). Defaults to ``pipe_id``. Required for cross-pipe actions.
+                extra_input: Optional extra fields for the mutation input (camelCase keys).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             pid = _normalize_required_id(pipe_id)
@@ -236,6 +244,16 @@ class AutomationTools:
                 return build_automation_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
                 )
+            arid: str | None = None
+            if action_repo_id is not None:
+                arid = _normalize_required_id(action_repo_id)
+                if arid is None:
+                    return build_automation_error_payload(
+                        message=(
+                            "Invalid 'action_repo_id': provide a non-empty string or "
+                            "positive integer."
+                        ),
+                    )
             bad = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -248,9 +266,10 @@ class AutomationTools:
                     tid,
                     aid,
                     active=active,
+                    action_repo_id=arid,
                     extra_input=extra_input,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_automation_tool_graphql_error(exc, ctx, debug)
             block = raw.get("createAutomation") or {}
             automation = block.get("automation") or {}
@@ -295,7 +314,7 @@ class AutomationTools:
                     rid,
                     extra_input=extra_input,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_automation_tool_graphql_error(exc, ctx, debug)
             block = raw.get("updateAutomation") or {}
             automation = block.get("automation") or {}
@@ -342,7 +361,7 @@ class AutomationTools:
 
             try:
                 raw = await client.delete_automation(rid)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_automation_tool_graphql_error(exc, ctx, debug)
             if not raw.get("success"):
                 return build_automation_error_payload(

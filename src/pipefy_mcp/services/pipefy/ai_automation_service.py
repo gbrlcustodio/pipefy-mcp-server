@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pipefy_mcp.models.ai_automation import (
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
@@ -20,10 +22,10 @@ class AiAutomationService:
     """Service for creating and updating AI Automations via the internal API."""
 
     def __init__(self, client: InternalApiClient) -> None:
-        """Create the service.
+        """Attach the client used for ``internal_api`` GraphQL calls.
 
         Args:
-            client: InternalApiClient for the internal_api endpoint.
+            client: Configured :class:`InternalApiClient` instance.
         """
         self._client = client
 
@@ -35,9 +37,6 @@ class AiAutomationService:
         Args:
             automation_input: Validated create input.
 
-        Returns:
-            Dict with automation_id and message.
-
         Raises:
             ValueError: When API response is missing automation.id.
         """
@@ -46,7 +45,8 @@ class AiAutomationService:
             "action_id": ACTION_ID_GENERATE_WITH_AI,
             "event_id": automation_input.event_id,
             "event_repo_id": automation_input.pipe_id,
-            "action_repo_id": automation_input.pipe_id,
+            "action_repo_id": automation_input.action_repo_id
+            or automation_input.pipe_id,
             "action_params": {
                 "aiParams": {
                     "value": automation_input.prompt,
@@ -86,19 +86,16 @@ class AiAutomationService:
         Args:
             automation_input: Validated update input.
 
-        Returns:
-            Dict with automation_id and message.
-
         Raises:
             ValueError: When API response is missing automation.id.
         """
-        input_dict: dict = {"id": automation_input.automation_id}
+        input_dict: dict[str, Any] = {"id": automation_input.automation_id}
         if automation_input.name is not None:
             input_dict["name"] = automation_input.name
         if automation_input.active is not None:
             input_dict["active"] = automation_input.active
 
-        ai_params: dict = {}
+        ai_params: dict[str, Any] = {}
         if automation_input.prompt is not None:
             ai_params["value"] = automation_input.prompt
         if automation_input.field_ids is not None:

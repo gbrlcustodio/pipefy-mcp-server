@@ -169,15 +169,20 @@ class AutomationService(BasePipefyClient):
         name: str,
         trigger_id: str,
         action_id: str,
+        *,
+        action_repo_id: str | None = None,
         **attrs: Any,
     ) -> CreateAutomationMutationResult:
         """Create a traditional automation (`CreateAutomationInput`).
 
         Args:
-            pipe_id: Pipe ID used as event and action repository context.
+            pipe_id: Source pipe ID for the trigger (maps to ``event_repo_id``).
             name: Rule display name.
             trigger_id: Event ID from `get_automation_events` (API field `event_id`).
             action_id: Action type ID from `get_automation_actions`.
+            action_repo_id: Pipe ID where the action executes. Defaults to ``pipe_id``
+                (same-pipe automation). For cross-pipe actions like ``create_connected_card``
+                or ``move_card_to_pipe``, set this to the **destination** pipe ID.
             **attrs: Additional `CreateAutomationInput` fields (API key names). ``None`` values are omitted.
                 When ``active`` is omitted, it defaults to ``True`` (rule created enabled in Pipefy).
         """
@@ -186,7 +191,7 @@ class AutomationService(BasePipefyClient):
             "event_id": trigger_id,
             "action_id": action_id,
             "event_repo_id": pipe_id,
-            "action_repo_id": pipe_id,
+            "action_repo_id": action_repo_id or pipe_id,
         }
         for key, value in attrs.items():
             if value is not None:

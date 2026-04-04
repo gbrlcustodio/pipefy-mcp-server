@@ -39,6 +39,10 @@ class CreateAiAutomationInput(BaseModel):
     name: NonBlankStr
     event_id: _EventId
     pipe_id: NonBlankStr
+    action_repo_id: NonBlankStr | None = Field(
+        default=None,
+        description="Pipe ID where the action executes. Defaults to pipe_id when omitted.",
+    )
     prompt: NonBlankStr
     field_ids: list[str] = Field(
         min_length=1,

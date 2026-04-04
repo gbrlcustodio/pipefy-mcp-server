@@ -1,3 +1,5 @@
+"""Facade that wires Pipefy domain services for MCP tools (delegation only)."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -521,16 +523,20 @@ class PipefyClient:
         action_id: str,
         *,
         active: bool = True,
+        action_repo_id: str | None = None,
         extra_input: dict[str, Any] | None = None,
     ) -> CreateAutomationMutationResult:
         """Create a traditional automation rule (optional ``extra_input`` uses CreateAutomationInput field names).
 
         Args:
-            pipe_id: Pipe ID.
+            pipe_id: Pipe ID (event source).
             name: Rule name.
             trigger_id: Event ID.
             action_id: Action ID.
             active: When True (default), create the rule enabled. Set False to start disabled.
+            action_repo_id: Pipe ID where the action executes. Defaults to ``pipe_id``.
+                For cross-pipe actions (``create_connected_card``, ``move_card_to_pipe``),
+                pass the **destination** pipe ID.
             extra_input: Extra ``CreateAutomationInput`` keys; ``active`` here overrides the ``active`` argument.
         """
         merged: dict[str, Any] = {"active": active, **(extra_input or {})}
@@ -539,6 +545,7 @@ class PipefyClient:
             name,
             trigger_id,
             action_id,
+            action_repo_id=action_repo_id,
             **merged,
         )
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
@@ -269,11 +269,13 @@ class PipeTools:
                 first: Max cards to return per page.
                 after: Cursor for fetching the next page (from ``pageInfo.endCursor`` of a previous call).
             """
-            merged_search = dict(search) if search else {}
+            merged_search: CardSearch = cast(CardSearch, dict(search) if search else {})
             if title:
                 merged_search["title"] = title
 
-            effective_search: CardSearch | None = merged_search or None  # type: ignore[assignment]
+            effective_search: CardSearch | None = (
+                merged_search if merged_search else None
+            )
 
             await ctx.debug(
                 f"Getting cards for pipe {pipe_id} (include_fields={include_fields}, search={effective_search})"
@@ -654,7 +656,7 @@ class PipeTools:
                 card_data = card_response["card"]
                 card_title = card_data["title"]
                 pipe_name = card_data.get("pipe", {}).get("name", "Unknown Pipe")
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 codes = extract_graphql_error_codes(exc)
                 correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_card_error_to_message(
@@ -700,9 +702,9 @@ class PipeTools:
                             message="Card deletion cancelled by user."
                         )
 
-                except Exception as e:
+                except Exception as exc:  # noqa: BLE001
                     return build_delete_card_error_payload(
-                        message=f"Failed to request confirmation: {str(e)}"
+                        message=f"Failed to request confirmation: {exc!s}"
                     )
 
             try:
@@ -720,7 +722,7 @@ class PipeTools:
                     return build_delete_card_error_payload(
                         message=f"Failed to delete card '{card_title}' (ID: {card_id}). Please try again or contact support."
                     )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 codes = extract_graphql_error_codes(exc)
                 correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_card_error_to_message(

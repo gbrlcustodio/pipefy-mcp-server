@@ -126,6 +126,7 @@ async def test_register_tools(client_session):
         "remove_member_from_pipe",
         "search_pipes",
         "search_schema",
+        "search_tables",
         "send_email_with_template",
         "send_inbox_email",
         "set_role",

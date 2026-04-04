@@ -63,7 +63,7 @@ class PipeConfigTools:
                 )
             try:
                 raw = await client.create_pipe(name.strip(), organization_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Create pipe failed.", debug=debug
                 )
@@ -116,7 +116,7 @@ class PipeConfigTools:
                     color=color,
                     preferences=preferences,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Update pipe failed.", debug=debug
                 )
@@ -156,7 +156,7 @@ class PipeConfigTools:
                 pipe_response = await client.get_pipe(pipe_id)
                 pipe_data = pipe_response.get("pipe") or {}
                 pipe_name = pipe_data.get("name") or "Unknown"
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 codes = extract_graphql_error_codes(exc)
                 correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_pipe_error_to_message(
@@ -192,7 +192,7 @@ class PipeConfigTools:
                         codes=[],
                     )
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 codes = extract_graphql_error_codes(exc)
                 correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_pipe_error_to_message(
@@ -243,7 +243,7 @@ class PipeConfigTools:
                     pipe_template_id,
                     organization_id=organization_id,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Clone pipe failed.", debug=debug
                 )
@@ -291,7 +291,7 @@ class PipeConfigTools:
                     index=index,
                     description=description,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Create phase failed.", debug=debug
                 )
@@ -366,7 +366,7 @@ class PipeConfigTools:
             if "name" not in update_attrs:
                 try:
                     phase_info = await client.get_phase_fields(phase_id)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001  # noqa: BLE001
                     return handle_pipe_config_tool_graphql_error(
                         exc, "Could not load phase.", debug=debug
                     )
@@ -379,7 +379,7 @@ class PipeConfigTools:
 
             try:
                 raw = await client.update_phase(phase_id, **update_attrs)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Update phase failed.", debug=debug
                 )
@@ -426,7 +426,7 @@ class PipeConfigTools:
 
             try:
                 raw = await client.delete_phase(phase_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Delete phase failed.", debug=debug
                 )
@@ -491,7 +491,7 @@ class PipeConfigTools:
                     field_type.strip(),
                     **merged,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Create phase field failed.", debug=debug
                 )
@@ -554,7 +554,7 @@ class PipeConfigTools:
             fid = field_id.strip() if isinstance(field_id, str) else field_id
             try:
                 raw = await client.update_phase_field(fid, **update_attrs)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Update phase field failed.", debug=debug
                 )
@@ -605,7 +605,7 @@ class PipeConfigTools:
 
             try:
                 raw = await client.delete_phase_field(fid)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Delete phase field failed.", debug=debug
                 )
@@ -651,7 +651,7 @@ class PipeConfigTools:
                     name.strip(),
                     color.strip(),
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Create label failed.", debug=debug
                 )
@@ -700,7 +700,7 @@ class PipeConfigTools:
                 )
             try:
                 raw = await client.update_label(label_id, **update_attrs)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Update label failed.", debug=debug
                 )
@@ -747,7 +747,7 @@ class PipeConfigTools:
 
             try:
                 raw = await client.delete_label(label_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Delete label failed.", debug=debug
                 )

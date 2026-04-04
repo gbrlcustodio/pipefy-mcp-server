@@ -67,67 +67,107 @@ class CreateAgentPartialFailurePayload(TypedDict):
 def build_create_automation_success(
     *, automation_id: str, message: str
 ) -> CreateAiAutomationSuccessPayload:
-    """Build success payload for create_ai_automation."""
+    """Successful AI automation create.
+
+    Args:
+        automation_id: New automation id from the API.
+        message: Short summary for the client.
+    """
     return {"success": True, "automation_id": automation_id, "message": message}
 
 
 def build_update_automation_success(
     *, automation_id: str, message: str
 ) -> UpdateAiAutomationSuccessPayload:
-    """Build success payload for update_ai_automation."""
+    """Successful AI automation update.
+
+    Args:
+        automation_id: Target automation id.
+        message: Short summary for the client.
+    """
     return {"success": True, "automation_id": automation_id, "message": message}
 
 
 def build_create_agent_success(
     *, agent_uuid: str, message: str
 ) -> CreateAiAgentSuccessPayload:
-    """Build success payload for create_ai_agent."""
+    """Successful AI agent create.
+
+    Args:
+        agent_uuid: New agent UUID from the API.
+        message: Short summary for the client.
+    """
     return {"success": True, "agent_uuid": agent_uuid, "message": message}
 
 
 def build_update_agent_success(
     *, agent_uuid: str, message: str
 ) -> UpdateAiAgentSuccessPayload:
-    """Build success payload for update_ai_agent."""
+    """Successful AI agent update.
+
+    Args:
+        agent_uuid: Target agent UUID.
+        message: Short summary for the client.
+    """
     return {"success": True, "agent_uuid": agent_uuid, "message": message}
 
 
 def build_toggle_agent_status_success(
     *, message: str
 ) -> ToggleAiAgentStatusSuccessPayload:
-    """Build success payload for toggle_ai_agent_status."""
+    """Successful agent enable/disable.
+
+    Args:
+        message: Short summary for the client.
+    """
     return {"success": True, "message": message}
 
 
 def build_get_agent_success(agent: AiAgentGraphPayload) -> GetAiAgentSuccessPayload:
-    """Build success payload for get_ai_agent."""
+    """Single-agent read envelope.
+
+    Args:
+        agent: ``aiAgent`` subtree (may be empty dict when missing).
+    """
     return {"success": True, "agent": agent}
 
 
 def build_get_agents_success(
     agents: list[AiAgentGraphPayload],
 ) -> GetAiAgentsSuccessPayload:
-    """Build success payload for get_ai_agents."""
+    """List-agents read envelope.
+
+    Args:
+        agents: Unwrapped connection nodes for the repo.
+    """
     return {"success": True, "agents": agents}
 
 
 def build_delete_agent_success(*, message: str) -> DeleteAiAgentSuccessPayload:
-    """Build success payload for delete_ai_agent."""
+    """Successful AI agent delete.
+
+    Args:
+        message: Short summary for the client.
+    """
     return {"success": True, "message": message}
 
 
 def build_ai_tool_error(message: str) -> AiToolErrorPayload:
-    """Build error payload for any AI tool."""
+    """Generic AI-tool failure envelope.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return {"success": False, "error": message}
 
 
 def build_create_agent_partial_failure(
     *, agent_uuid: str, error: str
 ) -> CreateAgentPartialFailurePayload:
-    """Build payload when create succeeded but chained update failed.
+    """Create OK but follow-up update failed — surface UUID for recovery.
 
     Args:
-        agent_uuid: UUID of the agent returned by create (for recovery via update/delete).
-        error: Message describing the update failure.
+        agent_uuid: Agent UUID from ``createAiAgent`` (retry update or delete).
+        error: Why the chained update failed.
     """
     return {"success": False, "agent_uuid": agent_uuid, "error": error}

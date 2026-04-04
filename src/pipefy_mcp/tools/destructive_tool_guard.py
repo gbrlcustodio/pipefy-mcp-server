@@ -18,10 +18,6 @@ from mcp.server.session import ServerSession
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
-# ---------------------------------------------------------------------------
-# Pydantic model for interactive elicitation
-# ---------------------------------------------------------------------------
-
 
 class DestructiveActionConfirmation(BaseModel):
     """Schema shown to the user when the MCP client supports elicitation."""
@@ -30,11 +26,6 @@ class DestructiveActionConfirmation(BaseModel):
         ...,
         description="Set to true to confirm the action, or false to cancel.",
     )
-
-
-# ---------------------------------------------------------------------------
-# Generic payload types
-# ---------------------------------------------------------------------------
 
 
 class DestructivePreviewPayload(TypedDict):
@@ -50,10 +41,6 @@ class DestructiveCancelledPayload(TypedDict):
     success: Literal[False]
     error: str
 
-
-# ---------------------------------------------------------------------------
-# Guard function
-# ---------------------------------------------------------------------------
 
 _CANCEL_MESSAGE = "Action cancelled by user."
 
@@ -91,13 +78,7 @@ async def check_destructive_confirmation(
     if can_elicit:
         return await _elicit_confirmation(ctx, resource_descriptor)
 
-    # confirm=True and no elicitation → proceed
     return None
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _build_preview_payload(resource_descriptor: str) -> DestructivePreviewPayload:
@@ -134,8 +115,8 @@ async def _elicit_confirmation(
         if not result.data.model_dump().get("confirm"):
             return _build_cancel_payload()
 
-    except Exception as e:
-        return {"success": False, "error": f"Failed to request confirmation: {e!s}"}
+    except Exception as exc:  # noqa: BLE001
+        return {"success": False, "error": f"Failed to request confirmation: {exc!s}"}
 
     return None
 

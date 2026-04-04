@@ -1,12 +1,14 @@
-"""GraphQL queries and mutations for Pipefy observability: logs, usage stats, and exports."""
+"""GraphQL queries and mutations for Pipefy observability: logs, usage stats, and exports.
+
+AiAgentLogConnection / AutomationLogConnection: nodes, pageInfo, totalCount. Usage breakdowns use
+StatsDetailsConnection. ``aiCreditUsageStats`` accepts PeriodFilter: current_month | last_month |
+last_3_months. ``CreateAutomationJobsExportInput``: organizationId (ID!), filter (PeriodFilter!),
+optional clientMutationId.
+"""
 
 from __future__ import annotations
 
 from gql import gql
-
-# AiAgentLogConnection / AutomationLogConnection: nodes, pageInfo, totalCount.
-# Usage queries: StatsDetailsConnection for per-item breakdowns.
-# aiCreditUsageStats: PeriodFilter current_month | last_month | last_3_months.
 
 GET_AI_AGENT_LOGS_QUERY = gql(
     """
@@ -259,8 +261,6 @@ GET_AI_CREDIT_USAGE_QUERY = gql(
     }
     """
 )
-
-# CreateAutomationJobsExportInput: organizationId (ID!), filter (PeriodFilter!), optional clientMutationId.
 
 CREATE_AUTOMATION_JOBS_EXPORT_MUTATION = gql(
     """

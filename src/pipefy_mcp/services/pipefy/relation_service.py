@@ -1,4 +1,13 @@
-"""GraphQL operations for Pipefy pipe, table, and card relations."""
+"""GraphQL operations for Pipefy pipe, table, and card relations.
+
+``CreatePipeRelationInput`` / ``UpdatePipeRelationInput`` require all boolean flags; defaults live
+in ``_PIPE_RELATION_CONSTRAINT_DEFAULTS``. ``CreateCardRelationInput.sourceType`` is
+``PipeRelation`` | ``Field`` (default constant: PipeRelation).
+
+Merged ``**attrs`` / ``extra_input``: ``None`` values are omitted from GraphQL input (leave
+unchanged on the server). Explicit API null to clear a field is not supported — same as
+``PipeConfigService`` / ``TableService``.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +26,6 @@ from pipefy_mcp.services.pipefy.queries.relation_queries import (
 )
 from pipefy_mcp.settings import PipefySettings
 
-# CreatePipeRelationInput / UpdatePipeRelationInput boolean defaults (API requires all flags).
 _PIPE_RELATION_CONSTRAINT_DEFAULTS: dict[str, Any] = {
     "allChildrenMustBeDoneToFinishParent": False,
     "allChildrenMustBeDoneToMoveParent": False,
@@ -29,12 +37,7 @@ _PIPE_RELATION_CONSTRAINT_DEFAULTS: dict[str, Any] = {
     "childMustExistToMoveParent": False,
 }
 
-# Pipefy `CreateCardRelationInput.sourceType`: PipeRelation | Field
 _DEFAULT_CARD_RELATION_SOURCE_TYPE = "PipeRelation"
-
-# Merged ``**attrs`` / ``extra_input``: keys with value ``None`` are skipped so the field is omitted
-# from the GraphQL input (leave unchanged). Explicit API ``null`` to clear a field is not supported
-# here — same choice as ``PipeConfigService`` / ``TableService``.
 
 
 class RelationService(BasePipefyClient):

@@ -1,3 +1,5 @@
+"""GraphQL schema introspection and ad-hoc execute against Pipefy's public endpoint."""
+
 from __future__ import annotations
 
 from typing import Any

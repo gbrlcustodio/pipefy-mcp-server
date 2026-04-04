@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
@@ -11,7 +10,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_error_codes,
     with_debug_suffix,
 )
-from pipefy_mcp.tools.validation_helpers import UUID_RE
+from pipefy_mcp.tools.validation_helpers import UUID_RE, format_json_preview
 
 
 class DeletePipePreviewPayload(TypedDict):
@@ -39,7 +38,7 @@ DeletePipePayload = (
 
 
 class PipeMutationSuccessPayload(TypedDict):
-    """Structured success response for pipe-config mutation tools."""
+    """Pipe create/update/clone tool success shape."""
 
     success: Literal[True]
     message: str
@@ -47,7 +46,7 @@ class PipeMutationSuccessPayload(TypedDict):
 
 
 class FieldConditionMutationSuccessPayload(TypedDict):
-    """Structured success response for create/update field condition tools."""
+    """Field condition create/update success shape."""
 
     success: Literal[True]
     condition_id: str
@@ -70,24 +69,20 @@ FieldConditionDeletePayload = (
 )
 
 
-def _to_readable_json(data: Any) -> str:
-    return json.dumps(data, indent=2, default=str, ensure_ascii=False)
-
-
 def handle_pipe_config_tool_graphql_error(
     exc: BaseException,
     fallback_msg: str,
     *,
     debug: bool = False,
 ) -> dict[str, Any]:
-    """Map a GraphQL/client exception to a pipe-config tool error payload.
+    """Turn transport/GraphQL failures into ``build_pipe_tool_error_payload`` output.
 
-    When ``debug`` is False, skips correlation/code extraction (same user-visible message).
+    When ``debug`` is False, the user-visible string omits codes / ``correlation_id``.
 
     Args:
-        exc: Exception from the Pipefy client or transport layer.
-        fallback_msg: Message when no extractable error strings exist.
-        debug: When True, append GraphQL codes and correlation_id to the message.
+        exc: Root exception from gql/httpx.
+        fallback_msg: Used when ``extract_error_strings`` is empty.
+        debug: When True, append codes and ``correlation_id``.
     """
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else fallback_msg
@@ -103,9 +98,11 @@ def handle_pipe_config_tool_graphql_error(
 def build_pipe_mutation_success_payload(
     *, label: str, data: dict[str, Any]
 ) -> PipeMutationSuccessPayload:
-    """Build a success payload for pipe create/update/clone tools.
+    """``success``, ``message`` (``label``), and raw GraphQL ``result`` dict.
 
-    ``result`` is the raw GraphQL response dict (structured), not a nested JSON string.
+    Args:
+        label: Short summary shown as ``message``.
+        data: Full mutation response subtree (not a JSON string).
     """
     return cast(
         PipeMutationSuccessPayload,
@@ -114,17 +111,22 @@ def build_pipe_mutation_success_payload(
 
 
 def build_pipe_tool_error_payload(*, message: str) -> dict[str, Any]:
+    """``success: False`` with ``error`` text.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return {"success": False, "error": message}
 
 
 def build_field_condition_success_payload(
     condition_id: str, action: str
 ) -> FieldConditionMutationSuccessPayload:
-    """Build a success payload for create_field_condition / update_field_condition.
+    """Field condition mutation envelope with canned ``message``.
 
     Args:
-        condition_id: Field condition ID returned by the API.
-        action: ``'created'`` or ``'updated'`` (passed through for clients).
+        condition_id: ID returned by the API.
+        action: ``created`` or ``updated`` (echoed to clients).
     """
     return {
         "success": True,
@@ -137,10 +139,10 @@ def build_field_condition_success_payload(
 def build_field_condition_delete_payload(
     success: bool,
 ) -> FieldConditionDeletePayload:
-    """Build a payload for delete_field_condition after the API responds.
+    """Post-delete API response as MCP-friendly dict.
 
     Args:
-        success: Whether ``deleteFieldCondition`` reported success.
+        success: Value of ``deleteFieldCondition.success``.
     """
     if success:
         return {
@@ -159,12 +161,18 @@ def build_delete_pipe_preview_payload(
     pipe_name: str,
     pipe_data: dict[str, Any],
 ) -> DeletePipePreviewPayload:
-    """Preview for delete_pipe when confirm is false."""
+    """Two-step delete: preview before ``confirm=True``.
+
+    Args:
+        pipe_id: Target pipe id.
+        pipe_name: Display name for messaging.
+        pipe_data: Subset serialized into ``pipe_summary``.
+    """
     return {
         "success": False,
         "requires_confirmation": True,
         "pipe_id": pipe_id,
-        "pipe_summary": _to_readable_json(
+        "pipe_summary": format_json_preview(
             {
                 "id": pipe_data.get("id"),
                 "name": pipe_name,
@@ -180,6 +188,11 @@ def build_delete_pipe_preview_payload(
 
 
 def build_delete_pipe_success_payload(*, pipe_id: int) -> DeletePipeSuccessPayload:
+    """Confirmed pipe deletion.
+
+    Args:
+        pipe_id: Deleted pipe id.
+    """
     return {
         "success": True,
         "pipe_id": pipe_id,
@@ -188,13 +201,18 @@ def build_delete_pipe_success_payload(*, pipe_id: int) -> DeletePipeSuccessPaylo
 
 
 def build_delete_pipe_error_payload(*, message: str) -> DeletePipeErrorPayload:
+    """Failed delete_pipe attempt.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return cast(DeletePipeErrorPayload, {"success": False, "error": message})
 
 
 def map_delete_pipe_error_to_message(
     *, pipe_id: int, pipe_name: str, codes: list[str]
 ) -> str:
-    """Map GraphQL error codes to user-facing text for delete_pipe."""
+    """Heuristic user string from GraphQL ``extensions.code`` for delete_pipe."""
     for code in codes:
         if code == "RESOURCE_NOT_FOUND":
             return (

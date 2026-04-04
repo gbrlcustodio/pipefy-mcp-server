@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
+
+
+def format_json_preview(data: Any) -> str:
+    """Pretty-print arbitrary data for MCP confirmation summaries (UTF-8, non-ASCII preserved).
+
+    Args:
+        data: Any JSON-serializable or stringifiable structure.
+    """
+    return json.dumps(data, indent=2, default=str, ensure_ascii=False)
 
 
 def valid_repo_id(value: object) -> bool:

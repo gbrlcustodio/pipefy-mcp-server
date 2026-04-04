@@ -90,7 +90,11 @@ class DeleteCardConfirmation(BaseModel):
 def build_add_card_comment_success_payload(
     *, comment_id: object
 ) -> AddCardCommentSuccessPayload:
-    """Build the public success payload for add_card_comment."""
+    """Recorded comment id.
+
+    Args:
+        comment_id: New comment id from the API (coerced to str).
+    """
     return {"success": True, "comment_id": str(comment_id)}
 
 
@@ -152,7 +156,7 @@ def _map_comment_like_error(
 
 
 def map_add_card_comment_error_to_message(exc: BaseException) -> str:
-    """Map a GraphQL exception into a stable, friendly English message."""
+    """Heuristic English message for add_comment failures."""
     return _map_comment_like_error(
         exc,
         not_found_msg="Card not found. Please verify 'card_id' and access permissions.",
@@ -163,7 +167,7 @@ def map_add_card_comment_error_to_message(exc: BaseException) -> str:
 
 
 def map_update_comment_error_to_message(exc: BaseException) -> str:
-    """Map a GraphQL exception into a stable, friendly English message."""
+    """Heuristic English message for update_comment failures."""
     return _map_comment_like_error(
         exc,
         not_found_msg="Comment not found. Please verify 'comment_id' and access permissions.",
@@ -174,7 +178,7 @@ def map_update_comment_error_to_message(exc: BaseException) -> str:
 
 
 def map_delete_comment_error_to_message(exc: BaseException) -> str:
-    """Map a GraphQL exception into a stable, friendly English message."""
+    """Heuristic English message for delete_comment failures."""
     return _map_comment_like_error(
         exc,
         not_found_msg="Comment not found. Please verify 'comment_id' and access permissions.",
@@ -190,36 +194,58 @@ def _build_comment_error_payload(message: str) -> dict:
 
 
 def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentErrorPayload:
-    """Build the public error payload for add_card_comment."""
+    """add_card_comment failure envelope.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return cast(AddCardCommentErrorPayload, _build_comment_error_payload(message))
 
 
 def build_update_comment_success_payload(
     *, comment_id: object
 ) -> UpdateCommentSuccessPayload:
-    """Build the public success payload for update_comment."""
+    """Updated comment id.
+
+    Args:
+        comment_id: Updated comment id (coerced to str).
+    """
     return {"success": True, "comment_id": str(comment_id)}
 
 
 def build_update_comment_error_payload(*, message: str) -> UpdateCommentErrorPayload:
-    """Build the public error payload for update_comment."""
+    """update_comment failure envelope.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return cast(UpdateCommentErrorPayload, _build_comment_error_payload(message))
 
 
 def build_delete_comment_success_payload() -> DeleteCommentSuccessPayload:
-    """Build the public success payload for delete_comment."""
+    """Minimal success body after delete_comment."""
     return {"success": True}
 
 
 def build_delete_comment_error_payload(*, message: str) -> DeleteCommentErrorPayload:
-    """Build the public error payload for delete_comment."""
+    """delete_comment failure envelope.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return cast(DeleteCommentErrorPayload, _build_comment_error_payload(message))
 
 
 def build_delete_card_preview_payload(
     *, card_id: int, card_title: str, pipe_name: str
 ) -> DeleteCardPreviewPayload:
-    """Build the preview payload for delete_card."""
+    """Two-step delete: preview before ``confirm=True``.
+
+    Args:
+        card_id: Target card id.
+        card_title: Shown in the warning text.
+        pipe_name: Owning pipe name for context.
+    """
     return {
         "success": False,
         "requires_confirmation": True,
@@ -237,7 +263,13 @@ def build_delete_card_preview_payload(
 def build_delete_card_success_payload(
     *, card_id: int, card_title: str, pipe_name: str
 ) -> DeleteCardSuccessPayload:
-    """Build the success payload for delete_card."""
+    """Confirmed card deletion.
+
+    Args:
+        card_id: Deleted card id.
+        card_title: Card title for messaging.
+        pipe_name: Pipe name for messaging.
+    """
     return {
         "success": True,
         "card_id": card_id,
@@ -251,7 +283,11 @@ def build_delete_card_success_payload(
 
 
 def build_delete_card_error_payload(*, message: str) -> DeleteCardErrorPayload:
-    """Build the error payload for delete_card."""
+    """delete_card failure envelope.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return {"success": False, "error": message}
 
 

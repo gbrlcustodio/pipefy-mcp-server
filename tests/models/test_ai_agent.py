@@ -10,7 +10,7 @@ from pipefy_mcp.models.ai_agent import (
     CreateAiAgentInput,
     UpdateAiAgentInput,
 )
-from tests.ai_agent_test_payloads import minimal_behavior_dict
+from tests.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
 
 
 def _make_behavior(name="Test Behavior", event_id="card_created"):
@@ -335,3 +335,136 @@ def test_behavior_input_event_params_defaults_none():
     assert inp.event_params is None
     dumped = inp.model_dump(by_alias=True, exclude_none=True)
     assert "eventParams" not in dumped
+
+
+# --- metadata validation per actionType ---
+
+VALID_FIELDS_ATTR = {"fieldId": "425829426", "inputMode": "fill_with_ai", "value": ""}
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "action_type", ["update_card", "create_card", "create_connected_card"]
+)
+def test_metadata_valid_for_card_field_actions(action_type):
+    metadata = {
+        "pipeId": "306996636",
+        "fieldsAttributes": [VALID_FIELDS_ATTR],
+    }
+    payload = behavior_with_action(action_type, metadata)
+    inp = BehaviorInput.model_validate(payload)
+    action = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]
+    assert action["metadata"]["pipeId"] == "306996636"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "action_type", ["update_card", "create_card", "create_connected_card"]
+)
+def test_metadata_rejects_empty_dict_for_card_field_actions(action_type):
+    payload = behavior_with_action(action_type, {})
+    with pytest.raises(ValidationError, match="pipeId"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "action_type", ["update_card", "create_card", "create_connected_card"]
+)
+def test_metadata_rejects_missing_fields_attributes(action_type):
+    payload = behavior_with_action(action_type, {"pipeId": "123"})
+    with pytest.raises(ValidationError, match="fieldsAttributes"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "action_type", ["update_card", "create_card", "create_connected_card"]
+)
+def test_metadata_rejects_empty_fields_attributes(action_type):
+    payload = behavior_with_action(
+        action_type, {"pipeId": "123", "fieldsAttributes": []}
+    )
+    with pytest.raises(ValidationError, match="fieldsAttributes"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "action_type", ["update_card", "create_card", "create_connected_card"]
+)
+def test_metadata_rejects_field_entry_missing_field_id(action_type):
+    metadata = {
+        "pipeId": "123",
+        "fieldsAttributes": [{"inputMode": "fill_with_ai", "value": ""}],
+    }
+    payload = behavior_with_action(action_type, metadata)
+    with pytest.raises(ValidationError, match="fieldId"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "action_type", ["update_card", "create_card", "create_connected_card"]
+)
+def test_metadata_rejects_field_entry_missing_input_mode(action_type):
+    metadata = {
+        "pipeId": "123",
+        "fieldsAttributes": [{"fieldId": "425829426", "value": ""}],
+    }
+    payload = behavior_with_action(action_type, metadata)
+    with pytest.raises(ValidationError, match="inputMode"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "action_type", ["update_card", "create_card", "create_connected_card"]
+)
+def test_metadata_allows_empty_value_in_fields_attributes(action_type):
+    metadata = {
+        "pipeId": "123",
+        "fieldsAttributes": [
+            {"fieldId": "1", "inputMode": "fill_with_ai", "value": ""}
+        ],
+    }
+    payload = behavior_with_action(action_type, metadata)
+    inp = BehaviorInput.model_validate(payload)
+    assert inp.action_params is not None
+
+
+@pytest.mark.unit
+def test_metadata_valid_for_move_card():
+    payload = behavior_with_action("move_card", {"destinationPhaseId": "999"})
+    inp = BehaviorInput.model_validate(payload)
+    action = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]
+    assert action["metadata"]["destinationPhaseId"] == "999"
+
+
+@pytest.mark.unit
+def test_metadata_rejects_empty_dict_for_move_card():
+    payload = behavior_with_action("move_card", {})
+    with pytest.raises(ValidationError, match="destinationPhaseId"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_metadata_rejects_blank_destination_phase_id_for_move_card():
+    payload = behavior_with_action("move_card", {"destinationPhaseId": "  "})
+    with pytest.raises(ValidationError, match="destinationPhaseId"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_metadata_passes_through_unknown_action_type():
+    payload = behavior_with_action("send_email", {"to": "user@example.com"})
+    inp = BehaviorInput.model_validate(payload)
+    action = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]
+    assert action["metadata"]["to"] == "user@example.com"
+
+
+@pytest.mark.unit
+def test_metadata_allows_empty_dict_for_unknown_action_type():
+    payload = behavior_with_action("send_email", {})
+    inp = BehaviorInput.model_validate(payload)
+    assert inp.action_params is not None

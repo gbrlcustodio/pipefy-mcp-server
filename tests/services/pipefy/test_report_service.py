@@ -301,7 +301,7 @@ async def test_create_pipe_report_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_PIPE_REPORT_MUTATION
-    assert variables["input"]["pipeId"] == "123"
+    assert variables["input"]["pipeId"] == 123
     assert variables["input"]["name"] == "New Report"
     assert variables["input"]["fields"] == ["title", "status"]
     assert result["createPipeReport"]["pipeReport"]["id"] == "r10"
@@ -315,7 +315,7 @@ async def test_create_pipe_report_minimal(mock_settings):
     result = await service.create_pipe_report("456", "Minimal")
 
     variables = service.execute_query.call_args[0][1]
-    assert variables["input"] == {"pipeId": "456", "name": "Minimal"}
+    assert variables["input"] == {"pipeId": 456, "name": "Minimal"}
     assert result["createPipeReport"]["pipeReport"]["name"] == "Minimal"
 
 

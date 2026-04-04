@@ -105,7 +105,7 @@ class TableTools:
                 )
             try:
                 raw = await client.get_table(table_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(exc, "Get table failed.")
             return build_table_read_success_payload(
                 raw,
@@ -131,7 +131,7 @@ class TableTools:
                 )
             try:
                 raw = await client.get_tables(table_ids)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(exc, "Get tables failed.")
             return build_table_read_success_payload(
                 raw,
@@ -182,7 +182,7 @@ class TableTools:
                     first=first,
                     after=after.strip() if isinstance(after, str) else after,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "List table records failed."
                 )
@@ -206,7 +206,7 @@ class TableTools:
                 )
             try:
                 raw = await client.get_table_record(record_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(exc, "Get table record failed.")
             return build_table_read_success_payload(
                 raw,
@@ -270,7 +270,7 @@ class TableTools:
                     first=first,
                     after=after.strip() if isinstance(after, str) else after,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(exc, "Find records failed.")
             return build_table_read_success_payload(
                 raw,
@@ -313,7 +313,7 @@ class TableTools:
                     merged[k] = v
             try:
                 raw = await client.create_table(name.strip(), organization_id, **merged)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Create table failed.", debug=debug
                 )
@@ -368,7 +368,7 @@ class TableTools:
                     kwargs[k] = v
             try:
                 raw = await client.update_table(table_id, **kwargs)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Update table failed.", debug=debug
                 )
@@ -408,7 +408,7 @@ class TableTools:
                 table_response = await client.get_table(table_id)
                 table_data = table_response.get("table") or {}
                 table_name = table_data.get("name") or "Unknown"
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 codes = extract_graphql_error_codes(exc)
                 correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_table_error_to_message(
@@ -444,7 +444,7 @@ class TableTools:
                         codes=[],
                     )
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 codes = extract_graphql_error_codes(exc)
                 correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_table_error_to_message(
@@ -525,7 +525,7 @@ class TableTools:
                     merged_attrs[k] = v
             try:
                 raw = await client.create_table_record(table_id, fields, **merged_attrs)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Create table record failed.", debug=debug
                 )
@@ -568,7 +568,7 @@ class TableTools:
                 )
             try:
                 raw = await client.update_table_record(record_id, fields)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Update table record failed.", debug=debug
                 )
@@ -615,7 +615,7 @@ class TableTools:
 
             try:
                 raw = await client.delete_table_record(record_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Delete table record failed.", debug=debug
                 )
@@ -662,7 +662,7 @@ class TableTools:
                 raw = await client.set_table_record_field_value(
                     record_id, field_id, value
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Set table record field value failed.", debug=debug
                 )
@@ -725,7 +725,7 @@ class TableTools:
                     field_type.strip(),
                     **merged,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Create table field failed.", debug=debug
                 )
@@ -806,7 +806,7 @@ class TableTools:
                 raw = await client.update_table_field(
                     fid, table_id=table_id_to_use, **update_attrs
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Update table field failed.", debug=debug
                 )
@@ -856,7 +856,7 @@ class TableTools:
 
             try:
                 raw = await client.delete_table_field(fid)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Delete table field failed.", debug=debug
                 )

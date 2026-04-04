@@ -42,7 +42,11 @@ def mock_organizations() -> list[dict]:
             "name": "Globo",
             "tables": {
                 "nodes": [
-                    {"id": "T3", "name": "Fornecedores", "description": "Supplier database"},
+                    {
+                        "id": "T3",
+                        "name": "Fornecedores",
+                        "description": "Supplier database",
+                    },
                     {"id": "T4", "name": "Clientes VIP", "description": None},
                 ]
             },

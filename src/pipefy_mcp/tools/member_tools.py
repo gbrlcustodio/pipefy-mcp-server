@@ -59,7 +59,7 @@ class MemberTools:
                     )
             try:
                 raw = await client.invite_members(pipe_id, members)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_member_tool_graphql_error(
                     exc, "Invite members failed.", debug=debug
                 )
@@ -118,7 +118,7 @@ class MemberTools:
                 raw = await client.remove_members_from_pipe(pipe_id, user_ids)
             except ValueError as exc:
                 return build_member_error_payload(message=str(exc))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_member_tool_graphql_error(
                     exc, "Remove members from pipe failed.", debug=debug
                 )
@@ -160,7 +160,7 @@ class MemberTools:
                 raw = await client.set_role(
                     pipe_id, member_id.strip(), role_name.strip()
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_member_tool_graphql_error(
                     exc, "Set role failed.", debug=debug
                 )

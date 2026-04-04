@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
@@ -13,10 +12,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_error_codes,
     with_debug_suffix,
 )
-
-
-def _to_readable_json(data: Any) -> str:
-    return json.dumps(data, indent=2, default=str, ensure_ascii=False)
+from pipefy_mcp.tools.validation_helpers import format_json_preview
 
 
 class TableReadSuccessPayload(TypedDict):
@@ -76,10 +72,13 @@ def build_table_read_success_payload(
     *,
     message: str,
 ) -> TableReadSuccessPayload:
-    """Build a success payload for table read tools.
+    """Read envelope with optional ``pagination`` from connection ``pageInfo``.
 
-    When the GraphQL payload includes `table_records` or `findRecords`, copies
-    `hasNextPage` and `endCursor` into `pagination` for clearer LLM consumption.
+    Fills ``pagination`` when ``data`` contains ``table_records`` or ``findRecords``.
+
+    Args:
+        data: Raw GraphQL payload for the tool.
+        message: Short summary for the client.
     """
     return cast(
         TableReadSuccessPayload,
@@ -93,6 +92,11 @@ def build_table_read_success_payload(
 
 
 def build_table_error_payload(*, message: str) -> dict[str, Any]:
+    """``success: False`` with ``error`` text.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return {"success": False, "error": message}
 
 
@@ -103,7 +107,12 @@ build_table_mutation_error_payload = build_table_error_payload
 def build_table_mutation_success_payload(
     *, message: str, data: dict[str, Any]
 ) -> TableMutationSuccessPayload:
-    """Structured success payload for table/record mutation tools."""
+    """``success``, ``message``, and mutation ``result``.
+
+    Args:
+        message: Short summary for the client.
+        data: Raw mutation payload (stored as ``result``).
+    """
     return cast(
         TableMutationSuccessPayload,
         {"success": True, "message": message, "result": data},
@@ -116,12 +125,18 @@ def build_delete_table_preview_payload(
     table_name: str,
     table_data: dict[str, Any],
 ) -> DeleteTablePreviewPayload:
-    """Preview when delete_table is called without confirmation."""
+    """Two-step delete: preview before ``confirm=True``.
+
+    Args:
+        table_id: Target table id.
+        table_name: Display name for messaging.
+        table_data: Subset serialized into ``table_summary``.
+    """
     return {
         "success": False,
         "requires_confirmation": True,
         "table_id": table_id,
-        "table_summary": _to_readable_json(
+        "table_summary": format_json_preview(
             {
                 "id": table_data.get("id"),
                 "name": table_name,
@@ -140,6 +155,11 @@ def build_delete_table_preview_payload(
 def build_delete_table_success_payload(
     *, table_id: str | int
 ) -> DeleteTableSuccessPayload:
+    """Confirmed table deletion.
+
+    Args:
+        table_id: Deleted table id.
+    """
     return {
         "success": True,
         "table_id": table_id,
@@ -148,6 +168,11 @@ def build_delete_table_success_payload(
 
 
 def build_delete_table_error_payload(*, message: str) -> DeleteTableErrorPayload:
+    """Failed delete_table attempt.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return cast(DeleteTableErrorPayload, {"success": False, "error": message})
 
 
@@ -187,12 +212,12 @@ def handle_table_tool_graphql_error(
     *,
     debug: bool = False,
 ) -> dict[str, Any]:
-    """Map a GraphQL/client exception to a table-tool error payload.
+    """Turn transport/GraphQL failures into ``build_table_error_payload`` output.
 
     Args:
-        exc: Exception from the Pipefy client or transport layer.
-        fallback_msg: Message when no extractable error strings exist.
-        debug: When True, append GraphQL codes and correlation_id to the message.
+        exc: Root exception from gql/httpx.
+        fallback_msg: Used when ``extract_error_strings`` is empty.
+        debug: When True, append codes and ``correlation_id``.
     """
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else fallback_msg

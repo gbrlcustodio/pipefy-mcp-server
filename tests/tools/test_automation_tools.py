@@ -372,6 +372,7 @@ async def test_create_automation_success(
         "evt-1",
         "act-1",
         active=True,
+        action_repo_id=None,
         extra_input=None,
     )
     payload = extract_payload(result)
@@ -381,6 +382,53 @@ async def test_create_automation_success(
         "name": "Notify",
         "active": True,
     }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_automation_passes_action_repo_id(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.create_automation.return_value = {
+        "createAutomation": {
+            "automation": {"id": "a-cc", "name": "Connected", "active": True},
+        },
+    }
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_automation",
+            {
+                "pipe_id": "p-parent",
+                "name": "Connected",
+                "trigger_id": "1",
+                "action_id": "2",
+                "action_repo_id": "p-child",
+                "extra_input": {
+                    "action_params": {
+                        "pipeId": "p-child",
+                        "fieldsAttributes": [],
+                    },
+                },
+            },
+        )
+
+    assert result.isError is False
+    mock_automation_client.create_automation.assert_awaited_once_with(
+        "p-parent",
+        "Connected",
+        "1",
+        "2",
+        active=True,
+        action_repo_id="p-child",
+        extra_input={
+            "action_params": {
+                "pipeId": "p-child",
+                "fieldsAttributes": [],
+            },
+        },
+    )
+    assert extract_payload(result)["success"] is True
 
 
 @pytest.mark.anyio

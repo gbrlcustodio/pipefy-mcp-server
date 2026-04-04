@@ -15,7 +15,6 @@ _REPO_TYPES_ID_NAME = """... on Pipe {
     name
 }"""
 
-# Composed with string concatenation (constants only; no runtime string building).
 _PIPE_RELATION_BODY = (
     """
                 id

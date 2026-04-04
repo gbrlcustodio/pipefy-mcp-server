@@ -49,11 +49,11 @@ def build_automation_mutation_success_payload(
     automation: dict[str, Any],
     action: str,
 ) -> AutomationMutationSuccessPayload:
-    """Build a success payload for traditional automation mutation tools.
+    """``success`` plus labeled ``message`` and raw ``automation`` dict.
 
     Args:
-        automation: ``automation`` object from the mutation response (may be empty for delete).
-        action: Short action key for the user-facing message (e.g. ``created``, ``updated``, ``deleted``).
+        automation: ``automation`` key from the mutation (possibly empty for delete).
+        action: Verb for the canned label (``created`` / ``updated`` / ``deleted`` / other).
     """
     labels = {
         "created": "Automation created.",
@@ -72,11 +72,11 @@ def build_automation_read_success_payload(
     data: AutomationReadToolData,
     label: str,
 ) -> AutomationReadSuccessPayload:
-    """Build a success payload for traditional automation read tools.
+    """``success``, ``message``, and typed read ``data`` (record or list).
 
     Args:
-        data: Automation record, list of summaries, or catalog entries from the API.
-        label: Short user-facing message (shown as ``message``).
+        data: Record, summary list, or catalog rows from the API.
+        label: Shown as ``message``.
     """
     return {
         "success": True,
@@ -89,11 +89,11 @@ def build_automation_error_payload(
     message: str,
     debug: str | None = None,
 ) -> AutomationToolErrorPayload:
-    """Build an error payload for automation tools.
+    """``success: False``; optional ``debug`` suffix in brackets.
 
     Args:
-        message: Primary error text for the caller.
-        debug: Optional extra detail (e.g. correlation hints) appended in brackets.
+        message: Primary error text.
+        debug: Extra detail appended as ``… [debug]`` when set.
     """
     text = message if not debug else f"{message} [{debug}]"
     return {"success": False, "error": text}
@@ -104,12 +104,12 @@ def handle_automation_tool_graphql_error(
     ctx: Context,
     debug: bool,
 ) -> AutomationToolErrorPayload:
-    """Map a GraphQL/client exception to an automation-tool error payload.
+    """Format ``exc`` as ``build_automation_error_payload``; optional MCP debug log.
 
     Args:
-        exc: Exception from the Pipefy client or transport layer.
-        ctx: MCP context (``debug`` logging in MCP clients such as Cursor when ``debug`` is True).
-        debug: When True, log exception detail and append GraphQL codes / correlation_id.
+        exc: Root exception from gql/httpx.
+        ctx: MCP context for ``ctx.debug`` when ``debug`` is True.
+        debug: Log raw exception and append codes / ``correlation_id`` to the message.
     """
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else "Automation request failed."

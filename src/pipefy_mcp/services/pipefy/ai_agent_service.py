@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import uuid
+from typing import Any
 
 from httpx_auth import OAuth2ClientCredentials
 
@@ -28,19 +29,11 @@ from pipefy_mcp.services.pipefy.types import (
 from pipefy_mcp.settings import PipefySettings
 
 
-def inject_reference_ids(behaviors: list[dict]) -> list[dict]:
-    """Generate and inject referenceIds into behavior actions.
-
-    For each behavior, generates a UUID v4 per action in actionsAttributes,
-    sets it as the action's referenceId, and appends a %{action:<uuid>}
-    placeholder to the behavior's instruction.
+def inject_reference_ids(behaviors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Deep-copy behaviors and assign a UUID ``referenceId`` per action; append ``%{action:<uuid>}`` to instruction.
 
     Args:
-        behaviors: List of behavior dicts with actionParams.aiBehaviorParams.
-
-    Returns:
-        New list of behaviors (deep copy) with referenceIds injected.
-        Original input is never mutated.
+        behaviors: Behavior dicts with ``actionParams.aiBehaviorParams.actionsAttributes``.
     """
     result = [copy.deepcopy(b) for b in behaviors]
 
@@ -74,11 +67,11 @@ class AiAgentService(BasePipefyClient):
         settings: PipefySettings,
         auth: OAuth2ClientCredentials | None = None,
     ) -> None:
-        """Create the service.
+        """Initialize the GraphQL client.
 
         Args:
-            settings: Pipefy settings (graphql_url, OAuth credentials).
-            auth: Optional pre-built OAuth2 auth to share token cache.
+            settings: Pipefy API settings.
+            auth: Optional shared OAuth handler (see :class:`BasePipefyClient`).
         """
         super().__init__(settings=settings, auth=auth)
 
@@ -87,9 +80,6 @@ class AiAgentService(BasePipefyClient):
 
         Args:
             agent_input: Validated create input with name and repo_uuid.
-
-        Returns:
-            Dict with agent_uuid and message.
 
         Raises:
             ValueError: When API response is missing agent.uuid.
@@ -123,9 +113,6 @@ class AiAgentService(BasePipefyClient):
 
         Args:
             agent_input: Validated update input with uuid, name, repo_uuid, behaviors.
-
-        Returns:
-            Dict with agent_uuid and message.
 
         Raises:
             ValueError: When API response is missing agent.uuid.
@@ -170,9 +157,6 @@ class AiAgentService(BasePipefyClient):
             agent_uuid: Agent UUID.
             active: True to activate, False to deactivate.
 
-        Returns:
-            Dict with success flag and message.
-
         Raises:
             ValueError: When the API reports failure.
         """
@@ -216,7 +200,7 @@ class AiAgentService(BasePipefyClient):
         )
         return unwrap_relay_connection_nodes(response.get("aiAgents"))
 
-    async def delete_agent(self, agent_uuid: str) -> dict:
+    async def delete_agent(self, agent_uuid: str) -> dict[str, Any]:
         """Delete an AI Agent permanently.
 
         Args:

@@ -46,7 +46,7 @@ class ReportService(BasePipefyClient):
         after: str | None = None,
         search: str | None = None,
         report_id: str | None = None,
-        order: dict | None = None,
+        order: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """List pipe reports with pagination and optional search/filter.
 
@@ -151,7 +151,7 @@ class ReportService(BasePipefyClient):
         name: str,
         *,
         fields: list[str] | None = None,
-        filter: dict | None = None,
+        filter: dict[str, Any] | None = None,
         formulas: list[list[str]] | None = None,
     ) -> dict[str, Any]:
         """Create a pipe report.
@@ -181,7 +181,7 @@ class ReportService(BasePipefyClient):
         name: str | None = None,
         color: str | None = None,
         fields: list[str] | None = None,
-        filter: dict | None = None,
+        filter: dict[str, Any] | None = None,
         formulas: list[list[str]] | None = None,
         featured_field: str | None = None,
     ) -> dict[str, Any]:
@@ -229,7 +229,7 @@ class ReportService(BasePipefyClient):
         pipe_ids: list[str],
         *,
         fields: list[str] | None = None,
-        filter: dict | None = None,
+        filter: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Create an organization report spanning multiple pipes.
 
@@ -260,7 +260,7 @@ class ReportService(BasePipefyClient):
         name: str | None = None,
         color: str | None = None,
         fields: list[str] | None = None,
-        filter: dict | None = None,
+        filter: dict[str, Any] | None = None,
         pipe_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         """Update an organization report. Only provided values are changed.
@@ -303,8 +303,8 @@ class ReportService(BasePipefyClient):
         pipe_id: str,
         pipe_report_id: str,
         *,
-        sort_by: dict | None = None,
-        filter: dict | None = None,
+        sort_by: dict[str, Any] | None = None,
+        filter: dict[str, Any] | None = None,
         columns: list[str] | None = None,
     ) -> dict[str, Any]:
         """Trigger an async pipe report export (poll ``get_pipe_report_export`` for completion).
@@ -336,8 +336,8 @@ class ReportService(BasePipefyClient):
         *,
         organization_report_id: int | None = None,
         pipe_ids: list[int] | None = None,
-        sort_by: dict | None = None,
-        filter: dict | None = None,
+        sort_by: dict[str, Any] | None = None,
+        filter: dict[str, Any] | None = None,
         columns: list[str] | None = None,
     ) -> dict[str, Any]:
         """Trigger an async organization report export (poll ``get_organization_report_export``).

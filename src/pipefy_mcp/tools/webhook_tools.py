@@ -56,7 +56,7 @@ class WebhookTools:
                     filter_by_name=filter_by_name.strip() if filter_by_name else None,
                     first=first,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
                     exc, "List email templates failed.", debug=debug
                 )
@@ -100,7 +100,7 @@ class WebhookTools:
                     card_id.strip(),
                     email_type=trimmed_email_type,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
                     exc, "Get card inbox emails failed.", debug=debug
                 )
@@ -172,7 +172,7 @@ class WebhookTools:
                     from_=from_.strip(),
                     **(extra_input or {}),
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
                     exc, "Send inbox email failed.", debug=debug
                 )
@@ -236,7 +236,7 @@ class WebhookTools:
                 )
             except ValueError as exc:
                 return build_webhook_error_payload(message=str(exc))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
                     exc, "Send email with template failed.", debug=debug
                 )
@@ -297,7 +297,7 @@ class WebhookTools:
                 )
             except ValueError as exc:
                 return build_webhook_error_payload(message=str(exc))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
                     exc, "Create webhook failed.", debug=debug
                 )
@@ -345,7 +345,7 @@ class WebhookTools:
 
             try:
                 raw = await client.delete_webhook(webhook_id.strip())
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
                     exc, "Delete webhook failed.", debug=debug
                 )

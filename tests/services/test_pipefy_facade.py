@@ -406,21 +406,21 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
         "ok": "create_automation"
     }
     automation_service.create_automation.assert_awaited_once_with(
-        "p1", "Rule", "ev", "act", active=True
+        "p1", "Rule", "ev", "act", action_repo_id=None, active=True
     )
 
     assert await client.create_automation(
         "p1", "Rule", "ev", "act", extra_input={"customKey": "v"}
     ) == {"ok": "create_automation"}
     automation_service.create_automation.assert_awaited_with(
-        "p1", "Rule", "ev", "act", active=True, customKey="v"
+        "p1", "Rule", "ev", "act", action_repo_id=None, active=True, customKey="v"
     )
 
     assert await client.create_automation("p1", "Rule", "ev", "act", active=False) == {
         "ok": "create_automation"
     }
     automation_service.create_automation.assert_awaited_with(
-        "p1", "Rule", "ev", "act", active=False
+        "p1", "Rule", "ev", "act", action_repo_id=None, active=False
     )
 
     assert await client.create_automation(
@@ -432,7 +432,14 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
         extra_input={"active": False},
     ) == {"ok": "create_automation"}
     automation_service.create_automation.assert_awaited_with(
-        "p1", "Rule", "ev", "act", active=False
+        "p1", "Rule", "ev", "act", action_repo_id=None, active=False
+    )
+
+    assert await client.create_automation(
+        "p1", "Rule", "ev", "act", action_repo_id="child-pipe"
+    ) == {"ok": "create_automation"}
+    automation_service.create_automation.assert_awaited_with(
+        "p1", "Rule", "ev", "act", action_repo_id="child-pipe", active=True
     )
 
     assert await client.update_automation("a1", extra_input={"name": "N"}) == {

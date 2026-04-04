@@ -258,6 +258,27 @@ async def test_create_automation_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_automation_with_action_repo_id(mock_settings):
+    created = {
+        "createAutomation": {
+            "automation": {"id": "a-xpipe", "name": "Cross", "active": True},
+        },
+    }
+    service = _make_service(mock_settings, created)
+    await service.create_automation(
+        "p-parent",
+        "Cross",
+        "evt-1",
+        "act-connected",
+        action_repo_id="p-child",
+    )
+    inp = service.execute_query.call_args[0][1]["input"]
+    assert inp["event_repo_id"] == "p-parent"
+    assert inp["action_repo_id"] == "p-child"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_create_automation_active_false_via_attrs(mock_settings):
     created = {
         "createAutomation": {

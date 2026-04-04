@@ -42,7 +42,7 @@ class RelationTools:
                 )
             try:
                 raw = await client.get_pipe_relations(pipe_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
                     exc, "Get pipe relations failed."
                 )
@@ -70,7 +70,7 @@ class RelationTools:
                 )
             try:
                 raw = await client.get_table_relations(relation_ids)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
                     exc, "Get table relations failed."
                 )
@@ -120,7 +120,7 @@ class RelationTools:
                     name.strip(),
                     extra_input=extra_input,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
                     exc, "Create pipe relation failed.", debug=debug
                 )
@@ -167,7 +167,7 @@ class RelationTools:
                     name.strip(),
                     extra_input=extra_input,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
                     exc, "Update pipe relation failed.", debug=debug
                 )
@@ -214,7 +214,7 @@ class RelationTools:
 
             try:
                 raw = await client.delete_pipe_relation(relation_id)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
                     exc, "Delete pipe relation failed.", debug=debug
                 )
@@ -264,7 +264,7 @@ class RelationTools:
                     source_id,
                     extra_input=extra_input,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
                     exc, "Create card relation failed.", debug=debug
                 )

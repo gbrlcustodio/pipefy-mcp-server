@@ -3,9 +3,19 @@
 import pytest
 
 from pipefy_mcp.tools.validation_helpers import (
+    format_json_preview,
     mutation_error_if_not_optional_dict,
     valid_repo_id,
 )
+
+
+@pytest.mark.unit
+def test_format_json_preview_pretty_and_utf8():
+    s = format_json_preview({"a": 1, "ç": "β"})
+    assert '"a": 1' in s
+    assert "ç" in s
+    assert "β" in s
+    assert "\n" in s
 
 
 @pytest.mark.unit

@@ -111,7 +111,7 @@ class FieldConditionTools:
                     actions_for_api,
                     **merged,
                 )
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Create field condition failed.", debug=debug
                 )
@@ -206,7 +206,7 @@ class FieldConditionTools:
             )
             try:
                 raw = await client.update_field_condition(cid_key, **update_attrs)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Update field condition failed.", debug=debug
                 )
@@ -269,7 +269,7 @@ class FieldConditionTools:
             )
             try:
                 raw = await client.delete_field_condition(cid_key)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Delete field condition failed.", debug=debug
                 )

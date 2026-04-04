@@ -1,4 +1,4 @@
-"""GraphQL queries for Pipefy database tables, records, and search."""
+"""GraphQL operations for Pipefy database tables, records, and search."""
 
 from __future__ import annotations
 
@@ -248,8 +248,8 @@ class TableService(BasePipefyClient):
 
         Args:
             field_id: Table field ID.
-            table_id: Table ID containing this field (required by API; if not provided, must be in attrs).
-            **attrs: Attributes to change (omit or pass None to skip). If table_id is not provided as a parameter, it can be passed here.
+            table_id: Owning table ID when known; otherwise pass ``table_id`` inside ``attrs``.
+            **attrs: ``UpdateTableFieldInput`` fields; ``None`` omits the key.
         """
         payload: dict[str, Any] = {"id": field_id}
         if table_id is not None:
@@ -285,7 +285,7 @@ class TableService(BasePipefyClient):
             match_threshold: Minimum fuzzy match score (0-100). Default: 70.
 
         Returns:
-            dict: Organizations with their matching tables, sorted by match score.
+            Organizations (with nested tables) matching the fuzzy filter, sorted by score.
         """
         result = await self.execute_query(SEARCH_TABLES_QUERY, {})
         organizations = result.get("organizations", [])

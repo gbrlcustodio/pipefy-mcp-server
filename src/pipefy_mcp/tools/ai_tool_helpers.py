@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import copy
+import logging
 import re
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from typing_extensions import TypedDict
 
 from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
+
+if TYPE_CHECKING:
+    from pipefy_mcp.services.pipefy import PipefyClient
+
+logger = logging.getLogger(__name__)
 
 
 class CreateAiAutomationSuccessPayload(TypedDict):
@@ -360,6 +367,153 @@ def validate_behaviors_against_pipe(
                     )
 
     return problems, warnings
+
+
+# --- Slug → numeric fieldId resolution ---
+
+
+def _extract_slug_field_ids_by_pipe(
+    behaviors: list[dict[str, Any]],
+) -> dict[str, set[str]]:
+    """Scan behaviors and collect non-numeric fieldIds grouped by their target pipeId.
+
+    Args:
+        behaviors: Raw behavior dicts (supports both camelCase and snake_case keys).
+
+    Returns:
+        Dict mapping pipeId → set of slug fieldIds found in that pipe's actions.
+        Empty dict when no slugs are present.
+    """
+    slugs_by_pipe: dict[str, set[str]] = {}
+    for b in behaviors:
+        if not isinstance(b, dict):
+            continue
+        ap = b.get("actionParams") or b.get("action_params") or {}
+        if not isinstance(ap, dict):
+            continue
+        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
+        if not isinstance(abp, dict):
+            continue
+        for a in abp.get("actionsAttributes") or abp.get("actions_attributes") or []:
+            if not isinstance(a, dict):
+                continue
+            metadata = a.get("metadata") or {}
+            pipe_id = str(metadata.get("pipeId", ""))
+            if not pipe_id:
+                continue
+            for fa in metadata.get("fieldsAttributes") or []:
+                if not isinstance(fa, dict):
+                    continue
+                fid = str(fa.get("fieldId", ""))
+                if fid and not fid.isdigit():
+                    slugs_by_pipe.setdefault(pipe_id, set()).add(fid)
+    return slugs_by_pipe
+
+
+async def build_field_slug_map(
+    client: PipefyClient,
+    pipe_id: int,
+) -> dict[str, str]:
+    """Build a slug → numeric internal_id map for all fields in a pipe.
+
+    Fetches pipe info (for phase IDs and start form fields), then calls
+    ``get_phase_fields`` per phase to collect ``internal_id`` values.
+
+    Args:
+        client: PipefyClient instance.
+        pipe_id: Numeric pipe ID.
+
+    Returns:
+        Dict mapping field slug to its numeric ``internal_id`` string.
+        Only includes entries where the slug is non-numeric.
+    """
+    slug_map: dict[str, str] = {}
+
+    pipe_data = await client.get_pipe(pipe_id)
+    pipe_info = pipe_data.get("pipe", {})
+
+    for field in pipe_info.get("start_form_fields") or []:
+        slug = str(field.get("id", ""))
+        internal = str(field.get("internal_id", ""))
+        if slug and internal and not slug.isdigit():
+            slug_map[slug] = internal
+
+    for phase in pipe_info.get("phases") or []:
+        phase_id = phase.get("id")
+        if not phase_id:
+            continue
+        try:
+            phase_data = await client.get_phase_fields(int(phase_id))
+            for field in phase_data.get("fields") or []:
+                slug = str(field.get("id", ""))
+                internal = str(field.get("internal_id", ""))
+                if slug and internal and not slug.isdigit():
+                    slug_map[slug] = internal
+        except Exception:  # noqa: BLE001
+            logger.debug("Failed to fetch fields for phase %s", phase_id, exc_info=True)
+    return slug_map
+
+
+async def resolve_field_slugs_to_numeric(
+    client: PipefyClient,
+    behaviors: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Replace slug fieldIds with numeric internal_ids in behavior metadata.
+
+    Scans ``fieldsAttributes[].fieldId`` across all behaviors for non-numeric values.
+    When found, fetches each target pipe's fields to build a slug→numeric map and
+    replaces matches. Returns a deep copy; the original ``behaviors`` list is not mutated.
+
+    Unresolvable slugs are left as-is (the API will reject them with the existing
+    enriched error).
+
+    Args:
+        client: PipefyClient for fetching pipe field data.
+        behaviors: Behavior dicts (same shape as ``create_ai_agent`` / ``update_ai_agent``).
+
+    Returns:
+        Behaviors with slug fieldIds replaced by numeric IDs where resolvable.
+    """
+    slugs_by_pipe = _extract_slug_field_ids_by_pipe(behaviors)
+    if not slugs_by_pipe:
+        return behaviors
+
+    slug_to_numeric: dict[str, str] = {}
+    for pipe_id_str in slugs_by_pipe:
+        try:
+            field_map = await build_field_slug_map(client, int(pipe_id_str))
+            slug_to_numeric.update(field_map)
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "Failed to fetch field map for pipe %s; slugs left as-is",
+                pipe_id_str,
+                exc_info=True,
+            )
+
+    if not slug_to_numeric:
+        return behaviors
+
+    resolved = copy.deepcopy(behaviors)
+    for b in resolved:
+        if not isinstance(b, dict):
+            continue
+        ap = b.get("actionParams") or b.get("action_params") or {}
+        if not isinstance(ap, dict):
+            continue
+        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
+        if not isinstance(abp, dict):
+            continue
+        for a in abp.get("actionsAttributes") or abp.get("actions_attributes") or []:
+            if not isinstance(a, dict):
+                continue
+            for fa in (a.get("metadata") or {}).get("fieldsAttributes") or []:
+                if not isinstance(fa, dict):
+                    continue
+                fid = str(fa.get("fieldId", ""))
+                if fid in slug_to_numeric:
+                    fa["fieldId"] = slug_to_numeric[fid]
+
+    return resolved
 
 
 def enrich_behavior_error(

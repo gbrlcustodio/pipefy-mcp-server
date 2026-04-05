@@ -20,6 +20,7 @@ GET_PIPE_QUERY = gql(
             }
             start_form_fields {
                 id
+                internal_id
                 label
                 required
                 type
@@ -36,6 +37,7 @@ GET_START_FORM_FIELDS_QUERY = gql(
         pipe(id: $pipe_id) {
             start_form_fields {
                 id
+                internal_id
                 label
                 type
                 required

@@ -20,6 +20,7 @@ from pipefy_mcp.tools.ai_tool_helpers import (
     build_toggle_agent_status_success,
     build_update_agent_success,
     enrich_behavior_error,
+    resolve_field_slugs_to_numeric,
     validate_behaviors_against_pipe,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
@@ -261,12 +262,15 @@ class AiAgentTools:
 
             agent_uuid = create_result["agent_uuid"]
 
+            resolved_behaviors = await resolve_field_slugs_to_numeric(
+                client, validated.behaviors
+            )
             update_input = UpdateAiAgentInput(
                 uuid=agent_uuid,
                 name=validated.name,
                 repo_uuid=validated.repo_uuid,
                 instruction=validated.instruction,
-                behaviors=validated.behaviors,
+                behaviors=resolved_behaviors,
                 data_source_ids=validated.data_source_ids,
             )
             try:
@@ -320,13 +324,14 @@ class AiAgentTools:
                 return build_ai_tool_error("name must not be blank")
             if not repo_uuid or not repo_uuid.strip():
                 return build_ai_tool_error("repo_uuid must not be blank")
+            resolved_behaviors = await resolve_field_slugs_to_numeric(client, behaviors)
             try:
                 validated = UpdateAiAgentInput(
                     uuid=uuid,
                     name=name,
                     repo_uuid=repo_uuid,
                     instruction=instruction,
-                    behaviors=behaviors,
+                    behaviors=resolved_behaviors,
                     data_source_ids=data_source_ids or [],
                 )
             except ValidationError as exc:
@@ -336,7 +341,7 @@ class AiAgentTools:
                 result = await client.update_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
                 return build_ai_tool_error(
-                    await _enrich_with_validation(exc, behaviors)
+                    await _enrich_with_validation(exc, resolved_behaviors)
                 )
 
             return build_update_agent_success(

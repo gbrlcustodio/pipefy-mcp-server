@@ -47,7 +47,7 @@ async def test_get_email_templates_success(mock_settings):
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is GET_EMAIL_TEMPLATES_QUERY
-    assert variables["repoId"] == "307061640"
+    assert variables["repoId"] == 307061640
     assert variables["first"] == 50
     assert result == payload
 
@@ -214,7 +214,7 @@ async def test_create_webhook_success(mock_settings):
     }
     service = _make_service(mock_settings, payload)
     result = await service.create_webhook(
-        pipe_id="pipe-1",
+        pipe_id="601",
         url="https://example.com/hook",
         actions=["card.create"],
     )
@@ -223,7 +223,7 @@ async def test_create_webhook_success(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_WEBHOOK_MUTATION
     inp = variables["input"]
-    assert inp["pipe_id"] == "pipe-1"
+    assert inp["pipe_id"] == 601
     assert inp["url"] == "https://example.com/hook"
     assert inp["actions"] == ["card.create"]
     assert result == payload
@@ -237,7 +237,7 @@ async def test_create_webhook_transport_error(mock_settings):
         side_effect=TransportQueryError("failed", errors=[{"message": "bad"}])
     )
     with pytest.raises(TransportQueryError):
-        await service.create_webhook("p1", "https://x.com/hook", ["card.move"])
+        await service.create_webhook("602", "https://x.com/hook", ["card.move"])
 
 
 @pytest.mark.unit
@@ -309,7 +309,7 @@ async def test_get_card_inbox_emails_success(mock_settings):
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is GET_CARD_INBOX_EMAILS_QUERY
-    assert variables["card_id"] == "12345"
+    assert variables["card_id"] == 12345
     assert result == payload
     assert len(result["card"]["inbox_emails"]) == 2
 

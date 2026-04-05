@@ -196,7 +196,7 @@ class ReportService(BasePipefyClient):
             formulas: Formula definitions.
             featured_field: Featured field name.
         """
-        input_obj: dict[str, Any] = {"id": report_id}
+        input_obj: dict[str, Any] = {"id": int(report_id)}
         optional_fields = {
             "name": name,
             "color": color,
@@ -219,7 +219,7 @@ class ReportService(BasePipefyClient):
             report_id: Pipe report ID.
         """
         return await self.execute_query(
-            DELETE_PIPE_REPORT_MUTATION, {"input": {"id": report_id}}
+            DELETE_PIPE_REPORT_MUTATION, {"input": {"id": int(report_id)}}
         )
 
     async def create_organization_report(
@@ -241,9 +241,9 @@ class ReportService(BasePipefyClient):
             filter: Report filter (``ReportCardsFilter`` shape).
         """
         input_obj: dict[str, Any] = {
-            "organizationId": organization_id,
+            "organizationId": int(organization_id),
             "name": name,
-            "pipeIds": pipe_ids,
+            "pipeIds": [int(pid) for pid in pipe_ids],
         }
         if fields is not None:
             input_obj["fields"] = fields
@@ -273,13 +273,13 @@ class ReportService(BasePipefyClient):
             filter: Report filter (``ReportCardsFilter`` shape).
             pipe_ids: Pipe IDs to include.
         """
-        input_obj: dict[str, Any] = {"id": report_id}
+        input_obj: dict[str, Any] = {"id": int(report_id)}
         optional_fields = {
             "name": name,
             "color": color,
             "fields": fields,
             "filter": filter,
-            "pipeIds": pipe_ids,
+            "pipeIds": [int(pid) for pid in pipe_ids] if pipe_ids is not None else None,
         }
         for key, value in optional_fields.items():
             if value is not None:
@@ -295,7 +295,7 @@ class ReportService(BasePipefyClient):
             report_id: Organization report ID.
         """
         return await self.execute_query(
-            DELETE_ORGANIZATION_REPORT_MUTATION, {"input": {"id": report_id}}
+            DELETE_ORGANIZATION_REPORT_MUTATION, {"input": {"id": int(report_id)}}
         )
 
     async def export_pipe_report(
@@ -317,8 +317,8 @@ class ReportService(BasePipefyClient):
             columns: Column field IDs to include in the export file.
         """
         input_obj: dict[str, Any] = {
-            "pipeId": pipe_id,
-            "pipeReportId": pipe_report_id,
+            "pipeId": int(pipe_id),
+            "pipeReportId": int(pipe_report_id),
         }
         if sort_by is not None:
             input_obj["sortBy"] = sort_by

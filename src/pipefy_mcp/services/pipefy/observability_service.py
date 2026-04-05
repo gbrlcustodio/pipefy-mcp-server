@@ -126,7 +126,7 @@ class ObservabilityService(BasePipefyClient):
         if trimmed.isdigit():
             result = await self.execute_query(
                 RESOLVE_ORGANIZATION_UUID_QUERY,
-                {"id": trimmed},
+                {"id": int(trimmed)},
             )
             org = result.get("organization")
             uuid_value = org.get("uuid") if isinstance(org, dict) else None
@@ -323,7 +323,7 @@ class ObservabilityService(BasePipefyClient):
         """
         return await self.execute_query(
             CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
-            {"input": {"organizationId": organization_id, "filter": period}},
+            {"input": {"organizationId": int(organization_id), "filter": period}},
         )
 
     async def get_automation_jobs_export(self, export_id: str) -> dict[str, Any]:

@@ -323,7 +323,7 @@ async def test_get_ai_credit_usage_resolves_numeric_organization_id(mock_setting
     assert service.execute_query.call_count == 2
     calls = service.execute_query.call_args_list
     assert calls[0][0][0] is RESOLVE_ORGANIZATION_UUID_QUERY
-    assert calls[0][0][1] == {"id": "300514213"}
+    assert calls[0][0][1] == {"id": 300514213}
     assert calls[1][0][0] is GET_AI_CREDIT_USAGE_QUERY
     assert calls[1][0][1] == {
         "organizationUuid": "341c1327-261c-4766-bb96-7953e4c3970d",
@@ -356,11 +356,11 @@ async def test_export_automation_jobs_success(mock_settings):
         }
     }
     service = _make_service(mock_settings, payload)
-    result = await service.export_automation_jobs("org-123", "last_month")
+    result = await service.export_automation_jobs("123", "last_month")
 
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_AUTOMATION_JOBS_EXPORT_MUTATION
-    assert variables == {"input": {"organizationId": "org-123", "filter": "last_month"}}
+    assert variables == {"input": {"organizationId": 123, "filter": "last_month"}}
     assert result["createAutomationJobsExport"]["automationJobsExport"]["id"] == "exp-1"
 
 
@@ -510,7 +510,7 @@ async def test_get_agents_usage_resolves_numeric_organization_id(mock_settings):
     assert service.execute_query.call_count == 2
     calls = service.execute_query.call_args_list
     assert calls[0][0][0] is RESOLVE_ORGANIZATION_UUID_QUERY
-    assert calls[0][0][1] == {"id": "300514213"}
+    assert calls[0][0][1] == {"id": 300514213}
     assert calls[1][0][0] is GET_AGENTS_USAGE_QUERY
     assert calls[1][0][1]["organizationUuid"] == "341c1327-261c-4766-bb96-7953e4c3970d"
     assert result["agentsUsage"]["totalCredits"] == 5.0
@@ -534,7 +534,7 @@ async def test_get_automations_usage_resolves_numeric_organization_id(mock_setti
     assert service.execute_query.call_count == 2
     calls = service.execute_query.call_args_list
     assert calls[0][0][0] is RESOLVE_ORGANIZATION_UUID_QUERY
-    assert calls[0][0][1] == {"id": "300514213"}
+    assert calls[0][0][1] == {"id": 300514213}
     assert calls[1][0][0] is GET_AUTOMATIONS_USAGE_QUERY
     assert calls[1][0][1]["organizationUuid"] == "341c1327-261c-4766-bb96-7953e4c3970d"
     assert result["automationsUsage"]["totalExecutions"] == 42

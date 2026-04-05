@@ -44,12 +44,12 @@ async def test_get_pipe_relations_sends_pipe_id(mock_settings):
         }
     }
     service = _make_service(mock_settings, payload)
-    result = await service.get_pipe_relations("p1")
+    result = await service.get_pipe_relations("701")
 
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is GET_PIPE_RELATIONS_QUERY
-    assert variables == {"pipeId": "p1"}
+    assert variables == {"pipeId": 701}
     assert result["pipe"]["parentsRelations"][0]["name"] == "Up"
 
 
@@ -69,11 +69,11 @@ async def test_get_pipe_relations_transport_error(mock_settings):
 async def test_get_table_relations_sends_ids_list(mock_settings):
     rows = [{"id": "t1", "name": "Link"}]
     service = _make_service(mock_settings, {"table_relations": rows})
-    result = await service.get_table_relations(["a", "b"])
+    result = await service.get_table_relations(["801", "802"])
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_TABLE_RELATIONS_QUERY
-    assert variables == {"ids": ["a", "b"]}
+    assert variables == {"ids": [801, 802]}
     assert result["table_relations"] == rows
 
 

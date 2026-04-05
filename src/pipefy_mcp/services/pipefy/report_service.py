@@ -163,7 +163,7 @@ class ReportService(BasePipefyClient):
             filter: Report filter (``ReportCardsFilter`` shape).
             formulas: Formula definitions (list of [field, operator, ...] tuples).
         """
-        input_obj: dict[str, Any] = {"pipeId": pipe_id, "name": name}
+        input_obj: dict[str, Any] = {"pipeId": int(pipe_id), "name": name}
         if fields is not None:
             input_obj["fields"] = fields
         if filter is not None:

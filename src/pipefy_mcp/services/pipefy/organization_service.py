@@ -29,7 +29,9 @@ class OrganizationService(BasePipefyClient):
         Args:
             organization_id: Numeric organization ID.
         """
-        data = await self.execute_query(GET_ORGANIZATION_QUERY, {"id": organization_id})
+        data = await self.execute_query(
+            GET_ORGANIZATION_QUERY, {"id": int(organization_id)}
+        )
         org = data.get("organization")
         if org is None:
             return {

@@ -1,6 +1,6 @@
 # Automations & AI
 
-Traditional automations (if/then rules) and AI-powered automations and agents. **15 tools.**
+Traditional automations (if/then rules) and AI-powered automations and agents. **16 tools.**
 
 ---
 

@@ -13,7 +13,7 @@ Read-only observability tools use `readOnlyHint=True`. The async export mutation
 | **Pipe for AI agent logs** | `repo_uuid` — the pipe **UUID** | `get_pipe` with numeric `pipe_id`; use `pipe.uuid` as `repo_uuid`. |
 | **Pipe for automation logs (all rules)** | `repo_id` — pipe id as **string** (numeric id is fine) | Same id you see in the Pipefy URL / `get_pipe` → `pipe.id`. |
 | **Single automation logs** | `automation_id` — **not** the pipe id | `get_automations` with `pipe_id` lists rules and their `id` values. |
-| **Organization for usage queries** | `organization_uuid` — org **UUID** | `execute_graphql`: `pipe(id: $id) { organization { uuid } }`, or resolve from any pipe in that org via `get_pipe`. |
+| **Organization for usage queries** | `organization_uuid` — org **UUID** | `get_organization(organization_id)` returns the `uuid` directly. Alternatively: `execute_graphql` with `pipe(id: $id) { organization { uuid } }`. |
 | **Organization for credit dashboard** | `organization_uuid` in the tool | **UUID** or **numeric org id** (string); numeric ids are resolved server-side before calling the API. |
 | **Organization for export** | `organization_id` on `export_automation_jobs` | Numeric org id (as used in URLs / exports); differs from the usage tools’ UUID parameter name. |
 
@@ -82,4 +82,5 @@ Empty lists (`totalCount: 0`) are valid: the pipe or automation may have no rece
 ## See also
 
 - [Automations & AI](automations-and-ai.md) — `get_automations` / `get_pipe` when resolving ids before calling observability tools.
-- [Introspection](introspection.md) — `execute_graphql` for ad-hoc queries (e.g. `organization { uuid }` from a `pipe`).
+- [Organization](organization.md) — `get_organization` for org UUID, plan, and member count (replaces `execute_graphql` workarounds for org discovery).
+- [Introspection](introspection.md) — `execute_graphql` for ad-hoc queries; `introspect_query` / `introspect_mutation` to discover query shapes before calling `execute_graphql`.

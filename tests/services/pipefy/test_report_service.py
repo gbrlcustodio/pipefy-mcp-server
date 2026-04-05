@@ -197,11 +197,11 @@ async def test_get_organization_report_success(mock_settings):
         }
     }
     service = _make_service(mock_settings, payload)
-    result = await service.get_organization_report("or1")
+    result = await service.get_organization_report("901")
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_ORGANIZATION_REPORT_QUERY
-    assert variables == {"id": "or1"}
+    assert variables == {"id": 901}
     assert result["organizationReport"]["name"] == "Org Overview"
 
 
@@ -232,11 +232,11 @@ async def test_get_organization_reports_success(mock_settings):
         }
     }
     service = _make_service(mock_settings, payload)
-    result = await service.get_organization_reports("org-1", first=5, after="cursor-1")
+    result = await service.get_organization_reports("1001", first=5, after="cursor-1")
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_ORGANIZATION_REPORTS_QUERY
-    assert variables["organizationId"] == "org-1"
+    assert variables["organizationId"] == 1001
     assert variables["first"] == 5
     assert variables["after"] == "cursor-1"
     assert len(result["organizationReports"]["edges"]) == 2

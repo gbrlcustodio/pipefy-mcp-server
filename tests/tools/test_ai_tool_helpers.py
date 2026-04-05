@@ -435,3 +435,79 @@ def test_get_ai_agent_like_payload_passes_validation_helpers():
     )
     assert problems == []
     assert warnings == []
+
+
+# --- cross-pipe field validation ---
+
+
+@pytest.mark.unit
+def test_validate_cross_pipe_field_ids_valid():
+    problems, warnings = validate_behaviors_against_pipe(
+        [_connected_card_behavior(target_pipe_id="child-pipe")],
+        pipe_id="1",
+        pipe_field_ids=PIPE_FIELDS,
+        pipe_phase_ids=PIPE_PHASES,
+        related_pipe_ids=RELATED_PIPES,
+        cross_pipe_field_ids={"child-pipe": {"200", "201"}},
+    )
+    assert problems == []
+
+
+@pytest.mark.unit
+def test_validate_cross_pipe_field_ids_invalid():
+    problems, warnings = validate_behaviors_against_pipe(
+        [_connected_card_behavior(target_pipe_id="child-pipe")],
+        pipe_id="1",
+        pipe_field_ids=PIPE_FIELDS,
+        pipe_phase_ids=PIPE_PHASES,
+        related_pipe_ids=RELATED_PIPES,
+        cross_pipe_field_ids={"child-pipe": {"300", "301"}},
+    )
+    assert len(problems) == 1
+    assert '"200"' in problems[0]
+    assert "target pipe child-pipe fields" in problems[0]
+
+
+@pytest.mark.unit
+def test_validate_cross_pipe_not_in_map_skips_field_check():
+    problems, warnings = validate_behaviors_against_pipe(
+        [_connected_card_behavior(target_pipe_id="child-pipe")],
+        pipe_id="1",
+        pipe_field_ids=PIPE_FIELDS,
+        pipe_phase_ids=PIPE_PHASES,
+        related_pipe_ids=RELATED_PIPES,
+        cross_pipe_field_ids={"other-pipe": {"200"}},
+    )
+    assert problems == []
+
+
+# --- _summarize_behaviors malformed input ---
+
+
+@pytest.mark.unit
+def test_summarize_behaviors_malformed_non_dict():
+    from pipefy_mcp.tools.ai_tool_helpers import _summarize_behaviors
+
+    result = _summarize_behaviors(["not a dict", 42])
+    assert "<malformed: str>" in result
+    assert "<malformed: int>" in result
+
+
+@pytest.mark.unit
+def test_summarize_behaviors_action_params_as_string():
+    from pipefy_mcp.tools.ai_tool_helpers import _summarize_behaviors
+
+    result = _summarize_behaviors(
+        [{"name": "Bad", "event_id": "x", "actionParams": "garbage"}]
+    )
+    assert '"Bad"' in result
+    assert "actions=[none]" in result
+
+
+@pytest.mark.unit
+def test_summarize_behaviors_missing_action_params():
+    from pipefy_mcp.tools.ai_tool_helpers import _summarize_behaviors
+
+    result = _summarize_behaviors([{"name": "Bare", "event_id": "card_created"}])
+    assert '"Bare"' in result
+    assert "actions=[none]" in result

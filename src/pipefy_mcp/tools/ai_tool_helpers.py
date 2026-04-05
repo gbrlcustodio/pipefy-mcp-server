@@ -196,21 +196,31 @@ _ERROR_HINTS: list[tuple[re.Pattern[str], str]] = [
 def _summarize_behaviors(behaviors: list[dict[str, Any]]) -> str:
     """Build a compact one-line-per-behavior summary for error context.
 
+    Tolerates malformed entries (non-dict behaviors, actionParams as string, etc.)
+    so it never raises when called from an error handler.
+
     Args:
         behaviors: Raw behavior dicts (pre-validation, may use either key style).
     """
     lines: list[str] = []
     for i, b in enumerate(behaviors):
+        if not isinstance(b, dict):
+            lines.append(f"  [{i}] <malformed: {type(b).__name__}>")
+            continue
         name = b.get("name", "<unnamed>")
         event = b.get("eventId") or b.get("event_id") or "?"
         actions_desc: list[str] = []
 
-        ap = b.get("actionParams") or b.get("action_params") or {}
-        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-        attrs = abp.get("actionsAttributes") or abp.get("actions_attributes") or []
-        for a in attrs:
-            if isinstance(a, dict):
-                actions_desc.append(a.get("actionType", "?"))
+        ap = b.get("actionParams") or b.get("action_params")
+        if isinstance(ap, dict):
+            abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params")
+            if isinstance(abp, dict):
+                attrs = (
+                    abp.get("actionsAttributes") or abp.get("actions_attributes") or []
+                )
+                for a in attrs:
+                    if isinstance(a, dict):
+                        actions_desc.append(a.get("actionType", "?"))
 
         actions_str = ", ".join(actions_desc) if actions_desc else "none"
         lines.append(f'  [{i}] "{name}" (event={event}, actions=[{actions_str}])')
@@ -232,6 +242,7 @@ def validate_behaviors_against_pipe(
     pipe_field_ids: set[str],
     pipe_phase_ids: set[str],
     related_pipe_ids: set[str] | None,
+    cross_pipe_field_ids: dict[str, set[str]] | None = None,
     unknown_action_types: Literal["error", "warning", "ignore"] = "error",
 ) -> tuple[list[str], list[str]]:
     """Check behaviors against resolved pipe context and return problems and warnings.
@@ -248,6 +259,10 @@ def validate_behaviors_against_pipe(
             ``create_connected_card`` validation; ``None`` skips that check
             (avoids false positives when relations were not loaded). A set
             (possibly empty) runs the relation check as before.
+        cross_pipe_field_ids: Optional mapping of ``{pipe_id: field_ids}`` for
+            target pipes referenced by cross-pipe actions. When provided,
+            fieldIds targeting those pipes are validated against the map.
+            When ``None`` (default), cross-pipe fieldIds are skipped.
         unknown_action_types: How to treat non-empty ``actionType`` values not in
             ``KNOWN_AI_ACTION_TYPES``: ``error`` adds to problems, ``warning``
             adds the same message to warnings, ``ignore`` skips.
@@ -301,23 +316,36 @@ def validate_behaviors_against_pipe(
                         f'destinationPhaseId "{dest}" not found in pipe phases.'
                     )
 
-            # Check fieldsAttributes fieldId references — only when the action
-            # targets the same pipe (or no pipeId is set in metadata).
-            # Cross-pipe actions (create_connected_card, create_card on another
-            # pipe) reference fields from the *target* pipe, which we don't have.
+            # Check fieldsAttributes fieldId references.
+            # Same-pipe actions check against pipe_field_ids; cross-pipe actions
+            # check against cross_pipe_field_ids when available.
             action_pipe = str(metadata.get("pipeId", ""))
             targets_source = not action_pipe or action_pipe == pipe_id
             if targets_source:
+                check_fields = pipe_field_ids
+            elif (
+                cross_pipe_field_ids is not None and action_pipe in cross_pipe_field_ids
+            ):
+                check_fields = cross_pipe_field_ids[action_pipe]
+            else:
+                check_fields = None
+
+            if check_fields is not None:
                 fields_attrs = metadata.get("fieldsAttributes") or []
                 for k, fa in enumerate(fields_attrs):
                     if not isinstance(fa, dict):
                         continue
                     fid = fa.get("fieldId", "")
-                    if fid and pipe_field_ids and fid not in pipe_field_ids:
+                    if fid and check_fields and fid not in check_fields:
+                        pipe_label = (
+                            "pipe fields"
+                            if targets_source
+                            else f"target pipe {action_pipe} fields"
+                        )
                         problems.append(
                             f"{prefix}, action [{j}] ({action_type}): "
                             f'fieldsAttributes[{k}].fieldId "{fid}" '
-                            f"not found in pipe fields."
+                            f"not found in {pipe_label}."
                         )
 
             # Check create_connected_card relation (skipped when related_pipe_ids is None)

@@ -29,6 +29,8 @@ def mock_pipefy_client():
     client.get_ai_agent = AsyncMock()
     client.get_ai_agents = AsyncMock()
     client.delete_ai_agent = AsyncMock()
+    client.get_pipe = AsyncMock()
+    client.get_pipe_relations = AsyncMock()
     return client
 
 
@@ -443,6 +445,197 @@ class TestToggleAiAgentStatus:
         assert "error" in payload
         assert isinstance(payload["error"], str)
 
+    async def test_graphql_error_extracts_message(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.toggle_ai_agent_status.side_effect = TransportQueryError(
+            "failed", errors=[{"message": "Agent is locked"}]
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "toggle_ai_agent_status",
+                {"uuid": "agent-uuid", "active": True},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "locked" in payload["error"]
+
+
+def _behavior_update_card_on_pipe(pipe_id="1", field_id="100"):
+    return {
+        "name": "Fill",
+        "event_id": "card_created",
+        "actionParams": {
+            "aiBehaviorParams": {
+                "instruction": "go",
+                "actionsAttributes": [
+                    {
+                        "name": "u",
+                        "actionType": "update_card",
+                        "metadata": {
+                            "pipeId": pipe_id,
+                            "fieldsAttributes": [
+                                {
+                                    "fieldId": field_id,
+                                    "inputMode": "fill_with_ai",
+                                    "value": "",
+                                },
+                            ],
+                        },
+                    },
+                ],
+            }
+        },
+    }
+
+
+def _pipe_graph_with_field(field_id="100", phase_id="ph-1"):
+    return {
+        "pipe": {
+            "phases": [
+                {
+                    "id": phase_id,
+                    "fields": [{"id": field_id}],
+                }
+            ],
+            "start_form_fields": [],
+        }
+    }
+
+
+@pytest.mark.anyio
+class TestValidateAiAgentBehaviors:
+    async def test_success(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field()
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [],
+            "parents": [],
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {
+                    "pipe_id": "1",
+                    "behaviors": [_behavior_update_card_on_pipe()],
+                    "strict_unknown_action_types": True,
+                },
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is True
+        assert payload["problems"] == []
+        assert payload["warnings"] == []
+        mock_pipefy_client.get_pipe.assert_awaited_once_with(1)
+        mock_pipefy_client.get_pipe_relations.assert_awaited_once_with("1")
+
+    async def test_relations_fetch_failure_adds_warning_skips_relation_check(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field()
+        mock_pipefy_client.get_pipe_relations.side_effect = TransportQueryError(
+            "failed", errors=[{"message": "denied"}]
+        )
+        behavior = {
+            "name": "Child",
+            "event_id": "card_created",
+            "actionParams": {
+                "aiBehaviorParams": {
+                    "instruction": "go",
+                    "actionsAttributes": [
+                        {
+                            "name": "c",
+                            "actionType": "create_connected_card",
+                            "metadata": {
+                                "pipeId": "99999",
+                                "fieldsAttributes": [
+                                    {
+                                        "fieldId": "200",
+                                        "inputMode": "fill_with_ai",
+                                        "value": "",
+                                    },
+                                ],
+                            },
+                        },
+                    ],
+                }
+            },
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {"pipe_id": "1", "behaviors": [behavior]},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is True
+        assert payload["problems"] == []
+        assert len(payload["warnings"]) == 1
+        assert "relations" in payload["warnings"][0].lower()
+
+    async def test_invalid_field_id_blocking(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field()
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [],
+            "parents": [],
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {
+                    "pipe_id": "1",
+                    "behaviors": [_behavior_update_card_on_pipe(field_id="999")],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is False
+        assert any("999" in p for p in payload["problems"])
+
+    async def test_strict_unknown_action_types_false_warns_only(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        from tests.ai_agent_test_payloads import behavior_with_action
+
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field()
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [],
+            "parents": [],
+        }
+        b = behavior_with_action("custom_future_type", {"x": 1})
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {
+                    "pipe_id": "1",
+                    "behaviors": [b],
+                    "strict_unknown_action_types": False,
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is True
+        assert payload["problems"] == []
+        assert any("custom_future_type" in w for w in payload["warnings"])
+
 
 @pytest.mark.anyio
 class TestGetAiAgent:
@@ -640,7 +833,7 @@ async def test_get_ai_agent_tools_have_read_only_hint(client_session):
     async with client_session as session:
         listed = await session.list_tools()
     by_name = {t.name: t for t in listed.tools}
-    for name in ("get_ai_agent", "get_ai_agents"):
+    for name in ("get_ai_agent", "get_ai_agents", "validate_ai_agent_behaviors"):
         tool = by_name[name]
         assert tool.annotations is not None
         assert tool.annotations.readOnlyHint is True

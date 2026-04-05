@@ -21,6 +21,7 @@ from pipefy_mcp.services.pipefy.automation_service import AutomationService
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.member_service import MemberService
 from pipefy_mcp.services.pipefy.observability_service import ObservabilityService
+from pipefy_mcp.services.pipefy.organization_service import OrganizationService
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.relation_service import RelationService
@@ -67,6 +68,7 @@ class PipefyClient:
         self._ai_agent_service = AiAgentService(settings=settings, auth=auth)
         self._observability_service = ObservabilityService(settings=settings, auth=auth)
         self._report_service = ReportService(settings=settings, auth=auth)
+        self._organization_service = OrganizationService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
@@ -914,29 +916,63 @@ class PipefyClient:
             search_term=search_term,
         )
 
-    async def introspect_type(self, type_name: str) -> dict[str, Any]:
+    async def get_organization(self, organization_id: str) -> dict[str, Any]:
+        """Fetch organization details by ID.
+
+        Args:
+            organization_id: Numeric organization ID.
+        """
+        return await self._organization_service.get_organization(organization_id)
+
+    async def introspect_type(
+        self, type_name: str, *, max_depth: int = 1
+    ) -> dict[str, Any]:
         """Introspect a GraphQL type by name (fields, inputFields, or enumValues).
 
         Args:
             type_name: Schema type name (e.g. Card, CreateCardInput).
+            max_depth: How many levels of referenced types to resolve (default 1).
         """
-        return await self._introspection_service.introspect_type(type_name)
+        return await self._introspection_service.introspect_type(
+            type_name, max_depth=max_depth
+        )
 
-    async def introspect_mutation(self, mutation_name: str) -> dict[str, Any]:
+    async def introspect_mutation(
+        self, mutation_name: str, *, max_depth: int = 1
+    ) -> dict[str, Any]:
         """Introspect a root mutation field (arguments and return type).
 
         Args:
             mutation_name: Mutation field name as exposed on the Mutation type.
+            max_depth: How many levels of referenced types to resolve (default 1).
         """
-        return await self._introspection_service.introspect_mutation(mutation_name)
+        return await self._introspection_service.introspect_mutation(
+            mutation_name, max_depth=max_depth
+        )
 
-    async def search_schema(self, keyword: str) -> dict[str, Any]:
+    async def introspect_query(
+        self, query_name: str, *, max_depth: int = 1
+    ) -> dict[str, Any]:
+        """Introspect a root query field (arguments and return type).
+
+        Args:
+            query_name: Query field name as exposed on the Query type.
+            max_depth: How many levels of referenced types to resolve (default 1).
+        """
+        return await self._introspection_service.introspect_query(
+            query_name, max_depth=max_depth
+        )
+
+    async def search_schema(
+        self, keyword: str, *, kind: str | None = None
+    ) -> dict[str, Any]:
         """Search schema types by keyword (name or description).
 
         Args:
             keyword: Case-insensitive substring to match.
+            kind: Optional GraphQL type kind filter (e.g. OBJECT, INPUT_OBJECT, ENUM).
         """
-        return await self._introspection_service.search_schema(keyword)
+        return await self._introspection_service.search_schema(keyword, kind=kind)
 
     async def execute_graphql(
         self, query: str, variables: dict[str, Any] | None = None

@@ -24,6 +24,7 @@ def mock_introspection_client():
     client = MagicMock(PipefyClient)
     client.introspect_type = AsyncMock()
     client.introspect_mutation = AsyncMock()
+    client.introspect_query = AsyncMock()
     client.search_schema = AsyncMock()
     client.execute_graphql = AsyncMock()
     return client
@@ -58,11 +59,31 @@ async def test_introspect_type_success(
     async with introspection_session as session:
         result = await session.call_tool("introspect_type", {"type_name": "Card"})
     assert result.isError is False
-    mock_introspection_client.introspect_type.assert_awaited_once_with("Card")
+    mock_introspection_client.introspect_type.assert_awaited_once_with(
+        "Card", max_depth=1
+    )
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "Card" in payload["result"]
     assert "OBJECT" in payload["result"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+async def test_introspect_type_with_max_depth_passes_through(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mock_introspection_client.introspect_type = AsyncMock(
+        return_value={"name": "Card", "kind": "OBJECT", "fields": []}
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(
+            "introspect_type", {"type_name": "Card", "max_depth": 2}
+        )
+    assert result.isError is False
+    mock_introspection_client.introspect_type.assert_awaited_once_with(
+        "Card", max_depth=2
+    )
 
 
 @pytest.mark.anyio
@@ -115,10 +136,58 @@ async def test_introspect_mutation_success(
             "introspect_mutation", {"mutation_name": "createCard"}
         )
     assert result.isError is False
-    mock_introspection_client.introspect_mutation.assert_awaited_once_with("createCard")
+    mock_introspection_client.introspect_mutation.assert_awaited_once_with(
+        "createCard", max_depth=1
+    )
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "createCard" in payload["result"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+async def test_introspect_mutation_with_max_depth_passes_through(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mock_introspection_client.introspect_mutation = AsyncMock(
+        return_value={
+            "name": "createCard",
+            "description": "Creates a card",
+            "args": [],
+            "type": {"name": "CardPayload", "kind": "OBJECT"},
+        }
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(
+            "introspect_mutation", {"mutation_name": "createCard", "max_depth": 2}
+        )
+    assert result.isError is False
+    mock_introspection_client.introspect_mutation.assert_awaited_once_with(
+        "createCard", max_depth=2
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+async def test_introspect_query_with_max_depth_passes_through(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mock_introspection_client.introspect_query = AsyncMock(
+        return_value={
+            "name": "pipe",
+            "description": "Lookup a pipe",
+            "args": [],
+            "type": {"name": "Pipe", "kind": "OBJECT"},
+        }
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(
+            "introspect_query", {"query_name": "pipe", "max_depth": 3}
+        )
+    assert result.isError is False
+    mock_introspection_client.introspect_query.assert_awaited_once_with(
+        "pipe", max_depth=3
+    )
 
 
 @pytest.mark.anyio
@@ -133,6 +202,56 @@ async def test_introspect_mutation_not_found_returns_error_payload(
         result = await session.call_tool(
             "introspect_mutation", {"mutation_name": "missing"}
         )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "not found" in payload["error"].lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+async def test_introspect_query_success(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mock_introspection_client.introspect_query = AsyncMock(
+        return_value={
+            "name": "pipe",
+            "description": "Lookup a pipe by its ID",
+            "args": [
+                {
+                    "name": "id",
+                    "type": {
+                        "name": None,
+                        "kind": "NON_NULL",
+                        "ofType": {"name": "ID", "kind": "SCALAR"},
+                    },
+                    "defaultValue": None,
+                }
+            ],
+            "type": {"name": "Pipe", "kind": "OBJECT"},
+        }
+    )
+    async with introspection_session as session:
+        result = await session.call_tool("introspect_query", {"query_name": "pipe"})
+    assert result.isError is False
+    mock_introspection_client.introspect_query.assert_awaited_once_with(
+        "pipe", max_depth=1
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "pipe" in payload["result"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+async def test_introspect_query_not_found_returns_error_payload(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mock_introspection_client.introspect_query = AsyncMock(
+        return_value={"error": "Query 'missing' was not found."}
+    )
+    async with introspection_session as session:
+        result = await session.call_tool("introspect_query", {"query_name": "missing"})
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -158,7 +277,7 @@ async def test_search_schema_returns_matching_types(
     async with introspection_session as session:
         result = await session.call_tool("search_schema", {"keyword": "pipe"})
     assert result.isError is False
-    mock_introspection_client.search_schema.assert_awaited_once_with("pipe")
+    mock_introspection_client.search_schema.assert_awaited_once_with("pipe", kind=None)
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "Pipe" in payload["result"]
@@ -176,6 +295,31 @@ async def test_search_schema_empty_returns_success_with_empty_types(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "[]" in payload["result"] or '"types": []' in payload["result"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+async def test_search_schema_with_kind_passes_through(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mock_introspection_client.search_schema = AsyncMock(
+        return_value={
+            "types": [
+                {"name": "CardStatus", "kind": "ENUM", "description": "Status values"}
+            ]
+        }
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(
+            "search_schema", {"keyword": "card", "kind": "ENUM"}
+        )
+    assert result.isError is False
+    mock_introspection_client.search_schema.assert_awaited_once_with(
+        "card", kind="ENUM"
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "CardStatus" in payload["result"]
 
 
 @pytest.mark.anyio

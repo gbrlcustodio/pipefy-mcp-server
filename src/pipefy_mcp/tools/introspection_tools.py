@@ -24,16 +24,17 @@ class IntrospectionTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def introspect_type(type_name: str) -> dict:
+        async def introspect_type(type_name: str, max_depth: int = 1) -> dict:
             """Inspect a Pipefy GraphQL type: fields, inputFields, or enumValues.
 
             Use before building raw queries to learn argument and return shapes.
 
             Args:
                 type_name: Schema type name exactly as defined (e.g. Card, Mutation).
+                max_depth: Levels of sub-types to resolve (1 = no recursion, 2+ = inline referenced types).
             """
             try:
-                result = await client.introspect_type(type_name)
+                result = await client.introspect_type(type_name, max_depth=max_depth)
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(str(exc))
             err = result.get("error")
@@ -44,16 +45,19 @@ class IntrospectionTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def introspect_mutation(mutation_name: str) -> dict:
+        async def introspect_mutation(mutation_name: str, max_depth: int = 1) -> dict:
             """Inspect a root GraphQL mutation: arguments and return type.
 
             Use before execute_graphql to learn required inputs and payload shape.
 
             Args:
                 mutation_name: Mutation field name on the Mutation type (e.g. createCard).
+                max_depth: Levels of sub-types to resolve (1 = no recursion, 2+ = inline referenced types).
             """
             try:
-                result = await client.introspect_mutation(mutation_name)
+                result = await client.introspect_mutation(
+                    mutation_name, max_depth=max_depth
+                )
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(str(exc))
             err = result.get("error")
@@ -64,16 +68,38 @@ class IntrospectionTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def search_schema(keyword: str) -> dict:
+        async def introspect_query(query_name: str, max_depth: int = 1) -> dict:
+            """Inspect a root GraphQL query: arguments and return type.
+
+            Use before execute_graphql to learn required inputs and payload shape.
+
+            Args:
+                query_name: Query field name on the Query type (e.g. pipe, organization).
+                max_depth: Levels of sub-types to resolve (1 = no recursion, 2+ = inline referenced types).
+            """
+            try:
+                result = await client.introspect_query(query_name, max_depth=max_depth)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(str(exc))
+            err = result.get("error")
+            if isinstance(err, str) and err:
+                return build_error_payload(err)
+            return build_success_payload(result)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
+        async def search_schema(keyword: str, kind: str | None = None) -> dict:
             """Search GraphQL schema types by keyword in name or description.
 
             Case-insensitive; introspection types (names starting with __) are excluded server-side.
 
             Args:
                 keyword: Substring to find relevant types (e.g. pipe, card, automation).
+                kind: Optional filter by GraphQL type kind (e.g. OBJECT, INPUT_OBJECT, ENUM, SCALAR).
             """
             try:
-                result = await client.search_schema(keyword)
+                result = await client.search_schema(keyword, kind=kind)
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(str(exc))
             err = result.get("error")

@@ -1,6 +1,6 @@
 # Database Tables
 
-Tables, records (rows), and schema columns (table fields) for org Database Tables. **15 tools.**
+Tables, records (rows), and schema columns (table fields) for org Database Tables. **17 tools.**
 
 ## Cross-cutting patterns
 

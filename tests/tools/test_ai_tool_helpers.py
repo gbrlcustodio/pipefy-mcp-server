@@ -511,3 +511,36 @@ def test_summarize_behaviors_missing_action_params():
     result = _summarize_behaviors([{"name": "Bare", "event_id": "card_created"}])
     assert '"Bare"' in result
     assert "actions=[none]" in result
+
+
+# --- _extract_pipe_id_from_behaviors ---
+
+
+@pytest.mark.unit
+def test_extract_pipe_id_from_update_card_behavior():
+    from pipefy_mcp.tools.ai_agent_tools import _extract_pipe_id_from_behaviors
+
+    behaviors = [_update_card_behavior(pipe_id="306996636")]
+    assert _extract_pipe_id_from_behaviors(behaviors) == "306996636"
+
+
+@pytest.mark.unit
+def test_extract_pipe_id_returns_none_for_empty():
+    from pipefy_mcp.tools.ai_agent_tools import _extract_pipe_id_from_behaviors
+
+    assert _extract_pipe_id_from_behaviors([]) is None
+
+
+@pytest.mark.unit
+def test_extract_pipe_id_returns_none_for_malformed():
+    from pipefy_mcp.tools.ai_agent_tools import _extract_pipe_id_from_behaviors
+
+    assert _extract_pipe_id_from_behaviors([{"actionParams": "garbage"}]) is None
+
+
+@pytest.mark.unit
+def test_extract_pipe_id_from_move_card_behavior():
+    from pipefy_mcp.tools.ai_agent_tools import _extract_pipe_id_from_behaviors
+
+    # move_card doesn't have metadata.pipeId
+    assert _extract_pipe_id_from_behaviors([_move_card_behavior()]) is None

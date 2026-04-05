@@ -71,6 +71,35 @@ INTROSPECT_MUTATION_QUERY = gql(
     """
 )
 
+INTROSPECT_QUERY_QUERY = gql(
+    """
+    query IntrospectQueryFields {
+        __type(name: "Query") {
+            fields {
+                name
+                description
+                args {
+                    name
+                    type {
+                        name
+                        kind
+                        ofType {
+                            name
+                            kind
+                        }
+                    }
+                    defaultValue
+                }
+                type {
+                    name
+                    kind
+                }
+            }
+        }
+    }
+    """
+)
+
 SCHEMA_TYPES_QUERY = gql(
     """
     query SchemaTypes {
@@ -87,6 +116,7 @@ SCHEMA_TYPES_QUERY = gql(
 
 __all__ = [
     "INTROSPECT_MUTATION_QUERY",
+    "INTROSPECT_QUERY_QUERY",
     "INTROSPECT_TYPE_QUERY",
     "SCHEMA_TYPES_QUERY",
 ]

@@ -153,8 +153,8 @@ async def test_scenario_search_then_introspect_type(
 
     assert extract_payload(s)["success"]
     assert extract_payload(t)["success"]
-    scenario_client.search_schema.assert_awaited_once_with("Card")
-    scenario_client.introspect_type.assert_awaited_once_with("Card")
+    scenario_client.search_schema.assert_awaited_once_with("Card", kind=None)
+    scenario_client.introspect_type.assert_awaited_once_with("Card", max_depth=1)
 
 
 @pytest.mark.anyio

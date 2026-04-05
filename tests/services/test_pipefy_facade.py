@@ -535,13 +535,13 @@ async def test_pipefy_client_introspection_methods_delegate_to_introspection_ser
     client._introspection_service = intro
 
     assert await client.introspect_type("Card") == {"name": "T"}
-    intro.introspect_type.assert_awaited_once_with("Card")
+    intro.introspect_type.assert_awaited_once_with("Card", max_depth=1)
 
     assert await client.introspect_mutation("createCard") == {"name": "m"}
-    intro.introspect_mutation.assert_awaited_once_with("createCard")
+    intro.introspect_mutation.assert_awaited_once_with("createCard", max_depth=1)
 
     assert await client.search_schema("pipe") == {"types": []}
-    intro.search_schema.assert_awaited_once_with("pipe")
+    intro.search_schema.assert_awaited_once_with("pipe", kind=None)
 
     assert await client.execute_graphql("query { x }", {"a": 1}) == {"data": True}
     intro.execute_graphql.assert_awaited_once_with("query { x }", {"a": 1})

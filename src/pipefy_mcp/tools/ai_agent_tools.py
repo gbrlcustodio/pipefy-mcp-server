@@ -28,6 +28,42 @@ from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30
 
 
+_RECORD_NOT_SAVED_PATTERN = "RECORD_NOT_SAVED"
+
+_PAYLOAD_OK_SUFFIX = (
+    "\n\nNote: All behaviors passed structural validation "
+    "(fields, phases, relations, actionTypes are correct). "
+    "The API rejection is likely a pipe-specific restriction "
+    "(orchestration pipe, feature flags, or plan limitation). "
+    "Try the same behaviors on a different pipe to confirm. "
+    "Do NOT retry with modified payload — the issue is the pipe, not the behaviors."
+)
+
+
+def _extract_pipe_id_from_behaviors(behaviors: list[dict]) -> str | None:
+    """Best-effort extraction of a numeric pipe ID from behavior metadata.
+
+    Looks for ``metadata.pipeId`` in the first action that has one.
+    Returns ``None`` when no pipe ID can be found.
+    """
+    for b in behaviors:
+        if not isinstance(b, dict):
+            continue
+        ap = b.get("actionParams") or b.get("action_params") or {}
+        if not isinstance(ap, dict):
+            continue
+        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
+        if not isinstance(abp, dict):
+            continue
+        for a in abp.get("actionsAttributes") or abp.get("actions_attributes") or []:
+            if not isinstance(a, dict):
+                continue
+            pid = (a.get("metadata") or {}).get("pipeId")
+            if pid:
+                return str(pid)
+    return None
+
+
 class AiAgentTools:
     """Declares MCP tools for AI Agent CRUD and status."""
 
@@ -39,6 +75,81 @@ class AiAgentTools:
             msgs = extract_error_strings(exc)
             text = "; ".join(msgs) if msgs else str(exc)
             return build_ai_tool_error(text)
+
+        async def _enrich_with_validation(
+            exc: BaseException, behaviors: list[dict]
+        ) -> str:
+            """Enrich an error with validation context for RECORD_NOT_SAVED.
+
+            When the error matches RECORD_NOT_SAVED, runs
+            ``validate_behaviors_against_pipe`` to distinguish payload problems
+            from pipe-specific restrictions. Falls back to standard enrichment
+            when validation cannot run or for non-RECORD_NOT_SAVED errors.
+            """
+            enriched = enrich_behavior_error(exc, behaviors)
+
+            if _RECORD_NOT_SAVED_PATTERN not in str(exc):
+                return enriched
+
+            pipe_id = _extract_pipe_id_from_behaviors(behaviors)
+            if not pipe_id:
+                return enriched
+
+            try:
+                pipe_data = await asyncio.wait_for(
+                    client.get_pipe(int(pipe_id)),
+                    timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
+                )
+                pipe_info = pipe_data.get("pipe", {})
+                phase_ids: set[str] = set()
+                field_ids: set[str] = set()
+                for phase in pipe_info.get("phases") or []:
+                    phase_ids.add(str(phase.get("id", "")))
+                    for field in phase.get("fields") or []:
+                        fid = field.get("id") or field.get("internal_id")
+                        if fid:
+                            field_ids.add(str(fid))
+                for field in pipe_info.get("start_form_fields") or []:
+                    fid = field.get("id") or field.get("internal_id")
+                    if fid:
+                        field_ids.add(str(fid))
+
+                related_pipe_ids: set[str] | None
+                try:
+                    relations = await asyncio.wait_for(
+                        client.get_pipe_relations(pipe_id),
+                        timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
+                    )
+                    related_pipe_ids = set()
+                    for rel in relations.get("children") or []:
+                        cid = rel.get("child", {}).get("id")
+                        if cid:
+                            related_pipe_ids.add(str(cid))
+                    for rel in relations.get("parents") or []:
+                        pid = rel.get("parent", {}).get("id")
+                        if pid:
+                            related_pipe_ids.add(str(pid))
+                except Exception:  # noqa: BLE001
+                    related_pipe_ids = None
+
+                problems, _ = validate_behaviors_against_pipe(
+                    behaviors,
+                    pipe_id=pipe_id,
+                    pipe_field_ids=field_ids,
+                    pipe_phase_ids=phase_ids,
+                    related_pipe_ids=related_pipe_ids,
+                    unknown_action_types="error",
+                )
+
+                if not problems:
+                    return enriched + _PAYLOAD_OK_SUFFIX
+                return (
+                    enriched
+                    + "\n\nValidation found problems:\n"
+                    + "\n".join(f"  - {p}" for p in problems)
+                )
+            except Exception:  # noqa: BLE001
+                return enriched
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
@@ -163,7 +274,7 @@ class AiAgentTools:
             except Exception as exc:  # noqa: BLE001
                 return build_create_agent_partial_failure(
                     agent_uuid=agent_uuid,
-                    error=enrich_behavior_error(exc, behaviors),
+                    error=await _enrich_with_validation(exc, behaviors),
                 )
 
             msg = f"AI Agent created and configured successfully. UUID: {agent_uuid}"
@@ -224,7 +335,9 @@ class AiAgentTools:
             try:
                 result = await client.update_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(enrich_behavior_error(exc, behaviors))
+                return build_ai_tool_error(
+                    await _enrich_with_validation(exc, behaviors)
+                )
 
             return build_update_agent_success(
                 agent_uuid=result["agent_uuid"],

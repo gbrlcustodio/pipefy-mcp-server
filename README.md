@@ -1,7 +1,7 @@
 # MCP server for Pipefy
 
 <p align="center">
-  <strong>Open-source MCP for Pipefy: 108 tools across pipes, cards, tables, relations, reports, automations, AI agents and observability — built for your IDE, with pagination, introspection and safe deletes.</strong>
+  <strong>Open-source MCP for Pipefy: 112 tools across pipes, cards, tables, relations, reports, automations, AI agents and observability — built for your IDE, with pagination, introspection and safe deletes.</strong>
 </p>
 
 <p align="center">
@@ -32,25 +32,26 @@
 
 ## MCP tools
 
-**108 tools** across 8 categories. Each tool has a docstring consumed by LLM clients for routing — treat those as the source of truth for arguments.
+**112 tools** across 9 categories. Each tool has a docstring consumed by LLM clients for routing — treat those as the source of truth for arguments.
 
 **Shared conventions (many tools):**
 - **Pagination** — List endpoints accept `first` and `after`. Use `pageInfo.hasNextPage` and `pageInfo.endCursor` to fetch the next page.
 - **`debug=true`** — Failed calls may include extra detail: GraphQL error codes and a `correlation_id` for support.
 - **`extra_input`** — Optional map of extra mutation fields (camelCase keys). Values that overlap the tool’s main parameters are ignored.
 - **Destructive deletes** — Two steps by default: the first response is a preview; call again with `confirm=true` to run the delete.
-- **`introspect_type`** — Ask the live schema for a type: fields, enums, and input shapes (for discovery, not for business data).
+- **Schema introspection** — `introspect_type`, `introspect_query`, `introspect_mutation` reveal live schema shapes; `search_schema` finds types by keyword with optional `kind` filter; `max_depth` on any introspection tool resolves sub-types in a single call.
 
 | Category | Tools | Description | Docs |
 |----------|:-----:|-------------|------|
 | **Pipes & cards** | 33 | Read, create, update, and delete pipes, phases, fields, labels, cards, and field conditions. | [Details](docs/tools/pipes-and-cards.md) |
-| **Database tables** | 16 | Tables, records (rows), schema columns (table fields), and org-wide table discovery. | [Details](docs/tools/database-tables.md) |
-| **Relations** | 6 | Link pipes, tables, and cards across workflows. | [Details](docs/tools/relations.md) |
+| **Database tables** | 17 | Tables, records (rows), schema columns (table fields), and org-wide table discovery. | [Details](docs/tools/database-tables.md) |
+| **Relations** | 5 | Link pipes, tables, and cards across workflows. | [Details](docs/tools/relations.md) |
 | **Reports** | 16 | Pipe and organization reports: discovery, CRUD, and async exports. | [Details](docs/tools/reports.md) |
-| **Automations & AI** | 15 | Traditional automations (rules engine) and AI-powered automations and agents. | [Details](docs/tools/automations-and-ai.md) |
+| **Automations & AI** | 16 | Traditional automations (rules engine) and AI-powered automations and agents. | [Details](docs/tools/automations-and-ai.md) |
 | **Observability** | 10 | AI agent and automation logs, usage stats, credits, job exports, status polling, and CSV fetch for finished exports. | [Details](docs/tools/observability.md) |
 | **Members, email & webhooks** | 9 | Pipe membership, card inbox emails, and webhook management. | [Details](docs/tools/members-email-webhooks.md) |
-| **Introspection** | 4 | Schema discovery and raw GraphQL execution. | [Details](docs/tools/introspection.md) |
+| **Organization** | 1 | Fetch organization details (plan, members, pipes count). | [Details](docs/tools/organization.md) |
+| **Introspection** | 5 | Schema discovery, depth-controlled type resolution, and raw GraphQL execution. | [Details](docs/tools/introspection.md) |
 
 ---
 

@@ -333,15 +333,15 @@ async def test_create_pipe_report_transport_error(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_pipe_report_success(mock_settings):
-    payload = {"updatePipeReport": {"pipeReport": {"id": "r10", "name": "Updated"}}}
+    payload = {"updatePipeReport": {"pipeReport": {"id": "10", "name": "Updated"}}}
     service = _make_service(mock_settings, payload)
     result = await service.update_pipe_report(
-        "r10", name="Updated", color="red", fields=["title"]
+        "10", name="Updated", color="red", fields=["title"]
     )
 
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_PIPE_REPORT_MUTATION
-    assert variables["input"]["id"] == "r10"
+    assert variables["input"]["id"] == 10
     assert variables["input"]["name"] == "Updated"
     assert variables["input"]["color"] == "red"
     assert variables["input"]["fields"] == ["title"]
@@ -351,12 +351,12 @@ async def test_update_pipe_report_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_pipe_report_skips_none_values(mock_settings):
-    payload = {"updatePipeReport": {"pipeReport": {"id": "r10", "name": "Same"}}}
+    payload = {"updatePipeReport": {"pipeReport": {"id": "10", "name": "Same"}}}
     service = _make_service(mock_settings, payload)
-    await service.update_pipe_report("r10", name="Same")
+    await service.update_pipe_report("10", name="Same")
 
     variables = service.execute_query.call_args[0][1]
-    assert variables["input"] == {"id": "r10", "name": "Same"}
+    assert variables["input"] == {"id": 10, "name": "Same"}
 
 
 @pytest.mark.unit
@@ -364,11 +364,11 @@ async def test_update_pipe_report_skips_none_values(mock_settings):
 async def test_delete_pipe_report_success(mock_settings):
     payload = {"deletePipeReport": {"success": True}}
     service = _make_service(mock_settings, payload)
-    result = await service.delete_pipe_report("r10")
+    result = await service.delete_pipe_report("10")
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_PIPE_REPORT_MUTATION
-    assert variables["input"] == {"id": "r10"}
+    assert variables["input"] == {"id": 10}
     assert result["deletePipeReport"]["success"] is True
 
 
@@ -377,21 +377,21 @@ async def test_delete_pipe_report_success(mock_settings):
 async def test_create_organization_report_success(mock_settings):
     payload = {
         "createOrganizationReport": {
-            "organizationReport": {"id": "or5", "name": "Cross-Pipe"}
+            "organizationReport": {"id": "5", "name": "Cross-Pipe"}
         }
     }
     service = _make_service(mock_settings, payload)
     result = await service.create_organization_report(
-        "org-1", "Cross-Pipe", ["p1", "p2"], fields=["title"]
+        "100", "Cross-Pipe", ["200", "300"], fields=["title"]
     )
 
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_ORGANIZATION_REPORT_MUTATION
-    assert variables["input"]["organizationId"] == "org-1"
+    assert variables["input"]["organizationId"] == 100
     assert variables["input"]["name"] == "Cross-Pipe"
-    assert variables["input"]["pipeIds"] == ["p1", "p2"]
+    assert variables["input"]["pipeIds"] == [200, 300]
     assert variables["input"]["fields"] == ["title"]
-    assert result["createOrganizationReport"]["organizationReport"]["id"] == "or5"
+    assert result["createOrganizationReport"]["organizationReport"]["id"] == "5"
 
 
 @pytest.mark.unit
@@ -399,19 +399,19 @@ async def test_create_organization_report_success(mock_settings):
 async def test_update_organization_report_success(mock_settings):
     payload = {
         "updateOrganizationReport": {
-            "organizationReport": {"id": "or5", "name": "Updated Org"}
+            "organizationReport": {"id": "5", "name": "Updated Org"}
         }
     }
     service = _make_service(mock_settings, payload)
     result = await service.update_organization_report(
-        "or5", name="Updated Org", pipe_ids=["p1", "p3"]
+        "5", name="Updated Org", pipe_ids=["200", "400"]
     )
 
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_ORGANIZATION_REPORT_MUTATION
-    assert variables["input"]["id"] == "or5"
+    assert variables["input"]["id"] == 5
     assert variables["input"]["name"] == "Updated Org"
-    assert variables["input"]["pipeIds"] == ["p1", "p3"]
+    assert variables["input"]["pipeIds"] == [200, 400]
     assert (
         result["updateOrganizationReport"]["organizationReport"]["name"]
         == "Updated Org"
@@ -423,11 +423,11 @@ async def test_update_organization_report_success(mock_settings):
 async def test_delete_organization_report_success(mock_settings):
     payload = {"deleteOrganizationReport": {"success": True}}
     service = _make_service(mock_settings, payload)
-    result = await service.delete_organization_report("or5")
+    result = await service.delete_organization_report("5")
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_ORGANIZATION_REPORT_MUTATION
-    assert variables["input"] == {"id": "or5"}
+    assert variables["input"] == {"id": 5}
     assert result["deleteOrganizationReport"]["success"] is True
 
 
@@ -438,11 +438,11 @@ async def test_export_pipe_report_success(mock_settings):
         "exportPipeReport": {"pipeReportExport": {"id": "exp1", "state": "processing"}}
     }
     service = _make_service(mock_settings, payload)
-    result = await service.export_pipe_report("pipe-1", "rep-1")
+    result = await service.export_pipe_report("100", "200")
 
     query, variables = service.execute_query.call_args[0]
     assert query is EXPORT_PIPE_REPORT_MUTATION
-    assert variables["input"] == {"pipeId": "pipe-1", "pipeReportId": "rep-1"}
+    assert variables["input"] == {"pipeId": 100, "pipeReportId": 200}
     assert result["exportPipeReport"]["pipeReportExport"]["state"] == "processing"
 
 
@@ -454,7 +454,7 @@ async def test_export_pipe_report_transport_error(mock_settings):
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
     with pytest.raises(TransportQueryError):
-        await service.export_pipe_report("pipe-1", "rep-1")
+        await service.export_pipe_report("100", "200")
 
 
 @pytest.mark.unit
@@ -515,4 +515,4 @@ async def test_update_pipe_report_transport_error(mock_settings):
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
     )
     with pytest.raises(TransportQueryError):
-        await service.update_pipe_report("rep-1", name="N")
+        await service.update_pipe_report("10", name="N")

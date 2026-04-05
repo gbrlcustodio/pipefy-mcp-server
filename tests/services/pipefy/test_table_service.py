@@ -49,12 +49,12 @@ async def test_get_table_sends_id_and_returns_payload(mock_settings):
         mock_settings,
         {"table": {"id": "t1", "name": "Refs", "table_fields": []}},
     )
-    result = await service.get_table("t1")
+    result = await service.get_table("101")
 
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is GET_TABLE_QUERY
-    assert variables == {"id": "t1"}
+    assert variables == {"id": 101}
     assert result["table"]["name"] == "Refs"
 
 
@@ -65,11 +65,11 @@ async def test_get_tables_sends_ids_list(mock_settings):
         mock_settings,
         {"tables": [{"id": "a"}, {"id": "b"}]},
     )
-    result = await service.get_tables(["a", "b"])
+    result = await service.get_tables(["101", "102"])
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_TABLES_QUERY
-    assert variables == {"ids": ["a", "b"]}
+    assert variables == {"ids": [101, 102]}
     assert len(result["tables"]) == 2
 
 
@@ -98,10 +98,10 @@ async def test_get_table_records_default_first_and_pagination_passthrough(
 @pytest.mark.asyncio
 async def test_get_table_records_includes_after_when_provided(mock_settings):
     service = _make_service(mock_settings, {"table_records": {"edges": []}})
-    await service.get_table_records("tbl", first=10, after="c1")
+    await service.get_table_records("201", first=10, after="c1")
 
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"tableId": "tbl", "first": 10, "after": "c1"}
+    assert variables == {"tableId": 201, "first": 10, "after": "c1"}
 
 
 @pytest.mark.unit
@@ -195,7 +195,7 @@ async def test_update_table_merges_id_and_attrs(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_TABLE_MUTATION
-    assert variables == {"input": {"id": "1", "name": "X"}}
+    assert variables == {"input": {"id": 1, "name": "X"}}
 
 
 @pytest.mark.unit
@@ -269,7 +269,7 @@ async def test_update_table_record_raises_when_no_supported_attributes(
 ):
     service = _make_service(mock_settings, {"updateTableRecord": {}})
     with pytest.raises(ValueError, match="Invalid 'fields'"):
-        await service.update_table_record("r1", {"unknown": "x"})
+        await service.update_table_record("100", {"unknown": "x"})
 
     service.execute_query.assert_not_called()
 
@@ -282,14 +282,14 @@ async def test_update_table_record_maps_status_id(mock_settings):
         {"updateTableRecord": {"table_record": {"id": "1"}}},
     )
     await service.update_table_record(
-        "r9",
+        "901",
         {"title": "Hi", "status_id": "st1"},
     )
 
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_TABLE_RECORD_MUTATION
     assert variables == {
-        "input": {"id": "r9", "title": "Hi", "statusId": "st1"},
+        "input": {"id": 901, "title": "Hi", "statusId": "st1"},
     }
 
 
@@ -308,11 +308,11 @@ async def test_update_table_record_raises_transport_query_error(mock_settings):
 @pytest.mark.asyncio
 async def test_delete_table_record_sends_id(mock_settings):
     service = _make_service(mock_settings, {"deleteTableRecord": {"success": True}})
-    await service.delete_table_record("rec")
+    await service.delete_table_record("301")
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_TABLE_RECORD_MUTATION
-    assert variables == {"input": {"id": "rec"}}
+    assert variables == {"input": {"id": 301}}
 
 
 @pytest.mark.unit
@@ -333,13 +333,13 @@ async def test_set_table_record_field_value_wraps_scalar(mock_settings):
         mock_settings,
         {"setTableRecordFieldValue": {"table_record": {"id": "1"}}},
     )
-    await service.set_table_record_field_value("r1", "f1", "text")
+    await service.set_table_record_field_value("401", "f1", "text")
 
     query, variables = service.execute_query.call_args[0]
     assert query is SET_TABLE_RECORD_FIELD_VALUE_MUTATION
     assert variables == {
         "input": {
-            "table_record_id": "r1",
+            "table_record_id": 401,
             "field_id": "f1",
             "value": ["text"],
         },
@@ -371,7 +371,7 @@ async def test_create_table_field_sends_input(mock_settings):
         },
     )
     result = await service.create_table_field(
-        "tbl1",
+        "501",
         "Code",
         "short_text",
         required=True,
@@ -381,7 +381,7 @@ async def test_create_table_field_sends_input(mock_settings):
     assert query is CREATE_TABLE_FIELD_MUTATION
     assert variables == {
         "input": {
-            "table_id": "tbl1",
+            "table_id": 501,
             "label": "Code",
             "type": "short_text",
             "required": True,

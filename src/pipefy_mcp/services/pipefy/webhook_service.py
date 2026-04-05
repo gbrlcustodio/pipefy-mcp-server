@@ -60,7 +60,7 @@ class WebhookService(BasePipefyClient):
             filter_by_name: Optional case-insensitive partial match on template name.
             first: Max templates to return (default 50).
         """
-        variables: dict[str, Any] = {"repoId": repo_id, "first": first}
+        variables: dict[str, Any] = {"repoId": int(repo_id), "first": first}
         if filter_by_name is not None and filter_by_name.strip():
             variables["filterByName"] = filter_by_name.strip()
         return await self.execute_query(GET_EMAIL_TEMPLATES_QUERY, variables)
@@ -226,7 +226,7 @@ class WebhookService(BasePipefyClient):
         """
         _require_https(url, "url")
         input_obj: dict[str, Any] = {
-            "pipe_id": pipe_id,
+            "pipe_id": int(pipe_id),
             "url": url,
             "actions": actions,
             "name": attrs.get("name", _DEFAULT_WEBHOOK_NAME),
@@ -266,7 +266,7 @@ class WebhookService(BasePipefyClient):
         """
         raw = await self.execute_query(
             GET_CARD_INBOX_EMAILS_QUERY,
-            {"card_id": card_id},
+            {"card_id": int(card_id)},
         )
         card_data = raw.get("card") or {}
         emails = card_data.get("inbox_emails") or []

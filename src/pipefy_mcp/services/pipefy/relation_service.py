@@ -58,7 +58,7 @@ class RelationService(BasePipefyClient):
         """
         return await self.execute_query(
             GET_PIPE_RELATIONS_QUERY,
-            {"pipeId": pipe_id},
+            {"pipeId": int(pipe_id)},
         )
 
     async def get_table_relations(
@@ -71,7 +71,7 @@ class RelationService(BasePipefyClient):
         """
         return await self.execute_query(
             GET_TABLE_RELATIONS_QUERY,
-            {"ids": list(relation_ids)},
+            {"ids": [int(r) for r in relation_ids]},
         )
 
     async def create_pipe_relation(

@@ -49,11 +49,13 @@ class TableService(BasePipefyClient):
 
     async def get_table(self, table_id: str | int) -> dict[str, Any]:
         """Fetch one database table by ID (metadata and fields)."""
-        return await self.execute_query(GET_TABLE_QUERY, {"id": table_id})
+        return await self.execute_query(GET_TABLE_QUERY, {"id": int(table_id)})
 
     async def get_tables(self, table_ids: list[str | int]) -> dict[str, Any]:
         """Fetch multiple database tables by ID."""
-        return await self.execute_query(GET_TABLES_QUERY, {"ids": list(table_ids)})
+        return await self.execute_query(
+            GET_TABLES_QUERY, {"ids": [int(t) for t in table_ids]}
+        )
 
     async def get_table_records(
         self,
@@ -68,14 +70,14 @@ class TableService(BasePipefyClient):
             first: Page size (forwarded to the API; callers may cap, e.g. max 200).
             after: Opaque cursor from the previous page's `pageInfo.endCursor`.
         """
-        variables: dict[str, Any] = {"tableId": table_id, "first": first}
+        variables: dict[str, Any] = {"tableId": int(table_id), "first": first}
         if after is not None:
             variables["after"] = after
         return await self.execute_query(GET_TABLE_RECORDS_QUERY, variables)
 
     async def get_table_record(self, record_id: str | int) -> dict[str, Any]:
         """Fetch a single table record by ID."""
-        return await self.execute_query(GET_TABLE_RECORD_QUERY, {"id": record_id})
+        return await self.execute_query(GET_TABLE_RECORD_QUERY, {"id": int(record_id)})
 
     async def find_records(
         self,
@@ -120,7 +122,7 @@ class TableService(BasePipefyClient):
 
     async def update_table(self, table_id: str | int, **attrs: Any) -> dict[str, Any]:
         """Update a database table by ID. Pass only `UpdateTableInput` fields (omit or None to skip)."""
-        payload: dict[str, Any] = {"id": table_id}
+        payload: dict[str, Any] = {"id": int(table_id)}
         for key, value in attrs.items():
             if value is not None:
                 payload[key] = value
@@ -130,7 +132,7 @@ class TableService(BasePipefyClient):
         """Delete a database table by ID (permanent). Caller must enforce preview/confirm UX."""
         return await self.execute_query(
             DELETE_TABLE_MUTATION,
-            {"input": {"id": table_id}},
+            {"input": {"id": int(table_id)}},
         )
 
     async def create_table_record(
@@ -147,7 +149,7 @@ class TableService(BasePipefyClient):
             **attrs: Other `CreateTableRecordInput` keys (e.g. title, assignee_ids), when not None.
         """
         input_obj: dict[str, Any] = {
-            "table_id": table_id,
+            "table_id": int(table_id),
             "fields_attributes": convert_fields_to_array(fields),
         }
         for key, value in attrs.items():
@@ -174,7 +176,7 @@ class TableService(BasePipefyClient):
             for key, value in fields.items()
         ):
             raise ValueError(UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE)
-        payload: dict[str, Any] = {"id": record_id}
+        payload: dict[str, Any] = {"id": int(record_id)}
         for key, value in fields.items():
             if value is None:
                 continue
@@ -191,7 +193,7 @@ class TableService(BasePipefyClient):
         """Delete a table record by ID (permanent)."""
         return await self.execute_query(
             DELETE_TABLE_RECORD_MUTATION,
-            {"input": {"id": record_id}},
+            {"input": {"id": int(record_id)}},
         )
 
     async def set_table_record_field_value(
@@ -206,7 +208,7 @@ class TableService(BasePipefyClient):
             SET_TABLE_RECORD_FIELD_VALUE_MUTATION,
             {
                 "input": {
-                    "table_record_id": record_id,
+                    "table_record_id": int(record_id),
                     "field_id": field_id,
                     "value": api_value,
                 }
@@ -229,7 +231,7 @@ class TableService(BasePipefyClient):
             **attrs: Other input fields (e.g. description, required, options), when not None.
         """
         input_obj: dict[str, Any] = {
-            "table_id": table_id,
+            "table_id": int(table_id),
             "label": label,
             "type": field_type,
         }
@@ -253,7 +255,7 @@ class TableService(BasePipefyClient):
         """
         payload: dict[str, Any] = {"id": field_id}
         if table_id is not None:
-            payload["table_id"] = table_id
+            payload["table_id"] = int(table_id)
         for key, value in attrs.items():
             if value is not None:
                 payload[key] = value

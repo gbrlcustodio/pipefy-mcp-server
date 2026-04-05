@@ -101,7 +101,7 @@ class ReportService(BasePipefyClient):
         """
         return await self.execute_query(
             GET_ORGANIZATION_REPORT_QUERY,
-            {"id": report_id},
+            {"id": int(report_id)},
         )
 
     async def get_organization_reports(
@@ -118,7 +118,10 @@ class ReportService(BasePipefyClient):
             first: Page size (default 30).
             after: Cursor for next page.
         """
-        variables: dict[str, Any] = {"organizationId": organization_id, "first": first}
+        variables: dict[str, Any] = {
+            "organizationId": int(organization_id),
+            "first": first,
+        }
         if after is not None:
             variables["after"] = after
         return await self.execute_query(GET_ORGANIZATION_REPORTS_QUERY, variables)

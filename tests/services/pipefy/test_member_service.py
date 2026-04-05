@@ -42,13 +42,13 @@ async def test_invite_members_success(mock_settings):
     }
     service = _make_service(mock_settings, payload)
     members = [{"email": "a@x.com", "role_name": "member"}]
-    result = await service.invite_members("pipe-1", members)
+    result = await service.invite_members("601", members)
 
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is INVITE_MEMBERS_MUTATION
     inp = variables["input"]
-    assert inp["pipe_id"] == "pipe-1"
+    assert inp["pipe_id"] == 601
     assert inp["emails"] == [{"email": "a@x.com", "role_name": "member"}]
     assert result == payload
 
@@ -62,7 +62,7 @@ async def test_invite_members_transport_error(mock_settings):
     )
     with pytest.raises(TransportQueryError):
         await service.invite_members(
-            "p1", [{"email": "x@y.com", "role_name": "member"}]
+            "602", [{"email": "x@y.com", "role_name": "member"}]
         )
 
 
@@ -161,13 +161,13 @@ async def test_set_role_success(mock_settings):
         }
     }
     service = _make_service(mock_settings, payload)
-    result = await service.set_role("pipe-1", "member-1", "admin")
+    result = await service.set_role("603", "member-1", "admin")
 
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is SET_ROLE_MUTATION
     inp = variables["input"]
-    assert inp["pipe_id"] == "pipe-1"
+    assert inp["pipe_id"] == 603
     assert inp["member"] == {"user_id": "member-1", "role_name": "admin"}
     assert result == payload
 
@@ -180,4 +180,4 @@ async def test_set_role_transport_error(mock_settings):
         side_effect=TransportQueryError("failed", errors=[{"message": "invalid"}])
     )
     with pytest.raises(TransportQueryError):
-        await service.set_role("p1", "m1", "member")
+        await service.set_role("604", "m1", "member")

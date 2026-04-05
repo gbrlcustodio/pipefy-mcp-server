@@ -51,12 +51,12 @@ async def test_get_automation_success(mock_settings):
         "event_repo": {"id": "p1", "name": "Pipe A"},
     }
     service = _make_service(mock_settings, {"automation": automation})
-    result = await service.get_automation("a1")
+    result = await service.get_automation("101")
 
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATION_QUERY
-    assert variables == {"id": "a1"}
+    assert variables == {"id": 101}
     assert result["id"] == "a1"
     assert result["name"] == "Notify assignee"
 
@@ -65,11 +65,11 @@ async def test_get_automation_success(mock_settings):
 @pytest.mark.asyncio
 async def test_get_automation_when_api_returns_null(mock_settings):
     service = _make_service(mock_settings, {"automation": None})
-    result = await service.get_automation("missing-id")
+    result = await service.get_automation("999")
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATION_QUERY
-    assert variables == {"id": "missing-id"}
+    assert variables == {"id": 999}
     assert result is None
 
 
@@ -81,7 +81,7 @@ async def test_get_automation_transport_error(mock_settings):
         side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
     )
     with pytest.raises(TransportQueryError):
-        await service.get_automation("missing")
+        await service.get_automation("998")
 
 
 @pytest.mark.unit
@@ -92,11 +92,11 @@ async def test_get_automations_success(mock_settings):
         {"id": "a2", "name": "Rule 2", "active": False},
     ]
     service = _make_service(mock_settings, {"automations": {"nodes": rows}})
-    result = await service.get_automations(organization_id="o1", pipe_id="p9")
+    result = await service.get_automations(organization_id="101", pipe_id="901")
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATIONS_FOR_ORG_AND_REPO_QUERY
-    assert variables == {"organizationId": "o1", "repoId": "p9"}
+    assert variables == {"organizationId": 101, "repoId": 901}
     assert isinstance(result, list)
     assert result == rows
 
@@ -112,15 +112,15 @@ async def test_get_automations_success_resolves_org_from_pipe(mock_settings):
             {"automations": {"nodes": rows}},
         ],
     )
-    result = await service.get_automations(pipe_id="p9")
+    result = await service.get_automations(pipe_id="901")
 
     assert service.execute_query.await_count == 2
     q1, v1 = service.execute_query.call_args_list[0][0]
     q2, v2 = service.execute_query.call_args_list[1][0]
     assert q1 is GET_PIPE_ORGANIZATION_ID_QUERY
-    assert v1 == {"id": "p9"}
+    assert v1 == {"id": 901}
     assert q2 is GET_AUTOMATIONS_FOR_ORG_AND_REPO_QUERY
-    assert v2 == {"organizationId": "300", "repoId": "p9"}
+    assert v2 == {"organizationId": 300, "repoId": 901}
     assert result == rows
 
 
@@ -129,11 +129,11 @@ async def test_get_automations_success_resolves_org_from_pipe(mock_settings):
 async def test_get_automations_organization_only_omits_repo_id(mock_settings):
     rows = [{"id": "a1", "name": "R", "active": True}]
     service = _make_service(mock_settings, {"automations": {"nodes": rows}})
-    result = await service.get_automations(organization_id="o1")
+    result = await service.get_automations(organization_id="201")
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATIONS_BY_ORG_QUERY
-    assert variables == {"organizationId": "o1"}
+    assert variables == {"organizationId": 201}
     assert result == rows
 
 
@@ -174,11 +174,11 @@ async def test_get_automation_actions_success(mock_settings):
         }
     ]
     service = _make_service(mock_settings, {"automationActions": actions})
-    result = await service.get_automation_actions("pipe-1")
+    result = await service.get_automation_actions("601")
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATION_ACTIONS_QUERY
-    assert variables == {"repoId": "pipe-1"}
+    assert variables == {"repoId": 601}
     assert isinstance(result, list)
     assert result[0]["id"] == "act1"
     assert result[0]["enabled"] is True
@@ -192,7 +192,7 @@ async def test_get_automation_actions_transport_error(mock_settings):
         side_effect=TransportQueryError("failed", errors=[{"message": "bad pipe"}])
     )
     with pytest.raises(TransportQueryError):
-        await service.get_automation_actions("x")
+        await service.get_automation_actions("999")
 
 
 @pytest.mark.unit

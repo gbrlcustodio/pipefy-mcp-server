@@ -49,7 +49,7 @@ class MemberService(BasePipefyClient):
         emails = [{"email": m["email"], "role_name": m["role_name"]} for m in members]
         return await self.execute_query(
             INVITE_MEMBERS_MUTATION,
-            {"input": {"pipe_id": pipe_id, "emails": emails}},
+            {"input": {"pipe_id": int(pipe_id), "emails": emails}},
         )
 
     async def remove_members_from_pipe(
@@ -125,7 +125,7 @@ class MemberService(BasePipefyClient):
             SET_ROLE_MUTATION,
             {
                 "input": {
-                    "pipe_id": pipe_id,
+                    "pipe_id": int(pipe_id),
                     "member": {"user_id": member_id, "role_name": role_name},
                 }
             },

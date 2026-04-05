@@ -115,8 +115,8 @@ async def _elicit_confirmation(
         if not result.data.model_dump().get("confirm"):
             return _build_cancel_payload()
 
-    except Exception as exc:  # noqa: BLE001
-        return {"success": False, "error": f"Failed to request confirmation: {exc!s}"}
+    except Exception:  # noqa: BLE001
+        return _build_preview_payload(resource_descriptor)
 
     return None
 

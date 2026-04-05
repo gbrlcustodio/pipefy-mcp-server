@@ -84,7 +84,7 @@ class TestWithElicitation:
         assert payload is not None
         assert payload["success"] is False
 
-    async def test_elicitation_raises_returns_error(self):
+    async def test_elicitation_raises_falls_back_to_preview(self):
         ctx = _make_ctx(
             can_elicit=True,
             elicit_side_effect=RuntimeError("elicit broke"),
@@ -94,7 +94,8 @@ class TestWithElicitation:
         )
         assert payload is not None
         assert payload["success"] is False
-        assert "Failed to request confirmation" in payload["error"]
+        assert payload["requires_confirmation"] is True
+        assert payload["resource"] == RESOURCE
 
     async def test_confirm_true_ignored_when_elicitation_available(self):
         """Even with confirm=True, elicitation takes precedence when available."""

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import ValidationError
@@ -22,6 +24,8 @@ from pipefy_mcp.tools.ai_tool_helpers import (
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
+
+VALIDATE_FETCH_TIMEOUT_SECONDS = 30
 
 
 class AiAgentTools:
@@ -122,6 +126,12 @@ class AiAgentTools:
                 f"instruction_len={len(instruction)}, behaviors_count={len(behaviors)}, "
                 f"data_source_ids={data_source_ids!r}"
             )
+            if not name or not name.strip():
+                return build_ai_tool_error("name must not be blank")
+            if not repo_uuid or not repo_uuid.strip():
+                return build_ai_tool_error("repo_uuid must not be blank")
+            if not instruction or not instruction.strip():
+                return build_ai_tool_error("instruction must not be blank")
             try:
                 validated = CreateAiAgentInput(
                     name=name,
@@ -136,7 +146,7 @@ class AiAgentTools:
             try:
                 create_result = await client.create_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
-                return error_payload_from_exception(exc)
+                return build_ai_tool_error(enrich_behavior_error(exc, behaviors))
 
             agent_uuid = create_result["agent_uuid"]
 
@@ -193,6 +203,12 @@ class AiAgentTools:
                 data_source_ids: Optional list of data source IDs.
             """
             ctx.debug(f"update_ai_agent: uuid={uuid}, behaviors_count={len(behaviors)}")
+            if not uuid or not uuid.strip():
+                return build_ai_tool_error("uuid must not be blank")
+            if not name or not name.strip():
+                return build_ai_tool_error("name must not be blank")
+            if not repo_uuid or not repo_uuid.strip():
+                return build_ai_tool_error("repo_uuid must not be blank")
             try:
                 validated = UpdateAiAgentInput(
                     uuid=uuid,
@@ -394,9 +410,16 @@ class AiAgentTools:
                     "message": "Behavior dicts failed structural validation (BehaviorInput).",
                 }
 
-            # Fetch pipe context
+            # Fetch pipe context (with timeout to avoid indefinite hangs)
             try:
-                pipe_data = await client.get_pipe(int(pid))
+                pipe_data = await asyncio.wait_for(
+                    client.get_pipe(int(pid)),
+                    timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                return build_ai_tool_error(
+                    f"Timed out fetching pipe {pid} after {VALIDATE_FETCH_TIMEOUT_SECONDS}s"
+                )
             except Exception as exc:  # noqa: BLE001
                 return build_ai_tool_error(f"Failed to fetch pipe {pid}: {exc}")
 
@@ -421,7 +444,10 @@ class AiAgentTools:
             tool_warnings: list[str] = []
             related_pipe_ids: set[str] | None
             try:
-                relations = await client.get_pipe_relations(pid)
+                relations = await asyncio.wait_for(
+                    client.get_pipe_relations(pid),
+                    timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
+                )
                 related_pipe_ids = set()
                 for rel in relations.get("children") or []:
                     child_id = rel.get("child", {}).get("id")
@@ -439,6 +465,55 @@ class AiAgentTools:
                     "were not verified against relations."
                 )
 
+            # Collect target pipe IDs from cross-pipe actions and fetch their fields.
+            # Skip when relations failed to load — without relation data, cross-pipe
+            # field checks produce unreliable results.
+            cross_pipe_field_ids: dict[str, set[str]] = {}
+            target_pipe_ids: set[str] = set()
+            if related_pipe_ids is not None:
+                for b in behaviors:
+                    ap = b.get("actionParams") or b.get("action_params") or {}
+                    abp = (
+                        ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
+                    )
+                    for a in (
+                        abp.get("actionsAttributes")
+                        or abp.get("actions_attributes")
+                        or []
+                    ):
+                        if not isinstance(a, dict):
+                            continue
+                        meta_pipe = str((a.get("metadata") or {}).get("pipeId", ""))
+                        if meta_pipe and meta_pipe != pid:
+                            target_pipe_ids.add(meta_pipe)
+
+            for target_pid in target_pipe_ids:
+                try:
+                    target_data = await asyncio.wait_for(
+                        client.get_pipe(int(target_pid)),
+                        timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
+                    )
+                    target_info = target_data.get("pipe", {})
+                    target_fields: set[str] = set()
+                    for phase in target_info.get("phases") or []:
+                        for field in phase.get("fields") or []:
+                            fid = field.get("id") or field.get("internal_id")
+                            if fid:
+                                target_fields.add(str(fid))
+                    for field in target_info.get("start_form_fields") or []:
+                        fid = field.get("id") or field.get("internal_id")
+                        if fid:
+                            target_fields.add(str(fid))
+                    cross_pipe_field_ids[target_pid] = target_fields
+                except Exception:  # noqa: BLE001
+                    ctx.debug(
+                        f"Could not fetch target pipe {target_pid}; skipping its field checks"
+                    )
+                    tool_warnings.append(
+                        f"Could not load fields for target pipe {target_pid}; "
+                        f"fieldIds targeting it were not verified."
+                    )
+
             unknown_action_types = "error" if strict_unknown_action_types else "warning"
             problems, helper_warnings = validate_behaviors_against_pipe(
                 behaviors,
@@ -446,6 +521,7 @@ class AiAgentTools:
                 pipe_field_ids=field_ids,
                 pipe_phase_ids=phase_ids,
                 related_pipe_ids=related_pipe_ids,
+                cross_pipe_field_ids=cross_pipe_field_ids or None,
                 unknown_action_types=unknown_action_types,
             )
             warnings = [*tool_warnings, *helper_warnings]

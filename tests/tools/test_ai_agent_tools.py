@@ -274,6 +274,50 @@ class TestCreateAiAgent:
         assert payload["success"] is False
         assert "error" in payload
 
+    async def test_blank_repo_uuid_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "My Agent",
+                    "repo_uuid": "   ",
+                    "instruction": "Purpose",
+                    "behaviors": [minimal_behavior_dict(name="B1")],
+                },
+            )
+        assert result.isError is False
+        mock_pipefy_client.create_ai_agent.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "repo_uuid" in payload["error"]
+
+    async def test_blank_name_returns_error_before_api_call(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Purpose",
+                    "behaviors": [minimal_behavior_dict(name="B1")],
+                },
+            )
+        assert result.isError is False
+        mock_pipefy_client.create_ai_agent.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "name" in payload["error"]
+
 
 @pytest.mark.anyio
 class TestUpdateAiAgent:
@@ -355,6 +399,29 @@ class TestUpdateAiAgent:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
+
+    async def test_blank_uuid_returns_error_before_api_call(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_ai_agent",
+                {
+                    "uuid": "  ",
+                    "name": "Agent",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Do things",
+                    "behaviors": [minimal_behavior_dict(name="B1")],
+                },
+            )
+        assert result.isError is False
+        mock_pipefy_client.update_ai_agent.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "uuid" in payload["error"]
 
     async def test_service_error_returns_error_payload(
         self,

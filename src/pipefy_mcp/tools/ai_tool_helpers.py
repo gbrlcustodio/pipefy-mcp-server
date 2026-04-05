@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Literal
+import re
+from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
 from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload
+from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 
 
 class CreateAiAutomationSuccessPayload(TypedDict):
@@ -171,3 +173,193 @@ def build_create_agent_partial_failure(
         error: Why the chained update failed.
     """
     return {"success": False, "agent_uuid": agent_uuid, "error": error}
+
+
+# --- Error enrichment for behavior-level failures ---
+
+# Patterns the Pipefy API returns that map to actionable advice.
+_ERROR_HINTS: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(r"RECORD_NOT_SAVED", re.IGNORECASE),
+        "Check that metadata is complete for each actionType "
+        "(e.g. update_card needs pipeId + fieldsAttributes; "
+        "move_card needs destinationPhaseId).",
+    ),
+    (
+        re.compile(r"must contain at least 1 action", re.IGNORECASE),
+        "Each behavior requires actionParams.aiBehaviorParams.actionsAttributes "
+        "with at least one action entry.",
+    ),
+]
+
+
+def _summarize_behaviors(behaviors: list[dict[str, Any]]) -> str:
+    """Build a compact one-line-per-behavior summary for error context.
+
+    Args:
+        behaviors: Raw behavior dicts (pre-validation, may use either key style).
+    """
+    lines: list[str] = []
+    for i, b in enumerate(behaviors):
+        name = b.get("name", "<unnamed>")
+        event = b.get("eventId") or b.get("event_id") or "?"
+        actions_desc: list[str] = []
+
+        ap = b.get("actionParams") or b.get("action_params") or {}
+        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
+        attrs = abp.get("actionsAttributes") or abp.get("actions_attributes") or []
+        for a in attrs:
+            if isinstance(a, dict):
+                actions_desc.append(a.get("actionType", "?"))
+
+        actions_str = ", ".join(actions_desc) if actions_desc else "none"
+        lines.append(f'  [{i}] "{name}" (event={event}, actions=[{actions_str}])')
+    return "\n".join(lines)
+
+
+# --- Behavior validation against pipe context ---
+
+# actionTypes that the Pipefy AI behavior system recognizes.
+KNOWN_AI_ACTION_TYPES = frozenset(
+    {"move_card", "update_card", "create_card", "create_connected_card"}
+)
+
+
+def validate_behaviors_against_pipe(
+    behaviors: list[dict[str, Any]],
+    *,
+    pipe_id: str = "",
+    pipe_field_ids: set[str],
+    pipe_phase_ids: set[str],
+    related_pipe_ids: set[str] | None,
+    unknown_action_types: Literal["error", "warning", "ignore"] = "error",
+) -> tuple[list[str], list[str]]:
+    """Check behaviors against resolved pipe context and return problems and warnings.
+
+    Pure function — no API calls. The caller is responsible for fetching
+    pipe fields, phases, and relations beforehand.
+
+    Args:
+        behaviors: Raw behavior dicts (pre-validation format).
+        pipe_id: Source pipe ID (used to decide whether fieldId checks apply).
+        pipe_field_ids: Set of valid field internal IDs for the source pipe.
+        pipe_phase_ids: Set of valid phase IDs (as strings) for the source pipe.
+        related_pipe_ids: Pipe IDs related to the source pipe for
+            ``create_connected_card`` validation; ``None`` skips that check
+            (avoids false positives when relations were not loaded). A set
+            (possibly empty) runs the relation check as before.
+        unknown_action_types: How to treat non-empty ``actionType`` values not in
+            ``KNOWN_AI_ACTION_TYPES``: ``error`` adds to problems, ``warning``
+            adds the same message to warnings, ``ignore`` skips.
+
+    Returns:
+        Tuple ``(problems, warnings)`` of human-readable strings. Empty lists
+        mean no issues at that severity.
+    """
+    problems: list[str] = []
+    warnings: list[str] = []
+
+    for i, b in enumerate(behaviors):
+        name = b.get("name", f"<behavior {i}>")
+        prefix = f'Behavior [{i}] "{name}"'
+
+        ap = b.get("actionParams") or b.get("action_params") or {}
+        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
+        attrs = abp.get("actionsAttributes") or abp.get("actions_attributes") or []
+
+        # Check eventParams phase references
+        ep = b.get("eventParams") or b.get("event_params") or {}
+        to_phase = ep.get("to_phase_id") or ep.get("toPhaseId")
+        if to_phase and str(to_phase) not in pipe_phase_ids:
+            problems.append(
+                f'{prefix}: eventParams.to_phase_id / toPhaseId "{to_phase}" '
+                f"not found in pipe phases."
+            )
+
+        for j, action in enumerate(attrs):
+            if not isinstance(action, dict):
+                continue
+            action_type = action.get("actionType", "")
+            metadata = action.get("metadata") or {}
+
+            if action_type and action_type not in KNOWN_AI_ACTION_TYPES:
+                msg = (
+                    f"{prefix}, action [{j}]: unknown actionType "
+                    f'"{action_type}". Known types: {sorted(KNOWN_AI_ACTION_TYPES)}.'
+                )
+                if unknown_action_types == "error":
+                    problems.append(msg)
+                elif unknown_action_types == "warning":
+                    warnings.append(msg)
+
+            # Check destinationPhaseId for move_card
+            if action_type == "move_card":
+                dest = metadata.get("destinationPhaseId", "")
+                if dest and str(dest) not in pipe_phase_ids:
+                    problems.append(
+                        f"{prefix}, action [{j}] (move_card): "
+                        f'destinationPhaseId "{dest}" not found in pipe phases.'
+                    )
+
+            # Check fieldsAttributes fieldId references — only when the action
+            # targets the same pipe (or no pipeId is set in metadata).
+            # Cross-pipe actions (create_connected_card, create_card on another
+            # pipe) reference fields from the *target* pipe, which we don't have.
+            action_pipe = str(metadata.get("pipeId", ""))
+            targets_source = not action_pipe or action_pipe == pipe_id
+            if targets_source:
+                fields_attrs = metadata.get("fieldsAttributes") or []
+                for k, fa in enumerate(fields_attrs):
+                    if not isinstance(fa, dict):
+                        continue
+                    fid = fa.get("fieldId", "")
+                    if fid and pipe_field_ids and fid not in pipe_field_ids:
+                        problems.append(
+                            f"{prefix}, action [{j}] ({action_type}): "
+                            f'fieldsAttributes[{k}].fieldId "{fid}" '
+                            f"not found in pipe fields."
+                        )
+
+            # Check create_connected_card relation (skipped when related_pipe_ids is None)
+            if action_type == "create_connected_card" and related_pipe_ids is not None:
+                target_pipe = metadata.get("pipeId", "")
+                if target_pipe and str(target_pipe) not in related_pipe_ids:
+                    problems.append(
+                        f"{prefix}, action [{j}] (create_connected_card): "
+                        f'pipeId "{target_pipe}" has no relation with the '
+                        f"source pipe. Create a pipe relation first "
+                        f"(get_pipe_relations / create_pipe_relation)."
+                    )
+
+    return problems, warnings
+
+
+def enrich_behavior_error(
+    exc: BaseException,
+    behaviors: list[dict[str, Any]],
+) -> str:
+    """Build an enriched error message with behavior context and actionable hints.
+
+    Extracts raw GraphQL messages, appends a behavior summary, and matches
+    known error patterns to actionable advice.
+
+    Args:
+        exc: The exception from the service call.
+        behaviors: The original behavior dicts sent by the caller (for context).
+    """
+    msgs = extract_error_strings(exc)
+    base = "; ".join(msgs) if msgs else str(exc)
+
+    hints: list[str] = []
+    for pattern, hint in _ERROR_HINTS:
+        if pattern.search(base):
+            hints.append(hint)
+
+    parts = [base]
+    if behaviors:
+        parts.append(
+            f"Behaviors sent ({len(behaviors)}):\n{_summarize_behaviors(behaviors)}"
+        )
+    if hints:
+        parts.append("Hints: " + " ".join(hints))
+    return "\n".join(parts)

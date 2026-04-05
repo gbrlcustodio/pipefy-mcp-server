@@ -17,6 +17,8 @@ from pipefy_mcp.tools.ai_tool_helpers import (
     build_get_agents_success,
     build_toggle_agent_status_success,
     build_update_agent_success,
+    enrich_behavior_error,
+    validate_behaviors_against_pipe,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
@@ -84,10 +86,26 @@ class AiAgentTools:
               - ``update_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [{"fieldId": "...", "inputMode": "fill_with_ai", "value": ""}]}``
               - ``create_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
               - ``create_connected_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
+                Requires a pipe relation between source and destination pipes
+                (verify with ``get_pipe_relations``).
 
             Optional ``eventParams`` per behavior (filters when the trigger fires):
               - ``field_updated`` event → ``{"triggerFieldIds": ["<field_id>"]}`` to fire only on specific fields.
               - ``card_moved`` event → ``{"to_phase_id": "<phase_id>"}`` to fire only when moving to a specific phase.
+
+            Behavior keys accept both ``snake_case`` (``event_id``, ``event_params``,
+            ``action_params``) and ``camelCase`` (``eventId``, ``eventParams``, ``actionParams``).
+            The canonical wire format is camelCase.
+
+            Important constraints:
+              - **All-or-nothing save**: the API replaces the entire behaviors list on every call.
+                Always send the complete set (1–5). Omitting a behavior deletes it.
+              - **``update_card`` vs ``update_card_field``**: use ``update_card``; the API does
+                not accept ``update_card_field`` as an actionType for AI behaviors.
+              - **``metadata: {}`` is never valid** for known action types — it causes
+                ``RECORD_NOT_SAVED``. Always include the required keys.
+              - The server injects ``referenceId`` UUIDs and ``%{action:<uuid>}`` placeholders
+                into each behavior's instruction automatically — do not set them manually.
 
             Args:
                 name: Agent display name.
@@ -133,11 +151,9 @@ class AiAgentTools:
             try:
                 await client.update_ai_agent(update_input)
             except Exception as exc:  # noqa: BLE001
-                msgs = extract_error_strings(exc)
-                text = "; ".join(msgs) if msgs else str(exc)
                 return build_create_agent_partial_failure(
                     agent_uuid=agent_uuid,
-                    error=text,
+                    error=enrich_behavior_error(exc, behaviors),
                 )
 
             msg = f"AI Agent created and configured successfully. UUID: {agent_uuid}"
@@ -155,11 +171,16 @@ class AiAgentTools:
             behaviors: list[dict],
             data_source_ids: list[str] | None = None,
         ) -> dict:
-            """Update an AI Agent — replaces the entire config, so always send the complete behaviors list.
+            """Update an AI Agent — replaces the entire config (all-or-nothing save).
 
+            Always send the **complete** behaviors list (1–5). Omitting a behavior deletes it.
             Each behavior must include ``actionParams.aiBehaviorParams.actionsAttributes`` with at least
             one action (same constraint and shape as ``create_ai_agent`` — see its docstring for the
-            full behavior dict example, discovery workflow, and known ``actionType`` values).
+            full behavior dict example, discovery workflow, known ``actionType`` values, and constraints).
+
+            To modify an existing agent: call ``get_ai_agent`` first, edit the returned config,
+            and send the full payload back. The server injects ``referenceId`` and ``%{action:<uuid>}``
+            placeholders automatically — do not set or preserve them from ``get_ai_agent``.
 
             Args:
                 uuid: UUID of the agent to update.
@@ -168,6 +189,7 @@ class AiAgentTools:
                 instruction: Agent-level purpose (Pipefy UI "Description"; API ``instruction``).
                 behaviors: 1–5 behavior dicts. Same shape as ``create_ai_agent``: each needs ``name``,
                     ``event_id``, and ``actionParams.aiBehaviorParams.actionsAttributes``.
+                    Accepts both ``snake_case`` and ``camelCase`` keys.
                 data_source_ids: Optional list of data source IDs.
             """
             ctx.debug(f"update_ai_agent: uuid={uuid}, behaviors_count={len(behaviors)}")
@@ -186,7 +208,7 @@ class AiAgentTools:
             try:
                 result = await client.update_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(str(exc))
+                return build_ai_tool_error(enrich_behavior_error(exc, behaviors))
 
             return build_update_agent_success(
                 agent_uuid=result["agent_uuid"],
@@ -220,7 +242,7 @@ class AiAgentTools:
                     agent_uuid=agent_uuid, active=active
                 )
             except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(str(exc))
+                return error_payload_from_exception(exc)
 
             return build_toggle_agent_status_success(message=result["message"])
 
@@ -228,7 +250,17 @@ class AiAgentTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_ai_agent(ctx: Context, uuid: str) -> dict:
-            """Get an AI Agent by UUID. Use get_pipe to find the pipe's uuid field, then get_ai_agents to list agents.
+            """Get an AI Agent by UUID with full behavior configuration.
+
+            Returns the complete agent config including, per behavior: ``eventParams``
+            (trigger filters like ``to_phase_id``, ``triggerFieldIds``),
+            ``actionParams.aiBehaviorParams`` with ``instruction``, ``actionsAttributes``
+            (each with ``actionType``, ``metadata``, ``referenceId``), ``referencedFieldIds``,
+            and ``dataSourceIds``.
+
+            The response is complete enough to re-send via ``update_ai_agent`` (clone/modify
+            workflow). Use ``get_pipe`` to find the pipe's ``uuid`` field, then ``get_ai_agents``
+            to list agents and obtain UUIDs.
 
             Args:
                 uuid: Agent UUID.
@@ -304,3 +336,131 @@ class AiAgentTools:
             return build_delete_agent_success(
                 message=f"AI Agent deleted successfully. UUID: {agent_uuid}",
             )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+        )
+        async def validate_ai_agent_behaviors(
+            ctx: Context,
+            pipe_id: str | int,
+            behaviors: list[dict],
+            strict_unknown_action_types: bool = True,
+        ) -> dict:
+            """Dry-run validation of AI Agent behaviors against a pipe's fields, phases, and relations.
+
+            Call **before** ``create_ai_agent`` / ``update_ai_agent`` to catch problems early
+            (invalid fieldIds, missing phase IDs, absent pipe relations for ``create_connected_card``).
+
+            Runs Pydantic model validation (same as the mutation tools) plus cross-references
+            against live pipe data. Does not persist anything.
+
+            Response fields:
+              - ``success``: the tool finished without an unexpected failure (same idea as other
+                read tools); ``False`` only when returning a generic tool error (e.g. blank
+                ``pipe_id``, or pipe fetch failed).
+              - ``valid``: ``True`` only when ``problems`` is empty (no blocking issues).
+              - ``warnings``: non-blocking notices (e.g. unknown ``actionType`` when
+                ``strict_unknown_action_types`` is ``False``, or relations could not be loaded).
+              - ``problems``, ``message``: blocking issues and a short summary.
+
+            Example shapes::
+
+              {"success": true, "valid": true, "problems": [], "warnings": [], "message": "..."}
+              {"success": true, "valid": false, "problems": ["..."], "warnings": [], "message": "..."}
+              {"success": true, "valid": true, "problems": [], "warnings": ["..."], "message": "..."}
+
+            Args:
+                pipe_id: Numeric pipe ID (used to fetch fields, phases, and relations).
+                behaviors: 1–5 behavior dicts (same shape as ``create_ai_agent``).
+                strict_unknown_action_types: When ``True`` (default), unknown ``actionType`` values
+                    are reported in ``problems``. When ``False``, they appear in ``warnings`` only.
+            """
+            pid = str(pipe_id).strip()
+            if not pid:
+                return build_ai_tool_error("pipe_id must not be blank")
+
+            # Pydantic structural validation
+            try:
+                from pipefy_mcp.models.ai_agent import BehaviorInput
+
+                for b in behaviors:
+                    BehaviorInput.model_validate(b)
+            except ValidationError as exc:
+                return {
+                    "success": True,
+                    "valid": False,
+                    "problems": [str(exc)],
+                    "warnings": [],
+                    "message": "Behavior dicts failed structural validation (BehaviorInput).",
+                }
+
+            # Fetch pipe context
+            try:
+                pipe_data = await client.get_pipe(int(pid))
+            except Exception as exc:  # noqa: BLE001
+                return build_ai_tool_error(f"Failed to fetch pipe {pid}: {exc}")
+
+            pipe_info = pipe_data.get("pipe", {})
+            phases = pipe_info.get("phases") or []
+            phase_ids: set[str] = set()
+            field_ids: set[str] = set()
+            for phase in phases:
+                phase_ids.add(str(phase.get("id", "")))
+                for field in phase.get("fields") or []:
+                    fid = field.get("id") or field.get("internal_id")
+                    if fid:
+                        field_ids.add(str(fid))
+
+            # Also include start form fields
+            start_fields = pipe_info.get("start_form_fields") or []
+            for field in start_fields:
+                fid = field.get("id") or field.get("internal_id")
+                if fid:
+                    field_ids.add(str(fid))
+
+            tool_warnings: list[str] = []
+            related_pipe_ids: set[str] | None
+            try:
+                relations = await client.get_pipe_relations(pid)
+                related_pipe_ids = set()
+                for rel in relations.get("children") or []:
+                    child_id = rel.get("child", {}).get("id")
+                    if child_id:
+                        related_pipe_ids.add(str(child_id))
+                for rel in relations.get("parents") or []:
+                    parent_id = rel.get("parent", {}).get("id")
+                    if parent_id:
+                        related_pipe_ids.add(str(parent_id))
+            except Exception:  # noqa: BLE001
+                ctx.debug("Could not fetch pipe relations; skipping relation checks")
+                related_pipe_ids = None
+                tool_warnings.append(
+                    "Could not load pipe relations; create_connected_card pipeId targets "
+                    "were not verified against relations."
+                )
+
+            unknown_action_types = "error" if strict_unknown_action_types else "warning"
+            problems, helper_warnings = validate_behaviors_against_pipe(
+                behaviors,
+                pipe_id=pid,
+                pipe_field_ids=field_ids,
+                pipe_phase_ids=phase_ids,
+                related_pipe_ids=related_pipe_ids,
+                unknown_action_types=unknown_action_types,
+            )
+            warnings = [*tool_warnings, *helper_warnings]
+
+            if problems:
+                msg = f"Found {len(problems)} problem(s) in behaviors."
+            elif warnings:
+                msg = f"Validation passed with {len(warnings)} warning(s)."
+            else:
+                msg = "All behaviors passed validation."
+
+            return {
+                "success": True,
+                "valid": len(problems) == 0,
+                "problems": problems,
+                "warnings": warnings,
+                "message": msg,
+            }

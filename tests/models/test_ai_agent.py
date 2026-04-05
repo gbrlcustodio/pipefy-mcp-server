@@ -466,5 +466,93 @@ def test_metadata_passes_through_unknown_action_type():
 @pytest.mark.unit
 def test_metadata_allows_empty_dict_for_unknown_action_type():
     payload = behavior_with_action("send_email", {})
+    BehaviorInput.model_validate(payload)
+
+
+# --- snake_case / camelCase normalization ---
+
+
+@pytest.mark.unit
+def test_behavior_input_accepts_snake_case_keys():
+    payload = {
+        "name": "Snake Behavior",
+        "event_id": "card_created",
+        "action_params": {
+            "aiBehaviorParams": {
+                "instruction": "Test instruction.",
+                "actionsAttributes": [
+                    {
+                        "name": "Update card fields",
+                        "actionType": "update_card",
+                        "metadata": {
+                            "pipeId": "123",
+                            "fieldsAttributes": [
+                                {
+                                    "fieldId": "1",
+                                    "inputMode": "fill_with_ai",
+                                    "value": "",
+                                },
+                            ],
+                        },
+                    },
+                ],
+            }
+        },
+    }
     inp = BehaviorInput.model_validate(payload)
+    assert inp.event_id == "card_created"
+    assert inp.action_params is not None
+
+
+@pytest.mark.unit
+def test_behavior_input_accepts_camel_case_keys():
+    payload = {
+        "name": "Camel Behavior",
+        "eventId": "card_moved",
+        "actionParams": {
+            "aiBehaviorParams": {
+                "instruction": "Test instruction.",
+                "actionsAttributes": [
+                    {
+                        "name": "Move",
+                        "actionType": "move_card",
+                        "metadata": {"destinationPhaseId": "999"},
+                    },
+                ],
+            }
+        },
+    }
+    inp = BehaviorInput.model_validate(payload)
+    assert inp.event_id == "card_moved"
+
+
+@pytest.mark.unit
+def test_behavior_input_snake_case_dumps_to_camel_case():
+    payload = {
+        "name": "Mixed",
+        "event_id": "field_updated",
+        "event_params": {"triggerFieldIds": ["1"]},
+        "action_params": {
+            "aiBehaviorParams": {
+                "instruction": "Go.",
+                "actionsAttributes": [
+                    {
+                        "name": "Move",
+                        "actionType": "move_card",
+                        "metadata": {"destinationPhaseId": "5"},
+                    },
+                ],
+            }
+        },
+    }
+    inp = BehaviorInput.model_validate(payload)
+    dumped = inp.model_dump(by_alias=True, exclude_none=True)
+    assert "eventId" in dumped
+    assert "event_id" not in dumped
+    assert "eventParams" in dumped
+    assert "event_params" not in dumped
+    assert "actionParams" in dumped
+    assert "action_params" not in dumped
+    assert "actionId" in dumped
+    assert "action_id" not in dumped
     assert inp.action_params is not None

@@ -248,7 +248,7 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     pipe_config_service.update_phase_field.assert_awaited_once_with(12, label="L")
 
     assert await client.delete_phase_field(13) == {"ok": "delete_phase_field"}
-    pipe_config_service.delete_phase_field.assert_awaited_once_with(13)
+    pipe_config_service.delete_phase_field.assert_awaited_once_with(13, pipe_uuid=None)
 
     assert await client.create_label(14, "Bug", "red") == {"ok": "create_label"}
     pipe_config_service.create_label.assert_awaited_once_with(14, "Bug", "red")

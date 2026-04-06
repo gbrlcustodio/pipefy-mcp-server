@@ -25,7 +25,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
 from pipefy_mcp.tools.pipe_config_validators import valid_phase_field_id
 
 _CREATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"phase_id", "label", "type"})
-_UPDATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"id"})
+_UPDATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"id", "uuid"})
 _UPDATE_LABEL_EXTRA_RESERVED = frozenset({"id"})
 
 
@@ -444,27 +444,28 @@ class PipeConfigTools:
             phase_id: int,
             label: str,
             field_type: str,
+            options: list[str] | None = None,
+            description: str | None = None,
+            required: bool | None = None,
             extra_input: dict[str, Any] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Create a custom field on a phase.
 
             ``field_type`` is passed through to Pipefy (use schema introspection on
-            ``CreatePhaseFieldInput`` to list valid types). Optional keys in
-            ``extra_input`` are merged into the mutation input (e.g. description,
-            required, options).
+            ``CreatePhaseFieldInput`` to list valid types).
 
-            **Select / radio / checklist fields:** pass ``options`` inside
-            ``extra_input`` (e.g. ``extra_input={"options": ["Alta", "Média",
-            "Baixa"]}``). If the API rejects options on creation, create the field
-            first and then call ``update_phase_field`` with the ``options`` list.
+            The response includes ``internal_id`` — use that numeric ID (not the slug
+            ``id``) for subsequent ``update_phase_field`` or ``delete_phase_field`` calls.
 
             Args:
                 phase_id: Phase that will receive the field.
                 label: Field label shown in the UI.
                 field_type: Pipefy field type string (API input field ``type``).
-                extra_input: Additional ``CreatePhaseFieldInput`` fields, if any
-                    (e.g. description, required, options).
+                options: Option values for select/radio/checklist fields (e.g. ["Alta", "Média", "Baixa"]).
+                description: Optional field description.
+                required: Whether the field is required.
+                extra_input: Additional ``CreatePhaseFieldInput`` fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not isinstance(phase_id, int) or phase_id <= 0:
@@ -484,6 +485,12 @@ class PipeConfigTools:
                 for k, v in (extra_input or {}).items()
                 if k not in _CREATE_PHASE_FIELD_EXTRA_RESERVED
             }
+            if options is not None:
+                merged["options"] = options
+            if description is not None:
+                merged["description"] = description
+            if required is not None:
+                merged["required"] = required
             try:
                 raw = await client.create_phase_field(
                     phase_id,
@@ -507,23 +514,30 @@ class PipeConfigTools:
         )
         async def update_phase_field(
             field_id: str | int,
-            label: str | None = None,
+            label: str,
             description: str | None = None,
             required: bool | None = None,
             options: list[Any] | dict[str, Any] | None = None,
+            uuid: str | None = None,
             extra_input: dict[str, Any] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Update a phase field.
 
-            Pass only fields to change. Use introspection on `UpdatePhaseFieldInput` for the full list.
+            Pass only fields to change (besides ``label`` which is always required by the API).
+
+            ``field_id`` is the field slug (e.g. ``"prioridade"``) returned by
+            ``create_phase_field`` or ``get_phase_fields``. When the same slug exists on
+            multiple phases, pass ``uuid`` to disambiguate (available from
+            ``create_phase_field`` and ``get_phase_fields``).
 
             Args:
-                field_id: Phase field ID (slug string from create/get_phase_fields, or positive integer).
-                label: New label, if changing.
+                field_id: Field slug (from create_phase_field or get_phase_fields).
+                label: Field label (required by the Pipefy API even if unchanged — pass the current value).
                 description: New description, if changing.
                 required: Whether the field is required, if changing.
-                options: Field options structure (API-specific), if changing.
+                options: Field options list (e.g. ["Alta", "Média", "Baixa"] for select fields).
+                uuid: Field UUID for disambiguation when the slug exists on multiple phases.
                 extra_input: Additional UpdatePhaseFieldInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -534,23 +548,27 @@ class PipeConfigTools:
                         "or a positive integer."
                     ),
                 )
+            if not isinstance(label, str) or not label.strip():
+                return build_pipe_tool_error_payload(
+                    message=(
+                        "Invalid 'label': the Pipefy API requires label on every update "
+                        "(pass the current label if unchanged)."
+                    ),
+                )
             update_attrs: dict[str, Any] = {
                 k: v
                 for k, v in (extra_input or {}).items()
                 if k not in _UPDATE_PHASE_FIELD_EXTRA_RESERVED
             }
-            if label is not None:
-                update_attrs["label"] = label
+            update_attrs["label"] = label
             if description is not None:
                 update_attrs["description"] = description
             if required is not None:
                 update_attrs["required"] = required
             if options is not None:
                 update_attrs["options"] = options
-            if not update_attrs:
-                return build_pipe_tool_error_payload(
-                    message="Provide at least one attribute to update.",
-                )
+            if uuid is not None:
+                update_attrs["uuid"] = uuid
             fid = field_id.strip() if isinstance(field_id, str) else field_id
             try:
                 raw = await client.update_phase_field(fid, **update_attrs)
@@ -573,6 +591,7 @@ class PipeConfigTools:
             ctx: Context[ServerSession, None],
             field_id: str | int,
             confirm: bool = False,
+            pipe_uuid: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete a phase field permanently.
@@ -581,9 +600,14 @@ class PipeConfigTools:
             ``confirm=True`` after user approval. When the MCP client supports
             elicitation, the user is prompted interactively instead.
 
+            ``field_id`` is the field slug (e.g. ``"prioridade"``) or uuid.
+            When the slug is shared across phases, pass ``pipe_uuid`` to
+            disambiguate (available from ``get_pipe``).
+
             Args:
-                field_id: Phase field ID to delete (slug string or positive integer).
+                field_id: Field slug or uuid (from create_phase_field or get_phase_fields).
                 confirm: Set to True to execute the deletion (step 2).
+                pipe_uuid: Pipe UUID for disambiguation when the slug is not unique across phases.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             if not valid_phase_field_id(field_id):
@@ -604,7 +628,7 @@ class PipeConfigTools:
                 return guard
 
             try:
-                raw = await client.delete_phase_field(fid)
+                raw = await client.delete_phase_field(fid, pipe_uuid=pipe_uuid)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Delete phase field failed.", debug=debug

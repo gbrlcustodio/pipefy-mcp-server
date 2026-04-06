@@ -63,11 +63,17 @@ class AutomationTools:
         async def get_automation(
             ctx: Context, automation_id: str | int
         ) -> dict[str, Any]:
-            """Load one automation rule by ID (name, active flag, pipe, trigger, actions).
+            """Load one automation rule by ID, including trigger and action payloads.
 
-            Use this before ``update_automation`` to inspect the current configuration.
-            For new rules, discover trigger and action IDs via ``get_automation_events`` and
-            ``get_automation_actions`` on the target pipe, then call ``create_automation``.
+            Returns ``event_params`` and ``action_params`` (e.g. ``aiParams`` with
+            ``value`` / ``fieldIds`` / ``skillsIds``) for inspection, debugging, and parity
+            with ``simulate_automation`` / ``create_automation`` inputs. Use this before
+            ``update_automation`` to inspect the stored configuration; when cloning a rule,
+            copy these objects into the matching optional JSON args on create/update or
+            simulation.
+
+            For new rules, discover ``event_id`` / ``action_id`` via ``get_automation_events``
+            and ``get_automation_actions`` on the target pipe, then call ``create_automation``.
 
             Args:
                 automation_id: Automation rule ID.

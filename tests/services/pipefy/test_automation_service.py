@@ -51,6 +51,20 @@ async def test_get_automation_success(mock_settings):
         "disabledReason": None,
         "created_at": "2025-01-01",
         "event_repo": {"id": "p1", "name": "Pipe A"},
+        "event_params": {
+            "to_phase_id": "ph_dest",
+            "triggerFieldIds": ["f1", "f2"],
+            "phase": {"id": "ph1", "name": "Doing"},
+        },
+        "action_params": {
+            "aiParams": {
+                "value": "Summarize card",
+                "fieldIds": ["10"],
+                "skillsIds": ["20"],
+            },
+            "email_template_id": "tmpl-1",
+            "to_phase_id": "ph2",
+        },
     }
     service = _make_service(mock_settings, {"automation": automation})
     result = await service.get_automation("101")
@@ -61,6 +75,10 @@ async def test_get_automation_success(mock_settings):
     assert variables == {"id": 101}
     assert result["id"] == "a1"
     assert result["name"] == "Notify assignee"
+    assert result["event_params"]["to_phase_id"] == "ph_dest"
+    assert result["event_params"]["triggerFieldIds"] == ["f1", "f2"]
+    assert result["action_params"]["aiParams"]["value"] == "Summarize card"
+    assert result["action_params"]["aiParams"]["fieldIds"] == ["10"]
 
 
 @pytest.mark.unit

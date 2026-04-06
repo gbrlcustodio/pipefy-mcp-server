@@ -20,6 +20,109 @@ GET_AUTOMATION_QUERY = gql(
                 id
                 name
             }
+            event_params {
+                fromPhaseId
+                inPhaseId
+                kindOfSla
+                to_phase_id
+                triggerAutomationId
+                triggerFieldIds
+                phase {
+                    id
+                    name
+                }
+            }
+            action_params {
+                aiParams {
+                    value
+                    fieldIds
+                    skillsIds
+                }
+                aiBehaviorParams {
+                    instruction
+                    providerId
+                    uuid
+                }
+                authenticationAddTo
+                authenticationKey
+                authenticationType
+                body
+                card_id
+                email_template_id
+                field_map {
+                    fieldId
+                    inputMode
+                    value
+                }
+                fields_map_order
+                hasAuthenticationValue
+                headers
+                httpMethod
+                oauth2ClientData {
+                    clientId
+                    grantType
+                    name
+                    ownerId
+                    ownerType
+                    scopes
+                    tokenUrl
+                    uuid
+                }
+                phase {
+                    id
+                    name
+                }
+                slaParams {
+                    timezone
+                    holidays {
+                        date
+                        description
+                        recurrence
+                    }
+                    monday {
+                        enabled
+                        endHour
+                        startHour
+                    }
+                    tuesday {
+                        enabled
+                        endHour
+                        startHour
+                    }
+                    wednesday {
+                        enabled
+                        endHour
+                        startHour
+                    }
+                    thursday {
+                        enabled
+                        endHour
+                        startHour
+                    }
+                    friday {
+                        enabled
+                        endHour
+                        startHour
+                    }
+                    saturday {
+                        enabled
+                        endHour
+                        startHour
+                    }
+                    sunday {
+                        enabled
+                        endHour
+                        startHour
+                    }
+                }
+                strategy
+                taskParams {
+                    recipients
+                    title
+                }
+                to_phase_id
+                url
+            }
         }
     }
     """

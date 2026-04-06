@@ -34,6 +34,19 @@ def test_create_ai_automation_input_requires_name_event_id_pipe_id_prompt_field_
 
 
 @pytest.mark.unit
+def test_create_ai_automation_input_skills_ids_defaults_to_empty_list():
+    """CreateAiAutomationInput skills_ids defaults to empty list."""
+    inp = CreateAiAutomationInput(
+        name="My Automation",
+        event_id="card_created",
+        pipe_id="123",
+        prompt="Summarize",
+        field_ids=["133"],
+    )
+    assert inp.skills_ids == []
+
+
+@pytest.mark.unit
 def test_create_ai_automation_input_condition_defaults_to_placeholder():
     """CreateAiAutomationInput condition defaults to placeholder structure."""
     inp = CreateAiAutomationInput(

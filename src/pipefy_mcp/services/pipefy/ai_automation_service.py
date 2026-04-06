@@ -51,6 +51,7 @@ class AiAutomationService:
                 "aiParams": {
                     "value": automation_input.prompt,
                     "fieldIds": automation_input.field_ids,
+                    "skillsIds": automation_input.skills_ids,
                 }
             },
             "condition": automation_input.condition,
@@ -100,6 +101,8 @@ class AiAutomationService:
             ai_params["value"] = automation_input.prompt
         if automation_input.field_ids is not None:
             ai_params["fieldIds"] = automation_input.field_ids
+        if automation_input.skills_ids is not None:
+            ai_params["skillsIds"] = automation_input.skills_ids
         if ai_params:
             input_dict["action_params"] = {"aiParams": ai_params}
 

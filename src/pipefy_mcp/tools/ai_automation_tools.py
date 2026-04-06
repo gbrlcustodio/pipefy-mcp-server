@@ -35,6 +35,7 @@ class AiAutomationTools:
             pipe_id: str,
             prompt: str,
             field_ids: list[str],
+            skills_ids: list[str] | None = None,
             condition: dict | None = None,
         ) -> dict:
             """Create a simple AI automation that generates content with a prompt and writes the result to one or more card fields.
@@ -48,11 +49,17 @@ class AiAutomationTools:
                 pipe_id: Pipe ID where the automation runs.
                 prompt: AI prompt text that generates the content.
                 field_ids: List of field internal IDs to write the result to.
+                skills_ids: AI skill IDs to attach. Defaults to empty (no skills).
                 condition: Optional condition structure for the automation trigger.
             """
             ctx.debug(
                 f"create_ai_automation: name={name}, event_id={event_id}, pipe_id={pipe_id}"
             )
+            optional_fields: dict = {}
+            if skills_ids is not None:
+                optional_fields["skills_ids"] = skills_ids
+            if condition is not None:
+                optional_fields["condition"] = condition
             try:
                 validated = CreateAiAutomationInput(
                     name=name,
@@ -60,7 +67,7 @@ class AiAutomationTools:
                     pipe_id=pipe_id,
                     prompt=prompt,
                     field_ids=field_ids,
-                    **({"condition": condition} if condition is not None else {}),
+                    **optional_fields,
                 )
             except ValidationError as exc:
                 return build_ai_tool_error(str(exc))
@@ -85,6 +92,7 @@ class AiAutomationTools:
             active: bool | None = None,
             prompt: str | None = None,
             field_ids: list[str] | None = None,
+            skills_ids: list[str] | None = None,
             condition: dict | None = None,
         ) -> dict:
             """Update an existing AI automation's name, prompt, destination fields, or active state.
@@ -95,6 +103,7 @@ class AiAutomationTools:
                 active: Whether the automation is active (optional).
                 prompt: New AI prompt text (optional).
                 field_ids: New list of field internal IDs (optional).
+                skills_ids: New list of AI skill IDs (optional).
                 condition: New condition structure (optional).
             """
             ctx.debug(f"update_ai_automation: automation_id={automation_id}")
@@ -105,6 +114,7 @@ class AiAutomationTools:
                     active=active,
                     prompt=prompt,
                     field_ids=field_ids,
+                    skills_ids=skills_ids,
                     condition=condition,
                 )
             except ValidationError as exc:

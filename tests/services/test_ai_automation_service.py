@@ -52,9 +52,36 @@ async def test_create_automation_calls_execute_query_with_correct_variables():
     assert variables["action_repo_id"] == "303"
     assert variables["action_params"]["aiParams"]["value"] == "Summarize the card"
     assert variables["action_params"]["aiParams"]["fieldIds"] == ["133", "789"]
+    assert variables["action_params"]["aiParams"]["skillsIds"] == []
     assert result["automation_id"] == "456"
     assert "AI Automation created successfully" in result["message"]
     assert "456" in result["message"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_automation_sends_custom_skills_ids():
+    """create_automation forwards custom skills_ids in aiParams.skillsIds."""
+    mock_client = _create_mock_internal_api_client(
+        {"data": {"createAutomation": {"automation": {"id": "456"}}}}
+    )
+    service = AiAutomationService(client=mock_client)
+
+    inp = CreateAiAutomationInput(
+        name="With Skills",
+        event_id="card_created",
+        pipe_id="303",
+        prompt="Summarize",
+        field_ids=["1"],
+        skills_ids=["skill_a", "skill_b"],
+    )
+    await service.create_automation(inp)
+
+    variables = mock_client.execute_query.call_args[0][1]
+    assert variables["action_params"]["aiParams"]["skillsIds"] == [
+        "skill_a",
+        "skill_b",
+    ]
 
 
 @pytest.mark.unit
@@ -112,6 +139,25 @@ async def test_update_automation_calls_execute_query_with_correct_variables():
     assert variables["input"]["action_params"]["aiParams"]["fieldIds"] == ["133"]
     assert result["automation_id"] == "789"
     assert "AI Automation updated successfully" in result["message"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_automation_sends_skills_ids_when_provided():
+    """update_automation includes skillsIds in aiParams when skills_ids is set."""
+    mock_client = _create_mock_internal_api_client(
+        {"data": {"updateAutomation": {"automation": {"id": "789"}}}}
+    )
+    service = AiAutomationService(client=mock_client)
+
+    inp = UpdateAiAutomationInput(
+        automation_id="789",
+        skills_ids=["skill_x"],
+    )
+    await service.update_automation(inp)
+
+    variables = mock_client.execute_query.call_args[0][1]
+    assert variables["input"]["action_params"]["aiParams"]["skillsIds"] == ["skill_x"]
 
 
 @pytest.mark.unit

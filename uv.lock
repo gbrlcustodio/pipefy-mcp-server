@@ -693,6 +693,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "gql", extra = ["httpx"] },
+    { name = "httpx" },
     { name = "httpx-auth" },
     { name = "mcp", extra = ["cli"] },
     { name = "openpyxl" },
@@ -715,6 +716,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "gql", extras = ["httpx"], specifier = ">=3.5.2" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "httpx-auth", specifier = ">=0.23.1" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.25.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },

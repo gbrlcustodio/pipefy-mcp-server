@@ -1,6 +1,6 @@
 # Pipes & Cards
 
-Read, create, update, and delete pipes, phases, phase fields, labels, cards, and field conditions. **33 tools.**
+Read, create, update, and delete pipes, phases, phase fields, labels, cards, and field conditions. **34 tools.**
 
 ## Cross-cutting patterns
 
@@ -51,6 +51,7 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, and
 | `update_card_field` | Single-field update (`updateCardField`). |
 | `update_card` | Metadata (title, assignees, labels, due date) and/or multiple custom fields via `field_updates`. |
 | `delete_card` | Two-step: default preview; `confirm=true` after explicit user confirmation. |
+| `upload_attachment_to_card` | Presigned URL + S3 PUT + `updateCardField` for **attachment** fields. **One file per call** — to attach multiple files, call the tool once per file. Exactly one of `file_url` or `file_content_base64`; optional `content_type` (inferred from `file_name` if omitted). **`field_id` must be the field slug** (e.g. `document_upload`), not the uuid — using the uuid returns `RESOURCE_NOT_FOUND`. |
 
 **Choosing card updates:** `update_card_field` = one field, full replacement. `update_card` + `field_updates` = several custom fields at once. `update_card` with attribute args = metadata (combinable with `field_updates`).
 

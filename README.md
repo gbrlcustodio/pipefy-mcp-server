@@ -1,7 +1,7 @@
 # MCP server for Pipefy
 
 <p align="center">
-  <strong>Open-source MCP for Pipefy: 112 tools across pipes, cards, tables, relations, reports, automations, AI agents and observability — built for your IDE, with pagination, introspection and safe deletes.</strong>
+  <strong>Open-source MCP for Pipefy: 114 tools across pipes, cards, tables, relations, reports, automations, AI agents and observability — built for your IDE, with pagination, introspection and safe deletes.</strong>
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
 
 ## MCP tools
 
-**112 tools** across 9 categories. Each tool has a docstring consumed by LLM clients for routing — treat those as the source of truth for arguments.
+**114 tools** across 9 categories. Each tool has a docstring consumed by LLM clients for routing — treat those as the source of truth for arguments.
 
 **Shared conventions (many tools):**
 - **Pagination** — List endpoints accept `first` and `after`. Use `pageInfo.hasNextPage` and `pageInfo.endCursor` to fetch the next page.
@@ -43,8 +43,8 @@
 
 | Category | Tools | Description | Docs |
 |----------|:-----:|-------------|------|
-| **Pipes & cards** | 33 | Read, create, update, and delete pipes, phases, fields, labels, cards, and field conditions. | [Details](docs/tools/pipes-and-cards.md) |
-| **Database tables** | 17 | Tables, records (rows), schema columns (table fields), and org-wide table discovery. | [Details](docs/tools/database-tables.md) |
+| **Pipes & cards** | 34 | Read, create, update, and delete pipes, phases, fields, labels, cards, field conditions, and card attachment uploads. | [Details](docs/tools/pipes-and-cards.md) |
+| **Database tables** | 18 | Tables, records (rows), schema columns (table fields), org-wide table discovery, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
 | **Relations** | 5 | Link pipes, tables, and cards across workflows. | [Details](docs/tools/relations.md) |
 | **Reports** | 16 | Pipe and organization reports: discovery, CRUD, and async exports. | [Details](docs/tools/reports.md) |
 | **Automations & AI** | 16 | Traditional automations (rules engine) and AI-powered automations and agents. | [Details](docs/tools/automations-and-ai.md) |
@@ -103,6 +103,9 @@ uv run pytest --cov=src/pipefy_mcp/services/pipefy --cov-report=term-missing
 
 # Integration tests (requires .env with PIPEFY_* OAuth settings)
 uv run pytest -m integration -v
+
+# Attachment upload live tests (optional IDs — see tests/tools/test_attachment_tools_live.py)
+# uv run pytest tests/tools/test_attachment_tools_live.py -m integration -v
 ```
 
 ### MCP Inspector

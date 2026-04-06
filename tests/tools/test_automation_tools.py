@@ -28,6 +28,7 @@ def mock_automation_client():
     client.get_automation_events = AsyncMock()
     client.create_automation = AsyncMock()
     client.update_automation = AsyncMock()
+    client.simulate_automation = AsyncMock()
     client.delete_automation = AsyncMock()
     return client
 
@@ -59,6 +60,10 @@ async def test_get_automation_success(
         "id": "a1",
         "name": "Rule",
         "active": True,
+        "event_params": {"kindOfSla": "due_date", "triggerFieldIds": ["99"]},
+        "action_params": {
+            "aiParams": {"value": "Run prompt", "fieldIds": ["1"], "skillsIds": []},
+        },
     }
 
     async with automation_session as session:
@@ -69,6 +74,8 @@ async def test_get_automation_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"] == mock_automation_client.get_automation.return_value
+    assert payload["data"]["event_params"]["kindOfSla"] == "due_date"
+    assert payload["data"]["action_params"]["aiParams"]["value"] == "Run prompt"
 
 
 @pytest.mark.anyio
@@ -562,8 +569,99 @@ async def test_create_and_update_automation_tools_are_not_read_only(
     async with automation_session as session:
         listed = await session.list_tools()
     by_name = {t.name: t for t in listed.tools}
-    for name in ("create_automation", "update_automation"):
+    for name in ("create_automation", "update_automation", "simulate_automation"):
         ann = by_name[name].annotations
         assert ann is not None
         assert ann.readOnlyHint is False
         assert ann.destructiveHint is not True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_simulate_automation_success(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.simulate_automation.return_value = {
+        "simulation_id": "sim-1",
+        "automation_simulation": {
+            "status": "success",
+            "details": {"message": "done"},
+            "simulationResult": {"x": 1},
+        },
+    }
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "simulate_automation",
+            {
+                "pipe_id": "p1",
+                "action_id": "generate_with_ai",
+                "sample_card_id": "c9",
+                "event_id": "card_created",
+                "event_params": None,
+                "action_params": None,
+                "condition": None,
+                "name": None,
+                "extra_input": None,
+                "debug": False,
+            },
+        )
+
+    assert result.isError is False
+    mock_automation_client.simulate_automation.assert_awaited_once_with(
+        pipe_id="p1",
+        action_id="generate_with_ai",
+        sample_card_id="c9",
+        event_id="card_created",
+        event_params=None,
+        action_params=None,
+        condition=None,
+        name=None,
+        extra_input=None,
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["simulation_id"] == "sim-1"
+    assert payload["automation_simulation"]["simulationResult"] == {"x": 1}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_simulate_automation_graphql_error(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.simulate_automation.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "bad simulation"}]
+    )
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "simulate_automation",
+            {
+                "pipe_id": "p1",
+                "action_id": "generate_with_ai",
+                "sample_card_id": "c1",
+            },
+        )
+
+    assert extract_payload(result)["success"] is False
+    assert "bad simulation" in extract_payload(result)["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_simulate_automation_rejects_invalid_pipe_id(
+    automation_session, mock_automation_client, extract_payload
+):
+    async with automation_session as session:
+        result = await session.call_tool(
+            "simulate_automation",
+            {
+                "pipe_id": "",
+                "action_id": "generate_with_ai",
+                "sample_card_id": "1",
+            },
+        )
+
+    mock_automation_client.simulate_automation.assert_not_called()
+    assert extract_payload(result)["success"] is False

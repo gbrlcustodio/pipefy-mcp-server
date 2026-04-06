@@ -40,6 +40,13 @@ class AutomationMutationSuccessPayload(TypedDict):
     automation: dict[str, Any]
 
 
+class AutomationSimulationSuccessPayload(TypedDict):
+    success: Literal[True]
+    message: str
+    simulation_id: str
+    automation_simulation: dict[str, Any]
+
+
 class AutomationToolErrorPayload(TypedDict):
     success: Literal[False]
     error: str
@@ -65,6 +72,20 @@ def build_automation_mutation_success_payload(
         "success": True,
         "message": message,
         "automation": automation,
+    }
+
+
+def build_automation_simulation_success_payload(
+    simulation_id: str,
+    automation_simulation: dict[str, Any],
+) -> AutomationSimulationSuccessPayload:
+    """Success payload with full ``automationSimulation`` row and the mutation ``simulationId``."""
+
+    return {
+        "success": True,
+        "message": "Automation simulation completed.",
+        "simulation_id": simulation_id,
+        "automation_simulation": automation_simulation,
     }
 
 

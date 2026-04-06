@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .ai_agent_service import AiAgentService
 from .ai_automation_service import AiAutomationService
+from .attachment_service import AttachmentService
 from .automation_service import AutomationService
 from .base_client import BasePipefyClient
 from .card_service import CardService
@@ -21,6 +22,7 @@ from .webhook_service import WebhookService
 __all__ = [
     "AiAgentService",
     "AiAutomationService",
+    "AttachmentService",
     "AutomationService",
     "BasePipefyClient",
     "CardService",

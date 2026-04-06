@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from pipefy_mcp.services.pipefy.ai_agent_service import AiAgentService
+from pipefy_mcp.services.pipefy.attachment_service import AttachmentService
 from pipefy_mcp.services.pipefy.automation_service import AutomationService
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
@@ -504,6 +505,7 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert isinstance(client._relation_service, RelationService)
     assert isinstance(client._automation_service, AutomationService)
     assert isinstance(client._ai_agent_service, AiAgentService)
+    assert isinstance(client._attachment_service, AttachmentService)
     assert isinstance(client._introspection_service, SchemaIntrospectionService)
     assert client._pipe_service._auth is not None, (
         "PipeService should have an auth instance"
@@ -536,6 +538,7 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert client._pipe_service._auth is client._relation_service._auth
     assert client._pipe_service._auth is client._automation_service._auth
     assert client._pipe_service._auth is client._introspection_service._auth
+    assert client._pipe_service._auth is client._attachment_service._auth
 
 
 @pytest.mark.unit

@@ -8,6 +8,7 @@ from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_mcp.services.pipefy.ai_agent_service import AiAgentService
+from pipefy_mcp.services.pipefy.attachment_service import AttachmentService
 from pipefy_mcp.services.pipefy.automation_graphql_types import (
     AutomationActionRow,
     AutomationEventRow,
@@ -70,6 +71,7 @@ class PipefyClient:
         self._observability_service = ObservabilityService(settings=settings, auth=auth)
         self._report_service = ReportService(settings=settings, auth=auth)
         self._organization_service = OrganizationService(settings=settings, auth=auth)
+        self._attachment_service = AttachmentService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
@@ -957,6 +959,53 @@ class PipefyClient:
             organization_id: Numeric organization ID.
         """
         return await self._organization_service.get_organization(organization_id)
+
+    async def create_presigned_url(
+        self,
+        organization_id: str,
+        file_name: str,
+        content_type: str | None = None,
+        content_length: int | None = None,
+    ) -> dict[str, Any]:
+        """Request a presigned upload URL from Pipefy.
+
+        Args:
+            organization_id: Organization ID.
+            file_name: Target file name for the upload.
+            content_type: Optional MIME type for the object.
+            content_length: Optional size in bytes.
+        """
+        return await self._attachment_service.create_presigned_url(
+            organization_id,
+            file_name,
+            content_type=content_type,
+            content_length=content_length,
+        )
+
+    async def upload_file_to_s3(
+        self,
+        presigned_url: str,
+        file_bytes: bytes,
+        content_type: str | None = None,
+    ) -> dict[str, Any]:
+        """PUT file bytes to a presigned object storage URL.
+
+        Args:
+            presigned_url: Full presigned destination URL.
+            file_bytes: Raw file content.
+            content_type: Optional ``Content-Type`` header for the PUT.
+        """
+        return await self._attachment_service.upload_file_to_s3(
+            presigned_url, file_bytes, content_type=content_type
+        )
+
+    def extract_storage_path(self, presigned_url: str) -> str:
+        """Return the object key path embedded in a presigned URL (no host or query string).
+
+        Args:
+            presigned_url: Full HTTPS URL including path and optional query string.
+        """
+        return self._attachment_service.extract_storage_path(presigned_url)
 
     async def introspect_type(
         self, type_name: str, *, max_depth: int = 1

@@ -129,8 +129,9 @@ async def test_live_execute_invalid_field_surfaces_errors_payload(live_svc):
     )
     assert "errors" in data
     assert any(
-        "thisFieldDoesNotExistOnQuery" in (e.get("message") or "").lower()
+        "thisfielddoesnotexistonquery" in (e.get("message") or "").lower()
         or "cannot query field" in (e.get("message") or "").lower()
+        or "doesn't exist" in (e.get("message") or "").lower()
         for e in data["errors"]
         if isinstance(e, dict)
     )

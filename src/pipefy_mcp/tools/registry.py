@@ -5,6 +5,7 @@ from mcp.server.fastmcp import FastMCP
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
+from pipefy_mcp.tools.attachment_tools import AttachmentTools
 from pipefy_mcp.tools.automation_tools import AutomationTools
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
@@ -37,6 +38,7 @@ class ToolRegistry:
         TableTools.register(self.mcp, self.services_container.pipefy_client)
         RelationTools.register(self.mcp, self.services_container.pipefy_client)
         ReportTools.register(self.mcp, self.services_container.pipefy_client)
+        AttachmentTools.register(self.mcp, self.services_container.pipefy_client)
         MemberTools.register(self.mcp, self.services_container.pipefy_client)
         WebhookTools.register(self.mcp, self.services_container.pipefy_client)
         AutomationTools.register(self.mcp, self.services_container.pipefy_client)

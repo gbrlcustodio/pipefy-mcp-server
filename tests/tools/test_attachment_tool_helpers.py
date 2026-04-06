@@ -58,7 +58,6 @@ def test_build_upload_error_payload_shape():
     assert out == {
         "success": False,
         "error": "failed",
-        "message": "failed",
         "step": "s3_upload",
     }
 

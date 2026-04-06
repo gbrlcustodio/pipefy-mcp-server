@@ -27,7 +27,7 @@ class MemberTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def invite_members(
-            pipe_id: str,
+            pipe_id: str | int,
             members: list[dict[str, Any]],
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -44,6 +44,7 @@ class MemberTools:
                 return build_member_error_payload(
                     message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
                 )
+            pipe_id = str(pipe_id)
             if not isinstance(members, list) or not members:
                 return build_member_error_payload(
                     message="Invalid 'members': provide a non-empty list of dicts with 'email' and 'role_name'.",
@@ -117,15 +118,26 @@ class MemberTools:
             if guard is not None:
                 return guard
 
+            await ctx.debug(
+                f"remove_member_from_pipe: calling mutation with "
+                f"pipe_id={pipe_id!r} (type={type(pipe_id).__name__}), "
+                f"user_ids={user_ids!r}"
+            )
             try:
                 raw = await client.remove_members_from_pipe(pipe_id, user_ids)
             except ValueError as exc:
                 return build_member_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
+                await ctx.debug(
+                    f"remove_member_from_pipe: mutation failed — {type(exc).__name__}: {exc}"
+                )
                 return handle_member_tool_graphql_error(
                     exc, "Remove members from pipe failed.", debug=debug
                 )
 
+            await ctx.debug(
+                "remove_member_from_pipe: mutation succeeded, verifying removal"
+            )
             warning = await _verify_removal(client, pipe_id, user_ids)
             return build_member_success_payload(
                 message="Members removed from pipe.",
@@ -137,8 +149,8 @@ class MemberTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def set_role(
-            pipe_id: str,
-            member_id: str,
+            pipe_id: str | int,
+            member_id: str | int,
             role_name: str,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -154,7 +166,9 @@ class MemberTools:
                 return build_member_error_payload(
                     message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
                 )
-            if not isinstance(member_id, str) or not member_id.strip():
+            pipe_id = str(pipe_id)
+            member_id = str(member_id)
+            if not member_id.strip():
                 return build_member_error_payload(
                     message="Invalid 'member_id': provide a non-empty string.",
                 )

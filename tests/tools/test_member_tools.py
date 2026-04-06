@@ -321,6 +321,30 @@ async def test_remove_member_returns_success_when_verification_fails(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_remove_member_coerces_int_user_ids_to_str(
+    member_session, mock_member_client, extract_payload
+):
+    """Agent may re-serialize user_ids as ints on the confirm call."""
+    mock_member_client.remove_members_from_pipe.return_value = {
+        "removeMembersFromPipe": {"success": True}
+    }
+    mock_member_client.get_pipe_members.return_value = {"pipe": {"members": []}}
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "remove_member_from_pipe",
+            {"pipe_id": "100", "user_ids": [307516938], "confirm": True},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    mock_member_client.remove_members_from_pipe.assert_awaited_once_with(
+        "100", ["307516938"]
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_remove_member_from_pipe_graphql_error(
     member_session, mock_member_client, extract_payload
 ):

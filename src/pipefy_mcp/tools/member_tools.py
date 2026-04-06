@@ -76,8 +76,8 @@ class MemberTools:
         )
         async def remove_member_from_pipe(
             ctx: Context[ServerSession, None],
-            pipe_id: str,
-            user_ids: list[str],
+            pipe_id: str | int,
+            user_ids: list[str | int],
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -97,11 +97,14 @@ class MemberTools:
                 return build_member_error_payload(
                     message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
                 )
+            pipe_id = str(pipe_id)
             if not isinstance(user_ids, list) or not user_ids:
                 return build_member_error_payload(
                     message="Invalid 'user_ids': provide a non-empty list of user IDs.",
                 )
-            if not all(isinstance(uid, str) and uid.strip() for uid in user_ids):
+            # Agents may re-serialize numeric IDs as ints on the confirm call
+            user_ids = [str(uid) for uid in user_ids]
+            if not all(uid.strip() for uid in user_ids):
                 return build_member_error_payload(
                     message="Invalid 'user_ids': each ID must be a non-empty string.",
                 )

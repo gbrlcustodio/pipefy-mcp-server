@@ -69,7 +69,6 @@ def build_upload_error_payload(
     return {
         "success": False,
         "error": message,
-        "message": message,
         "step": step,
     }
 

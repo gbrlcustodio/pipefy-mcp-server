@@ -122,9 +122,12 @@ class MemberTools:
                 return handle_member_tool_graphql_error(
                     exc, "Remove members from pipe failed.", debug=debug
                 )
+
+            warning = await _verify_removal(client, pipe_id, user_ids)
             return build_member_success_payload(
                 message="Members removed from pipe.",
                 data=raw,
+                warning=warning,
             )
 
         @mcp.tool(
@@ -168,3 +171,45 @@ class MemberTools:
                 message="Role updated.",
                 data=raw,
             )
+
+
+async def _verify_removal(
+    client: PipefyClient,
+    pipe_id: str,
+    user_ids: list[str],
+) -> str | None:
+    """Check whether removed members are actually gone from the pipe.
+
+    Returns a warning string when any requested user IDs are still present,
+    or ``None`` when all were successfully removed.  Silently returns
+    ``None`` on non-numeric ``pipe_id`` (verification requires ``int``)
+    or if the verification query itself fails.
+    """
+    pipe_id_str = str(pipe_id).strip()
+    if not pipe_id_str.isdigit():
+        return None
+
+    try:
+        members_data = await client.get_pipe_members(int(pipe_id_str))
+    except Exception:  # noqa: BLE001
+        return None
+
+    members = (members_data.get("pipe") or {}).get("members", [])
+    remaining_ids: set[str] = set()
+    for m in members:
+        user = m.get("user") if isinstance(m.get("user"), dict) else {}
+        if user.get("id"):
+            remaining_ids.add(str(user["id"]))
+        if user.get("uuid"):
+            remaining_ids.add(str(user["uuid"]))
+
+    requested = {str(uid) for uid in user_ids}
+    still_present = requested & remaining_ids
+    if not still_present:
+        return None
+
+    ids_str = ", ".join(sorted(still_present))
+    return (
+        f"API returned success but member(s) [{ids_str}] are still present in the pipe. "
+        "They may have org-level permissions that override pipe-level removal."
+    )

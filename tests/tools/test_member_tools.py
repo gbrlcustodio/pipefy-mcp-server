@@ -24,6 +24,7 @@ def mock_member_client():
     client = MagicMock(PipefyClient)
     client.invite_members = AsyncMock()
     client.remove_members_from_pipe = AsyncMock()
+    client.get_pipe_members = AsyncMock()
     client.set_role = AsyncMock()
     return client
 
@@ -155,7 +156,130 @@ async def test_remove_member_from_pipe_value_error_from_client(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("member_session", [None], indirect=True)
-async def test_remove_member_from_pipe_success(
+async def test_remove_member_verified_all_removed(
+    member_session, mock_member_client, extract_payload
+):
+    mock_member_client.remove_members_from_pipe.return_value = {
+        "removeMembersFromPipe": {"success": True}
+    }
+    mock_member_client.get_pipe_members.return_value = {
+        "pipe": {
+            "members": [
+                {
+                    "user": {
+                        "id": "99",
+                        "uuid": "uuid-99",
+                        "name": "Other",
+                        "email": "other@x.com",
+                    },
+                    "role_name": "member",
+                },
+            ]
+        }
+    }
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "remove_member_from_pipe",
+            {"pipe_id": "100", "user_ids": ["user-1", "user-2"], "confirm": True},
+        )
+
+    assert result.isError is False
+    mock_member_client.remove_members_from_pipe.assert_awaited_once_with(
+        "100", ["user-1", "user-2"]
+    )
+    mock_member_client.get_pipe_members.assert_awaited_once_with(100)
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "warning" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_remove_member_warns_when_member_still_present(
+    member_session, mock_member_client, extract_payload
+):
+    mock_member_client.remove_members_from_pipe.return_value = {
+        "removeMembersFromPipe": {"success": True}
+    }
+    mock_member_client.get_pipe_members.return_value = {
+        "pipe": {
+            "members": [
+                {
+                    "user": {
+                        "id": "160654",
+                        "uuid": "uuid-160654",
+                        "name": "Rodrigo",
+                        "email": "rodrigo@x.com",
+                    },
+                    "role_name": "admin",
+                },
+                {
+                    "user": {
+                        "id": "99",
+                        "uuid": "uuid-99",
+                        "name": "Other",
+                        "email": "other@x.com",
+                    },
+                    "role_name": "member",
+                },
+            ]
+        }
+    }
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "remove_member_from_pipe",
+            {"pipe_id": "100", "user_ids": ["160654"], "confirm": True},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "warning" in payload
+    assert "160654" in payload["warning"]
+    assert "org-level" in payload["warning"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_remove_member_warns_when_uuid_still_present(
+    member_session, mock_member_client, extract_payload
+):
+    """Verification matches user UUIDs too, not just numeric IDs."""
+    mock_member_client.remove_members_from_pipe.return_value = {
+        "removeMembersFromPipe": {"success": True}
+    }
+    mock_member_client.get_pipe_members.return_value = {
+        "pipe": {
+            "members": [
+                {
+                    "user": {
+                        "id": "160654",
+                        "uuid": "abc-def-123",
+                        "name": "Rodrigo",
+                        "email": "rodrigo@x.com",
+                    },
+                    "role_name": "admin",
+                },
+            ]
+        }
+    }
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "remove_member_from_pipe",
+            {"pipe_id": "100", "user_ids": ["abc-def-123"], "confirm": True},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "warning" in payload
+    assert "abc-def-123" in payload["warning"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_remove_member_skips_verification_for_non_numeric_pipe_id(
     member_session, mock_member_client, extract_payload
 ):
     mock_member_client.remove_members_from_pipe.return_value = {
@@ -165,16 +289,34 @@ async def test_remove_member_from_pipe_success(
     async with member_session as session:
         result = await session.call_tool(
             "remove_member_from_pipe",
-            {"pipe_id": "pipe-1", "user_ids": ["user-1", "user-2"], "confirm": True},
+            {"pipe_id": "pipe-1", "user_ids": ["user-1"], "confirm": True},
         )
 
-    assert result.isError is False
-    mock_member_client.remove_members_from_pipe.assert_awaited_once_with(
-        "pipe-1", ["user-1", "user-2"]
-    )
+    mock_member_client.get_pipe_members.assert_not_awaited()
     payload = extract_payload(result)
     assert payload["success"] is True
-    assert payload["result"]["removeMembersFromPipe"]["success"] is True
+    assert "warning" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_remove_member_returns_success_when_verification_fails(
+    member_session, mock_member_client, extract_payload
+):
+    """If get_pipe_members raises, don't fail the whole operation."""
+    mock_member_client.remove_members_from_pipe.return_value = {
+        "removeMembersFromPipe": {"success": True}
+    }
+    mock_member_client.get_pipe_members.side_effect = Exception("network error")
+
+    async with member_session as session:
+        result = await session.call_tool(
+            "remove_member_from_pipe",
+            {"pipe_id": "100", "user_ids": ["user-1"], "confirm": True},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
 
 
 @pytest.mark.anyio

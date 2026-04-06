@@ -25,6 +25,7 @@ class TestToolRegistry:
     @patch("pipefy_mcp.tools.registry.AutomationTools.register")
     @patch("pipefy_mcp.tools.registry.WebhookTools.register")
     @patch("pipefy_mcp.tools.registry.MemberTools.register")
+    @patch("pipefy_mcp.tools.registry.AttachmentTools.register")
     @patch("pipefy_mcp.tools.registry.ReportTools.register")
     @patch("pipefy_mcp.tools.registry.RelationTools.register")
     @patch("pipefy_mcp.tools.registry.TableTools.register")
@@ -39,6 +40,7 @@ class TestToolRegistry:
         mock_table_tools_register,
         mock_relation_tools_register,
         mock_report_tools_register,
+        mock_attachment_tools_register,
         mock_member_tools_register,
         mock_webhook_tools_register,
         mock_automation_tools_register,
@@ -62,6 +64,7 @@ class TestToolRegistry:
         mock_table_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_relation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_report_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_attachment_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_member_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_webhook_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
@@ -91,6 +94,7 @@ class TestToolRegistry:
     @patch("pipefy_mcp.tools.registry.AutomationTools.register")
     @patch("pipefy_mcp.tools.registry.WebhookTools.register")
     @patch("pipefy_mcp.tools.registry.MemberTools.register")
+    @patch("pipefy_mcp.tools.registry.AttachmentTools.register")
     @patch("pipefy_mcp.tools.registry.ReportTools.register")
     @patch("pipefy_mcp.tools.registry.RelationTools.register")
     @patch("pipefy_mcp.tools.registry.TableTools.register")
@@ -105,6 +109,7 @@ class TestToolRegistry:
         mock_table_tools_register,
         mock_relation_tools_register,
         mock_report_tools_register,
+        mock_attachment_tools_register,
         mock_member_tools_register,
         mock_webhook_tools_register,
         mock_automation_tools_register,
@@ -131,6 +136,7 @@ class TestToolRegistry:
         mock_table_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_relation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_report_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_attachment_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_member_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_webhook_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)

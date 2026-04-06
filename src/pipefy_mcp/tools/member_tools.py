@@ -27,7 +27,7 @@ class MemberTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def invite_members(
-            pipe_id: str,
+            pipe_id: str | int,
             members: list[dict[str, Any]],
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -44,6 +44,7 @@ class MemberTools:
                 return build_member_error_payload(
                     message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
                 )
+            pipe_id = str(pipe_id)
             if not isinstance(members, list) or not members:
                 return build_member_error_payload(
                     message="Invalid 'members': provide a non-empty list of dicts with 'email' and 'role_name'.",
@@ -137,8 +138,8 @@ class MemberTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def set_role(
-            pipe_id: str,
-            member_id: str,
+            pipe_id: str | int,
+            member_id: str | int,
             role_name: str,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -154,7 +155,9 @@ class MemberTools:
                 return build_member_error_payload(
                     message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
                 )
-            if not isinstance(member_id, str) or not member_id.strip():
+            pipe_id = str(pipe_id)
+            member_id = str(member_id)
+            if not member_id.strip():
                 return build_member_error_payload(
                     message="Invalid 'member_id': provide a non-empty string.",
                 )

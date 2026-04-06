@@ -27,22 +27,48 @@ from pipefy_mcp.services.pipefy.queries.automation_queries import (
 )
 
 
-def _format_automation_mutation_errors(errors: Any) -> str:
-    if errors is None:
+def _format_automation_error_details(detail_val: Any) -> str:
+    """Turn ``error_details`` (``[InternalError!]``-shaped payloads) into one line for :class:`ValueError`."""
+
+    if detail_val is None:
         return ""
-    if isinstance(errors, str):
-        return errors
-    if isinstance(errors, list):
+    if isinstance(detail_val, str):
+        return detail_val
+    if isinstance(detail_val, dict):
+        messages = detail_val.get("messages")
+        if isinstance(messages, list):
+            return "; ".join(m for m in messages if isinstance(m, str) and m)
+        return str(detail_val)
+    if isinstance(detail_val, list):
         parts: list[str] = []
-        for item in errors:
+        for item in detail_val:
             if isinstance(item, str) and item:
                 parts.append(item)
-            elif isinstance(item, dict):
-                msg = item.get("message")
-                if isinstance(msg, str) and msg:
-                    parts.append(msg)
+                continue
+            if not isinstance(item, dict):
+                continue
+            chunks: list[str] = []
+            raw_messages = item.get("messages")
+            if isinstance(raw_messages, list):
+                chunks.extend(m for m in raw_messages if isinstance(m, str) and m)
+            single = item.get("message")
+            if isinstance(single, str) and single:
+                chunks.append(single)
+            if not chunks:
+                continue
+            object_name = item.get("object_name")
+            object_key = item.get("object_key")
+            body = "; ".join(chunks)
+            if object_name and object_key:
+                parts.append(f"{object_name} ({object_key}): {body}")
+            elif object_name:
+                parts.append(f"{object_name}: {body}")
+            elif object_key:
+                parts.append(f"{object_key}: {body}")
+            else:
+                parts.append(body)
         return "; ".join(parts)
-    return str(errors)
+    return str(detail_val)
 
 
 def _raise_if_automation_mutation_has_errors(
@@ -52,10 +78,10 @@ def _raise_if_automation_mutation_has_errors(
     block = raw.get(mutation_key)
     if not isinstance(block, dict):
         return
-    err_val = block.get("errors")
+    err_val = block.get("error_details")
     if not err_val:
         return
-    text = _format_automation_mutation_errors(err_val)
+    text = _format_automation_error_details(err_val)
     if text:
         raise ValueError(text)
 

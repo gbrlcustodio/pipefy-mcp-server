@@ -304,16 +304,39 @@ async def test_create_automation_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_automation_raises_when_mutation_returns_errors(mock_settings):
+async def test_create_automation_raises_when_mutation_returns_error_details(
+    mock_settings,
+):
     payload = {
         "createAutomation": {
             "automation": None,
-            "errors": ["Invalid action for this event"],
+            "error_details": [
+                {
+                    "object_name": "Automation",
+                    "messages": ["Invalid action for this event"],
+                },
+            ],
         },
     }
     service = _make_service(mock_settings, payload)
     with pytest.raises(ValueError, match="Invalid action"):
         await service.create_automation("p1", "N", "e", "a")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_automation_raises_when_mutation_returns_error_details(
+    mock_settings,
+):
+    payload = {
+        "updateAutomation": {
+            "automation": None,
+            "error_details": [{"messages": ["Cannot rename inactive automation"]}],
+        },
+    }
+    service = _make_service(mock_settings, payload)
+    with pytest.raises(ValueError, match="Cannot rename"):
+        await service.update_automation("a7", name="x")
 
 
 @pytest.mark.unit

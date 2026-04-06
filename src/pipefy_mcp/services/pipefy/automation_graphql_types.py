@@ -66,9 +66,17 @@ class AutomationMutationSnapshot(TypedDict, total=False):
     active: bool
 
 
+class InternalErrorDetail(TypedDict, total=False):
+    """Single ``InternalError`` row from ``error_details`` on automation mutations."""
+
+    object_name: str
+    object_key: str
+    messages: list[str]
+
+
 class CreateAutomationMutationBlock(TypedDict, total=False):
-    automation: AutomationMutationSnapshot
-    errors: list[str] | list[Any]
+    automation: AutomationMutationSnapshot | None
+    error_details: list[InternalErrorDetail]
 
 
 class CreateAutomationMutationResult(TypedDict, total=False):
@@ -76,8 +84,8 @@ class CreateAutomationMutationResult(TypedDict, total=False):
 
 
 class UpdateAutomationMutationBlock(TypedDict, total=False):
-    automation: AutomationMutationSnapshot
-    errors: list[str] | list[Any]
+    automation: AutomationMutationSnapshot | None
+    error_details: list[InternalErrorDetail]
 
 
 class UpdateAutomationMutationResult(TypedDict, total=False):

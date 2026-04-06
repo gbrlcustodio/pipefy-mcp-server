@@ -102,7 +102,11 @@ CREATE_AUTOMATION_MUTATION = gql(
                 name
                 active
             }
-            errors
+            error_details {
+                object_name
+                object_key
+                messages
+            }
         }
     }
     """
@@ -117,7 +121,11 @@ UPDATE_AUTOMATION_MUTATION = gql(
                 name
                 active
             }
-            errors
+            error_details {
+                object_name
+                object_key
+                messages
+            }
         }
     }
     """

@@ -145,9 +145,16 @@ class PipefyClient:
         """Update a phase field (see Pipefy `UpdatePhaseFieldInput`)."""
         return await self._pipe_config_service.update_phase_field(field_id, **attrs)
 
-    async def delete_phase_field(self, field_id: str | int) -> dict:
+    async def delete_phase_field(
+        self,
+        field_id: str | int,
+        *,
+        pipe_uuid: str | None = None,
+    ) -> dict:
         """Delete a phase field by ID (permanent)."""
-        return await self._pipe_config_service.delete_phase_field(field_id)
+        return await self._pipe_config_service.delete_phase_field(
+            field_id, pipe_uuid=pipe_uuid
+        )
 
     async def create_label(self, pipe_id: int, name: str, color: str) -> dict:
         """Create a label on a pipe."""

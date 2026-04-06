@@ -48,6 +48,10 @@ class CreateAiAutomationInput(BaseModel):
         min_length=1,
         description="Non-empty list of field internal IDs as strings",
     )
+    skills_ids: list[str] = Field(
+        default_factory=list,
+        description="AI skill IDs to attach. Defaults to empty (no skills).",
+    )
     condition: dict = Field(default_factory=lambda: copy.deepcopy(DEFAULT_CONDITION))
 
 
@@ -59,4 +63,5 @@ class UpdateAiAutomationInput(BaseModel):
     active: bool | None = None
     prompt: NonBlankStr | None = None
     field_ids: list[str] | None = Field(default=None, min_length=1)
+    skills_ids: list[str] | None = None
     condition: dict | None = None

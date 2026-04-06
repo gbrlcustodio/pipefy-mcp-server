@@ -201,7 +201,13 @@ async def test_create_phase_field_sends_type_and_optional_attrs(mock_settings):
         mock_settings,
         {
             "createPhaseField": {
-                "phase_field": {"id": "f1", "label": "Email", "type": "email"},
+                "phase_field": {
+                    "id": "f1",
+                    "internal_id": "99001",
+                    "uuid": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                    "label": "Email",
+                    "type": "email",
+                },
             },
         },
     )
@@ -226,7 +232,13 @@ async def test_create_phase_field_sends_type_and_optional_attrs(mock_settings):
     }
     assert result == {
         "createPhaseField": {
-            "phase_field": {"id": "f1", "label": "Email", "type": "email"},
+            "phase_field": {
+                "id": "f1",
+                "internal_id": "99001",
+                "uuid": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                "label": "Email",
+                "type": "email",
+            },
         },
     }
 
@@ -300,10 +312,28 @@ async def test_delete_phase_field_sends_delete_input(mock_settings):
 @pytest.mark.asyncio
 async def test_delete_phase_field_accepts_string_slug(mock_settings):
     service = _make_service(mock_settings, {"deletePhaseField": {"success": True}})
-    result = await service.delete_phase_field("detalhe_mcp")
+    result = await service.delete_phase_field("prioridade")
 
     _query, variables = service.execute_query.call_args[0]
-    assert variables == {"input": {"id": "detalhe_mcp"}}
+    assert variables == {"input": {"id": "prioridade"}}
+    assert result == {"deletePhaseField": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_phase_field_includes_pipe_uuid_when_provided(mock_settings):
+    service = _make_service(mock_settings, {"deletePhaseField": {"success": True}})
+    result = await service.delete_phase_field(
+        "prioridade", pipe_uuid="b3bba313-6b99-44dc-b17e-f192dc00bb21"
+    )
+
+    _query, variables = service.execute_query.call_args[0]
+    assert variables == {
+        "input": {
+            "id": "prioridade",
+            "pipeUuid": "b3bba313-6b99-44dc-b17e-f192dc00bb21",
+        },
+    }
     assert result == {"deletePhaseField": {"success": True}}
 
 

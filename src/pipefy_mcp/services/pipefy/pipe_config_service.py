@@ -143,15 +143,24 @@ class PipeConfigService(BasePipefyClient):
                 payload[key] = value
         return await self.execute_query(UPDATE_PHASE_FIELD_MUTATION, {"input": payload})
 
-    async def delete_phase_field(self, field_id: str | int) -> dict:
+    async def delete_phase_field(
+        self,
+        field_id: str | int,
+        *,
+        pipe_uuid: str | None = None,
+    ) -> dict:
         """Delete a phase field by ID (permanent).
 
         Args:
-            field_id: Phase field ID to delete (slug or numeric).
+            field_id: Phase field slug or uuid to delete.
+            pipe_uuid: Optional pipe UUID for disambiguation when the slug exists on multiple phases.
         """
+        input_obj: dict[str, Any] = {"id": field_id}
+        if pipe_uuid is not None:
+            input_obj["pipeUuid"] = pipe_uuid
         return await self.execute_query(
             DELETE_PHASE_FIELD_MUTATION,
-            {"input": {"id": field_id}},
+            {"input": input_obj},
         )
 
     async def create_label(

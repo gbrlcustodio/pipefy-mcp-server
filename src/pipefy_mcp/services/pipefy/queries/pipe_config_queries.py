@@ -100,6 +100,8 @@ CREATE_PHASE_FIELD_MUTATION = gql(
         createPhaseField(input: $input) {
             phase_field {
                 id
+                internal_id
+                uuid
                 label
                 type
             }

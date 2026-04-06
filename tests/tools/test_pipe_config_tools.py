@@ -434,7 +434,13 @@ async def test_create_phase_field_success(
 ):
     mock_pipe_config_client.create_phase_field.return_value = {
         "createPhaseField": {
-            "phase_field": {"id": "f1", "label": "Email", "type": "email"},
+            "phase_field": {
+                "id": "f1",
+                "internal_id": "99001",
+                "uuid": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                "label": "Email",
+                "type": "email",
+            },
         },
     }
 
@@ -445,7 +451,7 @@ async def test_create_phase_field_success(
                 "phase_id": 1,
                 "label": "Email",
                 "field_type": "email",
-                "extra_input": {"description": "Contact"},
+                "description": "Contact",
             },
         )
 
@@ -454,6 +460,44 @@ async def test_create_phase_field_success(
         "Email",
         "email",
         description="Contact",
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_create_phase_field_with_options(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.create_phase_field.return_value = {
+        "createPhaseField": {
+            "phase_field": {
+                "id": "prioridade",
+                "internal_id": "427957330",
+                "uuid": "c1d2e3f4-5678-9abc-def0-123456789abc",
+                "label": "Prioridade",
+                "type": "select",
+            },
+        },
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "create_phase_field",
+            {
+                "phase_id": 1,
+                "label": "Prioridade",
+                "field_type": "select",
+                "options": ["Alta", "Média", "Baixa"],
+            },
+        )
+
+    mock_pipe_config_client.create_phase_field.assert_awaited_once_with(
+        1,
+        "Prioridade",
+        "select",
+        options=["Alta", "Média", "Baixa"],
     )
     assert extract_payload(result)["success"] is True
 
@@ -512,16 +556,51 @@ async def test_update_phase_field_success_with_string_slug(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
-async def test_update_phase_field_requires_at_least_one_attr(
+async def test_update_phase_field_with_uuid_for_disambiguation(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.update_phase_field.return_value = {
+        "updatePhaseField": {
+            "phase_field": {
+                "id": "prioridade",
+                "label": "Nível de Urgência",
+                "type": "select",
+            },
+        },
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "update_phase_field",
+            {
+                "field_id": "prioridade",
+                "label": "Nível de Urgência",
+                "uuid": "a796cc44-6568-4bfb-9c09-2b903eb7bff2",
+            },
+        )
+
+    mock_pipe_config_client.update_phase_field.assert_awaited_once_with(
+        "prioridade",
+        label="Nível de Urgência",
+        uuid="a796cc44-6568-4bfb-9c09-2b903eb7bff2",
+    )
+    assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_update_phase_field_rejects_blank_label(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
     async with pipe_config_session as session:
         result = await session.call_tool(
             "update_phase_field",
-            {"field_id": 9},
+            {"field_id": 9, "label": "   "},
         )
     mock_pipe_config_client.update_phase_field.assert_not_called()
-    assert extract_payload(result)["success"] is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "label" in payload["error"].lower()
 
 
 @pytest.mark.anyio
@@ -539,7 +618,9 @@ async def test_delete_phase_field_success(
             {"field_id": 100, "confirm": True},
         )
 
-    mock_pipe_config_client.delete_phase_field.assert_awaited_once_with(100)
+    mock_pipe_config_client.delete_phase_field.assert_awaited_once_with(
+        100, pipe_uuid=None
+    )
     assert extract_payload(result)["success"] is True
 
 
@@ -577,7 +658,7 @@ async def test_delete_phase_field_success_with_string_slug(
         )
 
     mock_pipe_config_client.delete_phase_field.assert_awaited_once_with(
-        "detalhe_mcp",
+        "detalhe_mcp", pipe_uuid=None
     )
     assert extract_payload(result)["success"] is True
 

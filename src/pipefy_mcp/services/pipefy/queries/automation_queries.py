@@ -141,8 +141,36 @@ DELETE_AUTOMATION_MUTATION = gql(
     """
 )
 
+CREATE_AUTOMATION_SIMULATION_MUTATION = gql(
+    """
+    mutation createAutomationSimulation($input: CreateAutomationSimulationInput!) {
+        createAutomationSimulation(input: $input) {
+            simulationId
+            clientMutationId
+        }
+    }
+    """
+)
+
+AUTOMATION_SIMULATION_QUERY = gql(
+    """
+    query automationSimulation($simulationId: ID!) {
+        automationSimulation(simulationId: $simulationId) {
+            status
+            details {
+                errorType
+                message
+            }
+            simulationResult
+        }
+    }
+    """
+)
+
 __all__ = [
+    "AUTOMATION_SIMULATION_QUERY",
     "CREATE_AUTOMATION_MUTATION",
+    "CREATE_AUTOMATION_SIMULATION_MUTATION",
     "DELETE_AUTOMATION_MUTATION",
     "GET_AUTOMATION_ACTIONS_QUERY",
     "GET_AUTOMATION_EVENTS_QUERY",

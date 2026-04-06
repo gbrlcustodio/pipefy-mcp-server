@@ -96,3 +96,36 @@ class DeleteAutomationServiceResult(TypedDict):
     """Normalized delete outcome exposed by ``AutomationService.delete_automation``."""
 
     success: bool
+
+
+class CreateAutomationSimulationMutationBlock(TypedDict, total=False):
+    """Payload from ``createAutomationSimulation`` (IDs only; full row comes from a follow-up query)."""
+
+    simulationId: str
+    clientMutationId: str | None
+
+
+class CreateAutomationSimulationMutationResult(TypedDict, total=False):
+    createAutomationSimulation: CreateAutomationSimulationMutationBlock
+
+
+class AutomationSimulationLogDetails(TypedDict, total=False):
+    """``details`` on ``AutomationSimulation``."""
+
+    errorType: str | None
+    message: str
+
+
+class AutomationSimulationRow(TypedDict, total=False):
+    """``automationSimulation`` query selection (status, details, simulationResult)."""
+
+    status: str
+    details: AutomationSimulationLogDetails | None
+    simulationResult: Any
+
+
+class SimulateAutomationServiceResult(TypedDict):
+    """Mutation + query outcome from ``AutomationService.simulate_automation``."""
+
+    simulation_id: str
+    automation_simulation: AutomationSimulationRow

@@ -7,7 +7,9 @@ from gql.transport.exceptions import TransportQueryError
 
 from pipefy_mcp.services.pipefy.automation_service import AutomationService
 from pipefy_mcp.services.pipefy.queries.automation_queries import (
+    AUTOMATION_SIMULATION_QUERY,
     CREATE_AUTOMATION_MUTATION,
+    CREATE_AUTOMATION_SIMULATION_MUTATION,
     DELETE_AUTOMATION_MUTATION,
     GET_AUTOMATION_ACTIONS_QUERY,
     GET_AUTOMATION_EVENTS_QUERY,
@@ -385,3 +387,110 @@ async def test_delete_automation_transport_error(mock_settings):
     )
     with pytest.raises(TransportQueryError):
         await service.delete_automation("z")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_simulate_automation_success(mock_settings):
+    mutation_payload = {
+        "createAutomationSimulation": {
+            "simulationId": "sim-99",
+            "clientMutationId": None,
+        },
+    }
+    query_payload = {
+        "automationSimulation": {
+            "status": "success",
+            "details": {"errorType": None, "message": "ok"},
+            "simulationResult": {"preview": True},
+        },
+    }
+    service = AutomationService(settings=mock_settings)
+    service.execute_query = AsyncMock(side_effect=[mutation_payload, query_payload])
+    result = await service.simulate_automation(
+        pipe_id="pipe-77",
+        action_id="generate_with_ai",
+        sample_card_id="card-1",
+        event_id="card_created",
+        event_params={"to_phase_id": "1"},
+        name="Trial",
+        extra_input={"active": True, "schedulerCron": "0 0 * * *"},
+    )
+
+    assert service.execute_query.await_count == 2
+    q1, v1 = service.execute_query.call_args_list[0][0]
+    q2, v2 = service.execute_query.call_args_list[1][0]
+    assert q1 is CREATE_AUTOMATION_SIMULATION_MUTATION
+    assert v1["input"]["action_id"] == "generate_with_ai"
+    assert v1["input"]["sampleCardId"] == "card-1"
+    assert v1["input"]["event_repo_id"] == "pipe-77"
+    assert v1["input"]["action_repo_id"] == "pipe-77"
+    assert v1["input"]["event_id"] == "card_created"
+    assert v1["input"]["event_params"] == {"to_phase_id": "1"}
+    assert v1["input"]["name"] == "Trial"
+    assert v1["input"]["active"] is True
+    assert v1["input"]["schedulerCron"] == "0 0 * * *"
+    assert q2 is AUTOMATION_SIMULATION_QUERY
+    assert v2 == {"simulationId": "sim-99"}
+    assert result["simulation_id"] == "sim-99"
+    assert result["automation_simulation"]["status"] == "success"
+    assert result["automation_simulation"]["simulationResult"] == {"preview": True}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_simulate_automation_extra_input_overrides_repo_ids(mock_settings):
+    mutation_payload = {
+        "createAutomationSimulation": {
+            "simulationId": "sim-override",
+            "clientMutationId": None,
+        },
+    }
+    query_payload = {
+        "automationSimulation": {
+            "status": "processing",
+            "details": None,
+            "simulationResult": None,
+        },
+    }
+    service = AutomationService(settings=mock_settings)
+    service.execute_query = AsyncMock(side_effect=[mutation_payload, query_payload])
+    await service.simulate_automation(
+        pipe_id="default-pipe",
+        action_id="generate_with_ai",
+        sample_card_id="c1",
+        extra_input={"event_repo_id": "ev-pipe", "action_repo_id": "act-pipe"},
+    )
+    _, v1 = service.execute_query.call_args_list[0][0]
+    assert v1["input"]["event_repo_id"] == "ev-pipe"
+    assert v1["input"]["action_repo_id"] == "act-pipe"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_simulate_automation_raises_when_no_simulation_id(mock_settings):
+    service = AutomationService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        return_value={"createAutomationSimulation": {"simulationId": None}},
+    )
+    with pytest.raises(ValueError, match="simulationId"):
+        await service.simulate_automation(
+            pipe_id="p1",
+            action_id="generate_with_ai",
+            sample_card_id="1",
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_simulate_automation_transport_error(mock_settings):
+    service = AutomationService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.simulate_automation(
+            pipe_id="p1",
+            action_id="generate_with_ai",
+            sample_card_id="1",
+        )

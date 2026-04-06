@@ -13,6 +13,7 @@ from pipefy_mcp.tools.automation_tool_helpers import (
     build_automation_error_payload,
     build_automation_mutation_success_payload,
     build_automation_read_success_payload,
+    build_automation_simulation_success_payload,
     handle_automation_tool_graphql_error,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
@@ -39,6 +40,16 @@ def _normalize_required_id(value: str | int) -> str | None:
     if isinstance(value, int):
         return str(value)
     return value.strip()
+
+
+def _normalize_simulation_action_id(value: str | int) -> str | None:
+    """Normalize simulation ``action_id`` (enum string such as ``generate_with_ai``, or positive int)."""
+    if isinstance(value, int):
+        return str(value) if value > 0 else None
+    if isinstance(value, str):
+        s = value.strip()
+        return s if s else None
+    return None
 
 
 class AutomationTools:
@@ -191,6 +202,104 @@ class AutomationTools:
             return build_automation_read_success_payload(
                 rows,
                 "Automation events catalog retrieved.",
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        )
+        async def simulate_automation(
+            ctx: Context,
+            pipe_id: str | int,
+            action_id: str | int,
+            sample_card_id: str | int,
+            event_id: str | int | None = None,
+            event_params: Any | None = None,
+            action_params: Any | None = None,
+            condition: Any | None = None,
+            name: str | None = None,
+            extra_input: Any | None = None,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Dry-run a traditional automation action against a real card (safe simulation, no live side effects).
+
+            Runs ``createAutomationSimulation`` and returns the **full** ``automationSimulation`` row in one
+            synchronous round-trip (mutation + follow-up query). Use this before enabling risky rules
+            (especially **AI / ``generate_with_ai``**) to validate behavior on a ``sample_card_id``.
+
+            **Pipe context:** ``pipe_id`` is forwarded as ``event_repo_id`` and ``action_repo_id`` on the
+            simulation input (Pipefy often returns ``INTERNAL_SERVER_ERROR`` if these are omitted). Override
+            via ``extra_input`` for cross-pipe setups. **Forward-compatible** ``action_id`` must be a **string**
+            (today's API includes ``generate_with_ai``; future enum values pass through as strings).
+
+            Args:
+                pipe_id: Pipe ID — default ``event_repo_id`` / ``action_repo_id`` for the simulation input.
+                action_id: Simulation action id (string, e.g. ``generate_with_ai``).
+                sample_card_id: Card id the simulation executes against.
+                event_id: Optional trigger event id when the scenario needs it.
+                event_params: Optional JSON object (trigger parameters).
+                action_params: Optional JSON object (action parameters).
+                condition: Optional JSON object (condition payload).
+                name: Optional simulation input name.
+                extra_input: Optional map of extra ``CreateAutomationSimulationInput`` fields (merged last).
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            pid = _normalize_required_id(pipe_id)
+            sid = _normalize_required_id(sample_card_id)
+            aid = _normalize_simulation_action_id(action_id)
+            if pid is None or sid is None or aid is None:
+                return build_automation_error_payload(
+                    message=(
+                        "Invalid 'pipe_id', 'sample_card_id', or 'action_id': use non-empty "
+                        "strings or positive integers where applicable."
+                    ),
+                )
+            eid: str | None = None
+            if event_id is not None:
+                eid = _normalize_required_id(event_id)
+                if eid is None:
+                    return build_automation_error_payload(
+                        message=(
+                            "Invalid 'event_id': provide a non-empty string or "
+                            "positive integer when supplied."
+                        ),
+                    )
+            for arg_name, val in (
+                ("event_params", event_params),
+                ("action_params", action_params),
+                ("condition", condition),
+            ):
+                bad = mutation_error_if_not_optional_dict(val, arg_name=arg_name)
+                if bad is not None:
+                    return bad
+            bad = mutation_error_if_not_optional_dict(
+                extra_input, arg_name="extra_input"
+            )
+            if bad is not None:
+                return bad
+            if name is not None and (not isinstance(name, str) or not name.strip()):
+                return build_automation_error_payload(
+                    message="Invalid 'name': provide a non-empty string when supplied.",
+                )
+            try:
+                result = await client.simulate_automation(
+                    pipe_id=pid,
+                    action_id=aid,
+                    sample_card_id=sid,
+                    event_id=eid,
+                    event_params=event_params,
+                    action_params=action_params,
+                    condition=condition,
+                    name=name.strip() if isinstance(name, str) else None,
+                    extra_input=extra_input,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return handle_automation_tool_graphql_error(exc, ctx, debug)
+            sim_row = result["automation_simulation"]
+            if not isinstance(sim_row, dict):
+                sim_row = {}
+            return build_automation_simulation_success_payload(
+                result["simulation_id"],
+                sim_row,
             )
 
         @mcp.tool(

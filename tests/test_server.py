@@ -131,6 +131,7 @@ async def test_register_tools(client_session):
         "search_tables",
         "send_email_with_template",
         "send_inbox_email",
+        "simulate_automation",
         "set_role",
         "set_table_record_field_value",
         "update_ai_agent",

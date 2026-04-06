@@ -15,6 +15,7 @@ from pipefy_mcp.services.pipefy.automation_graphql_types import (
     AutomationRuleSummary,
     CreateAutomationMutationResult,
     DeleteAutomationServiceResult,
+    SimulateAutomationServiceResult,
     UpdateAutomationMutationResult,
 )
 from pipefy_mcp.services.pipefy.automation_service import AutomationService
@@ -559,6 +560,32 @@ class PipefyClient:
         """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names)."""
         return await self._automation_service.update_automation(
             automation_id, **(extra_input or {})
+        )
+
+    async def simulate_automation(
+        self,
+        *,
+        pipe_id: str,
+        action_id: str,
+        sample_card_id: str,
+        event_id: str | None = None,
+        event_params: dict[str, Any] | None = None,
+        action_params: dict[str, Any] | None = None,
+        condition: dict[str, Any] | None = None,
+        name: str | None = None,
+        extra_input: dict[str, Any] | None = None,
+    ) -> SimulateAutomationServiceResult:
+        """Dry-run a traditional automation action against a sample card (simulation mutation + query)."""
+        return await self._automation_service.simulate_automation(
+            pipe_id=pipe_id,
+            action_id=action_id,
+            sample_card_id=sample_card_id,
+            event_id=event_id,
+            event_params=event_params,
+            action_params=action_params,
+            condition=condition,
+            name=name,
+            extra_input=extra_input,
         )
 
     async def delete_automation(

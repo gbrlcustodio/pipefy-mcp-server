@@ -263,7 +263,8 @@ class AiAgentTools:
             agent_uuid = create_result["agent_uuid"]
 
             resolved_behaviors = await resolve_field_slugs_to_numeric(
-                client, validated.behaviors
+                client,
+                [b.model_dump(by_alias=True) for b in validated.behaviors],
             )
             update_input = UpdateAiAgentInput(
                 uuid=agent_uuid,

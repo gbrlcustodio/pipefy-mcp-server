@@ -7,7 +7,12 @@ from typing import Any
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
+from pipefy_mcp.models.ai_automation import (
+    CreateAiAutomationInput,
+    UpdateAiAutomationInput,
+)
 from pipefy_mcp.services.pipefy.ai_agent_service import AiAgentService
+from pipefy_mcp.services.pipefy.ai_automation_service import AiAutomationService
 from pipefy_mcp.services.pipefy.attachment_service import AttachmentService
 from pipefy_mcp.services.pipefy.automation_graphql_types import (
     AutomationActionRow,
@@ -35,6 +40,7 @@ from pipefy_mcp.services.pipefy.table_service import TableService
 from pipefy_mcp.services.pipefy.types import (
     AgentServiceResult,
     AiAgentGraphPayload,
+    AutomationServiceResult,
     CardSearch,
     ToggleAgentStatusResult,
 )
@@ -75,6 +81,15 @@ class PipefyClient:
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
+        self._ai_automation_service: AiAutomationService | None = None
+
+    def set_ai_automation_service(self, service: AiAutomationService) -> None:
+        """Attach an AI automation service (requires OAuth credentials).
+
+        Args:
+            service: Configured :class:`AiAutomationService` instance.
+        """
+        self._ai_automation_service = service
 
     async def get_pipe(self, pipe_id: int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
@@ -551,14 +566,14 @@ class PipefyClient:
                 pass the **destination** pipe ID.
             extra_input: Extra ``CreateAutomationInput`` keys; ``active`` here overrides the ``active`` argument.
         """
-        merged: dict[str, Any] = {"active": active, **(extra_input or {})}
         return await self._automation_service.create_automation(
             pipe_id,
             name,
             trigger_id,
             action_id,
             action_repo_id=action_repo_id,
-            **merged,
+            active=active,
+            **(extra_input or {}),
         )
 
     async def update_automation(
@@ -634,6 +649,28 @@ class PipefyClient:
         return await self._ai_agent_service.toggle_agent_status(
             agent_uuid=agent_uuid, active=active
         )
+
+    async def create_ai_automation(
+        self, automation_input: CreateAiAutomationInput
+    ) -> AutomationServiceResult:
+        """Create an AI Automation (generate_with_ai action via internal API)."""
+        if self._ai_automation_service is None:
+            raise ValueError(
+                "AI Automation requires OAuth credentials "
+                "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL)."
+            )
+        return await self._ai_automation_service.create_automation(automation_input)
+
+    async def update_ai_automation(
+        self, automation_input: UpdateAiAutomationInput
+    ) -> AutomationServiceResult:
+        """Update an existing AI Automation via internal API."""
+        if self._ai_automation_service is None:
+            raise ValueError(
+                "AI Automation requires OAuth credentials "
+                "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL)."
+            )
+        return await self._ai_automation_service.update_automation(automation_input)
 
     async def get_pipe_members(self, pipe_id: int) -> dict:
         """Get the members of a pipe."""

@@ -17,6 +17,7 @@ from pipefy_mcp.models.comment import (
 from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
@@ -25,7 +26,6 @@ from pipefy_mcp.tools.graphql_error_helpers import (
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     AddCardCommentPayload,
-    DeleteCardConfirmation,
     DeleteCardPayload,
     DeleteCommentErrorPayload,
     DeleteCommentSuccessPayload,
@@ -37,7 +37,6 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
-    build_delete_card_preview_payload,
     build_delete_card_success_payload,
     build_delete_comment_error_payload,
     build_delete_comment_success_payload,
@@ -353,7 +352,7 @@ class PipeTools:
             return await client.get_pipe_members(pipe_id)
 
         @mcp.tool(
-            annotations=ToolAnnotations(idempotentHint=True),
+            annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True),
         )
         async def move_card_to_phase(card_id: int, destination_phase_id: int) -> dict:
             """Move a card to a specific phase."""
@@ -611,6 +610,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(
+                readOnlyHint=False,
                 destructiveHint=True,
             ),
         )
@@ -671,41 +671,13 @@ class PipeTools:
                     )
                 )
 
-            can_elicit = ctx.session.client_params.capabilities.elicitation
-            if not can_elicit and not confirm:
-                return build_delete_card_preview_payload(
-                    card_id=card_id,
-                    card_title=card_title,
-                    pipe_name=pipe_name,
-                )
-
-            if can_elicit and not confirm:
-                confirmation_message = (
-                    f"⚠️ You are about to permanently delete card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}'. "
-                    "This action is irreversible. Are you sure you want to proceed?"
-                )
-
-                try:
-                    result = await ctx.elicit(
-                        message=confirmation_message,
-                        schema=DeleteCardConfirmation,
-                    )
-
-                    if result.action != "accept":
-                        return build_delete_card_error_payload(
-                            message="Card deletion cancelled by user."
-                        )
-
-                    confirmation_data = result.data.model_dump()
-                    if not confirmation_data.get("confirm"):
-                        return build_delete_card_error_payload(
-                            message="Card deletion cancelled by user."
-                        )
-
-                except Exception as exc:  # noqa: BLE001
-                    return build_delete_card_error_payload(
-                        message=f"Failed to request confirmation: {exc!s}"
-                    )
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}'",
+            )
+            if guard is not None:
+                return guard
 
             try:
                 delete_response = await client.delete_card(card_id)

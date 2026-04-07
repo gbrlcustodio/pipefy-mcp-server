@@ -21,7 +21,6 @@ from pipefy_mcp.tools.graphql_error_helpers import (
 )
 from pipefy_mcp.tools.table_tool_helpers import (
     build_delete_table_error_payload,
-    build_delete_table_preview_payload,
     build_delete_table_success_payload,
     build_table_mutation_error_payload,
     build_table_mutation_success_payload,
@@ -39,13 +38,7 @@ _TABLE_RECORDS_FIRST_MIN = 1
 _TABLE_RECORDS_FIRST_MAX = 200
 
 
-def _valid_table_field_id(value: str | int) -> bool:
-    """Table field IDs may be numeric or slug strings from Pipefy."""
-    if isinstance(value, int):
-        return value > 0
-    if isinstance(value, str):
-        return bool(value.strip())
-    return False
+_valid_table_field_id = valid_repo_id
 
 
 _CREATE_TABLE_EXTRA_RESERVED = frozenset({"name", "organization_id"})
@@ -384,6 +377,7 @@ class TableTools:
             ),
         )
         async def delete_table(
+            ctx: Context[ServerSession, None],
             table_id: str | int,
             confirm: bool = False,
             debug: bool = False,
@@ -425,12 +419,13 @@ class TableTools:
                     ),
                 )
 
-            if not confirm:
-                return build_delete_table_preview_payload(
-                    table_id=table_id,
-                    table_name=table_name,
-                    table_data=table_data,
-                )
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"table '{table_name}' (ID: {table_id})",
+            )
+            if guard is not None:
+                return guard
 
             try:
                 delete_response = await client.delete_table(table_id)

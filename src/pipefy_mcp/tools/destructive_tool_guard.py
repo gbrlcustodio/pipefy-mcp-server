@@ -70,15 +70,15 @@ async def check_destructive_confirmation(
         A ``dict`` payload when the operation was cancelled or needs
         confirmation — the caller should return this payload as-is.
     """
-    can_elicit = ctx.session.client_params.capabilities.elicitation
+    if confirm:
+        return None
 
-    if not can_elicit and not confirm:
-        return _build_preview_payload(resource_descriptor)
+    can_elicit = ctx.session.client_params.capabilities.elicitation
 
     if can_elicit:
         return await _elicit_confirmation(ctx, resource_descriptor)
 
-    return None
+    return _build_preview_payload(resource_descriptor)
 
 
 def _build_preview_payload(resource_descriptor: str) -> DestructivePreviewPayload:

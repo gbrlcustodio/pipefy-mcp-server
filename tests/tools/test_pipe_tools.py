@@ -21,7 +21,6 @@ from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     DeleteCardErrorPayload,
-    DeleteCardPreviewPayload,
     DeleteCardSuccessPayload,
 )
 from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
@@ -1221,19 +1220,16 @@ class TestDeleteCardTool:
             mock_pipefy_client.delete_card.assert_not_called()
 
             payload = extract_payload(result)
-            expected_payload: DeleteCardPreviewPayload = {
+            assert payload == {
                 "success": False,
                 "requires_confirmation": True,
-                "card_id": 12345,
-                "card_title": "Test Card",
-                "pipe_name": "Test Pipe",
+                "resource": "card 'Test Card' (ID: 12345) from pipe 'Test Pipe'",
                 "message": (
-                    "⚠️ You are about to permanently delete card "
-                    "'Test Card' (ID: 12345) from pipe 'Test Pipe'. "
+                    "⚠️ You are about to permanently delete "
+                    "card 'Test Card' (ID: 12345) from pipe 'Test Pipe'. "
                     "This action is irreversible. Set 'confirm=True' to proceed."
                 ),
             }
-            assert payload == expected_payload
 
     @pytest.mark.parametrize(
         "client_session",
@@ -1262,11 +1258,10 @@ class TestDeleteCardTool:
             mock_pipefy_client.delete_card.assert_not_called()
 
             payload = extract_payload(result)
-            expected_payload: DeleteCardErrorPayload = {
+            assert payload == {
                 "success": False,
-                "error": "Card deletion cancelled by user.",
+                "error": "Action cancelled by user.",
             }
-            assert payload == expected_payload
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_invalid_card_id_returns_error(
@@ -1487,7 +1482,7 @@ class TestDeleteCardTool:
         mock_pipefy_client,
         extract_payload,
     ) -> None:
-        """When elicitation for confirmation raises, tool returns error with 'Failed to request confirmation'."""
+        """When elicitation raises, the shared guard falls back to a preview payload."""
         mock_pipefy_client.get_card.return_value = {
             "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
         }
@@ -1498,7 +1493,7 @@ class TestDeleteCardTool:
         mock_pipefy_client.delete_card.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "Failed to request confirmation" in payload["error"]
+        assert payload["requires_confirmation"] is True
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_debug_true_appends_codes_and_correlation_id_to_error(

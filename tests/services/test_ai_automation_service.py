@@ -17,7 +17,7 @@ def _create_mock_internal_api_client(execute_return: dict | None = None) -> Magi
     mock = MagicMock(spec=InternalApiClient)
     mock.execute_query = AsyncMock(
         return_value=execute_return
-        or {"data": {"createAutomation": {"automation": {"id": "123"}}}}
+        or {"createAutomation": {"automation": {"id": "123"}}}
     )
     return mock
 
@@ -27,7 +27,7 @@ def _create_mock_internal_api_client(execute_return: dict | None = None) -> Magi
 async def test_create_automation_calls_execute_query_with_correct_variables():
     """create_automation calls execute_query with createAutomation mutation and correct variables."""
     mock_client = _create_mock_internal_api_client(
-        {"data": {"createAutomation": {"automation": {"id": "456"}}}}
+        {"createAutomation": {"automation": {"id": "456"}}}
     )
     service = AiAutomationService(client=mock_client)
 
@@ -63,7 +63,7 @@ async def test_create_automation_calls_execute_query_with_correct_variables():
 async def test_create_automation_sends_custom_skills_ids():
     """create_automation forwards custom skills_ids in aiParams.skillsIds."""
     mock_client = _create_mock_internal_api_client(
-        {"data": {"createAutomation": {"automation": {"id": "456"}}}}
+        {"createAutomation": {"automation": {"id": "456"}}}
     )
     service = AiAutomationService(client=mock_client)
 
@@ -89,7 +89,7 @@ async def test_create_automation_sends_custom_skills_ids():
 async def test_create_automation_returns_success_format():
     """create_automation returns automation_id and message in success format."""
     mock_client = _create_mock_internal_api_client(
-        {"data": {"createAutomation": {"automation": {"id": "999"}}}}
+        {"createAutomation": {"automation": {"id": "999"}}}
     )
     service = AiAutomationService(client=mock_client)
 
@@ -113,7 +113,7 @@ async def test_create_automation_returns_success_format():
 async def test_update_automation_calls_execute_query_with_correct_variables():
     """update_automation calls execute_query with updateAutomation mutation and correct variables."""
     mock_client = _create_mock_internal_api_client(
-        {"data": {"updateAutomation": {"automation": {"id": "789"}}}}
+        {"updateAutomation": {"automation": {"id": "789"}}}
     )
     service = AiAutomationService(client=mock_client)
 
@@ -146,7 +146,7 @@ async def test_update_automation_calls_execute_query_with_correct_variables():
 async def test_update_automation_sends_skills_ids_when_provided():
     """update_automation includes skillsIds in aiParams when skills_ids is set."""
     mock_client = _create_mock_internal_api_client(
-        {"data": {"updateAutomation": {"automation": {"id": "789"}}}}
+        {"updateAutomation": {"automation": {"id": "789"}}}
     )
     service = AiAutomationService(client=mock_client)
 
@@ -165,7 +165,7 @@ async def test_update_automation_sends_skills_ids_when_provided():
 async def test_update_automation_returns_success_format():
     """update_automation returns automation_id and message in success format."""
     mock_client = _create_mock_internal_api_client(
-        {"data": {"updateAutomation": {"automation": {"id": "111"}}}}
+        {"updateAutomation": {"automation": {"id": "111"}}}
     )
     service = AiAutomationService(client=mock_client)
 
@@ -216,7 +216,7 @@ async def test_update_automation_propagates_execute_query_error():
 @pytest.mark.asyncio
 async def test_create_automation_missing_automation_id_returns_clear_error():
     """create_automation returns clear error when API response missing automation.id."""
-    mock_client = _create_mock_internal_api_client({"data": {}})
+    mock_client = _create_mock_internal_api_client({"createAutomation": {}})
     service = AiAutomationService(client=mock_client)
 
     inp = CreateAiAutomationInput(
@@ -236,7 +236,7 @@ async def test_create_automation_missing_automation_id_returns_clear_error():
 async def test_update_automation_missing_automation_id_returns_clear_error():
     """update_automation returns clear error when API response missing automation.id."""
     mock_client = _create_mock_internal_api_client(
-        {"data": {"updateAutomation": {"automation": {}}}}
+        {"updateAutomation": {"automation": {}}}
     )
     service = AiAutomationService(client=mock_client)
 
@@ -252,15 +252,13 @@ async def test_create_automation_raises_on_error_details():
     """create_automation raises ValueError when API returns error_details."""
     mock_client = _create_mock_internal_api_client(
         {
-            "data": {
-                "createAutomation": {
-                    "automation": None,
-                    "error_details": {
-                        "object_name": "Automation",
-                        "object_key": "base",
-                        "messages": ["Pipe not found", "AI not enabled"],
-                    },
-                }
+            "createAutomation": {
+                "automation": None,
+                "error_details": {
+                    "object_name": "Automation",
+                    "object_key": "base",
+                    "messages": ["Pipe not found", "AI not enabled"],
+                },
             }
         }
     )
@@ -283,15 +281,13 @@ async def test_update_automation_raises_on_error_details():
     """update_automation raises ValueError when API returns error_details."""
     mock_client = _create_mock_internal_api_client(
         {
-            "data": {
-                "updateAutomation": {
-                    "automation": None,
-                    "error_details": {
-                        "object_name": "Automation",
-                        "object_key": "base",
-                        "messages": ["Invalid field"],
-                    },
-                }
+            "updateAutomation": {
+                "automation": None,
+                "error_details": {
+                    "object_name": "Automation",
+                    "object_key": "base",
+                    "messages": ["Invalid field"],
+                },
             }
         }
     )

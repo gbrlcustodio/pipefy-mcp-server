@@ -61,7 +61,7 @@ class AiAutomationService:
             AI_CREATE_AUTOMATION_MUTATION, variables
         )
 
-        create_result = response.get("data", {}).get("createAutomation", {})
+        create_result = response.get("createAutomation", {})
         error_details = create_result.get("error_details")
         if error_details:
             messages = error_details.get("messages", [])
@@ -115,7 +115,7 @@ class AiAutomationService:
             AI_UPDATE_AUTOMATION_MUTATION, variables
         )
 
-        update_result = response.get("data", {}).get("updateAutomation", {})
+        update_result = response.get("updateAutomation", {})
         error_details = update_result.get("error_details")
         if error_details:
             messages = error_details.get("messages", [])

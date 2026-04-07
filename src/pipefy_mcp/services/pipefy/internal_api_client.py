@@ -33,6 +33,10 @@ class InternalApiClient:
             oauth_client: OAuth client ID.
             oauth_secret: OAuth client secret.
         """
+        if not url.strip().lower().startswith("https://"):
+            raise ValueError("internal_api URL must use HTTPS")
+        if not oauth_url.strip().lower().startswith("https://"):
+            raise ValueError("OAuth URL must use HTTPS")
         self._url = url
         self._auth = OAuth2ClientCredentials(
             token_url=oauth_url,
@@ -69,4 +73,5 @@ class InternalApiClient:
             data = response.json()
             if "errors" in data and data["errors"]:
                 raise ValueError(f"GraphQL error response: {data['errors']}")
-            return data
+            # Unwrap the "data" envelope to match BasePipefyClient.execute_query
+            return data.get("data", data)

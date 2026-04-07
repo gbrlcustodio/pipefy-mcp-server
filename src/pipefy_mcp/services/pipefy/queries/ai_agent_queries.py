@@ -52,6 +52,8 @@ GET_AI_AGENT_QUERY = gql(
                                 destinationPhaseId
                                 pipeId
                                 tableId
+                                emailTemplateId
+                                allowTemplateModifications
                                 fieldsAttributes {
                                     fieldId
                                     inputMode
@@ -168,6 +170,8 @@ UPDATE_AI_AGENT_MUTATION = gql(
                                     destinationPhaseId
                                     pipeId
                                     tableId
+                                    emailTemplateId
+                                    allowTemplateModifications
                                     fieldsAttributes {
                                         fieldId
                                         inputMode

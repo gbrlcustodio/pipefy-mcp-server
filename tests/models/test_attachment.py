@@ -180,6 +180,44 @@ def test_infer_content_type(file_name, expected):
 
 
 @pytest.mark.unit
+def test_upload_attachment_to_card_coerces_int_organization_id():
+    data = UploadAttachmentToCardInput(
+        organization_id=12345,
+        card_id=42,
+        field_id="field_abc",
+        file_name="doc.pdf",
+        file_url="https://example.com/f.pdf",
+    )
+    assert data.organization_id == "12345"
+
+
+@pytest.mark.unit
+def test_upload_attachment_to_card_coerces_int_field_id():
+    data = UploadAttachmentToCardInput(
+        organization_id="org-1",
+        card_id=42,
+        field_id=999,
+        file_name="doc.pdf",
+        file_url="https://example.com/f.pdf",
+    )
+    assert data.field_id == "999"
+
+
+@pytest.mark.unit
+def test_upload_attachment_to_table_record_coerces_int_ids():
+    data = UploadAttachmentToTableRecordInput(
+        organization_id=100,
+        table_record_id=200,
+        field_id=300,
+        file_name="n.csv",
+        file_url="https://example.com/x",
+    )
+    assert data.organization_id == "100"
+    assert data.table_record_id == "200"
+    assert data.field_id == "300"
+
+
+@pytest.mark.unit
 def test_models_exported_from_package():
     from pipefy_mcp.models import (
         UploadAttachmentToCardInput as CardFromPkg,

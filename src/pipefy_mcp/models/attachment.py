@@ -7,6 +7,8 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from pipefy_mcp.models.validators import PipefyId
+
 APPLICATION_OCTET_STREAM = "application/octet-stream"
 
 # ``mimetypes`` maps ``.xyz`` to ``chemical/x-xyz`` on many systems; for generic uploads
@@ -62,9 +64,9 @@ class UploadAttachmentToCardInput(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    organization_id: str
+    organization_id: PipefyId
     card_id: int
-    field_id: str
+    field_id: PipefyId
     file_name: str
     file_url: str | None = None
     file_content_base64: str | None = None
@@ -82,9 +84,9 @@ class UploadAttachmentToTableRecordInput(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    organization_id: str
-    table_record_id: str
-    field_id: str
+    organization_id: PipefyId
+    table_record_id: PipefyId
+    field_id: PipefyId
     file_name: str
     file_url: str | None = None
     file_content_base64: str | None = None

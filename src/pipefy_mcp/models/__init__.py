@@ -7,8 +7,10 @@ from pipefy_mcp.models.attachment import (
     UploadAttachmentToTableRecordInput,
     infer_content_type,
 )
+from pipefy_mcp.models.validators import PipefyId
 
 __all__ = [
+    "PipefyId",
     "UploadAttachmentToCardInput",
     "UploadAttachmentToTableRecordInput",
     "infer_content_type",

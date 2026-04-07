@@ -1,12 +1,12 @@
 # Automations & AI
 
-Traditional automations (if/then rules) and AI-powered automations and agents. **16 tools.**
+Traditional automations (if/then rules) and AI-powered automations and agents. **17 tools.**
 
 ---
 
 ## Traditional automations (rules engine)
 
-Seven tools manage Pipefy traditional automations: if/then rules bound to a pipe via the standard GraphQL API.
+Eight tools manage Pipefy traditional automations: if/then rules bound to a pipe via the standard GraphQL API.
 
 **Tip:** Call `get_automation_events` (global event catalog) and `get_automation_actions` with the target pipe (`repoId`) before `create_automation` to pick valid `trigger_id` / `action_id` values. Writes accept optional `extra_input` (camelCase API keys) and `debug=true` on errors.
 
@@ -17,6 +17,7 @@ Seven tools manage Pipefy traditional automations: if/then rules bound to a pipe
 | `get_automation_actions` | Yes | Catalog of action types for a pipe (IDs and field metadata). |
 | `get_automation_events` | Yes | Catalog of trigger event definitions (global list; tool still takes `pipe_id` for context). |
 | `create_automation` | No | Creates a rule: `pipe_id`, `name`, `trigger_id`, `action_id`; `active` defaults to true. Set `active: false` to create disabled. |
+| `create_send_task_automation` | No | Creates a send-a-task automation (`pipe_id`, trigger, task title, recipients). Created active; disable via `update_automation`. |
 | `update_automation` | No | Patches a rule via `extra_input` (`UpdateAutomationInput` fields). |
 | `delete_automation` | No | Permanently deletes a rule (`destructiveHint=True` — confirm with the user first). |
 

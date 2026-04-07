@@ -194,6 +194,69 @@ def _connected_card_behavior(target_pipe_id="child-pipe"):
     }
 
 
+def _create_table_record_behavior(field_id="tbl-field-999", table_id="tbl-1"):
+    return {
+        "name": "Insert table row",
+        "event_id": "card_created",
+        "actionParams": {
+            "aiBehaviorParams": {
+                "instruction": "go",
+                "actionsAttributes": [
+                    {
+                        "name": "row",
+                        "actionType": "create_table_record",
+                        "metadata": {
+                            "tableId": table_id,
+                            "fieldsAttributes": [
+                                {
+                                    "fieldId": field_id,
+                                    "inputMode": "fill_with_ai",
+                                    "value": "",
+                                },
+                            ],
+                        },
+                    },
+                ],
+            }
+        },
+    }
+
+
+def _send_email_template_behavior(
+    *,
+    email_template_id="tmpl-1",
+    include_stray_fields_attributes=False,
+):
+    metadata = {
+        "emailTemplateId": email_template_id,
+        "allowTemplateModifications": True,
+    }
+    if include_stray_fields_attributes:
+        metadata["fieldsAttributes"] = [
+            {
+                "fieldId": "999",
+                "inputMode": "fill_with_ai",
+                "value": "",
+            },
+        ]
+    return {
+        "name": "Send mail",
+        "event_id": "card_created",
+        "actionParams": {
+            "aiBehaviorParams": {
+                "instruction": "go",
+                "actionsAttributes": [
+                    {
+                        "name": "email",
+                        "actionType": "send_email_template",
+                        "metadata": metadata,
+                    },
+                ],
+            }
+        },
+    }
+
+
 PIPE_FIELDS = {"100", "101", "102"}
 PIPE_PHASES = {"ph-start", "ph-1", "ph-done"}
 RELATED_PIPES = {"child-pipe", "sibling-pipe"}
@@ -301,6 +364,37 @@ def test_validate_create_connected_card_skipped_when_relations_not_loaded():
     )
     assert problems == []
     assert warnings == []
+
+
+@pytest.mark.unit
+def test_validate_create_table_record_skips_pipe_field_id_check():
+    """Table field IDs are not validated against the source pipe (FR-6)."""
+    problems, warnings = validate_behaviors_against_pipe(
+        [_create_table_record_behavior(field_id="999")],
+        pipe_id="1",
+        pipe_field_ids=PIPE_FIELDS,
+        pipe_phase_ids=PIPE_PHASES,
+        related_pipe_ids=RELATED_PIPES,
+    )
+    assert problems == []
+    assert len(warnings) == 1
+    assert "create_table_record" in warnings[0]
+    assert "get_table" in warnings[0] and "get_table_record" in warnings[0]
+
+
+@pytest.mark.unit
+def test_validate_send_email_template_skips_pipe_field_checks():
+    """Email template actions do not cross-validate fieldIds against the pipe (FR-6)."""
+    problems, warnings = validate_behaviors_against_pipe(
+        [_send_email_template_behavior(include_stray_fields_attributes=True)],
+        pipe_id="1",
+        pipe_field_ids=PIPE_FIELDS,
+        pipe_phase_ids=PIPE_PHASES,
+        related_pipe_ids=RELATED_PIPES,
+    )
+    assert problems == []
+    assert warnings == []
+    assert not any("fieldsAttributes" in p for p in problems)
 
 
 @pytest.mark.unit

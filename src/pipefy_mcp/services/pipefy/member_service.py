@@ -72,12 +72,12 @@ class MemberService(BasePipefyClient):
             pipe_data = await self._pipe_service.get_pipe(int(pipe_id_str))
             pipe_obj = pipe_data.get("pipe") or {}
         elif _PIPE_UUID_RE.match(pipe_id_str):
-            pipe_data = await self._pipe_service.get_pipe(pipe_id_str)
-            pipe_obj = pipe_data.get("pipe") or {}
-        else:
             raise ValueError(
-                f"pipe_id must be a numeric pipe ID or a pipe UUID, got {pipe_id!r}."
+                f"pipe_id must be a numeric pipe ID, not a UUID ({pipe_id_str}). "
+                "Use the numeric pipe ID from get_pipe instead."
             )
+        else:
+            raise ValueError(f"pipe_id must be a numeric pipe ID, got {pipe_id!r}.")
 
         pipe_uuid = pipe_obj.get("uuid") or pipe_id_str
         pipe_numeric_id = pipe_obj.get("id")

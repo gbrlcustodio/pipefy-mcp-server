@@ -181,3 +181,13 @@ async def test_set_role_transport_error(mock_settings):
     )
     with pytest.raises(TransportQueryError):
         await service.set_role("604", "m1", "member")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_remove_members_rejects_uuid_pipe_id(mock_settings):
+    service = MemberService(settings=mock_settings)
+    with pytest.raises(ValueError, match="numeric pipe ID"):
+        await service.remove_members_from_pipe(
+            "a1b2c3d4-e5f6-7890-abcd-ef1234567890", ["u1"]
+        )

@@ -238,7 +238,14 @@ def _summarize_behaviors(behaviors: list[dict[str, Any]]) -> str:
 
 # actionTypes that the Pipefy AI behavior system recognizes.
 KNOWN_AI_ACTION_TYPES = frozenset(
-    {"move_card", "update_card", "create_card", "create_connected_card"}
+    {
+        "create_card",
+        "create_connected_card",
+        "create_table_record",
+        "move_card",
+        "send_email_template",
+        "update_card",
+    }
 )
 
 
@@ -326,34 +333,46 @@ def validate_behaviors_against_pipe(
             # Check fieldsAttributes fieldId references.
             # Same-pipe actions check against pipe_field_ids; cross-pipe actions
             # check against cross_pipe_field_ids when available.
-            action_pipe = str(metadata.get("pipeId", ""))
-            targets_source = not action_pipe or action_pipe == pipe_id
-            if targets_source:
-                check_fields = pipe_field_ids
-            elif (
-                cross_pipe_field_ids is not None and action_pipe in cross_pipe_field_ids
-            ):
-                check_fields = cross_pipe_field_ids[action_pipe]
-            else:
-                check_fields = None
+            # create_table_record: table field IDs, not pipe fields (FR-6).
+            # send_email_template: no pipe-scoped field metadata (FR-6); missing pipeId
+            # would otherwise make targets_source True and mis-validate stray fieldsAttributes.
+            if action_type not in ("create_table_record", "send_email_template"):
+                action_pipe = str(metadata.get("pipeId", ""))
+                targets_source = not action_pipe or action_pipe == pipe_id
+                if targets_source:
+                    check_fields = pipe_field_ids
+                elif (
+                    cross_pipe_field_ids is not None
+                    and action_pipe in cross_pipe_field_ids
+                ):
+                    check_fields = cross_pipe_field_ids[action_pipe]
+                else:
+                    check_fields = None
 
-            if check_fields is not None:
-                fields_attrs = metadata.get("fieldsAttributes") or []
-                for k, fa in enumerate(fields_attrs):
-                    if not isinstance(fa, dict):
-                        continue
-                    fid = fa.get("fieldId", "")
-                    if fid and check_fields and fid not in check_fields:
-                        pipe_label = (
-                            "pipe fields"
-                            if targets_source
-                            else f"target pipe {action_pipe} fields"
-                        )
-                        problems.append(
-                            f"{prefix}, action [{j}] ({action_type}): "
-                            f'fieldsAttributes[{k}].fieldId "{fid}" '
-                            f"not found in {pipe_label}."
-                        )
+                if check_fields is not None:
+                    fields_attrs = metadata.get("fieldsAttributes") or []
+                    for k, fa in enumerate(fields_attrs):
+                        if not isinstance(fa, dict):
+                            continue
+                        fid = fa.get("fieldId", "")
+                        if fid and check_fields and fid not in check_fields:
+                            pipe_label = (
+                                "pipe fields"
+                                if targets_source
+                                else f"target pipe {action_pipe} fields"
+                            )
+                            problems.append(
+                                f"{prefix}, action [{j}] ({action_type}): "
+                                f'fieldsAttributes[{k}].fieldId "{fid}" '
+                                f"not found in {pipe_label}."
+                            )
+
+            if action_type == "create_table_record":
+                warnings.append(
+                    f"{prefix}, action [{j}] (create_table_record): "
+                    "fieldsAttributes reference table field IDs, which cannot be validated "
+                    "against this pipe. Verify IDs with get_table or get_table_record."
+                )
 
             # Check create_connected_card relation (skipped when related_pipe_ids is None)
             if action_type == "create_connected_card" and related_pipe_ids is not None:

@@ -17,21 +17,8 @@ _CARD_FIELD_ACTION_TYPES = frozenset(
 )
 
 
-def _validate_card_field_metadata(action_type: str, metadata: dict) -> None:
-    """Validate metadata for actions that operate on card fields.
-
-    Args:
-        action_type: The actionType string (used in error messages).
-        metadata: The metadata dict from the action.
-
-    Raises:
-        ValueError: When required keys are missing or malformed.
-    """
-    if not metadata.get("pipeId"):
-        raise ValueError(
-            f"actionType '{action_type}' requires metadata.pipeId "
-            f"(the pipe where the action executes)."
-        )
+def _validate_fields_attributes_entries(action_type: str, metadata: dict) -> None:
+    """Require non-empty ``fieldsAttributes`` with ``fieldId`` and ``inputMode`` per entry."""
     fields = metadata.get("fieldsAttributes")
     if not isinstance(fields, list) or not fields:
         raise ValueError(
@@ -51,6 +38,51 @@ def _validate_card_field_metadata(action_type: str, metadata: dict) -> None:
             raise ValueError(
                 f"actionType '{action_type}': fieldsAttributes[{i}] "
                 f"requires 'inputMode'."
+            )
+
+
+def _validate_card_field_metadata(action_type: str, metadata: dict) -> None:
+    """Validate metadata for actions that operate on card fields.
+
+    Args:
+        action_type: The actionType string (used in error messages).
+        metadata: The metadata dict from the action.
+
+    Raises:
+        ValueError: When required keys are missing or malformed.
+    """
+    if not metadata.get("pipeId"):
+        raise ValueError(
+            f"actionType '{action_type}' requires metadata.pipeId "
+            f"(the pipe where the action executes)."
+        )
+    _validate_fields_attributes_entries(action_type, metadata)
+
+
+def _validate_create_table_record_metadata(metadata: dict) -> None:
+    """Validate metadata for create_table_record (table row, not pipe fields)."""
+    if not metadata.get("tableId"):
+        raise ValueError(
+            "actionType 'create_table_record' requires metadata.tableId "
+            "(target database table ID)."
+        )
+    _validate_fields_attributes_entries("create_table_record", metadata)
+
+
+def _validate_send_email_template_metadata(metadata: dict) -> None:
+    """Validate metadata for send_email_template actions."""
+    template_id = metadata.get("emailTemplateId")
+    if not isinstance(template_id, str) or not template_id.strip():
+        raise ValueError(
+            "actionType 'send_email_template' requires metadata.emailTemplateId "
+            "(non-empty email template ID)."
+        )
+    if "allowTemplateModifications" in metadata:
+        mod = metadata["allowTemplateModifications"]
+        if not isinstance(mod, bool):
+            raise ValueError(
+                "actionType 'send_email_template': metadata.allowTemplateModifications "
+                "must be a boolean when set."
             )
 
 
@@ -82,6 +114,10 @@ def _validate_action_metadata(action: dict) -> None:
         _validate_card_field_metadata(action_type, metadata)
     elif action_type == "move_card":
         _validate_move_card_metadata(metadata)
+    elif action_type == "create_table_record":
+        _validate_create_table_record_metadata(metadata)
+    elif action_type == "send_email_template":
+        _validate_send_email_template_metadata(metadata)
 
 
 class BehaviorInput(BaseModel):
@@ -90,10 +126,19 @@ class BehaviorInput(BaseModel):
     The Pipefy API requires ``actionParams.aiBehaviorParams.actionsAttributes`` with at least
     one action; otherwise ``updateAiAgent`` fails (e.g. "The instructions must contain at least 1 action").
 
-    Optional ``eventParams`` configures the trigger. For each action dict, known ``actionType``
-    values get ``metadata`` checks: ``update_card`` / ``create_card`` / ``create_connected_card``
-    need ``pipeId`` and non-empty ``fieldsAttributes`` (each entry needs ``fieldId`` and
-    ``inputMode``); ``move_card`` needs ``destinationPhaseId``. Other types are not validated here.
+    Optional ``eventParams`` configures the trigger.
+
+    Optional ``actionParams.aiBehaviorParams.capabilitiesAttributes`` is a list of capability
+    entries the API accepts (e.g. ``advanced_ocr``, ``web_search``). No extra structural
+    validation here — the API enforces capability shapes.
+
+    For each action dict, known ``actionType`` values get ``metadata`` checks:
+    ``update_card`` / ``create_card`` / ``create_connected_card`` need ``pipeId`` and non-empty
+    ``fieldsAttributes`` (each entry needs ``fieldId`` and ``inputMode``); ``move_card`` needs
+    ``destinationPhaseId``; ``create_table_record`` needs ``tableId`` and non-empty
+    ``fieldsAttributes`` (same entry shape as card actions; ``pipeId`` not required);
+    ``send_email_template`` needs ``emailTemplateId`` and optional ``allowTemplateModifications``
+    (boolean). Other types are not validated here.
     """
 
     model_config = ConfigDict(populate_by_name=True)

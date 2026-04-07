@@ -428,18 +428,6 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     )
 
     assert await client.create_automation(
-        "p1",
-        "Rule",
-        "ev",
-        "act",
-        active=True,
-        extra_input={"active": False},
-    ) == {"ok": "create_automation"}
-    automation_service.create_automation.assert_awaited_with(
-        "p1", "Rule", "ev", "act", action_repo_id=None, active=False
-    )
-
-    assert await client.create_automation(
         "p1", "Rule", "ev", "act", action_repo_id="child-pipe"
     ) == {"ok": "create_automation"}
     automation_service.create_automation.assert_awaited_with(

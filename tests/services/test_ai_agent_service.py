@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
+from graphql import print_ast
 
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_mcp.services.pipefy.ai_agent_service import (
@@ -18,11 +19,29 @@ from pipefy_mcp.services.pipefy.queries.ai_agent_queries import (
     DELETE_AI_AGENT_MUTATION,
     GET_AI_AGENT_QUERY,
     GET_AI_AGENTS_QUERY,
+    UPDATE_AI_AGENT_MUTATION,
 )
 from pipefy_mcp.settings import PipefySettings
-from tests.ai_agent_test_payloads import minimal_behavior_dict
+from tests.ai_agent_test_payloads import (
+    minimal_behavior_dict,
+    mock_agent_with_behaviors,
+)
 
 UUID_PATTERN = re.compile(r"%\{action:([a-f0-9-]{36})\}")
+
+
+@pytest.mark.unit
+def test_get_ai_agent_query_includes_email_template_metadata_fields():
+    printed = print_ast(GET_AI_AGENT_QUERY)
+    assert "emailTemplateId" in printed
+    assert "allowTemplateModifications" in printed
+
+
+@pytest.mark.unit
+def test_update_ai_agent_mutation_includes_email_template_metadata_fields():
+    printed = print_ast(UPDATE_AI_AGENT_MUTATION)
+    assert "emailTemplateId" in printed
+    assert "allowTemplateModifications" in printed
 
 
 def _make_behavior_dict(instruction="", actions=None):
@@ -467,6 +486,50 @@ async def test_get_agent_success():
     assert query is GET_AI_AGENT_QUERY
     assert variables == {"uuid": "agent-1"}
     assert result == agent_payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_agent_includes_behaviors_when_api_returns_them():
+    """get_agent passes through the full behaviors list from the API response."""
+    agent_payload = mock_agent_with_behaviors()
+    service = _create_mock_service({"aiAgent": agent_payload})
+
+    result = await service.get_agent("agent-with-behaviors")
+
+    assert result["behaviors"] is not None
+    assert len(result["behaviors"]) == 1
+    behavior = result["behaviors"][0]
+    assert behavior["id"] == "123"
+    assert behavior["eventId"] == "card_created"
+    ai_params = behavior["actionParams"]["aiBehaviorParams"]
+    assert ai_params["instruction"] == "Analyze the card and fill summary."
+    assert len(ai_params["actionsAttributes"]) == 1
+    assert ai_params["actionsAttributes"][0]["actionType"] == "update_card"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_agent_passes_through_null_behaviors():
+    """When API returns behaviors: null, service passes it through unchanged.
+
+    This documents the current behavior that leads to the bug: callers
+    (e.g. update_ai_agent flow) cannot distinguish "no behaviors" from
+    "behaviors could not be loaded" when the value is null.
+    """
+    agent_payload = {
+        "uuid": "agent-1",
+        "name": "Assistant",
+        "instruction": "Help users",
+        "disabledAt": None,
+        "needReview": False,
+        "behaviors": None,
+    }
+    service = _create_mock_service({"aiAgent": agent_payload})
+
+    result = await service.get_agent("agent-1")
+
+    assert result["behaviors"] is None
 
 
 @pytest.mark.unit

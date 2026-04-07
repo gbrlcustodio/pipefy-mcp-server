@@ -13,7 +13,7 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.models.ai_agent import UpdateAiAgentInput
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
-from tests.ai_agent_test_payloads import minimal_behavior_dict
+from tests.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
 
 
 @pytest.fixture
@@ -700,6 +700,68 @@ class TestValidateAiAgentBehaviors:
         mock_pipefy_client.get_pipe.assert_awaited_once_with(1)
         mock_pipefy_client.get_pipe_relations.assert_awaited_once_with("1")
 
+    async def test_create_table_record_warns_without_treating_table_field_as_pipe_field(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field()
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [],
+            "parents": [],
+        }
+        behavior = behavior_with_action(
+            "create_table_record",
+            {
+                "tableId": "tbl-1",
+                "fieldsAttributes": [
+                    {
+                        "fieldId": "not-on-pipe-999",
+                        "inputMode": "fill_with_ai",
+                        "value": "",
+                    },
+                ],
+            },
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {"pipe_id": "1", "behaviors": [behavior]},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is True
+        assert payload["problems"] == []
+        assert len(payload["warnings"]) == 1
+        assert "create_table_record" in payload["warnings"][0]
+
+    async def test_send_email_template_validates_without_pipe_field_problems(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field()
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [],
+            "parents": [],
+        }
+        behavior = behavior_with_action(
+            "send_email_template",
+            {"emailTemplateId": "tmpl-abc"},
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {"pipe_id": "1", "behaviors": [behavior]},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is True
+        assert payload["problems"] == []
+        assert payload["warnings"] == []
+
     async def test_relations_fetch_failure_adds_warning_skips_relation_check(
         self,
         client_session,
@@ -824,6 +886,62 @@ class TestGetAiAgent:
         mock_pipefy_client.get_ai_agent.assert_awaited_once_with("agent-1")
         payload = extract_payload(result)
         assert payload == {"success": True, "agent": agent}
+
+    async def test_success_with_behaviors(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Behaviors from the API are included verbatim in the MCP tool response."""
+        from tests.ai_agent_test_payloads import mock_agent_with_behaviors
+
+        agent = mock_agent_with_behaviors()
+        mock_pipefy_client.get_ai_agent.return_value = agent
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_ai_agent",
+                {"uuid": "agent-with-behaviors"},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        behaviors = payload["agent"]["behaviors"]
+        assert behaviors is not None
+        assert len(behaviors) == 1
+        assert behaviors[0]["eventId"] == "card_created"
+        ai_params = behaviors[0]["actionParams"]["aiBehaviorParams"]
+        assert ai_params["instruction"] == "Analyze the card and fill summary."
+
+    async def test_null_behaviors_from_api(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """When API returns behaviors: null, the tool response exposes it.
+
+        This documents the bug: callers see behaviors=null and cannot safely
+        re-send the config via update_ai_agent without risking data loss.
+        """
+        agent = {
+            "uuid": "agent-1",
+            "name": "Assistant",
+            "instruction": "Help",
+            "disabledAt": None,
+            "needReview": False,
+            "behaviors": None,
+        }
+        mock_pipefy_client.get_ai_agent.return_value = agent
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_ai_agent",
+                {"uuid": "agent-1"},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["agent"]["behaviors"] is None
 
     async def test_not_found_returns_error_payload(
         self,

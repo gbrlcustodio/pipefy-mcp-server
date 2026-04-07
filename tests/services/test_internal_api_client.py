@@ -73,7 +73,7 @@ async def test_execute_query_sends_post_with_correct_headers_and_body(respx_mock
     assert body == {"query": query_string, "variables": variables}
     assert "authorization" in (h.lower() for h in request.headers.keys())
     assert "content-type" in (h.lower() for h in request.headers.keys())
-    assert result == expected_json
+    assert result == expected_json.get("data", expected_json)
 
 
 @pytest.mark.unit
@@ -81,7 +81,7 @@ async def test_execute_query_sends_post_with_correct_headers_and_body(respx_mock
 @respx.mock(assert_all_mocked=False, assert_all_called=False)
 async def test_execute_query_returns_parsed_json_response(respx_mock):
     """Test execute_query returns the parsed JSON response from the API."""
-    expected = {"data": {"automation": {"id": "456"}}}
+    api_response = {"data": {"automation": {"id": "456"}}}
     respx_mock.post(OAUTH_TOKEN_URL).mock(
         return_value=httpx.Response(
             200,
@@ -89,7 +89,7 @@ async def test_execute_query_returns_parsed_json_response(respx_mock):
         )
     )
     respx_mock.post(DEFAULT_INTERNAL_API_URL).mock(
-        return_value=httpx.Response(200, json=expected)
+        return_value=httpx.Response(200, json=api_response)
     )
 
     client = InternalApiClient(
@@ -100,7 +100,7 @@ async def test_execute_query_returns_parsed_json_response(respx_mock):
     )
     result = await client.execute_query("query { x }", {})
 
-    assert result == expected
+    assert result == {"automation": {"id": "456"}}
 
 
 @pytest.mark.unit
@@ -180,3 +180,25 @@ async def test_execute_query_raises_on_timeout():
 
         with pytest.raises(httpx.TimeoutException):
             await client.execute_query("query { x }", {})
+
+
+@pytest.mark.unit
+def test_internal_api_client_rejects_http_url():
+    with pytest.raises(ValueError, match="HTTPS"):
+        InternalApiClient(
+            url="http://app.pipefy.com/internal_api",
+            oauth_url="https://auth.pipefy.com/oauth/token",
+            oauth_client="id",
+            oauth_secret="secret",
+        )
+
+
+@pytest.mark.unit
+def test_internal_api_client_rejects_http_oauth_url():
+    with pytest.raises(ValueError, match="HTTPS"):
+        InternalApiClient(
+            url="https://app.pipefy.com/internal_api",
+            oauth_url="http://auth.pipefy.com/oauth/token",
+            oauth_client="id",
+            oauth_secret="secret",
+        )

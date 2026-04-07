@@ -74,6 +74,10 @@ AI automations are separate from traditional rules above. They are prompt-driven
 | `update_card` | `{ "pipeId": "<pipe_id>", "fieldsAttributes": [{ "fieldId": "...", "inputMode": "fill_with_ai", "value": "" }] }` |
 | `create_card` | `{ "pipeId": "<pipe_id>", "fieldsAttributes": [...] }` |
 | `create_connected_card` | `{ "pipeId": "<pipe_id>", "fieldsAttributes": [...] }` |
+| `create_table_record` | `{ "tableId": "<table_id>", "fieldsAttributes": [...] }` (`pipeId` not required; MCP does not check table `fieldId` values against the pipe — use `get_table` / `get_table_record`.) |
+| `send_email_template` | `{ "emailTemplateId": "<template_id>" }` (optional: `allowTemplateModifications` boolean; MCP does not verify that the template ID exists.) |
+
+Optional inside `actionParams.aiBehaviorParams`: **`capabilitiesAttributes`** — list of capability entries (e.g. types `advanced_ocr`, `web_search`). Passed through to the API; the MCP does not deeply validate capability config.
 
 ### Optional `eventParams` (trigger filters)
 
@@ -90,6 +94,7 @@ Use `get_ai_agents` with the pipe's `uuid` (same as `repo_uuid`) before `create_
 |------|-----------|------|
 | `get_ai_agent` | Yes | Loads one agent by UUID: name, instruction, behaviors. |
 | `get_ai_agents` | Yes | Lists agents for a pipe (`repo_uuid` = pipe UUID). |
+| `validate_ai_agent_behaviors` | Yes | Dry-runs behaviors against a pipe (fields, phases, relations); use before create/update. |
 | `delete_ai_agent` | No | Permanently deletes an agent (`destructiveHint=True` — confirm with the user first). |
 
 ---

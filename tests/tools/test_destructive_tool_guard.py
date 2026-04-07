@@ -97,8 +97,8 @@ class TestWithElicitation:
         assert payload["requires_confirmation"] is True
         assert payload["resource"] == RESOURCE
 
-    async def test_confirm_true_ignored_when_elicitation_available(self):
-        """Even with confirm=True, elicitation takes precedence when available."""
+    async def test_confirm_true_bypasses_elicitation(self):
+        """When confirm=True, skip elicitation prompt and proceed immediately."""
         ctx = _make_ctx(
             can_elicit=True,
             elicit_result=_elicit_result(action="accept", confirm_value=True),
@@ -107,4 +107,4 @@ class TestWithElicitation:
             ctx, confirm=True, resource_descriptor=RESOURCE
         )
         assert result is None
-        ctx.elicit.assert_called_once()
+        ctx.elicit.assert_not_called()

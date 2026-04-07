@@ -5,6 +5,10 @@ from typing import Literal, cast
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
+from pipefy_mcp.tools.destructive_tool_guard import (
+    DestructiveCancelledPayload,
+    DestructivePreviewPayload,
+)
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 
 
@@ -73,7 +77,10 @@ class DeleteCardErrorPayload(TypedDict):
 
 
 DeleteCardPayload = (
-    DeleteCardPreviewPayload | DeleteCardSuccessPayload | DeleteCardErrorPayload
+    DestructivePreviewPayload
+    | DestructiveCancelledPayload
+    | DeleteCardSuccessPayload
+    | DeleteCardErrorPayload
 )
 
 # Message returned by find_cards tool when the API returns no matching cards.

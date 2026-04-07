@@ -514,7 +514,7 @@ async def test_delete_table_preview(table_session, mock_table_client, extract_pa
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload["requires_confirmation"] is True
-    assert payload["table_id"] == 5
+    assert payload["resource"] == "table 'Cat' (ID: 5)"
 
 
 @pytest.mark.anyio

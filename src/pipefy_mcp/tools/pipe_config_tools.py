@@ -15,7 +15,6 @@ from pipefy_mcp.tools.graphql_error_helpers import (
 )
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
     build_delete_pipe_error_payload,
-    build_delete_pipe_preview_payload,
     build_delete_pipe_success_payload,
     build_pipe_mutation_success_payload,
     build_pipe_tool_error_payload,
@@ -132,6 +131,7 @@ class PipeConfigTools:
             ),
         )
         async def delete_pipe(
+            ctx: Context[ServerSession, None],
             pipe_id: int,
             confirm: bool = False,
             debug: bool = False,
@@ -173,12 +173,13 @@ class PipeConfigTools:
                     ),
                 )
 
-            if not confirm:
-                return build_delete_pipe_preview_payload(
-                    pipe_id=pipe_id,
-                    pipe_name=pipe_name,
-                    pipe_data=pipe_data,
-                )
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"pipe '{pipe_name}' (ID: {pipe_id})",
+            )
+            if guard is not None:
+                return guard
 
             try:
                 delete_response = await client.delete_pipe(pipe_id)
@@ -366,7 +367,7 @@ class PipeConfigTools:
             if "name" not in update_attrs:
                 try:
                     phase_info = await client.get_phase_fields(phase_id)
-                except Exception as exc:  # noqa: BLE001  # noqa: BLE001
+                except Exception as exc:  # noqa: BLE001
                     return handle_pipe_config_tool_graphql_error(
                         exc, "Could not load phase.", debug=debug
                     )

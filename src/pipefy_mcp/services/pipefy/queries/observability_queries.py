@@ -145,7 +145,24 @@ GET_AUTOMATION_LOGS_BY_REPO_QUERY = gql(
     """
 )
 
-_STATS_DETAILS_NODE = """
+GET_AGENTS_USAGE_QUERY = gql(
+    """
+    query AgentsUsageDetails(
+        $organizationUuid: ID!
+        $filterDate: DateRange!
+        $filters: FilterParams
+        $search: String
+        $sort: SortCriteria
+    ) {
+        agentsUsageDetails(
+            organizationUuid: $organizationUuid
+            filterDate: $filterDate
+            filters: $filters
+            search: $search
+            sort: $sort
+        ) {
+            usage
+            agents {
                 nodes {
                     id
                     name
@@ -168,28 +185,7 @@ _STATS_DETAILS_NODE = """
                 pageInfo {
                     hasNextPage
                     endCursor
-                }"""
-
-GET_AGENTS_USAGE_QUERY = gql(
-    """
-    query AgentsUsageDetails(
-        $organizationUuid: ID!
-        $filterDate: DateRange!
-        $filters: FilterParams
-        $search: String
-        $sort: SortCriteria
-    ) {
-        agentsUsageDetails(
-            organizationUuid: $organizationUuid
-            filterDate: $filterDate
-            filters: $filters
-            search: $search
-            sort: $sort
-        ) {
-            usage
-            agents {"""
-    + _STATS_DETAILS_NODE
-    + """
+                }
             }
         }
     }
@@ -213,9 +209,30 @@ GET_AUTOMATIONS_USAGE_QUERY = gql(
             sort: $sort
         ) {
             usage
-            automations {"""
-    + _STATS_DETAILS_NODE
-    + """
+            automations {
+                nodes {
+                    id
+                    name
+                    usage
+                    status
+                    action
+                    event
+                    actionRepo {
+                        uuid
+                        name
+                    }
+                    eventRepo {
+                        uuid
+                        name
+                    }
+                    createdAt
+                    updatedAt
+                }
+                totalCount
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
             }
         }
     }

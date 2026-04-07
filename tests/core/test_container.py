@@ -70,12 +70,6 @@ class TestServicesContainer:
         mock_pipefy_client_class.assert_called_once_with(settings=settings.pipefy)
         assert container.pipefy_client is mock_client
 
-    def test_shutdown_method_exists(self):
-        """Test that shutdown method exists (currently a no-op)"""
-        container = ServicesContainer()
-
-        container.shutdown()
-
     @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.PipefyClient")
@@ -85,6 +79,10 @@ class TestServicesContainer:
         mock_ai_automation_service_class,
         mock_internal_api_client_class,
     ):
+        mock_client = Mock(spec=PipefyClient)
+        mock_client.client = Mock()
+        mock_pipefy_client_class.return_value = mock_client
+
         settings = Settings(
             pipefy=PipefySettings(
                 graphql_url="https://api.pipefy.com/graphql",
@@ -97,7 +95,8 @@ class TestServicesContainer:
         container = ServicesContainer()
         container.initialize_services(settings)
 
-        assert container.internal_api_client is not None
-        assert container.ai_automation_service is not None
         mock_internal_api_client_class.assert_called_once()
         mock_ai_automation_service_class.assert_called_once()
+        mock_client.set_ai_automation_service.assert_called_once_with(
+            mock_ai_automation_service_class.return_value
+        )

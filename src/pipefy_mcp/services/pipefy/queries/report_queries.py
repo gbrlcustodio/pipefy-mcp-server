@@ -6,38 +6,23 @@ from gql import gql
 
 # Column/filter discovery uses field `name` (not `id`). pipeReports omits cardCount (resolver errors).
 
-_PIPE_REPORT_FIELDS = """
-    id
-    name
-    color
-    fields
-    filter
-    sortBy {
-        direction
-        field
-    }
-    createdAt
-    lastUpdatedAt"""
-
-_REPORT_EXPORT_FIELDS = """
-    id
-    state
-    fileURL
-    startedAt
-    finishedAt
-    requestedBy {
-        id
-        name
-    }"""
-
 GET_PIPE_REPORTS_QUERY = gql(
     """
     query pipeReports($pipeUuid: String!, $first: Int, $after: String, $search: String, $reportId: ID, $order: PipeReportsOrder) {
         pipeReports(pipeUuid: $pipeUuid, first: $first, after: $after, search: $search, reportId: $reportId, order: $order) {
             edges {
-                node {"""
-    + _PIPE_REPORT_FIELDS
-    + """
+                node {
+                    id
+                    name
+                    color
+                    fields
+                    filter
+                    sortBy {
+                        direction
+                        field
+                    }
+                    createdAt
+                    lastUpdatedAt
                 }
             }
             pageInfo {
@@ -138,9 +123,16 @@ GET_ORGANIZATION_REPORTS_QUERY = gql(
 GET_PIPE_REPORT_EXPORT_QUERY = gql(
     """
     query pipeReportExport($id: ID!) {
-        pipeReportExport(id: $id) {"""
-    + _REPORT_EXPORT_FIELDS
-    + """
+        pipeReportExport(id: $id) {
+            id
+            state
+            fileURL
+            startedAt
+            finishedAt
+            requestedBy {
+                id
+                name
+            }
         }
     }
     """
@@ -149,9 +141,16 @@ GET_PIPE_REPORT_EXPORT_QUERY = gql(
 GET_ORGANIZATION_REPORT_EXPORT_QUERY = gql(
     """
     query organizationReportExport($id: ID!) {
-        organizationReportExport(id: $id) {"""
-    + _REPORT_EXPORT_FIELDS
-    + """
+        organizationReportExport(id: $id) {
+            id
+            state
+            fileURL
+            startedAt
+            finishedAt
+            requestedBy {
+                id
+                name
+            }
         }
     }
     """

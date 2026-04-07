@@ -469,6 +469,112 @@ def test_metadata_allows_empty_dict_for_unknown_action_type():
     BehaviorInput.model_validate(payload)
 
 
+@pytest.mark.unit
+def test_metadata_valid_for_create_table_record():
+    metadata = {
+        "tableId": "tbl-999",
+        "fieldsAttributes": [VALID_FIELDS_ATTR],
+    }
+    payload = behavior_with_action("create_table_record", metadata)
+    inp = BehaviorInput.model_validate(payload)
+    action = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]
+    assert action["metadata"]["tableId"] == "tbl-999"
+
+
+@pytest.mark.unit
+def test_metadata_rejects_missing_table_id_for_create_table_record():
+    payload = behavior_with_action(
+        "create_table_record",
+        {"fieldsAttributes": [VALID_FIELDS_ATTR]},
+    )
+    with pytest.raises(ValidationError, match="tableId"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_metadata_rejects_missing_fields_attributes_for_create_table_record():
+    payload = behavior_with_action("create_table_record", {"tableId": "tbl-1"})
+    with pytest.raises(ValidationError, match="fieldsAttributes"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_metadata_create_table_record_does_not_require_pipe_id():
+    metadata = {
+        "tableId": "tbl-1",
+        "fieldsAttributes": [VALID_FIELDS_ATTR],
+    }
+    payload = behavior_with_action("create_table_record", metadata)
+    BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_metadata_rejects_field_entry_missing_field_id_for_create_table_record():
+    metadata = {
+        "tableId": "tbl-1",
+        "fieldsAttributes": [{"inputMode": "fill_with_ai", "value": ""}],
+    }
+    payload = behavior_with_action("create_table_record", metadata)
+    with pytest.raises(ValidationError, match="fieldId"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_metadata_valid_for_send_email_template():
+    payload = behavior_with_action(
+        "send_email_template",
+        {"emailTemplateId": "tmpl-1"},
+    )
+    inp = BehaviorInput.model_validate(payload)
+    meta = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]["metadata"]
+    assert meta["emailTemplateId"] == "tmpl-1"
+
+
+@pytest.mark.unit
+def test_metadata_send_email_template_accepts_allow_template_modifications():
+    payload = behavior_with_action(
+        "send_email_template",
+        {"emailTemplateId": "tmpl-1", "allowTemplateModifications": False},
+    )
+    inp = BehaviorInput.model_validate(payload)
+    meta = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]["metadata"]
+    assert meta["allowTemplateModifications"] is False
+
+
+@pytest.mark.unit
+def test_metadata_rejects_missing_email_template_id():
+    payload = behavior_with_action("send_email_template", {})
+    with pytest.raises(ValidationError, match="emailTemplateId"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_metadata_rejects_blank_email_template_id():
+    payload = behavior_with_action("send_email_template", {"emailTemplateId": "  "})
+    with pytest.raises(ValidationError, match="emailTemplateId"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_metadata_rejects_non_bool_allow_template_modifications():
+    payload = behavior_with_action(
+        "send_email_template",
+        {"emailTemplateId": "tmpl-1", "allowTemplateModifications": "yes"},
+    )
+    with pytest.raises(ValidationError, match="allowTemplateModifications"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_behavior_input_accepts_capabilities_attributes_on_ai_behavior_params():
+    payload = minimal_behavior_dict()
+    abp = payload["actionParams"]["aiBehaviorParams"]
+    abp["capabilitiesAttributes"] = [{"type": "advanced_ocr"}, {"type": "web_search"}]
+    inp = BehaviorInput.model_validate(payload)
+    caps = inp.action_params["aiBehaviorParams"]["capabilitiesAttributes"]
+    assert caps == [{"type": "advanced_ocr"}, {"type": "web_search"}]
+
+
 # --- snake_case / camelCase normalization ---
 
 

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from gql import gql
 
+__all__ = [
+    "CREATE_PRESIGNED_URL_MUTATION",
+]
+
 CREATE_PRESIGNED_URL_MUTATION = gql(
     """
     mutation createPresignedUrl(

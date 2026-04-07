@@ -72,7 +72,7 @@ def _build_log_variables(
 
 def _build_usage_variables(
     organization_uuid: str,
-    filter_date: dict[str, str],
+    filter_date: DateRange,
     *,
     filters: dict[str, Any] | None,
     search: str | None,
@@ -236,7 +236,7 @@ class ObservabilityService(BasePipefyClient):
     async def get_agents_usage(
         self,
         organization_uuid: str,
-        filter_date: dict[str, str],
+        filter_date: DateRange,
         *,
         filters: dict[str, Any] | None = None,
         search: str | None = None,
@@ -265,7 +265,7 @@ class ObservabilityService(BasePipefyClient):
     async def get_automations_usage(
         self,
         organization_uuid: str,
-        filter_date: dict[str, str],
+        filter_date: DateRange,
         *,
         filters: dict[str, Any] | None = None,
         search: str | None = None,

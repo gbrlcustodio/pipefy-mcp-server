@@ -9,7 +9,7 @@ import pytest
 def extract_payload():
     """Extract tool payload from CallToolResult across MCP SDK versions."""
 
-    def _extract(result) -> dict:
+    def _extract(result):
         structured = getattr(result, "structuredContent", None)
         if structured is not None:
             if isinstance(structured, dict) and "result" in structured:

@@ -7,7 +7,9 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
+from pydantic import ValidationError
 
+from pipefy_mcp.models.send_task_automation import CreateSendTaskAutomationInput
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.automation_tool_helpers import (
     build_automation_error_payload,
@@ -386,6 +388,89 @@ class AutomationTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_automation_tool_graphql_error(exc, ctx, debug)
+            block = raw.get("createAutomation") or {}
+            automation = block.get("automation") or {}
+            if not isinstance(automation, dict):
+                automation = {}
+            return build_automation_mutation_success_payload(automation, "created")
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        )
+        async def create_send_task_automation(
+            ctx: Context,
+            pipe_id: str | int,
+            name: str,
+            event_id: str,
+            task_title: str,
+            recipients: str,
+            event_params: dict[str, Any] | None = None,
+            condition: dict[str, Any] | None = None,
+        ) -> dict[str, Any]:
+            """Create a traditional automation that sends a task to recipients when a trigger fires on a pipe.
+
+            The rule is created **active** so it runs immediately. Use ``update_automation`` with
+            ``extra_input`` that sets ``active`` to ``False`` to disable it, or ``delete_automation``
+            to remove it permanently.
+
+            **Compatible triggers** (examples): ``card_created``, ``card_moved``, ``field_updated``,
+            ``card_inbox_received_email``, ``all_children_in_phase``, ``manually_triggered``,
+            ``http_response_received``.
+
+            **Incompatible / blocked**: ``scheduler`` is rejected by this tool before the API call.
+            ``sla_based`` and ``card_left_phase`` are documented as incompatible with the send-a-task
+            action in Pipefy; the API will reject them if used.
+
+            **event_params**: optional dict of trigger-specific filters, for example ``{"to_phase_id": "..."}``
+            for ``card_moved``, or ``{"triggerFieldIds": ["..."]}`` for ``field_updated``.
+
+            Args:
+                pipe_id: Pipe ID where the trigger event is evaluated.
+                name: Automation rule display name.
+                event_id: Trigger event ID (e.g. ``card_created``).
+                task_title: Title of the task sent to recipients.
+                recipients: One or more e-mail addresses separated by commas.
+                event_params: Optional trigger filter payload (camelCase/snake_case as returned by catalog tools).
+                condition: Optional condition expressions payload.
+            """
+            try:
+                validated = CreateSendTaskAutomationInput(
+                    pipe_id=pipe_id,
+                    name=name,
+                    event_id=event_id,
+                    task_title=task_title,
+                    recipients=recipients,
+                    event_params=event_params,
+                    condition=condition,
+                )
+            except ValidationError as exc:
+                return build_automation_error_payload(str(exc))
+
+            extra_input: dict[str, Any] = {
+                "action_params": {
+                    "taskParams": {
+                        "title": validated.task_title,
+                        "recipients": validated.recipients,
+                    },
+                },
+            }
+            if validated.event_params is not None:
+                extra_input["event_params"] = validated.event_params
+            if validated.condition is not None:
+                extra_input["condition"] = validated.condition
+
+            try:
+                raw = await client.create_automation(
+                    validated.pipe_id,
+                    validated.name,
+                    validated.event_id,
+                    "send_a_task",
+                    active=True,
+                    action_repo_id=None,
+                    extra_input=extra_input,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return handle_automation_tool_graphql_error(exc, ctx, False)
             block = raw.get("createAutomation") or {}
             automation = block.get("automation") or {}
             if not isinstance(automation, dict):

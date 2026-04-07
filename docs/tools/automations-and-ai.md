@@ -8,7 +8,7 @@ Traditional automations (if/then rules) and AI-powered automations and agents. *
 
 Eight tools manage Pipefy traditional automations: if/then rules bound to a pipe via the standard GraphQL API.
 
-**Tip:** Call `get_automation_events` (global event catalog) and `get_automation_actions` with the target pipe (`repoId`) before `create_automation` to pick valid `trigger_id` / `action_id` values. Writes accept optional `extra_input` (camelCase API keys) and `debug=true` on errors.
+**Tip:** For **send-a-task** rules (`send_a_task` action), use `create_send_task_automation` (pipe, trigger, task title, recipients) instead of hand-building `action_params.taskParams` on `create_automation`. For other actions, call `get_automation_events` (global event catalog) and `get_automation_actions` with the target pipe (`repoId`) before `create_automation` to pick valid `trigger_id` / `action_id` values. Writes accept optional `extra_input` (camelCase API keys) and `debug=true` on errors.
 
 | Tool | Read-only | Role |
 |------|-----------|------|

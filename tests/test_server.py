@@ -54,6 +54,7 @@ async def test_register_tools(client_session):
         "create_pipe",
         "create_pipe_relation",
         "create_pipe_report",
+        "create_send_task_automation",
         "create_table",
         "create_table_field",
         "create_table_record",

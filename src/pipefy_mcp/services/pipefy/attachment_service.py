@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -15,6 +16,9 @@ from pipefy_mcp.services.pipefy.queries.attachment_queries import (
 from pipefy_mcp.settings import PipefySettings
 
 _BODY_SNIPPET_MAX_CHARS = 500
+_ALLOWED_UPLOAD_HOST_RE = re.compile(
+    r"^[\w.-]+\.(amazonaws\.com|pipefy\.com)$", re.IGNORECASE
+)
 
 
 class AttachmentService(BasePipefyClient):
@@ -88,6 +92,12 @@ class AttachmentService(BasePipefyClient):
             file_bytes: Raw file content.
             content_type: Optional ``Content-Type`` header for the request.
         """
+        host = urlparse(presigned_url).hostname or ""
+        if not _ALLOWED_UPLOAD_HOST_RE.match(host):
+            raise ValueError(
+                f"Upload URL host '{host}' is not in the allow-list "
+                "(*.amazonaws.com, *.pipefy.com)."
+            )
         headers: dict[str, str] = {}
         if content_type is not None:
             headers["Content-Type"] = content_type

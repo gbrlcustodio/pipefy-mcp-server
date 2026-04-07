@@ -147,7 +147,7 @@ async def test_upload_file_to_s3_success(mock_settings):
     service = AttachmentService(settings=mock_settings)
     with patch("httpx.AsyncClient", return_value=mock_cm):
         result = await service.upload_file_to_s3(
-            "https://s3.example.com/presigned",
+            "https://s3.us-east-1.amazonaws.com/presigned",
             b"hello",
             content_type=None,
         )
@@ -174,7 +174,7 @@ async def test_upload_file_to_s3_forbidden_includes_body_snippet(mock_settings):
     service = AttachmentService(settings=mock_settings)
     with patch("httpx.AsyncClient", return_value=mock_cm):
         result = await service.upload_file_to_s3(
-            "https://s3.example.com/presigned",
+            "https://s3.us-east-1.amazonaws.com/presigned",
             b"x",
             content_type=None,
         )
@@ -201,7 +201,7 @@ async def test_upload_file_to_s3_sets_content_type_header(mock_settings):
     service = AttachmentService(settings=mock_settings)
     with patch("httpx.AsyncClient", return_value=mock_cm):
         await service.upload_file_to_s3(
-            "https://s3.example.com/presigned",
+            "https://s3.us-east-1.amazonaws.com/presigned",
             b"%PDF",
             content_type="application/pdf",
         )
@@ -274,3 +274,35 @@ def test_pipefy_client_extract_storage_path_delegates_to_attachment_service():
     attachment.extract_storage_path.assert_called_once_with(
         "https://bucket/file.pdf?x=1",
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_file_to_s3_rejects_non_allowed_host(mock_settings):
+    service = AttachmentService(settings=mock_settings)
+    with pytest.raises(ValueError, match="not in the allow-list"):
+        await service.upload_file_to_s3(
+            "https://evil.example.com/upload",
+            b"data",
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_file_to_s3_accepts_pipefy_host(mock_settings):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = ""
+    mock_inner = MagicMock()
+    mock_inner.put = AsyncMock(return_value=mock_response)
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+    service = AttachmentService(settings=mock_settings)
+    with patch("httpx.AsyncClient", return_value=mock_cm):
+        result = await service.upload_file_to_s3(
+            "https://uploads.pipefy.com/presigned",
+            b"ok",
+        )
+    assert result["status_code"] == 200

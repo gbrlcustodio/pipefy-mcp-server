@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.validation_helpers import (
@@ -30,7 +31,7 @@ class WebhookTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_email_templates(
-            repo_id: str,
+            repo_id: PipefyId,
             filter_by_name: str | None = None,
             first: int = 50,
             debug: bool = False,
@@ -69,7 +70,7 @@ class WebhookTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_card_inbox_emails(
-            card_id: str,
+            card_id: PipefyId,
             email_type: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -113,7 +114,7 @@ class WebhookTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def send_inbox_email(
-            card_id: str,
+            card_id: PipefyId,
             to: list[str],
             subject: str,
             body: str,
@@ -185,8 +186,8 @@ class WebhookTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def send_email_with_template(
-            card_id: str,
-            email_template_id: str,
+            card_id: PipefyId,
+            email_template_id: PipefyId,
             to: list[str] | None = None,
             from_: str | None = None,
             extra_input: dict[str, Any] | None = None,
@@ -210,7 +211,7 @@ class WebhookTools:
                 return build_webhook_error_payload(
                     message="Invalid 'card_id': provide a non-empty string or positive integer.",
                 )
-            if not isinstance(email_template_id, str) or not email_template_id.strip():
+            if not email_template_id.strip():
                 return build_webhook_error_payload(
                     message="Invalid 'email_template_id': provide a non-empty string.",
                 )
@@ -249,7 +250,7 @@ class WebhookTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def create_webhook(
-            pipe_id: str,
+            pipe_id: PipefyId,
             url: str,
             actions: list[str],
             extra_input: dict[str, Any] | None = None,
@@ -314,7 +315,7 @@ class WebhookTools:
         )
         async def delete_webhook(
             ctx: Context[ServerSession, None],
-            webhook_id: str,
+            webhook_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:

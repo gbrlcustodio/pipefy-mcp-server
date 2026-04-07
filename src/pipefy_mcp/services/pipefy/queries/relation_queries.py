@@ -6,17 +6,12 @@ from gql import gql
 
 # Schema: Pipe uses parentsRelations/childrenRelations (not pipe_relations); tables use root table_relations(ids: [ID!]!).
 
-_REPO_TYPES_ID_NAME = """... on Pipe {
-    id
-    name
-}
-... on Table {
-    id
-    name
-}"""
-
-_PIPE_RELATION_BODY = (
+GET_PIPE_RELATIONS_QUERY = gql(
     """
+    query GetPipeRelations($pipeId: ID!) {
+        pipe(id: $pipeId) {
+            id
+            parentsRelations {
                 id
                 name
                 allChildrenMustBeDoneToFinishParent
@@ -28,34 +23,67 @@ _PIPE_RELATION_BODY = (
                 childMustExistToFinishParent
                 childMustExistToMoveParent
                 parent {
-"""
-    + _REPO_TYPES_ID_NAME
-    + """
+                    ... on Pipe {
+                        id
+                        name
+                    }
+                    ... on Table {
+                        id
+                        name
+                    }
                 }
                 child {
-"""
-    + _REPO_TYPES_ID_NAME
-    + """
+                    ... on Pipe {
+                        id
+                        name
+                    }
+                    ... on Table {
+                        id
+                        name
+                    }
                 }
                 ownFieldMaps {
                     fieldId
                     inputMode
                     value
-                }"""
-)
-
-GET_PIPE_RELATIONS_QUERY = gql(
-    """
-    query GetPipeRelations($pipeId: ID!) {
-        pipe(id: $pipeId) {
-            id
-            parentsRelations {"""
-    + _PIPE_RELATION_BODY
-    + """
+                }
             }
-            childrenRelations {"""
-    + _PIPE_RELATION_BODY
-    + """
+            childrenRelations {
+                id
+                name
+                allChildrenMustBeDoneToFinishParent
+                allChildrenMustBeDoneToMoveParent
+                autoFillFieldEnabled
+                canConnectExistingItems
+                canConnectMultipleItems
+                canCreateNewItems
+                childMustExistToFinishParent
+                childMustExistToMoveParent
+                parent {
+                    ... on Pipe {
+                        id
+                        name
+                    }
+                    ... on Table {
+                        id
+                        name
+                    }
+                }
+                child {
+                    ... on Pipe {
+                        id
+                        name
+                    }
+                    ... on Table {
+                        id
+                        name
+                    }
+                }
+                ownFieldMaps {
+                    fieldId
+                    inputMode
+                    value
+                }
             }
         }
     }
@@ -76,14 +104,24 @@ GET_TABLE_RELATIONS_QUERY = gql(
             childMustExistToFinishParent
             childMustExistToMoveParent
             parent {
-"""
-    + _REPO_TYPES_ID_NAME
-    + """
+                ... on Pipe {
+                    id
+                    name
+                }
+                ... on Table {
+                    id
+                    name
+                }
             }
             child {
-"""
-    + _REPO_TYPES_ID_NAME
-    + """
+                ... on Pipe {
+                    id
+                    name
+                }
+                ... on Table {
+                    id
+                    name
+                }
             }
         }
     }

@@ -240,7 +240,7 @@ class AiAgentTools:
                     See example above for the full shape.
                 data_source_ids: Optional knowledge-source IDs (same as ``update_ai_agent``).
             """
-            ctx.debug(
+            await ctx.debug(
                 f"create_ai_agent: name={name}, repo_uuid={repo_uuid}, "
                 f"instruction_len={len(instruction)}, behaviors_count={len(behaviors)}, "
                 f"data_source_ids={data_source_ids!r}"
@@ -339,7 +339,9 @@ class AiAgentTools:
                     Accepts both ``snake_case`` and ``camelCase`` keys.
                 data_source_ids: Optional list of data source IDs.
             """
-            ctx.debug(f"update_ai_agent: uuid={uuid}, behaviors_count={len(behaviors)}")
+            await ctx.debug(
+                f"update_ai_agent: uuid={uuid}, behaviors_count={len(behaviors)}"
+            )
             if not uuid or not uuid.strip():
                 return build_ai_tool_error("uuid must not be blank")
             if not name or not name.strip():
@@ -388,7 +390,7 @@ class AiAgentTools:
                 uuid: UUID of the agent to enable/disable.
                 active: True to activate, False to deactivate.
             """
-            ctx.debug(f"toggle_ai_agent_status: uuid={uuid}, active={active}")
+            await ctx.debug(f"toggle_ai_agent_status: uuid={uuid}, active={active}")
             agent_uuid = uuid.strip()
             if not agent_uuid:
                 return build_ai_tool_error("uuid must not be blank")
@@ -422,7 +424,7 @@ class AiAgentTools:
                 uuid: Agent UUID.
             """
             agent_uuid = uuid.strip()
-            ctx.debug(f"get_ai_agent: uuid={agent_uuid}")
+            await ctx.debug(f"get_ai_agent: uuid={agent_uuid}")
             if not agent_uuid:
                 return build_ai_tool_error("uuid must not be blank")
             try:
@@ -443,7 +445,7 @@ class AiAgentTools:
                 repo_uuid: UUID of the pipe.
             """
             pipe_uuid = repo_uuid.strip()
-            ctx.debug(f"get_ai_agents: repo_uuid={pipe_uuid}")
+            await ctx.debug(f"get_ai_agents: repo_uuid={pipe_uuid}")
             if not pipe_uuid:
                 return build_ai_tool_error("repo_uuid must not be blank")
             try:
@@ -469,7 +471,7 @@ class AiAgentTools:
                 confirm: Set to True to execute the deletion (step 2).
             """
             agent_uuid = uuid.strip()
-            ctx.debug(f"delete_ai_agent: uuid={agent_uuid}")
+            await ctx.debug(f"delete_ai_agent: uuid={agent_uuid}")
             if not agent_uuid:
                 return build_ai_tool_error("uuid must not be blank")
 
@@ -606,7 +608,9 @@ class AiAgentTools:
                     if parent_id:
                         related_pipe_ids.add(str(parent_id))
             except Exception:  # noqa: BLE001
-                ctx.debug("Could not fetch pipe relations; skipping relation checks")
+                await ctx.debug(
+                    "Could not fetch pipe relations; skipping relation checks"
+                )
                 related_pipe_ids = None
                 tool_warnings.append(
                     "Could not load pipe relations; create_connected_card pipeId targets "
@@ -654,7 +658,7 @@ class AiAgentTools:
                             target_fields.add(str(fid))
                     cross_pipe_field_ids[target_pid] = target_fields
                 except Exception:  # noqa: BLE001
-                    ctx.debug(
+                    await ctx.debug(
                         f"Could not fetch target pipe {target_pid}; skipping its field checks"
                     )
                     tool_warnings.append(

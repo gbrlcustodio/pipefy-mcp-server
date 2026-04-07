@@ -169,3 +169,62 @@ class TestUpdateAiAutomation:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
+
+
+## ---------------------------------------------------------------------------
+## PipefyId coercion: int → str through MCP transport (mcporter mitigation)
+## ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+class TestPipefyIdCoercion:
+    async def test_create_ai_automation_coerces_int_pipe_id_and_event_id(
+        self,
+        client_session,
+        mock_ai_automation_service,
+        extract_payload,
+    ):
+        mock_ai_automation_service.create_automation.return_value = {
+            "automation_id": "456",
+            "message": "AI Automation created successfully. ID: 456",
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_automation",
+                {
+                    "name": "Coerce Test",
+                    "event_id": 101,
+                    "pipe_id": 303,
+                    "prompt": "Summarize",
+                    "field_ids": ["f1"],
+                },
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+
+        validated_input = mock_ai_automation_service.create_automation.call_args[0][0]
+        assert validated_input.pipe_id == "303"
+        assert validated_input.event_id == "101"
+
+    async def test_update_ai_automation_coerces_int_automation_id(
+        self,
+        client_session,
+        mock_ai_automation_service,
+        extract_payload,
+    ):
+        mock_ai_automation_service.update_automation.return_value = {
+            "automation_id": "789",
+            "message": "AI Automation updated successfully. ID: 789",
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_ai_automation",
+                {"automation_id": 789, "name": "Updated"},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+
+        validated_input = mock_ai_automation_service.update_automation.call_args[0][0]
+        assert validated_input.automation_id == "789"

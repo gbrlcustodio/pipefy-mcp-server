@@ -95,3 +95,30 @@ async def test_get_organization_transport_error(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert isinstance(payload.get("error"), str)
+
+
+## ---------------------------------------------------------------------------
+## PipefyId coercion: int → str through MCP transport (mcporter mitigation)
+## ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("org_session", [None], indirect=True)
+async def test_get_organization_coerces_int_organization_id(
+    org_session, mock_org_client, extract_payload
+):
+    mock_org_client.get_organization = AsyncMock(
+        return_value={
+            "id": "123",
+            "uuid": "abc-def",
+            "name": "My Org",
+            "planName": "Business",
+            "membersCount": 42,
+        }
+    )
+    async with org_session as session:
+        result = await session.call_tool("get_organization", {"organization_id": 123})
+    assert result.isError is False
+    mock_org_client.get_organization.assert_awaited_once_with("123")
+    payload = extract_payload(result)
+    assert payload["success"] is True

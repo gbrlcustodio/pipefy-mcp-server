@@ -20,7 +20,6 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
-    build_delete_card_preview_payload,
     build_delete_card_success_payload,
     map_add_card_comment_error_to_message,
     map_delete_card_error_to_message,
@@ -167,26 +166,6 @@ def test_build_add_card_comment_error_payload():
     """Error payload has success False and given message."""
     out = build_add_card_comment_error_payload(message="Something failed")
     assert out == {"success": False, "error": "Something failed"}
-
-
-# =============================================================================
-# build_delete_card_preview_payload
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_build_delete_card_preview_payload():
-    """Preview payload includes requires_confirmation and card/pipe info."""
-    out = build_delete_card_preview_payload(
-        card_id=99, card_title="My Card", pipe_name="My Pipe"
-    )
-    assert out["success"] is False
-    assert out["requires_confirmation"] is True
-    assert out["card_id"] == 99
-    assert out["card_title"] == "My Card"
-    assert out["pipe_name"] == "My Pipe"
-    assert "permanently delete" in out["message"]
-    assert "confirm=True" in out["message"]
 
 
 # =============================================================================

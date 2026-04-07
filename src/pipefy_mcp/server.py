@@ -50,11 +50,11 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
             mcp=app,
             services_container=services_container,
         ).register_tools()
-
-        yield mcp
     except Exception:
-        logger.exception("Fatal error during server lifespan")
+        logger.exception("Fatal error during server lifespan initialization")
         raise
+
+    yield mcp
 
 
 PIPEFY_INSTRUCTIONS = textwrap.dedent("""

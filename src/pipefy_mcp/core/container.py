@@ -13,8 +13,6 @@ class ServicesContainer:
 
     _instance: Self | None = None
     pipefy_client: PipefyClient | None = None
-    internal_api_client: InternalApiClient | None = None
-    ai_automation_service: AiAutomationService | None = None
 
     @classmethod
     def get_instance(cls) -> Self:
@@ -22,10 +20,6 @@ class ServicesContainer:
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
-
-    def __init__(self):
-        """Initialize the container."""
-        pass
 
     def initialize_services(self, settings: Settings) -> None:
         """Create and wire all services.
@@ -40,15 +34,12 @@ class ServicesContainer:
         oauth_secret = settings.pipefy.oauth_secret
 
         if oauth_url and oauth_client and oauth_secret:
-            self.internal_api_client = InternalApiClient(
+            internal_client = InternalApiClient(
                 url=settings.pipefy.internal_api_url,
                 oauth_url=oauth_url,
                 oauth_client=oauth_client,
                 oauth_secret=oauth_secret,
             )
-            self.ai_automation_service = AiAutomationService(
-                client=self.internal_api_client
+            self.pipefy_client.set_ai_automation_service(
+                AiAutomationService(client=internal_client)
             )
-
-    def shutdown(self) -> None:
-        pass

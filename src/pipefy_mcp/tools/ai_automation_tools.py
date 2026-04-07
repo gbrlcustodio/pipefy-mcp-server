@@ -11,7 +11,7 @@ from pipefy_mcp.models.ai_automation import (
     UpdateAiAutomationInput,
 )
 from pipefy_mcp.models.validators import PipefyId
-from pipefy_mcp.services.pipefy.ai_automation_service import AiAutomationService
+from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
     build_create_automation_success,
@@ -23,7 +23,7 @@ class AiAutomationTools:
     """Declares MCP tools for AI Automation create and update."""
 
     @staticmethod
-    def register(mcp: FastMCP, service: AiAutomationService) -> None:
+    def register(mcp: FastMCP, client: PipefyClient) -> None:
         """Register AI Automation tools on the MCP server."""
 
         @mcp.tool(
@@ -53,7 +53,7 @@ class AiAutomationTools:
                 skills_ids: AI skill IDs to attach. Defaults to empty (no skills).
                 condition: Optional condition structure for the automation trigger.
             """
-            ctx.debug(
+            await ctx.debug(
                 f"create_ai_automation: name={name}, event_id={event_id}, pipe_id={pipe_id}"
             )
             optional_fields: dict = {}
@@ -74,7 +74,7 @@ class AiAutomationTools:
                 return build_ai_tool_error(str(exc))
 
             try:
-                result = await service.create_automation(validated)
+                result = await client.create_ai_automation(validated)
             except Exception as exc:  # noqa: BLE001
                 return build_ai_tool_error(str(exc))
 
@@ -107,7 +107,7 @@ class AiAutomationTools:
                 skills_ids: New list of AI skill IDs (optional).
                 condition: New condition structure (optional).
             """
-            ctx.debug(f"update_ai_automation: automation_id={automation_id}")
+            await ctx.debug(f"update_ai_automation: automation_id={automation_id}")
             try:
                 validated = UpdateAiAutomationInput(
                     automation_id=automation_id,
@@ -122,7 +122,7 @@ class AiAutomationTools:
                 return build_ai_tool_error(str(exc))
 
             try:
-                result = await service.update_automation(validated)
+                result = await client.update_ai_automation(validated)
             except Exception as exc:  # noqa: BLE001
                 return build_ai_tool_error(str(exc))
 

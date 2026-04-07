@@ -9,6 +9,7 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
+from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
 
 
@@ -18,17 +19,17 @@ def anyio_backend():
 
 
 @pytest.fixture
-def mock_ai_automation_service():
-    service = MagicMock()
-    service.create_automation = AsyncMock()
-    service.update_automation = AsyncMock()
-    return service
+def mock_pipefy_client():
+    client = MagicMock(spec=PipefyClient)
+    client.create_ai_automation = AsyncMock()
+    client.update_ai_automation = AsyncMock()
+    return client
 
 
 @pytest.fixture
-def mcp_server(mock_ai_automation_service):
+def mcp_server(mock_pipefy_client):
     mcp = FastMCP("AI Automation Tools Test")
-    AiAutomationTools.register(mcp, mock_ai_automation_service)
+    AiAutomationTools.register(mcp, mock_pipefy_client)
     return mcp
 
 
@@ -46,10 +47,10 @@ class TestCreateAiAutomation:
     async def test_success(
         self,
         client_session,
-        mock_ai_automation_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_automation_service.create_automation.return_value = {
+        mock_pipefy_client.create_ai_automation.return_value = {
             "automation_id": "123",
             "message": "AI Automation created successfully. ID: 123",
         }
@@ -77,10 +78,10 @@ class TestCreateAiAutomation:
     async def test_service_error_returns_error_payload(
         self,
         client_session,
-        mock_ai_automation_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_automation_service.create_automation.side_effect = RuntimeError(
+        mock_pipefy_client.create_ai_automation.side_effect = RuntimeError(
             "GraphQL error"
         )
         async with client_session as session:
@@ -103,7 +104,7 @@ class TestCreateAiAutomation:
     async def test_validation_error_returns_error_payload(
         self,
         client_session,
-        mock_ai_automation_service,
+        mock_pipefy_client,
         extract_payload,
     ):
         async with client_session as session:
@@ -118,7 +119,7 @@ class TestCreateAiAutomation:
                 },
             )
         assert result.isError is False
-        mock_ai_automation_service.create_automation.assert_not_called()
+        mock_pipefy_client.create_ai_automation.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
@@ -129,10 +130,10 @@ class TestUpdateAiAutomation:
     async def test_success(
         self,
         client_session,
-        mock_ai_automation_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_automation_service.update_automation.return_value = {
+        mock_pipefy_client.update_ai_automation.return_value = {
             "automation_id": "789",
             "message": "AI Automation updated successfully. ID: 789",
         }
@@ -154,10 +155,10 @@ class TestUpdateAiAutomation:
     async def test_service_error_returns_error_payload(
         self,
         client_session,
-        mock_ai_automation_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_automation_service.update_automation.side_effect = ValueError(
+        mock_pipefy_client.update_ai_automation.side_effect = ValueError(
             "Network error"
         )
         async with client_session as session:
@@ -181,10 +182,10 @@ class TestPipefyIdCoercion:
     async def test_create_ai_automation_coerces_int_pipe_id_and_event_id(
         self,
         client_session,
-        mock_ai_automation_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_automation_service.create_automation.return_value = {
+        mock_pipefy_client.create_ai_automation.return_value = {
             "automation_id": "456",
             "message": "AI Automation created successfully. ID: 456",
         }
@@ -203,17 +204,17 @@ class TestPipefyIdCoercion:
         payload = extract_payload(result)
         assert payload["success"] is True
 
-        validated_input = mock_ai_automation_service.create_automation.call_args[0][0]
+        validated_input = mock_pipefy_client.create_ai_automation.call_args[0][0]
         assert validated_input.pipe_id == "303"
         assert validated_input.event_id == "101"
 
     async def test_update_ai_automation_coerces_int_automation_id(
         self,
         client_session,
-        mock_ai_automation_service,
+        mock_pipefy_client,
         extract_payload,
     ):
-        mock_ai_automation_service.update_automation.return_value = {
+        mock_pipefy_client.update_ai_automation.return_value = {
             "automation_id": "789",
             "message": "AI Automation updated successfully. ID: 789",
         }
@@ -226,5 +227,5 @@ class TestPipefyIdCoercion:
         payload = extract_payload(result)
         assert payload["success"] is True
 
-        validated_input = mock_ai_automation_service.update_automation.call_args[0][0]
+        validated_input = mock_pipefy_client.update_ai_automation.call_args[0][0]
         assert validated_input.automation_id == "789"

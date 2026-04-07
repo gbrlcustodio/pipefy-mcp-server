@@ -46,11 +46,7 @@ class ToolRegistry:
         OrganizationTools.register(self.mcp, self.services_container.pipefy_client)
         ObservabilityTools.register(self.mcp, self.services_container.pipefy_client)
 
-        if self.services_container.ai_automation_service is not None:
-            AiAutomationTools.register(
-                self.mcp, self.services_container.ai_automation_service
-            )
-
+        AiAutomationTools.register(self.mcp, self.services_container.pipefy_client)
         AiAgentTools.register(self.mcp, self.services_container.pipefy_client)
 
         return self.mcp

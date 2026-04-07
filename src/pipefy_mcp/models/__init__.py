@@ -7,9 +7,11 @@ from pipefy_mcp.models.attachment import (
     UploadAttachmentToTableRecordInput,
     infer_content_type,
 )
+from pipefy_mcp.models.send_task_automation import CreateSendTaskAutomationInput
 from pipefy_mcp.models.validators import NonBlankStr, PipefyId
 
 __all__ = [
+    "CreateSendTaskAutomationInput",
     "NonBlankStr",
     "PipefyId",
     "UploadAttachmentToCardInput",

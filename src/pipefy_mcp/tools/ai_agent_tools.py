@@ -204,6 +204,13 @@ class AiAgentTools:
               - ``create_connected_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
                 Requires a pipe relation between source and destination pipes
                 (verify with ``get_pipe_relations``).
+              - ``create_table_record`` → ``{"tableId": "<table_id>", "fieldsAttributes": [{"fieldId": "...", "inputMode": "...", ...}, ...]}``
+                (``pipeId`` not required; field IDs belong to the table.)
+              - ``send_email_template`` → ``{"emailTemplateId": "<template_id>"}``;
+                optional ``allowTemplateModifications`` (boolean).
+
+            Optional ``actionParams.aiBehaviorParams.capabilitiesAttributes`` (list of strings), e.g.
+            ``advanced_ocr``, ``web_search`` — pass-through; the API validates capability types.
 
             Optional ``eventParams`` per behavior (filters when the trigger fires):
               - ``field_updated`` event → ``{"triggerFieldIds": ["<field_id>"]}`` to fire only on specific fields.
@@ -302,11 +309,25 @@ class AiAgentTools:
             Always send the **complete** behaviors list (1–5). Omitting a behavior deletes it.
             Each behavior must include ``actionParams.aiBehaviorParams.actionsAttributes`` with at least
             one action (same constraint and shape as ``create_ai_agent`` — see its docstring for the
-            full behavior dict example, discovery workflow, known ``actionType`` values, and constraints).
+            full behavior dict example, discovery workflow, and constraints).
 
             To modify an existing agent: call ``get_ai_agent`` first, edit the returned config,
             and send the full payload back. The server injects ``referenceId`` and ``%{action:<uuid>}``
             placeholders automatically — do not set or preserve them from ``get_ai_agent``.
+
+            Known ``actionType`` values and their required ``metadata`` (same as ``create_ai_agent``):
+              - ``move_card`` → ``{"destinationPhaseId": "<phase_id>"}``
+              - ``update_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [{"fieldId": "...", "inputMode": "fill_with_ai", "value": ""}]}``
+              - ``create_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
+              - ``create_connected_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [...]}``
+                (requires a pipe relation — verify with ``get_pipe_relations``).
+              - ``create_table_record`` → ``{"tableId": "<table_id>", "fieldsAttributes": [...]}``
+                (``pipeId`` not required; field IDs belong to the table.)
+              - ``send_email_template`` → ``{"emailTemplateId": "<template_id>"}``;
+                optional ``allowTemplateModifications`` (boolean).
+
+            Optional ``actionParams.aiBehaviorParams.capabilitiesAttributes`` (list of strings), e.g.
+            ``advanced_ocr``, ``web_search`` — pass-through; the API validates capability types.
 
             Args:
                 uuid: UUID of the agent to update.
@@ -485,6 +506,14 @@ class AiAgentTools:
 
             Call **before** ``create_ai_agent`` / ``update_ai_agent`` to catch problems early
             (invalid fieldIds, missing phase IDs, absent pipe relations for ``create_connected_card``).
+
+            Known ``actionType`` values for pipe-context checks are:
+            ``move_card``, ``update_card``, ``create_card``, ``create_connected_card``,
+            ``create_table_record``, and ``send_email_template``.
+            For ``create_table_record``, ``fieldsAttributes`` hold **table** field IDs — they are not
+            validated against the source pipe; the tool adds a **warning** to verify IDs with
+            ``get_table`` / ``get_table_record`` instead. ``send_email_template`` does not run
+            pipe field-ID checks on its metadata.
 
             Runs Pydantic model validation (same as the mutation tools) plus cross-references
             against live pipe data. Does not persist anything.

@@ -488,6 +488,86 @@ async def test_get_automation_jobs_export_rejects_empty_export_id(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_coerces_int_export_id(
+    observability_session, mock_observability_client, extract_payload
+):
+    """mcporter CLI sends numeric IDs as int; PipefyId must coerce to str."""
+    mock_observability_client.get_automation_jobs_export.return_value = {
+        "automationJobsExport": {
+            "id": "25901",
+            "status": "finished",
+            "fileUrl": "https://app.pipefy.com/storage/signed/export.xlsx",
+        }
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export",
+            {"export_id": 25901},
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_automation_jobs_export.assert_awaited_once_with(
+        "25901"
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_csv_coerces_int_export_id(
+    observability_session, mock_observability_client, extract_payload
+):
+    """mcporter CLI sends numeric IDs as int; PipefyId must coerce to str."""
+    mock_observability_client.get_automation_jobs_export_csv.return_value = {
+        "export_id": "25901",
+        "status": "finished",
+        "csv_text": "col1,col2\na,b\n",
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export_csv",
+            {"export_id": 25901},
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_automation_jobs_export_csv.assert_awaited_once_with(
+        "25901",
+        max_output_chars=400_000,
+        max_download_bytes=50 * 1024 * 1024,
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_logs_coerces_int_automation_id(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_automation_logs.return_value = {
+        "automationExecutions": {
+            "nodes": [],
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
+        }
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_logs",
+            {"automation_id": 42},
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_automation_logs.assert_awaited_once_with(
+        "42", first=30, after=None, status=None, search_term=None
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_usage_tools_have_read_only_hint(observability_session):
     async with observability_session as session:
         listed = await session.list_tools()
@@ -872,3 +952,366 @@ async def test_get_ai_credit_usage_coerces_int_organization_uuid(
     mock_observability_client.get_ai_credit_usage.assert_awaited_once_with(
         "302398434", "current_month"
     )
+
+
+# ---------------------------------------------------------------------------
+# get_automation_logs — input validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_logs_rejects_blank_automation_id(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool("get_automation_logs", {"automation_id": ""})
+
+    mock_observability_client.get_automation_logs.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "automation_id" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+@pytest.mark.parametrize("bad_first", [0, _MAX_PAGE_SIZE + 1])
+async def test_get_automation_logs_rejects_out_of_bounds_first(
+    observability_session, mock_observability_client, extract_payload, bad_first
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_logs", {"automation_id": "auto-1", "first": bad_first}
+        )
+
+    mock_observability_client.get_automation_logs.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "first" in p["error"].lower()
+
+
+# ---------------------------------------------------------------------------
+# get_automation_logs_by_repo — input validation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_logs_by_repo_rejects_blank_repo_id(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool("get_automation_logs_by_repo", {"repo_id": ""})
+
+    mock_observability_client.get_automation_logs_by_repo.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "repo_id" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+@pytest.mark.parametrize("bad_first", [0, _MAX_PAGE_SIZE + 1])
+async def test_get_automation_logs_by_repo_rejects_out_of_bounds_first(
+    observability_session, mock_observability_client, extract_payload, bad_first
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_logs_by_repo", {"repo_id": "repo-5", "first": bad_first}
+        )
+
+    mock_observability_client.get_automation_logs_by_repo.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "first" in p["error"].lower()
+
+
+# ---------------------------------------------------------------------------
+# get_agents_usage — invalid organization_uuid
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_agents_usage_graphql_error(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_agents_usage.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "unauthorized"}]
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_agents_usage",
+            {
+                "organization_uuid": "org-1",
+                "filter_date_from": "2026-03-01T00:00:00Z",
+                "filter_date_to": "2026-03-31T23:59:59Z",
+            },
+        )
+
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "unauthorized" in p["error"]
+
+
+# ---------------------------------------------------------------------------
+# get_automations_usage — invalid organization_uuid + GraphQL error
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automations_usage_rejects_empty_org_uuid(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automations_usage",
+            {
+                "organization_uuid": "",
+                "filter_date_from": "2026-03-01T00:00:00Z",
+                "filter_date_to": "2026-03-31T23:59:59Z",
+            },
+        )
+
+    mock_observability_client.get_automations_usage.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "organization_uuid" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automations_usage_graphql_error(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_automations_usage.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "service unavailable"}]
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automations_usage",
+            {
+                "organization_uuid": "org-1",
+                "filter_date_from": "2026-03-01T00:00:00Z",
+                "filter_date_to": "2026-03-31T23:59:59Z",
+            },
+        )
+
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "service unavailable" in p["error"]
+
+
+# ---------------------------------------------------------------------------
+# get_ai_credit_usage — invalid organization_uuid
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_credit_usage_rejects_empty_org_uuid(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_credit_usage",
+            {"organization_uuid": "", "period": "current_month"},
+        )
+
+    mock_observability_client.get_ai_credit_usage.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "organization_uuid" in p["error"]
+
+
+# ---------------------------------------------------------------------------
+# export_automation_jobs — invalid organization_id + GraphQL error
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_export_automation_jobs_rejects_empty_org_id(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "export_automation_jobs",
+            {"organization_id": "", "period": "last_month"},
+        )
+
+    mock_observability_client.export_automation_jobs.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "organization_id" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_export_automation_jobs_rejects_invalid_period(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "export_automation_jobs",
+            {"organization_id": "org-1", "period": "all_time"},
+        )
+
+    mock_observability_client.export_automation_jobs.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "period" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_export_automation_jobs_graphql_error(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.export_automation_jobs.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "rate limited"}]
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "export_automation_jobs",
+            {"organization_id": "org-1", "period": "last_month"},
+        )
+
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "rate limited" in p["error"]
+
+
+# ---------------------------------------------------------------------------
+# get_ai_agent_log_details — GraphQL error
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_agent_log_details_graphql_error(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_ai_agent_log_details.side_effect = (
+        TransportQueryError("failed", errors=[{"message": "log not found"}])
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_agent_log_details", {"log_uuid": "bad-uuid"}
+        )
+
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "log not found" in p["error"]
+
+
+# ---------------------------------------------------------------------------
+# get_automation_logs — GraphQL error
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_logs_graphql_error(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_automation_logs.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "internal error"}]
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_logs", {"automation_id": "auto-1"}
+        )
+
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "internal error" in p["error"]
+
+
+# ---------------------------------------------------------------------------
+# get_automation_logs_by_repo — GraphQL error
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_logs_by_repo_graphql_error(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_automation_logs_by_repo.side_effect = (
+        TransportQueryError("failed", errors=[{"message": "timeout"}])
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_logs_by_repo", {"repo_id": "repo-5"}
+        )
+
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "timeout" in p["error"]
+
+
+# ---------------------------------------------------------------------------
+# get_automation_jobs_export_csv — invalid limits + GraphQL error
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_csv_rejects_bad_max_download_bytes(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export_csv",
+            {"export_id": "1", "max_download_bytes": 10},
+        )
+
+    mock_observability_client.get_automation_jobs_export_csv.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "max_download_bytes" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_csv_graphql_error(
+    observability_session, mock_observability_client, extract_payload
+):
+    mock_observability_client.get_automation_jobs_export_csv.side_effect = Exception(
+        "network failure"
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export_csv",
+            {"export_id": "1"},
+        )
+
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "CSV failed" in p["error"] or "network failure" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_jobs_export_csv_rejects_empty_export_id(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_jobs_export_csv",
+            {"export_id": ""},
+        )
+
+    mock_observability_client.get_automation_jobs_export_csv.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "export_id" in p["error"]

@@ -868,3 +868,699 @@ async def test_search_tables_returns_client_response(
 
     payload = extract_payload(result)
     assert payload == expected
+
+
+# ---------------------------------------------------------------------------
+# Input validation: get_table
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+@pytest.mark.parametrize("bad_id", [0, ""])
+async def test_get_table_invalid_table_id(
+    table_session, mock_table_client, extract_payload, bad_id
+):
+    async with table_session as session:
+        result = await session.call_tool("get_table", {"table_id": bad_id})
+
+    mock_table_client.get_table.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "table_id" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: get_tables
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_get_tables_empty_list(table_session, mock_table_client, extract_payload):
+    async with table_session as session:
+        result = await session.call_tool("get_tables", {"table_ids": []})
+
+    mock_table_client.get_tables.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "table_ids" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: get_table_records
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_get_table_records_invalid_table_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "get_table_records", {"table_id": 0, "first": 10}
+        )
+
+    mock_table_client.get_table_records.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "table_id" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_get_table_records_first_too_small(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "get_table_records", {"table_id": "t1", "first": 0}
+        )
+
+    mock_table_client.get_table_records.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "first" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_get_table_records_first_too_large(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "get_table_records", {"table_id": "t1", "first": 201}
+        )
+
+    mock_table_client.get_table_records.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "first" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: get_table_record
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_get_table_record_invalid_record_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool("get_table_record", {"record_id": 0})
+
+    mock_table_client.get_table_record.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "record_id" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: find_records
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_find_records_invalid_table_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "find_records",
+            {"table_id": 0, "field_id": "f", "field_value": "v"},
+        )
+
+    mock_table_client.find_records.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "table_id" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_find_records_blank_field_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "find_records",
+            {"table_id": "t1", "field_id": "", "field_value": "v"},
+        )
+
+    mock_table_client.find_records.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "field_id" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_find_records_blank_field_value(
+    table_session, mock_table_client, extract_payload
+):
+    """field_value is typed as str — empty string is valid per the tool (not blank-checked)."""
+    mock_table_client.find_records.return_value = {
+        "findRecords": {
+            "edges": [],
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
+        }
+    }
+
+    async with table_session as session:
+        result = await session.call_tool(
+            "find_records",
+            {"table_id": "t1", "field_id": "f", "field_value": ""},
+        )
+
+    # Empty string is accepted — the tool only checks isinstance(field_value, str)
+    mock_table_client.find_records.assert_awaited_once()
+    payload = extract_payload(result)
+    assert payload["success"] is True
+
+
+# ---------------------------------------------------------------------------
+# Input validation: update_table_record
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_update_table_record_invalid_record_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "update_table_record",
+            {"record_id": 0, "fields": {"title": "x"}},
+        )
+
+    mock_table_client.update_table_record.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "record_id" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_update_table_record_empty_fields(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "update_table_record",
+            {"record_id": 1, "fields": {}},
+        )
+
+    mock_table_client.update_table_record.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+
+
+# ---------------------------------------------------------------------------
+# Input validation: delete_table_record
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_delete_table_record_invalid_record_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "delete_table_record",
+            {"record_id": 0, "confirm": True},
+        )
+
+    mock_table_client.delete_table_record.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "record_id" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_delete_table_record_preview_without_confirm(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "delete_table_record",
+            {"record_id": 99, "confirm": False},
+        )
+
+    mock_table_client.delete_table_record.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload.get("requires_confirmation") is True
+
+
+# ---------------------------------------------------------------------------
+# Input validation: set_table_record_field_value
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_set_table_record_field_value_invalid_record_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "set_table_record_field_value",
+            {"record_id": 0, "field_id": "f", "value": "x"},
+        )
+
+    mock_table_client.set_table_record_field_value.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "record_id" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_set_table_record_field_value_invalid_field_id_zero(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "set_table_record_field_value",
+            {"record_id": "1", "field_id": 0, "value": "x"},
+        )
+
+    mock_table_client.set_table_record_field_value.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "field_id" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_set_table_record_field_value_blank_field_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "set_table_record_field_value",
+            {"record_id": "1", "field_id": "", "value": "x"},
+        )
+
+    mock_table_client.set_table_record_field_value.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "field_id" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: create_table_field
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_create_table_field_invalid_table_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "create_table_field",
+            {"table_id": 0, "label": "Name", "field_type": "short_text"},
+        )
+
+    mock_table_client.create_table_field.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "table_id" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_create_table_field_empty_label(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "create_table_field",
+            {"table_id": "1", "label": "", "field_type": "short_text"},
+        )
+
+    mock_table_client.create_table_field.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "label" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_create_table_field_empty_field_type(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "create_table_field",
+            {"table_id": "1", "label": "x", "field_type": ""},
+        )
+
+    mock_table_client.create_table_field.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "field_type" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: update_table_field
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_update_table_field_invalid_field_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "update_table_field",
+            {"field_id": 0, "table_id": 1, "label": "L"},
+        )
+
+    mock_table_client.update_table_field.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "field_id" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: delete_table_field
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_delete_table_field_invalid_field_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "delete_table_field",
+            {"field_id": 0, "confirm": True},
+        )
+
+    mock_table_client.delete_table_field.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "field_id" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_delete_table_field_preview_without_confirm(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "delete_table_field",
+            {"field_id": "slug-1", "confirm": False},
+        )
+
+    mock_table_client.delete_table_field.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload.get("requires_confirmation") is True
+
+
+# ---------------------------------------------------------------------------
+# Input validation: create_table_record — empty fields
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_create_table_record_empty_dict_fields(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "create_table_record",
+            {"table_id": 10, "fields": {}},
+        )
+
+    mock_table_client.create_table_record.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "fields" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_create_table_record_empty_list_fields(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "create_table_record",
+            {"table_id": 10, "fields": []},
+        )
+
+    mock_table_client.create_table_record.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "fields" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: create_table — blank name, invalid org_id
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_create_table_blank_name(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "create_table",
+            {"name": "", "organization_id": 1},
+        )
+
+    mock_table_client.create_table.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "name" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_create_table_invalid_organization_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "create_table",
+            {"name": "T", "organization_id": 0},
+        )
+
+    mock_table_client.create_table.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "organization_id" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: update_table — invalid table_id, no changes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_update_table_invalid_table_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "update_table",
+            {"table_id": 0, "name": "N"},
+        )
+
+    mock_table_client.update_table.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "table_id" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_update_table_no_changes(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "update_table",
+            {"table_id": 1},
+        )
+
+    mock_table_client.update_table.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "at least one" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: delete_table — invalid table_id
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_delete_table_invalid_table_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "delete_table",
+            {"table_id": 0, "confirm": True},
+        )
+
+    mock_table_client.get_table.assert_not_called()
+    mock_table_client.delete_table.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "table_id" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: create_table_record — invalid table_id
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_create_table_record_invalid_table_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "create_table_record",
+            {"table_id": 0, "fields": {"f": "v"}},
+        )
+
+    mock_table_client.create_table_record.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "table_id" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# Input validation: set_table_record_field_value — null value
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_set_table_record_field_value_null_value(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "set_table_record_field_value",
+            {"record_id": "1", "field_id": "f", "value": None},
+        )
+
+    mock_table_client.set_table_record_field_value.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "value" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# delete_table — GraphQL error during get_table lookup
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_delete_table_graphql_error_on_lookup(
+    table_session, mock_table_client, extract_payload
+):
+    mock_table_client.get_table.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "table gone"}]
+    )
+
+    async with table_session as session:
+        result = await session.call_tool(
+            "delete_table",
+            {"table_id": 99, "confirm": True},
+        )
+
+    mock_table_client.delete_table.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+
+
+# ---------------------------------------------------------------------------
+# delete_table — confirm True but delete returns success=False
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_delete_table_confirm_returns_false(
+    table_session, mock_table_client, extract_payload
+):
+    mock_table_client.get_table.return_value = {"table": {"id": "5", "name": "T"}}
+    mock_table_client.delete_table.return_value = {"deleteTable": {"success": False}}
+
+    async with table_session as session:
+        result = await session.call_tool(
+            "delete_table",
+            {"table_id": 5, "confirm": True},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+
+
+# ---------------------------------------------------------------------------
+# get_tables — invalid ID inside list
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_get_tables_invalid_id_in_list(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool("get_tables", {"table_ids": [1, 0]})
+
+    mock_table_client.get_tables.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "each" in payload["error"].lower() or "Each" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# update_table_field — no updates and no table_id
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_update_table_field_no_updates_no_table_id(
+    table_session, mock_table_client, extract_payload
+):
+    async with table_session as session:
+        result = await session.call_tool(
+            "update_table_field",
+            {"field_id": "slug-1"},
+        )
+
+    mock_table_client.update_table_field.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "at least one" in payload["error"].lower() or "table_id" in payload["error"]

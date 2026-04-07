@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.report_tool_helpers import (
@@ -19,9 +20,7 @@ from pipefy_mcp.tools.report_tool_helpers import (
 
 
 def _blank_field_error(value: str, field: str) -> dict[str, Any] | None:
-    """Return an error payload when ``value`` is missing or blank."""
-    if not isinstance(value, str):
-        return build_report_error_payload(message=f"'{field}' must be a string.")
+    """Return an error payload when ``value`` is blank."""
     if not value.strip():
         return build_report_error_payload(message=f"'{field}' must be non-empty.")
     return None
@@ -40,7 +39,7 @@ class ReportTools:
             first: int = 30,
             after: str | None = None,
             search: str | None = None,
-            report_id: str | None = None,
+            report_id: PipefyId | None = None,
             order: dict | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -138,7 +137,7 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_organization_report(
-            report_id: str,
+            report_id: PipefyId,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Get a single organization report by ID.
@@ -165,7 +164,7 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_organization_reports(
-            organization_id: str,
+            organization_id: PipefyId,
             first: int = 30,
             after: str | None = None,
             debug: bool = False,
@@ -202,7 +201,7 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_pipe_report_export(
-            export_id: str,
+            export_id: PipefyId,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Check the status of a pipe report export. Poll this after calling `export_pipe_report`. States: processing -> done (with fileURL) -> failed.
@@ -229,7 +228,7 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_organization_report_export(
-            export_id: str,
+            export_id: PipefyId,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Check the status of an org report export. Poll this after calling `export_organization_report`.
@@ -256,7 +255,7 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def create_pipe_report(
-            pipe_id: str,
+            pipe_id: PipefyId,
             name: str,
             fields: list[str] | None = None,
             filter: dict | None = None,
@@ -296,7 +295,7 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_pipe_report(
-            report_id: str,
+            report_id: PipefyId,
             name: str | None = None,
             color: str | None = None,
             fields: list[str] | None = None,
@@ -347,7 +346,7 @@ class ReportTools:
         )
         async def delete_pipe_report(
             ctx: Context[ServerSession, None],
-            report_id: str,
+            report_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -389,7 +388,7 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def create_organization_report(
-            organization_id: str,
+            organization_id: PipefyId,
             name: str,
             pipe_ids: list[str],
             fields: list[str] | None = None,
@@ -433,7 +432,7 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_organization_report(
-            report_id: str,
+            report_id: PipefyId,
             name: str | None = None,
             color: str | None = None,
             fields: list[str] | None = None,
@@ -481,7 +480,7 @@ class ReportTools:
         )
         async def delete_organization_report(
             ctx: Context[ServerSession, None],
-            report_id: str,
+            report_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -523,8 +522,8 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def export_pipe_report(
-            pipe_id: str,
-            pipe_report_id: str,
+            pipe_id: PipefyId,
+            pipe_report_id: PipefyId,
             sort_by: dict | None = None,
             filter: dict | None = None,
             columns: list[str] | None = None,

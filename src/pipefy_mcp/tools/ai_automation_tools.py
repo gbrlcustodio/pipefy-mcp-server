@@ -10,6 +10,7 @@ from pipefy_mcp.models.ai_automation import (
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
 )
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy.ai_automation_service import AiAutomationService
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
@@ -31,8 +32,8 @@ class AiAutomationTools:
         async def create_ai_automation(
             ctx: Context,
             name: str,
-            event_id: str,
-            pipe_id: str,
+            event_id: PipefyId,
+            pipe_id: PipefyId,
             prompt: str,
             field_ids: list[str],
             skills_ids: list[str] | None = None,
@@ -87,7 +88,7 @@ class AiAutomationTools:
         )
         async def update_ai_automation(
             ctx: Context,
-            automation_id: str,
+            automation_id: PipefyId,
             name: str | None = None,
             active: bool | None = None,
             prompt: str | None = None,

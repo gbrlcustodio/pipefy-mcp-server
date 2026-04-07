@@ -5,6 +5,7 @@ from __future__ import annotations
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
@@ -22,7 +23,7 @@ class OrganizationTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def get_organization(organization_id: str) -> dict:
+        async def get_organization(organization_id: PipefyId) -> dict:
             """Fetch Pipefy organization details by ID.
 
             Returns id, uuid, name, plan, role, members count, pipes count,

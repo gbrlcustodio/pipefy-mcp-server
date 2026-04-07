@@ -570,3 +570,72 @@ async def test_upload_attachment_to_card_rejects_oversized_content_length(
         "too large" in payload["error"].lower() or "limit" in payload["error"].lower()
     )
     mock_attachment_client.create_presigned_url.assert_not_called()
+
+
+## ---------------------------------------------------------------------------
+## PipefyId coercion: int → str through MCP transport (mcporter mitigation)
+## ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_upload_attachment_to_card_coerces_int_ids(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+):
+    raw = b"hello"
+    b64 = base64.b64encode(raw).decode("ascii")
+
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_card",
+            {
+                "organization_id": 42,
+                "card_id": 7,
+                "field_id": 999,
+                "file_name": "note.txt",
+                "file_content_base64": b64,
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    mock_attachment_client.create_presigned_url.assert_awaited_once_with(
+        "42", "note.txt", "text/plain", 5
+    )
+    mock_attachment_client.update_card_field.assert_awaited_once_with(
+        7, "999", ["orgs/o/u/f/report.pdf"]
+    )
+
+
+@pytest.mark.anyio
+async def test_upload_attachment_to_table_record_coerces_int_ids(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+):
+    raw = b"hello"
+    b64 = base64.b64encode(raw).decode("ascii")
+
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_table_record",
+            {
+                "organization_id": 42,
+                "table_record_id": 200,
+                "field_id": 300,
+                "file_name": "data.csv",
+                "file_content_base64": b64,
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    mock_attachment_client.create_presigned_url.assert_awaited_once_with(
+        "42", "data.csv", "text/csv", 5
+    )
+    mock_attachment_client.set_table_record_field_value.assert_awaited_once_with(
+        "200", "300", ["orgs/o/u/f/report.pdf"]
+    )

@@ -7,6 +7,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.observability_tool_helpers import (
     build_observability_error_payload,
@@ -113,7 +114,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_automation_logs(
-            automation_id: str,
+            automation_id: PipefyId,
             first: int = 30,
             after: str | None = None,
             status: str | None = None,
@@ -130,7 +131,7 @@ class ObservabilityTools:
                 search_term: Free-text search within logs.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not automation_id or not isinstance(automation_id, str):
+            if not automation_id:
                 return build_observability_error_payload(
                     message="Invalid 'automation_id': provide a non-empty string.",
                 )
@@ -158,7 +159,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_automation_logs_by_repo(
-            repo_id: str,
+            repo_id: PipefyId,
             first: int = 30,
             after: str | None = None,
             status: str | None = None,
@@ -175,7 +176,7 @@ class ObservabilityTools:
                 search_term: Free-text search within logs.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not repo_id or not isinstance(repo_id, str):
+            if not repo_id:
                 return build_observability_error_payload(
                     message="Invalid 'repo_id': provide a non-empty string.",
                 )
@@ -371,7 +372,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_automation_jobs_export(
-            export_id: str,
+            export_id: PipefyId,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Poll an automation jobs export by id. Returns `status` (`created`, `processing`, `finished`, `failed`) and `fileUrl` when the API provides a signed download link (often after `finished`). Use after `export_automation_jobs`; repeat until `finished` or `failed`. The tool does not download the file — use `fileUrl` over HTTP if needed.
@@ -380,7 +381,7 @@ class ObservabilityTools:
                 export_id: Export id from `export_automation_jobs` result (`automationJobsExport.id`).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not export_id or not isinstance(export_id, str):
+            if not export_id:
                 return build_observability_error_payload(
                     message="Invalid 'export_id': provide a non-empty string.",
                 )
@@ -398,7 +399,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_automation_jobs_export_csv(
-            export_id: str,
+            export_id: PipefyId,
             max_output_chars: int = _DEFAULT_CSV_CHARS,
             max_download_bytes: int = _DEFAULT_EXPORT_DOWNLOAD_BYTES,
             debug: bool = False,
@@ -411,7 +412,7 @@ class ObservabilityTools:
                 max_download_bytes: Max xlsx size to download (4 KiB–80 MiB); default 50 MiB.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not export_id or not isinstance(export_id, str):
+            if not export_id:
                 return build_observability_error_payload(
                     message="Invalid 'export_id': provide a non-empty string.",
                 )

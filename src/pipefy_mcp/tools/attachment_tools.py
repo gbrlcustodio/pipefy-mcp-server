@@ -20,6 +20,7 @@ from pipefy_mcp.models.attachment import (
     UploadAttachmentToTableRecordInput,
     infer_content_type,
 )
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.attachment_tool_helpers import (
     build_upload_error_payload,
@@ -239,9 +240,9 @@ class AttachmentTools:
         )
         async def upload_attachment_to_card(
             ctx: Context[ServerSession, None],
-            organization_id: str,
+            organization_id: PipefyId,
             card_id: int,
-            field_id: str,
+            field_id: PipefyId,
             file_name: str,
             file_url: str | None = None,
             file_content_base64: str | None = None,
@@ -302,9 +303,9 @@ class AttachmentTools:
         )
         async def upload_attachment_to_table_record(
             ctx: Context[ServerSession, None],
-            organization_id: str,
-            table_record_id: str,
-            field_id: str,
+            organization_id: PipefyId,
+            table_record_id: PipefyId,
+            field_id: PipefyId,
             file_name: str,
             file_url: str | None = None,
             file_content_base64: str | None = None,

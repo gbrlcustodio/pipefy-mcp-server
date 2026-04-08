@@ -19,6 +19,9 @@ from pipefy_mcp.tools.automation_tool_helpers import (
     handle_automation_tool_graphql_error,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.phase_transition_helpers import (
+    validate_traditional_automation_move_transition_or_none,
+)
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     valid_repo_id,
@@ -331,6 +334,11 @@ class AutomationTools:
             ``CreateAutomationInput`` (camelCase keys). Use ``update_automation`` with ``active: false``
             to disable a rule after creation.
 
+            For ``card_moved`` rules with action ``move_single_card``, when ``extra_input`` includes
+            ``event_params.to_phase_id`` (or ``toPhaseId``) and ``action_params.to_phase_id`` (or
+            ``phase.id``), the tool rejects impossible transitions before calling the API, using the
+            same read-only transition data as ``move_card_to_phase``.
+
             **Cross-pipe actions** (e.g. ``create_connected_card``, ``move_card_to_pipe``):
             set ``action_repo_id`` to the **destination** pipe ID. When omitted it defaults to
             ``pipe_id`` (same-pipe automation). Cross-pipe actions typically require
@@ -376,6 +384,13 @@ class AutomationTools:
             )
             if bad is not None:
                 return bad
+            transition_msg = (
+                await validate_traditional_automation_move_transition_or_none(
+                    client, tid, aid, extra_input
+                )
+            )
+            if transition_msg is not None:
+                return build_automation_error_payload(transition_msg)
             try:
                 raw = await client.create_automation(
                     pid,

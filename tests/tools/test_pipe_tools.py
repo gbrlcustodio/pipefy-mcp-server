@@ -411,6 +411,77 @@ class TestDirectToolCalls:
         mock_pipefy_client.move_card_to_phase.assert_called_once_with(100, 200)
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_move_card_to_phase_returns_enriched_payload_when_transition_invalid(
+        self, client_session, mock_pipefy_client, extract_payload
+    ):
+        """On API failure, enrich if destination is not in cards_can_be_moved_to_phases."""
+
+        async def _fail_move(*_args):
+            raise RuntimeError("not a valid target phase")
+
+        mock_pipefy_client.move_card_to_phase = AsyncMock(side_effect=_fail_move)
+        mock_pipefy_client.get_card = AsyncMock(
+            return_value={
+                "card": {"id": "1", "current_phase": {"id": "10", "name": "Doing"}},
+            }
+        )
+        mock_pipefy_client.get_phase_allowed_move_targets = AsyncMock(
+            return_value={
+                "phase": {
+                    "id": "10",
+                    "name": "Doing",
+                    "cards_can_be_moved_to_phases": [
+                        {"id": "11", "name": "Done"},
+                    ],
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "move_card_to_phase",
+                {"card_id": 1, "destination_phase_id": 99},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload.get("success") is False
+        assert "99" in payload["error"]
+        assert payload["valid_destinations"] == [{"id": "11", "name": "Done"}]
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_move_card_to_phase_surfaces_original_error_when_destination_allowed(
+        self, client_session, mock_pipefy_client
+    ):
+        """If transition is allowed, surface the original API error (e.g. permissions)."""
+
+        async def _fail_move(*_args):
+            raise RuntimeError("forbidden")
+
+        mock_pipefy_client.move_card_to_phase = AsyncMock(side_effect=_fail_move)
+        mock_pipefy_client.get_card = AsyncMock(
+            return_value={
+                "card": {"current_phase": {"id": "10", "name": "Doing"}},
+            }
+        )
+        mock_pipefy_client.get_phase_allowed_move_targets = AsyncMock(
+            return_value={
+                "phase": {
+                    "id": "10",
+                    "name": "Doing",
+                    "cards_can_be_moved_to_phases": [
+                        {"id": "99", "name": "Target"},
+                    ],
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "move_card_to_phase",
+                {"card_id": 1, "destination_phase_id": 99},
+            )
+        assert result.isError is True
+        assert "forbidden" in (result.content[0].text if result.content else "")
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_start_form_fields_forwards_params_to_client(
         self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):

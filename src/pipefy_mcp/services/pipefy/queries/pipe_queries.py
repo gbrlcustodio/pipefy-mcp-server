@@ -85,6 +85,21 @@ GET_PIPE_MEMBERS_QUERY = gql(
     """
 )
 
+GET_PHASE_ALLOWED_MOVES_QUERY = gql(
+    """
+    query GetPhaseAllowedMoves($phase_id: ID!) {
+        phase(id: $phase_id) {
+            id
+            name
+            cards_can_be_moved_to_phases {
+                id
+                name
+            }
+        }
+    }
+    """
+)
+
 GET_PHASE_FIELDS_QUERY = gql(
     """
     query GetPhaseFields($phase_id: ID!) {
@@ -109,6 +124,7 @@ GET_PHASE_FIELDS_QUERY = gql(
 )
 
 __all__ = [
+    "GET_PHASE_ALLOWED_MOVES_QUERY",
     "GET_PHASE_FIELDS_QUERY",
     "GET_PIPE_MEMBERS_QUERY",
     "GET_PIPE_QUERY",

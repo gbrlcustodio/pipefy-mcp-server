@@ -817,6 +817,24 @@ async def test_move_card_to_phase_variable_shape():
     assert result == {"moveCardToPhase": {"clientMutationId": None}}
 
 
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_allowed_move_targets_delegates_to_pipe_service():
+    expected = {
+        "phase": {
+            "id": "5",
+            "name": "Backlog",
+            "cards_can_be_moved_to_phases": [{"id": "6", "name": "Doing"}],
+        }
+    }
+    client, mock_execute = _make_facade_client(expected)
+    result = await client.get_phase_allowed_move_targets(5)
+
+    mock_execute.assert_awaited()
+    assert mock_execute.call_args[0][1] == {"phase_id": 5}
+    assert result == expected
+
+
 @pytest.mark.asyncio
 async def test_search_pipes_delegates_to_pipe_service():
     """Test search_pipes delegates unchanged to PipeService.search_pipes."""

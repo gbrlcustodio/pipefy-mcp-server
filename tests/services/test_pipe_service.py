@@ -9,7 +9,10 @@ import pytest
 from graphql import print_ast
 
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
-from pipefy_mcp.services.pipefy.queries.pipe_queries import GET_PHASE_FIELDS_QUERY
+from pipefy_mcp.services.pipefy.queries.pipe_queries import (
+    GET_PHASE_ALLOWED_MOVES_QUERY,
+    GET_PHASE_FIELDS_QUERY,
+)
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -392,6 +395,32 @@ def test_get_phase_fields_query_selects_internal_id_and_uuid():
     printed = print_ast(GET_PHASE_FIELDS_QUERY)
     assert "internal_id" in printed
     assert "uuid" in printed
+
+
+@pytest.mark.unit
+def test_get_phase_allowed_moves_query_requests_transition_field():
+    printed = print_ast(GET_PHASE_ALLOWED_MOVES_QUERY)
+    assert "cards_can_be_moved_to_phases" in printed
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_allowed_move_targets_sends_phase_id(mock_settings):
+    phase_id = 342182335
+    api_response = {
+        "phase": {
+            "id": str(phase_id),
+            "name": "Doing",
+            "cards_can_be_moved_to_phases": [{"id": "200", "name": "Done"}],
+        }
+    }
+    service = _make_service(mock_settings, api_response)
+    result = await service.get_phase_allowed_move_targets(phase_id)
+
+    service.execute_query.assert_called_once()
+    assert service.execute_query.call_args[0][0] is GET_PHASE_ALLOWED_MOVES_QUERY
+    assert service.execute_query.call_args[0][1] == {"phase_id": phase_id}
+    assert result == api_response
 
 
 @pytest.mark.unit

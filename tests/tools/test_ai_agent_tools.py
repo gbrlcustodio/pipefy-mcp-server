@@ -27,6 +27,7 @@ def mock_pipefy_client():
     client.delete_ai_agent = AsyncMock()
     client.get_pipe = AsyncMock()
     client.get_pipe_relations = AsyncMock()
+    client.get_phase_allowed_move_targets = AsyncMock()
     return client
 
 
@@ -1376,6 +1377,109 @@ class TestValidateAiAgentBehaviorsErrorPaths:
             "parents": [],
         }
         behavior = _behavior_update_card_on_pipe(pipe_id="1", field_id="sf-1")
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {"pipe_id": "1", "behaviors": [behavior]},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is True
+        assert payload["problems"] == []
+
+    async def test_move_card_reports_invalid_transition_when_trigger_phase_known(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe.return_value = {
+            "pipe": {
+                "phases": [
+                    {"id": "100", "fields": []},
+                    {"id": "200", "fields": []},
+                ],
+                "start_form_fields": [],
+            }
+        }
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [],
+            "parents": [],
+        }
+        mock_pipefy_client.get_phase_allowed_move_targets.return_value = {
+            "phase": {
+                "id": "100",
+                "name": "Doing",
+                "cards_can_be_moved_to_phases": [{"id": "200", "name": "Done"}],
+            }
+        }
+        behavior = {
+            "name": "After valid lands",
+            "event_id": "card_moved",
+            "eventParams": {"to_phase_id": "100"},
+            "actionParams": {
+                "aiBehaviorParams": {
+                    "instruction": "move",
+                    "actionsAttributes": [
+                        {
+                            "name": "m",
+                            "actionType": "move_card",
+                            "metadata": {"destinationPhaseId": "999"},
+                        }
+                    ],
+                }
+            },
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {"pipe_id": "1", "behaviors": [behavior]},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is False
+        assert any("999" in p for p in payload["problems"])
+
+    async def test_move_card_transition_ok_when_destination_allowed(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe.return_value = {
+            "pipe": {
+                "phases": [{"id": "100", "fields": []}, {"id": "200", "fields": []}],
+                "start_form_fields": [],
+            }
+        }
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [],
+            "parents": [],
+        }
+        mock_pipefy_client.get_phase_allowed_move_targets.return_value = {
+            "phase": {
+                "id": "100",
+                "name": "Doing",
+                "cards_can_be_moved_to_phases": [{"id": "200", "name": "Done"}],
+            }
+        }
+        behavior = {
+            "name": "Move when landed",
+            "event_id": "card_moved",
+            "eventParams": {"to_phase_id": "100"},
+            "actionParams": {
+                "aiBehaviorParams": {
+                    "instruction": "move",
+                    "actions_attributes": [
+                        {
+                            "name": "m",
+                            "actionType": "move_card",
+                            "metadata": {"destinationPhaseId": "200"},
+                        }
+                    ],
+                }
+            },
+        }
         async with client_session as session:
             result = await session.call_tool(
                 "validate_ai_agent_behaviors",

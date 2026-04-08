@@ -25,6 +25,7 @@ def mock_automation_client():
     client.update_automation = AsyncMock()
     client.simulate_automation = AsyncMock()
     client.delete_automation = AsyncMock()
+    client.get_phase_allowed_move_targets = AsyncMock()
     return client
 
 
@@ -384,6 +385,45 @@ async def test_create_automation_success(
         "name": "Notify",
         "active": True,
     }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_automation_rejects_move_when_transition_not_allowed(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.get_phase_allowed_move_targets.return_value = {
+        "phase": {
+            "id": "10",
+            "name": "Doing",
+            "cards_can_be_moved_to_phases": [{"id": "11", "name": "Done"}],
+        }
+    }
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_automation",
+            {
+                "pipe_id": "p1",
+                "name": "Bad move",
+                "trigger_id": "card_moved",
+                "action_id": "move_single_card",
+                "active": True,
+                "action_repo_id": None,
+                "extra_input": {
+                    "event_params": {"to_phase_id": "10"},
+                    "action_params": {"to_phase_id": "99"},
+                },
+                "debug": False,
+            },
+        )
+
+    assert result.isError is False
+    mock_automation_client.create_automation.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "99" in payload["error"]
+    mock_automation_client.get_phase_allowed_move_targets.assert_awaited_once_with(10)
 
 
 @pytest.mark.anyio

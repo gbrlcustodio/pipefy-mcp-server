@@ -43,7 +43,7 @@ async def test_get_pipe_passes_pipe_id_variable(mock_settings):
 
     service.execute_query.assert_called_once()
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"pipe_id": pipe_id}, "Expected pipe_id in variables"
+    assert variables == {"pipe_id": str(pipe_id)}, "Expected pipe_id in variables"
     assert result == {"pipe": {"id": str(pipe_id)}}, "Expected pipe response"
 
 
@@ -72,7 +72,7 @@ async def test_get_pipe_members_returns_members(mock_settings):
 
     service.execute_query.assert_called_once()
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"pipeId": pipe_id}, "Expected pipeId in variables"
+    assert variables == {"pipeId": str(pipe_id)}, "Expected pipeId in variables"
     assert result == {"pipe": {"members": mock_members}}, (
         "Expected pipe members response"
     )
@@ -419,7 +419,7 @@ async def test_get_phase_allowed_move_targets_sends_phase_id(mock_settings):
 
     service.execute_query.assert_called_once()
     assert service.execute_query.call_args[0][0] is GET_PHASE_ALLOWED_MOVES_QUERY
-    assert service.execute_query.call_args[0][1] == {"phase_id": phase_id}
+    assert service.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
     assert result == api_response
 
 
@@ -470,7 +470,7 @@ class TestGetPhaseFields:
         mock_eq.assert_called_once()
         assert mock_eq.call_args[0][0] is GET_PHASE_FIELDS_QUERY
         variables = mock_eq.call_args[0][1]
-        assert variables == {"phase_id": self.PHASE_ID}, (
+        assert variables == {"phase_id": str(self.PHASE_ID)}, (
             "Expected phase_id in variables"
         )
         assert result == {

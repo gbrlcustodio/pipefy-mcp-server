@@ -25,18 +25,18 @@ class PipeService(BasePipefyClient):
     ) -> None:
         super().__init__(settings=settings, auth=auth)
 
-    async def get_pipe(self, pipe_id: int) -> dict:
+    async def get_pipe(self, pipe_id: str | int) -> dict:
         """Get a pipe by its ID, including phases, labels, and start form fields."""
-        variables = {"pipe_id": pipe_id}
+        variables = {"pipe_id": str(pipe_id)}
         return await self.execute_query(GET_PIPE_QUERY, variables)
 
-    async def get_pipe_members(self, pipe_id: int) -> dict:
+    async def get_pipe_members(self, pipe_id: str | int) -> dict:
         """Get the members of a pipe."""
-        variables = {"pipeId": pipe_id}
+        variables = {"pipeId": str(pipe_id)}
         return await self.execute_query(GET_PIPE_MEMBERS_QUERY, variables)
 
     async def get_start_form_fields(
-        self, pipe_id: int, required_only: bool = False
+        self, pipe_id: str | int, required_only: bool = False
     ) -> dict:
         """Get the start form fields of a pipe.
 
@@ -48,7 +48,7 @@ class PipeService(BasePipefyClient):
             dict: A dictionary containing the list of start form fields with their properties.
         """
 
-        variables = {"pipe_id": pipe_id}
+        variables = {"pipe_id": str(pipe_id)}
         result = await self.execute_query(GET_START_FORM_FIELDS_QUERY, variables)
 
         fields = result.get("pipe", {}).get("start_form_fields", [])
@@ -122,7 +122,7 @@ class PipeService(BasePipefyClient):
 
         return {"organizations": filtered_orgs}
 
-    async def get_phase_allowed_move_targets(self, phase_id: int) -> dict:
+    async def get_phase_allowed_move_targets(self, phase_id: str | int) -> dict:
         """List phases a card may move to from ``phase_id`` (UI transition rules).
 
         Read-only: mirrors Pipefy **Phase → Connections**. Returns the GraphQL
@@ -134,11 +134,11 @@ class PipeService(BasePipefyClient):
         Returns:
             Raw GraphQL payload (``phase`` key at top level).
         """
-        variables = {"phase_id": phase_id}
+        variables = {"phase_id": str(phase_id)}
         return await self.execute_query(GET_PHASE_ALLOWED_MOVES_QUERY, variables)
 
     async def get_phase_fields(
-        self, phase_id: int, required_only: bool = False
+        self, phase_id: str | int, required_only: bool = False
     ) -> dict:
         """Get the fields available in a specific phase.
 
@@ -149,7 +149,7 @@ class PipeService(BasePipefyClient):
         Returns:
             dict: A dictionary containing the phase info and its fields.
         """
-        variables = {"phase_id": phase_id}
+        variables = {"phase_id": str(phase_id)}
         result = await self.execute_query(GET_PHASE_FIELDS_QUERY, variables)
 
         phase = result.get("phase", {})

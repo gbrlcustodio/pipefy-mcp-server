@@ -34,7 +34,6 @@ class OrganizationService(BasePipefyClient):
         )
         org = data.get("organization")
         if org is None:
-            return {
-                "error": f"Organization '{organization_id}' was not found.",
-            }
+            msg = f"Organization '{organization_id}' was not found."
+            raise ValueError(msg)
         return org

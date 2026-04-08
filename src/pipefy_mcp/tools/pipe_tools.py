@@ -23,6 +23,9 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_error_codes,
     with_debug_suffix,
 )
+from pipefy_mcp.tools.phase_transition_helpers import (
+    try_enrich_move_card_to_phase_failure,
+)
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     AddCardCommentPayload,
@@ -363,9 +366,24 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True),
         )
         async def move_card_to_phase(card_id: int, destination_phase_id: int) -> dict:
-            """Move a card to a specific phase."""
+            """Move a card to a specific phase.
 
-            return await client.move_card_to_phase(card_id, destination_phase_id)
+            On failure, if the destination is not among ``cards_can_be_moved_to_phases`` for the
+            card's current phase, returns ``success: false`` with ``valid_destinations`` instead of
+            only the raw API error.
+            """
+
+            try:
+                return await client.move_card_to_phase(card_id, destination_phase_id)
+            except Exception as exc:  # noqa: BLE001
+                enriched = await try_enrich_move_card_to_phase_failure(
+                    client,
+                    card_id,
+                    destination_phase_id,
+                )
+                if enriched is not None:
+                    return enriched
+                raise exc
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),

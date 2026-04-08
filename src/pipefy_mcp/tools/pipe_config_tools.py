@@ -21,7 +21,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     handle_pipe_config_tool_graphql_error,
     map_delete_pipe_error_to_message,
 )
-from pipefy_mcp.tools.pipe_config_validators import valid_phase_field_id
+from pipefy_mcp.tools.validation_helpers import valid_repo_id as valid_phase_field_id
 
 _CREATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"phase_id", "label", "type"})
 _UPDATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"id", "uuid"})

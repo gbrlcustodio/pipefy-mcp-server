@@ -123,7 +123,10 @@ class IntrospectionTools:
                 query: Full GraphQL document (query or mutation).
                 variables: Optional variable map for the operation.
             """
-            result = await client.execute_graphql(query, variables)
+            try:
+                result = await client.execute_graphql(query, variables)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(str(exc))
             gql_errors = result.get("errors")
             if isinstance(gql_errors, list) and gql_errors:
                 messages: list[str] = []

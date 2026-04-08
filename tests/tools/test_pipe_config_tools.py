@@ -237,7 +237,7 @@ async def test_delete_pipe_invalid_id(
     payload = extract_payload(result)
     expected: DeletePipeErrorPayload = {
         "success": False,
-        "error": "Invalid 'pipe_id'. Use a positive integer.",
+        "error": "Invalid 'pipe_id'. Provide a non-empty string or positive integer.",
     }
     assert payload == expected
 

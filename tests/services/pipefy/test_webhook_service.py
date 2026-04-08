@@ -47,7 +47,7 @@ async def test_get_email_templates_success(mock_settings):
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is GET_EMAIL_TEMPLATES_QUERY
-    assert variables["repoId"] == 307061640
+    assert variables["repoId"] == "307061640"
     assert variables["first"] == 50
     assert result == payload
 
@@ -166,7 +166,7 @@ async def test_send_email_with_template_success(mock_settings):
     result = await service.send_email_with_template("1320616225", "tmpl-42")
 
     assert card_service.get_card.await_count == 1
-    card_service.get_card.assert_awaited_once_with(1320616225)
+    card_service.get_card.assert_awaited_once_with("1320616225")
     assert service.execute_query.await_count == 2
     first_q, first_vars = service.execute_query.call_args_list[0][0]
     second_q, second_inp = service.execute_query.call_args_list[1][0]
@@ -223,7 +223,7 @@ async def test_create_webhook_success(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_WEBHOOK_MUTATION
     inp = variables["input"]
-    assert inp["pipe_id"] == 601
+    assert inp["pipe_id"] == "601"
     assert inp["url"] == "https://example.com/hook"
     assert inp["actions"] == ["card.create"]
     assert result == payload
@@ -309,7 +309,7 @@ async def test_get_card_inbox_emails_success(mock_settings):
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is GET_CARD_INBOX_EMAILS_QUERY
-    assert variables["card_id"] == 12345
+    assert variables["card_id"] == "12345"
     assert result == payload
     assert len(result["card"]["inbox_emails"]) == 2
 

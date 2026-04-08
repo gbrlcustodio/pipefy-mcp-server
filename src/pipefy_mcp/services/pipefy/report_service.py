@@ -101,7 +101,7 @@ class ReportService(BasePipefyClient):
         """
         return await self.execute_query(
             GET_ORGANIZATION_REPORT_QUERY,
-            {"id": int(report_id)},
+            {"id": str(report_id)},
         )
 
     async def get_organization_reports(
@@ -119,7 +119,7 @@ class ReportService(BasePipefyClient):
             after: Cursor for next page.
         """
         variables: dict[str, Any] = {
-            "organizationId": int(organization_id),
+            "organizationId": str(organization_id),
             "first": first,
         }
         if after is not None:
@@ -166,7 +166,7 @@ class ReportService(BasePipefyClient):
             filter: Report filter (``ReportCardsFilter`` shape).
             formulas: Formula definitions (list of [field, operator, ...] tuples).
         """
-        input_obj: dict[str, Any] = {"pipeId": int(pipe_id), "name": name}
+        input_obj: dict[str, Any] = {"pipeId": str(pipe_id), "name": name}
         if fields is not None:
             input_obj["fields"] = fields
         if filter is not None:
@@ -199,7 +199,7 @@ class ReportService(BasePipefyClient):
             formulas: Formula definitions.
             featured_field: Featured field name.
         """
-        input_obj: dict[str, Any] = {"id": int(report_id)}
+        input_obj: dict[str, Any] = {"id": str(report_id)}
         optional_fields = {
             "name": name,
             "color": color,
@@ -222,7 +222,7 @@ class ReportService(BasePipefyClient):
             report_id: Pipe report ID.
         """
         return await self.execute_query(
-            DELETE_PIPE_REPORT_MUTATION, {"input": {"id": int(report_id)}}
+            DELETE_PIPE_REPORT_MUTATION, {"input": {"id": str(report_id)}}
         )
 
     async def create_organization_report(
@@ -244,9 +244,9 @@ class ReportService(BasePipefyClient):
             filter: Report filter (``ReportCardsFilter`` shape).
         """
         input_obj: dict[str, Any] = {
-            "organizationId": int(organization_id),
+            "organizationId": str(organization_id),
             "name": name,
-            "pipeIds": [int(pid) for pid in pipe_ids],
+            "pipeIds": [str(pid) for pid in pipe_ids],
         }
         if fields is not None:
             input_obj["fields"] = fields
@@ -276,13 +276,13 @@ class ReportService(BasePipefyClient):
             filter: Report filter (``ReportCardsFilter`` shape).
             pipe_ids: Pipe IDs to include.
         """
-        input_obj: dict[str, Any] = {"id": int(report_id)}
+        input_obj: dict[str, Any] = {"id": str(report_id)}
         optional_fields = {
             "name": name,
             "color": color,
             "fields": fields,
             "filter": filter,
-            "pipeIds": [int(pid) for pid in pipe_ids] if pipe_ids is not None else None,
+            "pipeIds": [str(pid) for pid in pipe_ids] if pipe_ids is not None else None,
         }
         for key, value in optional_fields.items():
             if value is not None:
@@ -298,7 +298,7 @@ class ReportService(BasePipefyClient):
             report_id: Organization report ID.
         """
         return await self.execute_query(
-            DELETE_ORGANIZATION_REPORT_MUTATION, {"input": {"id": int(report_id)}}
+            DELETE_ORGANIZATION_REPORT_MUTATION, {"input": {"id": str(report_id)}}
         )
 
     async def export_pipe_report(
@@ -320,8 +320,8 @@ class ReportService(BasePipefyClient):
             columns: Column field IDs to include in the export file.
         """
         input_obj: dict[str, Any] = {
-            "pipeId": int(pipe_id),
-            "pipeReportId": int(pipe_report_id),
+            "pipeId": str(pipe_id),
+            "pipeReportId": str(pipe_report_id),
         }
         if sort_by is not None:
             input_obj["sortBy"] = sort_by
@@ -335,31 +335,30 @@ class ReportService(BasePipefyClient):
 
     async def export_organization_report(
         self,
-        organization_id: int,
+        organization_id: str | int,
         *,
-        organization_report_id: int | None = None,
-        pipe_ids: list[int] | None = None,
+        organization_report_id: str | int | None = None,
+        pipe_ids: list[str | int] | None = None,
         sort_by: dict[str, Any] | None = None,
         filter: dict[str, Any] | None = None,
         columns: list[str] | None = None,
     ) -> dict[str, Any]:
         """Trigger an async organization report export (poll ``get_organization_report_export``).
 
-        Uses ``int`` for IDs because the GraphQL ``ExportOrganizationReportInput``
-        declares ``organizationId``, ``organizationReportId``, and ``pipeIds`` as ``Int``.
-
         Args:
-            organization_id: Organization numeric ID (GraphQL ``Int``).
+            organization_id: Organization ID.
             organization_report_id: Report to export; omit to export by pipes only.
             pipe_ids: Pipe IDs to scope the export.
             sort_by: ``ReportSortDirectionInput``.
             filter: ``ReportCardsFilter`` shape.
             columns: Column field IDs for the export file.
         """
-        input_obj: dict[str, Any] = {"organizationId": organization_id}
+        input_obj: dict[str, Any] = {"organizationId": str(organization_id)}
         optional_fields = {
-            "organizationReportId": organization_report_id,
-            "pipeIds": pipe_ids,
+            "organizationReportId": str(organization_report_id)
+            if organization_report_id is not None
+            else None,
+            "pipeIds": [str(pid) for pid in pipe_ids] if pipe_ids is not None else None,
             "sortBy": sort_by,
             "filter": filter,
             "columns": columns,

@@ -104,7 +104,7 @@ class AutomationService(BasePipefyClient):
         """
         payload = await self.execute_query(
             GET_AUTOMATION_QUERY,
-            {"id": int(automation_id)},
+            {"id": str(automation_id)},
         )
         row = payload.get("automation")
         if row is None or not isinstance(row, dict):
@@ -132,7 +132,7 @@ class AutomationService(BasePipefyClient):
         if org_id is None and pipe_id is not None:
             org_row = await self.execute_query(
                 GET_PIPE_ORGANIZATION_ID_QUERY,
-                {"id": int(pipe_id)},
+                {"id": str(pipe_id)},
             )
             pipe = org_row.get("pipe") or {}
             oid = pipe.get("organizationId")
@@ -146,12 +146,12 @@ class AutomationService(BasePipefyClient):
         if pipe_id is None:
             payload = await self.execute_query(
                 GET_AUTOMATIONS_BY_ORG_QUERY,
-                {"organizationId": int(org_id)},
+                {"organizationId": str(org_id)},
             )
         else:
             payload = await self.execute_query(
                 GET_AUTOMATIONS_FOR_ORG_AND_REPO_QUERY,
-                {"organizationId": int(org_id), "repoId": int(pipe_id)},
+                {"organizationId": str(org_id), "repoId": str(pipe_id)},
             )
         conn = payload.get("automations")
         if conn is None:
@@ -169,7 +169,7 @@ class AutomationService(BasePipefyClient):
         """
         payload = await self.execute_query(
             GET_AUTOMATION_ACTIONS_QUERY,
-            {"repoId": int(pipe_id)},
+            {"repoId": str(pipe_id)},
         )
         rows = payload.get("automationActions")
         if rows is None:

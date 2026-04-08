@@ -96,26 +96,26 @@ class PipefyClient:
         """
         self._ai_automation_service = service
 
-    async def get_pipe(self, pipe_id: int) -> dict:
+    async def get_pipe(self, pipe_id: str | int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
         return await self._pipe_service.get_pipe(pipe_id)
 
-    async def create_pipe(self, name: str, organization_id: int) -> dict:
+    async def create_pipe(self, name: str, organization_id: str | int) -> dict:
         """Create a new pipe in the organization."""
         return await self._pipe_config_service.create_pipe(name, organization_id)
 
-    async def update_pipe(self, pipe_id: int, **attrs: Any) -> dict:
+    async def update_pipe(self, pipe_id: str | int, **attrs: Any) -> dict:
         """Update pipe attributes (see Pipefy `UpdatePipeInput`)."""
         return await self._pipe_config_service.update_pipe(pipe_id, **attrs)
 
-    async def delete_pipe(self, pipe_id: int) -> dict:
+    async def delete_pipe(self, pipe_id: str | int) -> dict:
         """Delete a pipe by ID (permanent)."""
         return await self._pipe_config_service.delete_pipe(pipe_id)
 
     async def clone_pipe(
         self,
-        pipe_template_id: int,
-        organization_id: int | None = None,
+        pipe_template_id: str | int,
+        organization_id: str | int | None = None,
     ) -> dict:
         """Clone a pipe from a template pipe ID."""
         return await self._pipe_config_service.clone_pipe(
@@ -125,7 +125,7 @@ class PipefyClient:
 
     async def create_phase(
         self,
-        pipe_id: int,
+        pipe_id: str | int,
         name: str,
         done: bool = False,
         index: float | int | None = None,
@@ -140,17 +140,17 @@ class PipefyClient:
             description=description,
         )
 
-    async def update_phase(self, phase_id: int, **attrs: Any) -> dict:
+    async def update_phase(self, phase_id: str | int, **attrs: Any) -> dict:
         """Update phase attributes (see Pipefy `UpdatePhaseInput`)."""
         return await self._pipe_config_service.update_phase(phase_id, **attrs)
 
-    async def delete_phase(self, phase_id: int) -> dict:
+    async def delete_phase(self, phase_id: str | int) -> dict:
         """Delete a phase by ID (permanent)."""
         return await self._pipe_config_service.delete_phase(phase_id)
 
     async def create_phase_field(
         self,
-        phase_id: int,
+        phase_id: str | int,
         label: str,
         field_type: str,
         **attrs: Any,
@@ -178,15 +178,15 @@ class PipefyClient:
             field_id, pipe_uuid=pipe_uuid
         )
 
-    async def create_label(self, pipe_id: int, name: str, color: str) -> dict:
+    async def create_label(self, pipe_id: str | int, name: str, color: str) -> dict:
         """Create a label on a pipe."""
         return await self._pipe_config_service.create_label(pipe_id, name, color)
 
-    async def update_label(self, label_id: int, **attrs: Any) -> dict:
+    async def update_label(self, label_id: str | int, **attrs: Any) -> dict:
         """Update a label (see Pipefy `UpdateLabelInput`)."""
         return await self._pipe_config_service.update_label(label_id, **attrs)
 
-    async def delete_label(self, label_id: int) -> dict:
+    async def delete_label(self, label_id: str | int) -> dict:
         """Delete a label by ID (permanent)."""
         return await self._pipe_config_service.delete_label(label_id)
 
@@ -252,7 +252,9 @@ class PipefyClient:
             after=after,
         )
 
-    async def create_table(self, name: str, organization_id: int, **attrs: Any) -> dict:
+    async def create_table(
+        self, name: str, organization_id: str | int, **attrs: Any
+    ) -> dict:
         """Create a database table (see Pipefy `CreateTableInput`)."""
         return await self._table_service.create_table(name, organization_id, **attrs)
 
@@ -669,29 +671,29 @@ class PipefyClient:
         assert self._ai_automation_service is not None  # noqa: S101
         return await self._ai_automation_service.update_automation(automation_input)
 
-    async def get_pipe_members(self, pipe_id: int) -> dict:
+    async def get_pipe_members(self, pipe_id: str | int) -> dict:
         """Get the members of a pipe."""
         return await self._pipe_service.get_pipe_members(pipe_id)
 
     async def create_card(
-        self, pipe_id: int, fields: dict[str, Any] | list[dict[str, Any]]
+        self, pipe_id: str | int, fields: dict[str, Any] | list[dict[str, Any]]
     ) -> dict:
         """Create a card in the specified pipe with the given fields."""
         return await self._card_service.create_card(pipe_id, fields)
 
-    async def add_card_comment(self, card_id: int, text: str) -> dict:
+    async def add_card_comment(self, card_id: str | int, text: str) -> dict:
         """Add a text comment to a card by its ID."""
         return await self._card_service.create_comment(card_id, text)
 
-    async def update_comment(self, comment_id: int, text: str) -> dict:
+    async def update_comment(self, comment_id: str | int, text: str) -> dict:
         """Update an existing comment by its ID."""
         return await self._card_service.update_comment(comment_id, text)
 
-    async def delete_comment(self, comment_id: int) -> dict:
+    async def delete_comment(self, comment_id: str | int) -> dict:
         """Delete a comment by its ID."""
         return await self._card_service.delete_comment(comment_id)
 
-    async def get_card(self, card_id: int, include_fields: bool = False) -> dict:
+    async def get_card(self, card_id: str | int, include_fields: bool = False) -> dict:
         """Get a card by its ID.
 
         Args:
@@ -702,7 +704,7 @@ class PipefyClient:
 
     async def get_cards(
         self,
-        pipe_id: int,
+        pipe_id: str | int,
         search: CardSearch | None = None,
         include_fields: bool = False,
         *,
@@ -724,7 +726,7 @@ class PipefyClient:
 
     async def find_cards(
         self,
-        pipe_id: int,
+        pipe_id: str | int,
         field_id: str,
         field_value: str,
         include_fields: bool = False,
@@ -751,24 +753,26 @@ class PipefyClient:
             after=after,
         )
 
-    async def move_card_to_phase(self, card_id: int, destination_phase_id: int) -> dict:
+    async def move_card_to_phase(
+        self, card_id: str | int, destination_phase_id: str | int
+    ) -> dict:
         """Move a card to a specific phase."""
         return await self._card_service.move_card_to_phase(
             card_id, destination_phase_id
         )
 
     async def update_card_field(
-        self, card_id: int, field_id: str, new_value: Any
+        self, card_id: str | int, field_id: str, new_value: Any
     ) -> dict:
         """Update a single field of a card."""
         return await self._card_service.update_card_field(card_id, field_id, new_value)
 
     async def update_card(
         self,
-        card_id: int,
+        card_id: str | int,
         title: str | None = None,
-        assignee_ids: list[int] | None = None,
-        label_ids: list[int] | None = None,
+        assignee_ids: list[str | int] | None = None,
+        label_ids: list[str | int] | None = None,
         due_date: str | None = None,
         field_updates: list[dict] | None = None,
     ) -> dict:
@@ -782,12 +786,12 @@ class PipefyClient:
             field_updates=field_updates,
         )
 
-    async def delete_card(self, card_id: int) -> dict:
+    async def delete_card(self, card_id: str | int) -> dict:
         """Delete a card by its ID."""
         return await self._card_service.delete_card(card_id)
 
     async def get_start_form_fields(
-        self, pipe_id: int, required_only: bool = False
+        self, pipe_id: str | int, required_only: bool = False
     ) -> dict:
         """Get the start form fields of a pipe."""
         return await self._pipe_service.get_start_form_fields(pipe_id, required_only)
@@ -801,12 +805,12 @@ class PipefyClient:
         return await self._table_service.search_tables(table_name)
 
     async def get_phase_fields(
-        self, phase_id: int, required_only: bool = False
+        self, phase_id: str | int, required_only: bool = False
     ) -> dict:
         """Get the fields available in a specific phase."""
         return await self._pipe_service.get_phase_fields(phase_id, required_only)
 
-    async def get_phase_allowed_move_targets(self, phase_id: int) -> dict:
+    async def get_phase_allowed_move_targets(self, phase_id: str | int) -> dict:
         """Phases reachable from ``phase_id`` per Pipefy transition rules (read-only)."""
         return await self._pipe_service.get_phase_allowed_move_targets(phase_id)
 
@@ -960,10 +964,10 @@ class PipefyClient:
 
     async def export_organization_report(
         self,
-        organization_id: int,
+        organization_id: str | int,
         *,
-        organization_report_id: int | None = None,
-        pipe_ids: list[int] | None = None,
+        organization_report_id: str | int | None = None,
+        pipe_ids: list[str | int] | None = None,
         sort_by: dict | None = None,
         filter: dict | None = None,
         columns: list[str] | None = None,

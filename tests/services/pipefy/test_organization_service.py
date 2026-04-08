@@ -47,7 +47,7 @@ async def test_get_organization_returns_org_details(mock_settings):
     service.execute_query.assert_called_once()
     query_used, variables = service.execute_query.call_args[0]
     assert query_used is GET_ORGANIZATION_QUERY
-    assert variables == {"id": 123}
+    assert variables == {"id": "123"}
     assert result == org_data
 
 
@@ -71,4 +71,4 @@ async def test_get_organization_uses_correct_query_and_variables(mock_settings):
 
     query_used, variables = service.execute_query.call_args[0]
     assert query_used is GET_ORGANIZATION_QUERY
-    assert variables == {"id": 456}
+    assert variables == {"id": "456"}

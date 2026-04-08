@@ -49,7 +49,7 @@ class MemberService(BasePipefyClient):
         emails = [{"email": m["email"], "role_name": m["role_name"]} for m in members]
         return await self.execute_query(
             INVITE_MEMBERS_MUTATION,
-            {"input": {"pipe_id": int(pipe_id), "emails": emails}},
+            {"input": {"pipe_id": str(pipe_id), "emails": emails}},
         )
 
     async def remove_members_from_pipe(
@@ -69,7 +69,7 @@ class MemberService(BasePipefyClient):
         pipe_id_str = str(pipe_id).strip()
         pipe_obj: dict[str, Any] = {}
         if pipe_id_str.isdigit():
-            pipe_data = await self._pipe_service.get_pipe(int(pipe_id_str))
+            pipe_data = await self._pipe_service.get_pipe(pipe_id_str)
             pipe_obj = pipe_data.get("pipe") or {}
         elif _PIPE_UUID_RE.match(pipe_id_str):
             raise ValueError(
@@ -81,8 +81,6 @@ class MemberService(BasePipefyClient):
 
         pipe_uuid = pipe_obj.get("uuid") or pipe_id_str
         pipe_numeric_id = pipe_obj.get("id")
-        if isinstance(pipe_numeric_id, str) and pipe_numeric_id.isdigit():
-            pipe_numeric_id = int(pipe_numeric_id)
 
         user_uuids = list(user_ids)
         needs_resolution = any(
@@ -125,7 +123,7 @@ class MemberService(BasePipefyClient):
             SET_ROLE_MUTATION,
             {
                 "input": {
-                    "pipe_id": int(pipe_id),
+                    "pipe_id": str(pipe_id),
                     "member": {"user_id": member_id, "role_name": role_name},
                 }
             },

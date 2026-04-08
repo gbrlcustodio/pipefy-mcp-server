@@ -431,7 +431,7 @@ def _extract_slug_field_ids_by_pipe(
 
 async def build_field_slug_map(
     client: PipefyClient,
-    pipe_id: int,
+    pipe_id: str | int,
 ) -> dict[str, str]:
     """Build a slug → numeric internal_id map for all fields in a pipe.
 
@@ -462,7 +462,7 @@ async def build_field_slug_map(
         if not phase_id:
             continue
         try:
-            phase_data = await client.get_phase_fields(int(phase_id))
+            phase_data = await client.get_phase_fields(phase_id)
             for field in phase_data.get("fields") or []:
                 slug = str(field.get("id", ""))
                 internal = str(field.get("internal_id", ""))
@@ -500,7 +500,7 @@ async def resolve_field_slugs_to_numeric(
     slug_to_numeric: dict[str, str] = {}
     for pipe_id_str in slugs_by_pipe:
         try:
-            field_map = await build_field_slug_map(client, int(pipe_id_str))
+            field_map = await build_field_slug_map(client, pipe_id_str)
             slug_to_numeric.update(field_map)
         except Exception:  # noqa: BLE001
             logger.debug(
@@ -559,7 +559,7 @@ async def fetch_pipe_validation_context(
     import asyncio
 
     pipe_data = await asyncio.wait_for(
-        client.get_pipe(int(pipe_id)),
+        client.get_pipe(pipe_id),
         timeout=timeout,
     )
     pipe_info = pipe_data.get("pipe", {})

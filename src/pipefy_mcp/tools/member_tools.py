@@ -207,7 +207,7 @@ async def _verify_removal(
         return None
 
     try:
-        members_data = await client.get_pipe_members(int(pipe_id_str))
+        members_data = await client.get_pipe_members(pipe_id_str)
     except Exception:  # noqa: BLE001
         return None
 

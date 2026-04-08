@@ -54,8 +54,23 @@ async def test_get_table_sends_id_and_returns_payload(mock_settings):
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is GET_TABLE_QUERY
-    assert variables == {"id": 101}
+    assert variables == {"id": "101"}
     assert result["table"]["name"] == "Refs"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_table_accepts_alphanumeric_id(mock_settings):
+    service = _make_service(
+        mock_settings,
+        {"table": {"id": "Yr5RUVCi", "name": "Alpha", "table_fields": []}},
+    )
+    result = await service.get_table("Yr5RUVCi")
+
+    query, variables = service.execute_query.call_args[0]
+    assert query is GET_TABLE_QUERY
+    assert variables == {"id": "Yr5RUVCi"}
+    assert result["table"]["name"] == "Alpha"
 
 
 @pytest.mark.unit
@@ -69,7 +84,7 @@ async def test_get_tables_sends_ids_list(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_TABLES_QUERY
-    assert variables == {"ids": [101, 102]}
+    assert variables == {"ids": ["101", "102"]}
     assert len(result["tables"]) == 2
 
 
@@ -89,7 +104,7 @@ async def test_get_table_records_default_first_and_pagination_passthrough(
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_TABLE_RECORDS_QUERY
-    assert variables == {"tableId": 99, "first": 50}
+    assert variables == {"tableId": "99", "first": 50}
     assert result["table_records"]["pageInfo"]["hasNextPage"] is True
     assert result["table_records"]["pageInfo"]["endCursor"] == "c2"
 
@@ -101,7 +116,7 @@ async def test_get_table_records_includes_after_when_provided(mock_settings):
     await service.get_table_records("201", first=10, after="c1")
 
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"tableId": 201, "first": 10, "after": "c1"}
+    assert variables == {"tableId": "201", "first": 10, "after": "c1"}
 
 
 @pytest.mark.unit
@@ -115,7 +130,7 @@ async def test_get_table_record_sends_record_id(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_TABLE_RECORD_QUERY
-    assert variables == {"id": 7001}
+    assert variables == {"id": "7001"}
     assert result["table_record"]["title"] == "Row"
 
 
@@ -168,7 +183,7 @@ async def test_create_table_sends_create_table_input(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_TABLE_MUTATION
     assert variables == {
-        "input": {"name": "N", "organization_id": 88, "description": "D"},
+        "input": {"name": "N", "organization_id": "88", "description": "D"},
     }
     assert result["createTable"]["table"]["id"] == "t1"
 
@@ -195,7 +210,7 @@ async def test_update_table_merges_id_and_attrs(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_TABLE_MUTATION
-    assert variables == {"input": {"id": 1, "name": "X"}}
+    assert variables == {"input": {"id": "1", "name": "X"}}
 
 
 @pytest.mark.unit
@@ -217,7 +232,7 @@ async def test_delete_table_sends_delete_input(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_TABLE_MUTATION
-    assert variables == {"input": {"id": 42}}
+    assert variables == {"input": {"id": "42"}}
     assert result["deleteTable"]["success"] is True
 
 
@@ -244,7 +259,7 @@ async def test_create_table_record_converts_dict_fields(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_TABLE_RECORD_MUTATION
     inp = variables["input"]
-    assert inp["table_id"] == 9
+    assert inp["table_id"] == "9"
     assert inp["title"] == "T"
     assert len(inp["fields_attributes"]) == 1
     assert inp["fields_attributes"][0]["field_id"] == "f1"
@@ -289,7 +304,7 @@ async def test_update_table_record_maps_status_id(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_TABLE_RECORD_MUTATION
     assert variables == {
-        "input": {"id": 901, "title": "Hi", "statusId": "st1"},
+        "input": {"id": "901", "title": "Hi", "statusId": "st1"},
     }
 
 
@@ -312,7 +327,7 @@ async def test_delete_table_record_sends_id(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_TABLE_RECORD_MUTATION
-    assert variables == {"input": {"id": 301}}
+    assert variables == {"input": {"id": "301"}}
 
 
 @pytest.mark.unit
@@ -339,7 +354,7 @@ async def test_set_table_record_field_value_wraps_scalar(mock_settings):
     assert query is SET_TABLE_RECORD_FIELD_VALUE_MUTATION
     assert variables == {
         "input": {
-            "table_record_id": 401,
+            "table_record_id": "401",
             "field_id": "f1",
             "value": ["text"],
         },
@@ -381,7 +396,7 @@ async def test_create_table_field_sends_input(mock_settings):
     assert query is CREATE_TABLE_FIELD_MUTATION
     assert variables == {
         "input": {
-            "table_id": 501,
+            "table_id": "501",
             "label": "Code",
             "type": "short_text",
             "required": True,

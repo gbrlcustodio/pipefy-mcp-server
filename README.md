@@ -36,6 +36,7 @@
 
 **Shared conventions (many tools):**
 - **Pagination** — List endpoints accept `first` and `after`. Use `pageInfo.hasNextPage` and `pageInfo.endCursor` to fetch the next page.
+- **Pipefy IDs** — GraphQL treats IDs as **strings**. Tool parameters accept **string IDs** (recommended: `"301234"`). Clients that send unquoted JSON numbers may pass integers for some parameters; the server coerces them to strings before calling the API. Responses and success payloads return IDs as **strings**. Invalid IDs (e.g. empty, zero, or non-coercible values) are rejected before the network call. See [Pipes & cards — IDs](docs/tools/pipes-and-cards.md#pipefy-ids-type-safety) for `delete_card` and card/pipe parameters.
 - **`debug=true`** — Failed calls may include extra detail: GraphQL error codes and a `correlation_id` for support.
 - **`extra_input`** — Optional map of extra mutation fields (camelCase keys). Values that overlap the tool’s main parameters are ignored.
 - **Destructive deletes** — Two steps by default: the first response is a preview; call again with `confirm=true` to run the delete.

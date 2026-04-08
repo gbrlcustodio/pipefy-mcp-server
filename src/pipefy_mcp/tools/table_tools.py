@@ -275,7 +275,7 @@ class TableTools:
         )
         async def create_table(
             name: str,
-            organization_id: int,
+            organization_id: str | int,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -291,9 +291,9 @@ class TableTools:
                 return build_table_mutation_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
                 )
-            if not isinstance(organization_id, int) or organization_id <= 0:
+            if not valid_repo_id(organization_id):
                 return build_table_mutation_error_payload(
-                    message="Invalid 'organization_id'. Use a positive integer.",
+                    message="Invalid 'organization_id'. Provide a non-empty string or positive integer.",
                 )
             bad_extra = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"

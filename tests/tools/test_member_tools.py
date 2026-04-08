@@ -183,7 +183,7 @@ async def test_remove_member_verified_all_removed(
     mock_member_client.remove_members_from_pipe.assert_awaited_once_with(
         "100", ["user-1", "user-2"]
     )
-    mock_member_client.get_pipe_members.assert_awaited_once_with(100)
+    mock_member_client.get_pipe_members.assert_awaited_once_with("100")
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "warning" not in payload

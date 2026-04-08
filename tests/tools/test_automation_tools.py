@@ -423,7 +423,7 @@ async def test_create_automation_rejects_move_when_transition_not_allowed(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "99" in payload["error"]
-    mock_automation_client.get_phase_allowed_move_targets.assert_awaited_once_with(10)
+    mock_automation_client.get_phase_allowed_move_targets.assert_awaited_once_with("10")
 
 
 @pytest.mark.anyio

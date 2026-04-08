@@ -49,7 +49,7 @@ async def test_get_pipe_relations_sends_pipe_id(mock_settings):
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is GET_PIPE_RELATIONS_QUERY
-    assert variables == {"pipeId": 701}
+    assert variables == {"pipeId": "701"}
     assert result["pipe"]["parentsRelations"][0]["name"] == "Up"
 
 
@@ -73,7 +73,7 @@ async def test_get_table_relations_sends_ids_list(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_TABLE_RELATIONS_QUERY
-    assert variables == {"ids": [801, 802]}
+    assert variables == {"ids": ["801", "802"]}
     assert result["table_relations"] == rows
 
 

@@ -13,14 +13,14 @@ from pipefy_mcp.tools.validation_helpers import UUID_RE, format_json_preview
 class DeletePipePreviewPayload(TypedDict):
     success: Literal[False]
     requires_confirmation: Literal[True]
-    pipe_id: int
+    pipe_id: str | int
     message: str
     pipe_summary: str
 
 
 class DeletePipeSuccessPayload(TypedDict):
     success: Literal[True]
-    pipe_id: int
+    pipe_id: str | int
     message: str
 
 
@@ -138,7 +138,7 @@ def build_field_condition_delete_payload(
 
 def build_delete_pipe_preview_payload(
     *,
-    pipe_id: int,
+    pipe_id: str | int,
     pipe_name: str,
     pipe_data: dict[str, Any],
 ) -> DeletePipePreviewPayload:
@@ -168,7 +168,9 @@ def build_delete_pipe_preview_payload(
     }
 
 
-def build_delete_pipe_success_payload(*, pipe_id: int) -> DeletePipeSuccessPayload:
+def build_delete_pipe_success_payload(
+    *, pipe_id: str | int
+) -> DeletePipeSuccessPayload:
     """Confirmed pipe deletion.
 
     Args:
@@ -191,7 +193,7 @@ def build_delete_pipe_error_payload(*, message: str) -> DeletePipeErrorPayload:
 
 
 def map_delete_pipe_error_to_message(
-    *, pipe_id: int, pipe_name: str, codes: list[str]
+    *, pipe_id: str | int, pipe_name: str, codes: list[str]
 ) -> str:
     """Heuristic user string from GraphQL ``extensions.code`` for delete_pipe."""
     for code in codes:

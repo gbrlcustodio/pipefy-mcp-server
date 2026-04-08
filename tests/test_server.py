@@ -12,11 +12,6 @@ from pipefy_mcp.server import run_server
 from pipefy_mcp.settings import PipefySettings, Settings
 
 
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
 @pytest.fixture(scope="module")
 def client_session():
     return create_client_session(
@@ -54,6 +49,7 @@ async def test_register_tools(client_session):
         "create_pipe",
         "create_pipe_relation",
         "create_pipe_report",
+        "create_send_task_automation",
         "create_table",
         "create_table_field",
         "create_table_record",

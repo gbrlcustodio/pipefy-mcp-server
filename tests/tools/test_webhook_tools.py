@@ -15,11 +15,6 @@ from pipefy_mcp.tools.webhook_tools import WebhookTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_webhook_client():
     client = MagicMock(PipefyClient)
     client.get_email_templates = AsyncMock()

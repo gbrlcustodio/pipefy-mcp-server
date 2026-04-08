@@ -18,6 +18,12 @@ from pipefy_mcp.tools.ai_tool_helpers import (
     build_update_automation_success,
 )
 
+AI_AUTOMATION_NOT_CONFIGURED = (
+    "AI Automation requires OAuth credentials "
+    "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL). "
+    "Check .env.example for the required variables."
+)
+
 
 class AiAutomationTools:
     """Declares MCP tools for AI Automation create and update."""
@@ -37,6 +43,7 @@ class AiAutomationTools:
             prompt: str,
             field_ids: list[str],
             skills_ids: list[str] | None = None,
+            event_params: dict | None = None,
             condition: dict | None = None,
         ) -> dict:
             """Create a simple AI automation that generates content with a prompt and writes the result to one or more card fields.
@@ -48,17 +55,23 @@ class AiAutomationTools:
                 name: Automation name.
                 event_id: Event trigger (e.g. card_created, card_moved).
                 pipe_id: Pipe ID where the automation runs.
-                prompt: AI prompt text that generates the content.
-                field_ids: List of field internal IDs to write the result to.
+                prompt: AI prompt text. MUST reference at least one pipe field using %{internal_id} syntax (e.g. "Summarize the brief: %{425829426}"). Use the pipe's field internal_id values. Without a field reference the API rejects the request.
+                field_ids: List of field internal IDs where the AI writes its output.
                 skills_ids: AI skill IDs to attach. Defaults to empty (no skills).
+                event_params: Trigger-specific filters (e.g. {"to_phase_id": "..."} for card_moved, {"triggerFieldIds": [...]} for field_updated).
                 condition: Optional condition structure for the automation trigger.
             """
             await ctx.debug(
                 f"create_ai_automation: name={name}, event_id={event_id}, pipe_id={pipe_id}"
             )
+            if not client.ai_automation_available:
+                return build_ai_tool_error(AI_AUTOMATION_NOT_CONFIGURED)
+
             optional_fields: dict = {}
             if skills_ids is not None:
                 optional_fields["skills_ids"] = skills_ids
+            if event_params is not None:
+                optional_fields["event_params"] = event_params
             if condition is not None:
                 optional_fields["condition"] = condition
             try:
@@ -94,6 +107,7 @@ class AiAutomationTools:
             prompt: str | None = None,
             field_ids: list[str] | None = None,
             skills_ids: list[str] | None = None,
+            event_params: dict | None = None,
             condition: dict | None = None,
         ) -> dict:
             """Update an existing AI automation's name, prompt, destination fields, or active state.
@@ -102,12 +116,16 @@ class AiAutomationTools:
                 automation_id: ID of the automation to update.
                 name: New automation name (optional).
                 active: Whether the automation is active (optional).
-                prompt: New AI prompt text (optional).
+                prompt: New AI prompt text (optional). Must use %{internal_id} syntax to reference pipe fields (e.g. "Classify %{425829426}").
                 field_ids: New list of field internal IDs (optional).
                 skills_ids: New list of AI skill IDs (optional).
+                event_params: Trigger-specific filters (e.g. {"to_phase_id": "..."} for card_moved). Pass to change; omit to keep current.
                 condition: New condition structure (optional).
             """
             await ctx.debug(f"update_ai_automation: automation_id={automation_id}")
+            if not client.ai_automation_available:
+                return build_ai_tool_error(AI_AUTOMATION_NOT_CONFIGURED)
+
             try:
                 validated = UpdateAiAutomationInput(
                     automation_id=automation_id,
@@ -116,6 +134,7 @@ class AiAutomationTools:
                     prompt=prompt,
                     field_ids=field_ids,
                     skills_ids=skills_ids,
+                    event_params=event_params,
                     condition=condition,
                 )
             except ValidationError as exc:

@@ -15,11 +15,6 @@ from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_introspection_client():
     client = MagicMock(PipefyClient)
     client.introspect_type = AsyncMock()
@@ -387,3 +382,22 @@ async def test_execute_graphql_syntax_error_returns_error_payload(
     assert payload["success"] is False
     err = payload["error"].lower()
     assert "syntax" in err or "invalid" in err or "unexpected" in err
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("introspection_session", [None], indirect=True)
+async def test_execute_graphql_transport_error_returns_error_payload(
+    introspection_session, mock_introspection_client, extract_payload
+):
+    mock_introspection_client.execute_graphql = AsyncMock(
+        side_effect=RuntimeError("Connection refused")
+    )
+    async with introspection_session as session:
+        result = await session.call_tool(
+            "execute_graphql",
+            {"query": "query Q { __typename }"},
+        )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "Connection refused" in payload["error"]

@@ -13,6 +13,7 @@ mutation createAutomation(
   $action_repo_id: ID,
   $event_repo_id: ID,
   $action_params: AutomationActionParamsInput,
+  $event_params: AutomationEventParamsInput,
   $condition: ConditionInput
 ) {
   createAutomation(input: {
@@ -22,6 +23,7 @@ mutation createAutomation(
     action_repo_id: $action_repo_id,
     event_repo_id: $event_repo_id,
     action_params: $action_params,
+    event_params: $event_params,
     condition: $condition
   }) {
     automation {

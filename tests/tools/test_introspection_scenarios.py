@@ -14,11 +14,6 @@ from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def scenario_client():
     client = MagicMock(PipefyClient)
     client.introspect_type = AsyncMock()

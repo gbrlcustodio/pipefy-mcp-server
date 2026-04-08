@@ -15,11 +15,6 @@ from pipefy_mcp.tools.member_tools import MemberTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_member_client():
     client = MagicMock(PipefyClient)
     client.invite_members = AsyncMock()

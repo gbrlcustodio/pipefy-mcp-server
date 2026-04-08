@@ -19,7 +19,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     normalize_field_condition_actions,
     strip_expression_ids_for_create,
 )
-from pipefy_mcp.tools.pipe_config_validators import valid_phase_field_id
+from pipefy_mcp.tools.validation_helpers import valid_repo_id as valid_phase_field_id
 
 # Keys reserved so callers cannot override structured args via extra_input. Entries like
 # ``condition_expression`` / ``phase_field_id`` catch alternate spellings the API does not use

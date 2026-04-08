@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 import httpx
+from httpx import Timeout
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
@@ -101,7 +102,9 @@ class AttachmentService(BasePipefyClient):
         headers: dict[str, str] = {}
         if content_type is not None:
             headers["Content-Type"] = content_type
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(
+            timeout=Timeout(timeout=60),
+        ) as client:
             response = await client.put(
                 presigned_url, content=file_bytes, headers=headers
             )

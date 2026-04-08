@@ -15,11 +15,6 @@ from pipefy_mcp.tools.report_tools import ReportTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_report_client():
     client = MagicMock(PipefyClient)
     client.get_pipe_reports = AsyncMock()

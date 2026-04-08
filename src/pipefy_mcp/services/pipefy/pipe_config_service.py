@@ -1,3 +1,5 @@
+"""GraphQL mutations for pipe configuration (pipes, phases, fields, labels, conditions)."""
+
 from __future__ import annotations
 
 from typing import Any

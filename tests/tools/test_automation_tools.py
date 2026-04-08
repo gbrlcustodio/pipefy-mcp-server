@@ -15,11 +15,6 @@ from pipefy_mcp.tools.automation_tools import AutomationTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_automation_client():
     client = MagicMock(PipefyClient)
     client.get_automation = AsyncMock()
@@ -569,7 +564,12 @@ async def test_create_and_update_automation_tools_are_not_read_only(
     async with automation_session as session:
         listed = await session.list_tools()
     by_name = {t.name: t for t in listed.tools}
-    for name in ("create_automation", "update_automation", "simulate_automation"):
+    for name in (
+        "create_automation",
+        "create_send_task_automation",
+        "update_automation",
+        "simulate_automation",
+    ):
         ann = by_name[name].annotations
         assert ann is not None
         assert ann.readOnlyHint is False
@@ -665,3 +665,179 @@ async def test_simulate_automation_rejects_invalid_pipe_id(
 
     mock_automation_client.simulate_automation.assert_not_called()
     assert extract_payload(result)["success"] is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_send_task_automation_success(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.create_automation.return_value = {
+        "createAutomation": {
+            "automation": {"id": "st-1", "name": "Notify owners", "active": True},
+        },
+    }
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_send_task_automation",
+            {
+                "pipe_id": "p1",
+                "name": "Notify owners",
+                "event_id": "card_created",
+                "task_title": "Review card",
+                "recipients": "a@b.com, c@d.com",
+            },
+        )
+
+    assert result.isError is False
+    mock_automation_client.create_automation.assert_awaited_once_with(
+        "p1",
+        "Notify owners",
+        "card_created",
+        "send_a_task",
+        active=True,
+        action_repo_id=None,
+        extra_input={
+            "action_params": {
+                "taskParams": {
+                    "title": "Review card",
+                    "recipients": "a@b.com, c@d.com",
+                },
+            },
+        },
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["automation"] == {
+        "id": "st-1",
+        "name": "Notify owners",
+        "active": True,
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_send_task_automation_passes_event_params_and_condition(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.create_automation.return_value = {
+        "createAutomation": {
+            "automation": {"id": "st-2", "name": "R", "active": True},
+        },
+    }
+    event_params = {"to_phase_id": "ph-1"}
+    condition = {"expressions": []}
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_send_task_automation",
+            {
+                "pipe_id": "p1",
+                "name": "R",
+                "event_id": "card_moved",
+                "task_title": "T",
+                "recipients": "x@y.com",
+                "event_params": event_params,
+                "condition": condition,
+            },
+        )
+
+    assert result.isError is False
+    mock_automation_client.create_automation.assert_awaited_once_with(
+        "p1",
+        "R",
+        "card_moved",
+        "send_a_task",
+        active=True,
+        action_repo_id=None,
+        extra_input={
+            "action_params": {
+                "taskParams": {"title": "T", "recipients": "x@y.com"},
+            },
+            "event_params": event_params,
+            "condition": condition,
+        },
+    )
+    assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_send_task_automation_validation_blank_task_title(
+    automation_session, mock_automation_client, extract_payload
+):
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_send_task_automation",
+            {
+                "pipe_id": "p1",
+                "name": "N",
+                "event_id": "card_created",
+                "task_title": "",
+                "recipients": "a@b.com",
+            },
+        )
+
+    mock_automation_client.create_automation.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_send_task_automation_validation_scheduler(
+    automation_session, mock_automation_client, extract_payload
+):
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_send_task_automation",
+            {
+                "pipe_id": "p1",
+                "name": "N",
+                "event_id": "scheduler",
+                "task_title": "T",
+                "recipients": "a@b.com",
+            },
+        )
+
+    mock_automation_client.create_automation.assert_not_called()
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "send_a_task" in p["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_send_task_automation_graphql_error(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.create_automation.side_effect = TransportQueryError(
+        "failed", errors=[{"message": "mutation blocked"}]
+    )
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_send_task_automation",
+            {
+                "pipe_id": "p1",
+                "name": "N",
+                "event_id": "card_created",
+                "task_title": "T",
+                "recipients": "a@b.com",
+            },
+        )
+
+    assert extract_payload(result)["success"] is False
+    assert "mutation blocked" in extract_payload(result)["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_send_task_automation_listed_not_read_only(automation_session):
+    async with automation_session as session:
+        listed = await session.list_tools()
+    tool = next(t for t in listed.tools if t.name == "create_send_task_automation")
+    assert tool.annotations is not None
+    assert tool.annotations.readOnlyHint is False
+    assert tool.annotations.destructiveHint is not True

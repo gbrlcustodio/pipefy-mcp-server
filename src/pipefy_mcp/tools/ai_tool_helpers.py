@@ -535,6 +535,69 @@ async def resolve_field_slugs_to_numeric(
     return resolved
 
 
+async def fetch_pipe_validation_context(
+    client: PipefyClient,
+    pipe_id: str,
+    *,
+    timeout: float = 30,
+) -> tuple[set[str], set[str], set[str] | None]:
+    """Fetch pipe phases, fields, and relations for behavior validation.
+
+    Exceptions from ``get_pipe`` propagate to the caller (e.g. TimeoutError,
+    RuntimeError). Exceptions from ``get_pipe_relations`` are caught internally
+    and result in ``related_pipe_ids=None``.
+
+    Args:
+        client: PipefyClient instance.
+        pipe_id: Numeric pipe ID as string.
+        timeout: Timeout in seconds for each API call.
+
+    Returns:
+        Tuple of (field_ids, phase_ids, related_pipe_ids).
+        related_pipe_ids is None when relations could not be loaded.
+    """
+    import asyncio
+
+    pipe_data = await asyncio.wait_for(
+        client.get_pipe(int(pipe_id)),
+        timeout=timeout,
+    )
+    pipe_info = pipe_data.get("pipe", {})
+
+    phase_ids: set[str] = set()
+    field_ids: set[str] = set()
+    for phase in pipe_info.get("phases") or []:
+        phase_ids.add(str(phase.get("id", "")))
+        for field in phase.get("fields") or []:
+            fid = field.get("id") or field.get("internal_id")
+            if fid:
+                field_ids.add(str(fid))
+    for field in pipe_info.get("start_form_fields") or []:
+        fid = field.get("id") or field.get("internal_id")
+        if fid:
+            field_ids.add(str(fid))
+
+    related_pipe_ids: set[str] | None
+    try:
+        relations = await asyncio.wait_for(
+            client.get_pipe_relations(pipe_id),
+            timeout=timeout,
+        )
+        related_pipe_ids = set()
+        for rel in relations.get("children") or []:
+            cid = rel.get("child", {}).get("id")
+            if cid:
+                related_pipe_ids.add(str(cid))
+        for rel in relations.get("parents") or []:
+            pid = rel.get("parent", {}).get("id")
+            if pid:
+                related_pipe_ids.add(str(pid))
+    except Exception:  # noqa: BLE001
+        related_pipe_ids = None
+
+    return field_ids, phase_ids, related_pipe_ids
+
+
 def enrich_behavior_error(
     exc: BaseException,
     behaviors: list[dict[str, Any]],

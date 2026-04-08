@@ -18,28 +18,12 @@ from mcp.shared.memory import (
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
-
-
-def _pipefy_live_configured() -> bool:
-    p = settings.pipefy
-    return bool(
-        p.graphql_url
-        and str(p.graphql_url).startswith(("http://", "https://"))
-        and p.oauth_url
-        and str(p.oauth_url).startswith(("http://", "https://"))
-        and p.oauth_client
-        and p.oauth_secret
-    )
-
-
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
+from tests.integration_helpers import pipefy_live_configured
 
 
 @pytest.fixture
 def live_pipefy_client():
-    if not _pipefy_live_configured():
+    if not pipefy_live_configured():
         pytest.skip(
             "Pipefy credentials not configured (PIPEFY_GRAPHQL_URL + OAuth in .env)"
         )

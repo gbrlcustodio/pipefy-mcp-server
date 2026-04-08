@@ -14,15 +14,19 @@ from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_pipefy_client():
     client = MagicMock(spec=PipefyClient)
     client.create_ai_automation = AsyncMock()
     client.update_ai_automation = AsyncMock()
+    client.ai_automation_available = True
+    return client
+
+
+@pytest.fixture
+def mock_pipefy_client_no_ai():
+    """Client where AI automation is not configured (no OAuth credentials)."""
+    client = MagicMock(spec=PipefyClient)
+    client.ai_automation_available = False
     return client
 
 
@@ -34,9 +38,25 @@ def mcp_server(mock_pipefy_client):
 
 
 @pytest.fixture
+def mcp_server_no_ai(mock_pipefy_client_no_ai):
+    mcp = FastMCP("AI Automation Tools Test (no AI)")
+    AiAutomationTools.register(mcp, mock_pipefy_client_no_ai)
+    return mcp
+
+
+@pytest.fixture
 def client_session(mcp_server):
     return create_client_session(
         mcp_server,
+        read_timeout_seconds=timedelta(seconds=10),
+        raise_exceptions=True,
+    )
+
+
+@pytest.fixture
+def client_session_no_ai(mcp_server_no_ai):
+    return create_client_session(
+        mcp_server_no_ai,
         read_timeout_seconds=timedelta(seconds=10),
         raise_exceptions=True,
     )
@@ -61,7 +81,7 @@ class TestCreateAiAutomation:
                     "name": "My Auto",
                     "event_id": "card_created",
                     "pipe_id": "303",
-                    "prompt": "Summarize",
+                    "prompt": "Summarize %{133}",
                     "field_ids": ["133"],
                 },
             )
@@ -91,7 +111,7 @@ class TestCreateAiAutomation:
                     "name": "My Auto",
                     "event_id": "card_created",
                     "pipe_id": "303",
-                    "prompt": "Summarize",
+                    "prompt": "Summarize %{133}",
                     "field_ids": ["133"],
                 },
             )
@@ -114,7 +134,7 @@ class TestCreateAiAutomation:
                     "name": "",
                     "event_id": "card_created",
                     "pipe_id": "303",
-                    "prompt": "Summarize",
+                    "prompt": "Summarize %{133}",
                     "field_ids": ["133"],
                 },
             )
@@ -173,6 +193,50 @@ class TestUpdateAiAutomation:
 
 
 ## ---------------------------------------------------------------------------
+## AI Automation not configured (no OAuth credentials)
+## ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+class TestAiAutomationNotConfigured:
+    async def test_create_returns_error_payload_when_not_configured(
+        self,
+        client_session_no_ai,
+        extract_payload,
+    ):
+        async with client_session_no_ai as session:
+            result = await session.call_tool(
+                "create_ai_automation",
+                {
+                    "name": "My Auto",
+                    "event_id": "card_created",
+                    "pipe_id": "303",
+                    "prompt": "Summarize %{133}",
+                    "field_ids": ["133"],
+                },
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "OAuth" in payload["error"]
+
+    async def test_update_returns_error_payload_when_not_configured(
+        self,
+        client_session_no_ai,
+        extract_payload,
+    ):
+        async with client_session_no_ai as session:
+            result = await session.call_tool(
+                "update_ai_automation",
+                {"automation_id": "789", "name": "Updated"},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "OAuth" in payload["error"]
+
+
+## ---------------------------------------------------------------------------
 ## PipefyId coercion: int → str through MCP transport (mcporter mitigation)
 ## ---------------------------------------------------------------------------
 
@@ -196,7 +260,7 @@ class TestPipefyIdCoercion:
                     "name": "Coerce Test",
                     "event_id": 101,
                     "pipe_id": 303,
-                    "prompt": "Summarize",
+                    "prompt": "Summarize %{133}",
                     "field_ids": ["f1"],
                 },
             )

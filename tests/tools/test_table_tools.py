@@ -15,11 +15,6 @@ from pipefy_mcp.tools.table_tools import TableTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_table_client():
     client = MagicMock(PipefyClient)
     client.get_table = AsyncMock()

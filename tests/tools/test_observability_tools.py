@@ -15,11 +15,6 @@ from pipefy_mcp.tools.observability_tools import _MAX_PAGE_SIZE, ObservabilityTo
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_observability_client():
     client = MagicMock(PipefyClient)
     client.get_ai_agent_logs = AsyncMock()

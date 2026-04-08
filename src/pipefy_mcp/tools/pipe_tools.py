@@ -123,8 +123,16 @@ class PipeTools:
             card_id = result.get("createCard", {}).get("card", {}).get("id")
             if card_id:
                 if title:
-                    await client.update_card(int(card_id), title=title)
-                    result["createCard"]["card"]["title"] = title
+                    try:
+                        await client.update_card(int(card_id), title=title)
+                    except Exception as exc:  # noqa: BLE001
+                        result["title_warning"] = (
+                            f"Card created but title update failed: {exc}"
+                        )
+                    else:
+                        card_data_node = result.get("createCard", {}).get("card")
+                        if card_data_node is not None:
+                            card_data_node["title"] = title
                 card_url = f"https://app.pipefy.com/open-cards/{card_id}"
                 result["card_link"] = f"[{card_url}]({card_url})"
             return result

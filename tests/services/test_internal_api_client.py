@@ -152,7 +152,116 @@ async def test_execute_query_raises_on_graphql_errors_in_body(respx_mock):
         oauth_secret="client_secret",
     )
 
-    with pytest.raises(ValueError, match="GraphQL.*error"):
+    with pytest.raises(ValueError, match=r"^Something went wrong$"):
+        await client.execute_query("query { x }", {})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@respx.mock(assert_all_mocked=False, assert_all_called=False)
+async def test_execute_query_error_includes_extensions_code_and_correlation_id(
+    respx_mock,
+):
+    """GraphQL error message includes extensions code and correlation_id when present."""
+    graphql_error_response = {
+        "errors": [
+            {
+                "message": "Permission Denied",
+                "extensions": {
+                    "code": "PERMISSION_DENIED",
+                    "correlation_id": "abc-123",
+                },
+            }
+        ]
+    }
+    respx_mock.post(OAUTH_TOKEN_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
+        )
+    )
+    respx_mock.post(DEFAULT_INTERNAL_API_URL).mock(
+        return_value=httpx.Response(200, json=graphql_error_response)
+    )
+
+    client = InternalApiClient(
+        url=DEFAULT_INTERNAL_API_URL,
+        oauth_url=OAUTH_TOKEN_URL,
+        oauth_client="client_id",
+        oauth_secret="client_secret",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"Permission Denied \[code=PERMISSION_DENIED\] \[correlation_id=abc-123\]",
+    ):
+        await client.execute_query("query { x }", {})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@respx.mock(assert_all_mocked=False, assert_all_called=False)
+async def test_execute_query_error_concatenates_multiple_errors(respx_mock):
+    """Multiple GraphQL errors are joined with '; ' in the raised ValueError message."""
+    graphql_error_response = {
+        "errors": [
+            {"message": "Error one"},
+            {"message": "Error two", "extensions": {"code": "BAD_INPUT"}},
+        ]
+    }
+    respx_mock.post(OAUTH_TOKEN_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
+        )
+    )
+    respx_mock.post(DEFAULT_INTERNAL_API_URL).mock(
+        return_value=httpx.Response(200, json=graphql_error_response)
+    )
+
+    client = InternalApiClient(
+        url=DEFAULT_INTERNAL_API_URL,
+        oauth_url=OAUTH_TOKEN_URL,
+        oauth_client="client_id",
+        oauth_secret="client_secret",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"^Error one; Error two \[code=BAD_INPUT\]$",
+    ):
+        await client.execute_query("query { x }", {})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@respx.mock(assert_all_mocked=False, assert_all_called=False)
+async def test_execute_query_error_without_message_uses_fallback(respx_mock):
+    """GraphQL error dict without message uses 'Unknown error' as the base text."""
+    graphql_error_response = {
+        "errors": [{"extensions": {"code": "UNKNOWN"}}],
+    }
+    respx_mock.post(OAUTH_TOKEN_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
+        )
+    )
+    respx_mock.post(DEFAULT_INTERNAL_API_URL).mock(
+        return_value=httpx.Response(200, json=graphql_error_response)
+    )
+
+    client = InternalApiClient(
+        url=DEFAULT_INTERNAL_API_URL,
+        oauth_url=OAUTH_TOKEN_URL,
+        oauth_client="client_id",
+        oauth_secret="client_secret",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"^Unknown error \[code=UNKNOWN\]$",
+    ):
         await client.execute_query("query { x }", {})
 
 

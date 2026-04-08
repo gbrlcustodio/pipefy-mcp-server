@@ -15,11 +15,6 @@ from pipefy_mcp.tools.organization_tools import OrganizationTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_org_client():
     client = MagicMock(PipefyClient)
     client.get_organization = AsyncMock()
@@ -71,7 +66,7 @@ async def test_get_organization_not_found_returns_error(
     org_session, mock_org_client, extract_payload
 ):
     mock_org_client.get_organization = AsyncMock(
-        return_value={"error": "Organization '999' was not found."}
+        side_effect=ValueError("Organization '999' was not found.")
     )
     async with org_session as session:
         result = await session.call_tool("get_organization", {"organization_id": "999"})

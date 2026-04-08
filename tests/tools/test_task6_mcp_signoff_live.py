@@ -29,25 +29,7 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.server import mcp as mcp_server
 from pipefy_mcp.settings import settings
-
-
-def _pipefy_live_configured() -> bool:
-    p = settings.pipefy
-    return bool(
-        p.graphql_url
-        and str(p.graphql_url).startswith(("http://", "https://"))
-        and p.oauth_url
-        and str(p.oauth_url).startswith(("http://", "https://"))
-        and p.oauth_client
-        and p.oauth_secret
-    )
-
-
-def _require_live_creds() -> None:
-    if not _pipefy_live_configured():
-        pytest.skip(
-            "Pipefy credentials not configured (PIPEFY_GRAPHQL_URL + OAuth in .env)"
-        )
+from tests.integration_helpers import require_live_creds
 
 
 def _task6_pipe_id() -> int | None:
@@ -65,16 +47,11 @@ def _task6_phase_id() -> int | None:
     return int(raw) if raw else None
 
 
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
 @pytest.mark.integration
 @pytest.mark.anyio
 async def test_task6_6_1_and_6_2_get_pipe_then_get_ai_agents(extract_payload):
     """6.1 + 6.2: get_pipe exposes uuid/phases; get_ai_agents(repo_uuid) succeeds."""
-    _require_live_creds()
+    require_live_creds()
     pipe_id = _task6_pipe_id()
     if pipe_id is None:
         pytest.skip(
@@ -121,7 +98,7 @@ async def test_task6_6_1_and_6_2_get_pipe_then_get_ai_agents(extract_payload):
 @pytest.mark.anyio
 async def test_task6_6_2_get_ai_agent_when_env_set(extract_payload):
     """Optional: load one agent by UUID (compare with Pipefy UI)."""
-    _require_live_creds()
+    require_live_creds()
     agent_uuid = os.environ.get("TASK6_SIGNOFF_AGENT_UUID")
     if not agent_uuid:
         pytest.skip(
@@ -148,7 +125,7 @@ async def test_task6_6_3_get_phase_fields_includes_internal_id_and_uuid(
     extract_payload,
 ):
     """6.3 (read slice): get_phase_fields returns internal_id and uuid per field."""
-    _require_live_creds()
+    require_live_creds()
     phase_id = _task6_phase_id()
     if phase_id is None:
         pytest.skip(

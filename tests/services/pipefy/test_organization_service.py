@@ -53,13 +53,12 @@ async def test_get_organization_returns_org_details(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_organization_not_found_returns_error(mock_settings):
-    """When organization is null, return a clear error."""
+async def test_get_organization_not_found_raises_value_error(mock_settings):
+    """When organization is null, raise ValueError."""
     service = _make_service(mock_settings, {"organization": None})
-    result = await service.get_organization("999")
 
-    assert "error" in result
-    assert "999" in result["error"] or "not found" in result["error"].lower()
+    with pytest.raises(ValueError, match="999"):
+        await service.get_organization("999")
 
 
 @pytest.mark.unit

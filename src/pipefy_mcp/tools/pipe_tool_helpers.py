@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Literal, cast
 
-from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
 from pipefy_mcp.tools.destructive_tool_guard import (
@@ -54,15 +53,6 @@ class DeleteCommentErrorPayload(TypedDict):
 DeleteCommentPayload = DeleteCommentSuccessPayload | DeleteCommentErrorPayload
 
 
-class DeleteCardPreviewPayload(TypedDict):
-    success: Literal[False]
-    requires_confirmation: Literal[True]
-    card_id: int
-    card_title: str
-    pipe_name: str
-    message: str
-
-
 class DeleteCardSuccessPayload(TypedDict):
     success: Literal[True]
     card_id: int
@@ -85,13 +75,6 @@ DeleteCardPayload = (
 
 # Message returned by find_cards tool when the API returns no matching cards.
 FIND_CARDS_EMPTY_MESSAGE = "No cards found for this field/value."
-
-
-class DeleteCardConfirmation(BaseModel):
-    confirm: bool = Field(
-        ...,
-        description="Set to true to confirm deletion, or false to cancel.",
-    )
 
 
 def build_add_card_comment_success_payload(
@@ -241,30 +224,6 @@ def build_delete_comment_error_payload(*, message: str) -> DeleteCommentErrorPay
         message: User-visible failure reason.
     """
     return cast(DeleteCommentErrorPayload, _build_comment_error_payload(message))
-
-
-def build_delete_card_preview_payload(
-    *, card_id: int, card_title: str, pipe_name: str
-) -> DeleteCardPreviewPayload:
-    """Two-step delete: preview before ``confirm=True``.
-
-    Args:
-        card_id: Target card id.
-        card_title: Shown in the warning text.
-        pipe_name: Owning pipe name for context.
-    """
-    return {
-        "success": False,
-        "requires_confirmation": True,
-        "card_id": card_id,
-        "card_title": card_title,
-        "pipe_name": pipe_name,
-        "message": (
-            "⚠️ You are about to permanently delete card "
-            f"'{card_title}' (ID: {card_id}) from pipe '{pipe_name}'. "
-            "This action is irreversible. Set 'confirm=True' to proceed."
-        ),
-    }
 
 
 def build_delete_card_success_payload(

@@ -60,11 +60,6 @@ def test_field_condition_phase_field_id_slug_heuristic__no_integration(
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_pipe_config_client():
     client = MagicMock(PipefyClient)
     client.create_pipe = AsyncMock()

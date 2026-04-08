@@ -36,7 +36,4 @@ class OrganizationTools:
                 result = await client.get_organization(organization_id)
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(str(exc))
-            err = result.get("error")
-            if isinstance(err, str) and err:
-                return build_error_payload(err)
             return build_success_payload(result)

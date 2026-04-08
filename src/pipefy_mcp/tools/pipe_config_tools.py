@@ -21,6 +21,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     handle_pipe_config_tool_graphql_error,
     map_delete_pipe_error_to_message,
 )
+from pipefy_mcp.tools.validation_helpers import valid_repo_id
 from pipefy_mcp.tools.validation_helpers import valid_repo_id as valid_phase_field_id
 
 _CREATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"phase_id", "label", "type"})
@@ -56,9 +57,9 @@ class PipeConfigTools:
                 return build_pipe_tool_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
                 )
-            if not isinstance(organization_id, int) or organization_id <= 0:
+            if not valid_repo_id(organization_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'organization_id'. Use a positive integer.",
+                    message="Invalid 'organization_id'. Provide a non-empty string or positive integer.",
                 )
             try:
                 raw = await client.create_pipe(name.strip(), organization_id)
@@ -97,9 +98,9 @@ class PipeConfigTools:
                 preferences: Repo preferences object, if changing.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(pipe_id, int) or pipe_id <= 0:
+            if not valid_repo_id(pipe_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'pipe_id'. Use a positive integer.",
+                    message="Invalid 'pipe_id'. Provide a non-empty string or positive integer.",
                 )
             if all(x is None for x in (name, icon, color, preferences)):
                 return build_pipe_tool_error_payload(
@@ -146,9 +147,9 @@ class PipeConfigTools:
                 confirm: When True, performs the deletion after explicit user confirmation.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(pipe_id, int) or pipe_id <= 0:
+            if not valid_repo_id(pipe_id):
                 return build_delete_pipe_error_payload(
-                    message="Invalid 'pipe_id'. Use a positive integer.",
+                    message="Invalid 'pipe_id'. Provide a non-empty string or positive integer.",
                 )
 
             pipe_name = "Unknown"
@@ -229,15 +230,13 @@ class PipeConfigTools:
                 organization_id: Optional organization ID for the clone operation.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(pipe_template_id, int) or pipe_template_id <= 0:
+            if not valid_repo_id(pipe_template_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'pipe_template_id'. Use a positive integer.",
+                    message="Invalid 'pipe_template_id'. Provide a non-empty string or positive integer.",
                 )
-            if organization_id is not None and (
-                not isinstance(organization_id, int) or organization_id <= 0
-            ):
+            if organization_id is not None and not valid_repo_id(organization_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'organization_id'. Use a positive integer or omit.",
+                    message="Invalid 'organization_id'. Provide a non-empty string or positive integer, or omit.",
                 )
             try:
                 raw = await client.clone_pipe(
@@ -276,9 +275,9 @@ class PipeConfigTools:
                 description: Optional phase description.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(pipe_id, int) or pipe_id <= 0:
+            if not valid_repo_id(pipe_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'pipe_id'. Use a positive integer.",
+                    message="Invalid 'pipe_id'. Provide a non-empty string or positive integer.",
                 )
             if not isinstance(name, str) or not name.strip():
                 return build_pipe_tool_error_payload(
@@ -334,9 +333,9 @@ class PipeConfigTools:
                 only_admin_can_move_to_previous: If changing (deprecated in API).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(phase_id, int) or phase_id <= 0:
+            if not valid_repo_id(phase_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'phase_id'. Use a positive integer.",
+                    message="Invalid 'phase_id'. Provide a non-empty string or positive integer.",
                 )
 
             update_attrs: dict[str, Any] = {}
@@ -412,9 +411,9 @@ class PipeConfigTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(phase_id, int) or phase_id <= 0:
+            if not valid_repo_id(phase_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'phase_id'. Use a positive integer.",
+                    message="Invalid 'phase_id'. Provide a non-empty string or positive integer.",
                 )
 
             guard = await check_destructive_confirmation(
@@ -469,9 +468,9 @@ class PipeConfigTools:
                 extra_input: Additional ``CreatePhaseFieldInput`` fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(phase_id, int) or phase_id <= 0:
+            if not valid_repo_id(phase_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'phase_id'. Use a positive integer.",
+                    message="Invalid 'phase_id'. Provide a non-empty string or positive integer.",
                 )
             if not isinstance(label, str) or not label.strip():
                 return build_pipe_tool_error_payload(
@@ -658,9 +657,9 @@ class PipeConfigTools:
                 color: Label color (per Pipefy/API).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(pipe_id, int) or pipe_id <= 0:
+            if not valid_repo_id(pipe_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'pipe_id'. Use a positive integer.",
+                    message="Invalid 'pipe_id'. Provide a non-empty string or positive integer.",
                 )
             if not isinstance(name, str) or not name.strip():
                 return build_pipe_tool_error_payload(
@@ -706,9 +705,9 @@ class PipeConfigTools:
                 extra_input: Additional UpdateLabelInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(label_id, int) or label_id <= 0:
+            if not valid_repo_id(label_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'label_id'. Use a positive integer.",
+                    message="Invalid 'label_id'. Provide a non-empty string or positive integer.",
                 )
             update_attrs: dict[str, Any] = {
                 k: v
@@ -757,9 +756,9 @@ class PipeConfigTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(label_id, int) or label_id <= 0:
+            if not valid_repo_id(label_id):
                 return build_pipe_tool_error_payload(
-                    message="Invalid 'label_id'. Use a positive integer.",
+                    message="Invalid 'label_id'. Provide a non-empty string or positive integer.",
                 )
 
             guard = await check_destructive_confirmation(

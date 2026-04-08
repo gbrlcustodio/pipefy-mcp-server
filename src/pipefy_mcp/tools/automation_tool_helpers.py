@@ -120,7 +120,7 @@ def build_automation_error_payload(
     return {"success": False, "error": text}
 
 
-def handle_automation_tool_graphql_error(
+async def handle_automation_tool_graphql_error(
     exc: BaseException,
     ctx: Context,
     debug: bool,
@@ -135,7 +135,7 @@ def handle_automation_tool_graphql_error(
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else "Automation request failed."
     if debug:
-        ctx.debug(f"automation GraphQL error: {exc!r}")
+        await ctx.debug(f"automation GraphQL error: {exc!r}")
         codes = extract_graphql_error_codes(exc)
         cid = extract_graphql_correlation_id(exc)
         base = with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid)

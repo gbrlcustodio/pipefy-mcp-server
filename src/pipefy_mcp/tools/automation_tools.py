@@ -91,7 +91,7 @@ class AutomationTools:
             try:
                 raw = await client.get_automation(aid)
             except Exception as exc:  # noqa: BLE001
-                return handle_automation_tool_graphql_error(exc, ctx, False)
+                return await handle_automation_tool_graphql_error(exc, ctx, False)
             message = (
                 "No automation found for the given ID."
                 if not raw
@@ -142,7 +142,7 @@ class AutomationTools:
                     pipe_id=pipe,
                 )
             except Exception as exc:  # noqa: BLE001
-                return handle_automation_tool_graphql_error(exc, ctx, False)
+                return await handle_automation_tool_graphql_error(exc, ctx, False)
             return build_automation_read_success_payload(
                 rows,
                 "Automations listed.",
@@ -174,7 +174,7 @@ class AutomationTools:
             try:
                 rows = await client.get_automation_actions(pid)
             except Exception as exc:  # noqa: BLE001
-                return handle_automation_tool_graphql_error(exc, ctx, False)
+                return await handle_automation_tool_graphql_error(exc, ctx, False)
             return build_automation_read_success_payload(
                 rows,
                 "Automation actions catalog retrieved.",
@@ -206,7 +206,7 @@ class AutomationTools:
             try:
                 rows = await client.get_automation_events(pid)
             except Exception as exc:  # noqa: BLE001
-                return handle_automation_tool_graphql_error(exc, ctx, False)
+                return await handle_automation_tool_graphql_error(exc, ctx, False)
             return build_automation_read_success_payload(
                 rows,
                 "Automation events catalog retrieved.",
@@ -301,7 +301,7 @@ class AutomationTools:
                     extra_input=extra_input,
                 )
             except Exception as exc:  # noqa: BLE001
-                return handle_automation_tool_graphql_error(exc, ctx, debug)
+                return await handle_automation_tool_graphql_error(exc, ctx, debug)
             sim_row = result["automation_simulation"]
             if not isinstance(sim_row, dict):
                 sim_row = {}
@@ -387,7 +387,7 @@ class AutomationTools:
                     extra_input=extra_input,
                 )
             except Exception as exc:  # noqa: BLE001
-                return handle_automation_tool_graphql_error(exc, ctx, debug)
+                return await handle_automation_tool_graphql_error(exc, ctx, debug)
             block = raw.get("createAutomation") or {}
             automation = block.get("automation") or {}
             if not isinstance(automation, dict):
@@ -470,7 +470,7 @@ class AutomationTools:
                     extra_input=extra_input,
                 )
             except Exception as exc:  # noqa: BLE001
-                return handle_automation_tool_graphql_error(exc, ctx, False)
+                return await handle_automation_tool_graphql_error(exc, ctx, False)
             block = raw.get("createAutomation") or {}
             automation = block.get("automation") or {}
             if not isinstance(automation, dict):
@@ -515,7 +515,7 @@ class AutomationTools:
                     extra_input=extra_input,
                 )
             except Exception as exc:  # noqa: BLE001
-                return handle_automation_tool_graphql_error(exc, ctx, debug)
+                return await handle_automation_tool_graphql_error(exc, ctx, debug)
             block = raw.get("updateAutomation") or {}
             automation = block.get("automation") or {}
             if not isinstance(automation, dict):
@@ -562,7 +562,7 @@ class AutomationTools:
             try:
                 raw = await client.delete_automation(rid)
             except Exception as exc:  # noqa: BLE001
-                return handle_automation_tool_graphql_error(exc, ctx, debug)
+                return await handle_automation_tool_graphql_error(exc, ctx, debug)
             if not raw.get("success"):
                 return build_automation_error_payload(
                     message="Delete automation did not succeed.",

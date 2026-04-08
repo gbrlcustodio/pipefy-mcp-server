@@ -8,6 +8,9 @@ from pipefy_mcp.models.ai_automation import (
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
 )
+from pipefy_mcp.services.pipefy.automation_service import (
+    _format_automation_error_details,
+)
 from pipefy_mcp.services.pipefy.internal_api_client import InternalApiClient
 from pipefy_mcp.services.pipefy.queries.ai_automation_queries import (
     AI_CREATE_AUTOMATION_MUTATION,
@@ -40,7 +43,7 @@ class AiAutomationService:
         Raises:
             ValueError: When API response is missing automation.id.
         """
-        variables = {
+        variables: dict[str, Any] = {
             "name": automation_input.name,
             "action_id": ACTION_ID_GENERATE_WITH_AI,
             "event_id": automation_input.event_id,
@@ -56,6 +59,8 @@ class AiAutomationService:
             },
             "condition": automation_input.condition,
         }
+        if automation_input.event_params is not None:
+            variables["event_params"] = automation_input.event_params
 
         response = await self._client.execute_query(
             AI_CREATE_AUTOMATION_MUTATION, variables
@@ -64,8 +69,8 @@ class AiAutomationService:
         create_result = response.get("createAutomation", {})
         error_details = create_result.get("error_details")
         if error_details:
-            messages = error_details.get("messages", [])
-            raise ValueError(f"API error: {'; '.join(messages)}")
+            text = _format_automation_error_details(error_details)
+            raise ValueError(f"API error: {text}" if text else "API error: unknown")
 
         automation = create_result.get("automation")
         if not automation or "id" not in automation:
@@ -106,6 +111,8 @@ class AiAutomationService:
         if ai_params:
             input_dict["action_params"] = {"aiParams": ai_params}
 
+        if automation_input.event_params is not None:
+            input_dict["event_params"] = automation_input.event_params
         if automation_input.condition is not None:
             input_dict["condition"] = automation_input.condition
 
@@ -118,8 +125,8 @@ class AiAutomationService:
         update_result = response.get("updateAutomation", {})
         error_details = update_result.get("error_details")
         if error_details:
-            messages = error_details.get("messages", [])
-            raise ValueError(f"API error: {'; '.join(messages)}")
+            text = _format_automation_error_details(error_details)
+            raise ValueError(f"API error: {text}" if text else "API error: unknown")
 
         automation = update_result.get("automation")
         if not automation or "id" not in automation:

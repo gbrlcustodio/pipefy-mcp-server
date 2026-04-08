@@ -201,7 +201,7 @@ async def test_get_organization_report_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_ORGANIZATION_REPORT_QUERY
-    assert variables == {"id": 901}
+    assert variables == {"id": "901"}
     assert result["organizationReport"]["name"] == "Org Overview"
 
 
@@ -236,7 +236,7 @@ async def test_get_organization_reports_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_ORGANIZATION_REPORTS_QUERY
-    assert variables["organizationId"] == 1001
+    assert variables["organizationId"] == "1001"
     assert variables["first"] == 5
     assert variables["after"] == "cursor-1"
     assert len(result["organizationReports"]["edges"]) == 2
@@ -301,7 +301,7 @@ async def test_create_pipe_report_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_PIPE_REPORT_MUTATION
-    assert variables["input"]["pipeId"] == 123
+    assert variables["input"]["pipeId"] == "123"
     assert variables["input"]["name"] == "New Report"
     assert variables["input"]["fields"] == ["title", "status"]
     assert result["createPipeReport"]["pipeReport"]["id"] == "r10"
@@ -315,7 +315,7 @@ async def test_create_pipe_report_minimal(mock_settings):
     result = await service.create_pipe_report("456", "Minimal")
 
     variables = service.execute_query.call_args[0][1]
-    assert variables["input"] == {"pipeId": 456, "name": "Minimal"}
+    assert variables["input"] == {"pipeId": "456", "name": "Minimal"}
     assert result["createPipeReport"]["pipeReport"]["name"] == "Minimal"
 
 
@@ -341,7 +341,7 @@ async def test_update_pipe_report_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_PIPE_REPORT_MUTATION
-    assert variables["input"]["id"] == 10
+    assert variables["input"]["id"] == "10"
     assert variables["input"]["name"] == "Updated"
     assert variables["input"]["color"] == "red"
     assert variables["input"]["fields"] == ["title"]
@@ -356,7 +356,7 @@ async def test_update_pipe_report_skips_none_values(mock_settings):
     await service.update_pipe_report("10", name="Same")
 
     variables = service.execute_query.call_args[0][1]
-    assert variables["input"] == {"id": 10, "name": "Same"}
+    assert variables["input"] == {"id": "10", "name": "Same"}
 
 
 @pytest.mark.unit
@@ -368,7 +368,7 @@ async def test_delete_pipe_report_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_PIPE_REPORT_MUTATION
-    assert variables["input"] == {"id": 10}
+    assert variables["input"] == {"id": "10"}
     assert result["deletePipeReport"]["success"] is True
 
 
@@ -387,9 +387,9 @@ async def test_create_organization_report_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_ORGANIZATION_REPORT_MUTATION
-    assert variables["input"]["organizationId"] == 100
+    assert variables["input"]["organizationId"] == "100"
     assert variables["input"]["name"] == "Cross-Pipe"
-    assert variables["input"]["pipeIds"] == [200, 300]
+    assert variables["input"]["pipeIds"] == ["200", "300"]
     assert variables["input"]["fields"] == ["title"]
     assert result["createOrganizationReport"]["organizationReport"]["id"] == "5"
 
@@ -409,9 +409,9 @@ async def test_update_organization_report_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_ORGANIZATION_REPORT_MUTATION
-    assert variables["input"]["id"] == 5
+    assert variables["input"]["id"] == "5"
     assert variables["input"]["name"] == "Updated Org"
-    assert variables["input"]["pipeIds"] == [200, 400]
+    assert variables["input"]["pipeIds"] == ["200", "400"]
     assert (
         result["updateOrganizationReport"]["organizationReport"]["name"]
         == "Updated Org"
@@ -427,7 +427,7 @@ async def test_delete_organization_report_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_ORGANIZATION_REPORT_MUTATION
-    assert variables["input"] == {"id": 5}
+    assert variables["input"] == {"id": "5"}
     assert result["deleteOrganizationReport"]["success"] is True
 
 
@@ -442,7 +442,7 @@ async def test_export_pipe_report_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is EXPORT_PIPE_REPORT_MUTATION
-    assert variables["input"] == {"pipeId": 100, "pipeReportId": 200}
+    assert variables["input"] == {"pipeId": "100", "pipeReportId": "200"}
     assert result["exportPipeReport"]["pipeReportExport"]["state"] == "processing"
 
 
@@ -473,9 +473,9 @@ async def test_export_organization_report_success(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is EXPORT_ORGANIZATION_REPORT_MUTATION
     assert variables["input"] == {
-        "organizationId": 42,
-        "organizationReportId": 7,
-        "pipeIds": [10, 11],
+        "organizationId": "42",
+        "organizationReportId": "7",
+        "pipeIds": ["10", "11"],
     }
     assert (
         result["exportOrganizationReport"]["organizationReportExport"]["state"]

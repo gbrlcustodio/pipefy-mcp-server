@@ -172,7 +172,7 @@ async def test_upload_attachment_to_card_file_url_success(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is True
-    assert payload["card_id"] == 7
+    assert payload["card_id"] == "7"
     assert payload["field_id"] == "field-uuid"
     assert payload["file_name"] == "report.pdf"
     assert payload["content_type"] == "application/pdf"
@@ -187,7 +187,7 @@ async def test_upload_attachment_to_card_file_url_success(
     )
     mock_attachment_client.upload_file_to_s3.assert_awaited_once()
     mock_attachment_client.update_card_field.assert_awaited_once_with(
-        7,
+        "7",
         "field-uuid",
         ["orgs/o/u/f/report.pdf"],
     )
@@ -600,7 +600,7 @@ async def test_upload_attachment_to_card_coerces_int_ids(
         "42", "note.txt", "text/plain", 5
     )
     mock_attachment_client.update_card_field.assert_awaited_once_with(
-        7, "999", ["orgs/o/u/f/report.pdf"]
+        "7", "999", ["orgs/o/u/f/report.pdf"]
     )
 
 

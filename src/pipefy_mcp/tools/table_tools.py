@@ -275,7 +275,7 @@ class TableTools:
         )
         async def create_table(
             name: str,
-            organization_id: int,
+            organization_id: str | int,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:

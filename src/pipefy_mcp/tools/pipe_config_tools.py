@@ -40,7 +40,7 @@ class PipeConfigTools:
         )
         async def create_pipe(
             name: str,
-            organization_id: int,
+            organization_id: str | int,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Create a new empty pipe in an organization.
@@ -77,7 +77,7 @@ class PipeConfigTools:
             ),
         )
         async def update_pipe(
-            pipe_id: int,
+            pipe_id: str | int,
             name: str | None = None,
             icon: str | None = None,
             color: str | None = None,
@@ -132,7 +132,7 @@ class PipeConfigTools:
         )
         async def delete_pipe(
             ctx: Context[ServerSession, None],
-            pipe_id: int,
+            pipe_id: str | int,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -216,8 +216,8 @@ class PipeConfigTools:
             ),
         )
         async def clone_pipe(
-            pipe_template_id: int,
-            organization_id: int | None = None,
+            pipe_template_id: str | int,
+            organization_id: str | int | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Clone a pipe from a template pipe ID.
@@ -259,7 +259,7 @@ class PipeConfigTools:
             ),
         )
         async def create_phase(
-            pipe_id: int,
+            pipe_id: str | int,
             name: str,
             done: bool = False,
             index: float | int | None = None,
@@ -307,7 +307,7 @@ class PipeConfigTools:
             ),
         )
         async def update_phase(
-            phase_id: int,
+            phase_id: str | int,
             name: str | None = None,
             description: str | None = None,
             done: bool | None = None,
@@ -397,7 +397,7 @@ class PipeConfigTools:
         )
         async def delete_phase(
             ctx: Context[ServerSession, None],
-            phase_id: int,
+            phase_id: str | int,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -442,7 +442,7 @@ class PipeConfigTools:
             ),
         )
         async def create_phase_field(
-            phase_id: int,
+            phase_id: str | int,
             label: str,
             field_type: str,
             options: list[str] | None = None,
@@ -645,7 +645,7 @@ class PipeConfigTools:
             ),
         )
         async def create_label(
-            pipe_id: int,
+            pipe_id: str | int,
             name: str,
             color: str,
             debug: bool = False,
@@ -691,7 +691,7 @@ class PipeConfigTools:
             ),
         )
         async def update_label(
-            label_id: int,
+            label_id: str | int,
             name: str | None = None,
             color: str | None = None,
             extra_input: dict[str, Any] | None = None,
@@ -742,7 +742,7 @@ class PipeConfigTools:
         )
         async def delete_label(
             ctx: Context[ServerSession, None],
-            label_id: int,
+            label_id: str | int,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:

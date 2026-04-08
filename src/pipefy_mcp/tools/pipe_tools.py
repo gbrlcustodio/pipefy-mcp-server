@@ -67,7 +67,7 @@ class PipeTools:
         )
         async def create_card(
             ctx: Context[ServerSession, None],
-            pipe_id: int,
+            pipe_id: str | int,
             title: str | None = None,
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
@@ -127,7 +127,7 @@ class PipeTools:
             if card_id:
                 if title:
                     try:
-                        await client.update_card(int(card_id), title=title)
+                        await client.update_card(card_id, title=title)
                     except Exception as exc:  # noqa: BLE001
                         result["title_warning"] = (
                             f"Card created but title update failed: {exc}"
@@ -146,7 +146,7 @@ class PipeTools:
             ),
         )
         async def get_card(
-            card_id: int,
+            card_id: str | int,
             include_fields: bool = False,
         ) -> dict:
             """Get a card by its ID.
@@ -160,7 +160,9 @@ class PipeTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
         )
-        async def add_card_comment(card_id: int, text: str) -> AddCardCommentPayload:
+        async def add_card_comment(
+            card_id: str | int, text: str
+        ) -> AddCardCommentPayload:
             """Add a text comment to a Pipefy card.
 
             Args:
@@ -191,7 +193,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_comment(
-            comment_id: int, text: str
+            comment_id: str | int, text: str
         ) -> UpdateCommentSuccessPayload | UpdateCommentErrorPayload:
             """Update an existing comment by its ID.
 
@@ -223,7 +225,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def delete_comment(
-            comment_id: int,
+            comment_id: str | int,
         ) -> DeleteCommentSuccessPayload | DeleteCommentErrorPayload:
             """Delete a comment by its ID.
 
@@ -253,7 +255,7 @@ class PipeTools:
         )
         async def get_cards(
             ctx: Context[ServerSession, None],
-            pipe_id: int,
+            pipe_id: str | int,
             title: str | None = None,
             search: CardSearch | None = None,
             include_fields: bool = False,
@@ -304,7 +306,7 @@ class PipeTools:
             ),
         )
         async def find_cards(
-            pipe_id: int,
+            pipe_id: str | int,
             field_id: str,
             field_value: str,
             include_fields: bool = False,
@@ -347,7 +349,7 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_pipe(pipe_id: int) -> dict:
+        async def get_pipe(pipe_id: str | int) -> dict:
             """Get a pipe by its ID."""
 
             return await client.get_pipe(pipe_id)
@@ -357,7 +359,7 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_pipe_members(pipe_id: int) -> dict:
+        async def get_pipe_members(pipe_id: str | int) -> dict:
             """Get the members of a pipe."""
 
             return await client.get_pipe_members(pipe_id)
@@ -365,7 +367,9 @@ class PipeTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True),
         )
-        async def move_card_to_phase(card_id: int, destination_phase_id: int) -> dict:
+        async def move_card_to_phase(
+            card_id: str | int, destination_phase_id: str | int
+        ) -> dict:
             """Move a card to a specific phase.
 
             On failure, if the destination is not among ``cards_can_be_moved_to_phases`` for the
@@ -389,7 +393,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_card_field(
-            card_id: int, field_id: str, new_value: Any
+            card_id: str | int, field_id: str, new_value: Any
         ) -> dict:
             """Update a single field of a card.
 
@@ -411,10 +415,10 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_card(
-            card_id: int,
+            card_id: str | int,
             title: str | None = None,
-            assignee_ids: list[int] | None = None,
-            label_ids: list[int] | None = None,
+            assignee_ids: list[str | int] | None = None,
+            label_ids: list[str | int] | None = None,
             due_date: str | None = None,
             field_updates: list[dict] | None = None,
         ) -> dict:
@@ -470,7 +474,7 @@ class PipeTools:
             ),
         )
         async def get_start_form_fields(
-            pipe_id: int, required_only: bool = False
+            pipe_id: str | int, required_only: bool = False
         ) -> dict:
             """Get the start form fields of a pipe.
 
@@ -501,7 +505,9 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_phase_fields(phase_id: int, required_only: bool = False) -> dict:
+        async def get_phase_fields(
+            phase_id: str | int, required_only: bool = False
+        ) -> dict:
             """Get the fields available in a specific phase.
 
             Use this tool to understand which fields need to be filled on a specific phase.
@@ -534,8 +540,8 @@ class PipeTools:
         )
         async def fill_card_phase_fields(
             ctx: Context[ServerSession, None],
-            card_id: int,
-            phase_id: int,
+            card_id: str | int,
+            phase_id: str | int,
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
         ) -> dict:
@@ -642,7 +648,7 @@ class PipeTools:
         )
         async def delete_card(
             ctx: Context[ServerSession, None],
-            card_id: int,
+            card_id: str | int,
             confirm: bool = False,
             debug: bool = False,
         ) -> DeleteCardPayload:

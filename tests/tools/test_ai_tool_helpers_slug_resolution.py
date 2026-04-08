@@ -230,7 +230,7 @@ async def test_resolve_handles_multiple_pipes():
     client = AsyncMock()
 
     async def mock_get_pipe(pipe_id):
-        if pipe_id == 100:
+        if str(pipe_id) == "100":
             return {
                 "pipe": {
                     "phases": [],

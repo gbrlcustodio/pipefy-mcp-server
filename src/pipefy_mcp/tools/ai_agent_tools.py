@@ -597,7 +597,7 @@ class AiAgentTools:
             for target_pid in target_pipe_ids:
                 try:
                     target_data = await asyncio.wait_for(
-                        client.get_pipe(int(target_pid)),
+                        client.get_pipe(target_pid),
                         timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
                     )
                     target_info = target_data.get("pipe", {})

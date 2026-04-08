@@ -26,7 +26,7 @@ def build_upload_success_payload(
     content_type: str,
     file_size: int,
     field_id: str,
-    card_id: int | None = None,
+    card_id: str | int | None = None,
     table_record_id: str | None = None,
 ) -> dict[str, Any]:
     """Structured success payload (FR-8).

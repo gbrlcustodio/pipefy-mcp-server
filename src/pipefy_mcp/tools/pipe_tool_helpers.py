@@ -55,7 +55,7 @@ DeleteCommentPayload = DeleteCommentSuccessPayload | DeleteCommentErrorPayload
 
 class DeleteCardSuccessPayload(TypedDict):
     success: Literal[True]
-    card_id: int
+    card_id: str | int
     card_title: str
     pipe_name: str
     message: str
@@ -227,7 +227,7 @@ def build_delete_comment_error_payload(*, message: str) -> DeleteCommentErrorPay
 
 
 def build_delete_card_success_payload(
-    *, card_id: int, card_title: str, pipe_name: str
+    *, card_id: str | int, card_title: str, pipe_name: str
 ) -> DeleteCardSuccessPayload:
     """Confirmed card deletion.
 
@@ -287,7 +287,7 @@ def _filter_fields_by_definitions(
 
 
 def map_delete_card_error_to_message(
-    *, card_id: int, card_title: str, codes: list[str]
+    *, card_id: str | int, card_title: str, codes: list[str]
 ) -> str:
     """Map GraphQL error codes to short, actionable messages for delete_card."""
     for code in codes:

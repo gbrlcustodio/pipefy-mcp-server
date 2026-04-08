@@ -566,9 +566,9 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def export_organization_report(
-            organization_id: int,
-            organization_report_id: int | None = None,
-            pipe_ids: list[int] | None = None,
+            organization_id: str | int,
+            organization_report_id: str | int | None = None,
+            pipe_ids: list[str | int] | None = None,
             sort_by: dict | None = None,
             filter: dict | None = None,
             columns: list[str] | None = None,

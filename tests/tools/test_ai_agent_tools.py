@@ -693,7 +693,7 @@ class TestValidateAiAgentBehaviors:
         assert payload["valid"] is True
         assert payload["problems"] == []
         assert payload["warnings"] == []
-        mock_pipefy_client.get_pipe.assert_awaited_once_with(1)
+        mock_pipefy_client.get_pipe.assert_awaited_once_with("1")
         mock_pipefy_client.get_pipe_relations.assert_awaited_once_with("1")
 
     async def test_create_table_record_warns_without_treating_table_field_as_pipe_field(
@@ -1855,7 +1855,7 @@ class TestFetchPipeValidationContext:
         assert "sf-1" in field_ids
         assert "sf-2" in field_ids
         assert related_pipe_ids == {"child-10", "parent-20"}
-        mock_pipefy_client.get_pipe.assert_awaited_once_with(42)
+        mock_pipefy_client.get_pipe.assert_awaited_once_with("42")
         mock_pipefy_client.get_pipe_relations.assert_awaited_once_with("42")
 
     async def test_relations_failure_returns_none(self, mock_pipefy_client):

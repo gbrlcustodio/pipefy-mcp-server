@@ -16,8 +16,8 @@ _AUTOMATION_MOVE_CARD_ACTION_IDS = frozenset({"move_single_card"})
 
 async def try_enrich_move_card_to_phase_failure(
     client: PipefyClient,
-    card_id: int,
-    destination_phase_id: int,
+    card_id: str | int,
+    destination_phase_id: str | int,
 ) -> dict[str, Any] | None:
     """If the card cannot move to ``destination_phase_id`` from its current phase, build an error payload.
 
@@ -44,7 +44,7 @@ async def try_enrich_move_card_to_phase_failure(
     if cur_id is None:
         return None
     try:
-        phase_payload = await client.get_phase_allowed_move_targets(int(cur_id))
+        phase_payload = await client.get_phase_allowed_move_targets(cur_id)
     except Exception:
         return None
     phase = phase_payload.get("phase") or {}
@@ -91,7 +91,7 @@ async def collect_ai_behavior_move_transition_problems(
     async def phase_context(phase_id_str: str) -> tuple[str, list[dict]]:
         if phase_id_str not in cache:
             try:
-                data = await client.get_phase_allowed_move_targets(int(phase_id_str))
+                data = await client.get_phase_allowed_move_targets(phase_id_str)
             except Exception:
                 cache[phase_id_str] = ("", [])
             else:
@@ -211,7 +211,7 @@ async def validate_traditional_automation_move_transition_or_none(
         return None
     dest_s = str(dest)
     try:
-        data = await client.get_phase_allowed_move_targets(int(src_s))
+        data = await client.get_phase_allowed_move_targets(src_s)
     except Exception:
         return None
     ph = data.get("phase") or {}

@@ -806,6 +806,10 @@ class PipefyClient:
         """Get the fields available in a specific phase."""
         return await self._pipe_service.get_phase_fields(phase_id, required_only)
 
+    async def get_phase_allowed_move_targets(self, phase_id: int) -> dict:
+        """Phases reachable from ``phase_id`` per Pipefy transition rules (read-only)."""
+        return await self._pipe_service.get_phase_allowed_move_targets(phase_id)
+
     async def get_pipe_reports(
         self,
         pipe_uuid: str,

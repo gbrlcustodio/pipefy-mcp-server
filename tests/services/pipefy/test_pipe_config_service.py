@@ -55,7 +55,7 @@ async def test_create_pipe_sends_input_and_returns_payload(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_PIPE_MUTATION
     assert variables == {
-        "input": {"name": "Alpha", "organization_id": 9001},
+        "input": {"name": "Alpha", "organization_id": "9001"},
     }
     assert result == {"createPipe": {"pipe": {"id": "1", "name": "Alpha"}}}
 
@@ -71,7 +71,7 @@ async def test_update_pipe_merges_id_and_non_none_attrs(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_PIPE_MUTATION
     assert variables == {
-        "input": {"id": 2, "name": "Beta", "icon": "star"},
+        "input": {"id": "2", "name": "Beta", "icon": "star"},
     }
     assert result == {"updatePipe": {"pipe": {"id": "2", "name": "Beta"}}}
 
@@ -84,7 +84,7 @@ async def test_delete_pipe_sends_delete_input(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_PIPE_MUTATION
-    assert variables == {"input": {"id": 42}}
+    assert variables == {"input": {"id": "42"}}
     assert result == {"deletePipe": {"success": True}}
 
 
@@ -99,7 +99,7 @@ async def test_clone_pipe_sends_template_ids_only(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is CLONE_PIPE_MUTATION
-    assert variables == {"input": {"pipe_template_ids": [303]}}
+    assert variables == {"input": {"pipe_template_ids": ["303"]}}
     assert result == {"clonePipes": {"pipes": [{"id": "9", "name": "Clone"}]}}
 
 
@@ -111,7 +111,7 @@ async def test_clone_pipe_includes_organization_when_provided(mock_settings):
 
     variables = service.execute_query.call_args[0][1]
     assert variables == {
-        "input": {"pipe_template_ids": [1], "organization_id": 88},
+        "input": {"pipe_template_ids": ["1"], "organization_id": "88"},
     }
 
 
@@ -136,7 +136,7 @@ async def test_create_phase_sends_pipe_id_name_done_and_optional_index(
     assert query is CREATE_PHASE_MUTATION
     assert variables == {
         "input": {
-            "pipe_id": 50,
+            "pipe_id": "50",
             "name": "Backlog",
             "done": False,
             "index": 0.0,
@@ -159,7 +159,7 @@ async def test_create_phase_omits_optional_fields_when_not_set(mock_settings):
 
     variables = service.execute_query.call_args[0][1]
     assert variables == {
-        "input": {"pipe_id": 51, "name": "Done", "done": True},
+        "input": {"pipe_id": "51", "name": "Done", "done": True},
     }
 
 
@@ -175,7 +175,7 @@ async def test_update_phase_merges_id_and_attrs(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_PHASE_MUTATION
     assert variables == {
-        "input": {"id": 3, "name": "Renamed", "done": True},
+        "input": {"id": "3", "name": "Renamed", "done": True},
     }
     assert result == {
         "updatePhase": {"phase": {"id": "3", "name": "Renamed", "done": True}},
@@ -190,7 +190,7 @@ async def test_delete_phase_sends_delete_input(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_PHASE_MUTATION
-    assert variables == {"input": {"id": 77}}
+    assert variables == {"input": {"id": "77"}}
     assert result == {"deletePhase": {"success": True}}
 
 
@@ -223,7 +223,7 @@ async def test_create_phase_field_sends_type_and_optional_attrs(mock_settings):
     assert query is CREATE_PHASE_FIELD_MUTATION
     assert variables == {
         "input": {
-            "phase_id": 10,
+            "phase_id": "10",
             "label": "Email",
             "type": "email",
             "description": "Work email",
@@ -258,7 +258,7 @@ async def test_update_phase_field_merges_id_and_attrs(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_PHASE_FIELD_MUTATION
-    assert variables == {"input": {"id": 5, "label": "Renamed"}}
+    assert variables == {"input": {"id": "5", "label": "Renamed"}}
     assert result == {
         "updatePhaseField": {
             "phase_field": {"id": "5", "label": "Renamed", "type": "short_text"},
@@ -304,7 +304,7 @@ async def test_delete_phase_field_sends_delete_input(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_PHASE_FIELD_MUTATION
-    assert variables == {"input": {"id": 99}}
+    assert variables == {"input": {"id": "99"}}
     assert result == {"deletePhaseField": {"success": True}}
 
 
@@ -349,7 +349,7 @@ async def test_create_label_sends_pipe_name_color(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_LABEL_MUTATION
     assert variables == {
-        "input": {"pipe_id": 20, "name": "Bug", "color": "red"},
+        "input": {"pipe_id": "20", "name": "Bug", "color": "red"},
     }
     assert result == {
         "createLabel": {"label": {"id": "1", "name": "Bug", "color": "red"}},
@@ -367,7 +367,7 @@ async def test_update_label_merges_id_and_attrs(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is UPDATE_LABEL_MUTATION
-    assert variables == {"input": {"id": 2, "name": "Feature"}}
+    assert variables == {"input": {"id": "2", "name": "Feature"}}
     assert result == {
         "updateLabel": {"label": {"id": "2", "name": "Feature", "color": "blue"}},
     }
@@ -381,7 +381,7 @@ async def test_delete_label_sends_delete_input(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_LABEL_MUTATION
-    assert variables == {"input": {"id": 3}}
+    assert variables == {"input": {"id": "3"}}
     assert result == {"deleteLabel": {"success": True}}
 
 

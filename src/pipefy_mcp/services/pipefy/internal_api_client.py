@@ -72,6 +72,15 @@ class InternalApiClient:
 
             data = response.json()
             if "errors" in data and data["errors"]:
-                raise ValueError(f"GraphQL error response: {data['errors']}")
+                error_msgs = []
+                for err in data["errors"]:
+                    msg = err.get("message", "Unknown error")
+                    ext = err.get("extensions", {})
+                    code = ext.get("code", "")
+                    corr = ext.get("correlation_id", "")
+                    suffix = f" [code={code}]" if code else ""
+                    suffix += f" [correlation_id={corr}]" if corr else ""
+                    error_msgs.append(f"{msg}{suffix}")
+                raise ValueError("; ".join(error_msgs))
             # Unwrap the "data" envelope to match BasePipefyClient.execute_query
             return data.get("data", data)

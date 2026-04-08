@@ -71,6 +71,7 @@ class BasePipefyClient:
             auth=self._auth,
             timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
         )
+        # Skip schema fetch to avoid extra introspection round-trip per request
         async with Client(
             transport=transport, fetch_schema_from_transport=False
         ) as session:

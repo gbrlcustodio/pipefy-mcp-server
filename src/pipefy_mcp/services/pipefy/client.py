@@ -83,6 +83,11 @@ class PipefyClient:
         )
         self._ai_automation_service: AiAutomationService | None = None
 
+    @property
+    def ai_automation_available(self) -> bool:
+        """Whether the AI Automation service is configured (OAuth credentials present)."""
+        return self._ai_automation_service is not None
+
     def set_ai_automation_service(self, service: AiAutomationService) -> None:
         """Attach an AI automation service (requires OAuth credentials).
 
@@ -654,22 +659,14 @@ class PipefyClient:
         self, automation_input: CreateAiAutomationInput
     ) -> AutomationServiceResult:
         """Create an AI Automation (generate_with_ai action via internal API)."""
-        if self._ai_automation_service is None:
-            raise ValueError(
-                "AI Automation requires OAuth credentials "
-                "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL)."
-            )
+        assert self._ai_automation_service is not None  # noqa: S101
         return await self._ai_automation_service.create_automation(automation_input)
 
     async def update_ai_automation(
         self, automation_input: UpdateAiAutomationInput
     ) -> AutomationServiceResult:
         """Update an existing AI Automation via internal API."""
-        if self._ai_automation_service is None:
-            raise ValueError(
-                "AI Automation requires OAuth credentials "
-                "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL)."
-            )
+        assert self._ai_automation_service is not None  # noqa: S101
         return await self._ai_automation_service.update_automation(automation_input)
 
     async def get_pipe_members(self, pipe_id: int) -> dict:

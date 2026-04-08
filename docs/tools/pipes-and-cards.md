@@ -10,6 +10,15 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, and
 - `extra_input` merges extra API keys (camelCase); keys that would duplicate primary arguments are ignored.
 - **Destructive deletes** (`delete_pipe`, `delete_card`) use a two-step flow: first call returns a preview, then `confirm=true` after user approval.
 
+### Pipefy IDs (type safety)
+
+Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most other nodes.
+
+- **Prefer string arguments** when calling tools (e.g. `card_id: "1332881010"`, `pipe_id: "306996634"`). This matches API responses (`get_pipe`, `get_card`, `create_card`, etc.).
+- **Integer JSON values** (e.g. `1332881010` without quotes) are still accepted on many tools: they are **coerced to strings** before variables are sent to GraphQL, so behavior matches the API.
+- **Validation:** empty strings, whitespace-only IDs, and non-positive numeric IDs are rejected with a clear tool error (no spurious `ValueError` from type mixing).
+- **`delete_card`:** `card_id` follows the same rule — use a **string** (recommended) or a positive integer; the tool normalizes to a string for `getCard` / `deleteCard`. On success, `card_id` in the payload is a **string**.
+
 ---
 
 ## Pipe reads
@@ -50,7 +59,7 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, and
 | `move_card_to_phase` | Move card to another phase. |
 | `update_card_field` | Single-field update (`updateCardField`). |
 | `update_card` | Metadata (title, assignees, labels, due date) and/or multiple custom fields via `field_updates`. |
-| `delete_card` | Two-step: default preview; `confirm=true` after explicit user confirmation. |
+| `delete_card` | Two-step: default preview; `confirm=true` after explicit user confirmation. `card_id` is a **string** in the API; pass `"…"` or a coerced positive integer (see [Pipefy IDs](#pipefy-ids-type-safety)). |
 | `upload_attachment_to_card` | Presigned URL + S3 PUT + `updateCardField` for **attachment** fields. **One file per call** — to attach multiple files, call the tool once per file. Exactly one of `file_url` or `file_content_base64`; optional `content_type` (inferred from `file_name` if omitted). **`field_id` must be the field slug** (e.g. `document_upload`), not the uuid — using the uuid returns `RESOURCE_NOT_FOUND`. |
 
 **Choosing card updates:** `update_card_field` = one field, full replacement. `update_card` + `field_updates` = several custom fields at once. `update_card` with attribute args = metadata (combinable with `field_updates`).

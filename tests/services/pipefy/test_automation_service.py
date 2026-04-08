@@ -151,7 +151,7 @@ async def test_get_automation_success(mock_settings):
     service.execute_query.assert_awaited_once()
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATION_QUERY
-    assert variables == {"id": 101}
+    assert variables == {"id": "101"}
     assert result["id"] == "a1"
     assert result["name"] == "Notify assignee"
     assert result["event_params"]["to_phase_id"] == "ph_dest"
@@ -168,7 +168,7 @@ async def test_get_automation_when_api_returns_null(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATION_QUERY
-    assert variables == {"id": 999}
+    assert variables == {"id": "999"}
     assert result is None
 
 
@@ -195,7 +195,7 @@ async def test_get_automations_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATIONS_FOR_ORG_AND_REPO_QUERY
-    assert variables == {"organizationId": 101, "repoId": 901}
+    assert variables == {"organizationId": "101", "repoId": "901"}
     assert isinstance(result, list)
     assert result == rows
 
@@ -217,9 +217,9 @@ async def test_get_automations_success_resolves_org_from_pipe(mock_settings):
     q1, v1 = service.execute_query.call_args_list[0][0]
     q2, v2 = service.execute_query.call_args_list[1][0]
     assert q1 is GET_PIPE_ORGANIZATION_ID_QUERY
-    assert v1 == {"id": 901}
+    assert v1 == {"id": "901"}
     assert q2 is GET_AUTOMATIONS_FOR_ORG_AND_REPO_QUERY
-    assert v2 == {"organizationId": 300, "repoId": 901}
+    assert v2 == {"organizationId": "300", "repoId": "901"}
     assert result == rows
 
 
@@ -232,7 +232,7 @@ async def test_get_automations_organization_only_omits_repo_id(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATIONS_BY_ORG_QUERY
-    assert variables == {"organizationId": 201}
+    assert variables == {"organizationId": "201"}
     assert result == rows
 
 
@@ -329,7 +329,7 @@ async def test_get_automation_actions_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_AUTOMATION_ACTIONS_QUERY
-    assert variables == {"repoId": 601}
+    assert variables == {"repoId": "601"}
     assert isinstance(result, list)
     assert result[0]["id"] == "act1"
     assert result[0]["enabled"] is True

@@ -60,7 +60,7 @@ class WebhookService(BasePipefyClient):
             filter_by_name: Optional case-insensitive partial match on template name.
             first: Max templates to return (default 50).
         """
-        variables: dict[str, Any] = {"repoId": int(repo_id), "first": first}
+        variables: dict[str, Any] = {"repoId": str(repo_id), "first": first}
         if filter_by_name is not None and filter_by_name.strip():
             variables["filterByName"] = filter_by_name.strip()
         return await self.execute_query(GET_EMAIL_TEMPLATES_QUERY, variables)
@@ -98,7 +98,7 @@ class WebhookService(BasePipefyClient):
         if "repoId" in attrs or not card_id.isdigit():
             return attrs
         try:
-            card_data = await self._card_service.get_card(int(card_id))
+            card_data = await self._card_service.get_card(card_id)
             pipe_obj = card_data.get("card", {}).get("pipe")
             pipe_id = pipe_obj.get("id") if isinstance(pipe_obj, dict) else None
             if pipe_id is not None:
@@ -171,7 +171,7 @@ class WebhookService(BasePipefyClient):
         card_id_str = str(card_id).strip()
         if not card_id_str.isdigit():
             raise ValueError(f"card_id must be a numeric card ID, got {card_id!r}.")
-        card_data = await self._card_service.get_card(int(card_id_str))
+        card_data = await self._card_service.get_card(card_id_str)
         card_obj = card_data.get("card") or {}
         card_uuid = card_obj.get("uuid")
         if not card_uuid:
@@ -226,7 +226,7 @@ class WebhookService(BasePipefyClient):
         """
         _require_https(url, "url")
         input_obj: dict[str, Any] = {
-            "pipe_id": int(pipe_id),
+            "pipe_id": str(pipe_id),
             "url": url,
             "actions": actions,
             "name": attrs.get("name", _DEFAULT_WEBHOOK_NAME),
@@ -266,7 +266,7 @@ class WebhookService(BasePipefyClient):
         """
         raw = await self.execute_query(
             GET_CARD_INBOX_EMAILS_QUERY,
-            {"card_id": int(card_id)},
+            {"card_id": str(card_id)},
         )
         card_data = raw.get("card") or {}
         emails = card_data.get("inbox_emails") or []

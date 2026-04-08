@@ -48,7 +48,7 @@ async def test_invite_members_success(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is INVITE_MEMBERS_MUTATION
     inp = variables["input"]
-    assert inp["pipe_id"] == 601
+    assert inp["pipe_id"] == "601"
     assert inp["emails"] == [{"email": "a@x.com", "role_name": "member"}]
     assert result == payload
 
@@ -167,7 +167,7 @@ async def test_set_role_success(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is SET_ROLE_MUTATION
     inp = variables["input"]
-    assert inp["pipe_id"] == 603
+    assert inp["pipe_id"] == "603"
     assert inp["member"] == {"user_id": "member-1", "role_name": "admin"}
     assert result == payload
 

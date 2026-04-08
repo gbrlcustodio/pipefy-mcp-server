@@ -27,11 +27,6 @@ _VALIDATE_PATCH = "pipefy_mcp.tools.attachment_tools._validate_url_safe"
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_attachment_client():
     client = MagicMock(PipefyClient)
     client.create_presigned_url = AsyncMock(

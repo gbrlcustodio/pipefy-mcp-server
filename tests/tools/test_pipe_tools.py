@@ -31,11 +31,6 @@ from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mcp_server(mock_pipefy_client):
     mcp = FastMCP("Pipefy MCP Test Server")
     PipeTools.register(mcp, mock_pipefy_client)
@@ -290,6 +285,39 @@ class TestCreateCardTool:
             )
             response = json.loads(result.content[0].text)
             assert response["createCard"]["card"]["title"] == "Copa América"
+            assert "card_link" in response
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_title_update_failure_returns_warning(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """When update_card raises after a successful create_card, the card result
+        is still returned with a title_warning and no title set."""
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "789"}}
+        }
+        mock_pipefy_client.update_card.side_effect = RuntimeError("API timeout")
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id, "title": "My Title"},
+            )
+            assert result.isError is False
+            mock_pipefy_client.create_card.assert_called_once_with(pipe_id, {})
+            mock_pipefy_client.update_card.assert_called_once_with(
+                789, title="My Title"
+            )
+            response = json.loads(result.content[0].text)
+            assert "title" not in response.get("createCard", {}).get("card", {})
+            assert "title_warning" in response
+            assert "API timeout" in response["title_warning"]
             assert "card_link" in response
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)

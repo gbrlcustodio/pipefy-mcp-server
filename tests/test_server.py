@@ -12,11 +12,6 @@ from pipefy_mcp.server import run_server
 from pipefy_mcp.settings import PipefySettings, Settings
 
 
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
 @pytest.fixture(scope="module")
 def client_session():
     return create_client_session(

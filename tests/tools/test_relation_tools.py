@@ -15,11 +15,6 @@ from pipefy_mcp.tools.relation_tools import RelationTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_relation_client():
     client = MagicMock(PipefyClient)
     client.get_pipe_relations = AsyncMock()

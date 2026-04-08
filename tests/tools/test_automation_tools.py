@@ -15,11 +15,6 @@ from pipefy_mcp.tools.automation_tools import AutomationTools
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_automation_client():
     client = MagicMock(PipefyClient)
     client.get_automation = AsyncMock()

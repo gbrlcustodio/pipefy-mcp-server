@@ -26,37 +26,14 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.server import mcp as mcp_server
 from pipefy_mcp.settings import settings
-
-
-def _pipefy_live_configured() -> bool:
-    p = settings.pipefy
-    return bool(
-        p.graphql_url
-        and str(p.graphql_url).startswith(("http://", "https://"))
-        and p.oauth_url
-        and str(p.oauth_url).startswith(("http://", "https://"))
-        and p.oauth_client
-        and p.oauth_secret
-    )
-
-
-def _require_live_creds() -> None:
-    if not _pipefy_live_configured():
-        pytest.skip(
-            "Pipefy credentials not configured (PIPEFY_GRAPHQL_URL + OAuth in .env)"
-        )
-
-
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
+from tests.integration_helpers import require_live_creds
 
 
 @pytest.mark.integration
 @pytest.mark.anyio
 async def test_live_pipeclaw_mcp_introspect_type_create_pipe_input(extract_payload):
     """Full stack: MCP tool -> introspection -> GraphQL (read-only)."""
-    _require_live_creds()
+    require_live_creds()
     with patch("pipefy_mcp.server.settings", settings):
         async with create_client_session(
             mcp_server,
@@ -78,7 +55,7 @@ async def test_live_pipeclaw_mcp_introspect_type_create_pipe_input(extract_paylo
 @pytest.mark.anyio
 async def test_live_pipeclaw_mcp_get_pipe(extract_payload):
     """Full stack: MCP ``get_pipe`` (read-only)."""
-    _require_live_creds()
+    require_live_creds()
     pipe_id_raw = os.environ.get("PIPE_BUILDING_LIVE_PIPE_ID")
     if not pipe_id_raw:
         pytest.skip(
@@ -102,7 +79,7 @@ async def test_live_pipeclaw_mcp_get_pipe(extract_payload):
 @pytest.mark.anyio
 async def test_live_pipeclaw_mcp_create_pipe(extract_payload):
     """Full stack: MCP ``create_pipe`` — creates a real pipe (opt-in via env)."""
-    _require_live_creds()
+    require_live_creds()
     org_raw = os.environ.get("PIPE_BUILDING_LIVE_ORG_ID")
     if not org_raw:
         pytest.skip(
@@ -132,7 +109,7 @@ async def test_live_pipeclaw_mcp_create_pipe(extract_payload):
 @pytest.mark.anyio
 async def test_live_pipeclaw_mcp_create_label_hex_color(extract_payload):
     """Full stack: MCP ``create_label`` — requires pipe id (opt-in, writes)."""
-    _require_live_creds()
+    require_live_creds()
     pipe_raw = os.environ.get("PIPE_BUILDING_LIVE_PIPE_ID")
     if not pipe_raw:
         pytest.skip("Set PIPE_BUILDING_LIVE_PIPE_ID for create_label live test")

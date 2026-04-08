@@ -35,25 +35,7 @@ from pipefy_mcp.server import mcp as mcp_server
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.attachment_tools import AttachmentTools
-
-
-def _pipefy_live_configured() -> bool:
-    p = settings.pipefy
-    return bool(
-        p.graphql_url
-        and str(p.graphql_url).startswith(("http://", "https://"))
-        and p.oauth_url
-        and str(p.oauth_url).startswith(("http://", "https://"))
-        and p.oauth_client
-        and p.oauth_secret
-    )
-
-
-def _require_live_creds() -> None:
-    if not _pipefy_live_configured():
-        pytest.skip(
-            "Pipefy credentials not configured (PIPEFY_GRAPHQL_URL + OAuth in .env)"
-        )
+from tests.integration_helpers import require_live_creds
 
 
 def _card_upload_env():
@@ -89,13 +71,8 @@ def _assert_field_shows_upload(value, file_name: str) -> None:
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def live_pipefy_client():
-    _require_live_creds()
+    require_live_creds()
     return PipefyClient(settings=settings.pipefy)
 
 
@@ -113,7 +90,7 @@ async def test_live_upload_attachment_to_card_end_to_end(
     extract_payload,
 ):
     """Full MCP flow: presigned URL, S3 PUT, updateCardField, read-back on card."""
-    _require_live_creds()
+    require_live_creds()
     env = _card_upload_env()
     if not env:
         pytest.skip(
@@ -163,7 +140,7 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
     extract_payload,
 ):
     """Full MCP path for table records: setTableRecordFieldValue + read-back."""
-    _require_live_creds()
+    require_live_creds()
     env = _table_upload_env()
     if not env:
         pytest.skip(
@@ -208,7 +185,7 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
 @pytest.mark.anyio
 async def test_live_pipeclaw_mcp_upload_attachment_to_card(extract_payload):
     """Registers AttachmentTools via the production app (ToolRegistry wiring)."""
-    _require_live_creds()
+    require_live_creds()
     env = _card_upload_env()
     if not env:
         pytest.skip(
@@ -254,7 +231,7 @@ def _s3_matrix_enabled() -> bool:
 @pytest.mark.anyio
 async def test_live_s3_put_mismatched_content_length():
     """PUT body size must match ``contentLength`` given to createPresignedUrl."""
-    _require_live_creds()
+    require_live_creds()
     org = os.environ.get("PIPE_ATTACHMENT_LIVE_ORG_ID")
     if not org:
         pytest.skip("Set PIPE_ATTACHMENT_LIVE_ORG_ID")
@@ -291,7 +268,7 @@ async def test_live_s3_put_mismatched_content_length():
 @pytest.mark.anyio
 async def test_live_s3_put_expired_presigned_url():
     """After X-Amz-Expires, PUT should fail (403 typical). Long wait — opt-in."""
-    _require_live_creds()
+    require_live_creds()
     org = os.environ.get("PIPE_ATTACHMENT_LIVE_ORG_ID")
     if not org:
         pytest.skip("Set PIPE_ATTACHMENT_LIVE_ORG_ID")
@@ -335,7 +312,7 @@ async def test_live_s3_put_expired_presigned_url():
 @pytest.mark.anyio
 async def test_live_s3_put_omits_content_type_when_signed():
     """If Content-Type is signed, omitting it on PUT should fail."""
-    _require_live_creds()
+    require_live_creds()
     org = os.environ.get("PIPE_ATTACHMENT_LIVE_ORG_ID")
     if not org:
         pytest.skip("Set PIPE_ATTACHMENT_LIVE_ORG_ID")

@@ -13,23 +13,12 @@ from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
 )
 from pipefy_mcp.settings import settings
-
-
-def _pipefy_live_configured() -> bool:
-    p = settings.pipefy
-    return bool(
-        p.graphql_url
-        and str(p.graphql_url).startswith(("http://", "https://"))
-        and p.oauth_url
-        and str(p.oauth_url).startswith(("http://", "https://"))
-        and p.oauth_client
-        and p.oauth_secret
-    )
+from tests.integration_helpers import pipefy_live_configured
 
 
 @pytest.fixture
 def live_svc():
-    if not _pipefy_live_configured():
+    if not pipefy_live_configured():
         pytest.skip(
             "Pipefy credentials not configured (PIPEFY_GRAPHQL_URL + OAuth in .env)"
         )

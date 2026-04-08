@@ -30,37 +30,14 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.server import mcp as mcp_server
 from pipefy_mcp.settings import settings
-
-
-def _pipefy_live_configured() -> bool:
-    p = settings.pipefy
-    return bool(
-        p.graphql_url
-        and str(p.graphql_url).startswith(("http://", "https://"))
-        and p.oauth_url
-        and str(p.oauth_url).startswith(("http://", "https://"))
-        and p.oauth_client
-        and p.oauth_secret
-    )
-
-
-def _require_live_creds() -> None:
-    if not _pipefy_live_configured():
-        pytest.skip(
-            "Pipefy credentials not configured (PIPEFY_GRAPHQL_URL + OAuth in .env)"
-        )
-
-
-@pytest.fixture
-def anyio_backend():
-    return "asyncio"
+from tests.integration_helpers import require_live_creds
 
 
 @pytest.mark.integration
 @pytest.mark.anyio
 async def test_live_field_condition_tools_only_happy_path(extract_payload):
     """Full stack: get_phase_fields → create_field_condition → delete_field_condition."""
-    _require_live_creds()
+    require_live_creds()
     phase_raw = os.environ.get("PIPE_FIELD_CONDITION_LIVE_PHASE_ID")
     if not phase_raw:
         pytest.skip(

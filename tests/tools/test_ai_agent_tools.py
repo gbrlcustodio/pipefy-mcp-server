@@ -17,11 +17,6 @@ from tests.ai_agent_test_payloads import behavior_with_action, minimal_behavior_
 
 
 @pytest.fixture
-def anyio_backend():
-    return "asyncio"
-
-
-@pytest.fixture
 def mock_pipefy_client():
     client = MagicMock()
     client.create_ai_agent = AsyncMock()
@@ -1716,3 +1711,97 @@ async def test_get_ai_agent_tools_have_read_only_hint(client_session):
         tool = by_name[name]
         assert tool.annotations is not None
         assert tool.annotations.readOnlyHint is True
+
+
+@pytest.mark.anyio
+class TestFetchPipeValidationContext:
+    """Unit tests for the fetch_pipe_validation_context helper."""
+
+    async def test_extracts_fields_phases_and_relations(self, mock_pipefy_client):
+        from pipefy_mcp.tools.ai_tool_helpers import fetch_pipe_validation_context
+
+        mock_pipefy_client.get_pipe.return_value = {
+            "pipe": {
+                "phases": [
+                    {
+                        "id": "ph-1",
+                        "fields": [{"id": "f1"}, {"id": "f2", "internal_id": "f2i"}],
+                    },
+                    {
+                        "id": "ph-2",
+                        "fields": [{"id": "f3"}],
+                    },
+                ],
+                "start_form_fields": [{"id": "sf-1"}, {"internal_id": "sf-2"}],
+            }
+        }
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [{"child": {"id": "child-10"}}],
+            "parents": [{"parent": {"id": "parent-20"}}],
+        }
+
+        field_ids, phase_ids, related_pipe_ids = await fetch_pipe_validation_context(
+            mock_pipefy_client, "42"
+        )
+
+        assert phase_ids == {"ph-1", "ph-2"}
+        assert "f1" in field_ids
+        assert "f2" in field_ids
+        assert "f3" in field_ids
+        assert "sf-1" in field_ids
+        assert "sf-2" in field_ids
+        assert related_pipe_ids == {"child-10", "parent-20"}
+        mock_pipefy_client.get_pipe.assert_awaited_once_with(42)
+        mock_pipefy_client.get_pipe_relations.assert_awaited_once_with("42")
+
+    async def test_relations_failure_returns_none(self, mock_pipefy_client):
+        from pipefy_mcp.tools.ai_tool_helpers import fetch_pipe_validation_context
+
+        mock_pipefy_client.get_pipe.return_value = {
+            "pipe": {
+                "phases": [{"id": "ph-1", "fields": [{"id": "f1"}]}],
+                "start_form_fields": [],
+            }
+        }
+        mock_pipefy_client.get_pipe_relations.side_effect = RuntimeError("denied")
+
+        field_ids, phase_ids, related_pipe_ids = await fetch_pipe_validation_context(
+            mock_pipefy_client, "99"
+        )
+
+        assert phase_ids == {"ph-1"}
+        assert field_ids == {"f1"}
+        assert related_pipe_ids is None
+
+    async def test_get_pipe_error_propagates(self, mock_pipefy_client):
+        from pipefy_mcp.tools.ai_tool_helpers import fetch_pipe_validation_context
+
+        mock_pipefy_client.get_pipe.side_effect = RuntimeError("db down")
+
+        with pytest.raises(RuntimeError, match="db down"):
+            await fetch_pipe_validation_context(mock_pipefy_client, "1")
+
+    async def test_get_pipe_timeout_propagates(self, mock_pipefy_client):
+        from pipefy_mcp.tools.ai_tool_helpers import fetch_pipe_validation_context
+
+        mock_pipefy_client.get_pipe.side_effect = asyncio.TimeoutError()
+
+        with pytest.raises(asyncio.TimeoutError):
+            await fetch_pipe_validation_context(mock_pipefy_client, "1")
+
+    async def test_empty_pipe_returns_empty_sets(self, mock_pipefy_client):
+        from pipefy_mcp.tools.ai_tool_helpers import fetch_pipe_validation_context
+
+        mock_pipefy_client.get_pipe.return_value = {"pipe": {}}
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [],
+            "parents": [],
+        }
+
+        field_ids, phase_ids, related_pipe_ids = await fetch_pipe_validation_context(
+            mock_pipefy_client, "1"
+        )
+
+        assert field_ids == set()
+        assert phase_ids == set()
+        assert related_pipe_ids == set()

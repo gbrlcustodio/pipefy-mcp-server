@@ -26,8 +26,31 @@ def test_upload_attachment_to_card_accepts_file_url():
         file_url="https://example.com/f.pdf",
         file_content_base64=None,
     )
+    assert data.card_id == "42"
     assert data.file_url == "https://example.com/f.pdf"
     assert data.file_content_base64 is None
+
+
+@pytest.mark.unit
+def test_upload_attachment_to_card_coerces_int_card_id():
+    """card_id uses PipefyId — int input should be coerced to string."""
+    data = UploadAttachmentToCardInput(
+        **_base_kwargs(),
+        card_id=99,
+        file_url="https://example.com/f.pdf",
+    )
+    assert data.card_id == "99"
+
+
+@pytest.mark.unit
+def test_upload_attachment_to_card_accepts_string_card_id():
+    """card_id uses PipefyId — string IDs should pass through."""
+    data = UploadAttachmentToCardInput(
+        **_base_kwargs(),
+        card_id="Yr5RUVCi",
+        file_url="https://example.com/f.pdf",
+    )
+    assert data.card_id == "Yr5RUVCi"
 
 
 @pytest.mark.unit

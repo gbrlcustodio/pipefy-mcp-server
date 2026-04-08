@@ -26,6 +26,9 @@ from pipefy_mcp.tools.ai_tool_helpers import (
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
+from pipefy_mcp.tools.phase_transition_helpers import (
+    collect_ai_behavior_move_transition_problems,
+)
 
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30
 
@@ -116,13 +119,19 @@ class AiAgentTools:
                     related_pipe_ids=related_pipe_ids,
                     unknown_action_types="error",
                 )
+                transition_problems = (
+                    await collect_ai_behavior_move_transition_problems(
+                        client, behaviors
+                    )
+                )
+                all_problems = [*problems, *transition_problems]
 
-                if not problems:
+                if not all_problems:
                     return enriched + _PAYLOAD_OK_SUFFIX
                 return (
                     enriched
                     + "\n\nValidation found problems:\n"
-                    + "\n".join(f"  - {p}" for p in problems)
+                    + "\n".join(f"  - {p}" for p in all_problems)
                 )
             except Exception:  # noqa: BLE001
                 return enriched
@@ -487,6 +496,9 @@ class AiAgentTools:
             Known ``actionType`` values for pipe-context checks are:
             ``move_card``, ``update_card``, ``create_card``, ``create_connected_card``,
             ``create_table_record``, and ``send_email_template``.
+            For ``move_card`` with trigger ``card_moved`` and ``eventParams.to_phase_id``/``toPhaseId``,
+            the tool also checks that ``destinationPhaseId`` is allowed from that phase
+            (``cards_can_be_moved_to_phases``).
             For ``create_table_record``, ``fieldsAttributes`` hold **table** field IDs — they are not
             validated against the source pipe; the tool adds a **warning** to verify IDs with
             ``get_table`` / ``get_table_record`` instead. ``send_email_template`` does not run
@@ -619,6 +631,10 @@ class AiAgentTools:
                 cross_pipe_field_ids=cross_pipe_field_ids or None,
                 unknown_action_types=unknown_action_types,
             )
+            transition_problems = await collect_ai_behavior_move_transition_problems(
+                client, behaviors
+            )
+            problems = [*problems, *transition_problems]
             warnings = [*tool_warnings, *helper_warnings]
 
             if problems:

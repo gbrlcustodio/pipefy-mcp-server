@@ -518,7 +518,7 @@ class TestDirectToolCalls:
         assert payload == {"success": True, "comment_id": "c_999"}
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_update_comment_invalid_comment_id_returns_error_payload(
+    async def test_update_comment_zero_id_coerces_to_string_and_calls_api(
         self,
         client_session,
         mock_pipefy_client,
@@ -622,7 +622,7 @@ class TestDirectToolCalls:
         assert payload == {"success": True}
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_delete_comment_invalid_comment_id_returns_error_payload(
+    async def test_delete_comment_zero_id_coerces_to_string_and_calls_api(
         self,
         client_session,
         mock_pipefy_client,
@@ -857,7 +857,7 @@ class TestAddCardCommentTool:
             assert payload == {"success": True, "comment_id": "c_987"}
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_invalid_input_returns_error_payload(
+    async def test_zero_card_id_coerces_to_string_and_calls_api(
         self,
         client_session,
         mock_pipefy_client,
@@ -1312,7 +1312,7 @@ class TestDeleteCardTool:
             )
 
             assert result.isError is False
-            mock_pipefy_client.get_card.assert_called_once_with(12345)
+            mock_pipefy_client.get_card.assert_called_once_with("12345")
             mock_pipefy_client.delete_card.assert_not_called()
 
             payload = extract_payload(result)
@@ -1326,6 +1326,31 @@ class TestDeleteCardTool:
                     "This action is irreversible. Set 'confirm=True' to proceed."
                 ),
             }
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_confirm_true_accepts_string_card_id(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        """String card_id is accepted (GraphQL IDs are strings)."""
+        mock_pipefy_client.get_card.return_value = {
+            "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
+        }
+        mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": True}}
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card",
+                {"card_id": "12345", "confirm": True},
+            )
+
+        assert result.isError is False
+        mock_pipefy_client.get_card.assert_called_once_with("12345")
+        mock_pipefy_client.delete_card.assert_called_once_with("12345")
+        payload = extract_payload(result)
+        assert payload["success"] is True
 
     @pytest.mark.parametrize(
         "client_session",
@@ -1350,7 +1375,7 @@ class TestDeleteCardTool:
             )
 
             assert result.isError is False
-            mock_pipefy_client.get_card.assert_called_once_with(12345)
+            mock_pipefy_client.get_card.assert_called_once_with("12345")
             mock_pipefy_client.delete_card.assert_not_called()
 
             payload = extract_payload(result)
@@ -1413,7 +1438,7 @@ class TestDeleteCardTool:
             )
 
             assert result.isError is False
-            mock_pipefy_client.get_card.assert_called_once_with(99999)
+            mock_pipefy_client.get_card.assert_called_once_with("99999")
             mock_pipefy_client.delete_card.assert_not_called()
 
             payload = extract_payload(result)
@@ -1460,7 +1485,7 @@ class TestDeleteCardTool:
             )
 
             assert result.isError is False
-            mock_pipefy_client.delete_card.assert_called_once_with(12345)
+            mock_pipefy_client.delete_card.assert_called_once_with("12345")
 
             payload = extract_payload(result)
             expected_payload: DeleteCardErrorPayload = {
@@ -1494,7 +1519,7 @@ class TestDeleteCardTool:
             )
 
             assert result.isError is False
-            mock_pipefy_client.delete_card.assert_called_once_with(12345)
+            mock_pipefy_client.delete_card.assert_called_once_with("12345")
 
             payload = extract_payload(result)
             expected_payload: DeleteCardErrorPayload = {
@@ -1527,7 +1552,7 @@ class TestDeleteCardTool:
             )
 
         assert result.isError is False
-        mock_pipefy_client.delete_card.assert_called_once_with(12345)
+        mock_pipefy_client.delete_card.assert_called_once_with("12345")
         payload = extract_payload(result)
         assert payload["success"] is True
 
@@ -1555,12 +1580,12 @@ class TestDeleteCardTool:
             )
 
             assert result.isError is False
-            mock_pipefy_client.delete_card.assert_called_once_with(12345)
+            mock_pipefy_client.delete_card.assert_called_once_with("12345")
 
             payload = extract_payload(result)
             expected_payload: DeleteCardSuccessPayload = {
                 "success": True,
-                "card_id": 12345,
+                "card_id": "12345",
                 "card_title": "Test Card",
                 "pipe_name": "Test Pipe",
                 "message": "Card 'Test Card' (ID: 12345) from pipe 'Test Pipe' has been permanently deleted.",
@@ -1585,7 +1610,7 @@ class TestDeleteCardTool:
         async with client_session as session:
             result = await session.call_tool("delete_card", {"card_id": 12345})
         assert result.isError is False
-        mock_pipefy_client.get_card.assert_called_once_with(12345)
+        mock_pipefy_client.get_card.assert_called_once_with("12345")
         mock_pipefy_client.delete_card.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False

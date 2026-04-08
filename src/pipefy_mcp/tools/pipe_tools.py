@@ -7,7 +7,7 @@ from typing import Any, cast
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from pipefy_mcp.models.comment import (
     CommentInput,
@@ -15,6 +15,7 @@ from pipefy_mcp.models.comment import (
     UpdateCommentInput,
 )
 from pipefy_mcp.models.form import create_form_model
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
@@ -674,17 +675,27 @@ class PipeTools:
             Returns:
                 Success/error status of the deletion.
             """
-            if not isinstance(card_id, int):
+            try:
+                coerced = TypeAdapter(PipefyId).validate_python(card_id)
+            except ValidationError:
                 return build_delete_card_error_payload(
-                    message=f"Invalid 'card_id'. Expected an integer, got {type(card_id).__name__}."
+                    message=(
+                        "Invalid 'card_id'. Provide a non-empty string or positive "
+                        f"numeric ID (got {type(card_id).__name__})."
+                    )
                 )
-            if card_id <= 0:
+            card_id_str = str(coerced).strip()
+            if not card_id_str:
+                return build_delete_card_error_payload(
+                    message="Invalid 'card_id'. Please provide a non-empty card ID."
+                )
+            if card_id_str.isdigit() and int(card_id_str) <= 0:
                 return build_delete_card_error_payload(
                     message="Invalid 'card_id'. Please provide a positive integer."
                 )
 
             try:
-                card_response = await client.get_card(card_id)
+                card_response = await client.get_card(card_id_str)
                 card_data = card_response["card"]
                 card_title = card_data["title"]
                 pipe_name = card_data.get("pipe", {}).get("name", "Unknown Pipe")
@@ -692,7 +703,7 @@ class PipeTools:
                 codes = extract_graphql_error_codes(exc)
                 correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_card_error_to_message(
-                    card_id=card_id, card_title="Unknown", codes=codes
+                    card_id=card_id_str, card_title="Unknown", codes=codes
                 )
                 return build_delete_card_error_payload(
                     message=with_debug_suffix(
@@ -706,31 +717,36 @@ class PipeTools:
             guard = await check_destructive_confirmation(
                 ctx,
                 confirm=confirm,
-                resource_descriptor=f"card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}'",
+                resource_descriptor=(
+                    f"card '{card_title}' (ID: {card_id_str}) from pipe '{pipe_name}'"
+                ),
             )
             if guard is not None:
                 return guard
 
             try:
-                delete_response = await client.delete_card(card_id)
+                delete_response = await client.delete_card(card_id_str)
 
                 delete_data = delete_response.get("deleteCard", {})
 
                 if delete_data.get("success"):
                     return build_delete_card_success_payload(
-                        card_id=card_id,
+                        card_id=card_id_str,
                         card_title=card_title,
                         pipe_name=pipe_name,
                     )
                 else:
                     return build_delete_card_error_payload(
-                        message=f"Failed to delete card '{card_title}' (ID: {card_id}). Please try again or contact support."
+                        message=(
+                            f"Failed to delete card '{card_title}' (ID: {card_id_str}). "
+                            "Please try again or contact support."
+                        )
                     )
             except Exception as exc:  # noqa: BLE001
                 codes = extract_graphql_error_codes(exc)
                 correlation_id = extract_graphql_correlation_id(exc)
                 base = map_delete_card_error_to_message(
-                    card_id=card_id, card_title=card_title, codes=codes
+                    card_id=card_id_str, card_title=card_title, codes=codes
                 )
                 return build_delete_card_error_payload(
                     message=with_debug_suffix(

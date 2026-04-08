@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 
 def extract_error_strings(exc: BaseException) -> list[str]:
@@ -84,3 +85,31 @@ def with_debug_suffix(
     if not parts:
         return message
     return f"{message} (debug: {'; '.join(parts)})"
+
+
+def handle_tool_graphql_error(
+    exc: BaseException,
+    fallback_msg: str,
+    *,
+    debug: bool = False,
+) -> dict[str, Any]:
+    """Turn transport/GraphQL failures into a standard error payload.
+
+    Consolidates the repeated ``handle_*_tool_graphql_error`` pattern used across
+    domain helper modules. Returns ``{"success": False, "error": message}``.
+
+    Args:
+        exc: Root exception from gql/httpx.
+        fallback_msg: Used when ``extract_error_strings`` is empty.
+        debug: When True, append codes and ``correlation_id``.
+    """
+    msgs = extract_error_strings(exc)
+    base = "; ".join(msgs) if msgs else fallback_msg
+    if not debug:
+        return {"success": False, "error": base}
+    codes = extract_graphql_error_codes(exc)
+    cid = extract_graphql_correlation_id(exc)
+    return {
+        "success": False,
+        "error": with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid),
+    }

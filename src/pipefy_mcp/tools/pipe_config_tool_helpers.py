@@ -5,10 +5,7 @@ from typing import Any, Literal, cast
 from typing_extensions import TypedDict
 
 from pipefy_mcp.tools.graphql_error_helpers import (
-    extract_error_strings,
-    extract_graphql_correlation_id,
-    extract_graphql_error_codes,
-    with_debug_suffix,
+    handle_tool_graphql_error,
 )
 from pipefy_mcp.tools.validation_helpers import UUID_RE, format_json_preview
 
@@ -75,24 +72,8 @@ def handle_pipe_config_tool_graphql_error(
     *,
     debug: bool = False,
 ) -> dict[str, Any]:
-    """Turn transport/GraphQL failures into ``build_pipe_tool_error_payload`` output.
-
-    When ``debug`` is False, the user-visible string omits codes / ``correlation_id``.
-
-    Args:
-        exc: Root exception from gql/httpx.
-        fallback_msg: Used when ``extract_error_strings`` is empty.
-        debug: When True, append codes and ``correlation_id``.
-    """
-    msgs = extract_error_strings(exc)
-    base = "; ".join(msgs) if msgs else fallback_msg
-    if not debug:
-        return build_pipe_tool_error_payload(message=base)
-    codes = extract_graphql_error_codes(exc)
-    cid = extract_graphql_correlation_id(exc)
-    return build_pipe_tool_error_payload(
-        message=with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid),
-    )
+    """Delegate to :func:`handle_tool_graphql_error`."""
+    return handle_tool_graphql_error(exc, fallback_msg, debug=debug)
 
 
 def build_pipe_mutation_success_payload(

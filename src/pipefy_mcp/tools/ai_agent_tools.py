@@ -20,6 +20,7 @@ from pipefy_mcp.tools.ai_tool_helpers import (
     build_toggle_agent_status_success,
     build_update_agent_success,
     enrich_behavior_error,
+    fetch_pipe_validation_context,
     resolve_field_slugs_to_numeric,
     validate_behaviors_against_pipe,
 )
@@ -97,41 +98,15 @@ class AiAgentTools:
                 return enriched
 
             try:
-                pipe_data = await asyncio.wait_for(
-                    client.get_pipe(int(pipe_id)),
+                (
+                    field_ids,
+                    phase_ids,
+                    related_pipe_ids,
+                ) = await fetch_pipe_validation_context(
+                    client,
+                    pipe_id,
                     timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
                 )
-                pipe_info = pipe_data.get("pipe", {})
-                phase_ids: set[str] = set()
-                field_ids: set[str] = set()
-                for phase in pipe_info.get("phases") or []:
-                    phase_ids.add(str(phase.get("id", "")))
-                    for field in phase.get("fields") or []:
-                        fid = field.get("id") or field.get("internal_id")
-                        if fid:
-                            field_ids.add(str(fid))
-                for field in pipe_info.get("start_form_fields") or []:
-                    fid = field.get("id") or field.get("internal_id")
-                    if fid:
-                        field_ids.add(str(fid))
-
-                related_pipe_ids: set[str] | None
-                try:
-                    relations = await asyncio.wait_for(
-                        client.get_pipe_relations(pipe_id),
-                        timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
-                    )
-                    related_pipe_ids = set()
-                    for rel in relations.get("children") or []:
-                        cid = rel.get("child", {}).get("id")
-                        if cid:
-                            related_pipe_ids.add(str(cid))
-                    for rel in relations.get("parents") or []:
-                        pid = rel.get("parent", {}).get("id")
-                        if pid:
-                            related_pipe_ids.add(str(pid))
-                except Exception:  # noqa: BLE001
-                    related_pipe_ids = None
 
                 problems, _ = validate_behaviors_against_pipe(
                     behaviors,
@@ -560,11 +535,13 @@ class AiAgentTools:
                     "message": "Behavior dicts failed structural validation (BehaviorInput).",
                 }
 
-            # Fetch pipe context (with timeout to avoid indefinite hangs)
             try:
-                pipe_data = await asyncio.wait_for(
-                    client.get_pipe(int(pid)),
-                    timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
+                (
+                    field_ids,
+                    phase_ids,
+                    related_pipe_ids,
+                ) = await fetch_pipe_validation_context(
+                    client, pid, timeout=VALIDATE_FETCH_TIMEOUT_SECONDS
                 )
             except asyncio.TimeoutError:
                 return build_ai_tool_error(
@@ -573,45 +550,11 @@ class AiAgentTools:
             except Exception as exc:  # noqa: BLE001
                 return build_ai_tool_error(f"Failed to fetch pipe {pid}: {exc}")
 
-            pipe_info = pipe_data.get("pipe", {})
-            phases = pipe_info.get("phases") or []
-            phase_ids: set[str] = set()
-            field_ids: set[str] = set()
-            for phase in phases:
-                phase_ids.add(str(phase.get("id", "")))
-                for field in phase.get("fields") or []:
-                    fid = field.get("id") or field.get("internal_id")
-                    if fid:
-                        field_ids.add(str(fid))
-
-            # Also include start form fields
-            start_fields = pipe_info.get("start_form_fields") or []
-            for field in start_fields:
-                fid = field.get("id") or field.get("internal_id")
-                if fid:
-                    field_ids.add(str(fid))
-
             tool_warnings: list[str] = []
-            related_pipe_ids: set[str] | None
-            try:
-                relations = await asyncio.wait_for(
-                    client.get_pipe_relations(pid),
-                    timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
-                )
-                related_pipe_ids = set()
-                for rel in relations.get("children") or []:
-                    child_id = rel.get("child", {}).get("id")
-                    if child_id:
-                        related_pipe_ids.add(str(child_id))
-                for rel in relations.get("parents") or []:
-                    parent_id = rel.get("parent", {}).get("id")
-                    if parent_id:
-                        related_pipe_ids.add(str(parent_id))
-            except Exception:  # noqa: BLE001
+            if related_pipe_ids is None:
                 await ctx.debug(
                     "Could not fetch pipe relations; skipping relation checks"
                 )
-                related_pipe_ids = None
                 tool_warnings.append(
                     "Could not load pipe relations; create_connected_card pipeId targets "
                     "were not verified against relations."

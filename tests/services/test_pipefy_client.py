@@ -812,7 +812,10 @@ async def test_move_card_to_phase_variable_shape():
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
     assert variables == {
-        "input": {"card_id": str(card_id), "destination_phase_id": str(destination_phase_id)}
+        "input": {
+            "card_id": str(card_id),
+            "destination_phase_id": str(destination_phase_id),
+        }
     }
     assert result == {"moveCardToPhase": {"clientMutationId": None}}
 

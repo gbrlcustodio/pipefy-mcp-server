@@ -59,6 +59,20 @@ def test_comment_input_valid_input():
 
 
 @pytest.mark.unit
+def test_update_comment_input_accepts_alphanumeric_id():
+    """UpdateCommentInput should accept alphanumeric string comment_id."""
+    comment = UpdateCommentInput(comment_id="Yr5RUVCi", text="ok")
+    assert comment.comment_id == "Yr5RUVCi"
+
+
+@pytest.mark.unit
+def test_delete_comment_input_accepts_alphanumeric_id():
+    """DeleteCommentInput should accept alphanumeric string comment_id."""
+    comment = DeleteCommentInput(comment_id="Yr5RUVCi")
+    assert comment.comment_id == "Yr5RUVCi"
+
+
+@pytest.mark.unit
 def test_update_comment_input_rejects_boolean_comment_id():
     """UpdateCommentInput should reject boolean comment_id."""
     with pytest.raises(ValidationError):

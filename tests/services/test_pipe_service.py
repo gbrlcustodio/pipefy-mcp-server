@@ -49,6 +49,17 @@ async def test_get_pipe_passes_pipe_id_variable(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_pipe_accepts_alphanumeric_id(mock_settings):
+    """Test get_pipe passes an alphanumeric ID through to GraphQL variables unchanged."""
+    service = _make_service(mock_settings, {"pipe": {"id": "Yr5RUVCi"}})
+    await service.get_pipe("Yr5RUVCi")
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables == {"pipe_id": "Yr5RUVCi"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_get_pipe_members_returns_members(mock_settings):
     """Test get_pipe_members returns the list of members for a pipe."""
     pipe_id = 123

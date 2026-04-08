@@ -78,6 +78,19 @@ async def test_update_pipe_merges_id_and_non_none_attrs(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_update_pipe_accepts_alphanumeric_id(mock_settings):
+    """Test update_pipe passes an alphanumeric ID through to GraphQL variables unchanged."""
+    service = _make_service(
+        mock_settings, {"updatePipe": {"pipe": {"id": "Yr5RUVCi", "name": "X"}}}
+    )
+    await service.update_pipe("Yr5RUVCi", name="X")
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables == {"input": {"id": "Yr5RUVCi", "name": "X"}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_delete_pipe_sends_delete_input(mock_settings):
     service = _make_service(mock_settings, {"deletePipe": {"success": True}})
     result = await service.delete_pipe(42)

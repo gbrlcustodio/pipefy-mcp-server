@@ -194,6 +194,19 @@ async def test_get_card_passes_card_id_and_includeFields(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_card_accepts_alphanumeric_id(mock_settings):
+    """Test get_card passes an alphanumeric ID through to GraphQL variables unchanged."""
+    service = _make_service(
+        mock_settings, {"card": {"id": "Yr5RUVCi", "title": "Test"}}
+    )
+    await service.get_card("Yr5RUVCi")
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables == {"card_id": "Yr5RUVCi", "includeFields": False}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_get_card_with_include_fields_true_passes_includeFields(mock_settings):
     """Test get_card with include_fields=True passes includeFields=True to query."""
     card_id = 12345

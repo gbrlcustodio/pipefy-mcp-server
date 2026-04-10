@@ -1324,6 +1324,25 @@ class TestValidateAiAgentBehaviorsErrorPaths:
         assert payload["success"] is True
         assert payload["valid"] is False
         assert len(payload["problems"]) > 0
+        assert any("event_id" in p.lower() or "eventid" in p.lower() for p in payload["problems"])
+
+    async def test_pydantic_validation_missing_name_hint(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Missing behavior name returns an actionable lead problem."""
+        no_name = {"event_id": "card_created"}
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {"pipe_id": "1", "behaviors": [no_name]},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is False
+        assert any("name" in p.lower() and "behavior" in p.lower() for p in payload["problems"])
 
     async def test_pipe_fetch_timeout(
         self,

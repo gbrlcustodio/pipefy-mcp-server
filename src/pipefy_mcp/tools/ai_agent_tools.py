@@ -72,6 +72,33 @@ def _extract_pipe_id_from_behaviors(behaviors: list[dict]) -> str | None:
     return None
 
 
+def _behavior_input_validation_problems(exc: ValidationError) -> list[str]:
+    """Turn ``BehaviorInput`` validation errors into short, actionable strings."""
+
+    def _targets_name_field(err: dict) -> bool:
+        loc = err.get("loc") or ()
+        return bool(loc) and loc[-1] == "name"
+
+    raw_errors = exc.errors()
+    problems: list[str] = []
+
+    if any(_targets_name_field(e) for e in raw_errors):
+        problems.append(
+            "Each behavior must include `name` (non-blank display name). "
+            "Match create_ai_agent: `event_id` or `eventId`, plus `actionParams` with "
+            "`aiBehaviorParams.instruction` and at least one entry in `actionsAttributes`."
+        )
+
+    for e in raw_errors:
+        if _targets_name_field(e):
+            continue
+        loc = e.get("loc") or ()
+        path = " -> ".join(str(p) for p in loc) if loc else "behavior"
+        problems.append(f"{path}: {e.get('msg', 'validation error')}")
+
+    return problems if problems else [str(exc)]
+
+
 class AiAgentTools:
     """Declares MCP tools for AI Agent CRUD and status."""
 
@@ -470,13 +497,13 @@ class AiAgentTools:
         ) -> dict:
             """Delete an AI Agent permanently. This action is irreversible.
 
-            Two-step operation: call without ``confirm`` to preview, then with
-            ``confirm=True`` after user approval. When the MCP client supports
-            elicitation, the user is prompted interactively instead.
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
 
             Args:
                 uuid: Agent UUID.
-                confirm: Set to True to execute the deletion (step 2).
+                confirm: Must be ``True`` to run the delete mutation.
             """
             agent_uuid = uuid.strip()
             await ctx.debug(f"delete_ai_agent: uuid={agent_uuid}")
@@ -548,7 +575,9 @@ class AiAgentTools:
 
             Args:
                 pipe_id: Numeric pipe ID (used to fetch fields, phases, and relations).
-                behaviors: 1–5 behavior dicts (same shape as ``create_ai_agent``).
+                behaviors: 1–5 behavior dicts (same shape as ``create_ai_agent``). Each must
+                    include ``name``, ``event_id`` (or ``eventId``), and ``actionParams`` with
+                    ``aiBehaviorParams`` (``instruction`` + ``actionsAttributes``).
                 strict_unknown_action_types: When ``True`` (default), unknown ``actionType`` values
                     are reported in ``problems``. When ``False``, they appear in ``warnings`` only.
             """
@@ -577,7 +606,7 @@ class AiAgentTools:
                 return {
                     "success": True,
                     "valid": False,
-                    "problems": [str(exc)],
+                    "problems": _behavior_input_validation_problems(exc),
                     "warnings": [],
                     "message": "Behavior dicts failed structural validation (BehaviorInput).",
                 }

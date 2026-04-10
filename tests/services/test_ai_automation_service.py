@@ -164,6 +164,55 @@ async def test_create_automation_forwards_custom_condition():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_automation_sends_partial_condition_without_injected_defaults():
+    """Partial ``condition`` omits unset keys (no ``expressions``, no ``expressions_structure``)."""
+    mock_client = _create_mock_internal_api_client(
+        {"createAutomation": {"automation": {"id": "456"}}}
+    )
+    service = AiAutomationService(client=mock_client)
+
+    inp = CreateAiAutomationInput(
+        name="Partial cond",
+        event_id="card_created",
+        pipe_id="303",
+        prompt="Summarize %{1}",
+        field_ids=["1"],
+        condition={"foo": "bar"},
+    )
+    await service.create_automation(inp)
+
+    variables = mock_client.execute_query.call_args[0][1]
+    assert variables["condition"] == {"foo": "bar"}
+    assert "expressions" not in variables["condition"]
+    assert "expressions_structure" not in variables["condition"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_automation_sends_partial_condition_expressions_structure_only():
+    """Only user-provided condition keys appear in mutation variables."""
+    mock_client = _create_mock_internal_api_client(
+        {"createAutomation": {"automation": {"id": "456"}}}
+    )
+    service = AiAutomationService(client=mock_client)
+
+    inp = CreateAiAutomationInput(
+        name="Partial structure",
+        event_id="card_created",
+        pipe_id="303",
+        prompt="Summarize %{1}",
+        field_ids=["1"],
+        condition={"expressions_structure": [[1]]},
+    )
+    await service.create_automation(inp)
+
+    variables = mock_client.execute_query.call_args[0][1]
+    assert variables["condition"] == {"expressions_structure": [[1]]}
+    assert "expressions" not in variables["condition"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_create_automation_omits_event_params_when_none():
     """create_automation does not include event_params key when None."""
     mock_client = _create_mock_internal_api_client(
@@ -220,6 +269,26 @@ async def test_update_automation_passes_condition_when_provided():
 
     variables = mock_client.execute_query.call_args[0][1]
     assert variables["input"]["condition"] == cond
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_automation_partial_condition_omits_unset_fields():
+    """Update sends only keys the caller set on ``condition``."""
+    mock_client = _create_mock_internal_api_client(
+        {"updateAutomation": {"automation": {"id": "789"}}}
+    )
+    service = AiAutomationService(client=mock_client)
+
+    inp = UpdateAiAutomationInput(
+        automation_id="789",
+        condition={"custom_key": "only_this"},
+    )
+    await service.update_automation(inp)
+
+    variables = mock_client.execute_query.call_args[0][1]
+    assert variables["input"]["condition"] == {"custom_key": "only_this"}
+    assert "expressions" not in variables["input"]["condition"]
 
 
 @pytest.mark.unit

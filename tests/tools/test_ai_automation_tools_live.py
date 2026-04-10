@@ -78,10 +78,7 @@ async def test_live_create_ai_automation_omits_condition_uses_default_placeholde
             )
     assert create_result.isError is False, create_result
     payload = extract_payload(create_result)
-    if not payload.get("success"):
-        pytest.skip(
-            f"create_ai_automation failed (check AI on pipe / permissions): {payload!r}"
-        )
+    assert payload.get("success") is True, payload
     automation_id = str(payload.get("automation_id") or "").strip()
     assert automation_id, f"Missing automation_id in payload: {payload!r}"
 

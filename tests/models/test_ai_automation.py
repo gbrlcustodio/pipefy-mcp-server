@@ -83,6 +83,43 @@ def test_create_ai_automation_input_condition_explicit_override():
 
 
 @pytest.mark.unit
+def test_create_ai_automation_input_condition_partial_arbitrary_keys_round_trip():
+    """Partial condition dict does not populate unset ``expressions`` / ``expressions_structure``."""
+    inp = CreateAiAutomationInput(
+        name="My Automation",
+        event_id="card_created",
+        pipe_id="123",
+        prompt="Summarize %{133}",
+        field_ids=["133"],
+        condition={"foo": "bar"},
+    )
+    dumped = inp.condition.model_dump(
+        mode="python", exclude_unset=True, exclude_none=True
+    )
+    assert dumped == {"foo": "bar"}
+    assert "expressions" not in dumped
+    assert "expressions_structure" not in dumped
+
+
+@pytest.mark.unit
+def test_create_ai_automation_input_condition_partial_expressions_structure_only():
+    """Caller may send only ``expressions_structure`` without default empty ``expressions``."""
+    inp = CreateAiAutomationInput(
+        name="My Automation",
+        event_id="card_created",
+        pipe_id="123",
+        prompt="Summarize %{133}",
+        field_ids=["133"],
+        condition={"expressions_structure": [[1]]},
+    )
+    dumped = inp.condition.model_dump(
+        mode="python", exclude_unset=True, exclude_none=True
+    )
+    assert dumped == {"expressions_structure": [[1]]}
+    assert "expressions" not in dumped
+
+
+@pytest.mark.unit
 def test_create_ai_automation_input_field_ids_rejects_empty_list():
     """CreateAiAutomationInput rejects empty field_ids."""
     with pytest.raises(ValidationError):

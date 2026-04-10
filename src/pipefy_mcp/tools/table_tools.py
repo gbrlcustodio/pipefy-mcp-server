@@ -89,6 +89,10 @@ class TableTools:
         async def get_table(table_id: str | int) -> dict[str, Any]:
             """Load one database table: name, description, fields, and authorization.
 
+            ``table_id`` is the **database table** id (from ``search_tables`` / ``get_tables``).
+            For **table-to-table relation link** metadata, use ``get_table_relations`` with
+            table-**relation** ids — not this argument.
+
             Args:
                 table_id: Pipefy database table ID.
             """
@@ -110,6 +114,8 @@ class TableTools:
         )
         async def get_tables(table_ids: list[str | int]) -> dict[str, Any]:
             """Load several database tables by ID (same shape as get_table per table).
+
+            IDs are **database table** ids, not table-**relation** ids (see ``get_table_relations``).
 
             Args:
                 table_ids: Non-empty list of table IDs.

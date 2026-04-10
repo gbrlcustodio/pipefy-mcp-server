@@ -38,7 +38,9 @@ class AiAutomationService:
         """Create an AI Automation (generate_with_ai action).
 
         Args:
-            automation_input: Validated create input.
+            automation_input: Validated create input. ``condition`` is always
+                present on the mutation variables: the model supplies
+                ``DEFAULT_CONDITION`` when the caller did not set one.
 
         Raises:
             ValueError: When API response is missing automation.id.
@@ -57,10 +59,12 @@ class AiAutomationService:
                     "skillsIds": automation_input.skills_ids,
                 }
             },
-            "condition": automation_input.condition,
+            "condition": automation_input.condition.model_dump(mode="python"),
         }
         if automation_input.event_params is not None:
-            variables["event_params"] = automation_input.event_params
+            variables["event_params"] = automation_input.event_params.model_dump(
+                mode="python"
+            )
 
         response = await self._client.execute_query(
             AI_CREATE_AUTOMATION_MUTATION, variables
@@ -112,9 +116,13 @@ class AiAutomationService:
             input_dict["action_params"] = {"aiParams": ai_params}
 
         if automation_input.event_params is not None:
-            input_dict["event_params"] = automation_input.event_params
+            input_dict["event_params"] = automation_input.event_params.model_dump(
+                mode="python"
+            )
         if automation_input.condition is not None:
-            input_dict["condition"] = automation_input.condition
+            input_dict["condition"] = automation_input.condition.model_dump(
+                mode="python"
+            )
 
         variables = {"input": input_dict}
 

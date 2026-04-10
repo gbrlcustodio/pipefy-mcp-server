@@ -4,16 +4,11 @@ import pytest
 from pydantic import ValidationError
 
 from pipefy_mcp.models.ai_automation import (
+    DEFAULT_CONDITION,
+    AutomationConditionInput,
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
 )
-
-DEFAULT_CONDITION = {
-    "expressions": [
-        {"structure_id": 0, "field_address": "", "operation": "", "value": ""}
-    ],
-    "expressions_structure": [[0]],
-}
 
 
 @pytest.mark.unit
@@ -56,7 +51,35 @@ def test_create_ai_automation_input_condition_defaults_to_placeholder():
         prompt="Summarize %{133}",
         field_ids=["133"],
     )
-    assert inp.condition == DEFAULT_CONDITION
+    assert inp.condition.model_dump(mode="python") == DEFAULT_CONDITION
+    inp2 = CreateAiAutomationInput(
+        name="My Automation",
+        event_id="card_created",
+        pipe_id="123",
+        prompt="Summarize %{133}",
+        field_ids=["133"],
+    )
+    assert inp.condition is not inp2.condition
+
+
+@pytest.mark.unit
+def test_create_ai_automation_input_condition_explicit_override():
+    """CreateAiAutomationInput uses caller-provided condition when passed."""
+    custom = {
+        "expressions": [
+            {"structure_id": 1, "field_address": "f", "op": "x", "value": "y"}
+        ],
+        "expressions_structure": [[1]],
+    }
+    inp = CreateAiAutomationInput(
+        name="My Automation",
+        event_id="card_created",
+        pipe_id="123",
+        prompt="Summarize %{133}",
+        field_ids=["133"],
+        condition=custom,
+    )
+    assert inp.condition.model_dump(mode="python") == custom
 
 
 @pytest.mark.unit
@@ -164,7 +187,8 @@ def test_create_ai_automation_input_event_params_pass_through():
         field_ids=["133"],
         event_params=params,
     )
-    assert inp.event_params == params
+    assert inp.event_params is not None
+    assert inp.event_params.model_dump(mode="python") == params
 
 
 @pytest.mark.unit
@@ -190,7 +214,11 @@ def test_update_ai_automation_input_accepts_optional_fields():
     assert inp.active is False
     assert inp.prompt == "New prompt %{133}"
     assert inp.field_ids == ["133", "789"]
-    assert inp.condition == {"expressions": [], "expressions_structure": []}
+    assert isinstance(inp.condition, AutomationConditionInput)
+    assert inp.condition.model_dump(mode="python") == {
+        "expressions": [],
+        "expressions_structure": [],
+    }
 
 
 @pytest.mark.unit
@@ -211,7 +239,8 @@ def test_update_ai_automation_input_event_params_pass_through():
     """UpdateAiAutomationInput stores event_params when provided."""
     params = {"to_phase_id": "phase-99"}
     inp = UpdateAiAutomationInput(automation_id="456", event_params=params)
-    assert inp.event_params == params
+    assert inp.event_params is not None
+    assert inp.event_params.model_dump(mode="python") == params
 
 
 @pytest.mark.unit

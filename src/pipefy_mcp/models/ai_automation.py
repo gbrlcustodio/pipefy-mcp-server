@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import copy
 import re
-from typing import Annotated
+from typing import Annotated, Any
 
-from pydantic import BaseModel, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from pipefy_mcp.models.validators import NonBlankStr
 
@@ -14,12 +14,42 @@ EVENT_ID_BLACKLIST = frozenset({"scheduler"})
 
 FIELD_REF_PATTERN = re.compile(r"%\{[^}]+\}")
 
-DEFAULT_CONDITION = {
+# Sent on every create when the caller omits ``condition``. Pipefy's internal
+# ``createAutomation`` expects a condition object; omitting the variable can
+# differ semantically from an explicit "no user condition" shape. This placeholder
+# matches an empty expression list so the API receives a stable payload.
+DEFAULT_CONDITION: dict[str, Any] = {
     "expressions": [
         {"structure_id": 0, "field_address": "", "operation": "", "value": ""}
     ],
     "expressions_structure": [[0]],
 }
+
+
+class AutomationConditionInput(BaseModel):
+    """Pipefy ``ConditionInput``-shaped payload. Unknown top-level keys are preserved."""
+
+    model_config = ConfigDict(extra="allow")
+
+    expressions: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Condition expressions (Pipefy ConditionInput).",
+    )
+    expressions_structure: list[Any] | None = Field(
+        default=None,
+        description="Expression grouping indices for Pipefy condition trees.",
+    )
+
+
+class AutomationEventParamsInput(BaseModel):
+    """Pipefy automation trigger params (e.g. ``to_phase_id``, ``triggerFieldIds``)."""
+
+    model_config = ConfigDict(extra="allow")
+
+
+def _default_automation_condition() -> AutomationConditionInput:
+    """Fresh placeholder condition (deep copy) for each new create input."""
+    return AutomationConditionInput.model_validate(copy.deepcopy(DEFAULT_CONDITION))
 
 
 def _reject_blacklisted_event_id(v: str) -> str:
@@ -69,7 +99,12 @@ _AiPrompt = Annotated[
 
 
 class CreateAiAutomationInput(BaseModel):
-    """Validated input for creating an AI Automation (generate_with_ai)."""
+    """Validated input for creating an AI Automation (generate_with_ai).
+
+    When ``condition`` is omitted, it defaults to a deep copy of
+    :data:`DEFAULT_CONDITION` so the internal API always receives an explicit
+    condition object (see ``docs/tools/automations-and-ai.md``).
+    """
 
     name: NonBlankStr
     event_id: _EventId
@@ -87,14 +122,20 @@ class CreateAiAutomationInput(BaseModel):
         default_factory=list,
         description="AI skill IDs to attach. Defaults to empty (no skills).",
     )
-    event_params: dict | None = Field(
+    event_params: AutomationEventParamsInput | None = Field(
         default=None,
         description=(
             "Trigger-specific filters (e.g. to_phase_id for card_moved, "
             "triggerFieldIds for field_updated). Omit when not needed."
         ),
     )
-    condition: dict = Field(default_factory=lambda: copy.deepcopy(DEFAULT_CONDITION))
+    condition: AutomationConditionInput = Field(
+        default_factory=_default_automation_condition,
+        description=(
+            "Trigger condition for the automation. Omit to use DEFAULT_CONDITION "
+            "(empty-expression placeholder sent to Pipefy). Pass a dict to override."
+        ),
+    )
 
 
 class UpdateAiAutomationInput(BaseModel):
@@ -106,8 +147,8 @@ class UpdateAiAutomationInput(BaseModel):
     prompt: _AiPrompt | None = None
     field_ids: list[str] | None = Field(default=None, min_length=1)
     skills_ids: list[str] | None = None
-    event_params: dict | None = Field(
+    event_params: AutomationEventParamsInput | None = Field(
         default=None,
         description="Trigger-specific filters. Pass to change; omit to keep current.",
     )
-    condition: dict | None = None
+    condition: AutomationConditionInput | None = None

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from pipefy_mcp.models.ai_automation import (
+    DEFAULT_CONDITION,
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
 )
@@ -111,6 +112,58 @@ async def test_create_automation_passes_event_params_when_provided():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_automation_includes_default_condition_placeholder():
+    """create_automation always sends condition (model default when caller omits it)."""
+    mock_client = _create_mock_internal_api_client(
+        {"createAutomation": {"automation": {"id": "456"}}}
+    )
+    service = AiAutomationService(client=mock_client)
+
+    inp = CreateAiAutomationInput(
+        name="No explicit condition",
+        event_id="card_created",
+        pipe_id="303",
+        prompt="Summarize %{1}",
+        field_ids=["1"],
+    )
+    await service.create_automation(inp)
+
+    variables = mock_client.execute_query.call_args[0][1]
+    assert "condition" in variables
+    assert variables["condition"] == DEFAULT_CONDITION
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_automation_forwards_custom_condition():
+    """create_automation sends caller-provided condition in variables."""
+    mock_client = _create_mock_internal_api_client(
+        {"createAutomation": {"automation": {"id": "456"}}}
+    )
+    service = AiAutomationService(client=mock_client)
+
+    custom = {
+        "expressions": [
+            {"structure_id": 1, "field_address": "f", "operation": "eq", "value": "v"}
+        ],
+        "expressions_structure": [[1]],
+    }
+    inp = CreateAiAutomationInput(
+        name="Custom condition",
+        event_id="card_created",
+        pipe_id="303",
+        prompt="Summarize %{1}",
+        field_ids=["1"],
+        condition=custom,
+    )
+    await service.create_automation(inp)
+
+    variables = mock_client.execute_query.call_args[0][1]
+    assert variables["condition"] == custom
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_create_automation_omits_event_params_when_none():
     """create_automation does not include event_params key when None."""
     mock_client = _create_mock_internal_api_client(
@@ -129,6 +182,44 @@ async def test_create_automation_omits_event_params_when_none():
 
     variables = mock_client.execute_query.call_args[0][1]
     assert "event_params" not in variables
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_automation_omits_condition_when_not_provided():
+    """update_automation does not include condition in input when omitted."""
+    mock_client = _create_mock_internal_api_client(
+        {"updateAutomation": {"automation": {"id": "789"}}}
+    )
+    service = AiAutomationService(client=mock_client)
+
+    inp = UpdateAiAutomationInput(automation_id="789", name="Only name")
+    await service.update_automation(inp)
+
+    variables = mock_client.execute_query.call_args[0][1]
+    assert "condition" not in variables["input"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_automation_passes_condition_when_provided():
+    """update_automation includes condition in input dict when set."""
+    mock_client = _create_mock_internal_api_client(
+        {"updateAutomation": {"automation": {"id": "789"}}}
+    )
+    service = AiAutomationService(client=mock_client)
+
+    cond = {
+        "expressions": [
+            {"structure_id": 0, "field_address": "", "operation": "", "value": ""}
+        ],
+        "expressions_structure": [[0]],
+    }
+    inp = UpdateAiAutomationInput(automation_id="789", condition=cond)
+    await service.update_automation(inp)
+
+    variables = mock_client.execute_query.call_args[0][1]
+    assert variables["input"]["condition"] == cond
 
 
 @pytest.mark.unit

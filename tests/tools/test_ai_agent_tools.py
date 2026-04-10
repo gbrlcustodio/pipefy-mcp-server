@@ -1324,7 +1324,10 @@ class TestValidateAiAgentBehaviorsErrorPaths:
         assert payload["success"] is True
         assert payload["valid"] is False
         assert len(payload["problems"]) > 0
-        assert any("event_id" in p.lower() or "eventid" in p.lower() for p in payload["problems"])
+        assert any(
+            "event_id" in p.lower() or "eventid" in p.lower()
+            for p in payload["problems"]
+        )
 
     async def test_pydantic_validation_missing_name_hint(
         self,
@@ -1342,7 +1345,9 @@ class TestValidateAiAgentBehaviorsErrorPaths:
         payload = extract_payload(result)
         assert payload["success"] is True
         assert payload["valid"] is False
-        assert any("name" in p.lower() and "behavior" in p.lower() for p in payload["problems"])
+        assert any(
+            "name" in p.lower() and "behavior" in p.lower() for p in payload["problems"]
+        )
 
     async def test_pipe_fetch_timeout(
         self,

@@ -22,7 +22,6 @@ from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     DeleteCardErrorPayload,
-    DeleteCardSuccessPayload,
 )
 from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
 

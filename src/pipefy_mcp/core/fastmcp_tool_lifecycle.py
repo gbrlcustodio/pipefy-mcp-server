@@ -1,4 +1,7 @@
-"""FastMCP internals used for in-process server lifespan and tool rebinding."""
+"""FastMCP ``_tool_manager`` boundary for removing tools by name.
+
+Pipefy selective cleanup policy lives in :mod:`pipefy_mcp.core.pipefy_tool_lifecycle`.
+"""
 
 from __future__ import annotations
 

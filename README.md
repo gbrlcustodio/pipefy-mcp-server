@@ -136,6 +136,20 @@ uv run ruff check src/
 uv run ruff format src/
 ```
 
+### Adding or renaming an MCP tool
+
+1. Implement the tool in the appropriate module under `src/pipefy_mcp/tools/` and call its `*Tools.register(...)` from `ToolRegistry.register_tools()` in [`src/pipefy_mcp/tools/registry.py`](src/pipefy_mcp/tools/registry.py) if it is not already wired.
+2. Add the **exact tool name** (as exposed to MCP clients) to **`PIPEFY_TOOL_NAMES`** in the same file. The server uses that set for collision checks at startup and for cleanup after a failed registration; `tests/test_server.py` also asserts the live tool list matches this set.
+
+### Manual smoke test (Cursor MCP)
+
+After meaningful changes to **`server.py`**, the **lifespan**, or **tool registration** (including `PIPEFY_TOOL_NAMES`), validate the real stack—not only unit tests:
+
+1. Add or enable this server in **Cursor MCP settings** and run the server, for example: `uv run pipefy-mcp-server` — this starts the MCP server defined in this repo so Cursor can connect to it.
+2. From the chat or MCP tools panel, confirm tools load (e.g. list tools / invoke a simple read-only tool you care about).
+
+Inspector (`npx @modelcontextprotocol/inspector …`) remains useful for protocol debugging; Cursor MCP is the preferred sign-off for “tools work as we use them.”
+
 ## Contributing
 We are building this in public and we need your feedback!
 

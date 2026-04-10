@@ -15,6 +15,7 @@
 
 ### Manual tool testing (E2E)
 - **Preferred:** Use **Cursor’s MCP integration** (add this server in Cursor MCP settings, run `pipefy-mcp-server`, then invoke tools from the chat / MCP panel). This matches how maintainers and agents exercise the server in daily use.
+- **After `server.py`, lifespan, or registration changes:** Run a short **Cursor MCP smoke test** (list tools and/or call a read-only tool). See README **Development & Testing → Manual smoke test (Cursor MCP)**.
 - **Optional:** `npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server` — MCP Inspector is fine for protocol debugging or when Cursor is not in the loop; it is not the primary sign-off for “tools work for us.”
 
 ## Coding Style & Naming Conventions
@@ -43,9 +44,10 @@ When implementing a new tool, follow this checklist (TDD-first):
 1. **Write tests first** in `tests/tools/` mirroring the source structure (e.g., `test_pipe_tools.py`).
 2. **Run the tests and confirm they fail** for the new behavior.
 3. **Implement the tool logic** in `src/pipefy_mcp/tools/` (e.g., `pipe_tools.py` or create a new file if appropriate).
-4. **Register the tool** in `src/pipefy_mcp/server.py` by adding its function or reference to the MCP server setup.
-5. **Re-run tests and ensure they pass**.
-6. **Update the README** if the tool introduces new user-facing functionality or configuration options.
+4. **Register the tool** by calling the appropriate `*Tools.register(mcp, client)` from `ToolRegistry.register_tools()` in `src/pipefy_mcp/tools/registry.py` (only if not already wired for that domain).
+5. **Add the MCP tool name** to **`PIPEFY_TOOL_NAMES`** in `src/pipefy_mcp/tools/registry.py` (same string the client sees). Omitting this breaks startup preflight and `tests/test_server.py`.
+6. **Re-run tests and ensure they pass** (including `tests/test_server.py` if the tool list changed).
+7. **Update the README** if the tool introduces new user-facing functionality or configuration options.
 
 ## Commit & Pull Request Guidelines
 - Commit messages follow a conventional style such as `feat:`, `fix:`, `refactor:`, `style:`, `test:`, `docs:` with optional scopes (e.g., `feat(tools): ...`).

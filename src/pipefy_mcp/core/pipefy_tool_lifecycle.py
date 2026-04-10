@@ -14,6 +14,33 @@ logger = logging.getLogger(__name__)
 
 PIPEFY_REPEAT_VISIT_FLAG_ATTR = "_pipefy_cleared_tools_once"
 PIPEFY_OWNED_TOOL_NAMES_ATTR = "_pipefy_tool_names"
+PIPEFY_PENDING_TOOL_NAMES_ATTR = "_pipefy_pending_tool_names"
+
+
+def mark_pipefy_tool_registration_started(app: FastMCP, names: set[str]) -> None:
+    """Record which Pipefy tool names the current registration attempt may leave behind.
+
+    If :func:`cleanup_failed_pipefy_tool_registration` runs, only these names are
+    removed so foreign tools registered under the same app are untouched.
+
+    Args:
+        app: FastMCP server instance.
+        names: Pipefy-owned tool names for this attempt (see ``PIPEFY_TOOL_NAMES``).
+    """
+    setattr(app, PIPEFY_PENDING_TOOL_NAMES_ATTR, set(names))
+
+
+def cleanup_failed_pipefy_tool_registration(app: FastMCP) -> None:
+    """Remove tools registered so far in a failed attempt; clear pending state.
+
+    Args:
+        app: FastMCP server instance.
+    """
+    pending = getattr(app, PIPEFY_PENDING_TOOL_NAMES_ATTR, None)
+    if pending:
+        remove_fastmcp_tools_by_name(app, set(pending))
+    if hasattr(app, PIPEFY_PENDING_TOOL_NAMES_ATTR):
+        delattr(app, PIPEFY_PENDING_TOOL_NAMES_ATTR)
 
 
 def prepare_app_for_repeat_pipefy_tool_registration(app: FastMCP) -> None:
@@ -54,8 +81,9 @@ def mark_pipefy_tool_registration_complete(app: FastMCP, names: set[str]) -> Non
 
     Args:
         app: FastMCP server instance.
-        names: Exact tool names from :class:`pipefy_mcp.tools.registry.ToolRegistry`
-            (must match ``ToolManager.remove_tool``).
+        names: Exact Pipefy tool names (must match ``ToolManager.remove_tool``).
     """
     setattr(app, PIPEFY_OWNED_TOOL_NAMES_ATTR, set(names))
     setattr(app, PIPEFY_REPEAT_VISIT_FLAG_ATTR, True)
+    if hasattr(app, PIPEFY_PENDING_TOOL_NAMES_ATTR):
+        delattr(app, PIPEFY_PENDING_TOOL_NAMES_ATTR)

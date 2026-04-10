@@ -4,7 +4,7 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.tools.registry import ToolRegistry
+from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES, ToolRegistry
 
 
 class TestToolRegistry:
@@ -19,7 +19,7 @@ class TestToolRegistry:
 
         assert registry.mcp is mock_mcp
         assert registry.services_container is mock_container
-        assert registry.pipefy_tool_names == frozenset()
+        assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
     @patch("pipefy_mcp.tools.registry.ObservabilityTools.register")
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
@@ -72,7 +72,7 @@ class TestToolRegistry:
         mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_observability_tools_register.assert_called_once_with(mock_mcp, mock_client)
         assert result is mock_mcp
-        assert registry.pipefy_tool_names == frozenset()
+        assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
     def test_register_tools_raises_when_pipefy_client_is_none(self):
         """Test that register_tools raises ValueError when pipefy_client is None"""
@@ -144,7 +144,7 @@ class TestToolRegistry:
         mock_observability_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_ai_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_ai_agent_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        assert registry.pipefy_tool_names == frozenset()
+        assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
     def test_register_tools_records_pipefy_tool_names_on_real_fastmcp(self):
         mcp = FastMCP("tool-registry-names")
@@ -153,5 +153,31 @@ class TestToolRegistry:
         registry = ToolRegistry(mcp=mcp, services_container=mock_container)
         registry.register_tools()
 
+        assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
         assert "create_card" in registry.pipefy_tool_names
         assert len(registry.pipefy_tool_names) > 50
+
+    def test_check_for_name_collisions_raises_when_pipefy_name_already_registered(self):
+        mock_mcp = Mock(spec=FastMCP)
+        mock_container = Mock(spec=ServicesContainer)
+        registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
+        with patch.object(
+            ToolRegistry,
+            "_snapshot_tool_names",
+            return_value={"create_card", "foreign_tool"},
+        ):
+            with pytest.raises(
+                RuntimeError, match="these names already exist: create_card"
+            ):
+                registry.check_for_name_collisions()
+
+    def test_check_for_name_collisions_ok_when_no_overlap(self):
+        mock_mcp = Mock(spec=FastMCP)
+        mock_container = Mock(spec=ServicesContainer)
+        registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
+        with patch.object(
+            ToolRegistry,
+            "_snapshot_tool_names",
+            return_value={"foreign_tool"},
+        ):
+            registry.check_for_name_collisions()

@@ -10,6 +10,7 @@ from mcp.shared.memory import (
 from pipefy_mcp.server import mcp as mcp_server
 from pipefy_mcp.server import run_server
 from pipefy_mcp.settings import PipefySettings, Settings
+from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 
 
 @pytest.fixture(scope="module")
@@ -33,132 +34,15 @@ _MINIMAL_PIPEFY_SETTINGS = Settings(
 
 @pytest.mark.anyio
 async def test_register_tools(client_session):
-    expected_tool_names = [
-        "add_card_comment",
-        "clone_pipe",
-        "create_ai_agent",
-        "create_ai_automation",
-        "create_automation",
-        "create_card",
-        "create_card_relation",
-        "create_field_condition",
-        "create_label",
-        "create_organization_report",
-        "create_phase",
-        "create_phase_field",
-        "create_pipe",
-        "create_pipe_relation",
-        "create_pipe_report",
-        "create_send_task_automation",
-        "create_table",
-        "create_table_field",
-        "create_table_record",
-        "create_webhook",
-        "delete_ai_agent",
-        "toggle_ai_agent_status",
-        "delete_automation",
-        "delete_card",
-        "delete_comment",
-        "delete_field_condition",
-        "delete_label",
-        "delete_organization_report",
-        "delete_phase",
-        "delete_phase_field",
-        "delete_pipe",
-        "delete_pipe_relation",
-        "delete_pipe_report",
-        "delete_table",
-        "delete_table_field",
-        "delete_table_record",
-        "delete_webhook",
-        "execute_graphql",
-        "export_automation_jobs",
-        "export_organization_report",
-        "export_pipe_audit_logs",
-        "export_pipe_report",
-        "fill_card_phase_fields",
-        "find_cards",
-        "find_records",
-        "get_agents_usage",
-        "get_ai_agent",
-        "get_ai_agent_log_details",
-        "get_ai_agent_logs",
-        "get_ai_agents",
-        "get_ai_credit_usage",
-        "get_automation",
-        "get_automation_actions",
-        "get_automation_events",
-        "get_automation_jobs_export",
-        "get_automation_jobs_export_csv",
-        "get_automation_logs",
-        "get_automation_logs_by_repo",
-        "get_automations",
-        "get_automations_usage",
-        "get_card",
-        "get_card_inbox_emails",
-        "get_cards",
-        "get_email_templates",
-        "get_organization",
-        "get_organization_report",
-        "get_organization_report_export",
-        "get_organization_reports",
-        "get_phase_fields",
-        "get_pipe",
-        "get_pipe_members",
-        "get_pipe_relations",
-        "get_pipe_report_columns",
-        "get_pipe_report_export",
-        "get_pipe_report_filterable_fields",
-        "get_pipe_reports",
-        "get_start_form_fields",
-        "get_table",
-        "get_table_record",
-        "get_table_records",
-        "get_tables",
-        "get_table_relations",
-        "introspect_mutation",
-        "introspect_query",
-        "introspect_type",
-        "invite_members",
-        "move_card_to_phase",
-        "remove_member_from_pipe",
-        "search_pipes",
-        "search_schema",
-        "search_tables",
-        "send_email_with_template",
-        "send_inbox_email",
-        "simulate_automation",
-        "set_role",
-        "set_table_record_field_value",
-        "update_ai_agent",
-        "update_ai_automation",
-        "update_automation",
-        "update_card",
-        "update_card_field",
-        "update_comment",
-        "update_field_condition",
-        "update_label",
-        "update_organization_report",
-        "update_phase",
-        "update_phase_field",
-        "update_pipe",
-        "update_pipe_relation",
-        "update_pipe_report",
-        "update_table",
-        "update_table_field",
-        "update_table_record",
-        "upload_attachment_to_card",
-        "upload_attachment_to_table_record",
-        "validate_ai_agent_behaviors",
-    ]
+    expected_tool_names = sorted(PIPEFY_TOOL_NAMES)
 
     with patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS):
         async with client_session as session:
             result = await session.list_tools()
-            actual_tool_names = [tool.name for tool in result.tools]
+            actual_tool_names = sorted(tool.name for tool in result.tools)
 
-            assert sorted(expected_tool_names) == sorted(actual_tool_names), (
-                "Expected create_card to be available"
+            assert actual_tool_names == expected_tool_names, (
+                "Registered tool names must match PIPEFY_TOOL_NAMES"
             )
 
 
@@ -252,6 +136,7 @@ async def test_lifespan_failed_register_tools_does_not_mark_repeat_visit_state()
     ):
         mock_registry = MagicMock()
         mock_registry_cls.return_value = mock_registry
+        mock_registry.pipefy_tool_names = frozenset({"create_card"})
         mock_registry.register_tools.side_effect = RuntimeError("register failed")
 
         with pytest.raises(RuntimeError, match="register failed"):
@@ -285,7 +170,7 @@ async def test_lifespan_retry_after_failed_register_tools_succeeds():
         mock_fail.register_tools.side_effect = RuntimeError("register failed")
         mock_ok = MagicMock()
         mock_ok.register_tools.return_value = app
-        mock_ok.pipefy_tool_names = {"create_card"}
+        mock_ok.pipefy_tool_names = frozenset({"create_card"})
         mock_registry_cls.side_effect = [mock_fail, mock_ok]
 
         with pytest.raises(RuntimeError, match="register failed"):
@@ -300,3 +185,101 @@ async def test_lifespan_retry_after_failed_register_tools_succeeds():
         mock_ok.register_tools.assert_called_once()
         assert getattr(app, ptl.PIPEFY_REPEAT_VISIT_FLAG_ATTR, False) is True
         assert getattr(app, ptl.PIPEFY_OWNED_TOOL_NAMES_ATTR) == {"create_card"}
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_lifespan_tool_name_collision_fails_before_registration():
+    """Foreign tool already named create_card: preflight raises; pending never set."""
+    import pipefy_mcp.core.pipefy_tool_lifecycle as ptl
+    from pipefy_mcp.server import lifespan
+
+    app = FastMCP("collision-test")
+
+    @app.tool()
+    async def create_card() -> str:
+        """Shadows Pipefy tool name; must trigger collision check."""
+        return "foreign"
+
+    mock_container = MagicMock()
+    mock_container.pipefy_client = MagicMock()
+
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch(
+            "pipefy_mcp.server.ServicesContainer.get_instance",
+            return_value=mock_container,
+        ),
+    ):
+        with pytest.raises(
+            RuntimeError, match="these names already exist: create_card"
+        ):
+            async with lifespan(app):
+                pass
+
+    assert not hasattr(app, ptl.PIPEFY_PENDING_TOOL_NAMES_ATTR)
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_lifespan_partial_register_failure_cleans_pipefy_tools_retry_uses_new_client():
+    """PipeTools registers then PipeConfigTools raises; cleanup; second run binds new client."""
+    import pipefy_mcp.core.pipefy_tool_lifecycle as ptl
+    from pipefy_mcp.server import lifespan
+    from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
+    from pipefy_mcp.tools.pipe_tools import PipeTools
+
+    app = FastMCP("partial-reg")
+    mock_container = MagicMock()
+    client1 = MagicMock()
+    client2 = MagicMock()
+    mock_container.pipefy_client = client1
+
+    pipe_tools_register_clients = []
+    real_pipe_tools_register = PipeTools.register
+
+    def wrapping_pipe_tools_register(mcp, client):
+        pipe_tools_register_clients.append(client)
+        return real_pipe_tools_register(mcp, client)
+
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch(
+            "pipefy_mcp.server.ServicesContainer.get_instance",
+            return_value=mock_container,
+        ),
+        patch.object(PipeTools, "register", side_effect=wrapping_pipe_tools_register),
+        patch.object(
+            PipeConfigTools,
+            "register",
+            side_effect=RuntimeError("pipe config boom"),
+        ),
+    ):
+        with pytest.raises(RuntimeError, match="pipe config boom"):
+            async with lifespan(app):
+                pass
+
+    assert not hasattr(app, ptl.PIPEFY_PENDING_TOOL_NAMES_ATTR)
+    assert getattr(app, ptl.PIPEFY_REPEAT_VISIT_FLAG_ATTR, False) is False
+    after_fail_names = {t.name for t in app._tool_manager.list_tools()}
+    assert "create_card" not in after_fail_names
+
+    mock_container.pipefy_client = client2
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch(
+            "pipefy_mcp.server.ServicesContainer.get_instance",
+            return_value=mock_container,
+        ),
+        patch.object(
+            PipeTools,
+            "register",
+            side_effect=wrapping_pipe_tools_register,
+        ),
+    ):
+        async with lifespan(app):
+            pass
+
+    assert pipe_tools_register_clients[0] is client1
+    assert pipe_tools_register_clients[-1] is client2
+    assert "create_card" in {t.name for t in app._tool_manager.list_tools()}

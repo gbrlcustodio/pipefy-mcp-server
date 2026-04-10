@@ -321,9 +321,9 @@ class WebhookTools:
         ) -> dict[str, Any]:
             """Delete a webhook permanently.
 
-            Two-step operation: call without ``confirm`` to preview, then with
-            ``confirm=True`` after user approval. When the MCP client supports
-            elicitation, the user is prompted interactively instead.
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
 
             Args:
                 ctx: MCP context for debug logging.

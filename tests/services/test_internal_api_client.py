@@ -1,6 +1,9 @@
 """Unit tests for InternalApiClient and PipefySettings.internal_api_url.
 
-Tests validate the internal API client behavior without real network calls.
+Service-layer tests intentionally assert the full GraphQL error text produced by
+``InternalApiClient`` (including ``[code=…]`` / ``[correlation_id=…]`` suffixes).
+MCP tools must not surface that raw text to users by default; see AI automation
+tool handlers and ``strip_internal_api_diagnostic_markers``.
 """
 
 import json
@@ -194,6 +197,45 @@ async def test_execute_query_error_includes_extensions_code_and_correlation_id(
     with pytest.raises(
         ValueError,
         match=r"Permission Denied \[code=PERMISSION_DENIED\] \[correlation_id=abc-123\]",
+    ):
+        await client.execute_query("query { x }", {})
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@respx.mock(assert_all_mocked=False, assert_all_called=False)
+async def test_execute_query_error_includes_correlation_id_when_code_absent(
+    respx_mock,
+):
+    """``correlation_id`` is appended even when ``extensions.code`` is missing."""
+    graphql_error_response = {
+        "errors": [
+            {
+                "message": "Rate limited",
+                "extensions": {"correlation_id": "corr-only-99"},
+            }
+        ]
+    }
+    respx_mock.post(OAUTH_TOKEN_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
+        )
+    )
+    respx_mock.post(DEFAULT_INTERNAL_API_URL).mock(
+        return_value=httpx.Response(200, json=graphql_error_response)
+    )
+
+    client = InternalApiClient(
+        url=DEFAULT_INTERNAL_API_URL,
+        oauth_url=OAUTH_TOKEN_URL,
+        oauth_client="client_id",
+        oauth_secret="client_secret",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=r"^Rate limited \[correlation_id=corr-only-99\]$",
     ):
         await client.execute_query("query { x }", {})
 

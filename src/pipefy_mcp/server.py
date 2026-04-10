@@ -8,34 +8,16 @@ from contextlib import asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.core.pipefy_tool_lifecycle import (
+    cleanup_failed_pipefy_tool_registration,
+    mark_pipefy_tool_registration_complete,
+    mark_pipefy_tool_registration_started,
+    prepare_app_for_repeat_pipefy_tool_registration,
+)
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
-
-_PIPEFY_APP_TOOLS_ATTR = "_pipefy_cleared_tools_once"
-
-
-def _clear_fastmcp_tools_if_repeat_visit(app: FastMCP) -> None:
-    """Ensure tool handlers are re-bound when lifespan runs again on the same app.
-
-    FastMCP's ToolManager keeps the first registered callable when names collide.
-    In-process MCP sessions (tests, Cursor) can enter lifespan multiple times;
-    ``initialize_services`` then updates the container but tools would still call
-    the old client unless we remove stale tools before ``register_tools``.
-
-    NOTE: Uses private ``app._tool_manager`` (tested with mcp[cli]>=1.25.0).
-    """
-    if getattr(app, _PIPEFY_APP_TOOLS_ATTR, False):
-        try:
-            for tool in list(app._tool_manager.list_tools()):
-                app._tool_manager.remove_tool(tool.name)
-        except AttributeError:
-            logger.warning(
-                "FastMCP internal API changed; could not clear stale tools. "
-                "Tool re-registration may produce duplicates."
-            )
-    setattr(app, _PIPEFY_APP_TOOLS_ATTR, True)
 
 
 @asynccontextmanager
@@ -45,12 +27,17 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
         logger.info("Initializing services")
         services_container = ServicesContainer.get_instance()
         services_container.initialize_services(settings)
-        _clear_fastmcp_tools_if_repeat_visit(app)
-        mcp = ToolRegistry(
+        prepare_app_for_repeat_pipefy_tool_registration(app)
+        registry = ToolRegistry(
             mcp=app,
             services_container=services_container,
-        ).register_tools()
+        )
+        registry.check_for_name_collisions()
+        mark_pipefy_tool_registration_started(app, set(registry.pipefy_tool_names))
+        mcp = registry.register_tools()
+        mark_pipefy_tool_registration_complete(app, set(registry.pipefy_tool_names))
     except Exception:
+        cleanup_failed_pipefy_tool_registration(app)
         logger.exception("Fatal error during server lifespan initialization")
         raise
 

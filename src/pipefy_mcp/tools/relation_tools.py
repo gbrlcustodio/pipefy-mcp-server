@@ -33,6 +33,10 @@ class RelationTools:
         async def get_pipe_relations(pipe_id: str | int) -> dict[str, Any]:
             """List pipe relations for a pipe (parent and child links, config, and repo refs).
 
+            Takes a **pipe** ID. Each relation's ``id`` in the response is a **pipe relation**
+            ID (use as ``source_id`` in ``create_card_relation``). Do not confuse with
+            ``get_table_relations``, which takes **table relation** IDs, not ``pipe_id``.
+
             Args:
                 pipe_id: Pipe ID.
             """
@@ -55,10 +59,16 @@ class RelationTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_table_relations(relation_ids: list[str | int]) -> dict[str, Any]:
-            """Load table relations by their IDs (Pipefy root `table_relations`).
+            """Load table relations by ID (Pipefy root ``table_relations``).
+
+            **Do not pass** ``table_id`` or a database table ID — this tool only accepts
+            **table relation** identifiers (the link object between tables). To resolve
+            table IDs for schema/records, use ``get_table`` / ``search_tables`` instead.
+            Obtain table-relation IDs from the Pipefy UI, your saved metadata, or GraphQL
+            (e.g. introspection / ``execute_graphql``), not from ``get_pipe_relations``.
 
             Args:
-                relation_ids: Non-empty list of **table relation** IDs (not the database table ID).
+                relation_ids: Non-empty list of **table relation** IDs (never the database table ID).
             """
             if not isinstance(relation_ids, list) or not relation_ids:
                 return build_relation_error_payload(
@@ -91,6 +101,7 @@ class RelationTools:
         ) -> dict[str, Any]:
             """Create a parent-child relation between two pipes.
 
+            ``parent_id`` and ``child_id`` are **pipe** IDs (not table or card IDs).
             Optional ``extra_input`` merges into Pipefy ``CreatePipeRelationInput`` (camelCase keys), e.g. ``canCreateNewItems``, ``ownFieldMaps``.
 
             Args:
@@ -140,6 +151,7 @@ class RelationTools:
         ) -> dict[str, Any]:
             """Update an existing pipe relation (name, auto-fill, connection flags).
 
+            ``relation_id`` is the **pipe relation** id from ``get_pipe_relations`` (not a table relation id).
             Optional ``extra_input`` merges into Pipefy ``UpdatePipeRelationInput`` (camelCase keys), overriding defaults for flags or ``ownFieldMaps``.
 
             Args:
@@ -190,9 +202,10 @@ class RelationTools:
         ) -> dict[str, Any]:
             """Permanently delete a pipe relation by ID.
 
-            Two-step operation: call without ``confirm`` to preview, then with
-            ``confirm=True`` after user approval. When the MCP client supports
-            elicitation, the user is prompted interactively instead.
+            ``relation_id`` is the **pipe relation** id from ``get_pipe_relations`` (not a table relation id).
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
 
             Args:
                 relation_id: Pipe relation ID to delete.
@@ -235,7 +248,8 @@ class RelationTools:
         ) -> dict[str, Any]:
             """Connect a child card to a parent card using an existing pipe relation.
 
-            Use ``get_pipe_relations`` on the parent or child pipe to obtain the pipe relation ``id`` (pass it as ``source_id``).
+            ``source_id`` must be a **pipe relation** id from ``get_pipe_relations`` (the link between pipes).
+            It is **not** a table-relation id (``get_table_relations``), not a database ``table_id``, and not a pipe or card id.
 
             Args:
                 parent_id: Parent card ID.

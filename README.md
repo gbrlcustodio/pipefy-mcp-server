@@ -1,7 +1,7 @@
 # MCP server for Pipefy
 
 <p align="center">
-  <strong>Open-source MCP for Pipefy: 115 tools across pipes, cards, tables, relations, reports, automations, AI agents and observability — built for your IDE, with pagination, introspection and safe deletes.</strong>
+  <strong>Open-source MCP for Pipefy: 116 tools across pipes, cards, tables, relations, reports, automations, AI agents and observability — built for your IDE, with pagination, introspection and safe deletes.</strong>
 </p>
 
 <p align="center">
@@ -23,6 +23,7 @@
 <p align="center">
   <a href="#mcp-tools">MCP tools</a> •
   <a href="#getting-started">Getting started</a> •
+  <a href="#why-these-dependencies">Why these dependencies?</a> •
   <a href="#mcp-clients">MCP clients</a> •
   <a href="#development--testing">Development & Testing</a> •
   <a href="#contributing">Contributing</a>
@@ -32,21 +33,24 @@
 
 ## MCP tools
 
-**115 tools** across 9 categories. Each tool has a docstring consumed by LLM clients for routing — treat those as the source of truth for arguments.
+The server exposes **116 tools**, grouped below into **nine** surface areas. Canonical names live in `PIPEFY_TOOL_NAMES` (`src/pipefy_mcp/tools/registry.py`).
 
-**Shared conventions (many tools):**
-- **Pagination** — List endpoints accept `first` and `after`. Use `pageInfo.hasNextPage` and `pageInfo.endCursor` to fetch the next page.
-- **Pipefy IDs** — GraphQL treats IDs as **strings**. Tool parameters accept **string IDs** (recommended: `"301234"`). Clients that send unquoted JSON numbers may pass integers for some parameters; the server coerces them to strings before calling the API. Responses and success payloads return IDs as **strings**. Invalid IDs (e.g. empty, zero, or non-coercible values) are rejected before the network call. See [Pipes & cards — IDs](docs/tools/pipes-and-cards.md#pipefy-ids-type-safety) for `delete_card` and card/pipe parameters.
-- **`debug=true`** — Failed calls may include extra detail: GraphQL error codes and a `correlation_id` for support.
-- **`extra_input`** — Optional map of extra mutation fields (camelCase keys). Values that overlap the tool’s main parameters are ignored.
-- **Destructive deletes** — Two steps by default: the first response is a preview; call again with `confirm=true` to run the delete.
-- **Schema introspection** — `introspect_type`, `introspect_query`, `introspect_mutation` reveal live schema shapes; `search_schema` finds types by keyword with optional `kind` filter; `max_depth` on any introspection tool resolves sub-types in a single call.
+**Documentation for agents:** each tool’s description and `Args:` come from its Python docstring—MCP clients show that text to LLMs for routing. Use the docstrings (and the per-area docs linked in the table) as the authority on parameters and edge cases.
+
+**Cross-cutting behavior**
+
+- **Pagination** — List-style tools accept `first` and `after`. Continue with `pageInfo.endCursor` while `pageInfo.hasNextPage` is true.
+- **IDs** — Pipefy GraphQL uses string IDs. Pass IDs as strings (e.g. `"301234"`). Some parameters also accept JSON integers; the server normalizes to string before calling the API. Success payloads return string IDs. Empty, zero, or otherwise invalid IDs fail validation before any network call. More detail: [Pipefy IDs and type safety](docs/tools/pipes-and-cards.md#pipefy-ids-type-safety).
+- **`debug=true`** — On failures, error text may include GraphQL codes and a `correlation_id` for support.
+- **`extra_input`** — Optional map of extra mutation fields (camelCase keys). Keys that duplicate the tool’s primary parameters are ignored.
+- **Destructive operations** — Deletes use a two-step contract: call with `confirm=false` (default) for a preview, then `confirm=true` only after explicit approval to execute.
+- **Introspection** — `introspect_type`, `introspect_query`, and `introspect_mutation` expose live schema; `search_schema` lists types by keyword (optional `kind` filter). Use `max_depth` where supported to expand nested types in one round trip.
 
 | Category | Tools | Description | Docs |
 |----------|:-----:|-------------|------|
-| **Pipes & cards** | 34 | Read, create, update, and delete pipes, phases, fields, labels, cards, field conditions, and card attachment uploads. | [Details](docs/tools/pipes-and-cards.md) |
+| **Pipes & cards** | 34 | Pipes, phases, fields, labels, cards, field conditions, and card-level attachments—read/write/delete as documented per tool. | [Details](docs/tools/pipes-and-cards.md) |
 | **Database tables** | 18 | Tables, records (rows), schema columns (table fields), org-wide table discovery, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
-| **Relations** | 5 | Link pipes, tables, and cards across workflows. | [Details](docs/tools/relations.md) |
+| **Relations** | 6 | Pipe relations, table relations by ID, and card links across workflows. | [Details](docs/tools/relations.md) |
 | **Reports** | 16 | Pipe and organization reports: discovery, CRUD, and async exports. | [Details](docs/tools/reports.md) |
 | **Automations & AI** | 17 | Traditional automations (rules engine) and AI-powered automations and agents. | [Details](docs/tools/automations-and-ai.md) |
 | **Observability** | 10 | AI agent and automation logs, usage stats, credits, job exports, status polling, and CSV fetch for finished exports. | [Details](docs/tools/observability.md) |
@@ -80,6 +84,16 @@ cp .env.example .env
 ```
 
 **Environment variables:** names, placeholders, and how `.env` interacts with Pydantic Settings are documented in **[Configuration](docs/configuration.md)** (keys themselves live only in [`.env.example`](.env.example)).
+
+### Why these dependencies?
+
+The runtime stack in [`pyproject.toml`](pyproject.toml) is small on purpose. For a longer rationale (code references and security notes), see **[Dependencies](docs/dependencies.md)**. Summary:
+
+| Package | Role in this server |
+|--------|---------------------|
+| **httpx** | Async HTTP client used by `gql` for GraphQL (`HTTPXAsyncTransport`), Pipefy’s internal GraphQL API, presigned S3 uploads/downloads for attachments, and downloading signed export URLs (automation job / observability flows). |
+| **httpx-auth** | `OAuth2ClientCredentials` for service-account token acquisition and refresh; shared across GraphQL clients and direct `httpx` calls that need the same Pipefy OAuth settings. |
+| **openpyxl** | Reads `.xlsx` export files (e.g. automation job exports) and converts the first worksheet to CSV text for MCP responses — see `observability_export_csv`. |
 
 ## MCP clients
 
@@ -124,6 +138,20 @@ uv run ruff check src/
 # Format code
 uv run ruff format src/
 ```
+
+### Adding or renaming an MCP tool
+
+1. Implement the tool in the appropriate module under `src/pipefy_mcp/tools/` and call its `*Tools.register(...)` from `ToolRegistry.register_tools()` in [`src/pipefy_mcp/tools/registry.py`](src/pipefy_mcp/tools/registry.py) if it is not already wired.
+2. Add the **exact tool name** (as exposed to MCP clients) to **`PIPEFY_TOOL_NAMES`** in the same file. The server uses that set for collision checks at startup and for cleanup after a failed registration; `tests/test_server.py` also asserts the live tool list matches this set.
+
+### Manual smoke test (Cursor MCP)
+
+After meaningful changes to **`server.py`**, the **lifespan**, or **tool registration** (including `PIPEFY_TOOL_NAMES`), validate the real stack—not only unit tests:
+
+1. Add or enable this server in **Cursor MCP settings** and run the server, for example: `uv run pipefy-mcp-server` — this starts the MCP server defined in this repo so Cursor can connect to it.
+2. From the chat or MCP tools panel, confirm tools load (e.g. list tools / invoke a simple read-only tool you care about).
+
+Inspector (`npx @modelcontextprotocol/inspector …`) remains useful for protocol debugging; Cursor MCP is the preferred sign-off for “tools work as we use them.”
 
 ## Contributing
 We are building this in public and we need your feedback!

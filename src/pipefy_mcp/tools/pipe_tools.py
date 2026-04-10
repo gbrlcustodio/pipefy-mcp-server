@@ -24,6 +24,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_error_codes,
     with_debug_suffix,
 )
+from pipefy_mcp.tools.mcp_capabilities import supports_elicitation
 from pipefy_mcp.tools.phase_transition_helpers import (
     try_enrich_move_card_to_phase_failure,
 )
@@ -108,7 +109,7 @@ class PipeTools:
             await ctx.debug(f"Provided fields: {fields}")
 
             card_data = fields or {}
-            can_elicit = ctx.session.client_params.capabilities.elicitation
+            can_elicit = supports_elicitation(ctx)
 
             if can_elicit:
                 try:
@@ -320,12 +321,18 @@ class PipeTools:
             (e.g. Status = "In Progress"). This tool does **not** support
             searching by card title — use ``get_cards(title=...)`` for that.
 
+            Do **not** use column ``name`` values from ``get_pipe_report_columns`` or
+            ``get_pipe_report_filterable_fields`` (e.g. ``field_2_string``) as ``field_id``:
+            those keys are for pipe **reports**, not for the ``findCards`` GraphQL field.
+            Always take ``field_id`` from ``get_phase_fields`` or ``get_start_form_fields``
+            (the field's ``id`` / slug).
+
             Args:
                 pipe_id: The ID of the pipe to search in.
-                field_id: Pipefy field slug (e.g. "status", "id_da_solicita_o") — the ``id``
+                field_id: Pipefy field slug (e.g. "status", "campaign_name") — the ``id``
                     value returned by get_start_form_fields or get_phase_fields, NOT the
-                    human-readable label. Call get_start_form_fields first to discover valid
-                    field slugs for your pipe.
+                    human-readable label and NOT pipe-report column names. Call
+                    get_phase_fields (per phase) or get_start_form_fields to discover valid slugs.
                 field_value: Value to match for that field (string; use the format expected by the field type).
                 include_fields: If True, include each card's custom fields (name, value) in the response.
                 first: Max cards per page (optional).
@@ -574,7 +581,7 @@ class PipeTools:
             await ctx.debug(f"Provided fields: {fields}")
 
             field_data = fields or {}
-            can_elicit = ctx.session.client_params.capabilities.elicitation
+            can_elicit = supports_elicitation(ctx)
 
             if can_elicit and expected_fields:
                 try:
@@ -655,21 +662,16 @@ class PipeTools:
         ) -> DeleteCardPayload:
             """Delete a card from Pipefy.
 
-            This is a destructive, two-step operation:
+            Two-step operation:
 
-            1. **Preview** — call without ``confirm`` (or ``confirm=False``) to see
-               which card will be deleted.  When the MCP client supports elicitation
-               the user is prompted interactively; otherwise a preview payload is
-               returned and no deletion happens.
-            2. **Execute** — call again with ``confirm=True`` after the user has
-               reviewed the preview.
+            1. **Preview** — call with ``confirm=False`` (default). Returns a preview payload;
+               nothing is deleted. Elicitation is **not** used to authorize deletion (automated
+               clients may auto-accept prompts).
+            2. **Execute** — call again with ``confirm=True`` after explicit human approval.
 
             Args:
                 card_id: The ID of the card to delete.
-                confirm: Set to True to execute the deletion (step 2).
-                    When the client supports elicitation, ``confirm=True`` still
-                    applies: use it to skip the dialog after explicit user approval
-                    (e.g. agent workflows); omit it to show the interactive prompt.
+                confirm: Must be ``True`` to run the delete mutation.
                 debug: When true, appends GraphQL error codes and correlation_id to the error message.
 
             Returns:

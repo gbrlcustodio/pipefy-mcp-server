@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from pipefy_mcp.models.ai_automation import (
+    AutomationConditionInput,
+    AutomationEventParamsInput,
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
 )
@@ -19,6 +21,28 @@ from pipefy_mcp.services.pipefy.queries.ai_automation_queries import (
 from pipefy_mcp.services.pipefy.types import AutomationServiceResult
 
 ACTION_ID_GENERATE_WITH_AI = "generate_with_ai"
+
+
+def _automation_condition_for_api(
+    condition: AutomationConditionInput,
+) -> dict[str, Any]:
+    """Serialize condition for GraphQL without injecting unset model defaults."""
+    return condition.model_dump(
+        mode="python",
+        exclude_unset=True,
+        exclude_none=True,
+    )
+
+
+def _automation_event_params_for_api(
+    params: AutomationEventParamsInput,
+) -> dict[str, Any]:
+    """Serialize event_params without unset fields or explicit ``None`` values."""
+    return params.model_dump(
+        mode="python",
+        exclude_unset=True,
+        exclude_none=True,
+    )
 
 
 class AiAutomationService:
@@ -38,7 +62,9 @@ class AiAutomationService:
         """Create an AI Automation (generate_with_ai action).
 
         Args:
-            automation_input: Validated create input.
+            automation_input: Validated create input. ``condition`` is always
+                present on the mutation variables: the model supplies
+                ``DEFAULT_CONDITION`` when the caller did not set one.
 
         Raises:
             ValueError: When API response is missing automation.id.
@@ -57,10 +83,12 @@ class AiAutomationService:
                     "skillsIds": automation_input.skills_ids,
                 }
             },
-            "condition": automation_input.condition,
+            "condition": _automation_condition_for_api(automation_input.condition),
         }
         if automation_input.event_params is not None:
-            variables["event_params"] = automation_input.event_params
+            variables["event_params"] = _automation_event_params_for_api(
+                automation_input.event_params
+            )
 
         response = await self._client.execute_query(
             AI_CREATE_AUTOMATION_MUTATION, variables
@@ -112,9 +140,13 @@ class AiAutomationService:
             input_dict["action_params"] = {"aiParams": ai_params}
 
         if automation_input.event_params is not None:
-            input_dict["event_params"] = automation_input.event_params
+            input_dict["event_params"] = _automation_event_params_for_api(
+                automation_input.event_params
+            )
         if automation_input.condition is not None:
-            input_dict["condition"] = automation_input.condition
+            input_dict["condition"] = _automation_condition_for_api(
+                automation_input.condition
+            )
 
         variables = {"input": input_dict}
 

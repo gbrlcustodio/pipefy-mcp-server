@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 from random import randint
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
@@ -21,7 +22,6 @@ from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     DeleteCardErrorPayload,
-    DeleteCardSuccessPayload,
 )
 from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
 
@@ -211,6 +211,37 @@ class TestCreateCardTool:
                 ),
             }
             assert response == expected_response
+
+    async def test_create_card_when_capabilities_missing_no_attribute_error(
+        self,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """client_params without capabilities must not raise when gating elicitation."""
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "789"}}
+        }
+
+        mcp = FastMCP("Pipefy MCP Test Server")
+        PipeTools.register(mcp, mock_pipefy_client)
+
+        ctx = MagicMock()
+        ctx.debug = AsyncMock()
+        ctx.session = SimpleNamespace(client_params=SimpleNamespace())
+
+        result = await mcp._tool_manager.call_tool(
+            "create_card",
+            {"pipe_id": pipe_id},
+            context=ctx,
+            convert_result=False,
+        )
+
+        mock_pipefy_client.create_card.assert_called_once_with(pipe_id, {})
+        assert result["createCard"]["card"]["id"] == "789"
+        assert "card_link" in result
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_without_elicitation_filters_non_editable_fields(
@@ -1363,7 +1394,7 @@ class TestDeleteCardTool:
         mock_pipefy_client,
         extract_payload,
     ) -> None:
-        """Test delete_card tool when user declines confirmation via elicitation."""
+        """Without confirm=True, deletion never runs—even if the client supports elicitation."""
         mock_pipefy_client.get_card.return_value = {
             "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
         }
@@ -1381,7 +1412,13 @@ class TestDeleteCardTool:
             payload = extract_payload(result)
             assert payload == {
                 "success": False,
-                "error": "Action cancelled by user.",
+                "requires_confirmation": True,
+                "resource": "card 'Test Card' (ID: 12345) from pipe 'Test Pipe'",
+                "message": (
+                    "⚠️ You are about to permanently delete "
+                    "card 'Test Card' (ID: 12345) from pipe 'Test Pipe'. "
+                    "This action is irreversible. Set 'confirm=True' to proceed."
+                ),
             }
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -1561,13 +1598,13 @@ class TestDeleteCardTool:
         [elicitation_callback_for(action="accept", content={"confirm": True})],
         indirect=True,
     )
-    async def test_user_confirms_deletion(
+    async def test_elicitation_does_not_authorize_delete_without_confirm_true(
         self,
         client_session,
         mock_pipefy_client,
         extract_payload,
     ) -> None:
-        """Test delete_card tool when user confirms deletion via elicitation."""
+        """Elicitation accept must not delete; only confirm=True may run the mutation."""
         mock_pipefy_client.get_card.return_value = {
             "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
         }
@@ -1580,30 +1617,24 @@ class TestDeleteCardTool:
             )
 
             assert result.isError is False
-            mock_pipefy_client.delete_card.assert_called_once_with("12345")
+            mock_pipefy_client.delete_card.assert_not_called()
 
             payload = extract_payload(result)
-            expected_payload: DeleteCardSuccessPayload = {
-                "success": True,
-                "card_id": "12345",
-                "card_title": "Test Card",
-                "pipe_name": "Test Pipe",
-                "message": "Card 'Test Card' (ID: 12345) from pipe 'Test Pipe' has been permanently deleted.",
-            }
-            assert payload == expected_payload
+            assert payload["success"] is False
+            assert payload["requires_confirmation"] is True
 
     @pytest.mark.parametrize(
         "client_session",
         [elicitation_callback_raises(RuntimeError("confirmation request failed"))],
         indirect=True,
     )
-    async def test_elicitation_raises_returns_failed_request_confirmation(
+    async def test_elicitation_callback_unused_for_delete_preview(
         self,
         client_session,
         mock_pipefy_client,
         extract_payload,
     ) -> None:
-        """When elicitation raises, the shared guard falls back to a preview payload."""
+        """Guard does not call elicit; a broken elicitation callback must not affect preview."""
         mock_pipefy_client.get_card.return_value = {
             "card": {"id": "12345", "title": "Test Card", "pipe": {"name": "Test Pipe"}}
         }

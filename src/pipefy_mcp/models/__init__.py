@@ -8,6 +8,8 @@ from pipefy_mcp.models.ai_agent import (
     UpdateAiAgentInput,
 )
 from pipefy_mcp.models.ai_automation import (
+    AutomationConditionInput,
+    AutomationEventParamsInput,
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
 )
@@ -20,6 +22,8 @@ from pipefy_mcp.models.send_task_automation import CreateSendTaskAutomationInput
 from pipefy_mcp.models.validators import NonBlankStr, PipefyId
 
 __all__ = [
+    "AutomationConditionInput",
+    "AutomationEventParamsInput",
     "BehaviorInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",

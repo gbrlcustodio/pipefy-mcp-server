@@ -31,6 +31,10 @@ AI automations are separate from traditional rules above. They are prompt-driven
 |------|------|
 | `create_ai_automation` | Prompt-driven automation writing to one or more card fields (AI must be enabled on the pipe). |
 | `update_ai_automation` | Change name, `active`, prompt, `field_ids`, or `condition`. |
+
+### `create_ai_automation`: `condition` (contract)
+
+**Source of truth:** **Required-on-wire via default (branch B).** If the tool caller omits `condition`, the MCP layer applies `DEFAULT_CONDITION` in code (`CreateAiAutomationInput`): an empty-expression structure meaning “no extra trigger conditions” in Pipefy. The internal API **always** receives a `condition` key on create, avoiding ambiguous “key absent” behavior. Pass an explicit `condition` dict to override. **`update_ai_automation`:** omit `condition` to leave the existing rule unchanged; pass a dict to replace it.
 | `create_ai_agent` | Creates and configures an AI agent with `instruction` (= Pipefy UI "Description") and 1–5 `behaviors` in one call. `repo_uuid` is the pipe UUID from `get_pipe`. Optional: `data_source_ids`. |
 | `update_ai_agent` | Replaces full agent config; send the complete `behaviors` list (1-5). |
 | `toggle_ai_agent_status` | Enable/disable without resending configuration. |

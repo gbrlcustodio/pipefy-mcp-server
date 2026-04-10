@@ -78,6 +78,8 @@ class InternalApiClient:
                     ext = err.get("extensions", {})
                     code = ext.get("code", "")
                     corr = ext.get("correlation_id", "")
+                    # Include extensions for logs and service-layer tests; MCP-facing tools
+                    # should omit these suffixes from default user-visible errors.
                     suffix = f" [code={code}]" if code else ""
                     suffix += f" [correlation_id={corr}]" if corr else ""
                     error_msgs.append(f"{msg}{suffix}")

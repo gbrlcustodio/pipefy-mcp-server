@@ -88,6 +88,9 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Get available columns for a pipe report. Each item includes `name` (internal field id for `fields`) and `label`.
 
+            The ``name`` values here are for **report** configuration and exports only; they are
+            not the same slugs used by ``find_cards`` (use ``get_phase_fields`` / ``get_start_form_fields`` for that).
+
             Args:
                 pipe_uuid: Pipe UUID.
                 debug: When True, append GraphQL codes and correlation_id to errors.
@@ -114,6 +117,8 @@ class ReportTools:
             debug: bool = False,
         ) -> dict[str, Any]:
             """Get filterable fields for a pipe report (nested groups; use `name` for filter fields).
+
+            Like ``get_pipe_report_columns``, the ``name`` keys are for **reports**, not for ``find_cards``.
 
             Args:
                 pipe_uuid: Pipe UUID.
@@ -352,9 +357,9 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Delete a pipe report. This action is irreversible.
 
-            Two-step operation: call without ``confirm`` to preview, then with
-            ``confirm=True`` after user approval. When the MCP client supports
-            elicitation, the user is prompted interactively instead.
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
 
             Args:
                 report_id: Pipe report ID to delete.
@@ -486,9 +491,9 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Delete an organization report. This action is irreversible.
 
-            Two-step operation: call without ``confirm`` to preview, then with
-            ``confirm=True`` after user approval. When the MCP client supports
-            elicitation, the user is prompted interactively instead.
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
 
             Args:
                 report_id: Organization report ID to delete.

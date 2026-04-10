@@ -23,7 +23,9 @@ from pipefy_mcp.services.pipefy.types import AutomationServiceResult
 ACTION_ID_GENERATE_WITH_AI = "generate_with_ai"
 
 
-def _automation_condition_for_api(condition: AutomationConditionInput) -> dict[str, Any]:
+def _automation_condition_for_api(
+    condition: AutomationConditionInput,
+) -> dict[str, Any]:
     """Serialize condition for GraphQL without injecting unset model defaults."""
     return condition.model_dump(
         mode="python",
@@ -32,7 +34,9 @@ def _automation_condition_for_api(condition: AutomationConditionInput) -> dict[s
     )
 
 
-def _automation_event_params_for_api(params: AutomationEventParamsInput) -> dict[str, Any]:
+def _automation_event_params_for_api(
+    params: AutomationEventParamsInput,
+) -> dict[str, Any]:
     """Serialize event_params without unset fields or explicit ``None`` values."""
     return params.model_dump(
         mode="python",

@@ -210,6 +210,72 @@ class TestCreateAiAutomation:
         assert "[correlation_id=" not in err
         assert "Could not create the AI automation" in err
 
+    async def test_omitted_condition_sends_default_condition_to_client(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        from pipefy_mcp.models.ai_automation import DEFAULT_CONDITION
+
+        mock_pipefy_client.create_ai_automation.return_value = {
+            "automation_id": "999",
+            "message": "AI Automation created successfully. ID: 999",
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_automation",
+                {
+                    "name": "No Condition",
+                    "event_id": "card_created",
+                    "pipe_id": "303",
+                    "prompt": "Summarize %{133}",
+                    "field_ids": ["133"],
+                },
+            )
+        assert result.isError is False
+        validated_input = mock_pipefy_client.create_ai_automation.call_args[0][0]
+        assert validated_input.condition.model_dump(mode="python") == DEFAULT_CONDITION
+
+    async def test_explicit_condition_overrides_default(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        custom_condition = {
+            "expressions": [
+                {
+                    "structure_id": 1,
+                    "field_address": "status",
+                    "operation": "eq",
+                    "value": "open",
+                }
+            ],
+            "expressions_structure": [[1]],
+        }
+        mock_pipefy_client.create_ai_automation.return_value = {
+            "automation_id": "888",
+            "message": "AI Automation created successfully. ID: 888",
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_automation",
+                {
+                    "name": "Custom Condition",
+                    "event_id": "card_created",
+                    "pipe_id": "303",
+                    "prompt": "Summarize %{133}",
+                    "field_ids": ["133"],
+                    "condition": custom_condition,
+                },
+            )
+        assert result.isError is False
+        validated_input = mock_pipefy_client.create_ai_automation.call_args[0][0]
+        dumped = validated_input.condition.model_dump(mode="python")
+        assert dumped["expressions"][0]["field_address"] == "status"
+        assert dumped["expressions"][0]["operation"] == "eq"
+
     async def test_validation_error_returns_error_payload(
         self,
         client_session,

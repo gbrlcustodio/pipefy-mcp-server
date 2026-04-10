@@ -9,8 +9,8 @@ from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.core.pipefy_tool_lifecycle import (
+    mark_pipefy_tool_registration_complete,
     prepare_app_for_repeat_pipefy_tool_registration,
-    store_pipefy_owned_tool_names,
 )
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.registry import ToolRegistry
@@ -31,7 +31,7 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
             services_container=services_container,
         )
         mcp = registry.register_tools()
-        store_pipefy_owned_tool_names(app, set(registry.pipefy_tool_names))
+        mark_pipefy_tool_registration_complete(app, set(registry.pipefy_tool_names))
     except Exception:
         logger.exception("Fatal error during server lifespan initialization")
         raise

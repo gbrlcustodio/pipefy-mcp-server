@@ -19,6 +19,11 @@ PIPEFY_OWNED_TOOL_NAMES_ATTR = "_pipefy_tool_names"
 def prepare_app_for_repeat_pipefy_tool_registration(app: FastMCP) -> None:
     """Remove only Pipefy-owned tools before re-registering on a repeat lifespan visit.
 
+    Runs **only** after a prior lifespan completed tool registration successfully
+    (see :func:`mark_pipefy_tool_registration_complete`). Does not mutate the
+    repeat-visit flag: that is set only after ``register_tools()`` succeeds so a
+    failed initialization cannot leave the app marked as a consolidated repeat visit.
+
     FastMCP's ToolManager keeps the first registered callable when names collide.
     In-process MCP sessions (tests, Cursor) can enter lifespan multiple times;
     ``initialize_services`` then updates the container but tools would still call
@@ -29,21 +34,23 @@ def prepare_app_for_repeat_pipefy_tool_registration(app: FastMCP) -> None:
     Args:
         app: FastMCP server instance bound to this process.
     """
-    if getattr(app, PIPEFY_REPEAT_VISIT_FLAG_ATTR, False):
-        owned = getattr(app, PIPEFY_OWNED_TOOL_NAMES_ATTR, None)
-        if not owned:
-            logger.warning(
-                "Repeat MCP lifespan visit but %s is missing or empty; "
-                "skipping selective Pipefy tool cleanup.",
-                PIPEFY_OWNED_TOOL_NAMES_ATTR,
-            )
-        else:
-            remove_fastmcp_tools_by_name(app, set(owned))
-    setattr(app, PIPEFY_REPEAT_VISIT_FLAG_ATTR, True)
+    if not getattr(app, PIPEFY_REPEAT_VISIT_FLAG_ATTR, False):
+        return
+    owned = getattr(app, PIPEFY_OWNED_TOOL_NAMES_ATTR, None)
+    if not owned:
+        logger.warning(
+            "Repeat MCP lifespan visit but %s is missing or empty; "
+            "skipping selective Pipefy tool cleanup.",
+            PIPEFY_OWNED_TOOL_NAMES_ATTR,
+        )
+        return
+    remove_fastmcp_tools_by_name(app, set(owned))
 
 
-def store_pipefy_owned_tool_names(app: FastMCP, names: set[str]) -> None:
-    """Record Pipefy-registered tool names on ``app`` for the next selective cleanup.
+def mark_pipefy_tool_registration_complete(app: FastMCP, names: set[str]) -> None:
+    """Persist owned tool names and mark that a lifespan registration completed.
+
+    Call only after ``ToolRegistry.register_tools()`` succeeds.
 
     Args:
         app: FastMCP server instance.
@@ -51,3 +58,4 @@ def store_pipefy_owned_tool_names(app: FastMCP, names: set[str]) -> None:
             (must match ``ToolManager.remove_tool``).
     """
     setattr(app, PIPEFY_OWNED_TOOL_NAMES_ATTR, set(names))
+    setattr(app, PIPEFY_REPEAT_VISIT_FLAG_ATTR, True)

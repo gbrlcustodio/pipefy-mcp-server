@@ -229,3 +229,74 @@ async def test_lifespan_logs_error_when_initialization_raises():
         mock_logger.exception.assert_called_once()
         call_msg = mock_logger.exception.call_args[0][0]
         assert "Fatal error during server lifespan" in call_msg
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_lifespan_failed_register_tools_does_not_mark_repeat_visit_state():
+    """``register_tools`` failure must not set repeat-visit flag or owned tool names."""
+    import pipefy_mcp.core.pipefy_tool_lifecycle as ptl
+    from pipefy_mcp.server import lifespan
+
+    app = FastMCP("fail-register-tools")
+    mock_container = MagicMock()
+    mock_container.pipefy_client = MagicMock()
+
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch(
+            "pipefy_mcp.server.ServicesContainer.get_instance",
+            return_value=mock_container,
+        ),
+        patch("pipefy_mcp.server.ToolRegistry") as mock_registry_cls,
+    ):
+        mock_registry = MagicMock()
+        mock_registry_cls.return_value = mock_registry
+        mock_registry.register_tools.side_effect = RuntimeError("register failed")
+
+        with pytest.raises(RuntimeError, match="register failed"):
+            async with lifespan(app):
+                pass
+
+    assert getattr(app, ptl.PIPEFY_REPEAT_VISIT_FLAG_ATTR, False) is False
+    assert getattr(app, ptl.PIPEFY_OWNED_TOOL_NAMES_ATTR, None) is None
+
+
+@pytest.mark.unit
+@pytest.mark.anyio
+async def test_lifespan_retry_after_failed_register_tools_succeeds():
+    """After a failed ``register_tools``, a later successful run completes mark state."""
+    import pipefy_mcp.core.pipefy_tool_lifecycle as ptl
+    from pipefy_mcp.server import lifespan
+
+    app = FastMCP("retry-after-fail")
+    mock_container = MagicMock()
+    mock_container.pipefy_client = MagicMock()
+
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch(
+            "pipefy_mcp.server.ServicesContainer.get_instance",
+            return_value=mock_container,
+        ),
+        patch("pipefy_mcp.server.ToolRegistry") as mock_registry_cls,
+    ):
+        mock_fail = MagicMock()
+        mock_fail.register_tools.side_effect = RuntimeError("register failed")
+        mock_ok = MagicMock()
+        mock_ok.register_tools.return_value = app
+        mock_ok.pipefy_tool_names = {"create_card"}
+        mock_registry_cls.side_effect = [mock_fail, mock_ok]
+
+        with pytest.raises(RuntimeError, match="register failed"):
+            async with lifespan(app):
+                pass
+
+        assert getattr(app, ptl.PIPEFY_REPEAT_VISIT_FLAG_ATTR, False) is False
+
+        async with lifespan(app):
+            pass
+
+        mock_ok.register_tools.assert_called_once()
+        assert getattr(app, ptl.PIPEFY_REPEAT_VISIT_FLAG_ATTR, False) is True
+        assert getattr(app, ptl.PIPEFY_OWNED_TOOL_NAMES_ATTR) == {"create_card"}

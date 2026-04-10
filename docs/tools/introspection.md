@@ -1,6 +1,6 @@
 # Introspection & Raw GraphQL
 
-Schema discovery tools plus a last-resort executor. Same OAuth client as everything else. **6 tools.**
+Schema discovery tools plus a last-resort executor. Same OAuth client as everything else. **5 tools.**
 
 Prefer dedicated tools for standard operations. Use these when the schema shifts or no dedicated tool exists.
 

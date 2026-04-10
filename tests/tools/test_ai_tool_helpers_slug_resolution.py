@@ -334,6 +334,33 @@ async def test_resolve_handles_snake_case_keys():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_resolve_rewrites_instruction_field_slug_to_numeric():
+    client = AsyncMock()
+    client.get_pipe = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [],
+                "start_form_fields": [
+                    {"id": "resumo_de_briefing_ia", "internal_id": "427911728"},
+                ],
+            }
+        }
+    )
+
+    b = _behavior_with_fields("306996636", ["427911728"])
+    b["actionParams"]["aiBehaviorParams"]["instruction"] = (
+        "Read %{field:resumo_de_briefing_ia} then stop."
+    )
+    resolved = await resolve_field_slugs_to_numeric(client, [b])
+
+    assert (
+        resolved[0]["actionParams"]["aiBehaviorParams"]["instruction"]
+        == "Read %{field:427911728} then stop."
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_resolve_skips_behaviors_without_pipe_id():
     client = AsyncMock()
 

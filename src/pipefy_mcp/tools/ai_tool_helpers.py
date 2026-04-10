@@ -429,6 +429,47 @@ def _extract_slug_field_ids_by_pipe(
     return slugs_by_pipe
 
 
+_INSTRUCTION_FIELD_TOKEN_RE = re.compile(r"%\{field:([^}]+)\}")
+
+
+def _instruction_has_non_numeric_field_tokens(instruction: str) -> bool:
+    for m in _INSTRUCTION_FIELD_TOKEN_RE.finditer(instruction):
+        if m.group(1) and not m.group(1).strip().isdigit():
+            return True
+    return False
+
+
+def _pipe_ids_from_behavior(behavior: dict[str, Any]) -> set[str]:
+    pids: set[str] = set()
+    ap = behavior.get("actionParams") or behavior.get("action_params") or {}
+    if not isinstance(ap, dict):
+        return pids
+    abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
+    if not isinstance(abp, dict):
+        return pids
+    for a in abp.get("actionsAttributes") or abp.get("actions_attributes") or []:
+        if not isinstance(a, dict):
+            continue
+        pid = str((a.get("metadata") or {}).get("pipeId", ""))
+        if pid:
+            pids.add(pid)
+    return pids
+
+
+def _rewrite_instruction_field_tokens(
+    instruction: str, slug_to_numeric: dict[str, str]
+) -> str:
+    def repl(m: re.Match[str]) -> str:
+        key = m.group(1).strip()
+        if key.isdigit():
+            return m.group(0)
+        if key in slug_to_numeric:
+            return f"%{{field:{slug_to_numeric[key]}}}"
+        return m.group(0)
+
+    return _INSTRUCTION_FIELD_TOKEN_RE.sub(repl, instruction)
+
+
 async def build_field_slug_map(
     client: PipefyClient,
     pipe_id: str | int,
@@ -477,28 +518,36 @@ async def resolve_field_slugs_to_numeric(
     client: PipefyClient,
     behaviors: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Replace slug fieldIds with numeric internal_ids in behavior metadata.
-
-    Scans ``fieldsAttributes[].fieldId`` across all behaviors for non-numeric values.
-    When found, fetches each target pipe's fields to build a slug→numeric map and
-    replaces matches. Returns a deep copy; the original ``behaviors`` list is not mutated.
-
-    Unresolvable slugs are left as-is (the API will reject them with the existing
-    enriched error).
+    """Resolve slug ``fieldId`` values and ``%{field:<slug>}`` tokens to numeric internal ids.
 
     Args:
         client: PipefyClient for fetching pipe field data.
         behaviors: Behavior dicts (same shape as ``create_ai_agent`` / ``update_ai_agent``).
 
     Returns:
-        Behaviors with slug fieldIds replaced by numeric IDs where resolvable.
+        New list when any pipe fetch ran; otherwise the original list. Unresolved slugs unchanged.
     """
     slugs_by_pipe = _extract_slug_field_ids_by_pipe(behaviors)
-    if not slugs_by_pipe:
+    pipes_needed: set[str] = set(slugs_by_pipe.keys())
+
+    for b in behaviors:
+        if not isinstance(b, dict):
+            continue
+        ap = b.get("actionParams") or b.get("action_params") or {}
+        if not isinstance(ap, dict):
+            continue
+        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
+        if not isinstance(abp, dict):
+            continue
+        instr = abp.get("instruction")
+        if isinstance(instr, str) and _instruction_has_non_numeric_field_tokens(instr):
+            pipes_needed.update(_pipe_ids_from_behavior(b))
+
+    if not pipes_needed:
         return behaviors
 
     slug_to_numeric: dict[str, str] = {}
-    for pipe_id_str in slugs_by_pipe:
+    for pipe_id_str in pipes_needed:
         try:
             field_map = await build_field_slug_map(client, pipe_id_str)
             slug_to_numeric.update(field_map)
@@ -531,6 +580,12 @@ async def resolve_field_slugs_to_numeric(
                 fid = str(fa.get("fieldId", ""))
                 if fid in slug_to_numeric:
                     fa["fieldId"] = slug_to_numeric[fid]
+
+        instr = abp.get("instruction")
+        if isinstance(instr, str):
+            abp["instruction"] = _rewrite_instruction_field_tokens(
+                instr, slug_to_numeric
+            )
 
     return resolved
 

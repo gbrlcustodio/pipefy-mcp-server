@@ -18,6 +18,8 @@ from mcp.server.session import ServerSession
 from pydantic import BaseModel, Field
 from typing_extensions import TypedDict
 
+from pipefy_mcp.tools.mcp_capabilities import supports_elicitation
+
 
 class DestructiveActionConfirmation(BaseModel):
     """Schema shown to the user when the MCP client supports elicitation."""
@@ -73,7 +75,7 @@ async def check_destructive_confirmation(
     if confirm:
         return None
 
-    can_elicit = ctx.session.client_params.capabilities.elicitation
+    can_elicit = supports_elicitation(ctx)
 
     if can_elicit:
         return await _elicit_confirmation(ctx, resource_descriptor)

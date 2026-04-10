@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 from random import randint
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, Mock
 
@@ -211,6 +212,37 @@ class TestCreateCardTool:
                 ),
             }
             assert response == expected_response
+
+    async def test_create_card_when_capabilities_missing_no_attribute_error(
+        self,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """client_params without capabilities must not raise when gating elicitation."""
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "789"}}
+        }
+
+        mcp = FastMCP("Pipefy MCP Test Server")
+        PipeTools.register(mcp, mock_pipefy_client)
+
+        ctx = MagicMock()
+        ctx.debug = AsyncMock()
+        ctx.session = SimpleNamespace(client_params=SimpleNamespace())
+
+        result = await mcp._tool_manager.call_tool(
+            "create_card",
+            {"pipe_id": pipe_id},
+            context=ctx,
+            convert_result=False,
+        )
+
+        mock_pipefy_client.create_card.assert_called_once_with(pipe_id, {})
+        assert result["createCard"]["card"]["id"] == "789"
+        assert "card_link" in result
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_without_elicitation_filters_non_editable_fields(

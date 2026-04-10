@@ -1,5 +1,6 @@
 """Tests for the reusable destructive tool confirmation guard."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -107,4 +108,50 @@ class TestWithElicitation:
             ctx, confirm=True, resource_descriptor=RESOURCE
         )
         assert result is None
+        ctx.elicit.assert_not_called()
+
+
+@pytest.mark.anyio
+class TestMissingCapabilityMetadata:
+    async def test_no_client_params_returns_preview(self):
+        ctx = MagicMock()
+        ctx.session = SimpleNamespace()
+        ctx.elicit = AsyncMock()
+        payload = await check_destructive_confirmation(
+            ctx, confirm=False, resource_descriptor=RESOURCE
+        )
+        assert payload is not None
+        assert payload["success"] is False
+        assert payload["requires_confirmation"] is True
+        assert payload["resource"] == RESOURCE
+        assert "confirm=True" in payload["message"]
+        ctx.elicit.assert_not_called()
+
+    async def test_client_params_without_capabilities_returns_preview(self):
+        ctx = MagicMock()
+        ctx.session = SimpleNamespace(client_params=SimpleNamespace())
+        ctx.elicit = AsyncMock()
+        payload = await check_destructive_confirmation(
+            ctx, confirm=False, resource_descriptor=RESOURCE
+        )
+        assert payload is not None
+        assert payload["success"] is False
+        assert payload["requires_confirmation"] is True
+        assert payload["resource"] == RESOURCE
+        assert "confirm=True" in payload["message"]
+        ctx.elicit.assert_not_called()
+
+    async def test_capabilities_without_elicitation_attr_returns_preview(self):
+        ctx = MagicMock()
+        ctx.session = SimpleNamespace(
+            client_params=SimpleNamespace(capabilities=SimpleNamespace()),
+        )
+        ctx.elicit = AsyncMock()
+        payload = await check_destructive_confirmation(
+            ctx, confirm=False, resource_descriptor=RESOURCE
+        )
+        assert payload is not None
+        assert payload["success"] is False
+        assert payload["requires_confirmation"] is True
+        assert payload["resource"] == RESOURCE
         ctx.elicit.assert_not_called()

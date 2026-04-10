@@ -24,6 +24,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_error_codes,
     with_debug_suffix,
 )
+from pipefy_mcp.tools.mcp_capabilities import supports_elicitation
 from pipefy_mcp.tools.phase_transition_helpers import (
     try_enrich_move_card_to_phase_failure,
 )
@@ -108,7 +109,7 @@ class PipeTools:
             await ctx.debug(f"Provided fields: {fields}")
 
             card_data = fields or {}
-            can_elicit = ctx.session.client_params.capabilities.elicitation
+            can_elicit = supports_elicitation(ctx)
 
             if can_elicit:
                 try:
@@ -574,7 +575,7 @@ class PipeTools:
             await ctx.debug(f"Provided fields: {fields}")
 
             field_data = fields or {}
-            can_elicit = ctx.session.client_params.capabilities.elicitation
+            can_elicit = supports_elicitation(ctx)
 
             if can_elicit and expected_fields:
                 try:

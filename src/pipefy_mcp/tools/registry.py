@@ -26,11 +26,32 @@ class ToolRegistry:
     def __init__(self, mcp: FastMCP, services_container: ServicesContainer):
         self.mcp = mcp
         self.services_container = services_container
+        self.pipefy_tool_names: frozenset[str] = frozenset()
+
+    @staticmethod
+    def _snapshot_tool_names(mcp: FastMCP) -> set[str]:
+        try:
+            tools = mcp._tool_manager.list_tools()
+        except AttributeError:
+            return set()
+        try:
+            tool_list = list(tools)
+        except TypeError:
+            return set()
+        names: set[str] = set()
+        for tool in tool_list:
+            try:
+                names.add(tool.name)
+            except AttributeError:
+                continue
+        return names
 
     def register_tools(self) -> FastMCP:
         """Register tools with the MCP server."""
         if self.services_container.pipefy_client is None:
             raise ValueError("Pipefy client is not initialized in services container")
+
+        before = self._snapshot_tool_names(self.mcp)
 
         PipeTools.register(self.mcp, self.services_container.pipefy_client)
         PipeConfigTools.register(self.mcp, self.services_container.pipefy_client)
@@ -48,5 +69,8 @@ class ToolRegistry:
 
         AiAutomationTools.register(self.mcp, self.services_container.pipefy_client)
         AiAgentTools.register(self.mcp, self.services_container.pipefy_client)
+
+        after = self._snapshot_tool_names(self.mcp)
+        self.pipefy_tool_names = frozenset(after - before)
 
         return self.mcp

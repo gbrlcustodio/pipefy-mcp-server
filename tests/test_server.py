@@ -174,6 +174,38 @@ def test_run_server_calls_logger_and_mcp_run():
         mock_mcp.run.assert_called_once()
 
 
+@pytest.mark.anyio
+async def test_repeat_lifespan_preserves_foreign_tools_and_stable_pipefy_names():
+    """Second lifespan visit removes only Pipefy-owned tools, then re-registers; foreign tools stay."""
+    from pipefy_mcp.server import lifespan
+
+    app = FastMCP("repeat-lifespan-test")
+
+    @app.tool()
+    async def foreign_mcp_tool() -> str:
+        """Registered outside ToolRegistry; must survive a second lifespan run."""
+        return "ok"
+
+    mock_container = MagicMock()
+    mock_container.pipefy_client = MagicMock()
+
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch(
+            "pipefy_mcp.server.ServicesContainer.get_instance",
+            return_value=mock_container,
+        ),
+    ):
+        async with lifespan(app):
+            first_names = {t.name for t in app._tool_manager.list_tools()}
+        async with lifespan(app):
+            second_names = {t.name for t in app._tool_manager.list_tools()}
+
+    assert first_names == second_names
+    assert "foreign_mcp_tool" in second_names
+    assert "create_card" in second_names
+
+
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_lifespan_logs_error_when_initialization_raises():

@@ -1,4 +1,4 @@
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from mcp.server.fastmcp import FastMCP
@@ -19,6 +19,7 @@ class TestToolRegistry:
 
         assert registry.mcp is mock_mcp
         assert registry.services_container is mock_container
+        assert registry.pipefy_tool_names == frozenset()
 
     @patch("pipefy_mcp.tools.registry.ObservabilityTools.register")
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
@@ -71,6 +72,7 @@ class TestToolRegistry:
         mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_observability_tools_register.assert_called_once_with(mock_mcp, mock_client)
         assert result is mock_mcp
+        assert registry.pipefy_tool_names == frozenset()
 
     def test_register_tools_raises_when_pipefy_client_is_none(self):
         """Test that register_tools raises ValueError when pipefy_client is None"""
@@ -142,3 +144,14 @@ class TestToolRegistry:
         mock_observability_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_ai_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_ai_agent_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        assert registry.pipefy_tool_names == frozenset()
+
+    def test_register_tools_records_pipefy_tool_names_on_real_fastmcp(self):
+        mcp = FastMCP("tool-registry-names")
+        mock_container = Mock(spec=ServicesContainer)
+        mock_container.pipefy_client = MagicMock()
+        registry = ToolRegistry(mcp=mcp, services_container=mock_container)
+        registry.register_tools()
+
+        assert "create_card" in registry.pipefy_tool_names
+        assert len(registry.pipefy_tool_names) > 50

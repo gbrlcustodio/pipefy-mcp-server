@@ -23,6 +23,7 @@
 <p align="center">
   <a href="#mcp-tools">MCP tools</a> •
   <a href="#getting-started">Getting started</a> •
+  <a href="#why-these-dependencies">Why these dependencies?</a> •
   <a href="#mcp-clients">MCP clients</a> •
   <a href="#development--testing">Development & Testing</a> •
   <a href="#contributing">Contributing</a>
@@ -80,6 +81,16 @@ cp .env.example .env
 ```
 
 **Environment variables:** names, placeholders, and how `.env` interacts with Pydantic Settings are documented in **[Configuration](docs/configuration.md)** (keys themselves live only in [`.env.example`](.env.example)).
+
+### Why these dependencies?
+
+The runtime stack in [`pyproject.toml`](pyproject.toml) is small on purpose. For a longer rationale (code references and security notes), see **[Dependencies](docs/dependencies.md)**. Summary:
+
+| Package | Role in this server |
+|--------|---------------------|
+| **httpx** | Async HTTP client used by `gql` for GraphQL (`HTTPXAsyncTransport`), Pipefy’s internal GraphQL API, presigned S3 uploads/downloads for attachments, and downloading signed export URLs (automation job / observability flows). |
+| **httpx-auth** | `OAuth2ClientCredentials` for service-account token acquisition and refresh; shared across GraphQL clients and direct `httpx` calls that need the same Pipefy OAuth settings. |
+| **openpyxl** | Reads `.xlsx` export files (e.g. automation job exports) and converts the first worksheet to CSV text for MCP responses — see `observability_export_csv`. |
 
 ## MCP clients
 

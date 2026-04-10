@@ -10,23 +10,11 @@ from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmati
 RESOURCE = "phase 'Initial' (ID: 42)"
 
 
-def _make_ctx(*, can_elicit, elicit_result=None, elicit_side_effect=None):
+def _make_ctx(*, can_elicit):
     ctx = MagicMock()
     ctx.session.client_params.capabilities.elicitation = can_elicit
-    if elicit_side_effect:
-        ctx.elicit = AsyncMock(side_effect=elicit_side_effect)
-    elif elicit_result is not None:
-        ctx.elicit = AsyncMock(return_value=elicit_result)
-    else:
-        ctx.elicit = AsyncMock()
+    ctx.elicit = AsyncMock()
     return ctx
-
-
-def _elicit_result(action, confirm_value=True):
-    result = MagicMock()
-    result.action = action
-    result.data.model_dump.return_value = {"confirm": confirm_value}
-    return result
 
 
 @pytest.mark.anyio
@@ -41,6 +29,7 @@ class TestNoElicitation:
         assert payload["requires_confirmation"] is True
         assert payload["resource"] == RESOURCE
         assert "confirm=True" in payload["message"]
+        ctx.elicit.assert_not_called()
 
     async def test_confirm_true_returns_none(self):
         ctx = _make_ctx(can_elicit=False)
@@ -48,48 +37,15 @@ class TestNoElicitation:
             ctx, confirm=True, resource_descriptor=RESOURCE
         )
         assert result is None
+        ctx.elicit.assert_not_called()
 
 
 @pytest.mark.anyio
-class TestWithElicitation:
-    async def test_user_accepts_returns_none(self):
-        ctx = _make_ctx(
-            can_elicit=True,
-            elicit_result=_elicit_result(action="accept", confirm_value=True),
-        )
-        result = await check_destructive_confirmation(
-            ctx, confirm=False, resource_descriptor=RESOURCE
-        )
-        assert result is None
+class TestClientAdvertisesElicitation:
+    """Even when the client supports elicitation, only ``confirm=True`` authorizes deletion."""
 
-    async def test_user_declines_returns_cancel(self):
-        ctx = _make_ctx(
-            can_elicit=True,
-            elicit_result=_elicit_result(action="decline"),
-        )
-        payload = await check_destructive_confirmation(
-            ctx, confirm=False, resource_descriptor=RESOURCE
-        )
-        assert payload is not None
-        assert payload["success"] is False
-        assert "cancelled" in payload["error"].lower()
-
-    async def test_user_accepts_but_confirm_false_returns_cancel(self):
-        ctx = _make_ctx(
-            can_elicit=True,
-            elicit_result=_elicit_result(action="accept", confirm_value=False),
-        )
-        payload = await check_destructive_confirmation(
-            ctx, confirm=False, resource_descriptor=RESOURCE
-        )
-        assert payload is not None
-        assert payload["success"] is False
-
-    async def test_elicitation_raises_falls_back_to_preview(self):
-        ctx = _make_ctx(
-            can_elicit=True,
-            elicit_side_effect=RuntimeError("elicit broke"),
-        )
+    async def test_confirm_false_returns_preview_and_never_elicits(self):
+        ctx = _make_ctx(can_elicit=True)
         payload = await check_destructive_confirmation(
             ctx, confirm=False, resource_descriptor=RESOURCE
         )
@@ -97,13 +53,11 @@ class TestWithElicitation:
         assert payload["success"] is False
         assert payload["requires_confirmation"] is True
         assert payload["resource"] == RESOURCE
+        assert "confirm=True" in payload["message"]
+        ctx.elicit.assert_not_called()
 
-    async def test_confirm_true_bypasses_elicitation(self):
-        """When confirm=True, skip elicitation prompt and proceed immediately."""
-        ctx = _make_ctx(
-            can_elicit=True,
-            elicit_result=_elicit_result(action="accept", confirm_value=True),
-        )
+    async def test_confirm_true_returns_none_without_elicit(self):
+        ctx = _make_ctx(can_elicit=True)
         result = await check_destructive_confirmation(
             ctx, confirm=True, resource_descriptor=RESOURCE
         )

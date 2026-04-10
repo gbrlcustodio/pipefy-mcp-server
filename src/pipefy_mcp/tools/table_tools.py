@@ -586,9 +586,9 @@ class TableTools:
         ) -> dict[str, Any]:
             """Delete a table record permanently.
 
-            Two-step operation: call without ``confirm`` to preview, then with
-            ``confirm=True`` after user approval. When the MCP client supports
-            elicitation, the user is prompted interactively instead.
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
 
             Args:
                 record_id: Record ID to delete.
@@ -824,9 +824,9 @@ class TableTools:
         ) -> dict[str, Any]:
             """Delete a database table field (column) permanently.
 
-            Two-step operation: call without ``confirm`` to preview, then with
-            ``confirm=True`` after user approval. When the MCP client supports
-            elicitation, the user is prompted interactively instead.
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
 
             Args:
                 field_id: Table field ID to delete.

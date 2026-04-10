@@ -402,9 +402,9 @@ class PipeConfigTools:
         ) -> dict[str, Any]:
             """Delete a phase permanently.
 
-            Two-step operation: call without ``confirm`` to preview, then with
-            ``confirm=True`` after user approval. When the MCP client supports
-            elicitation, the user is prompted interactively instead.
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
 
             Args:
                 phase_id: Phase ID to delete.
@@ -596,9 +596,9 @@ class PipeConfigTools:
         ) -> dict[str, Any]:
             """Delete a phase field permanently.
 
-            Two-step operation: call without ``confirm`` to preview, then with
-            ``confirm=True`` after user approval. When the MCP client supports
-            elicitation, the user is prompted interactively instead.
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
 
             ``field_id`` is the field slug (e.g. ``"prioridade"``) or uuid.
             When the slug is shared across phases, pass ``pipe_uuid`` to
@@ -747,9 +747,9 @@ class PipeConfigTools:
         ) -> dict[str, Any]:
             """Delete a label permanently.
 
-            Two-step operation: call without ``confirm`` to preview, then with
-            ``confirm=True`` after user approval. When the MCP client supports
-            elicitation, the user is prompted interactively instead.
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
 
             Args:
                 label_id: Label ID to delete.

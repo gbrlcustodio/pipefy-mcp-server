@@ -30,7 +30,7 @@ from pipefy_mcp.settings import PipefySettings
 
 
 def inject_reference_ids(behaviors: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Deep-copy behaviors and assign a UUID ``referenceId`` per action; append ``%{action:<uuid>}`` to instruction.
+    """Deep-copy behaviors and assign a UUID ``referenceId`` per action; append ``%{action:<uuid>}`` lines to instruction.
 
     Args:
         behaviors: Behavior dicts with ``actionParams.aiBehaviorParams.actionsAttributes``.
@@ -107,9 +107,6 @@ class AiAgentService(BasePipefyClient):
 
     async def update_agent(self, agent_input: UpdateAiAgentInput) -> AgentServiceResult:
         """Update an AI Agent with instruction and behaviors.
-
-        Calls inject_reference_ids on behaviors before building the payload
-        so each action gets a fresh UUID v4 referenceId.
 
         Args:
             agent_input: Validated update input with uuid, name, repo_uuid, behaviors.

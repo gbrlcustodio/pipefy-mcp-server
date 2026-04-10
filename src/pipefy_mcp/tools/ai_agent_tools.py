@@ -24,6 +24,9 @@ from pipefy_mcp.tools.ai_tool_helpers import (
     resolve_field_slugs_to_numeric,
     validate_behaviors_against_pipe,
 )
+from pipefy_mcp.tools.behavior_placeholder_interpolation import (
+    expand_behaviors_placeholders,
+)
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 from pipefy_mcp.tools.phase_transition_helpers import (
@@ -211,8 +214,14 @@ class AiAgentTools:
                 not accept ``update_card_field`` as an actionType for AI behaviors.
               - **``metadata: {}`` is never valid** for known action types — it causes
                 ``RECORD_NOT_SAVED``. Always include the required keys.
-              - The server injects ``referenceId`` UUIDs and ``%{action:<uuid>}`` placeholders
-                into each behavior's instruction automatically — do not set them manually.
+              - Behavior ``instruction``: use ``%{field:<internal_id>}``; slugs are rewritten to ids
+                when an action supplies ``pipeId``. ``%{action:<uuid>}`` lines are appended per action;
+                do not set ``referenceId`` manually. Bare ``{field:…}`` / ``{action:uuid}`` get a ``%``
+                prefix before the API call.
+            - **Template params:** per behavior you may pass ``template_params`` (or ``placeholders``)
+                with string values and use ``{{name}}`` in any string (instruction, metadata IDs, etc.).
+                Optionally set ``instruction_template`` instead of ``actionParams.aiBehaviorParams.instruction``
+                — the tool interpolates and writes the final instruction before calling the API.
 
             Args:
                 name: Agent display name.
@@ -221,6 +230,7 @@ class AiAgentTools:
                 behaviors: 1–5 behavior dicts. Each requires ``name``, ``event_id``, and
                     ``actionParams.aiBehaviorParams`` with a non-empty ``actionsAttributes`` list.
                     Optional: ``eventParams`` to filter event triggers (e.g. ``triggerFieldIds``, ``to_phase_id``).
+                    Optional: ``template_params`` / ``placeholders``, ``instruction_template``.
                     See example above for the full shape.
                 data_source_ids: Optional knowledge-source IDs (same as ``update_ai_agent``).
             """
@@ -236,11 +246,15 @@ class AiAgentTools:
             if not instruction or not instruction.strip():
                 return build_ai_tool_error("instruction must not be blank")
             try:
+                behaviors_expanded = expand_behaviors_placeholders(behaviors)
+            except ValueError as exc:
+                return build_ai_tool_error(str(exc))
+            try:
                 validated = CreateAiAgentInput(
                     name=name,
                     repo_uuid=repo_uuid,
                     instruction=instruction,
-                    behaviors=behaviors,
+                    behaviors=behaviors_expanded,
                     data_source_ids=data_source_ids or [],
                 )
             except ValidationError as exc:
@@ -249,7 +263,9 @@ class AiAgentTools:
             try:
                 create_result = await client.create_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(enrich_behavior_error(exc, behaviors))
+                return build_ai_tool_error(
+                    enrich_behavior_error(exc, behaviors_expanded)
+                )
 
             agent_uuid = create_result["agent_uuid"]
 
@@ -270,7 +286,7 @@ class AiAgentTools:
             except Exception as exc:  # noqa: BLE001
                 return build_create_agent_partial_failure(
                     agent_uuid=agent_uuid,
-                    error=await _enrich_with_validation(exc, behaviors),
+                    error=await _enrich_with_validation(exc, behaviors_expanded),
                 )
 
             msg = f"AI Agent created and configured successfully. UUID: {agent_uuid}"
@@ -296,8 +312,8 @@ class AiAgentTools:
             full behavior dict example, discovery workflow, and constraints).
 
             To modify an existing agent: call ``get_ai_agent`` first, edit the returned config,
-            and send the full payload back. The server injects ``referenceId`` and ``%{action:<uuid>}``
-            placeholders automatically — do not set or preserve them from ``get_ai_agent``.
+            and send the full payload back. The server replaces ``referenceId`` and appends
+            ``%{action:<uuid>}`` lines to the instruction on each update (same as create flow).
 
             Known ``actionType`` values and their required ``metadata`` (same as ``create_ai_agent``):
               - ``move_card`` → ``{"destinationPhaseId": "<phase_id>"}``
@@ -321,6 +337,8 @@ class AiAgentTools:
                 behaviors: 1–5 behavior dicts. Same shape as ``create_ai_agent``: each needs ``name``,
                     ``event_id``, and ``actionParams.aiBehaviorParams.actionsAttributes``.
                     Accepts both ``snake_case`` and ``camelCase`` keys.
+                    Optional: ``template_params`` / ``placeholders`` and ``instruction_template``
+                    (same interpolation as ``create_ai_agent``).
                 data_source_ids: Optional list of data source IDs.
             """
             await ctx.debug(
@@ -332,7 +350,13 @@ class AiAgentTools:
                 return build_ai_tool_error("name must not be blank")
             if not repo_uuid or not repo_uuid.strip():
                 return build_ai_tool_error("repo_uuid must not be blank")
-            resolved_behaviors = await resolve_field_slugs_to_numeric(client, behaviors)
+            try:
+                behaviors_expanded = expand_behaviors_placeholders(behaviors)
+            except ValueError as exc:
+                return build_ai_tool_error(str(exc))
+            resolved_behaviors = await resolve_field_slugs_to_numeric(
+                client, behaviors_expanded
+            )
             try:
                 validated = UpdateAiAgentInput(
                     uuid=uuid,
@@ -532,11 +556,22 @@ class AiAgentTools:
             if not pid:
                 return build_ai_tool_error("pipe_id must not be blank")
 
+            try:
+                behaviors_expanded = expand_behaviors_placeholders(behaviors)
+            except ValueError as exc:
+                return {
+                    "success": True,
+                    "valid": False,
+                    "problems": [str(exc)],
+                    "warnings": [],
+                    "message": "Behavior placeholder expansion failed.",
+                }
+
             # Pydantic structural validation
             try:
                 from pipefy_mcp.models.ai_agent import BehaviorInput
 
-                for b in behaviors:
+                for b in behaviors_expanded:
                     BehaviorInput.model_validate(b)
             except ValidationError as exc:
                 return {
@@ -546,6 +581,8 @@ class AiAgentTools:
                     "warnings": [],
                     "message": "Behavior dicts failed structural validation (BehaviorInput).",
                 }
+
+            behaviors = behaviors_expanded
 
             try:
                 (

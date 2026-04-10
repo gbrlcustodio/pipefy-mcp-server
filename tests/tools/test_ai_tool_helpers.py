@@ -89,6 +89,29 @@ def test_enrich_with_empty_behaviors():
 
 
 @pytest.mark.unit
+def test_enrich_strips_internal_api_diagnostic_markers():
+    exc = ValueError(
+        "Invalid prompt [code=INVALID_PROMPT] [correlation_id=secret-correlation-uuid]"
+    )
+    behaviors = _make_behaviors(("B1", "card_created", "update_card"))
+    result = enrich_behavior_error(exc, behaviors)
+    assert "Invalid prompt" in result
+    assert "[code=" not in result
+    assert "[correlation_id=" not in result
+    assert "secret-correlation-uuid" not in result
+
+
+@pytest.mark.unit
+def test_enrich_only_diagnostic_markers_uses_generic_fallback():
+    exc = ValueError(" [code=X] [correlation_id=Y]")
+    behaviors = _make_behaviors(("B1", "card_created", "update_card"))
+    result = enrich_behavior_error(exc, behaviors)
+    assert "The AI behavior request failed" in result
+    assert "[code=" not in result
+    assert "Behaviors sent (1):" in result
+
+
+@pytest.mark.unit
 def test_enrich_handles_camel_case_behavior_keys():
     behaviors = [
         {

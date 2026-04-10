@@ -10,7 +10,10 @@ from typing import TYPE_CHECKING, Any, Literal
 from typing_extensions import TypedDict
 
 from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload
-from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_error_strings,
+    strip_internal_api_diagnostic_markers,
+)
 
 if TYPE_CHECKING:
     from pipefy_mcp.services.pipefy import PipefyClient
@@ -164,6 +167,9 @@ def build_delete_agent_success(*, message: str) -> DeleteAiAgentSuccessPayload:
 def build_ai_tool_error(message: str) -> AiToolErrorPayload:
     """Generic AI-tool failure envelope.
 
+    Does not alter ``message``; callers must pass user-safe text (sanitized when
+    the source is ``InternalApiClient`` / GraphQL errors with diagnostic suffixes).
+
     Args:
         message: User-visible failure reason.
     """
@@ -185,6 +191,10 @@ def build_create_agent_partial_failure(
 # --- Error enrichment for behavior-level failures ---
 
 # Patterns the Pipefy API returns that map to actionable advice.
+_BEHAVIOR_ERROR_EMPTY_AFTER_SANITIZE = (
+    "The AI behavior request failed. Check behaviors and pipe context, then retry."
+)
+
 _ERROR_HINTS: list[tuple[re.Pattern[str], str]] = [
     (
         re.compile(r"RECORD_NOT_SAVED", re.IGNORECASE),
@@ -659,8 +669,9 @@ def enrich_behavior_error(
 ) -> str:
     """Build an enriched error message with behavior context and actionable hints.
 
-    Extracts raw GraphQL messages, appends a behavior summary, and matches
-    known error patterns to actionable advice.
+    Extracts GraphQL messages, strips InternalApiClient-style ``[code=…]`` /
+    ``[correlation_id=…]`` markers from the primary line, appends a behavior
+    summary, and matches known error patterns to actionable advice.
 
     Args:
         exc: The exception from the service call.
@@ -668,6 +679,9 @@ def enrich_behavior_error(
     """
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else str(exc)
+    base = strip_internal_api_diagnostic_markers(base).strip()
+    if not base:
+        base = _BEHAVIOR_ERROR_EMPTY_AFTER_SANITIZE
 
     hints: list[str] = []
     for pattern, hint in _ERROR_HINTS:

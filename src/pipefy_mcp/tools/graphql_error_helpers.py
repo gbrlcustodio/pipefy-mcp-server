@@ -5,6 +5,58 @@ from __future__ import annotations
 import re
 from typing import Any
 
+# Suffixes appended by InternalApiClient for service-layer diagnostics; MCP tools
+# should strip these from default user-visible errors (see task 4.2).
+_INTERNAL_API_CODE_SUFFIX_RE = re.compile(r"\s*\[code=[^\]]*\]")
+_INTERNAL_API_CORRELATION_SUFFIX_RE = re.compile(r"\s*\[correlation_id=[^\]]*\]")
+_INTERNAL_API_CODE_BRACKET_CAPTURE_RE = re.compile(r"\[code=([^\]]*)\]")
+_INTERNAL_API_CORRELATION_BRACKET_CAPTURE_RE = re.compile(
+    r"\[correlation_id=([^\]]*)\]"
+)
+
+
+def strip_internal_api_diagnostic_markers(message: str) -> str:
+    """Remove ``[code=…]`` / ``[correlation_id=…]`` markers from a message string.
+
+    ``InternalApiClient`` appends these to GraphQL error text for logs and tests.
+    Multiple occurrences (e.g. ``; ``-joined errors) are all removed.
+
+    Args:
+        message: Raw error text, often ``str(ValueError(...))`` from the client.
+    """
+    stripped = _INTERNAL_API_CORRELATION_SUFFIX_RE.sub("", message)
+    stripped = _INTERNAL_API_CODE_SUFFIX_RE.sub("", stripped)
+    return stripped.strip()
+
+
+def extract_internal_api_bracket_codes(message: str) -> list[str]:
+    """Collect distinct ``code`` values from ``[code=…]`` markers (InternalApiClient).
+
+    Args:
+        message: Raw exception text before stripping markers.
+    """
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw_code in _INTERNAL_API_CODE_BRACKET_CAPTURE_RE.findall(message):
+        code = raw_code.strip()
+        if code and code not in seen:
+            seen.add(code)
+            out.append(code)
+    return out
+
+
+def extract_internal_api_bracket_correlation_id(message: str) -> str | None:
+    """Return the first non-empty correlation id from ``[correlation_id=…]`` markers.
+
+    Args:
+        message: Raw exception text before stripping markers.
+    """
+    for raw_cid in _INTERNAL_API_CORRELATION_BRACKET_CAPTURE_RE.findall(message):
+        cid = raw_cid.strip()
+        if cid:
+            return cid
+    return None
+
 
 def extract_error_strings(exc: BaseException) -> list[str]:
     """Best-effort extraction of error messages from gql/GraphQL exceptions."""

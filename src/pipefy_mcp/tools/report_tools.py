@@ -82,6 +82,59 @@ class ReportTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
+        async def get_pipe_report(
+            ctx: Context[ServerSession, None],
+            pipe_uuid: str,
+            report_id: PipefyId,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Fetch one pipe report by ID.
+
+            Uses a filtered list query (``report_id`` + ``first: 1``) — Pipefy exposes no
+            dedicated single-report read field for pipe reports.
+
+            Args:
+                pipe_uuid: Pipe UUID (not numeric ID).
+                report_id: Pipe report ID.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            await ctx.debug(
+                f"get_pipe_report: pipe_uuid={pipe_uuid}, report_id={report_id}"
+            )
+            err = _blank_field_error(pipe_uuid, "pipe_uuid")
+            if err is not None:
+                return err
+            err = _blank_field_error(report_id, "report_id")
+            if err is not None:
+                return err
+            try:
+                raw = await client.get_pipe_reports(
+                    pipe_uuid,
+                    first=1,
+                    report_id=report_id,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return handle_report_tool_graphql_error(
+                    exc, "Get pipe report failed.", debug=debug
+                )
+            edges = (raw.get("pipeReports") or {}).get("edges") or []
+            node: dict[str, Any] | None = None
+            if edges:
+                first_edge = edges[0]
+                if isinstance(first_edge, dict):
+                    node = first_edge.get("node")
+            if not node:
+                return build_report_error_payload(
+                    message=f"Pipe report not found (report_id={report_id}).",
+                )
+            return build_report_read_success_payload(
+                {"pipeReport": node},
+                message="Pipe report retrieved.",
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
         async def get_pipe_report_columns(
             pipe_uuid: str,
             debug: bool = False,

@@ -51,6 +51,12 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     map_delete_comment_error_to_message,
     map_update_comment_error_to_message,
 )
+from pipefy_mcp.tools.relation_tool_helpers import (
+    build_relation_error_payload,
+    build_relation_mutation_success_payload,
+    handle_relation_tool_graphql_error,
+)
+from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 # Key for findCards response; used when reading edges and adding empty message.
 FIND_CARDS_RESPONSE_KEY = "findCards"
@@ -167,6 +173,68 @@ class PipeTools:
             return await client.get_card(card_id, include_fields=include_fields)
 
         @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def get_card_relations(
+            ctx: Context[ServerSession, None],
+            card_id: PipefyId,
+            debug: bool = False,
+        ) -> dict:
+            """List parent and child card relations for a card (full lists; no pagination).
+
+            Use after ``get_card`` or ``find_cards`` when you need linked cards in other pipes.
+            ``child_relations`` and ``parent_relations`` mirror Pipefy's relation groups (name,
+            pipe, linked cards).
+
+            Args:
+                card_id: Card whose relations to load.
+                debug: When True, append GraphQL codes and correlation_id on errors.
+
+            Returns:
+                On success: ``success``, ``message``, ``child_relations``, and ``parent_relations``
+                (API fields ``child_relations`` / ``parent_relations`` on ``Card``). On failure:
+                ``success: False`` and ``error``.
+            """
+            await ctx.debug(f"get_card_relations: card_id={card_id}")
+            card_id_str, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return err
+
+            try:
+                raw = await client.get_card_relations(card_id_str)
+            except Exception as exc:  # noqa: BLE001
+                return handle_relation_tool_graphql_error(
+                    exc, "Get card relations failed.", debug=debug
+                )
+
+            card_node = raw.get("card")
+            if card_node is None:
+                return {
+                    "success": False,
+                    "error": "Card not found or access denied.",
+                }
+
+            # Public GraphQL returns snake_case (``child_relations``); accept camelCase too.
+            child = (
+                card_node.get("child_relations")
+                or card_node.get("childRelations")
+                or []
+            )
+            parent = (
+                card_node.get("parent_relations")
+                or card_node.get("parentRelations")
+                or []
+            )
+            return {
+                "success": True,
+                "message": "Card relations loaded.",
+                "child_relations": child,
+                "parent_relations": parent,
+            }
+
+        @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def add_card_comment(
@@ -276,6 +344,78 @@ class PipeTools:
                 )
 
             return build_delete_comment_success_payload()
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=True,
+            ),
+        )
+        async def delete_card_relation(
+            ctx: Context[ServerSession, None],
+            child_id: PipefyId,
+            parent_id: PipefyId,
+            source_id: PipefyId,
+            confirm: bool = False,
+            debug: bool = False,
+        ) -> dict:
+            """Remove a link between two related cards.
+
+            ``source_id`` is the **pipe relation** id from ``get_pipe_relations`` (same as
+            ``create_card_relation``). Two-step flow: preview with ``confirm=False`` (default),
+            then execute with ``confirm=True`` after explicit approval.
+
+            Args:
+                child_id: Child card ID in the relation.
+                parent_id: Parent card ID in the relation.
+                source_id: Pipe relation ID defining the pipe-to-pipe link.
+                confirm: Must be ``True`` to run the delete mutation.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+
+            Returns:
+                Success payload with mutation result, or ``success: False`` with ``error``.
+            """
+            await ctx.debug(
+                f"delete_card_relation: child_id={child_id}, parent_id={parent_id}, "
+                f"source_id={source_id}, confirm={confirm}"
+            )
+
+            cid, err = validate_tool_id(child_id, "child_id")
+            if err is not None:
+                return err
+            pid, err = validate_tool_id(parent_id, "parent_id")
+            if err is not None:
+                return err
+            sid, err = validate_tool_id(source_id, "source_id")
+            if err is not None:
+                return err
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=(
+                    f"card relation (child: {cid}, parent: {pid}, source: {sid})"
+                ),
+            )
+            if guard is not None:
+                return guard
+
+            try:
+                raw = await client.delete_card_relation(cid, pid, sid)
+            except Exception as exc:  # noqa: BLE001
+                return handle_relation_tool_graphql_error(
+                    exc, "Delete card relation failed.", debug=debug
+                )
+
+            node = raw.get("deleteCardRelation") or {}
+            if node.get("success"):
+                return build_relation_mutation_success_payload(
+                    message="Card relation removed.",
+                    data=raw,
+                )
+            return build_relation_error_payload(
+                message="Delete card relation did not succeed.",
+            )
 
         @mcp.tool(
             annotations=ToolAnnotations(

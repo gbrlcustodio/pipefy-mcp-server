@@ -6,6 +6,8 @@ from pipefy_mcp.tools.validation_helpers import (
     format_json_preview,
     mutation_error_if_not_optional_dict,
     valid_repo_id,
+    validate_optional_tool_id,
+    validate_tool_id,
 )
 
 
@@ -51,3 +53,74 @@ def test_mutation_error_if_not_optional_dict_rejects_non_mapping():
     err_list = mutation_error_if_not_optional_dict([], arg_name="extra_input")
     assert err_list is not None
     assert err_list["success"] is False
+
+
+@pytest.mark.unit
+class TestValidateToolId:
+    def test_positive_int_coerced_to_str(self):
+        val, err = validate_tool_id(42, "card_id")
+        assert val == "42"
+        assert err is None
+
+    def test_non_empty_str_passes(self):
+        val, err = validate_tool_id("abc-123", "pipe_id")
+        assert val == "abc-123"
+        assert err is None
+
+    def test_str_is_stripped(self):
+        val, err = validate_tool_id("  99  ", "id")
+        assert val == "99"
+        assert err is None
+
+    def test_rejects_empty_str(self):
+        val, err = validate_tool_id("", "card_id")
+        assert val is None
+        assert err["success"] is False
+        assert "card_id" in err["error"]
+
+    def test_rejects_whitespace_only(self):
+        val, err = validate_tool_id("   ", "card_id")
+        assert val is None
+        assert err["success"] is False
+
+    def test_rejects_zero(self):
+        val, err = validate_tool_id(0, "card_id")
+        assert val is None
+        assert err["success"] is False
+
+    def test_rejects_negative_int(self):
+        val, err = validate_tool_id(-1, "card_id")
+        assert val is None
+        assert err["success"] is False
+
+    def test_rejects_negative_str(self):
+        val, err = validate_tool_id("-5", "card_id")
+        assert val is None
+        assert err["success"] is False
+
+    def test_rejects_bool(self):
+        val, err = validate_tool_id(True, "card_id")
+        assert val is None
+        assert err["success"] is False
+
+
+@pytest.mark.unit
+class TestValidateOptionalToolId:
+    def test_none_passes_through(self):
+        ok, val, err = validate_optional_tool_id(None, "org_id")
+        assert ok is True
+        assert val is None
+        assert err is None
+
+    def test_valid_value_cleaned(self):
+        ok, val, err = validate_optional_tool_id("  42  ", "org_id")
+        assert ok is True
+        assert val == "42"
+        assert err is None
+
+    def test_invalid_returns_error(self):
+        ok, val, err = validate_optional_tool_id("", "org_id")
+        assert ok is False
+        assert val is None
+        assert err["success"] is False
+        assert "org_id" in err["error"]

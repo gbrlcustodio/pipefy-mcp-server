@@ -34,6 +34,10 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     card_service.create_card = AsyncMock(return_value={"ok": "create"})
     card_service.create_comment = AsyncMock(return_value={"ok": "comment"})
     card_service.delete_card = AsyncMock(return_value={"ok": "delete"})
+    card_service.get_card_relations = AsyncMock(return_value={"ok": "card_relations"})
+    card_service.delete_card_relation = AsyncMock(
+        return_value={"ok": "delete_card_relation"}
+    )
     card_service.get_card = AsyncMock(return_value={"ok": "card"})
     card_service.get_cards = AsyncMock(return_value={"ok": "cards"})
     card_service.move_card_to_phase = AsyncMock(return_value={"ok": "move"})
@@ -173,6 +177,14 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 
     assert await client.delete_card(34) == {"ok": "delete"}
     card_service.delete_card.assert_awaited_once_with(34)
+
+    assert await client.get_card_relations("cr-1") == {"ok": "card_relations"}
+    card_service.get_card_relations.assert_awaited_once_with("cr-1")
+
+    assert await client.delete_card_relation(10, 20, "src") == {
+        "ok": "delete_card_relation"
+    }
+    card_service.delete_card_relation.assert_awaited_once_with(10, 20, "src")
 
     assert await client.get_card(4) == {"ok": "card"}
     card_service.get_card.assert_awaited_once_with(4, include_fields=False)

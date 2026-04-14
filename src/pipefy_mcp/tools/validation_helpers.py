@@ -33,6 +33,68 @@ def valid_repo_id(value: object) -> bool:
     return False
 
 
+def _is_non_positive_numeric(s: str) -> bool:
+    """True when ``s`` is a numeric string representing zero or a negative number."""
+    stripped = s.strip()
+    if stripped.startswith("-") and stripped[1:].isdigit():
+        return True
+    return bool(stripped.isdigit() and int(stripped) <= 0)
+
+
+def validate_tool_id(
+    value: str | int,
+    label: str = "id",
+) -> tuple[str | None, dict[str, object] | None]:
+    """Validate and normalize a Pipefy ID at the tool boundary.
+
+    Returns ``(cleaned_id, None)`` on success or ``(None, error_payload)`` on
+    failure.  Handles empty strings, booleans, zero, and negative numbers.
+
+    Args:
+        value: Raw ID value from the MCP tool parameter.
+        label: Parameter name for the error message (e.g. ``card_id``).
+    """
+    if isinstance(value, bool) or not valid_repo_id(value):
+        return None, {
+            "success": False,
+            "error": (
+                f"Invalid '{label}': provide a non-empty string or positive integer."
+            ),
+        }
+    s = str(value).strip() if isinstance(value, int) else value.strip()
+    if not s:
+        return None, {
+            "success": False,
+            "error": f"Invalid '{label}': provide a non-empty ID.",
+        }
+    if _is_non_positive_numeric(s):
+        return None, {
+            "success": False,
+            "error": f"Invalid '{label}': provide a positive integer.",
+        }
+    return s, None
+
+
+def validate_optional_tool_id(
+    value: str | int | None,
+    label: str = "id",
+) -> tuple[bool, str | None, dict[str, object] | None]:
+    """Validate an optional Pipefy ID.  ``None`` passes through.
+
+    Returns ``(ok, cleaned_id_or_none, error_payload_or_none)``.
+
+    Args:
+        value: Optional raw ID value.
+        label: Parameter name for the error message.
+    """
+    if value is None:
+        return True, None, None
+    cleaned, err = validate_tool_id(value, label)
+    if err is not None:
+        return False, None, err
+    return True, cleaned, None
+
+
 def mutation_error_if_not_optional_dict(
     value: Any,
     *,

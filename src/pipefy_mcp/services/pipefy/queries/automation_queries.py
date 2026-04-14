@@ -146,6 +146,7 @@ GET_AUTOMATIONS_BY_ORG_QUERY = gql(
                 id
                 name
                 active
+                action_id
             }
         }
     }
@@ -160,6 +161,7 @@ GET_AUTOMATIONS_FOR_ORG_AND_REPO_QUERY = gql(
                 id
                 name
                 active
+                action_id
             }
         }
     }

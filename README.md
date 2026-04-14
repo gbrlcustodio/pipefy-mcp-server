@@ -50,7 +50,7 @@ The server exposes **116 tools**, grouped below into **nine** surface areas. Can
 |----------|:-----:|-------------|------|
 | **Pipes & cards** | 34 | Pipes, phases, fields, labels, cards, field conditions, and card-level attachments—read/write/delete as documented per tool. | [Details](docs/tools/pipes-and-cards.md) |
 | **Database tables** | 18 | Tables, records (rows), schema columns (table fields), org-wide table discovery, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
-| **Relations** | 6 | Pipe relations, table relations by ID, and card links across workflows. | [Details](docs/tools/relations.md) |
+| **Relations** | 8 | Pipe relations, table relations by ID, card links, list/delete card-level relations. | [Details](docs/tools/relations.md) |
 | **Reports** | 16 | Pipe and organization reports: discovery, CRUD, and async exports. | [Details](docs/tools/reports.md) |
 | **Automations & AI** | 17 | Traditional automations (rules engine) and AI-powered automations and agents. | [Details](docs/tools/automations-and-ai.md) |
 | **Observability** | 10 | AI agent and automation logs, usage stats, credits, job exports, status polling, and CSV fetch for finished exports. | [Details](docs/tools/observability.md) |

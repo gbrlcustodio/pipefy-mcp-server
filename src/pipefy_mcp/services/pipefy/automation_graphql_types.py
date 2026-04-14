@@ -147,6 +147,7 @@ class AutomationRuleSummary(TypedDict, total=False):
     id: str
     name: str
     active: bool
+    action_id: str
 
 
 class AutomationActionRow(TypedDict, total=False):

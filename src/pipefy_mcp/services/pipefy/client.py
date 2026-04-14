@@ -230,6 +230,14 @@ class PipefyClient:
         """Delete a field condition by ID (permanent)."""
         return await self._pipe_config_service.delete_field_condition(condition_id)
 
+    async def get_field_conditions(self, phase_id: str | int) -> dict:
+        """List field conditions defined on a phase."""
+        return await self._pipe_config_service.get_field_conditions(phase_id)
+
+    async def get_field_condition(self, condition_id: str | int) -> dict:
+        """Get one field condition by ID (rule, expressions, actions)."""
+        return await self._pipe_config_service.get_field_condition(condition_id)
+
     async def get_table(self, table_id: str | int) -> dict:
         """Get a database table by ID (metadata, fields, authorization)."""
         return await self._table_service.get_table(table_id)

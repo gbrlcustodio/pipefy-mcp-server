@@ -51,7 +51,15 @@ def mock_pipefy_client():
     )
     client.delete_comment = AsyncMock(return_value={"deleteComment": {"success": True}})
     client.get_card = AsyncMock()
+    client.get_card_relations = AsyncMock(
+        return_value={
+            "card": {"childRelations": [], "parentRelations": []},
+        }
+    )
     client.delete_card = AsyncMock()
+    client.delete_card_relation = AsyncMock(
+        return_value={"deleteCardRelation": {"success": True}}
+    )
     client.update_card = AsyncMock()
 
     return client
@@ -1717,3 +1725,220 @@ class TestDeleteCardTool:
         assert "error" in payload
         assert "codes=" in payload["error"] or "correlation_id=" in payload["error"]
         assert "PERMISSION_DENIED" in payload["error"]
+
+
+@pytest.mark.anyio
+class TestGetCardRelations:
+    """Tests for get_card_relations tool."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_success_returns_child_and_parent_relations(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        child_rel = [
+            {
+                "name": "rel",
+                "pipe": {"id": "10", "name": "Pipe A"},
+                "cards": [{"id": "c1", "title": "One"}],
+            }
+        ]
+        parent_rel = [
+            {
+                "name": "parent",
+                "pipe": {"id": "20", "name": "Pipe B"},
+                "cards": [{"id": "p1", "title": "Two"}],
+            }
+        ]
+        mock_pipefy_client.get_card_relations = AsyncMock(
+            return_value={
+                "card": {
+                    "childRelations": child_rel,
+                    "parentRelations": parent_rel,
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_card_relations", {"card_id": 555})
+        assert result.isError is False
+        mock_pipefy_client.get_card_relations.assert_called_once_with("555")
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["child_relations"] == child_rel
+        assert payload["parent_relations"] == parent_rel
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_empty_relations_returns_empty_lists(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        mock_pipefy_client.get_card_relations = AsyncMock(
+            return_value={"card": {"childRelations": [], "parentRelations": []}}
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_card_relations", {"card_id": "999"})
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload == {
+            "success": True,
+            "child_relations": [],
+            "parent_relations": [],
+        }
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_graphql_error_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        from gql.transport.exceptions import TransportQueryError
+
+        mock_pipefy_client.get_card_relations.side_effect = TransportQueryError(
+            "GraphQL Error",
+            errors=[
+                {"message": "Not found", "extensions": {"code": "RESOURCE_NOT_FOUND"}},
+            ],
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_card_relations", {"card_id": 1, "debug": False}
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "error" in payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_card_null_returns_not_found(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        mock_pipefy_client.get_card_relations = AsyncMock(return_value={"card": None})
+        async with client_session as session:
+            result = await session.call_tool("get_card_relations", {"card_id": 42})
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "not found" in payload["error"].lower()
+
+
+@pytest.mark.anyio
+class TestDeleteCardRelation:
+    """Tests for delete_card_relation tool."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_preview_then_confirm_success(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        child_id, parent_id, source_id = 1, 2, 3
+        resource = f"card relation (child: {child_id}, parent: {parent_id}, source: {source_id})"
+        expected_preview = {
+            "success": False,
+            "requires_confirmation": True,
+            "resource": resource,
+            "message": (
+                f"⚠️ You are about to permanently delete {resource}. "
+                "This action is irreversible. Set 'confirm=True' to proceed."
+            ),
+        }
+        mock_pipefy_client.delete_card_relation.return_value = {
+            "deleteCardRelation": {"success": True}
+        }
+
+        async with client_session as session:
+            preview = await session.call_tool(
+                "delete_card_relation",
+                {
+                    "child_id": child_id,
+                    "parent_id": parent_id,
+                    "source_id": source_id,
+                },
+            )
+            assert preview.isError is False
+            mock_pipefy_client.delete_card_relation.assert_not_called()
+            assert extract_payload(preview) == expected_preview
+
+            result = await session.call_tool(
+                "delete_card_relation",
+                {
+                    "child_id": child_id,
+                    "parent_id": parent_id,
+                    "source_id": source_id,
+                    "confirm": True,
+                },
+            )
+        assert result.isError is False
+        mock_pipefy_client.delete_card_relation.assert_called_once_with(
+            str(child_id), str(parent_id), str(source_id)
+        )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["message"] == "Card relation removed."
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_api_exception_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        from gql.transport.exceptions import TransportQueryError
+
+        mock_pipefy_client.delete_card_relation.side_effect = TransportQueryError(
+            "GraphQL Error",
+            errors=[
+                {
+                    "message": "Permission denied",
+                    "extensions": {"code": "PERMISSION_DENIED"},
+                }
+            ],
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card_relation",
+                {
+                    "child_id": 10,
+                    "parent_id": 20,
+                    "source_id": 30,
+                    "confirm": True,
+                },
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "error" in payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_mutation_success_false_returns_error(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        mock_pipefy_client.delete_card_relation = AsyncMock(
+            return_value={"deleteCardRelation": {"success": False}}
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card_relation",
+                {
+                    "child_id": "a",
+                    "parent_id": "b",
+                    "source_id": "c",
+                    "confirm": True,
+                },
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "did not succeed" in payload["error"].lower()

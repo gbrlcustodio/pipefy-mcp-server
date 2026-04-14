@@ -645,7 +645,7 @@ class TestDirectToolCalls:
         async with client_session as session:
             result = await session.call_tool(
                 "delete_comment",
-                {"comment_id": 456},
+                {"comment_id": 456, "confirm": True},
             )
         assert result.isError is False
         mock_pipefy_client.delete_comment.assert_called_once_with("456")
@@ -663,7 +663,7 @@ class TestDirectToolCalls:
         async with client_session as session:
             result = await session.call_tool(
                 "delete_comment",
-                {"comment_id": 0},
+                {"comment_id": 0, "confirm": True},
             )
         assert result.isError is False
         mock_pipefy_client.delete_comment.assert_called_once_with("0")
@@ -692,7 +692,7 @@ class TestDirectToolCalls:
         async with client_session as session:
             result = await session.call_tool(
                 "delete_comment",
-                {"comment_id": 12345},
+                {"comment_id": 12345, "confirm": True},
             )
         assert result.isError is False
         mock_pipefy_client.delete_comment.assert_called_once_with("12345")
@@ -718,7 +718,7 @@ class TestDirectToolCalls:
         async with client_session as session:
             result = await session.call_tool(
                 "delete_comment",
-                {"comment_id": 99999},
+                {"comment_id": 99999, "confirm": True},
             )
         assert result.isError is False
         mock_pipefy_client.delete_comment.assert_called_once_with("99999")
@@ -726,6 +726,43 @@ class TestDirectToolCalls:
         assert payload["success"] is False
         assert "error" in payload
         assert "comment" in payload["error"].lower() or "not found" in payload["error"]
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_delete_comment_preview_then_confirm_true_runs_mutation(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Destructive guard: default returns preview; confirm=True runs delete (step 2)."""
+        comment_id = 42
+        resource = f"comment (ID: {comment_id})"
+        expected_preview = {
+            "success": False,
+            "requires_confirmation": True,
+            "resource": resource,
+            "message": (
+                f"⚠️ You are about to permanently delete {resource}. "
+                "This action is irreversible. Set 'confirm=True' to proceed."
+            ),
+        }
+
+        async with client_session as session:
+            preview = await session.call_tool(
+                "delete_comment",
+                {"comment_id": comment_id},
+            )
+            assert preview.isError is False
+            mock_pipefy_client.delete_comment.assert_not_called()
+            assert extract_payload(preview) == expected_preview
+
+            result = await session.call_tool(
+                "delete_comment",
+                {"comment_id": comment_id, "confirm": True},
+            )
+        assert result.isError is False
+        mock_pipefy_client.delete_comment.assert_called_once_with(str(comment_id))
+        assert extract_payload(result) == {"success": True}
 
 
 @pytest.mark.anyio

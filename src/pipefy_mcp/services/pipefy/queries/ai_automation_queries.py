@@ -1,6 +1,9 @@
 """GraphQL mutation strings for AI Automation (internal_api endpoint).
 
-Plain strings (not gql()) since internal_api does not support schema validation.
+Mutations are plain strings (not ``gql()``) because ``InternalApiClient``
+sends raw GraphQL text via JSON POST — the internal_api endpoint does not
+support schema validation that ``gql()`` provides via graphql-core. All
+other query files use ``gql()`` constants.
 """
 
 from __future__ import annotations

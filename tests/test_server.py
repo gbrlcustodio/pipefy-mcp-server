@@ -47,15 +47,11 @@ async def test_register_tools(client_session):
 
 
 @pytest.mark.unit
-def test_run_server_calls_logger_and_mcp_run():
-    """run_server logs and calls mcp.run()."""
-    with (
-        patch("pipefy_mcp.server.logger") as mock_logger,
-        patch("pipefy_mcp.server.mcp") as mock_mcp,
-    ):
+def test_run_server_starts_mcp_with_no_arguments():
+    """run_server delegates to mcp.run() without extra arguments."""
+    with patch("pipefy_mcp.server.mcp") as mock_mcp:
         run_server()
-        mock_logger.info.assert_called()
-        mock_mcp.run.assert_called_once()
+        mock_mcp.run.assert_called_once_with()
 
 
 @pytest.mark.anyio

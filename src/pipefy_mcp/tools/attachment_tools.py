@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 import ipaddress
@@ -44,8 +45,11 @@ _PRIVATE_NETWORKS = (
 )
 
 
-def _validate_url_safe(url: str) -> None:
+async def _validate_url_safe(url: str) -> None:
     """Reject URLs that target private/internal networks or non-HTTP schemes.
+
+    DNS resolution is offloaded to a thread executor so it does not block the
+    async event loop.
 
     Raises:
         ValueError: When the URL is unsafe for server-side fetch.
@@ -61,7 +65,10 @@ def _validate_url_safe(url: str) -> None:
         raise ValueError(msg)
 
     try:
-        addr_info = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+        loop = asyncio.get_event_loop()
+        addr_info = await loop.run_in_executor(
+            None, socket.getaddrinfo, hostname, None, 0, socket.SOCK_STREAM
+        )
     except socket.gaierror as exc:
         msg = f"Could not resolve hostname '{hostname}': {exc}"
         raise ValueError(msg) from exc
@@ -74,47 +81,67 @@ def _validate_url_safe(url: str) -> None:
                 raise ValueError(msg)
 
 
+_MAX_REDIRECTS = 3
+
+
 async def _download_file_bytes(url: str) -> bytes:
     """Fetch file body from an HTTP(S) URL with SSRF protection and size limit.
+
+    Redirects are followed manually (up to ``_MAX_REDIRECTS``) so that each
+    intermediate URL is validated against private-network rules — preventing
+    redirect-based SSRF bypass.
 
     Args:
         url: Location to download. Must be http/https and resolve to a public IP.
 
     Raises:
-        ValueError: When the URL targets a private network or exceeds size limit.
+        ValueError: When the URL targets a private network, exceeds size limit,
+            or the redirect chain is too long.
         httpx.HTTPError: On transport/HTTP failures.
     """
-    _validate_url_safe(url)
+    await _validate_url_safe(url)
+    current_url = url
 
     async with httpx.AsyncClient() as http:
-        async with http.stream(
-            "GET",
-            url,
-            follow_redirects=True,
-            timeout=_FILE_DOWNLOAD_TIMEOUT_SEC,
-        ) as response:
-            response.raise_for_status()
+        for _ in range(_MAX_REDIRECTS + 1):
+            async with http.stream(
+                "GET",
+                current_url,
+                follow_redirects=False,
+                timeout=_FILE_DOWNLOAD_TIMEOUT_SEC,
+            ) as response:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("location")
+                    if not location:
+                        raise ValueError("Redirect without Location header")
+                    await _validate_url_safe(location)
+                    current_url = location
+                    continue
 
-            content_length = response.headers.get("content-length")
-            if content_length and int(content_length) > _MAX_DOWNLOAD_SIZE_BYTES:
-                msg = (
-                    f"File too large: Content-Length {content_length} bytes "
-                    f"exceeds the {_MAX_DOWNLOAD_SIZE_BYTES // (1024 * 1024)} MiB limit."
-                )
-                raise ValueError(msg)
+                response.raise_for_status()
 
-            chunks: list[bytes] = []
-            total = 0
-            async for chunk in response.aiter_bytes():
-                total += len(chunk)
-                if total > _MAX_DOWNLOAD_SIZE_BYTES:
+                content_length = response.headers.get("content-length")
+                if content_length and int(content_length) > _MAX_DOWNLOAD_SIZE_BYTES:
                     msg = (
-                        f"File too large: downloaded {total} bytes, "
-                        f"exceeding the {_MAX_DOWNLOAD_SIZE_BYTES // (1024 * 1024)} MiB limit."
+                        f"File too large: Content-Length {content_length} bytes "
+                        f"exceeds the {_MAX_DOWNLOAD_SIZE_BYTES // (1024 * 1024)} MiB limit."
                     )
                     raise ValueError(msg)
-                chunks.append(chunk)
-            return b"".join(chunks)
+
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > _MAX_DOWNLOAD_SIZE_BYTES:
+                        msg = (
+                            f"File too large: downloaded {total} bytes, "
+                            f"exceeding the {_MAX_DOWNLOAD_SIZE_BYTES // (1024 * 1024)} MiB limit."
+                        )
+                        raise ValueError(msg)
+                    chunks.append(chunk)
+                return b"".join(chunks)
+
+        raise ValueError(f"Too many redirects (max {_MAX_REDIRECTS})")
 
 
 def _decode_base64_file(payload: str) -> bytes:

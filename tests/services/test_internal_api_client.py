@@ -353,3 +353,25 @@ def test_internal_api_client_rejects_http_oauth_url():
             oauth_client="id",
             oauth_secret="secret",
         )
+
+
+@pytest.mark.unit
+def test_internal_api_client_rejects_empty_hostname():
+    with pytest.raises(ValueError, match="hostname"):
+        InternalApiClient(
+            url="https://",
+            oauth_url="https://auth.pipefy.com/oauth/token",
+            oauth_client="id",
+            oauth_secret="secret",
+        )
+
+
+@pytest.mark.unit
+def test_internal_api_client_rejects_localhost():
+    with pytest.raises(ValueError, match="localhost"):
+        InternalApiClient(
+            url="https://localhost/internal_api",
+            oauth_url="https://auth.pipefy.com/oauth/token",
+            oauth_client="id",
+            oauth_secret="secret",
+        )

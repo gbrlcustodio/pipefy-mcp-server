@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from httpx import Timeout
@@ -33,10 +34,17 @@ class InternalApiClient:
             oauth_client: OAuth client ID.
             oauth_secret: OAuth client secret.
         """
-        if not url.strip().lower().startswith("https://"):
-            raise ValueError("internal_api URL must use HTTPS")
-        if not oauth_url.strip().lower().startswith("https://"):
-            raise ValueError("OAuth URL must use HTTPS")
+        for label, val in (("internal_api URL", url), ("OAuth URL", oauth_url)):
+            stripped = val.strip().lower()
+            if not stripped.startswith("https://"):
+                raise ValueError(f"{label} must use HTTPS")
+            parsed = urlparse(val.strip())
+            if not parsed.hostname:
+                raise ValueError(f"{label} must include a hostname")
+            if parsed.hostname in ("localhost", "127.0.0.1", "::1"):
+                raise ValueError(
+                    f"{label} must not point to localhost ({parsed.hostname})"
+                )
         self._url = url
         self._auth = OAuth2ClientCredentials(
             token_url=oauth_url,

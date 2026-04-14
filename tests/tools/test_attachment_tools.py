@@ -87,61 +87,62 @@ def _httpx_stream_cm_mock(content=b"hello-bytes", headers=None):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.anyio
 class TestValidateUrlSafe:
-    def test_rejects_file_scheme(self):
+    async def test_rejects_file_scheme(self):
         with pytest.raises(ValueError, match="Only http and https"):
-            _validate_url_safe("file:///etc/passwd")
+            await _validate_url_safe("file:///etc/passwd")
 
-    def test_rejects_ftp_scheme(self):
+    async def test_rejects_ftp_scheme(self):
         with pytest.raises(ValueError, match="Only http and https"):
-            _validate_url_safe("ftp://internal/data")
+            await _validate_url_safe("ftp://internal/data")
 
-    def test_rejects_no_hostname(self):
+    async def test_rejects_no_hostname(self):
         with pytest.raises(ValueError, match="no hostname"):
-            _validate_url_safe("https://")
+            await _validate_url_safe("https://")
 
     @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
-    def test_rejects_localhost(self, mock_getaddrinfo):
+    async def test_rejects_localhost(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("127.0.0.1", 0))]
         with pytest.raises(ValueError, match="private/internal"):
-            _validate_url_safe("https://localhost/secret")
+            await _validate_url_safe("https://localhost/secret")
 
     @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
-    def test_rejects_metadata_endpoint(self, mock_getaddrinfo):
+    async def test_rejects_metadata_endpoint(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [
             (None, None, None, None, ("169.254.169.254", 0))
         ]
         with pytest.raises(ValueError, match="private/internal"):
-            _validate_url_safe("http://169.254.169.254/latest/meta-data/")
+            await _validate_url_safe("http://169.254.169.254/latest/meta-data/")
 
     @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
-    def test_rejects_private_10_range(self, mock_getaddrinfo):
+    async def test_rejects_private_10_range(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("10.0.0.1", 0))]
         with pytest.raises(ValueError, match="private/internal"):
-            _validate_url_safe("https://internal.corp/file.pdf")
+            await _validate_url_safe("https://internal.corp/file.pdf")
 
     @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
-    def test_rejects_private_172_range(self, mock_getaddrinfo):
+    async def test_rejects_private_172_range(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("172.16.0.1", 0))]
         with pytest.raises(ValueError, match="private/internal"):
-            _validate_url_safe("https://internal.corp/file.pdf")
+            await _validate_url_safe("https://internal.corp/file.pdf")
 
     @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
-    def test_rejects_private_192_range(self, mock_getaddrinfo):
+    async def test_rejects_private_192_range(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("192.168.1.1", 0))]
         with pytest.raises(ValueError, match="private/internal"):
-            _validate_url_safe("https://home.lan/file.pdf")
+            await _validate_url_safe("https://home.lan/file.pdf")
 
     @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
-    def test_rejects_ipv6_loopback(self, mock_getaddrinfo):
+    async def test_rejects_ipv6_loopback(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("::1", 0, 0, 0))]
         with pytest.raises(ValueError, match="private/internal"):
-            _validate_url_safe("https://[::1]/file.pdf")
+            await _validate_url_safe("https://[::1]/file.pdf")
 
     @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
-    def test_accepts_public_ip(self, mock_getaddrinfo):
+    async def test_accepts_public_ip(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("93.184.216.34", 0))]
-        _validate_url_safe("https://example.com/file.pdf")  # should not raise
+        await _validate_url_safe("https://example.com/file.pdf")  # should not raise
 
 
 @pytest.mark.anyio

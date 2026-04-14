@@ -26,11 +26,15 @@ from pipefy_mcp.services.pipefy.automation_graphql_types import (
 )
 from pipefy_mcp.services.pipefy.automation_service import AutomationService
 from pipefy_mcp.services.pipefy.card_service import CardService
+from pipefy_mcp.services.pipefy.internal_api_client import InternalApiClient
 from pipefy_mcp.services.pipefy.member_service import MemberService
 from pipefy_mcp.services.pipefy.observability_service import ObservabilityService
 from pipefy_mcp.services.pipefy.organization_service import OrganizationService
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.services.pipefy.queries.card_queries import (
+    INTERNAL_DELETE_CARD_RELATION_MUTATION,
+)
 from pipefy_mcp.services.pipefy.relation_service import RelationService
 from pipefy_mcp.services.pipefy.report_service import ReportService
 from pipefy_mcp.services.pipefy.schema_introspection_service import (
@@ -82,11 +86,17 @@ class PipefyClient:
             settings=settings, auth=auth
         )
         self._ai_automation_service: AiAutomationService | None = None
+        self._internal_api_client: InternalApiClient | None = None
 
     @property
     def ai_automation_available(self) -> bool:
         """Whether the AI Automation service is configured (OAuth credentials present)."""
         return self._ai_automation_service is not None
+
+    @property
+    def internal_api_available(self) -> bool:
+        """Whether the internal API client is configured (OAuth credentials present)."""
+        return self._internal_api_client is not None
 
     def set_ai_automation_service(self, service: AiAutomationService) -> None:
         """Attach an AI automation service (requires OAuth credentials).
@@ -95,6 +105,14 @@ class PipefyClient:
             service: Configured :class:`AiAutomationService` instance.
         """
         self._ai_automation_service = service
+
+    def set_internal_api_client(self, client: InternalApiClient) -> None:
+        """Attach the internal API client (requires OAuth credentials).
+
+        Args:
+            client: Configured :class:`InternalApiClient` instance.
+        """
+        self._internal_api_client = client
 
     async def get_pipe(self, pipe_id: str | int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
@@ -800,9 +818,19 @@ class PipefyClient:
         parent_id: str | int,
         source_id: str | int,
     ) -> dict:
-        """Delete a relation link between two cards."""
-        return await self._card_service.delete_card_relation(
-            child_id, parent_id, source_id
+        """Delete a relation link between two cards (internal API, requires OAuth).
+
+        The ``deleteCardRelation`` mutation is not exposed on the public GraphQL
+        schema — only on the internal API (core_api / internal_v1).
+        """
+        assert self._internal_api_client is not None  # noqa: S101
+        return await self._internal_api_client.execute_query(
+            INTERNAL_DELETE_CARD_RELATION_MUTATION,
+            {
+                "childId": str(child_id),
+                "parentId": str(parent_id),
+                "sourceId": str(source_id),
+            },
         )
 
     async def get_start_form_fields(

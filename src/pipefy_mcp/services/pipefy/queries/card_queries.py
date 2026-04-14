@@ -58,21 +58,6 @@ DELETE_CARD_MUTATION = gql(
     """
 )
 
-DELETE_CARD_RELATION_MUTATION = gql(
-    """
-    mutation ($childId: ID!, $parentId: ID!, $sourceId: ID!) {
-        deleteCardRelation(
-            input: { childId: $childId, parentId: $parentId, sourceId: $sourceId }
-        ) {
-            success
-        }
-    }
-    """
-)
-# NOTE: As of live public schema introspection, ``deleteCardRelation`` may be absent
-# (only ``createCardRelation`` is guaranteed). The MCP tool still sends this
-# operation for tenants that expose it; otherwise GraphQL returns an error.
-
 GET_CARD_QUERY = gql(
     """
     query ($card_id: ID!, $includeFields: Boolean!) {
@@ -279,16 +264,41 @@ UPDATE_FIELDS_VALUES_MUTATION = gql(
     """
 )
 
+# ---------------------------------------------------------------------------
+# Internal API mutations (plain strings, not gql())
+#
+# ``deleteCardRelation`` is only available on the internal GraphQL schema
+# (core_api / internal_v1), not the public API.  The InternalApiClient sends
+# raw GraphQL text via JSON POST, so these are plain strings — same pattern
+# as ``ai_automation_queries.py``.
+# ---------------------------------------------------------------------------
+
+INTERNAL_DELETE_CARD_RELATION_MUTATION = """
+mutation deleteCardRelation(
+  $childId: ID!,
+  $parentId: ID!,
+  $sourceId: ID!
+) {
+  deleteCardRelation(input: {
+    childId: $childId,
+    parentId: $parentId,
+    sourceId: $sourceId
+  }) {
+    success
+  }
+}
+"""
+
 __all__ = [
     "CREATE_CARD_MUTATION",
     "CREATE_COMMENT_MUTATION",
     "DELETE_CARD_MUTATION",
-    "DELETE_CARD_RELATION_MUTATION",
     "DELETE_COMMENT_MUTATION",
     "FIND_CARDS_QUERY",
     "GET_CARD_QUERY",
     "GET_CARD_RELATIONS_QUERY",
     "GET_CARDS_QUERY",
+    "INTERNAL_DELETE_CARD_RELATION_MUTATION",
     "MOVE_CARD_TO_PHASE_MUTATION",
     "UPDATE_CARD_FIELD_MUTATION",
     "UPDATE_CARD_MUTATION",

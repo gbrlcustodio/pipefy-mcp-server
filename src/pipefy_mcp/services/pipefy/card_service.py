@@ -9,7 +9,6 @@ from pipefy_mcp.services.pipefy.queries.card_queries import (
     CREATE_CARD_MUTATION,
     CREATE_COMMENT_MUTATION,
     DELETE_CARD_MUTATION,
-    DELETE_CARD_RELATION_MUTATION,
     DELETE_COMMENT_MUTATION,
     FIND_CARDS_QUERY,
     GET_CARD_QUERY,
@@ -70,17 +69,6 @@ class CardService(BasePipefyClient):
         """Load parent and child relations for a card (full lists; no pagination)."""
         variables = {"cardId": str(card_id)}
         return await self.execute_query(GET_CARD_RELATIONS_QUERY, variables)
-
-    async def delete_card_relation(
-        self, child_id: str | int, parent_id: str | int, source_id: str | int
-    ) -> dict:
-        """Remove a link between two related cards."""
-        variables = {
-            "childId": str(child_id),
-            "parentId": str(parent_id),
-            "sourceId": str(source_id),
-        }
-        return await self.execute_query(DELETE_CARD_RELATION_MUTATION, variables)
 
     async def get_card(self, card_id: str | int, include_fields: bool = False) -> dict:
         """Get a card by its ID.

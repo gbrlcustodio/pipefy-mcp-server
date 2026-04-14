@@ -60,6 +60,7 @@ def mock_pipefy_client():
     client.delete_card_relation = AsyncMock(
         return_value={"deleteCardRelation": {"success": True}}
     )
+    client.internal_api_available = True
     client.update_card = AsyncMock()
 
     return client
@@ -395,6 +396,106 @@ class TestGetPipeMembersTool:
 
             assert result.isError is False, "Unexpected tool result"
             mock_pipefy_client.get_pipe_members.assert_called_once_with(pipe_id)
+
+
+@pytest.mark.anyio
+class TestGetLabels:
+    """Tests for get_labels tool (delegates to client.get_pipe)."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_labels_success_returns_labels(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+    ) -> None:
+        labels = [{"id": "301", "name": "Urgent"}, {"id": "302", "name": "Low"}]
+        mock_pipefy_client.get_pipe = AsyncMock(
+            return_value={"pipe": {"id": str(pipe_id), "labels": labels}}
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_labels", {"pipe_id": pipe_id})
+        assert result.isError is False
+        mock_pipefy_client.get_pipe.assert_called_once_with(str(pipe_id))
+        payload = extract_payload(result)
+        assert payload == {
+            "success": True,
+            "message": "Labels loaded.",
+            "labels": labels,
+        }
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_labels_empty_returns_empty_list(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        mock_pipefy_client.get_pipe = AsyncMock(
+            return_value={"pipe": {"id": "1", "labels": []}}
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_labels", {"pipe_id": 1})
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["labels"] == []
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_labels_null_labels_normalized_to_empty_list(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        mock_pipefy_client.get_pipe = AsyncMock(
+            return_value={"pipe": {"id": "1", "labels": None}}
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_labels", {"pipe_id": "1"})
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["labels"] == []
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_labels_pipe_null_returns_access_denied(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        mock_pipefy_client.get_pipe = AsyncMock(return_value={"pipe": None})
+        async with client_session as session:
+            result = await session.call_tool("get_labels", {"pipe_id": 999})
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "access denied" in payload["error"].lower()
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_labels_get_pipe_exception_returns_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        from gql.transport.exceptions import TransportQueryError
+
+        mock_pipefy_client.get_pipe.side_effect = TransportQueryError(
+            "GraphQL Error",
+            errors=[
+                {"message": "Denied", "extensions": {"code": "PERMISSION_DENIED"}},
+            ],
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_labels", {"pipe_id": 1, "debug": False}
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "error" in payload
 
 
 @pytest.mark.anyio
@@ -1962,3 +2063,28 @@ class TestDeleteCardRelation:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "did not succeed" in payload["error"].lower()
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_not_configured_returns_oauth_message(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        """delete_card_relation requires internal API (OAuth) credentials."""
+        mock_pipefy_client.internal_api_available = False
+        async with client_session as session:
+            result = await session.call_tool(
+                "delete_card_relation",
+                {
+                    "child_id": "1",
+                    "parent_id": "2",
+                    "source_id": "3",
+                    "confirm": True,
+                },
+            )
+        assert result.isError is False
+        mock_pipefy_client.delete_card_relation.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "OAuth" in payload["error"]

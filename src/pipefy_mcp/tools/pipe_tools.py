@@ -22,6 +22,7 @@ from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmati
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
+    handle_tool_graphql_error,
     with_debug_suffix,
 )
 from pipefy_mcp.tools.mcp_capabilities import supports_elicitation
@@ -359,11 +360,15 @@ class PipeTools:
             confirm: bool = False,
             debug: bool = False,
         ) -> dict:
-            """Remove a link between two related cards.
+            """Remove a link between two related cards (requires OAuth credentials).
 
             ``source_id`` is the **pipe relation** id from ``get_pipe_relations`` (same as
             ``create_card_relation``). Two-step flow: preview with ``confirm=False`` (default),
             then execute with ``confirm=True`` after explicit approval.
+
+            Requires OAuth credentials (PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET,
+            PIPEFY_OAUTH_URL) because the ``deleteCardRelation`` mutation is only available
+            on the internal API, not the public GraphQL schema.
 
             Args:
                 child_id: Child card ID in the relation.
@@ -379,6 +384,16 @@ class PipeTools:
                 f"delete_card_relation: child_id={child_id}, parent_id={parent_id}, "
                 f"source_id={source_id}, confirm={confirm}"
             )
+
+            if not client.internal_api_available:
+                return build_relation_error_payload(
+                    message=(
+                        "delete_card_relation requires OAuth credentials "
+                        "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL). "
+                        "The deleteCardRelation mutation is only available on the "
+                        "internal API. Check .env.example for the required variables."
+                    ),
+                )
 
             cid, err = validate_tool_id(child_id, "child_id")
             if err is not None:
@@ -539,6 +554,55 @@ class PipeTools:
                 ``phases``, ``labels``, ``start_form_fields``, and related metadata from the API.
             """
             return await client.get_pipe(pipe_id)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def get_labels(
+            ctx: Context[ServerSession, None],
+            pipe_id: PipefyId,
+            debug: bool = False,
+        ) -> dict:
+            """List labels defined on a pipe (id and name).
+
+            Uses the same underlying data as ``get_pipe`` (``labels { id name }``) but returns
+            only the label list—lighter for agents that only need valid label IDs for cards or filters.
+
+            Args:
+                pipe_id: Pipe whose labels to load.
+                debug: When True, append GraphQL codes and correlation_id on errors.
+
+            Returns:
+                On success: ``success``, ``message``, and ``labels`` (list of ``{id, name}``).
+                On failure: ``success: False`` and ``error``.
+            """
+            await ctx.debug(f"get_labels: pipe_id={pipe_id}")
+            pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
+
+            try:
+                raw = await client.get_pipe(pipe_id_str)
+            except Exception as exc:  # noqa: BLE001
+                return handle_tool_graphql_error(exc, "Get labels failed.", debug=debug)
+
+            pipe_node = raw.get("pipe")
+            if pipe_node is None:
+                return {
+                    "success": False,
+                    "error": "Pipe not found or access denied.",
+                }
+
+            labels = pipe_node.get("labels")
+            if labels is None:
+                labels = []
+            return {
+                "success": True,
+                "message": "Labels loaded.",
+                "labels": labels,
+            }
 
         @mcp.tool(
             annotations=ToolAnnotations(

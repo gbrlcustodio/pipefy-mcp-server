@@ -1,11 +1,11 @@
 # Connections & Relations
 
-Link processes and cards across workflows. **6 tools.**
+Link processes and cards across workflows. **8 tools.**
 
 ## Key concepts
 
 - **Pipe relations** define parent/child structure between pipes (who connects to whom, constraints, auto-fill). Use `get_pipe_relations` on a pipe to list relation IDs and metadata.
-- **Card relations** connect individual cards through an existing pipe relation: pass `source_id` = that pipe relation's ID (from `get_pipe_relations`). Default `sourceType` is `PipeRelation`; use `extra_input` (e.g. `sourceType: Field`) when the API requires a field-based link — see `introspect_type` on `CreateCardRelationInput`.
+- **Card relations** connect individual cards through an existing pipe relation: pass `source_id` = that pipe relation's ID (from `get_pipe_relations`). Default `sourceType` is `PipeRelation`; use `extra_input` (e.g. `sourceType: Field`) when the API requires a field-based link — see `introspect_type` on `CreateCardRelationInput`. The GraphQL `Card` type exposes **`child_relations`** and **`parent_relations`** (snake_case); the MCP maps them to tool output keys of the same shape.
 - **Table relations** in GraphQL are loaded by table-relation ID, not by database table ID: `get_table_relations` takes a non-empty list of those IDs (root `table_relations` query).
 
 ## Common mistakes (agents)
@@ -24,3 +24,7 @@ Link processes and cards across workflows. **6 tools.**
 | `update_pipe_relation` | No | Updates relation config; `name` required; optional `extra_input` for other `UpdatePipeRelationInput` keys. |
 | `delete_pipe_relation` | No | Permanently deletes a pipe relation (`destructiveHint=True` — confirm with the user first). |
 | `create_card_relation` | No | Links a child card to a parent card via `source_id` (pipe relation ID); optional `extra_input` for `CreateCardRelationInput`. Mutations support `debug=true` on errors. |
+| `get_card_relations` | Yes | Lists `child_relations` and `parent_relations` for a card (linked cards and pipes). |
+| `delete_card_relation` | No | Removes a card link (`destructiveHint=True`). Public GraphQL may not expose the underlying delete mutation on all tenants — see [Card relations testing](card-relations-testing.md). |
+
+Manual scenario (prepare pipes/cards and validate `get_card_relations`): [card-relations-testing.md](card-relations-testing.md).

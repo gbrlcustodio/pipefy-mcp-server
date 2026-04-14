@@ -26,16 +26,16 @@ from pipefy_mcp.tools.automation_tool_helpers import (
     build_automation_read_success_payload,
     handle_automation_tool_graphql_error,
 )
-from pipefy_mcp.tools.automation_tools import (
-    _normalize_optional_filter,
-    _normalize_required_id,
-)
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_internal_api_bracket_codes,
     extract_internal_api_bracket_correlation_id,
     strip_internal_api_diagnostic_markers,
     with_debug_suffix,
+)
+from pipefy_mcp.tools.validation_helpers import (
+    validate_optional_tool_id,
+    validate_tool_id,
 )
 
 AI_AUTOMATION_CREATE_FAILED = (
@@ -55,18 +55,6 @@ AI_AUTOMATION_NOT_CONFIGURED = (
 GENERATE_WITH_AI_ACTION_ID = "generate_with_ai"
 
 
-def _reject_non_positive_numeric_id(aid: str) -> bool:
-    """True when ``aid`` is only digits (optional leading ``-``) and <= 0.
-
-    ``PipefyId`` coerces ``-1`` to ``"-1"``; ``_normalize_required_id`` would
-    otherwise accept that string.
-    """
-    s = aid.strip()
-    if s.startswith("-") and s[1:].isdigit():
-        return True
-    return bool(s.isdigit() and int(s) <= 0)
-
-
 def _is_ai_automation_summary_row(row: Any) -> bool:
     """True when the listing row is an AI (prompt) automation."""
     if not isinstance(row, dict):
@@ -74,6 +62,9 @@ def _is_ai_automation_summary_row(row: Any) -> bool:
     action_id = row.get("action_id") or row.get("actionId")
     if action_id == GENERATE_WITH_AI_ACTION_ID:
         return True
+    # Fallback: some API responses omit action_id but include aiParams in the
+    # action payload.  This heuristic avoids missing those rows; if a future
+    # non-AI action type also carries aiParams, revisit this check.
     ap = row.get("action_params") or row.get("actionParams")
     if isinstance(ap, dict) and (
         ap.get("aiParams") is not None or ap.get("ai_params") is not None
@@ -142,14 +133,9 @@ class AiAutomationTools:
                 ``error``.
             """
             await ctx.debug(f"get_ai_automation: automation_id={automation_id}")
-            aid = _normalize_required_id(automation_id)
-            if aid is None or _reject_non_positive_numeric_id(aid):
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'automation_id': provide a non-empty string or "
-                        "positive integer."
-                    ),
-                )
+            aid, err = validate_tool_id(automation_id, "automation_id")
+            if err is not None:
+                return build_automation_error_payload(message=err["error"])
             try:
                 raw = await client.get_automation(aid)
             except Exception as exc:  # noqa: BLE001
@@ -192,22 +178,14 @@ class AiAutomationTools:
             await ctx.debug(
                 f"get_ai_automations: pipe_id={pipe_id}, organization_id={organization_id}"
             )
-            ok_o, org = _normalize_optional_filter(organization_id)
+            ok_o, org, org_err = validate_optional_tool_id(
+                organization_id, "organization_id"
+            )
             if not ok_o:
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'organization_id': provide a non-empty string or "
-                        "positive integer when supplied."
-                    ),
-                )
-            pid = _normalize_required_id(pipe_id)
-            if pid is None or _reject_non_positive_numeric_id(pid):
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'pipe_id': provide a non-empty string or "
-                        "positive integer."
-                    ),
-                )
+                return build_automation_error_payload(message=org_err["error"])
+            pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
+            if pid_err is not None:
+                return build_automation_error_payload(message=pid_err["error"])
             try:
                 rows = await client.get_automations(
                     organization_id=org,
@@ -246,17 +224,13 @@ class AiAutomationTools:
                 ``success: False`` with ``error``.
             """
             await ctx.debug(f"delete_ai_automation: automation_id={automation_id}")
-            if not client.ai_automation_available:
-                return build_ai_tool_error(AI_AUTOMATION_NOT_CONFIGURED)
+            # No ai_automation_available check — deletion uses the public GraphQL
+            # endpoint (AutomationService.delete_automation), not internal_api.
+            # Only create/update require OAuth credentials.
 
-            rid = _normalize_required_id(automation_id)
-            if rid is None or _reject_non_positive_numeric_id(rid):
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'automation_id': provide a non-empty string or "
-                        "positive integer."
-                    ),
-                )
+            rid, rid_err = validate_tool_id(automation_id, "automation_id")
+            if rid_err is not None:
+                return build_automation_error_payload(message=rid_err["error"])
 
             guard = await check_destructive_confirmation(
                 ctx,

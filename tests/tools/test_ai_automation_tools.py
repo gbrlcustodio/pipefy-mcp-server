@@ -440,22 +440,23 @@ class TestDeleteAiAutomation:
         assert p["success"] is False
         assert "forbidden" in p["error"]
 
-    async def test_not_configured_returns_oauth_message(
+    async def test_works_without_oauth_config(
         self,
         client_session_no_ai,
         mock_pipefy_client_no_ai,
         extract_payload,
     ):
+        """Delete uses public GraphQL, not internal_api — OAuth is not required."""
+        mock_pipefy_client_no_ai.delete_automation.return_value = {"success": True}
         async with client_session_no_ai as session:
             result = await session.call_tool(
                 "delete_ai_automation",
                 {"automation_id": "1", "confirm": True},
             )
         assert result.isError is False
-        mock_pipefy_client_no_ai.delete_automation.assert_not_called()
+        mock_pipefy_client_no_ai.delete_automation.assert_awaited_once_with("1")
         p = extract_payload(result)
-        assert p["success"] is False
-        assert "OAuth" in p["error"]
+        assert p["success"] is True
 
     async def test_api_success_false_returns_error_payload(
         self,
@@ -876,22 +877,23 @@ class TestAiAutomationNotConfigured:
         assert payload["success"] is False
         assert "OAuth" in payload["error"]
 
-    async def test_delete_returns_error_payload_when_not_configured(
+    async def test_delete_works_without_oauth_config(
         self,
         client_session_no_ai,
         mock_pipefy_client_no_ai,
         extract_payload,
     ):
+        """Delete uses public GraphQL — no OAuth needed (unlike create/update)."""
+        mock_pipefy_client_no_ai.delete_automation.return_value = {"success": True}
         async with client_session_no_ai as session:
             result = await session.call_tool(
                 "delete_ai_automation",
                 {"automation_id": "789", "confirm": True},
             )
         assert result.isError is False
-        mock_pipefy_client_no_ai.delete_automation.assert_not_called()
+        mock_pipefy_client_no_ai.delete_automation.assert_awaited_once_with("789")
         payload = extract_payload(result)
-        assert payload["success"] is False
-        assert "OAuth" in payload["error"]
+        assert payload["success"] is True
 
 
 ## ---------------------------------------------------------------------------

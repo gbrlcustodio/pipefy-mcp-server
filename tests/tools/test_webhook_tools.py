@@ -22,6 +22,8 @@ def mock_webhook_client():
     client.send_email_with_template = AsyncMock()
     client.get_card_inbox_emails = AsyncMock()
     client.create_webhook = AsyncMock()
+    client.get_webhooks = AsyncMock()
+    client.update_webhook = AsyncMock()
     client.delete_webhook = AsyncMock()
     return client
 
@@ -327,6 +329,166 @@ async def test_create_webhook_graphql_error(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid url" in payload["error"]
+
+
+# ---------------------------------------------------------------------------
+# get_webhooks / update_webhook
+# ---------------------------------------------------------------------------
+
+
+class TestGetWebhooks:
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
+    async def test_success(self, webhook_session, mock_webhook_client, extract_payload):
+        mock_webhook_client.get_webhooks.return_value = {
+            "pipe": {
+                "webhooks": [
+                    {
+                        "id": "w1",
+                        "name": "Hook A",
+                        "url": "https://a.example/hook",
+                        "actions": ["card.create"],
+                        "headers": None,
+                        "email": None,
+                    }
+                ]
+            }
+        }
+
+        async with webhook_session as session:
+            result = await session.call_tool(
+                "get_webhooks",
+                {"pipe_id": "601"},
+            )
+
+        assert result.isError is False
+        mock_webhook_client.get_webhooks.assert_awaited_once_with("601")
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert len(payload["result"]["pipe"]["webhooks"]) == 1
+        assert payload["result"]["pipe"]["webhooks"][0]["id"] == "w1"
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
+    async def test_empty(self, webhook_session, mock_webhook_client, extract_payload):
+        mock_webhook_client.get_webhooks.return_value = {"pipe": {"webhooks": []}}
+
+        async with webhook_session as session:
+            result = await session.call_tool(
+                "get_webhooks",
+                {"pipe_id": "602"},
+            )
+
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["result"]["pipe"]["webhooks"] == []
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
+    async def test_graphql_error(
+        self, webhook_session, mock_webhook_client, extract_payload
+    ):
+        mock_webhook_client.get_webhooks.side_effect = TransportQueryError(
+            "failed", errors=[{"message": "pipe not found"}]
+        )
+
+        async with webhook_session as session:
+            result = await session.call_tool(
+                "get_webhooks",
+                {"pipe_id": "999"},
+            )
+
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "pipe not found" in payload["error"]
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
+    async def test_has_read_only_hint(self, webhook_session):
+        async with webhook_session as session:
+            listed = await session.list_tools()
+        tool = next(t for t in listed.tools if t.name == "get_webhooks")
+        assert tool.annotations is not None
+        assert tool.annotations.readOnlyHint is True
+
+
+class TestUpdateWebhook:
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
+    async def test_success(self, webhook_session, mock_webhook_client, extract_payload):
+        mock_webhook_client.update_webhook.return_value = {
+            "updateWebhook": {
+                "webhook": {
+                    "id": "w1",
+                    "name": "Renamed",
+                    "url": "https://b.example/hook",
+                    "actions": ["card.move"],
+                    "headers": {},
+                }
+            }
+        }
+
+        async with webhook_session as session:
+            result = await session.call_tool(
+                "update_webhook",
+                {
+                    "webhook_id": "w1",
+                    "name": "Renamed",
+                    "url": "https://b.example/hook",
+                    "actions": ["card.move"],
+                    "headers": {},
+                },
+            )
+
+        assert result.isError is False
+        mock_webhook_client.update_webhook.assert_awaited_once_with(
+            "w1",
+            name="Renamed",
+            url="https://b.example/hook",
+            actions=["card.move"],
+            headers={},
+        )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["result"]["updateWebhook"]["webhook"]["id"] == "w1"
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
+    async def test_graphql_error(
+        self, webhook_session, mock_webhook_client, extract_payload
+    ):
+        mock_webhook_client.update_webhook.side_effect = TransportQueryError(
+            "failed", errors=[{"message": "webhook gone"}]
+        )
+
+        async with webhook_session as session:
+            result = await session.call_tool(
+                "update_webhook",
+                {"webhook_id": "w1", "name": "X"},
+            )
+
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "webhook gone" in payload["error"]
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("webhook_session", [None], indirect=True)
+    async def test_rejects_when_no_fields_to_update(
+        self, webhook_session, mock_webhook_client, extract_payload
+    ):
+        async with webhook_session as session:
+            result = await session.call_tool(
+                "update_webhook",
+                {"webhook_id": "w1"},
+            )
+
+        mock_webhook_client.update_webhook.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "at least one" in payload["error"]
 
 
 @pytest.mark.anyio

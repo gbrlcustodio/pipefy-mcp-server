@@ -89,12 +89,21 @@ class TableTools:
         async def get_table(table_id: str | int) -> dict[str, Any]:
             """Load one database table: name, description, fields, and authorization.
 
+            Use this after ``search_tables`` (or when you already have a table ID) to inspect
+            schema, field types, and permissions before creating or updating records.
+
             ``table_id`` is the **database table** id (from ``search_tables`` / ``get_tables``).
             For **table-to-table relation link** metadata, use ``get_table_relations`` with
             table-**relation** ids — not this argument.
 
             Args:
                 table_id: Pipefy database table ID.
+
+            Returns:
+                On success, a structured payload with ``success``, ``message``, and ``data``
+                (GraphQL ``table`` object: ``id``, ``name``, ``description``, ``table_fields``,
+                ``authorization``). On validation or GraphQL errors, ``success: False`` with an
+                ``error`` message.
             """
             if not valid_repo_id(table_id):
                 return build_table_read_error_payload(
@@ -196,8 +205,16 @@ class TableTools:
         async def get_table_record(record_id: str | int) -> dict[str, Any]:
             """Load a single database table record with its field values.
 
+            Use this when you have a record ID (e.g. from ``get_table_records`` or ``find_records``)
+            and need the full row: title and ``record_fields`` name/value pairs.
+
             Args:
-                record_id: Table record ID.
+                record_id: Table record ID (string or positive integer).
+
+            Returns:
+                On success, ``success``, ``message``, and ``data`` containing the GraphQL
+                ``table_record`` (``id``, ``title``, ``record_fields``). On errors,
+                ``success: False`` with ``error``.
             """
             if not valid_repo_id(record_id):
                 return build_table_read_error_payload(

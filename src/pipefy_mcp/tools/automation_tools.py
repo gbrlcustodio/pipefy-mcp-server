@@ -70,18 +70,20 @@ class AutomationTools:
         ) -> dict[str, Any]:
             """Load one automation rule by ID, including trigger and action payloads.
 
-            Returns ``event_params`` and ``action_params`` (e.g. ``aiParams`` with
-            ``value`` / ``fieldIds`` / ``skillsIds``) for inspection, debugging, and parity
-            with ``simulate_automation`` / ``create_automation`` inputs. Use this before
-            ``update_automation`` to inspect the stored configuration; when cloning a rule,
-            copy these objects into the matching optional JSON args on create/update or
-            simulation.
-
-            For new rules, discover ``event_id`` / ``action_id`` via ``get_automation_events``
-            and ``get_automation_actions`` on the target pipe, then call ``create_automation``.
+            Use this to inspect or debug a specific rule, or before ``update_automation`` /
+            ``delete_automation``. Returned ``event_params`` and ``action_params`` (e.g.
+            ``aiParams`` with ``value`` / ``fieldIds`` / ``skillsIds``) align with
+            ``simulate_automation`` and ``create_automation`` inputs. For new rules, discover
+            ``event_id`` / ``action_id`` via ``get_automation_events`` and ``get_automation_actions``
+            on the target pipe, then call ``create_automation``.
 
             Args:
-                automation_id: Automation rule ID.
+                automation_id: Automation rule ID (non-empty string or positive integer).
+
+            Returns:
+                On success, ``success``, ``message``, and ``data`` with the automation row (or
+                ``None`` when not found). On validation or GraphQL errors, ``success: False`` with
+                ``error``.
             """
             aid = _normalize_required_id(automation_id)
             if aid is None:
@@ -112,16 +114,23 @@ class AutomationTools:
         ) -> dict[str, Any]:
             """List traditional automation rules, optionally filtered by organization and/or pipe.
 
-            Combine with ``get_automation`` for full detail. Use pipe-scoped listings to plan
-            ``create_automation`` / ``update_automation`` without pulling every org rule.
+            Use this to discover automation IDs in a pipe or org before calling ``get_automation``
+            for full payloads, or to plan ``create_automation`` / ``update_automation`` without
+            listing unrelated rules.
 
-            When only ``pipe_id`` is set (no ``organization_id``), the server resolves the org from
-            the pipe first, then lists automations — two sequential API calls vs. one when you pass
-            ``organization_id`` directly.
+            Combine with ``get_automation`` for full detail. When only ``pipe_id`` is set (no
+            ``organization_id``), the server resolves the org from the pipe first, then lists
+            automations — two sequential API calls vs. one when you pass ``organization_id``
+            directly.
 
             Args:
-                organization_id: When set, restrict to this organization.
-                pipe_id: When set, restrict to this pipe.
+                organization_id: When set, restrict to this organization; omit for no org filter.
+                pipe_id: When set, restrict to this pipe; omit for no pipe filter.
+
+            Returns:
+                On success, ``success``, ``message``, and ``data`` with the list of automation
+                summaries returned by the API. On validation or GraphQL errors, ``success: False``
+                with ``error``.
             """
             ok_o, org = _normalize_optional_filter(organization_id)
             ok_p, pipe = _normalize_optional_filter(pipe_id)

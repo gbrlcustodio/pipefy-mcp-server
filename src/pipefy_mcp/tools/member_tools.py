@@ -9,6 +9,7 @@ from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.member_tool_helpers import (
     build_member_error_payload,
@@ -88,6 +89,10 @@ class MemberTools:
             ``confirm=True`` after explicit human approval. Elicitation does not authorize
             deletion (only ``confirm=True`` does).
 
+            Service account guard: when ``PIPEFY_SERVICE_ACCOUNT_IDS`` is set, user IDs in
+            that list cannot be removed via this tool (returns an error); use the Pipefy UI
+            if intentional. When the env var is unset or empty, the guard is not applied.
+
             Args:
                 pipe_id: ID of the pipe.
                 user_ids: List of user IDs to remove.
@@ -109,6 +114,25 @@ class MemberTools:
                 return build_member_error_payload(
                     message="Invalid 'user_ids': each ID must be a non-empty string.",
                 )
+
+            protected_ids = settings.pipefy.service_account_ids
+            if protected_ids:
+                protected_set = set(protected_ids)
+                blocked = [uid for uid in user_ids if uid in protected_set]
+                if blocked:
+                    if len(blocked) == 1:
+                        msg = (
+                            f"Cannot remove service account {blocked[0]} — "
+                            "this would break all write operations for this pipe. "
+                            "Remove it via the Pipefy UI if intentional."
+                        )
+                    else:
+                        msg = (
+                            f"Cannot remove service accounts {', '.join(blocked)} — "
+                            "this would break all write operations for this pipe. "
+                            "Remove it via the Pipefy UI if intentional."
+                        )
+                    return build_member_error_payload(message=msg)
 
             guard = await check_destructive_confirmation(
                 ctx,
@@ -156,6 +180,10 @@ class MemberTools:
         ) -> dict[str, Any]:
             """Set a member's role on a pipe.
 
+            Service account warning: when ``PIPEFY_SERVICE_ACCOUNT_IDS`` includes ``member_id``,
+            the success payload may include a ``warning`` field reminding you to keep write
+            permissions for that account. When the env var is unset or empty, no warning is added.
+
             Args:
                 pipe_id: ID of the pipe.
                 member_id: User ID of the member.
@@ -176,17 +204,26 @@ class MemberTools:
                 return build_member_error_payload(
                     message="Invalid 'role_name': provide a non-empty string.",
                 )
+            trimmed_member_id = member_id.strip()
             try:
                 raw = await client.set_role(
-                    pipe_id, member_id.strip(), role_name.strip()
+                    pipe_id, trimmed_member_id, role_name.strip()
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_member_tool_graphql_error(
                     exc, "Set role failed.", debug=debug
                 )
+            warning: str | None = None
+            protected_ids = settings.pipefy.service_account_ids
+            if protected_ids and trimmed_member_id in protected_ids:
+                warning = (
+                    "Warning: you changed the role of a service account. "
+                    "Ensure the new role retains write permissions."
+                )
             return build_member_success_payload(
                 message="Role updated.",
                 data=raw,
+                warning=warning,
             )
 
 

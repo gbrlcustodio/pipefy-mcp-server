@@ -56,6 +56,7 @@ from pipefy_mcp.tools.relation_tool_helpers import (
     build_relation_mutation_success_payload,
     handle_relation_tool_graphql_error,
 )
+from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 # Key for findCards response; used when reading edges and adding empty message.
 FIND_CARDS_RESPONSE_KEY = "findCards"
@@ -196,27 +197,9 @@ class PipeTools:
                 On failure: ``success: False`` and ``error``.
             """
             await ctx.debug(f"get_card_relations: card_id={card_id}")
-            try:
-                coerced = TypeAdapter(PipefyId).validate_python(card_id)
-            except ValidationError:
-                return {
-                    "success": False,
-                    "error": (
-                        "Invalid 'card_id'. Provide a non-empty string or positive "
-                        f"numeric ID (got {type(card_id).__name__})."
-                    ),
-                }
-            card_id_str = str(coerced).strip()
-            if not card_id_str:
-                return {
-                    "success": False,
-                    "error": "Invalid 'card_id'. Please provide a non-empty card ID.",
-                }
-            if card_id_str.isdigit() and int(card_id_str) <= 0:
-                return {
-                    "success": False,
-                    "error": "Invalid 'card_id'. Please provide a positive integer.",
-                }
+            card_id_str, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return err
 
             try:
                 raw = await client.get_card_relations(card_id_str)
@@ -236,6 +219,7 @@ class PipeTools:
             parent = card_node.get("parentRelations") or []
             return {
                 "success": True,
+                "message": "Card relations loaded.",
                 "child_relations": child,
                 "parent_relations": parent,
             }
@@ -386,39 +370,15 @@ class PipeTools:
                 f"source_id={source_id}, confirm={confirm}"
             )
 
-            def _normalize_id(label: str, value: PipefyId) -> str | dict:
-                try:
-                    coerced = TypeAdapter(PipefyId).validate_python(value)
-                except ValidationError:
-                    return {
-                        "success": False,
-                        "error": (
-                            f"Invalid '{label}'. Provide a non-empty string or positive "
-                            f"numeric ID (got {type(value).__name__})."
-                        ),
-                    }
-                s = str(coerced).strip()
-                if not s:
-                    return {
-                        "success": False,
-                        "error": f"Invalid '{label}'. Please provide a non-empty ID.",
-                    }
-                if s.isdigit() and int(s) <= 0:
-                    return {
-                        "success": False,
-                        "error": f"Invalid '{label}'. Please provide a positive integer.",
-                    }
-                return s
-
-            cid = _normalize_id("child_id", child_id)
-            if isinstance(cid, dict):
-                return cid
-            pid = _normalize_id("parent_id", parent_id)
-            if isinstance(pid, dict):
-                return pid
-            sid = _normalize_id("source_id", source_id)
-            if isinstance(sid, dict):
-                return sid
+            cid, err = validate_tool_id(child_id, "child_id")
+            if err is not None:
+                return err
+            pid, err = validate_tool_id(parent_id, "parent_id")
+            if err is not None:
+                return err
+            sid, err = validate_tool_id(source_id, "source_id")
+            if err is not None:
+                return err
 
             guard = await check_destructive_confirmation(
                 ctx,

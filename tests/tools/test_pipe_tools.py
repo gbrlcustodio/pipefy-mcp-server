@@ -1785,6 +1785,7 @@ class TestGetCardRelations:
         payload = extract_payload(result)
         assert payload == {
             "success": True,
+            "message": "Card relations loaded.",
             "child_relations": [],
             "parent_relations": [],
         }

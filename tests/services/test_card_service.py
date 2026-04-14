@@ -432,8 +432,8 @@ async def test_get_card_relations_uses_query_and_cardId_variable(mock_settings):
     card_id = 999
     expected = {
         "card": {
-            "childRelations": [],
-            "parentRelations": [{"name": "rel", "pipe": {"id": "1", "name": "P"}}],
+            "child_relations": [],
+            "parent_relations": [{"name": "rel", "pipe": {"id": "1", "name": "P"}}],
         }
     }
     service = _make_service(mock_settings, expected)

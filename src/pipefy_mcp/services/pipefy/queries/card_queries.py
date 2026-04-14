@@ -69,6 +69,9 @@ DELETE_CARD_RELATION_MUTATION = gql(
     }
     """
 )
+# NOTE: As of live public schema introspection, ``deleteCardRelation`` may be absent
+# (only ``createCardRelation`` is guaranteed). The MCP tool still sends this
+# operation for tenants that expose it; otherwise GraphQL returns an error.
 
 GET_CARD_QUERY = gql(
     """
@@ -125,7 +128,7 @@ GET_CARD_RELATIONS_QUERY = gql(
     """
     query ($cardId: ID!) {
         card(id: $cardId) {
-            childRelations {
+            child_relations {
                 name
                 pipe {
                     id
@@ -136,7 +139,7 @@ GET_CARD_RELATIONS_QUERY = gql(
                     title
                 }
             }
-            parentRelations {
+            parent_relations {
                 name
                 pipe {
                     id

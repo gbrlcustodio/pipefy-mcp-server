@@ -193,8 +193,9 @@ class PipeTools:
                 debug: When True, append GraphQL codes and correlation_id on errors.
 
             Returns:
-                On success: ``success``, ``child_relations``, and ``parent_relations`` arrays.
-                On failure: ``success: False`` and ``error``.
+                On success: ``success``, ``message``, ``child_relations``, and ``parent_relations``
+                (API fields ``child_relations`` / ``parent_relations`` on ``Card``). On failure:
+                ``success: False`` and ``error``.
             """
             await ctx.debug(f"get_card_relations: card_id={card_id}")
             card_id_str, err = validate_tool_id(card_id, "card_id")
@@ -215,8 +216,17 @@ class PipeTools:
                     "error": "Card not found or access denied.",
                 }
 
-            child = card_node.get("childRelations") or []
-            parent = card_node.get("parentRelations") or []
+            # Public GraphQL returns snake_case (``child_relations``); accept camelCase too.
+            child = (
+                card_node.get("child_relations")
+                or card_node.get("childRelations")
+                or []
+            )
+            parent = (
+                card_node.get("parent_relations")
+                or card_node.get("parentRelations")
+                or []
+            )
             return {
                 "success": True,
                 "message": "Card relations loaded.",

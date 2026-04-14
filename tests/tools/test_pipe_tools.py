@@ -53,7 +53,7 @@ def mock_pipefy_client():
     client.get_card = AsyncMock()
     client.get_card_relations = AsyncMock(
         return_value={
-            "card": {"childRelations": [], "parentRelations": []},
+            "card": {"child_relations": [], "parent_relations": []},
         }
     )
     client.delete_card = AsyncMock()
@@ -1755,8 +1755,8 @@ class TestGetCardRelations:
         mock_pipefy_client.get_card_relations = AsyncMock(
             return_value={
                 "card": {
-                    "childRelations": child_rel,
-                    "parentRelations": parent_rel,
+                    "child_relations": child_rel,
+                    "parent_relations": parent_rel,
                 }
             }
         )
@@ -1770,6 +1770,25 @@ class TestGetCardRelations:
         assert payload["parent_relations"] == parent_rel
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_success_accepts_camelcase_keys_from_response(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ) -> None:
+        """Older or alternate clients may return camelCase keys; tool normalizes both."""
+        row = [{"name": "x", "pipe": {"id": "1", "name": "P"}, "cards": []}]
+        mock_pipefy_client.get_card_relations = AsyncMock(
+            return_value={"card": {"childRelations": row, "parentRelations": []}}
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_card_relations", {"card_id": 1})
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["child_relations"] == row
+        assert payload["parent_relations"] == []
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_empty_relations_returns_empty_lists(
         self,
         client_session,
@@ -1777,7 +1796,7 @@ class TestGetCardRelations:
         extract_payload,
     ) -> None:
         mock_pipefy_client.get_card_relations = AsyncMock(
-            return_value={"card": {"childRelations": [], "parentRelations": []}}
+            return_value={"card": {"child_relations": [], "parent_relations": []}}
         )
         async with client_session as session:
             result = await session.call_tool("get_card_relations", {"card_id": "999"})

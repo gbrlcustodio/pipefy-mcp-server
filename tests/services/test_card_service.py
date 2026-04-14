@@ -9,7 +9,9 @@ import pytest
 
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.queries.card_queries import (
+    DELETE_CARD_RELATION_MUTATION,
     FIND_CARDS_QUERY,
+    GET_CARD_RELATIONS_QUERY,
     GET_CARDS_QUERY,
 )
 from pipefy_mcp.settings import PipefySettings
@@ -421,3 +423,42 @@ async def test_delete_card_permission_denied_error(mock_settings):
     assert result == {
         "deleteCard": {"success": False, "errors": ["PERMISSION_DENIED"]}
     }, "Expected error response passthrough"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_card_relations_uses_query_and_cardId_variable(mock_settings):
+    """Test get_card_relations calls GET_CARD_RELATIONS_QUERY with cardId."""
+    card_id = 999
+    expected = {
+        "card": {
+            "childRelations": [],
+            "parentRelations": [{"name": "rel", "pipe": {"id": "1", "name": "P"}}],
+        }
+    }
+    service = _make_service(mock_settings, expected)
+    result = await service.get_card_relations(card_id)
+
+    query_used = service.execute_query.call_args[0][0]
+    variables = service.execute_query.call_args[0][1]
+    assert query_used is GET_CARD_RELATIONS_QUERY
+    assert variables == {"cardId": "999"}
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_card_relation_sends_top_level_graphql_variables(mock_settings):
+    """Test delete_card_relation uses DELETE_CARD_RELATION_MUTATION with childId, parentId, sourceId."""
+    service = _make_service(mock_settings, {"deleteCardRelation": {"success": True}})
+    result = await service.delete_card_relation("c1", 2, "src-3")
+
+    query_used = service.execute_query.call_args[0][0]
+    variables = service.execute_query.call_args[0][1]
+    assert query_used is DELETE_CARD_RELATION_MUTATION
+    assert variables == {
+        "childId": "c1",
+        "parentId": "2",
+        "sourceId": "src-3",
+    }
+    assert result == {"deleteCardRelation": {"success": True}}

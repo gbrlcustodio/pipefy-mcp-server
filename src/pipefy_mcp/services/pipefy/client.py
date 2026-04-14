@@ -790,6 +790,21 @@ class PipefyClient:
         """Delete a card by its ID."""
         return await self._card_service.delete_card(card_id)
 
+    async def get_card_relations(self, card_id: str | int) -> dict:
+        """Get parent and child card relations for a card."""
+        return await self._card_service.get_card_relations(card_id)
+
+    async def delete_card_relation(
+        self,
+        child_id: str | int,
+        parent_id: str | int,
+        source_id: str | int,
+    ) -> dict:
+        """Delete a relation link between two cards."""
+        return await self._card_service.delete_card_relation(
+            child_id, parent_id, source_id
+        )
+
     async def get_start_form_fields(
         self, pipe_id: str | int, required_only: bool = False
     ) -> dict:

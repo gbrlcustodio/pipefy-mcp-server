@@ -58,6 +58,18 @@ DELETE_CARD_MUTATION = gql(
     """
 )
 
+DELETE_CARD_RELATION_MUTATION = gql(
+    """
+    mutation ($childId: ID!, $parentId: ID!, $sourceId: ID!) {
+        deleteCardRelation(
+            input: { childId: $childId, parentId: $parentId, sourceId: $sourceId }
+        ) {
+            success
+        }
+    }
+    """
+)
+
 GET_CARD_QUERY = gql(
     """
     query ($card_id: ID!, $includeFields: Boolean!) {
@@ -103,6 +115,37 @@ GET_CARDS_QUERY = gql(
             pageInfo {
                 hasNextPage
                 endCursor
+            }
+        }
+    }
+    """
+)
+
+GET_CARD_RELATIONS_QUERY = gql(
+    """
+    query ($cardId: ID!) {
+        card(id: $cardId) {
+            childRelations {
+                name
+                pipe {
+                    id
+                    name
+                }
+                cards {
+                    id
+                    title
+                }
+            }
+            parentRelations {
+                name
+                pipe {
+                    id
+                    name
+                }
+                cards {
+                    id
+                    title
+                }
             }
         }
     }
@@ -237,9 +280,11 @@ __all__ = [
     "CREATE_CARD_MUTATION",
     "CREATE_COMMENT_MUTATION",
     "DELETE_CARD_MUTATION",
+    "DELETE_CARD_RELATION_MUTATION",
     "DELETE_COMMENT_MUTATION",
     "FIND_CARDS_QUERY",
     "GET_CARD_QUERY",
+    "GET_CARD_RELATIONS_QUERY",
     "GET_CARDS_QUERY",
     "MOVE_CARD_TO_PHASE_MUTATION",
     "UPDATE_CARD_FIELD_MUTATION",

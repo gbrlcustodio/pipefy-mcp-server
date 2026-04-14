@@ -32,8 +32,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     AddCardCommentPayload,
     DeleteCardPayload,
-    DeleteCommentErrorPayload,
-    DeleteCommentSuccessPayload,
+    DeleteCommentPayload,
     UpdateCommentErrorPayload,
     UpdateCommentSuccessPayload,
     UserCancelledError,
@@ -151,11 +150,19 @@ class PipeTools:
             card_id: str | int,
             include_fields: bool = False,
         ) -> dict:
-            """Get a card by its ID.
+            """Load one card by ID for title, phase, assignees, labels, and optional field values.
+
+            Use this to inspect a card before updates, after ``find_cards`` / ``get_cards``,
+            or when the user references a card by ID. Set ``include_fields`` when you need
+            custom field ``name``/``value`` pairs for forms or automation.
 
             Args:
-                card_id: The ID of the card.
-                include_fields: If True, include the card's custom fields (name, value) in the response.
+                card_id: Pipefy card ID (string or positive integer).
+                include_fields: If True, include each custom field's name and value on the card node.
+
+            Returns:
+                dict: GraphQL ``card`` query payload (typically ``card`` with ``id``, ``title``,
+                ``phase``, ``assignees``, ``labels``, and—when requested—``fields``).
             """
             return await client.get_card(card_id, include_fields=include_fields)
 
@@ -224,15 +231,27 @@ class PipeTools:
             return build_update_comment_success_payload(comment_id=comment_id_out)
 
         @mcp.tool(
-            annotations=ToolAnnotations(readOnlyHint=False),
+            annotations=ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=True,
+            ),
         )
         async def delete_comment(
+            ctx: Context[ServerSession, None],
             comment_id: str | int,
-        ) -> DeleteCommentSuccessPayload | DeleteCommentErrorPayload:
-            """Delete a comment by its ID.
+            confirm: bool = False,
+        ) -> DeleteCommentPayload:
+            """Delete a comment from Pipefy.
+
+            Two-step operation:
+
+            1. **Preview** — call with ``confirm=False`` (default). Returns a preview payload;
+               nothing is deleted. Elicitation is **not** used to authorize deletion.
+            2. **Execute** — call again with ``confirm=True`` after explicit human approval.
 
             Args:
                 comment_id: The ID of the comment to delete.
+                confirm: Must be ``True`` to run the delete mutation.
             """
             try:
                 delete_input = DeleteCommentInput(comment_id=comment_id)
@@ -240,6 +259,14 @@ class PipeTools:
                 return build_delete_comment_error_payload(
                     message="Invalid input. Please provide a valid 'comment_id'."
                 )
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"comment (ID: {delete_input.comment_id})",
+            )
+            if guard is not None:
+                return guard
 
             try:
                 await client.delete_comment(delete_input.comment_id)
@@ -358,8 +385,19 @@ class PipeTools:
             ),
         )
         async def get_pipe(pipe_id: str | int) -> dict:
-            """Get a pipe by its ID."""
+            """Load a pipe by ID: name, phases, labels, and start-form field definitions.
 
+            Use this after resolving ``pipe_id`` (e.g. from ``search_pipes``) to inspect workflow
+            structure, obtain phase IDs for ``move_card_to_phase``, or read start-form fields
+            before ``create_card``.
+
+            Args:
+                pipe_id: Pipe identifier (string or positive integer).
+
+            Returns:
+                dict: GraphQL response containing a ``pipe`` object with ``id``, ``name``,
+                ``phases``, ``labels``, ``start_form_fields``, and related metadata from the API.
+            """
             return await client.get_pipe(pipe_id)
 
         @mcp.tool(
@@ -368,8 +406,18 @@ class PipeTools:
             ),
         )
         async def get_pipe_members(pipe_id: str | int) -> dict:
-            """Get the members of a pipe."""
+            """List members of a pipe with roles and basic user profile fields.
 
+            Use this to audit who has access, resolve user IDs for assignments, or before
+            changing membership with invite/remove/role tools.
+
+            Args:
+                pipe_id: Pipe identifier (string or positive integer).
+
+            Returns:
+                dict: GraphQL payload whose ``pipe.members`` entries include ``user``
+                (``id``, ``uuid``, ``name``, ``email``) and ``role_name`` per member.
+            """
             return await client.get_pipe_members(pipe_id)
 
         @mcp.tool(
@@ -378,11 +426,21 @@ class PipeTools:
         async def move_card_to_phase(
             card_id: str | int, destination_phase_id: str | int
         ) -> dict:
-            """Move a card to a specific phase.
+            """Move a card to a target phase (Kanban column) within the same pipe.
 
-            On failure, if the destination is not among ``cards_can_be_moved_to_phases`` for the
-            card's current phase, returns ``success: false`` with ``valid_destinations`` instead of
-            only the raw API error.
+            Use this when the workflow should advance or regress a card; pair with ``get_pipe``
+            or ``get_card`` to resolve valid phase IDs. On failure, if the destination is not
+            among ``cards_can_be_moved_to_phases`` for the card's current phase, the tool may
+            return ``success: false`` with ``valid_destinations`` instead of only the raw API error.
+
+            Args:
+                card_id: The card to move.
+                destination_phase_id: Target phase ID (must be allowed for the current phase).
+
+            Returns:
+                dict: Pipefy move mutation response on success. On some validation failures,
+                a structured payload with ``success: false`` and ``valid_destinations`` when the
+                destination phase is not allowed from the current phase.
             """
 
             try:

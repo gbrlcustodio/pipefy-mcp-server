@@ -50,7 +50,9 @@ class DeleteCommentErrorPayload(TypedDict):
     error: str
 
 
-DeleteCommentPayload = DeleteCommentSuccessPayload | DeleteCommentErrorPayload
+DeleteCommentPayload = (
+    DestructivePreviewPayload | DeleteCommentSuccessPayload | DeleteCommentErrorPayload
+)
 
 
 class DeleteCardSuccessPayload(TypedDict):

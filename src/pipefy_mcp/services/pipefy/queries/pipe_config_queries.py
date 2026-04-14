@@ -206,6 +206,54 @@ DELETE_FIELD_CONDITION_MUTATION = gql(
     """
 )
 
+GET_FIELD_CONDITIONS_QUERY = gql(
+    """
+    query ($phaseId: ID!) {
+        phase(id: $phaseId) {
+            fieldConditions {
+                id
+                name
+                condition {
+                    expressions {
+                        field_address
+                        operation
+                        value
+                    }
+                }
+                actions {
+                    phaseFieldId
+                }
+            }
+        }
+    }
+    """
+)
+
+GET_FIELD_CONDITION_QUERY = gql(
+    """
+    query ($id: ID!) {
+        fieldCondition(id: $id) {
+            id
+            name
+            phase {
+                id
+                name
+            }
+            condition {
+                expressions {
+                    field_address
+                    operation
+                    value
+                }
+            }
+            actions {
+                phaseFieldId
+            }
+        }
+    }
+    """
+)
+
 __all__ = [
     "CLONE_PIPE_MUTATION",
     "CREATE_FIELD_CONDITION_MUTATION",
@@ -218,6 +266,8 @@ __all__ = [
     "DELETE_PHASE_FIELD_MUTATION",
     "DELETE_PHASE_MUTATION",
     "DELETE_PIPE_MUTATION",
+    "GET_FIELD_CONDITION_QUERY",
+    "GET_FIELD_CONDITIONS_QUERY",
     "UPDATE_FIELD_CONDITION_MUTATION",
     "UPDATE_LABEL_MUTATION",
     "UPDATE_PHASE_FIELD_MUTATION",

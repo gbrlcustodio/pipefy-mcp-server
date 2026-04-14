@@ -18,6 +18,8 @@ from pipefy_mcp.services.pipefy.queries.pipe_config_queries import (
     DELETE_PHASE_FIELD_MUTATION,
     DELETE_PHASE_MUTATION,
     DELETE_PIPE_MUTATION,
+    GET_FIELD_CONDITION_QUERY,
+    GET_FIELD_CONDITIONS_QUERY,
     UPDATE_FIELD_CONDITION_MUTATION,
     UPDATE_LABEL_MUTATION,
     UPDATE_PHASE_FIELD_MUTATION,
@@ -528,3 +530,67 @@ async def test_delete_field_condition_transport_error(mock_settings):
     )
     with pytest.raises(TransportQueryError):
         await service.delete_field_condition("cond-x")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_field_conditions_success(mock_settings):
+    api_payload = {
+        "phase": {
+            "fieldConditions": [
+                {
+                    "id": "fc-1",
+                    "name": "Rule A",
+                    "condition": {
+                        "expressions": [
+                            {
+                                "field_address": "x",
+                                "operation": "equals",
+                                "value": "1",
+                            },
+                        ],
+                    },
+                    "actions": [{"phaseFieldId": "pf-9"}],
+                },
+            ],
+        },
+    }
+    service = _make_service(mock_settings, api_payload)
+    result = await service.get_field_conditions(404)
+
+    query, variables = service.execute_query.call_args[0]
+    assert query is GET_FIELD_CONDITIONS_QUERY
+    assert variables == {"phaseId": "404"}
+    assert result == api_payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_field_condition_success(mock_settings):
+    api_payload = {
+        "fieldCondition": {
+            "id": "fc-2",
+            "name": "Rule B",
+            "phase": {"id": "88", "name": "Form"},
+            "condition": {"expressions": []},
+            "actions": [],
+        },
+    }
+    service = _make_service(mock_settings, api_payload)
+    result = await service.get_field_condition("fc-2")
+
+    query, variables = service.execute_query.call_args[0]
+    assert query is GET_FIELD_CONDITION_QUERY
+    assert variables == {"id": "fc-2"}
+    assert result == api_payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_field_condition_transport_error(mock_settings):
+    service = PipeConfigService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.get_field_condition("missing")

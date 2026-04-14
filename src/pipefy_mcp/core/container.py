@@ -40,6 +40,7 @@ class ServicesContainer:
                 oauth_client=oauth_client,
                 oauth_secret=oauth_secret,
             )
+            self.pipefy_client.set_internal_api_client(internal_client)
             self.pipefy_client.set_ai_automation_service(
                 AiAutomationService(client=internal_client)
             )

@@ -19,6 +19,16 @@ from pipefy_mcp.services.pipefy.webhook_service import WebhookService
 from pipefy_mcp.settings import PipefySettings
 
 
+@pytest.fixture
+def mock_settings():
+    return PipefySettings(
+        graphql_url="https://api.pipefy.com/graphql",
+        oauth_url="https://auth.pipefy.com/oauth/token",
+        oauth_client="client_id",
+        oauth_secret="client_secret",
+    )
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_pipefy_client_facade_delegates_to_services_without_modifying_args_or_return():
@@ -35,9 +45,6 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     card_service.create_comment = AsyncMock(return_value={"ok": "comment"})
     card_service.delete_card = AsyncMock(return_value={"ok": "delete"})
     card_service.get_card_relations = AsyncMock(return_value={"ok": "card_relations"})
-    card_service.delete_card_relation = AsyncMock(
-        return_value={"ok": "delete_card_relation"}
-    )
     card_service.get_card = AsyncMock(return_value={"ok": "card"})
     card_service.get_cards = AsyncMock(return_value={"ok": "cards"})
     card_service.move_card_to_phase = AsyncMock(return_value={"ok": "move"})
@@ -71,6 +78,12 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     )
     pipe_config_service.delete_field_condition = AsyncMock(
         return_value={"ok": "delete_field_condition"}
+    )
+    pipe_config_service.get_field_conditions = AsyncMock(
+        return_value={"ok": "get_field_conditions"}
+    )
+    pipe_config_service.get_field_condition = AsyncMock(
+        return_value={"ok": "get_field_condition"}
     )
 
     table_service.get_table = AsyncMock(return_value={"ok": "get_table"})
@@ -149,6 +162,10 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
         return_value={"ok": "delete_automation"}
     )
 
+    webhook_service = AsyncMock()
+    webhook_service.get_webhooks = AsyncMock(return_value={"ok": "get_webhooks"})
+    webhook_service.update_webhook = AsyncMock(return_value={"ok": "update_webhook"})
+
     ai_agent_service = AsyncMock()
     ai_agent_service.get_agent = AsyncMock(return_value={"ok": "get_ai_agent"})
     ai_agent_service.get_agents = AsyncMock(return_value=[{"uuid": "u1"}])
@@ -160,6 +177,7 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     client._pipe_config_service = pipe_config_service
     client._table_service = table_service
     client._relation_service = relation_service
+    client._webhook_service = webhook_service
     client._automation_service = automation_service
     client._ai_agent_service = ai_agent_service
 
@@ -181,10 +199,14 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.get_card_relations("cr-1") == {"ok": "card_relations"}
     card_service.get_card_relations.assert_awaited_once_with("cr-1")
 
-    assert await client.delete_card_relation(10, 20, "src") == {
-        "ok": "delete_card_relation"
-    }
-    card_service.delete_card_relation.assert_awaited_once_with(10, 20, "src")
+    assert await client.get_webhooks("p99") == {"ok": "get_webhooks"}
+    webhook_service.get_webhooks.assert_awaited_once_with("p99")
+
+    assert await client.update_webhook("w1", name="X") == {"ok": "update_webhook"}
+    webhook_service.update_webhook.assert_awaited_once_with("w1", name="X")
+
+    # delete_card_relation delegates to InternalApiClient (not CardService)
+    # — tested separately below.
 
     assert await client.get_card(4) == {"ok": "card"}
     card_service.get_card.assert_awaited_once_with(4, include_fields=False)
@@ -297,6 +319,12 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 
     assert await client.delete_field_condition("c2") == {"ok": "delete_field_condition"}
     pipe_config_service.delete_field_condition.assert_awaited_once_with("c2")
+
+    assert await client.get_field_conditions("ph-3") == {"ok": "get_field_conditions"}
+    pipe_config_service.get_field_conditions.assert_awaited_once_with("ph-3")
+
+    assert await client.get_field_condition("fc-1") == {"ok": "get_field_condition"}
+    pipe_config_service.get_field_condition.assert_awaited_once_with("fc-1")
 
     assert await client.get_table("t1") == {"ok": "get_table"}
     table_service.get_table.assert_awaited_once_with("t1")
@@ -640,3 +668,29 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
     ai_agent_service.toggle_agent_status.assert_awaited_once_with(
         agent_uuid="a", active=True
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_card_relation_delegates_to_internal_api_client(mock_settings):
+    """delete_card_relation uses InternalApiClient (not CardService) because the
+    mutation is only on the internal GraphQL schema."""
+    from pipefy_mcp.services.pipefy.internal_api_client import InternalApiClient
+    from pipefy_mcp.services.pipefy.queries.card_queries import (
+        INTERNAL_DELETE_CARD_RELATION_MUTATION,
+    )
+
+    client = PipefyClient(settings=mock_settings)
+    internal = MagicMock(spec=InternalApiClient)
+    internal.execute_query = AsyncMock(
+        return_value={"deleteCardRelation": {"success": True}}
+    )
+    client.set_internal_api_client(internal)
+
+    result = await client.delete_card_relation("c1", "p2", "src-3")
+
+    internal.execute_query.assert_awaited_once_with(
+        INTERNAL_DELETE_CARD_RELATION_MUTATION,
+        {"childId": "c1", "parentId": "p2", "sourceId": "src-3"},
+    )
+    assert result == {"deleteCardRelation": {"success": True}}

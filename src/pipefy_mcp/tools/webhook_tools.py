@@ -14,6 +14,7 @@ from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmati
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     valid_repo_id,
+    validate_tool_id,
 )
 from pipefy_mcp.tools.webhook_tool_helpers import (
     build_webhook_error_payload,
@@ -247,6 +248,38 @@ class WebhookTools:
             )
 
         @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
+        async def get_webhooks(
+            ctx: Context[ServerSession, None],
+            pipe_id: PipefyId,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """List webhooks configured on a pipe.
+
+            Returns each webhook's id, name, url, actions, headers, and email (if set).
+            Use before updating or deleting a webhook to obtain the webhook ID.
+
+            Args:
+                pipe_id: ID of the pipe.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            await ctx.debug(f"get_webhooks: pipe_id={pipe_id}")
+            pid, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
+            try:
+                raw = await client.get_webhooks(pid)
+            except Exception as exc:  # noqa: BLE001
+                return handle_webhook_tool_graphql_error(
+                    exc, "List webhooks failed.", debug=debug
+                )
+            return build_webhook_success_payload(
+                message="Webhooks listed.",
+                data=raw,
+            )
+
+        @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def create_webhook(
@@ -304,6 +337,86 @@ class WebhookTools:
                 )
             return build_webhook_success_payload(
                 message="Webhook created.",
+                data=raw,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def update_webhook(
+            webhook_id: PipefyId,
+            name: str | None = None,
+            url: str | None = None,
+            actions: list[str] | None = None,
+            headers: dict[str, Any] | None = None,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Update an existing webhook by ID.
+
+            Provide at least one of ``name``, ``url``, ``actions``, or ``headers``.
+            When ``url`` is set, it must be HTTPS (same rule as ``create_webhook``).
+
+            Args:
+                webhook_id: ID of the webhook to update.
+                name: Optional new display name.
+                url: Optional new HTTPS callback URL.
+                actions: Optional new list of event action strings (non-empty when provided).
+                headers: Optional JSON object of custom HTTP headers for the webhook request.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            wid, err = validate_tool_id(webhook_id, "webhook_id")
+            if err is not None:
+                return err
+
+            if all(x is None for x in (name, url, actions, headers)):
+                return build_webhook_error_payload(
+                    message="Provide at least one of: name, url, actions, headers.",
+                )
+
+            if name is not None:
+                if not isinstance(name, str) or not name.strip():
+                    return build_webhook_error_payload(
+                        message="Invalid 'name': when provided, must be a non-empty string.",
+                    )
+            if url is not None:
+                if not isinstance(url, str) or not url.strip():
+                    return build_webhook_error_payload(
+                        message="Invalid 'url': when provided, must be a non-empty string.",
+                    )
+            if actions is not None:
+                if not isinstance(actions, list) or not actions:
+                    return build_webhook_error_payload(
+                        message="Invalid 'actions': when provided, must be a non-empty list.",
+                    )
+                if not all(isinstance(a, str) and a.strip() for a in actions):
+                    return build_webhook_error_payload(
+                        message="Invalid 'actions': each action must be a non-empty string.",
+                    )
+            if headers is not None and not isinstance(headers, dict):
+                return build_webhook_error_payload(
+                    message="Invalid 'headers': when provided, must be a JSON object (dict).",
+                )
+
+            kwargs: dict[str, Any] = {}
+            if name is not None:
+                kwargs["name"] = name.strip()
+            if url is not None:
+                kwargs["url"] = url.strip()
+            if actions is not None:
+                kwargs["actions"] = [a.strip() for a in actions]
+            if headers is not None:
+                kwargs["headers"] = headers
+
+            try:
+                raw = await client.update_webhook(wid, **kwargs)
+            except ValueError as exc:
+                return build_webhook_error_payload(message=str(exc))
+            except Exception as exc:  # noqa: BLE001
+                return handle_webhook_tool_graphql_error(
+                    exc, "Update webhook failed.", debug=debug
+                )
+            return build_webhook_success_payload(
+                message="Webhook updated.",
                 data=raw,
             )
 

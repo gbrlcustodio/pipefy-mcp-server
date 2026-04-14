@@ -17,6 +17,8 @@ from pipefy_mcp.services.pipefy.queries.webhook_queries import (
     GET_CARD_INBOX_EMAILS_QUERY,
     GET_EMAIL_TEMPLATES_QUERY,
     GET_PARSED_EMAIL_TEMPLATE_QUERY,
+    GET_WEBHOOKS_QUERY,
+    UPDATE_WEBHOOK_MUTATION,
 )
 from pipefy_mcp.settings import PipefySettings
 
@@ -34,7 +36,7 @@ def _require_https(url: str, context: str = "url") -> None:
 
 
 class WebhookService(BasePipefyClient):
-    """Send inbox emails and manage webhooks (create, delete)."""
+    """Send inbox emails and manage webhooks (list, create, update, delete)."""
 
     def __init__(
         self,
@@ -238,6 +240,42 @@ class WebhookService(BasePipefyClient):
                 input_obj[key] = value
         return await self.execute_query(
             CREATE_WEBHOOK_MUTATION,
+            {"input": input_obj},
+        )
+
+    async def get_webhooks(self, pipe_id: str) -> dict[str, Any]:
+        """List webhooks registered on a pipe.
+
+        Args:
+            pipe_id: ID of the pipe.
+        """
+        return await self.execute_query(
+            GET_WEBHOOKS_QUERY,
+            {"pipeId": str(pipe_id)},
+        )
+
+    async def update_webhook(self, webhook_id: str, **attrs: Any) -> dict[str, Any]:
+        """Update a webhook by ID.
+
+        Args:
+            webhook_id: Webhook ID (required by ``UpdateWebhookInput``).
+            **attrs: Optional ``UpdateWebhookInput`` fields (``name``, ``url``, ``actions``,
+                ``headers``, ``email``, ``filters``, etc.). Omitted or ``None`` values are skipped.
+
+        Raises:
+            ValueError: If ``url`` is provided and is not HTTPS.
+        """
+        input_obj: dict[str, Any] = {"id": str(webhook_id)}
+        url_val = attrs.get("url")
+        if url_val is not None:
+            _require_https(str(url_val), "url")
+        for key, value in attrs.items():
+            if key == "id":
+                continue
+            if value is not None:
+                input_obj[key] = value
+        return await self.execute_query(
+            UPDATE_WEBHOOK_MUTATION,
             {"input": input_obj},
         )
 

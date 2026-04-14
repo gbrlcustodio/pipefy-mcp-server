@@ -96,6 +96,96 @@ async def test_get_pipe_reports_graphql_error(
     assert "not allowed" in payload["error"]
 
 
+class TestGetPipeReport:
+    """Tests for ``get_pipe_report`` (single report via filtered ``get_pipe_reports``)."""
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("report_session", [None], indirect=True)
+    async def test_get_pipe_report_success(
+        self, report_session, mock_report_client, extract_payload
+    ):
+        mock_report_client.get_pipe_reports.return_value = {
+            "pipeReports": {
+                "edges": [
+                    {
+                        "node": {
+                            "id": "r42",
+                            "name": "Filtered",
+                            "color": "#fff",
+                        }
+                    }
+                ],
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+            }
+        }
+
+        async with report_session as session:
+            result = await session.call_tool(
+                "get_pipe_report",
+                {"pipe_uuid": "uuid-abc", "report_id": "r42"},
+            )
+
+        assert result.isError is False
+        mock_report_client.get_pipe_reports.assert_awaited_once_with(
+            "uuid-abc",
+            first=1,
+            report_id="r42",
+        )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["data"]["pipeReport"]["id"] == "r42"
+        assert payload["data"]["pipeReport"]["name"] == "Filtered"
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("report_session", [None], indirect=True)
+    async def test_get_pipe_report_not_found(
+        self, report_session, mock_report_client, extract_payload
+    ):
+        mock_report_client.get_pipe_reports.return_value = {
+            "pipeReports": {
+                "edges": [],
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+            }
+        }
+
+        async with report_session as session:
+            result = await session.call_tool(
+                "get_pipe_report",
+                {"pipe_uuid": "uuid-abc", "report_id": "missing"},
+            )
+
+        assert result.isError is False
+        mock_report_client.get_pipe_reports.assert_awaited_once_with(
+            "uuid-abc",
+            first=1,
+            report_id="missing",
+        )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "not found" in payload["error"].lower()
+        assert "missing" in payload["error"]
+
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("report_session", [None], indirect=True)
+    async def test_get_pipe_report_graphql_error(
+        self, report_session, mock_report_client, extract_payload
+    ):
+        mock_report_client.get_pipe_reports.side_effect = TransportQueryError(
+            "failed", errors=[{"message": "pipe reports unavailable"}]
+        )
+
+        async with report_session as session:
+            result = await session.call_tool(
+                "get_pipe_report",
+                {"pipe_uuid": "uuid-abc", "report_id": "r1"},
+            )
+
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "unavailable" in payload["error"]
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_report_columns_success(
@@ -282,6 +372,7 @@ async def test_get_organization_report_export_success(
 async def test_all_read_tools_have_readonly_hint(report_session):
     read_tool_names = [
         "get_pipe_reports",
+        "get_pipe_report",
         "get_pipe_report_columns",
         "get_pipe_report_filterable_fields",
         "get_organization_report",

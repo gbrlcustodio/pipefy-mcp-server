@@ -19,6 +19,8 @@ from pipefy_mcp.services.pipefy.queries.pipe_config_queries import (
     DELETE_PHASE_FIELD_MUTATION,
     DELETE_PHASE_MUTATION,
     DELETE_PIPE_MUTATION,
+    GET_FIELD_CONDITION_QUERY,
+    GET_FIELD_CONDITIONS_QUERY,
     UPDATE_FIELD_CONDITION_MUTATION,
     UPDATE_LABEL_MUTATION,
     UPDATE_PHASE_FIELD_MUTATION,
@@ -271,3 +273,26 @@ class PipeConfigService(BasePipefyClient):
         )
         payload = response.get("deleteFieldCondition", {})
         return {"success": bool(payload.get("success"))}
+
+    async def get_field_conditions(self, phase_id: str | int) -> dict:
+        """Load field conditions for a phase (``phase.fieldConditions``).
+
+        Args:
+            phase_id: Phase ID passed as GraphQL variable ``phaseId``.
+        """
+        phase_key = phase_id.strip() if isinstance(phase_id, str) else str(phase_id)
+        return await self.execute_query(
+            GET_FIELD_CONDITIONS_QUERY,
+            {"phaseId": phase_key},
+        )
+
+    async def get_field_condition(self, condition_id: str | int) -> dict:
+        """Load a single field condition by ID.
+
+        Args:
+            condition_id: Field condition ID passed as GraphQL variable ``id``.
+        """
+        cid = (
+            condition_id.strip() if isinstance(condition_id, str) else str(condition_id)
+        )
+        return await self.execute_query(GET_FIELD_CONDITION_QUERY, {"id": cid})

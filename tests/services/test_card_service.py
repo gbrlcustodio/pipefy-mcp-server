@@ -9,7 +9,6 @@ import pytest
 
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.queries.card_queries import (
-    DELETE_CARD_RELATION_MUTATION,
     FIND_CARDS_QUERY,
     GET_CARD_RELATIONS_QUERY,
     GET_CARDS_QUERY,
@@ -445,20 +444,6 @@ async def test_get_card_relations_uses_query_and_cardId_variable(mock_settings):
     assert variables == {"cardId": "999"}
     assert result == expected
 
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_delete_card_relation_sends_top_level_graphql_variables(mock_settings):
-    """Test delete_card_relation uses DELETE_CARD_RELATION_MUTATION with childId, parentId, sourceId."""
-    service = _make_service(mock_settings, {"deleteCardRelation": {"success": True}})
-    result = await service.delete_card_relation("c1", 2, "src-3")
-
-    query_used = service.execute_query.call_args[0][0]
-    variables = service.execute_query.call_args[0][1]
-    assert query_used is DELETE_CARD_RELATION_MUTATION
-    assert variables == {
-        "childId": "c1",
-        "parentId": "2",
-        "sourceId": "src-3",
-    }
-    assert result == {"deleteCardRelation": {"success": True}}
+    # delete_card_relation is routed through InternalApiClient (not CardService)
+    # because the mutation is only available on the internal GraphQL schema.
+    # See tests/services/test_pipefy_facade.py for the facade delegation test.

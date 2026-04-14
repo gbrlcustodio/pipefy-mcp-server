@@ -80,6 +80,8 @@ def mock_pipe_config_client():
     client.create_field_condition = AsyncMock()
     client.update_field_condition = AsyncMock()
     client.delete_field_condition = AsyncMock()
+    client.get_field_conditions = AsyncMock()
+    client.get_field_condition = AsyncMock()
     return client
 
 

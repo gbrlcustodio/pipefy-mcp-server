@@ -6,6 +6,8 @@ card (inbox_emails): card_id for listing sent/received inbox emails.
 parsedEmailTemplate: emailTemplateId, cardUuid (cardUuid optional — omitted returns template without placeholder resolution).
 CreateWebhookInput: pipe_id/table_id, url, actions, name, etc.
 DeleteWebhookInput: id.
+UpdateWebhookInput: id (required), optional name, url, actions, headers, email, filters, etc.
+pipe(id).webhooks: list Webhook (id, name, url, actions, headers, email).
 """
 
 from __future__ import annotations
@@ -96,6 +98,39 @@ DELETE_WEBHOOK_MUTATION = gql(
     """
 )
 
+GET_WEBHOOKS_QUERY = gql(
+    """
+    query GetWebhooks($pipeId: ID!) {
+        pipe(id: $pipeId) {
+            webhooks {
+                id
+                name
+                url
+                actions
+                headers
+                email
+            }
+        }
+    }
+    """
+)
+
+UPDATE_WEBHOOK_MUTATION = gql(
+    """
+    mutation UpdateWebhook($input: UpdateWebhookInput!) {
+        updateWebhook(input: $input) {
+            webhook {
+                id
+                name
+                url
+                actions
+                headers
+            }
+        }
+    }
+    """
+)
+
 GET_CARD_INBOX_EMAILS_QUERY = gql(
     """
     query ($card_id: ID!) {
@@ -123,4 +158,6 @@ __all__ = [
     "GET_CARD_INBOX_EMAILS_QUERY",
     "GET_EMAIL_TEMPLATES_QUERY",
     "GET_PARSED_EMAIL_TEMPLATE_QUERY",
+    "GET_WEBHOOKS_QUERY",
+    "UPDATE_WEBHOOK_MUTATION",
 ]

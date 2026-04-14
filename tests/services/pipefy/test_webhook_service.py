@@ -1,4 +1,4 @@
-"""Unit tests for WebhookService (send inbox email, create/delete webhook)."""
+"""Unit tests for WebhookService (send inbox email, webhook CRUD)."""
 
 from unittest.mock import AsyncMock
 
@@ -12,6 +12,8 @@ from pipefy_mcp.services.pipefy.queries.webhook_queries import (
     GET_CARD_INBOX_EMAILS_QUERY,
     GET_EMAIL_TEMPLATES_QUERY,
     GET_PARSED_EMAIL_TEMPLATE_QUERY,
+    GET_WEBHOOKS_QUERY,
+    UPDATE_WEBHOOK_MUTATION,
 )
 from pipefy_mcp.services.pipefy.webhook_service import WebhookService
 from pipefy_mcp.settings import PipefySettings
@@ -271,6 +273,120 @@ async def test_delete_webhook_transport_error(mock_settings):
     )
     with pytest.raises(TransportQueryError):
         await service.delete_webhook("w1")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_webhooks_success(mock_settings):
+    payload = {
+        "pipe": {
+            "webhooks": [
+                {
+                    "id": "w1",
+                    "name": "Hook A",
+                    "url": "https://a.example/hook",
+                    "actions": ["card.create"],
+                    "headers": None,
+                    "email": None,
+                }
+            ]
+        }
+    }
+    service = _make_service(mock_settings, payload)
+    result = await service.get_webhooks("601")
+
+    service.execute_query.assert_awaited_once()
+    query, variables = service.execute_query.call_args[0]
+    assert query is GET_WEBHOOKS_QUERY
+    assert variables == {"pipeId": "601"}
+    assert result == payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_webhooks_empty(mock_settings):
+    payload = {"pipe": {"webhooks": []}}
+    service = _make_service(mock_settings, payload)
+    result = await service.get_webhooks("602")
+    assert result["pipe"]["webhooks"] == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_webhooks_transport_error(mock_settings):
+    service = WebhookService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "nope"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.get_webhooks("p1")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_webhook_success(mock_settings):
+    payload = {
+        "updateWebhook": {
+            "webhook": {
+                "id": "w1",
+                "name": "Renamed",
+                "url": "https://b.example/hook",
+                "actions": ["card.move"],
+                "headers": {},
+            }
+        }
+    }
+    service = _make_service(mock_settings, payload)
+    result = await service.update_webhook(
+        "w1",
+        name="Renamed",
+        url="https://b.example/hook",
+        actions=["card.move"],
+        headers={},
+    )
+
+    service.execute_query.assert_awaited_once()
+    query, variables = service.execute_query.call_args[0]
+    assert query is UPDATE_WEBHOOK_MUTATION
+    assert variables["input"] == {
+        "id": "w1",
+        "name": "Renamed",
+        "url": "https://b.example/hook",
+        "actions": ["card.move"],
+        "headers": {},
+    }
+    assert result == payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_webhook_ignores_id_kwarg(mock_settings):
+    payload = {"updateWebhook": {"webhook": {"id": "w1"}}}
+    service = _make_service(mock_settings, payload)
+    await service.update_webhook("w1", id="should-be-ignored", name="X")
+
+    _, variables = service.execute_query.call_args[0]
+    assert variables["input"]["id"] == "w1"
+    assert variables["input"]["name"] == "X"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_webhook_rejects_http_url(mock_settings):
+    service = WebhookService(settings=mock_settings)
+    with pytest.raises(ValueError, match="HTTPS"):
+        await service.update_webhook("w1", url="http://insecure.example/hook")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_webhook_transport_error(mock_settings):
+    service = WebhookService(settings=mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "bad"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.update_webhook("w1", name="only-name")
 
 
 @pytest.mark.unit

@@ -544,6 +544,14 @@ class PipefyClient:
             pipe_id, url, actions, **attrs
         )
 
+    async def get_webhooks(self, pipe_id: str) -> dict[str, Any]:
+        """List webhooks configured on a pipe."""
+        return await self._webhook_service.get_webhooks(pipe_id)
+
+    async def update_webhook(self, webhook_id: str, **attrs: Any) -> dict[str, Any]:
+        """Update a webhook (see Pipefy ``UpdateWebhookInput``)."""
+        return await self._webhook_service.update_webhook(webhook_id, **attrs)
+
     async def delete_webhook(self, webhook_id: str) -> dict[str, Any]:
         """Delete a webhook by ID (permanent).
 

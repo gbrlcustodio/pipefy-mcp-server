@@ -1,4 +1,4 @@
-"""MCP tools for Pipefy field condition create, update, and delete."""
+"""MCP tools for Pipefy field condition read, create, update, and delete."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
@@ -19,7 +20,12 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     normalize_field_condition_actions,
     strip_expression_ids_for_create,
 )
-from pipefy_mcp.tools.validation_helpers import valid_repo_id as valid_phase_field_id
+from pipefy_mcp.tools.validation_helpers import (
+    valid_repo_id as valid_phase_field_id,
+)
+from pipefy_mcp.tools.validation_helpers import (
+    validate_tool_id,
+)
 
 # Keys reserved so callers cannot override structured args via extra_input. Entries like
 # ``condition_expression`` / ``phase_field_id`` catch alternate spellings the API does not use
@@ -38,10 +44,111 @@ _UPDATE_FIELD_CONDITION_EXTRA_RESERVED = frozenset({"id"})
 
 
 class FieldConditionTools:
-    """Declares MCP tools for field condition CRUD."""
+    """Declares MCP tools for field conditions (read, create, update, delete)."""
 
     @staticmethod
     def register(mcp: FastMCP, client: PipefyClient) -> None:
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def get_field_conditions(
+            ctx: Context[ServerSession, None],
+            phase_id: PipefyId,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """List field conditions defined on a phase (rules, expressions, actions).
+
+            Use after resolving ``phase_id`` (e.g. from ``get_pipe`` or ``get_phase_fields``)
+            to inspect conditional field logic before creating or updating rules.
+
+            Args:
+                ctx: MCP context for debug logging.
+                phase_id: Phase that owns the conditions.
+                debug: When True, append GraphQL codes and correlation_id on errors.
+
+            Returns:
+                On success: ``success``, ``message``, and ``field_conditions`` (list from the API).
+                On failure: ``success: False`` and ``error``.
+            """
+            await ctx.debug(
+                f"get_field_conditions: phase_id={phase_id!r}, debug={debug}"
+            )
+            phase_id_str, err = validate_tool_id(phase_id, "phase_id")
+            if err is not None:
+                return err
+
+            try:
+                raw = await client.get_field_conditions(phase_id_str)
+            except Exception as exc:  # noqa: BLE001
+                return handle_pipe_config_tool_graphql_error(
+                    exc, "List field conditions failed.", debug=debug
+                )
+
+            phase = raw.get("phase")
+            if phase is None:
+                return {
+                    "success": False,
+                    "error": "Phase not found or access denied.",
+                }
+
+            rows = phase.get("fieldConditions")
+            if rows is None:
+                rows = []
+            return {
+                "success": True,
+                "message": "Field conditions loaded.",
+                "field_conditions": rows,
+            }
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def get_field_condition(
+            ctx: Context[ServerSession, None],
+            field_condition_id: PipefyId,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Load one field condition by ID (name, phase, condition, actions).
+
+            Args:
+                ctx: MCP context for debug logging.
+                field_condition_id: Field condition ID.
+                debug: When True, append GraphQL codes and correlation_id on errors.
+
+            Returns:
+                On success: ``success``, ``message``, and ``field_condition`` (single object).
+                On failure: ``success: False`` and ``error``.
+            """
+            await ctx.debug(
+                f"get_field_condition: field_condition_id={field_condition_id!r}, debug={debug}"
+            )
+            cid, err = validate_tool_id(field_condition_id, "field_condition_id")
+            if err is not None:
+                return err
+
+            try:
+                raw = await client.get_field_condition(cid)
+            except Exception as exc:  # noqa: BLE001
+                return handle_pipe_config_tool_graphql_error(
+                    exc, "Get field condition failed.", debug=debug
+                )
+
+            fc = raw.get("fieldCondition")
+            if fc is None:
+                return {
+                    "success": False,
+                    "error": "Field condition not found or access denied.",
+                }
+            return {
+                "success": True,
+                "message": "Field condition loaded.",
+                "field_condition": fc,
+            }
+
         @mcp.tool(
             annotations=ToolAnnotations(
                 readOnlyHint=False,

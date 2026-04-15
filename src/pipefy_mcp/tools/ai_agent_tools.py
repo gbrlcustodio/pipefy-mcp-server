@@ -37,6 +37,8 @@ from pipefy_mcp.tools.phase_transition_helpers import (
     collect_ai_behavior_move_transition_problems,
 )
 
+MEMBERSHIP_CHECK_TIMEOUT_SECONDS = 5
+
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30
 
 
@@ -721,6 +723,48 @@ class AiAgentTools:
                         f"fieldIds targeting it were not verified."
                     )
 
+            # Proactive membership check for cross-pipe target pipes (FR-12).
+            # Only runs when service_account_ids are configured.
+            from pipefy_mcp.settings import settings
+
+            membership_problems: list[str] = []
+            sa_ids = settings.pipefy.service_account_ids
+            if sa_ids and target_pipe_ids:
+                sa_set = set(sa_ids)
+                try:
+                    member_results = await asyncio.wait_for(
+                        asyncio.gather(
+                            *(
+                                client.get_pipe_members(tpid)
+                                for tpid in target_pipe_ids
+                            ),
+                            return_exceptions=True,
+                        ),
+                        timeout=MEMBERSHIP_CHECK_TIMEOUT_SECONDS,
+                    )
+                    for tpid, mresult in zip(target_pipe_ids, member_results):
+                        if isinstance(mresult, BaseException):
+                            await ctx.debug(
+                                f"Could not check membership for pipe {tpid}: {mresult}"
+                            )
+                            continue
+                        members = mresult.get("pipe", {}).get("members") or []
+                        member_ids = {
+                            str(m.get("user", {}).get("id", ""))
+                            for m in members
+                            if isinstance(m, dict)
+                        }
+                        if not sa_set & member_ids:
+                            membership_problems.append(
+                                f"Service account is not a member of target pipe "
+                                f"{tpid}. Use invite_members to add it before "
+                                f"creating the agent."
+                            )
+                except (TimeoutError, asyncio.TimeoutError):
+                    await ctx.debug(
+                        "Membership check timed out; skipping SA verification"
+                    )
+
             unknown_action_types = "error" if strict_unknown_action_types else "warning"
             problems, helper_warnings = validate_behaviors_against_pipe(
                 behaviors,
@@ -734,7 +778,7 @@ class AiAgentTools:
             transition_problems = await collect_ai_behavior_move_transition_problems(
                 client, behaviors
             )
-            problems = [*problems, *transition_problems]
+            problems = [*problems, *transition_problems, *membership_problems]
             warnings = [*tool_warnings, *helper_warnings]
 
             if problems:

@@ -669,9 +669,9 @@ async def test_export_organization_report_success(
 
     assert result.isError is False
     mock_report_client.export_organization_report.assert_awaited_once_with(
-        42,
-        organization_report_id=7,
-        pipe_ids=[10, 11],
+        "42",
+        organization_report_id="7",
+        pipe_ids=["10", "11"],
         sort_by=None,
         filter=None,
         columns=None,

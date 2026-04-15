@@ -624,9 +624,9 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def export_organization_report(
-            organization_id: str | int,
-            organization_report_id: str | int | None = None,
-            pipe_ids: list[str | int] | None = None,
+            organization_id: PipefyId,
+            organization_report_id: PipefyId | None = None,
+            pipe_ids: list[PipefyId] | None = None,
             sort_by: dict | None = None,
             filter: dict | None = None,
             columns: list[str] | None = None,
@@ -643,7 +643,7 @@ class ReportTools:
                 columns: Column field IDs for the export file.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if organization_id < 1:
+            if int(organization_id) < 1:
                 return build_report_error_payload(
                     message="'organization_id' must be a positive integer.",
                 )

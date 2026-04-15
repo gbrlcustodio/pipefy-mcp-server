@@ -268,7 +268,7 @@ class AttachmentTools:
         async def upload_attachment_to_card(
             ctx: Context[ServerSession, None],
             organization_id: PipefyId,
-            card_id: str | int,
+            card_id: PipefyId,
             field_id: PipefyId,
             file_name: str,
             file_url: str | None = None,

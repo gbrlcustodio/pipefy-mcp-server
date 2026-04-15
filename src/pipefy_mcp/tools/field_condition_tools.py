@@ -156,7 +156,7 @@ class FieldConditionTools:
         )
         async def create_field_condition(
             ctx: Context,
-            phase_id: str | int,
+            phase_id: PipefyId,
             condition: dict[str, Any],
             actions: list[dict[str, Any]],
             extra_input: dict[str, Any] | None = None,
@@ -239,7 +239,7 @@ class FieldConditionTools:
         )
         async def update_field_condition(
             ctx: Context,
-            condition_id: str | int,
+            condition_id: PipefyId,
             condition: dict[str, Any] | None = None,
             actions: list[dict[str, Any]] | None = None,
             extra_input: dict[str, Any] | None = None,
@@ -335,7 +335,7 @@ class FieldConditionTools:
         )
         async def delete_field_condition(
             ctx: Context[ServerSession, None],
-            condition_id: str | int,
+            condition_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:

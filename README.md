@@ -1,7 +1,7 @@
 # MCP server for Pipefy
 
 <p align="center">
-  <strong>Open-source MCP for Pipefy: 116 tools across pipes, cards, tables, relations, reports, automations, AI agents and observability — built for your IDE, with pagination, introspection and safe deletes.</strong>
+  <strong>Open-source MCP for Pipefy: 128 tools across pipes, cards, tables, relations, reports, automations, AI agents and observability — built for your IDE, with pagination, introspection and safe deletes.</strong>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@
 
 ## MCP tools
 
-The server exposes **116 tools**, grouped below into **nine** surface areas. Canonical names live in `PIPEFY_TOOL_NAMES` (`src/pipefy_mcp/tools/registry.py`).
+The server exposes **128 tools**, grouped below into **nine** surface areas. Canonical names live in `PIPEFY_TOOL_NAMES` (`src/pipefy_mcp/tools/registry.py`).
 
 **Documentation for agents:** each tool’s description and `Args:` come from its Python docstring—MCP clients show that text to LLMs for routing. Use the docstrings (and the per-area docs linked in the table) as the authority on parameters and edge cases.
 
@@ -48,15 +48,17 @@ The server exposes **116 tools**, grouped below into **nine** surface areas. Can
 
 | Category | Tools | Description | Docs |
 |----------|:-----:|-------------|------|
-| **Pipes & cards** | 34 | Pipes, phases, fields, labels, cards, field conditions, and card-level attachments—read/write/delete as documented per tool. | [Details](docs/tools/pipes-and-cards.md) |
-| **Database tables** | 18 | Tables, records (rows), schema columns (table fields), org-wide table discovery, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
+| **Pipes & cards** | 37 | Pipes, phases, fields, labels, cards, field conditions, and card-level attachments—read/write/delete as documented per tool (card-to-card relation list/delete live under **Relations**). | [Details](docs/tools/pipes-and-cards.md) |
+| **Database tables** | 17 | Tables, records (rows), schema columns (table fields), org-wide table discovery, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
 | **Relations** | 8 | Pipe relations, table relations by ID, card links, list/delete card-level relations. | [Details](docs/tools/relations.md) |
-| **Reports** | 16 | Pipe and organization reports: discovery, CRUD, and async exports. | [Details](docs/tools/reports.md) |
-| **Automations & AI** | 17 | Traditional automations (rules engine) and AI-powered automations and agents. | [Details](docs/tools/automations-and-ai.md) |
+| **Reports** | 17 | Pipe and organization reports: discovery, CRUD, single pipe report read, and async exports. | [Details](docs/tools/reports.md) |
+| **Automations & AI** | 22 | Traditional automations (rules engine), AI automations (including read/delete/validate), and AI agents. | [Details](docs/tools/automations-and-ai.md) |
 | **Observability** | 10 | AI agent and automation logs, usage stats, credits, job exports, status polling, and CSV fetch for finished exports. | [Details](docs/tools/observability.md) |
-| **Members, email & webhooks** | 9 | Pipe membership, card inbox emails, and webhook management. | [Details](docs/tools/members-email-webhooks.md) |
+| **Members, email & webhooks** | 11 | Pipe membership, card inbox emails, webhooks (list/update/create/delete), and transactional email sends. | [Details](docs/tools/members-email-webhooks.md) |
 | **Organization** | 1 | Fetch organization details (plan, members, pipes count). | [Details](docs/tools/organization.md) |
 | **Introspection** | 5 | Schema discovery, depth-controlled type resolution, and raw GraphQL execution. | [Details](docs/tools/introspection.md) |
+
+**Sanity check:** 37 + 17 + 8 + 17 + 22 + 10 + 11 + 1 + 5 = **128** (matches `len(PIPEFY_TOOL_NAMES)`).
 
 ---
 

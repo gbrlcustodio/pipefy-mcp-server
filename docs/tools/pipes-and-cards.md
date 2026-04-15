@@ -1,6 +1,6 @@
 # Pipes & Cards
 
-Read, create, update, and delete pipes, phases, phase fields, labels, cards, and field conditions. **34 tools.**
+Read, create, update, and delete pipes, phases, phase fields, labels, cards, and field conditions. **37 tools.** (Card-to-card relation tools `get_card_relations` / `delete_card_relation` / `create_card_relation` are documented in [Connections & Relations](relations.md).)
 
 ## Cross-cutting patterns
 
@@ -29,6 +29,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | `get_start_form_fields` | Start-form fields for a pipe. |
 | `get_phase_fields` | Fields for a phase — each includes `id`, `internal_id`, `uuid`. |
 | `get_pipe_members` | List pipe members. |
+| `get_labels` | List labels configured on the pipe (`id`, `name`). |
 | `search_pipes` | Search pipes by name. |
 
 ## Card reads
@@ -55,7 +56,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | `create_card` | Create a card; may use elicitation to ask the user for required fields mid-call. |
 | `add_card_comment` | Add a comment to a card. |
 | `update_comment` | Update an existing comment. |
-| `delete_comment` | Delete a comment. |
+| `delete_comment` | Delete a comment (two-step: preview with `confirm=false`, then `confirm=true` after approval; `destructiveHint=True`). |
 | `move_card_to_phase` | Move card to another phase. |
 | `update_card_field` | Single-field update (`updateCardField`). |
 | `update_card` | Metadata (title, assignees, labels, due date) and/or multiple custom fields via `field_updates`. |
@@ -66,10 +67,12 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 
 ## Field condition tools
 
-Three tools configure conditional visibility on phase fields.
+Five tools read and configure conditional visibility on phase fields.
 
 | Tool | Read-only | Role |
 |------|-----------|------|
+| `get_field_conditions` | Yes | Lists conditions for a phase (expressions, actions). |
+| `get_field_condition` | Yes | Loads one condition by ID. |
 | `create_field_condition` | No | Creates a rule: `phase_id`, `condition` (dict), `actions` (list of dicts), optional `extra_input`. |
 | `update_field_condition` | No | Patches an existing rule: `condition_id` and at least one of `condition`, `actions`, or `extra_input`. |
 | `delete_field_condition` | No | Deletes a rule (`destructiveHint=True` — confirm with the user first). |

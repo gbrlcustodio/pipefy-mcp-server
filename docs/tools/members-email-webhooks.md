@@ -1,6 +1,6 @@
 # Members, Email & Webhooks
 
-Manage pipe membership, send emails from card inboxes, read inbox replies, and manage webhooks. **9 tools.**
+Manage pipe membership, send emails from card inboxes, read inbox replies, and manage webhooks (list, create, update, delete). **11 tools.**
 
 ---
 
@@ -34,5 +34,7 @@ Configure IDs in `.env` (see `.env.example`). Omit the variable when you do not 
 
 | Tool | Read-only | Role |
 |------|-----------|------|
+| `get_webhooks` | Yes | Lists webhooks for a pipe (`id`, `name`, `url`, `actions`, `headers`, `email`). |
 | `create_webhook` | No | Register a webhook for pipe events; `url` must be HTTPS; `actions` is a list of event names (e.g. `['card.move', 'card.create']`). Use `introspect_type('WebhookActions')` for valid actions. |
+| `update_webhook` | No | Patch an existing webhook (`webhook_id`, optional `name`, `url`, `actions`, `headers`). |
 | `delete_webhook` | No | Permanently delete a webhook by ID (`destructiveHint=True` — confirm with the user first). |

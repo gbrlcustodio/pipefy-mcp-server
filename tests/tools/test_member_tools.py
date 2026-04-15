@@ -10,8 +10,18 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
+import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.member_tools import MemberTools
+
+
+@pytest.fixture(autouse=True)
+def _isolate_sa_ids(monkeypatch):
+    """Ensure .env service_account_ids don't leak into tests.
+
+    Tests that need specific SA IDs override via their own monkeypatch.
+    """
+    monkeypatch.setattr(_settings_mod.settings.pipefy, "service_account_ids", [])
 
 
 @pytest.fixture

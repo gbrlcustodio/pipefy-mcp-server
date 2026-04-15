@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pipefy_mcp.services.pipefy import PipefyClient
 
+import pipefy_mcp.settings as _settings_mod
+
 # Suffixes appended by InternalApiClient for service-layer diagnostics; MCP tools
 # should strip these from default user-visible errors (see task 4.2).
 _INTERNAL_API_CODE_SUFFIX_RE = re.compile(r"\s*\[code=[^\]]*\]")
@@ -214,22 +216,34 @@ async def enrich_permission_denied_error(
     except (TimeoutError, asyncio.TimeoutError):
         return None
 
+    sa_ids = set(_settings_mod.settings.pipefy.service_account_ids)
+
     missing_pipes: list[str] = []
     for pid, result in zip(unique_ids, results):
         if isinstance(result, BaseException):
-            # Could not fetch members — could be access denied, network, or pipe not found
             missing_pipes.append(
                 f"Could not verify membership for pipe {pid}. "
                 f"Check if the service account is a member — use invite_members if not."
             )
             continue
         members = result.get("pipe", {}).get("members") or []
+        pipe_name = result.get("pipe", {}).get("name") or f"pipe {pid}"
         if not members:
-            pipe_name = result.get("pipe", {}).get("name") or f"pipe {pid}"
             missing_pipes.append(
                 f"Service account may not be a member of {pipe_name} (ID: {pid}). "
                 f"Use invite_members to add it."
             )
+        elif sa_ids:
+            member_ids = {
+                str(m.get("user", {}).get("id", ""))
+                for m in members
+                if isinstance(m, dict)
+            }
+            if not sa_ids & member_ids:
+                missing_pipes.append(
+                    f"Service account is not a member of {pipe_name} (ID: {pid}). "
+                    f"Use invite_members to add it."
+                )
 
     if not missing_pipes:
         return None

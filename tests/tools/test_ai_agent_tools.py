@@ -11,9 +11,16 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
+import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.models.ai_agent import UpdateAiAgentInput
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from tests.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
+
+
+@pytest.fixture(autouse=True)
+def _isolate_sa_ids(monkeypatch):
+    """Ensure service_account_ids is empty so .env values don't leak into tests."""
+    monkeypatch.setattr(_settings_mod.settings.pipefy, "service_account_ids", [])
 
 
 @pytest.fixture
@@ -27,7 +34,7 @@ def mock_pipefy_client():
     client.delete_ai_agent = AsyncMock()
     client.get_pipe = AsyncMock()
     client.get_pipe_relations = AsyncMock()
-    client.get_pipe_members = AsyncMock()
+    client.get_pipe_members = AsyncMock(return_value={"pipe": {"members": []}})
     client.get_phase_allowed_move_targets = AsyncMock()
     return client
 

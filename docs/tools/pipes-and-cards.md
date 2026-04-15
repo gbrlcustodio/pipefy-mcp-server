@@ -54,6 +54,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | Tool | Role |
 |------|------|
 | `create_card` | Create a card; may use elicitation to ask the user for required fields mid-call. |
+| `fill_card_phase_fields` | Fill phase-specific fields on a card; may use elicitation when available. |
 | `add_card_comment` | Add a comment to a card. |
 | `update_comment` | Update an existing comment. |
 | `delete_comment` | Delete a comment (two-step: preview with `confirm=false`, then `confirm=true` after approval; `destructiveHint=True`). |
@@ -64,6 +65,24 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | `upload_attachment_to_card` | Presigned URL + S3 PUT + `updateCardField` for **attachment** fields. **One file per call** — to attach multiple files, call the tool once per file. Exactly one of `file_url` or `file_content_base64`; optional `content_type` (inferred from `file_name` if omitted). **`field_id` must be the field slug** (e.g. `document_upload`), not the uuid — using the uuid returns `RESOURCE_NOT_FOUND`. |
 
 **Choosing card updates:** `update_card_field` = one field, full replacement. `update_card` + `field_updates` = several custom fields at once. `update_card` with attribute args = metadata (combinable with `field_updates`).
+
+### Headless / agent clients
+
+When elicitation is unavailable (agents, CLIs, SDK consumers), `create_card` and `fill_card_phase_fields` still work but behave differently:
+
+1. The tool fetches the start-form or phase field definitions internally.
+2. Provided `fields` are **filtered to editable field IDs only** — keys that do not match an editable field are silently discarded (no error).
+3. The filtered dict is sent directly to the Pipefy API.
+
+Because non-editable keys are dropped without warning, agents should discover fields first and pass all required values explicitly:
+
+```
+get_start_form_fields(pipe_id)   → learn field IDs, types, required flag
+create_card(pipe_id, fields={…}) → supply every required field ID
+
+get_phase_fields(phase_id)                     → learn phase field IDs
+fill_card_phase_fields(card_id, phase_id, fields={…}) → supply values
+```
 
 ## Field condition tools
 

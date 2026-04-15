@@ -677,7 +677,9 @@ async def test_set_table_record_field_value_success(
             {"record_id": 1, "field_id": "f", "value": "x"},
         )
 
-    mock_table_client.set_table_record_field_value.assert_awaited_once_with("1", "f", "x")
+    mock_table_client.set_table_record_field_value.assert_awaited_once_with(
+        "1", "f", "x"
+    )
     assert extract_payload(result)["success"] is True
 
 

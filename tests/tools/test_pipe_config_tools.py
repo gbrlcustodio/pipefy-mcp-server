@@ -1250,7 +1250,7 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
         )
     assert result.isError is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        1,
+        "1",
         expr,
         actions,
     )
@@ -1278,7 +1278,7 @@ async def test_create_field_condition_maps_hidden_action_id_to_hide__no_integrat
         )
     assert result.isError is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        1,
+        "1",
         expr,
         [{"phaseFieldId": "308821043", "whenEvaluator": True, "actionId": "hide"}],
     )
@@ -1324,7 +1324,7 @@ async def test_create_field_condition_strips_expression_ids__no_integration(
         )
     assert result.isError is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        1,
+        "1",
         expected_condition,
         actions,
     )

@@ -669,7 +669,9 @@ class TestDirectToolCalls:
                 {"pipe_id": pipe_id, "required_only": True},
             )
         assert result.isError is False
-        mock_pipefy_client.get_start_form_fields.assert_called_once_with(str(pipe_id), True)
+        mock_pipefy_client.get_start_form_fields.assert_called_once_with(
+            str(pipe_id), True
+        )
         payload = extract_payload(result)
         assert "start_form_fields" in payload
 
@@ -1181,7 +1183,9 @@ class TestGetPhaseFieldsTool:
             )
 
             assert result.isError is True, "Expected tool error for permission denied"
-            mock_pipefy_client.get_phase_fields.assert_called_once_with(str(phase_id), False)
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(
+                str(phase_id), False
+            )
 
 
 @pytest.mark.anyio
@@ -1219,7 +1223,9 @@ class TestFillCardPhaseFieldsTool:
             )
 
             assert result.isError is False, "Unexpected tool error"
-            mock_pipefy_client.get_phase_fields.assert_called_once_with(str(phase_id), False)
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(
+                str(phase_id), False
+            )
             mock_pipefy_client.update_card.assert_called_once_with(
                 card_id=str(card_id),
                 field_updates=[{"field_id": "status", "value": "done"}],
@@ -1271,7 +1277,9 @@ class TestFillCardPhaseFieldsTool:
             )
 
             assert result.isError is False, "Unexpected tool error"
-            mock_pipefy_client.get_phase_fields.assert_called_once_with(str(phase_id), False)
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(
+                str(phase_id), False
+            )
             mock_pipefy_client.update_card.assert_called_once_with(
                 card_id=str(card_id),
                 field_updates=[{"field_id": "status", "value": "done"}],
@@ -1460,7 +1468,9 @@ class TestFillCardPhaseFieldsTool:
             )
 
             assert result.isError is True, "Expected tool error for permission denied"
-            mock_pipefy_client.get_phase_fields.assert_called_once_with(str(phase_id), False)
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(
+                str(phase_id), False
+            )
             mock_pipefy_client.update_card.assert_not_called()
 
 

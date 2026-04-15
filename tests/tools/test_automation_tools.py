@@ -934,8 +934,6 @@ class TestPipefyIdCoercion:
             return_value={"id": "500", "name": "Test"}
         )
         async with automation_session as session:
-            result = await session.call_tool(
-                "get_automation", {"automation_id": 500}
-            )
+            result = await session.call_tool("get_automation", {"automation_id": 500})
         assert result.isError is False
         mock_automation_client.get_automation.assert_awaited_once_with("500")

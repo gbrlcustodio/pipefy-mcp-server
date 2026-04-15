@@ -39,7 +39,7 @@ AI automations are separate from traditional rules above. They are prompt-driven
 
 ### `create_ai_automation`: `condition` (contract)
 
-**Source of truth:** **Required-on-wire via default (branch B).** If the tool caller omits `condition`, the MCP layer applies `DEFAULT_CONDITION` in code (`CreateAiAutomationInput`): an empty-expression structure meaning “no extra trigger conditions” in Pipefy. The internal API **always** receives a `condition` key on create, avoiding ambiguous “key absent” behavior. Pass an explicit `condition` dict to override. **`update_ai_automation`:** omit `condition` to leave the existing rule unchanged; pass a dict to replace it.
+On **create**, if the caller omits `condition`, the MCP layer supplies `DEFAULT_CONDITION` (see `CreateAiAutomationInput` in `pipefy_mcp.models.ai_automation`) so Pipefy always receives an explicit condition object. Pass a `condition` dict to override. On **`update_ai_automation`**, omit `condition` to leave the existing rule unchanged; pass a dict to replace it.
 
 ## AI agents
 

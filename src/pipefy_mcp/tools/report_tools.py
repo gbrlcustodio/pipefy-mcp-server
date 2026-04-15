@@ -17,6 +17,7 @@ from pipefy_mcp.tools.report_tool_helpers import (
     build_report_read_success_payload,
     handle_report_tool_graphql_error,
 )
+from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 
 def _blank_field_error(value: str, field: str) -> dict[str, Any] | None:
@@ -643,10 +644,9 @@ class ReportTools:
                 columns: Column field IDs for the export file.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if int(organization_id) < 1:
-                return build_report_error_payload(
-                    message="'organization_id' must be a positive integer.",
-                )
+            _, err = validate_tool_id(organization_id, "organization_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.export_organization_report(
                     organization_id,

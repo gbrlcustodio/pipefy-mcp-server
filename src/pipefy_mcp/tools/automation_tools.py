@@ -26,29 +26,9 @@ from pipefy_mcp.tools.phase_transition_helpers import (
 )
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
-    valid_repo_id,
     validate_optional_tool_id,
     validate_tool_id,
 )
-
-
-def _normalize_optional_filter(value: str | int | None) -> tuple[bool, str | None]:
-    """Return (ok, value) for optional org/pipe filters; ok False when value is syntactically invalid."""
-    if value is None:
-        return True, None
-    if not valid_repo_id(value):
-        return False, None
-    if isinstance(value, int):
-        return True, str(value)
-    return True, value.strip()
-
-
-def _normalize_required_id(value: str | int) -> str | None:
-    if not valid_repo_id(value):
-        return None
-    if isinstance(value, int):
-        return str(value)
-    return value.strip()
 
 
 def _normalize_simulation_action_id(value: str | int) -> str | None:

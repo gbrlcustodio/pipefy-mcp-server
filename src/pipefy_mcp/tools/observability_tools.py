@@ -15,6 +15,7 @@ from pipefy_mcp.tools.observability_tool_helpers import (
     build_observability_read_success_payload,
     handle_observability_tool_graphql_error,
 )
+from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 # --- Validation constants ---
 
@@ -223,10 +224,9 @@ class ObservabilityTools:
                 sort: SortCriteria dict (field + direction).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_uuid:
-                return build_observability_error_payload(
-                    message="Invalid 'organization_uuid': provide a non-empty string or integer.",
-                )
+            _, err = validate_tool_id(organization_uuid, "organization_uuid")
+            if err is not None:
+                return err
             if not filter_date_from or not filter_date_to:
                 return build_observability_error_payload(
                     message="Both 'filter_date_from' and 'filter_date_to' are required.",
@@ -270,10 +270,9 @@ class ObservabilityTools:
                 sort: SortCriteria dict (field + direction).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_uuid:
-                return build_observability_error_payload(
-                    message="Invalid 'organization_uuid': provide a non-empty string or integer.",
-                )
+            _, err = validate_tool_id(organization_uuid, "organization_uuid")
+            if err is not None:
+                return err
             if not filter_date_from or not filter_date_to:
                 return build_observability_error_payload(
                     message="Both 'filter_date_from' and 'filter_date_to' are required.",
@@ -310,10 +309,9 @@ class ObservabilityTools:
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_uuid:
-                return build_observability_error_payload(
-                    message="Invalid 'organization_uuid': provide a non-empty string or integer.",
-                )
+            _, err = validate_tool_id(organization_uuid, "organization_uuid")
+            if err is not None:
+                return err
             if period not in _VALID_PERIODS:
                 return build_observability_error_payload(
                     message=f"Invalid 'period': must be one of {sorted(_VALID_PERIODS)}.",
@@ -345,10 +343,9 @@ class ObservabilityTools:
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_id:
-                return build_observability_error_payload(
-                    message="Invalid 'organization_id': provide a non-empty string or integer.",
-                )
+            _, err = validate_tool_id(organization_id, "organization_id")
+            if err is not None:
+                return err
             if period not in _VALID_PERIODS:
                 return build_observability_error_payload(
                     message=f"Invalid 'period': must be one of {sorted(_VALID_PERIODS)}.",

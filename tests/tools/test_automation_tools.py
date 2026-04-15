@@ -885,7 +885,7 @@ async def test_create_send_task_automation_listed_not_read_only(automation_sessi
 
 
 ## ---------------------------------------------------------------------------
-## FR-11: Cross-pipe PERMISSION_DENIED enrichment
+## Cross-pipe PERMISSION_DENIED enrichment
 ## ---------------------------------------------------------------------------
 
 

@@ -704,8 +704,7 @@ class AiAgentTools:
                         f"fieldIds targeting it were not verified."
                     )
 
-            # Proactive membership check for cross-pipe target pipes (FR-12).
-            # Only runs when service_account_ids are configured.
+            # Optional: verify service account membership on cross-pipe targets.
             membership_problems: list[str] = []
             sa_ids = settings.pipefy.service_account_ids
             target_pipe_list = list(target_pipe_ids)

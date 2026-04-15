@@ -373,9 +373,8 @@ def validate_behaviors_against_pipe(
             # Check fieldsAttributes fieldId references.
             # Same-pipe actions check against pipe_field_ids; cross-pipe actions
             # check against cross_pipe_field_ids when available.
-            # create_table_record: table field IDs, not pipe fields (FR-6).
-            # send_email_template: no pipe-scoped field metadata (FR-6); missing pipeId
-            # would otherwise make targets_source True and mis-validate stray fieldsAttributes.
+            # Skip fieldId validation for create_table_record (table fields) and
+            # send_email_template (no pipe field list; pipeId omission would mis-route checks).
             if action_type not in ("create_table_record", "send_email_template"):
                 action_pipe = str(metadata.get("pipeId", ""))
                 targets_source = not action_pipe or action_pipe == pipe_id

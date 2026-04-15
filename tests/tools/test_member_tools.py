@@ -143,7 +143,7 @@ async def test_invite_members_graphql_error(
 async def test_remove_member_from_pipe_blocks_protected_service_account(
     member_session, mock_member_client, extract_payload
 ):
-    """FR-1: IDs in PIPEFY_SERVICE_ACCOUNT_IDS cannot be removed via MCP."""
+    """IDs in PIPEFY_SERVICE_ACCOUNT_IDS cannot be removed via MCP."""
     mock_member_client.remove_members_from_pipe.return_value = {
         "removeMembersFromPipe": {"success": True}
     }

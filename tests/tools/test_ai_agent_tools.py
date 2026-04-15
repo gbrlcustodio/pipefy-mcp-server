@@ -1944,7 +1944,7 @@ class TestFetchPipeValidationContext:
 
 
 ## ---------------------------------------------------------------------------
-## Proactive membership check in validate_ai_agent_behaviors (FR-12)
+## Proactive membership check in validate_ai_agent_behaviors
 ## ---------------------------------------------------------------------------
 
 
@@ -2152,7 +2152,7 @@ class TestValidateAiAgentBehaviorsMembership:
 
 
 ## ---------------------------------------------------------------------------
-## FR-11: Cross-pipe PERMISSION_DENIED enrichment at tool level
+## Cross-pipe PERMISSION_DENIED enrichment at tool level
 ## ---------------------------------------------------------------------------
 
 

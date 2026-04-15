@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 import pipefy_mcp.settings as _settings_mod
 
 # Suffixes appended by InternalApiClient for service-layer diagnostics; MCP tools
-# should strip these from default user-visible errors (see task 4.2).
+# strip these from default user-visible errors.
 _INTERNAL_API_CODE_SUFFIX_RE = re.compile(r"\s*\[code=[^\]]*\]")
 _INTERNAL_API_CORRELATION_SUFFIX_RE = re.compile(r"\s*\[correlation_id=[^\]]*\]")
 _INTERNAL_API_CODE_BRACKET_CAPTURE_RE = re.compile(r"\[code=([^\]]*)\]")
@@ -151,10 +151,7 @@ def handle_tool_graphql_error(
     *,
     debug: bool = False,
 ) -> dict[str, Any]:
-    """Turn transport/GraphQL failures into a standard error payload.
-
-    Consolidates the repeated ``handle_*_tool_graphql_error`` pattern used across
-    domain helper modules. Returns ``{"success": False, "error": message}``.
+    """Turn transport/GraphQL failures into ``{"success": False, "error": message}``.
 
     Args:
         exc: Root exception from gql/httpx.

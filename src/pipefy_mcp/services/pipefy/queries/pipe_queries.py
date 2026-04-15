@@ -123,11 +123,45 @@ GET_PHASE_FIELDS_QUERY = gql(
     """
 )
 
+GET_PIPE_WITH_PREFERENCES_QUERY = gql(
+    """
+    query ($pipe_id: ID!) {
+        pipe(id: $pipe_id) {
+            id
+            uuid
+            name
+            preferences {
+                aiAgentsEnabled
+            }
+            phases {
+                id
+                name
+                fields {
+                    id
+                    internal_id
+                    label
+                    type
+                    editable
+                }
+            }
+            start_form_fields {
+                id
+                internal_id
+                label
+                type
+                editable
+            }
+        }
+    }
+    """
+)
+
 __all__ = [
     "GET_PHASE_ALLOWED_MOVES_QUERY",
     "GET_PHASE_FIELDS_QUERY",
     "GET_PIPE_MEMBERS_QUERY",
     "GET_PIPE_QUERY",
+    "GET_PIPE_WITH_PREFERENCES_QUERY",
     "GET_START_FORM_FIELDS_QUERY",
     "SEARCH_PIPES_QUERY",
 ]

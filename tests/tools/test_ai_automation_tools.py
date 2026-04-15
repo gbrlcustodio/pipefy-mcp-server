@@ -22,6 +22,8 @@ def mock_pipefy_client():
     client.get_automation = AsyncMock()
     client.get_automations = AsyncMock()
     client.delete_automation = AsyncMock()
+    client.get_pipe_with_preferences = AsyncMock()
+    client.get_automation_events = AsyncMock()
     client.ai_automation_available = True
     return client
 
@@ -1002,3 +1004,326 @@ class TestPipefyIdCoercion:
             )
         assert extract_payload(result)["success"] is True
         mock_pipefy_client.delete_automation.assert_awaited_once_with("501")
+
+
+## ---------------------------------------------------------------------------
+## validate_ai_automation_prompt
+## ---------------------------------------------------------------------------
+
+MOCK_PIPE_WITH_PREFS = {
+    "pipe": {
+        "id": "303",
+        "uuid": "pipe-uuid-303",
+        "name": "Test Pipe",
+        "preferences": {"aiAgentsEnabled": True},
+        "phases": [
+            {
+                "id": "1",
+                "name": "Start",
+                "fields": [
+                    {
+                        "id": "slug_a",
+                        "internal_id": "100",
+                        "label": "Summary",
+                        "type": "short_text",
+                        "editable": True,
+                    },
+                    {
+                        "id": "slug_b",
+                        "internal_id": "200",
+                        "label": "Status",
+                        "type": "short_text",
+                        "editable": False,
+                    },
+                ],
+            },
+        ],
+        "start_form_fields": [
+            {
+                "id": "slug_c",
+                "internal_id": "300",
+                "label": "Title",
+                "type": "short_text",
+                "editable": True,
+            },
+        ],
+    },
+}
+
+MOCK_EVENTS = [
+    {"id": "card_created"},
+    {"id": "card_moved"},
+    {"id": "field_updated"},
+]
+
+
+@pytest.mark.anyio
+class TestValidateAiAutomationPrompt:
+    async def test_valid_prompt(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is True
+        assert payload["problems"] == []
+        assert payload["field_map"]["100"] == "Summary"
+
+    async def test_missing_field_ref_in_prompt(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Just a plain prompt with no references",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is False
+        assert any("%{internal_id}" in p for p in payload["problems"])
+
+    async def test_invalid_field_id_in_prompt_token(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{999999}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is False
+        assert any("999999" in p for p in payload["problems"])
+
+    async def test_invalid_output_field_id(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["888888"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is False
+        assert any("888888" in p for p in payload["problems"])
+
+    async def test_ai_disabled_on_pipe(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        disabled_pipe = {
+            "pipe": {
+                **MOCK_PIPE_WITH_PREFS["pipe"],
+                "preferences": {"aiAgentsEnabled": False},
+            }
+        }
+        mock_pipefy_client.get_pipe_with_preferences.return_value = disabled_pipe
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is False
+        assert any("AI is not enabled" in p for p in payload["problems"])
+
+    async def test_valid_event_id(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        mock_pipefy_client.get_automation_events.return_value = MOCK_EVENTS
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                    "event_id": "card_created",
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is True
+        assert payload["problems"] == []
+
+    async def test_invalid_event_id(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        mock_pipefy_client.get_automation_events.return_value = MOCK_EVENTS
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                    "event_id": "nonexistent_event",
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is False
+        assert any("nonexistent_event" in p for p in payload["problems"])
+
+    async def test_read_only_field_warning(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Check: %{200}",
+                    "field_ids": ["200"],
+                },
+            )
+        payload = extract_payload(result)
+        # read-only field appears in warnings, not problems
+        assert any("read-only" in w for w in payload["warnings"])
+
+    async def test_pipe_fetch_failure(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.side_effect = RuntimeError(
+            "network error"
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "network error" in payload["error"]
+
+    async def test_rejects_invalid_pipe_id(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        mock_pipefy_client.get_pipe_with_preferences.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+
+    async def test_event_fetch_failure_adds_warning(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        mock_pipefy_client.get_automation_events.side_effect = RuntimeError("fail")
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                    "event_id": "card_created",
+                },
+            )
+        payload = extract_payload(result)
+        # Event fetch failure is a warning, not a problem
+        assert payload["valid"] is True
+        assert any("Could not verify event_id" in w for w in payload["warnings"])
+
+    async def test_has_read_only_annotation(self, client_session):
+        async with client_session as session:
+            listed = await session.list_tools()
+        tool = next(
+            t for t in listed.tools if t.name == "validate_ai_automation_prompt"
+        )
+        assert tool.annotations is not None
+        assert tool.annotations.readOnlyHint is True
+
+    async def test_field_map_contains_only_referenced_fields(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["300"],
+                },
+            )
+        payload = extract_payload(result)
+        # field_map only includes referenced fields (100 from prompt, 300 from field_ids)
+        assert "100" in payload["field_map"]
+        assert "300" in payload["field_map"]
+        assert "200" not in payload["field_map"]

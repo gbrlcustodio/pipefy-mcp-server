@@ -7,7 +7,7 @@ from typing import Any, cast
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pydantic import TypeAdapter, ValidationError
+from pydantic import ValidationError
 
 from pipefy_mcp.models.comment import (
     CommentInput,
@@ -76,7 +76,7 @@ class PipeTools:
         )
         async def create_card(
             ctx: Context[ServerSession, None],
-            pipe_id: str | int,
+            pipe_id: PipefyId,
             title: str | None = None,
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
@@ -164,7 +164,7 @@ class PipeTools:
             ),
         )
         async def get_card(
-            card_id: str | int,
+            card_id: PipefyId,
             include_fields: bool = False,
         ) -> dict:
             """Load one card by ID for title, phase, assignees, labels, and optional field values.
@@ -249,7 +249,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def add_card_comment(
-            card_id: str | int, text: str
+            card_id: PipefyId, text: str
         ) -> AddCardCommentPayload:
             """Add a text comment to a Pipefy card.
 
@@ -281,7 +281,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_comment(
-            comment_id: str | int, text: str
+            comment_id: PipefyId, text: str
         ) -> UpdateCommentSuccessPayload | UpdateCommentErrorPayload:
             """Update an existing comment by its ID.
 
@@ -317,7 +317,7 @@ class PipeTools:
         )
         async def delete_comment(
             ctx: Context[ServerSession, None],
-            comment_id: str | int,
+            comment_id: PipefyId,
             confirm: bool = False,
         ) -> DeleteCommentPayload:
             """Delete a comment from Pipefy.
@@ -449,7 +449,7 @@ class PipeTools:
         )
         async def get_cards(
             ctx: Context[ServerSession, None],
-            pipe_id: str | int,
+            pipe_id: PipefyId,
             title: str | None = None,
             search: CardSearch | None = None,
             include_fields: bool = False,
@@ -500,7 +500,7 @@ class PipeTools:
             ),
         )
         async def find_cards(
-            pipe_id: str | int,
+            pipe_id: PipefyId,
             field_id: str,
             field_value: str,
             include_fields: bool = False,
@@ -549,7 +549,7 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_pipe(pipe_id: str | int) -> dict:
+        async def get_pipe(pipe_id: PipefyId) -> dict:
             """Load a pipe by ID: name, phases, labels, and start-form field definitions.
 
             Use this after resolving ``pipe_id`` (e.g. from ``search_pipes``) to inspect workflow
@@ -619,7 +619,7 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_pipe_members(pipe_id: str | int) -> dict:
+        async def get_pipe_members(pipe_id: PipefyId) -> dict:
             """List members of a pipe with roles and basic user profile fields.
 
             Use this to audit who has access, resolve user IDs for assignments, or before
@@ -638,7 +638,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True),
         )
         async def move_card_to_phase(
-            card_id: str | int, destination_phase_id: str | int
+            card_id: PipefyId, destination_phase_id: PipefyId
         ) -> dict:
             """Move a card to a target phase (Kanban column) within the same pipe.
 
@@ -673,7 +673,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_card_field(
-            card_id: str | int, field_id: str, new_value: Any
+            card_id: PipefyId, field_id: str, new_value: Any
         ) -> dict:
             """Update a single field of a card.
 
@@ -695,10 +695,10 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_card(
-            card_id: str | int,
+            card_id: PipefyId,
             title: str | None = None,
-            assignee_ids: list[str | int] | None = None,
-            label_ids: list[str | int] | None = None,
+            assignee_ids: list[PipefyId] | None = None,
+            label_ids: list[PipefyId] | None = None,
             due_date: str | None = None,
             field_updates: list[dict] | None = None,
         ) -> dict:
@@ -754,7 +754,7 @@ class PipeTools:
             ),
         )
         async def get_start_form_fields(
-            pipe_id: str | int, required_only: bool = False
+            pipe_id: PipefyId, required_only: bool = False
         ) -> dict:
             """Get the start form fields of a pipe.
 
@@ -786,7 +786,7 @@ class PipeTools:
             ),
         )
         async def get_phase_fields(
-            phase_id: str | int, required_only: bool = False
+            phase_id: PipefyId, required_only: bool = False
         ) -> dict:
             """Get the fields available in a specific phase.
 
@@ -820,8 +820,8 @@ class PipeTools:
         )
         async def fill_card_phase_fields(
             ctx: Context[ServerSession, None],
-            card_id: str | int,
-            phase_id: str | int,
+            card_id: PipefyId,
+            phase_id: PipefyId,
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
         ) -> dict:
@@ -928,7 +928,7 @@ class PipeTools:
         )
         async def delete_card(
             ctx: Context[ServerSession, None],
-            card_id: str | int,
+            card_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> DeleteCardPayload:
@@ -949,24 +949,9 @@ class PipeTools:
             Returns:
                 Success/error status of the deletion.
             """
-            try:
-                coerced = TypeAdapter(PipefyId).validate_python(card_id)
-            except ValidationError:
-                return build_delete_card_error_payload(
-                    message=(
-                        "Invalid 'card_id'. Provide a non-empty string or positive "
-                        f"numeric ID (got {type(card_id).__name__})."
-                    )
-                )
-            card_id_str = str(coerced).strip()
-            if not card_id_str:
-                return build_delete_card_error_payload(
-                    message="Invalid 'card_id'. Please provide a non-empty card ID."
-                )
-            if card_id_str.isdigit() and int(card_id_str) <= 0:
-                return build_delete_card_error_payload(
-                    message="Invalid 'card_id'. Please provide a positive integer."
-                )
+            card_id_str, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return build_delete_card_error_payload(message=err["error"])
 
             try:
                 card_response = await client.get_card(card_id_str)

@@ -139,7 +139,7 @@ class TestCreateCardTool:
         async with client_session as session:
             result = await session.call_tool("create_card", {"pipe_id": pipe_id})
             assert result.isError is False, "Unexpected tool result"
-            mock_pipefy_client.create_card.assert_called_once_with(pipe_id, {})
+            mock_pipefy_client.create_card.assert_called_once_with(str(pipe_id), {})
             response = json.loads(result.content[0].text)
             expected_response = {
                 "createCard": {"card": {"id": "789"}},
@@ -211,7 +211,7 @@ class TestCreateCardTool:
             )
             assert result.isError is False, "Unexpected tool result"
             mock_pipefy_client.create_card.assert_called_once_with(
-                pipe_id, {"field_1": "value_1", "field_2": "value_2"}
+                str(pipe_id), {"field_1": "value_1", "field_2": "value_2"}
             )
             response = json.loads(result.content[0].text)
             expected_response = {
@@ -249,7 +249,7 @@ class TestCreateCardTool:
             convert_result=False,
         )
 
-        mock_pipefy_client.create_card.assert_called_once_with(pipe_id, {})
+        mock_pipefy_client.create_card.assert_called_once_with(str(pipe_id), {})
         assert result["createCard"]["card"]["id"] == "789"
         assert "card_link" in result
 
@@ -293,7 +293,7 @@ class TestCreateCardTool:
 
             assert result.isError is False, "Unexpected tool result"
             mock_pipefy_client.create_card.assert_called_once_with(
-                pipe_id, {"field_1": "value_1"}
+                str(pipe_id), {"field_1": "value_1"}
             )
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -320,7 +320,7 @@ class TestCreateCardTool:
                 {"pipe_id": pipe_id, "title": "Copa América"},
             )
             assert result.isError is False
-            mock_pipefy_client.create_card.assert_called_once_with(pipe_id, {})
+            mock_pipefy_client.create_card.assert_called_once_with(str(pipe_id), {})
             mock_pipefy_client.update_card.assert_called_once_with(
                 "789", title="Copa América"
             )
@@ -351,7 +351,7 @@ class TestCreateCardTool:
                 {"pipe_id": pipe_id, "title": "My Title"},
             )
             assert result.isError is False
-            mock_pipefy_client.create_card.assert_called_once_with(pipe_id, {})
+            mock_pipefy_client.create_card.assert_called_once_with(str(pipe_id), {})
             mock_pipefy_client.update_card.assert_called_once_with(
                 "789", title="My Title"
             )
@@ -429,7 +429,7 @@ class TestGetPipeMembersTool:
             result = await session.call_tool("get_pipe_members", {"pipe_id": pipe_id})
 
             assert result.isError is False, "Unexpected tool result"
-            mock_pipefy_client.get_pipe_members.assert_called_once_with(pipe_id)
+            mock_pipefy_client.get_pipe_members.assert_called_once_with(str(pipe_id))
 
 
 @pytest.mark.anyio
@@ -549,7 +549,7 @@ class TestDirectToolCalls:
                 "get_card", {"card_id": 123, "include_fields": True}
             )
         assert result.isError is False
-        mock_pipefy_client.get_card.assert_called_once_with(123, include_fields=True)
+        mock_pipefy_client.get_card.assert_called_once_with("123", include_fields=True)
         payload = extract_payload(result)
         assert payload["card"]["id"] == "123"
 
@@ -564,7 +564,7 @@ class TestDirectToolCalls:
         async with client_session as session:
             result = await session.call_tool("get_pipe", {"pipe_id": pipe_id})
         assert result.isError is False
-        mock_pipefy_client.get_pipe.assert_called_once_with(pipe_id)
+        mock_pipefy_client.get_pipe.assert_called_once_with(str(pipe_id))
         payload = extract_payload(result)
         assert payload["pipe"]["name"] == "My Pipe"
 
@@ -582,7 +582,7 @@ class TestDirectToolCalls:
                 {"card_id": 100, "destination_phase_id": 200},
             )
         assert result.isError is False
-        mock_pipefy_client.move_card_to_phase.assert_called_once_with(100, 200)
+        mock_pipefy_client.move_card_to_phase.assert_called_once_with("100", "200")
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_move_card_to_phase_returns_enriched_payload_when_transition_invalid(
@@ -669,7 +669,7 @@ class TestDirectToolCalls:
                 {"pipe_id": pipe_id, "required_only": True},
             )
         assert result.isError is False
-        mock_pipefy_client.get_start_form_fields.assert_called_once_with(pipe_id, True)
+        mock_pipefy_client.get_start_form_fields.assert_called_once_with(str(pipe_id), True)
         payload = extract_payload(result)
         assert "start_form_fields" in payload
 
@@ -927,7 +927,7 @@ class TestGetCardsTool:
 
         assert result.isError is False, "Unexpected tool error"
         mock_pipefy_client.get_cards.assert_called_once_with(
-            pipe_id, None, include_fields=True, first=None, after=None
+            str(pipe_id), None, include_fields=True, first=None, after=None
         )
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -945,7 +945,7 @@ class TestGetCardsTool:
 
         assert result.isError is False
         mock_pipefy_client.get_cards.assert_called_once_with(
-            pipe_id,
+            str(pipe_id),
             {"title": "Copa"},
             include_fields=False,
             first=None,
@@ -971,7 +971,7 @@ class TestGetCardsTool:
 
         assert result.isError is False
         mock_pipefy_client.get_cards.assert_called_once_with(
-            pipe_id,
+            str(pipe_id),
             {"include_done": True, "title": "Copa"},
             include_fields=False,
             first=None,
@@ -1009,7 +1009,7 @@ class TestFindCardsTool:
 
         assert result.isError is False, "Unexpected tool error"
         mock_pipefy_client.find_cards.assert_called_once_with(
-            pipe_id,
+            str(pipe_id),
             field_id,
             field_value,
             include_fields=True,
@@ -1155,7 +1155,7 @@ class TestGetPhaseFieldsTool:
 
             assert result.isError is False, "Unexpected tool error"
             mock_pipefy_client.get_phase_fields.assert_called_once_with(
-                phase_id, required_only
+                str(phase_id), required_only
             )
             response = extract_payload(result)
             assert response["phase_id"] == str(phase_id)
@@ -1181,7 +1181,7 @@ class TestGetPhaseFieldsTool:
             )
 
             assert result.isError is True, "Expected tool error for permission denied"
-            mock_pipefy_client.get_phase_fields.assert_called_once_with(phase_id, False)
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(str(phase_id), False)
 
 
 @pytest.mark.anyio
@@ -1219,9 +1219,9 @@ class TestFillCardPhaseFieldsTool:
             )
 
             assert result.isError is False, "Unexpected tool error"
-            mock_pipefy_client.get_phase_fields.assert_called_once_with(phase_id, False)
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(str(phase_id), False)
             mock_pipefy_client.update_card.assert_called_once_with(
-                card_id=card_id,
+                card_id=str(card_id),
                 field_updates=[{"field_id": "status", "value": "done"}],
             )
 
@@ -1271,9 +1271,9 @@ class TestFillCardPhaseFieldsTool:
             )
 
             assert result.isError is False, "Unexpected tool error"
-            mock_pipefy_client.get_phase_fields.assert_called_once_with(phase_id, False)
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(str(phase_id), False)
             mock_pipefy_client.update_card.assert_called_once_with(
-                card_id=card_id,
+                card_id=str(card_id),
                 field_updates=[{"field_id": "status", "value": "done"}],
             )
 
@@ -1350,7 +1350,7 @@ class TestFillCardPhaseFieldsTool:
 
             assert result.isError is False, "Unexpected tool error"
             mock_pipefy_client.update_card.assert_called_once_with(
-                card_id=card_id,
+                card_id=str(card_id),
                 field_updates=[{"field_id": "status", "value": "completed"}],
             )
 
@@ -1401,7 +1401,7 @@ class TestFillCardPhaseFieldsTool:
 
             assert result.isError is False, "Unexpected tool error"
             mock_pipefy_client.update_card.assert_called_once_with(
-                card_id=card_id,
+                card_id=str(card_id),
                 field_updates=[{"field_id": "status", "value": "completed"}],
             )
 
@@ -1460,7 +1460,7 @@ class TestFillCardPhaseFieldsTool:
             )
 
             assert result.isError is True, "Expected tool error for permission denied"
-            mock_pipefy_client.get_phase_fields.assert_called_once_with(phase_id, False)
+            mock_pipefy_client.get_phase_fields.assert_called_once_with(str(phase_id), False)
             mock_pipefy_client.update_card.assert_not_called()
 
 
@@ -1487,7 +1487,7 @@ class TestUpdateCardTool:
 
             assert result.isError is False, "Unexpected tool error"
             mock_pipefy_client.update_card.assert_called_once_with(
-                card_id=123,
+                card_id="123",
                 title=None,
                 assignee_ids=None,
                 label_ids=None,
@@ -1622,7 +1622,7 @@ class TestDeleteCardTool:
             payload = extract_payload(result)
             expected_payload: DeleteCardErrorPayload = {
                 "success": False,
-                "error": "Invalid 'card_id'. Please provide a positive integer.",
+                "error": "Invalid 'card_id': provide a positive integer.",
             }
             assert payload == expected_payload
 

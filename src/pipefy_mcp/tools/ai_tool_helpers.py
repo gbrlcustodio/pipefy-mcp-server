@@ -21,6 +21,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class ValidateAiAutomationPromptPayload(TypedDict):
+    success: Literal[True]
+    valid: bool
+    problems: list[str]
+    warnings: list[str]
+    field_map: dict[str, str]
+
+
 class CreateAiAutomationSuccessPayload(TypedDict):
     success: Literal[True]
     automation_id: str
@@ -174,6 +182,28 @@ def build_ai_tool_error(message: str) -> AiToolErrorPayload:
         message: User-visible failure reason.
     """
     return {"success": False, "error": message}
+
+
+def build_validate_prompt_payload(
+    *,
+    problems: list[str],
+    warnings: list[str],
+    field_map: dict[str, str],
+) -> ValidateAiAutomationPromptPayload:
+    """Build the response for ``validate_ai_automation_prompt``.
+
+    Args:
+        problems: Blocking issues found during validation.
+        warnings: Non-blocking notices.
+        field_map: Mapping of numeric field ID to field slug/label.
+    """
+    return {
+        "success": True,
+        "valid": len(problems) == 0,
+        "problems": problems,
+        "warnings": warnings,
+        "field_map": field_map,
+    }
 
 
 def build_create_agent_partial_failure(

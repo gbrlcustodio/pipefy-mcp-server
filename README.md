@@ -58,8 +58,6 @@ The server exposes **128 tools**, grouped below into **nine** surface areas. Can
 | **Organization** | 1 | Fetch organization details (plan, members, pipes count). | [Details](docs/tools/organization.md) |
 | **Introspection** | 5 | Schema discovery, depth-controlled type resolution, and raw GraphQL execution. | [Details](docs/tools/introspection.md) |
 
-**Sanity check:** 37 + 17 + 8 + 17 + 22 + 10 + 11 + 1 + 5 = **128** (matches `len(PIPEFY_TOOL_NAMES)`).
-
 ---
 
 ## Getting Started

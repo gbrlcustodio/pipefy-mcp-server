@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.relation_tool_helpers import (
@@ -18,7 +19,7 @@ from pipefy_mcp.tools.relation_tool_helpers import (
 )
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
-    valid_repo_id,
+    validate_tool_id,
 )
 
 
@@ -30,7 +31,7 @@ class RelationTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def get_pipe_relations(pipe_id: str | int) -> dict[str, Any]:
+        async def get_pipe_relations(pipe_id: PipefyId) -> dict[str, Any]:
             """List pipe relations for a pipe (parent and child links, config, and repo refs).
 
             Takes a **pipe** ID. Each relation's ``id`` in the response is a **pipe relation**
@@ -40,10 +41,9 @@ class RelationTools:
             Args:
                 pipe_id: Pipe ID.
             """
-            if not valid_repo_id(pipe_id):
-                return build_relation_error_payload(
-                    message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
-                )
+            pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.get_pipe_relations(pipe_id)
             except Exception as exc:  # noqa: BLE001
@@ -58,7 +58,7 @@ class RelationTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def get_table_relations(relation_ids: list[str | int]) -> dict[str, Any]:
+        async def get_table_relations(relation_ids: list[PipefyId]) -> dict[str, Any]:
             """Load table relations by ID (Pipefy root ``table_relations``).
 
             **Do not pass** ``table_id`` or a database table ID — this tool only accepts
@@ -74,12 +74,14 @@ class RelationTools:
                 return build_relation_error_payload(
                     message="Invalid 'relation_ids': provide a non-empty list of table relation IDs.",
                 )
-            if not all(valid_repo_id(rid) for rid in relation_ids):
-                return build_relation_error_payload(
-                    message="Each relation ID must be a non-empty string or positive integer.",
-                )
+            validated_ids = []
+            for rid in relation_ids:
+                cleaned, err = validate_tool_id(rid, "relation_id")
+                if err is not None:
+                    return err
+                validated_ids.append(cleaned)
             try:
-                raw = await client.get_table_relations(relation_ids)
+                raw = await client.get_table_relations(validated_ids)
             except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
                     exc, "Get table relations failed."
@@ -93,8 +95,8 @@ class RelationTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def create_pipe_relation(
-            parent_id: str | int,
-            child_id: str | int,
+            parent_id: PipefyId,
+            child_id: PipefyId,
             name: str,
             extra_input: Any | None = None,
             debug: bool = False,
@@ -111,10 +113,12 @@ class RelationTools:
                 extra_input: Optional extra fields for the mutation input.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(parent_id) or not valid_repo_id(child_id):
-                return build_relation_error_payload(
-                    message="Invalid 'parent_id' or 'child_id': use non-empty strings or positive integers.",
-                )
+            parent_id, err = validate_tool_id(parent_id, "parent_id")
+            if err is not None:
+                return err
+            child_id, err = validate_tool_id(child_id, "child_id")
+            if err is not None:
+                return err
             if not isinstance(name, str) or not name.strip():
                 return build_relation_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
@@ -144,7 +148,7 @@ class RelationTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_pipe_relation(
-            relation_id: str | int,
+            relation_id: PipefyId,
             name: str,
             extra_input: Any | None = None,
             debug: bool = False,
@@ -160,10 +164,9 @@ class RelationTools:
                 extra_input: Optional extra fields for the mutation input.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(relation_id):
-                return build_relation_error_payload(
-                    message="Invalid 'relation_id': use a non-empty string or positive integer.",
-                )
+            relation_id, err = validate_tool_id(relation_id, "relation_id")
+            if err is not None:
+                return err
             if not isinstance(name, str) or not name.strip():
                 return build_relation_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
@@ -196,7 +199,7 @@ class RelationTools:
         )
         async def delete_pipe_relation(
             ctx: Context[ServerSession, None],
-            relation_id: str | int,
+            relation_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -212,10 +215,9 @@ class RelationTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(relation_id):
-                return build_relation_error_payload(
-                    message="Invalid 'relation_id': use a non-empty string or positive integer.",
-                )
+            relation_id, err = validate_tool_id(relation_id, "relation_id")
+            if err is not None:
+                return err
 
             guard = await check_destructive_confirmation(
                 ctx,
@@ -240,9 +242,9 @@ class RelationTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def create_card_relation(
-            parent_id: str | int,
-            child_id: str | int,
-            source_id: str | int,
+            parent_id: PipefyId,
+            child_id: PipefyId,
+            source_id: PipefyId,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -258,14 +260,15 @@ class RelationTools:
                 extra_input: Optional ``CreateCardRelationInput`` fields (camelCase), e.g. ``sourceType`` (default ``PipeRelation``).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(parent_id) or not valid_repo_id(child_id):
-                return build_relation_error_payload(
-                    message="Invalid 'parent_id' or 'child_id': use non-empty strings or positive integers.",
-                )
-            if not valid_repo_id(source_id):
-                return build_relation_error_payload(
-                    message="Invalid 'source_id': use a non-empty string or positive integer (pipe relation ID).",
-                )
+            parent_id, err = validate_tool_id(parent_id, "parent_id")
+            if err is not None:
+                return err
+            child_id, err = validate_tool_id(child_id, "child_id")
+            if err is not None:
+                return err
+            source_id, err = validate_tool_id(source_id, "source_id")
+            if err is not None:
+                return err
             bad = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )

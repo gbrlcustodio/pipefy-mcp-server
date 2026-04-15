@@ -65,7 +65,7 @@ async def test_get_table_success(table_session, mock_table_client, extract_paylo
         result = await session.call_tool("get_table", {"table_id": 1})
 
     assert result.isError is False
-    mock_table_client.get_table.assert_awaited_once_with(1)
+    mock_table_client.get_table.assert_awaited_once_with("1")
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["table"]["name"] == "Catalog"
@@ -98,7 +98,7 @@ async def test_get_tables_success(table_session, mock_table_client, extract_payl
         result = await session.call_tool("get_tables", {"table_ids": [1, 2]})
 
     assert result.isError is False
-    mock_table_client.get_tables.assert_awaited_once_with([1, 2])
+    mock_table_client.get_tables.assert_awaited_once_with(["1", "2"])
     assert extract_payload(result)["success"] is True
 
 
@@ -211,7 +211,7 @@ async def test_find_records_success(table_session, mock_table_client, extract_pa
         )
 
     mock_table_client.find_records.assert_awaited_once_with(
-        3, "f", "x", first=None, after=None
+        "3", "f", "x", first=None, after=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -273,7 +273,7 @@ async def test_update_table_rejects_non_object_extra_input(
 
     payload = extract_payload(result)
     if bad_extra == {}:
-        mock_table_client.update_table.assert_awaited_once_with(1, name="N")
+        mock_table_client.update_table.assert_awaited_once_with("1", name="N")
         assert payload["success"] is True
     else:
         mock_table_client.update_table.assert_not_called()
@@ -342,7 +342,7 @@ async def test_update_table_field_omitted_extra_input_ok(
         )
 
     mock_table_client.update_table_field.assert_awaited_once_with(
-        "slug-1", table_id=123, label="New"
+        "slug-1", table_id="123", label="New"
     )
     assert extract_payload(result)["success"] is True
 
@@ -435,7 +435,7 @@ async def test_create_table_success(table_session, mock_table_client, extract_pa
             {"name": "T", "organization_id": 100},
         )
 
-    mock_table_client.create_table.assert_awaited_once_with("T", 100)
+    mock_table_client.create_table.assert_awaited_once_with("T", "100")
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "createTable" in payload["result"]
@@ -470,7 +470,7 @@ async def test_update_table_success(table_session, mock_table_client, extract_pa
             {"table_id": 3, "name": "New"},
         )
 
-    mock_table_client.update_table.assert_awaited_once_with(3, name="New")
+    mock_table_client.update_table.assert_awaited_once_with("3", name="New")
     assert extract_payload(result)["success"] is True
 
 
@@ -526,7 +526,7 @@ async def test_delete_table_confirm_success(
             {"table_id": 5, "confirm": True},
         )
 
-    mock_table_client.delete_table.assert_awaited_once_with(5)
+    mock_table_client.delete_table.assert_awaited_once_with("5")
     assert extract_payload(result)["success"] is True
 
 
@@ -566,7 +566,7 @@ async def test_create_table_record_success(
 
     mock_table_client.create_table_record.assert_awaited_once()
     call_kw = mock_table_client.create_table_record.call_args
-    assert call_kw[0][0] == 10
+    assert call_kw[0][0] == "10"
     assert call_kw[0][1] == {"f1": "a"}
     assert extract_payload(result)["success"] is True
 
@@ -604,7 +604,7 @@ async def test_update_table_record_success(
             {"record_id": 8, "fields": {"title": "Z"}},
         )
 
-    mock_table_client.update_table_record.assert_awaited_once_with(8, {"title": "Z"})
+    mock_table_client.update_table_record.assert_awaited_once_with("8", {"title": "Z"})
     assert extract_payload(result)["success"] is True
 
 
@@ -641,7 +641,7 @@ async def test_delete_table_record_success(
             {"record_id": 99, "confirm": True},
         )
 
-    mock_table_client.delete_table_record.assert_awaited_once_with(99)
+    mock_table_client.delete_table_record.assert_awaited_once_with("99")
     assert extract_payload(result)["success"] is True
 
 
@@ -677,7 +677,7 @@ async def test_set_table_record_field_value_success(
             {"record_id": 1, "field_id": "f", "value": "x"},
         )
 
-    mock_table_client.set_table_record_field_value.assert_awaited_once_with(1, "f", "x")
+    mock_table_client.set_table_record_field_value.assert_awaited_once_with("1", "f", "x")
     assert extract_payload(result)["success"] is True
 
 
@@ -715,7 +715,7 @@ async def test_create_table_field_success(
         )
 
     mock_table_client.create_table_field.assert_awaited_once_with(
-        1, "Code", "short_text"
+        "1", "Code", "short_text"
     )
     assert extract_payload(result)["success"] is True
 
@@ -754,7 +754,7 @@ async def test_update_table_field_success(
         )
 
     mock_table_client.update_table_field.assert_awaited_once_with(
-        "slug-1", table_id=123, label="New"
+        "slug-1", table_id="123", label="New"
     )
     assert extract_payload(result)["success"] is True
 
@@ -791,7 +791,7 @@ async def test_delete_table_field_success(
             "delete_table_field", {"field_id": 88, "confirm": True}
         )
 
-    mock_table_client.delete_table_field.assert_awaited_once_with(88)
+    mock_table_client.delete_table_field.assert_awaited_once_with("88")
     assert extract_payload(result)["success"] is True
 
 

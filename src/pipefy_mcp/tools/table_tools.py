@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
@@ -31,14 +32,12 @@ from pipefy_mcp.tools.table_tool_helpers import (
 )
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
-    valid_repo_id,
+    validate_optional_tool_id,
+    validate_tool_id,
 )
 
 _TABLE_RECORDS_FIRST_MIN = 1
 _TABLE_RECORDS_FIRST_MAX = 200
-
-
-_valid_table_field_id = valid_repo_id
 
 
 _CREATE_TABLE_EXTRA_RESERVED = frozenset({"name", "organization_id"})
@@ -86,7 +85,7 @@ class TableTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def get_table(table_id: str | int) -> dict[str, Any]:
+        async def get_table(table_id: PipefyId) -> dict[str, Any]:
             """Load one database table: name, description, fields, and authorization.
 
             Use this after ``search_tables`` (or when you already have a table ID) to inspect
@@ -105,10 +104,9 @@ class TableTools:
                 ``authorization``). On validation or GraphQL errors, ``success: False`` with an
                 ``error`` message.
             """
-            if not valid_repo_id(table_id):
-                return build_table_read_error_payload(
-                    message="Invalid 'table_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(table_id, "table_id")
+            if err is not None:
+                return build_table_read_error_payload(message=err["error"])
             try:
                 raw = await client.get_table(table_id)
             except Exception as exc:  # noqa: BLE001
@@ -121,7 +119,7 @@ class TableTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def get_tables(table_ids: list[str | int]) -> dict[str, Any]:
+        async def get_tables(table_ids: list[PipefyId]) -> dict[str, Any]:
             """Load several database tables by ID (same shape as get_table per table).
 
             IDs are **database table** ids, not table-**relation** ids (see ``get_table_relations``).
@@ -133,10 +131,12 @@ class TableTools:
                 return build_table_read_error_payload(
                     message="Invalid 'table_ids': provide a non-empty list of IDs.",
                 )
-            if not all(valid_repo_id(tid) for tid in table_ids):
-                return build_table_read_error_payload(
-                    message="Each table ID must be a non-empty string or positive integer.",
-                )
+            for tid in table_ids:
+                _, err = validate_tool_id(tid, "table_ids")
+                if err is not None:
+                    return build_table_read_error_payload(
+                        message="Each table ID must be a non-empty string or positive integer.",
+                    )
             try:
                 raw = await client.get_tables(table_ids)
             except Exception as exc:  # noqa: BLE001
@@ -150,7 +150,7 @@ class TableTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_table_records(
-            table_id: str | int,
+            table_id: PipefyId,
             first: int = 50,
             after: str | None = None,
         ) -> dict[str, Any]:
@@ -165,10 +165,9 @@ class TableTools:
                 first: Page size (1–200, default 50).
                 after: Cursor from the previous page (`endCursor`), if any.
             """
-            if not valid_repo_id(table_id):
-                return build_table_read_error_payload(
-                    message="Invalid 'table_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(table_id, "table_id")
+            if err is not None:
+                return build_table_read_error_payload(message=err["error"])
             if (
                 not isinstance(first, int)
                 or first < _TABLE_RECORDS_FIRST_MIN
@@ -202,7 +201,7 @@ class TableTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def get_table_record(record_id: str | int) -> dict[str, Any]:
+        async def get_table_record(record_id: PipefyId) -> dict[str, Any]:
             """Load a single database table record with its field values.
 
             Use this when you have a record ID (e.g. from ``get_table_records`` or ``find_records``)
@@ -216,10 +215,9 @@ class TableTools:
                 ``table_record`` (``id``, ``title``, ``record_fields``). On errors,
                 ``success: False`` with ``error``.
             """
-            if not valid_repo_id(record_id):
-                return build_table_read_error_payload(
-                    message="Invalid 'record_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(record_id, "record_id")
+            if err is not None:
+                return build_table_read_error_payload(message=err["error"])
             try:
                 raw = await client.get_table_record(record_id)
             except Exception as exc:  # noqa: BLE001
@@ -233,7 +231,7 @@ class TableTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def find_records(
-            table_id: str | int,
+            table_id: PipefyId,
             field_id: str,
             field_value: str,
             first: int | None = None,
@@ -251,10 +249,9 @@ class TableTools:
                 first: Optional page size for pagination.
                 after: Optional cursor from a previous response.
             """
-            if not valid_repo_id(table_id):
-                return build_table_read_error_payload(
-                    message="Invalid 'table_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(table_id, "table_id")
+            if err is not None:
+                return build_table_read_error_payload(message=err["error"])
             if not isinstance(field_id, str) or not field_id.strip():
                 return build_table_read_error_payload(
                     message="Invalid 'field_id': provide a non-empty string.",
@@ -298,7 +295,7 @@ class TableTools:
         )
         async def create_table(
             name: str,
-            organization_id: str | int,
+            organization_id: PipefyId,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -314,10 +311,9 @@ class TableTools:
                 return build_table_mutation_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
                 )
-            if not valid_repo_id(organization_id):
-                return build_table_mutation_error_payload(
-                    message="Invalid 'organization_id'. Provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(organization_id, "organization_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
             bad_extra = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -342,7 +338,7 @@ class TableTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_table(
-            table_id: str | int,
+            table_id: PipefyId,
             name: str | None = None,
             description: str | None = None,
             extra_input: Any | None = None,
@@ -357,10 +353,9 @@ class TableTools:
                 extra_input: Other `UpdateTableInput` keys to merge (e.g. public, icon).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(table_id):
-                return build_table_mutation_error_payload(
-                    message="Invalid 'table_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(table_id, "table_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
             bad_extra = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -401,7 +396,7 @@ class TableTools:
         )
         async def delete_table(
             ctx: Context[ServerSession, None],
-            table_id: str | int,
+            table_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -415,10 +410,9 @@ class TableTools:
                 confirm: When True, performs deletion after explicit user confirmation.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(table_id):
-                return build_delete_table_error_payload(
-                    message="Invalid 'table_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(table_id, "table_id")
+            if err is not None:
+                return build_delete_table_error_payload(message=err["error"])
 
             table_name = "Unknown"
             try:
@@ -483,7 +477,7 @@ class TableTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def create_table_record(
-            table_id: str | int,
+            table_id: PipefyId,
             fields: Any,
             title: str | None = None,
             extra_input: Any | None = None,
@@ -498,10 +492,9 @@ class TableTools:
                 extra_input: Other `CreateTableRecordInput` keys (e.g. label_ids).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(table_id):
-                return build_table_mutation_error_payload(
-                    message="Invalid 'table_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(table_id, "table_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
             if not isinstance(fields, (dict, list)):
                 return build_table_mutation_error_payload(
                     message="Invalid 'fields': provide a dict (field_id → value) or a list of field objects.",
@@ -556,7 +549,7 @@ class TableTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_table_record(
-            record_id: str | int,
+            record_id: PipefyId,
             fields: dict[str, Any],
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -569,10 +562,9 @@ class TableTools:
                 fields: Keys may include title, due_date, status_id (or statusId).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(record_id):
-                return build_table_mutation_error_payload(
-                    message="Invalid 'record_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(record_id, "record_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
             if not isinstance(fields, dict) or not fields:
                 return build_table_mutation_error_payload(
                     message="Invalid 'fields': provide a non-empty dict with at least one attribute.",
@@ -603,7 +595,7 @@ class TableTools:
         )
         async def delete_table_record(
             ctx: Context[ServerSession, None],
-            record_id: str | int,
+            record_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -618,10 +610,9 @@ class TableTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(record_id):
-                return build_table_mutation_error_payload(
-                    message="Invalid 'record_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(record_id, "record_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
 
             guard = await check_destructive_confirmation(
                 ctx,
@@ -646,8 +637,8 @@ class TableTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def set_table_record_field_value(
-            record_id: str | int,
-            field_id: str | int,
+            record_id: PipefyId,
+            field_id: PipefyId,
             value: Any,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -659,19 +650,12 @@ class TableTools:
                 value: New value (string/number/list as required by the field type).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(record_id):
-                return build_table_mutation_error_payload(
-                    message="Invalid 'record_id': provide a non-empty string or positive integer.",
-                )
-            if isinstance(field_id, int):
-                if field_id <= 0:
-                    return build_table_mutation_error_payload(
-                        message="Invalid 'field_id'. Use a non-empty string or positive integer.",
-                    )
-            elif not isinstance(field_id, str) or not field_id.strip():
-                return build_table_mutation_error_payload(
-                    message="Invalid 'field_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(record_id, "record_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
+            _, err = validate_tool_id(field_id, "field_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
             if value is None:
                 return build_table_mutation_error_payload(
                     message="Invalid 'value': cannot be null.",
@@ -693,7 +677,7 @@ class TableTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def create_table_field(
-            table_id: str | int,
+            table_id: PipefyId,
             label: str,
             field_type: str,
             extra_input: Any | None = None,
@@ -715,10 +699,9 @@ class TableTools:
                 extra_input: Additional CreateTableFieldInput keys to merge (e.g. required, options).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(table_id):
-                return build_table_mutation_error_payload(
-                    message="Invalid 'table_id': provide a non-empty string or positive integer.",
-                )
+            _, err = validate_tool_id(table_id, "table_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
             if not isinstance(label, str) or not label.strip():
                 return build_table_mutation_error_payload(
                     message="Invalid 'label': provide a non-empty string.",
@@ -756,8 +739,8 @@ class TableTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_table_field(
-            field_id: str | int,
-            table_id: str | int | None = None,
+            field_id: PipefyId,
+            table_id: PipefyId | None = None,
             label: str | None = None,
             description: str | None = None,
             required: bool | None = None,
@@ -779,12 +762,12 @@ class TableTools:
                 extra_input: Other UpdateTableFieldInput keys to merge (e.g. table_id if not provided as parameter).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_table_field_id(field_id):
-                return build_table_mutation_error_payload(
-                    message=(
-                        "Invalid 'field_id': use a non-empty string or positive integer."
-                    ),
-                )
+            _, err = validate_tool_id(field_id, "field_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
+            ok, _, opt_err = validate_optional_tool_id(table_id, "table_id")
+            if not ok:
+                return build_table_mutation_error_payload(message=opt_err["error"])
             bad_extra = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -819,10 +802,9 @@ class TableTools:
                         "table_id is required by the API. Provide it as a parameter or via extra_input."
                     ),
                 )
-            fid = field_id.strip() if isinstance(field_id, str) else field_id
             try:
                 raw = await client.update_table_field(
-                    fid, table_id=table_id_to_use, **update_attrs
+                    field_id, table_id=table_id_to_use, **update_attrs
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
@@ -841,7 +823,7 @@ class TableTools:
         )
         async def delete_table_field(
             ctx: Context[ServerSession, None],
-            field_id: str | int,
+            field_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -856,13 +838,9 @@ class TableTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not _valid_table_field_id(field_id):
-                return build_table_mutation_error_payload(
-                    message=(
-                        "Invalid 'field_id': use a non-empty string or positive integer."
-                    ),
-                )
-            fid = field_id.strip() if isinstance(field_id, str) else field_id
+            _, err = validate_tool_id(field_id, "field_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
 
             guard = await check_destructive_confirmation(
                 ctx,
@@ -873,7 +851,7 @@ class TableTools:
                 return guard
 
             try:
-                raw = await client.delete_table_field(fid)
+                raw = await client.delete_table_field(field_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Delete table field failed.", debug=debug

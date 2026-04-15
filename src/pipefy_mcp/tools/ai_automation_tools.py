@@ -162,9 +162,7 @@ class AiAutomationTools:
             try:
                 pipe_data = await client.get_pipe_with_preferences(pid)
             except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(
-                    f"Failed to fetch pipe {pid}: {exc}"
-                )
+                return build_ai_tool_error(f"Failed to fetch pipe {pid}: {exc}")
 
             pipe_info = pipe_data.get("pipe", {})
 
@@ -178,9 +176,7 @@ class AiAutomationTools:
                         all_field_ids.add(fid)
                         field_map[fid] = label
                     if field.get("editable") is False:
-                        warnings.append(
-                            f"Field {fid} ({label}) is read-only."
-                        )
+                        warnings.append(f"Field {fid} ({label}) is read-only.")
             for field in pipe_info.get("start_form_fields") or []:
                 fid = str(field.get("internal_id") or field.get("id", ""))
                 label = field.get("label", "")
@@ -188,9 +184,7 @@ class AiAutomationTools:
                     all_field_ids.add(fid)
                     field_map[fid] = label
                 if field.get("editable") is False:
-                    warnings.append(
-                        f"Field {fid} ({label}) is read-only."
-                    )
+                    warnings.append(f"Field {fid} ({label}) is read-only.")
 
             # 3. Validate prompt token IDs exist in the pipe
             for token_id in prompt_tokens:
@@ -225,9 +219,7 @@ class AiAutomationTools:
                                 f"{sorted(valid_event_ids)}."
                             )
                     except Exception as exc:  # noqa: BLE001
-                        await ctx.debug(
-                            f"Could not fetch automation events: {exc}"
-                        )
+                        await ctx.debug(f"Could not fetch automation events: {exc}")
                         warnings.append(
                             "Could not verify event_id — automation events "
                             "endpoint returned an error."
@@ -244,9 +236,7 @@ class AiAutomationTools:
 
             # Only include referenced fields in the returned field_map
             referenced_ids = set(prompt_tokens) | set(str(f) for f in field_ids)
-            filtered_map = {
-                k: v for k, v in field_map.items() if k in referenced_ids
-            }
+            filtered_map = {k: v for k, v in field_map.items() if k in referenced_ids}
 
             return build_validate_prompt_payload(
                 problems=problems,

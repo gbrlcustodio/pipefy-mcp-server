@@ -306,9 +306,7 @@ class AiAgentTools:
                 create_result = await client.create_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
                 pipe_ids = _collect_pipe_ids_from_behaviors(behaviors_expanded)
-                perm_msg = await enrich_permission_denied_error(
-                    exc, pipe_ids, client
-                )
+                perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
                 error_text = enrich_behavior_error(exc, behaviors_expanded)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
@@ -332,12 +330,8 @@ class AiAgentTools:
                 await client.update_ai_agent(update_input)
             except Exception as exc:  # noqa: BLE001
                 pipe_ids = _collect_pipe_ids_from_behaviors(behaviors_expanded)
-                perm_msg = await enrich_permission_denied_error(
-                    exc, pipe_ids, client
-                )
-                error_text = await _enrich_with_validation(
-                    exc, behaviors_expanded
-                )
+                perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
+                error_text = await _enrich_with_validation(exc, behaviors_expanded)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
                 return build_create_agent_partial_failure(
@@ -429,12 +423,8 @@ class AiAgentTools:
                 result = await client.update_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
                 pipe_ids = _collect_pipe_ids_from_behaviors(resolved_behaviors)
-                perm_msg = await enrich_permission_denied_error(
-                    exc, pipe_ids, client
-                )
-                error_text = await _enrich_with_validation(
-                    exc, resolved_behaviors
-                )
+                perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
+                error_text = await _enrich_with_validation(exc, resolved_behaviors)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
                 return build_ai_tool_error(error_text)

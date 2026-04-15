@@ -2024,9 +2024,7 @@ class TestValidateAiAgentBehaviorsMembership:
             )
         payload = extract_payload(result)
         assert payload["success"] is True
-        assert any(
-            "not a member of target pipe 999" in p for p in payload["problems"]
-        )
+        assert any("not a member of target pipe 999" in p for p in payload["problems"])
 
     async def test_sa_is_member_no_extra_problem(
         self,
@@ -2066,9 +2064,7 @@ class TestValidateAiAgentBehaviorsMembership:
             )
         payload = extract_payload(result)
         # No membership problem
-        membership_problems = [
-            p for p in payload["problems"] if "not a member" in p
-        ]
+        membership_problems = [p for p in payload["problems"] if "not a member" in p]
         assert membership_problems == []
 
     async def test_sa_not_configured_skips_check(
@@ -2102,9 +2098,7 @@ class TestValidateAiAgentBehaviorsMembership:
             )
         payload = extract_payload(result)
         # No membership check ran, so no membership problems
-        membership_problems = [
-            p for p in payload["problems"] if "not a member" in p
-        ]
+        membership_problems = [p for p in payload["problems"] if "not a member" in p]
         assert membership_problems == []
         mock_pipefy_client.get_pipe_members.assert_not_called()
 
@@ -2146,7 +2140,5 @@ class TestValidateAiAgentBehaviorsMembership:
         payload = extract_payload(result)
         # Timeout doesn't cause a problem — tool still succeeds
         assert payload["success"] is True
-        membership_problems = [
-            p for p in payload["problems"] if "not a member" in p
-        ]
+        membership_problems = [p for p in payload["problems"] if "not a member" in p]
         assert membership_problems == []

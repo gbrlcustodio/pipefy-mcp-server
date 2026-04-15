@@ -18,8 +18,8 @@ from pipefy_mcp.tools.automation_tool_helpers import (
     build_automation_simulation_success_payload,
     handle_automation_tool_graphql_error,
 )
-from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
 from pipefy_mcp.tools.phase_transition_helpers import (
     validate_traditional_automation_move_transition_or_none,
 )

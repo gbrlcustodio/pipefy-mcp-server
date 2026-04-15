@@ -21,9 +21,6 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     strip_expression_ids_for_create,
 )
 from pipefy_mcp.tools.validation_helpers import (
-    valid_repo_id as valid_phase_field_id,
-)
-from pipefy_mcp.tools.validation_helpers import (
     validate_tool_id,
 )
 
@@ -177,10 +174,9 @@ class FieldConditionTools:
             await ctx.debug(
                 f"create_field_condition: phase_id={phase_id!r}, debug={debug}"
             )
-            if not valid_phase_field_id(phase_id):
-                return build_pipe_tool_error_payload(
-                    message="Invalid 'phase_id'. Use a non-empty string or a positive integer.",
-                )
+            pid, err = validate_tool_id(phase_id, "phase_id")
+            if err is not None:
+                return err
             if not isinstance(condition, dict):
                 return build_pipe_tool_error_payload(
                     message="Invalid 'condition': provide an object/dict.",
@@ -213,7 +209,7 @@ class FieldConditionTools:
             actions_for_api = normalize_field_condition_actions(actions)
             try:
                 raw = await client.create_field_condition(
-                    phase_id,
+                    pid,
                     condition_for_api,
                     actions_for_api,
                     **merged,
@@ -262,12 +258,9 @@ class FieldConditionTools:
             await ctx.debug(
                 f"update_field_condition: condition_id={condition_id!r}, debug={debug}"
             )
-            if not valid_phase_field_id(condition_id):
-                return build_pipe_tool_error_payload(
-                    message=(
-                        "Invalid 'condition_id'. Use a non-empty string or a positive integer."
-                    ),
-                )
+            cid_str, err = validate_tool_id(condition_id, "condition_id")
+            if err is not None:
+                return err
             if extra_input is not None and not isinstance(extra_input, dict):
                 return build_pipe_tool_error_payload(
                     message="Invalid 'extra_input': provide an object/dict or omit.",
@@ -306,13 +299,8 @@ class FieldConditionTools:
                         "'extra_input' to update."
                     ),
                 )
-            cid_key = (
-                condition_id.strip()
-                if isinstance(condition_id, str)
-                else str(condition_id)
-            )
             try:
-                raw = await client.update_field_condition(cid_key, **update_attrs)
+                raw = await client.update_field_condition(cid_str, **update_attrs)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Update field condition failed.", debug=debug
@@ -354,12 +342,9 @@ class FieldConditionTools:
             await ctx.debug(
                 f"delete_field_condition: condition_id={condition_id!r}, debug={debug}"
             )
-            if not valid_phase_field_id(condition_id):
-                return build_pipe_tool_error_payload(
-                    message=(
-                        "Invalid 'condition_id'. Use a non-empty string or a positive integer."
-                    ),
-                )
+            cid_str, err = validate_tool_id(condition_id, "condition_id")
+            if err is not None:
+                return err
 
             guard = await check_destructive_confirmation(
                 ctx,
@@ -369,13 +354,8 @@ class FieldConditionTools:
             if guard is not None:
                 return guard
 
-            cid_key = (
-                condition_id.strip()
-                if isinstance(condition_id, str)
-                else str(condition_id)
-            )
             try:
-                raw = await client.delete_field_condition(cid_key)
+                raw = await client.delete_field_condition(cid_str)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Delete field condition failed.", debug=debug

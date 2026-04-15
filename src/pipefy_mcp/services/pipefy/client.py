@@ -118,6 +118,10 @@ class PipefyClient:
         """Get a pipe by ID, including phases, labels, and start form fields."""
         return await self._pipe_service.get_pipe(pipe_id)
 
+    async def get_pipe_with_preferences(self, pipe_id: str | int) -> dict:
+        """Get a pipe with AI preferences, phases with fields, and start form fields."""
+        return await self._pipe_service.get_pipe_with_preferences(pipe_id)
+
     async def create_pipe(self, name: str, organization_id: str | int) -> dict:
         """Create a new pipe in the organization."""
         return await self._pipe_config_service.create_pipe(name, organization_id)

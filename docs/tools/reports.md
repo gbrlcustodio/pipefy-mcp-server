@@ -1,6 +1,6 @@
 # Reports
 
-Pipe reports and organization reports: discovery, CRUD, and async exports. **16 tools.**
+Pipe reports and organization reports: discovery, CRUD, single pipe report fetch, and async exports. **17 tools.**
 
 ## Cross-cutting patterns
 
@@ -16,6 +16,7 @@ Pipe reports and organization reports: discovery, CRUD, and async exports. **16 
 | Tool | Role |
 |------|------|
 | `get_pipe_reports` | Lists pipe reports with pagination and optional search. |
+| `get_pipe_report` | Loads **one** pipe report by id (filtered list under the hood — no dedicated single-report endpoint). |
 | `get_pipe_report_columns` | Returns columns (`name`, `label`, `type`, ...) for building `fields` on create/update. |
 | `get_pipe_report_filterable_fields` | Returns filterable fields grouped by section/phase for `filter`. |
 | `get_organization_report` | Loads one organization report by ID. |

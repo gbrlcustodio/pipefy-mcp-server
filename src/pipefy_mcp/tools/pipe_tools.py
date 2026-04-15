@@ -20,6 +20,7 @@ from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
+    enrich_permission_denied_error,
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
     handle_tool_graphql_error,
@@ -130,7 +131,16 @@ class PipeTools:
             elif expected_fields:
                 card_data = _filter_fields_by_definitions(card_data, expected_fields)
 
-            result = await client.create_card(pipe_id, card_data)
+            try:
+                result = await client.create_card(pipe_id, card_data)
+            except Exception as exc:  # noqa: BLE001
+                perm_msg = await enrich_permission_denied_error(
+                    exc, [str(pipe_id)], client
+                )
+                error_text = str(exc)
+                if perm_msg:
+                    error_text = f"{perm_msg}\n{error_text}"
+                return {"success": False, "error": error_text}
             card_id = result.get("createCard", {}).get("card", {}).get("id")
             if card_id:
                 if title:

@@ -9,6 +9,7 @@ from pipefy_mcp.services.pipefy.queries.pipe_queries import (
     GET_PHASE_FIELDS_QUERY,
     GET_PIPE_MEMBERS_QUERY,
     GET_PIPE_QUERY,
+    GET_PIPE_WITH_PREFERENCES_QUERY,
     GET_START_FORM_FIELDS_QUERY,
     SEARCH_PIPES_QUERY,
 )
@@ -29,6 +30,15 @@ class PipeService(BasePipefyClient):
         """Get a pipe by its ID, including phases, labels, and start form fields."""
         variables = {"pipe_id": str(pipe_id)}
         return await self.execute_query(GET_PIPE_QUERY, variables)
+
+    async def get_pipe_with_preferences(self, pipe_id: str | int) -> dict:
+        """Get a pipe including AI preferences, phases with fields, and start form fields.
+
+        Args:
+            pipe_id: Pipe ID.
+        """
+        variables = {"pipe_id": str(pipe_id)}
+        return await self.execute_query(GET_PIPE_WITH_PREFERENCES_QUERY, variables)
 
     async def get_pipe_members(self, pipe_id: str | int) -> dict:
         """Get the members of a pipe."""

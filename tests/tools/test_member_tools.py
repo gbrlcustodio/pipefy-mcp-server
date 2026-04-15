@@ -10,8 +10,18 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
+import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.member_tools import MemberTools
+
+
+@pytest.fixture(autouse=True)
+def _isolate_sa_ids(monkeypatch):
+    """Ensure .env service_account_ids don't leak into tests.
+
+    Tests that need specific SA IDs override via their own monkeypatch.
+    """
+    monkeypatch.setattr(_settings_mod.settings.pipefy, "service_account_ids", [])
 
 
 @pytest.fixture
@@ -133,7 +143,7 @@ async def test_invite_members_graphql_error(
 async def test_remove_member_from_pipe_blocks_protected_service_account(
     member_session, mock_member_client, extract_payload
 ):
-    """FR-1: IDs in PIPEFY_SERVICE_ACCOUNT_IDS cannot be removed via MCP."""
+    """IDs in PIPEFY_SERVICE_ACCOUNT_IDS cannot be removed via MCP."""
     mock_member_client.remove_members_from_pipe.return_value = {
         "removeMembersFromPipe": {"success": True}
     }

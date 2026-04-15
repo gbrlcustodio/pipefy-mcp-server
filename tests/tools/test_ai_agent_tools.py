@@ -11,9 +11,16 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
+import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.models.ai_agent import UpdateAiAgentInput
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from tests.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
+
+
+@pytest.fixture(autouse=True)
+def _isolate_sa_ids(monkeypatch):
+    """Ensure service_account_ids is empty so .env values don't leak into tests."""
+    monkeypatch.setattr(_settings_mod.settings.pipefy, "service_account_ids", [])
 
 
 @pytest.fixture
@@ -27,6 +34,7 @@ def mock_pipefy_client():
     client.delete_ai_agent = AsyncMock()
     client.get_pipe = AsyncMock()
     client.get_pipe_relations = AsyncMock()
+    client.get_pipe_members = AsyncMock(return_value={"pipe": {"members": []}})
     client.get_phase_allowed_move_targets = AsyncMock()
     return client
 
@@ -1933,3 +1941,252 @@ class TestFetchPipeValidationContext:
         assert field_ids == set()
         assert phase_ids == set()
         assert related_pipe_ids == set()
+
+
+## ---------------------------------------------------------------------------
+## Proactive membership check in validate_ai_agent_behaviors
+## ---------------------------------------------------------------------------
+
+
+def _cross_pipe_behavior(target_pipe_id="999"):
+    return {
+        "name": "Cross-pipe create",
+        "event_id": "card_created",
+        "actionParams": {
+            "aiBehaviorParams": {
+                "instruction": "Create card in target pipe",
+                "actionsAttributes": [
+                    {
+                        "name": "create in target",
+                        "actionType": "create_card",
+                        "metadata": {
+                            "pipeId": target_pipe_id,
+                            "fieldsAttributes": [
+                                {
+                                    "fieldId": "f1",
+                                    "inputMode": "fill_with_ai",
+                                    "value": "",
+                                },
+                            ],
+                        },
+                    },
+                ],
+            }
+        },
+    }
+
+
+def _pipe_graph_with_fields_for_both():
+    """Pipe graph for cross-pipe validation tests."""
+    return {
+        "pipe": {
+            "phases": [
+                {
+                    "id": "ph-1",
+                    "fields": [{"id": "100"}],
+                }
+            ],
+            "start_form_fields": [],
+        }
+    }
+
+
+@pytest.mark.anyio
+class TestValidateAiAgentBehaviorsMembership:
+    async def test_sa_not_member_reports_problem(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+        monkeypatch,
+    ):
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_fields_for_both()
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [{"child": {"id": "999"}}],
+            "parents": [],
+        }
+        # Target pipe returns members that do NOT include the SA
+        mock_pipefy_client.get_pipe_members.return_value = {
+            "pipe": {
+                "name": "Target Pipe",
+                "members": [{"user": {"id": "other-user"}, "role_name": "member"}],
+            }
+        }
+
+        from pipefy_mcp import settings as settings_mod
+
+        monkeypatch.setattr(
+            settings_mod.settings.pipefy,
+            "service_account_ids",
+            ["sa-123"],
+        )
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {
+                    "pipe_id": "1",
+                    "behaviors": [_cross_pipe_behavior()],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert any("not a member of target pipe 999" in p for p in payload["problems"])
+
+    async def test_sa_is_member_no_extra_problem(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+        monkeypatch,
+    ):
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_fields_for_both()
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [{"child": {"id": "999"}}],
+            "parents": [],
+        }
+        # Target pipe includes SA as a member
+        mock_pipefy_client.get_pipe_members.return_value = {
+            "pipe": {
+                "name": "Target Pipe",
+                "members": [{"user": {"id": "sa-123"}, "role_name": "admin"}],
+            }
+        }
+
+        from pipefy_mcp import settings as settings_mod
+
+        monkeypatch.setattr(
+            settings_mod.settings.pipefy,
+            "service_account_ids",
+            ["sa-123"],
+        )
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {
+                    "pipe_id": "1",
+                    "behaviors": [_cross_pipe_behavior()],
+                },
+            )
+        payload = extract_payload(result)
+        # No membership problem
+        membership_problems = [p for p in payload["problems"] if "not a member" in p]
+        assert membership_problems == []
+
+    async def test_sa_not_configured_skips_check(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+        monkeypatch,
+    ):
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_fields_for_both()
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [{"child": {"id": "999"}}],
+            "parents": [],
+        }
+
+        from pipefy_mcp import settings as settings_mod
+
+        monkeypatch.setattr(
+            settings_mod.settings.pipefy,
+            "service_account_ids",
+            [],
+        )
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {
+                    "pipe_id": "1",
+                    "behaviors": [_cross_pipe_behavior()],
+                },
+            )
+        payload = extract_payload(result)
+        # No membership check ran, so no membership problems
+        membership_problems = [p for p in payload["problems"] if "not a member" in p]
+        assert membership_problems == []
+        mock_pipefy_client.get_pipe_members.assert_not_called()
+
+    async def test_membership_timeout_graceful(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+        monkeypatch,
+    ):
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_fields_for_both()
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [{"child": {"id": "999"}}],
+            "parents": [],
+        }
+
+        async def slow_members(*args, **kwargs):
+            await asyncio.sleep(10)
+            return {}
+
+        mock_pipefy_client.get_pipe_members.side_effect = slow_members
+
+        from pipefy_mcp import settings as settings_mod
+
+        monkeypatch.setattr(
+            settings_mod.settings.pipefy,
+            "service_account_ids",
+            ["sa-123"],
+        )
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {
+                    "pipe_id": "1",
+                    "behaviors": [_cross_pipe_behavior()],
+                },
+            )
+        payload = extract_payload(result)
+        # Timeout doesn't cause a problem — tool still succeeds
+        assert payload["success"] is True
+        membership_problems = [p for p in payload["problems"] if "not a member" in p]
+        assert membership_problems == []
+
+
+## ---------------------------------------------------------------------------
+## Cross-pipe PERMISSION_DENIED enrichment at tool level
+## ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+class TestCreateAiAgentPermissionEnrichment:
+    async def test_permission_denied_enriches_error_with_membership_guidance(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.create_ai_agent.side_effect = TransportQueryError(
+            "forbidden",
+            errors=[
+                {
+                    "message": "forbidden",
+                    "extensions": {"code": "PERMISSION_DENIED"},
+                }
+            ],
+        )
+        # get_pipe_members fails for the target pipe (no access)
+        mock_pipefy_client.get_pipe_members.side_effect = RuntimeError("no access")
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "Agent",
+                    "repo_uuid": "uuid-1",
+                    "instruction": "Do stuff",
+                    "behaviors": [minimal_behavior_dict()],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        # Enrichment message is prepended to the error
+        assert "invite_members" in payload["error"]
+        assert "forbidden" in payload["error"]

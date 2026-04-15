@@ -391,7 +391,7 @@ def test_validate_create_connected_card_skipped_when_relations_not_loaded():
 
 @pytest.mark.unit
 def test_validate_create_table_record_skips_pipe_field_id_check():
-    """Table field IDs are not validated against the source pipe (FR-6)."""
+    """Table field IDs are not validated against the source pipe."""
     problems, warnings = validate_behaviors_against_pipe(
         [_create_table_record_behavior(field_id="999")],
         pipe_id="1",
@@ -407,7 +407,7 @@ def test_validate_create_table_record_skips_pipe_field_id_check():
 
 @pytest.mark.unit
 def test_validate_send_email_template_skips_pipe_field_checks():
-    """Email template actions do not cross-validate fieldIds against the pipe (FR-6)."""
+    """Email template actions do not cross-validate fieldIds against the pipe."""
     problems, warnings = validate_behaviors_against_pipe(
         [_send_email_template_behavior(include_stray_fields_attributes=True)],
         pipe_id="1",

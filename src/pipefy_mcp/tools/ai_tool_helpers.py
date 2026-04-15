@@ -21,6 +21,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class ValidateAiAutomationPromptPayload(TypedDict):
+    success: Literal[True]
+    valid: bool
+    problems: list[str]
+    warnings: list[str]
+    field_map: dict[str, str]
+
+
 class CreateAiAutomationSuccessPayload(TypedDict):
     success: Literal[True]
     automation_id: str
@@ -174,6 +182,28 @@ def build_ai_tool_error(message: str) -> AiToolErrorPayload:
         message: User-visible failure reason.
     """
     return {"success": False, "error": message}
+
+
+def build_validate_prompt_payload(
+    *,
+    problems: list[str],
+    warnings: list[str],
+    field_map: dict[str, str],
+) -> ValidateAiAutomationPromptPayload:
+    """Build the response for ``validate_ai_automation_prompt``.
+
+    Args:
+        problems: Blocking issues found during validation.
+        warnings: Non-blocking notices.
+        field_map: Mapping of numeric field ID to field slug/label.
+    """
+    return {
+        "success": True,
+        "valid": len(problems) == 0,
+        "problems": problems,
+        "warnings": warnings,
+        "field_map": field_map,
+    }
 
 
 def build_create_agent_partial_failure(
@@ -343,9 +373,8 @@ def validate_behaviors_against_pipe(
             # Check fieldsAttributes fieldId references.
             # Same-pipe actions check against pipe_field_ids; cross-pipe actions
             # check against cross_pipe_field_ids when available.
-            # create_table_record: table field IDs, not pipe fields (FR-6).
-            # send_email_template: no pipe-scoped field metadata (FR-6); missing pipeId
-            # would otherwise make targets_source True and mis-validate stray fieldsAttributes.
+            # Skip fieldId validation for create_table_record (table fields) and
+            # send_email_template (no pipe field list; pipeId omission would mis-route checks).
             if action_type not in ("create_table_record", "send_email_template"):
                 action_pipe = str(metadata.get("pipeId", ""))
                 targets_source = not action_pipe or action_pipe == pipe_id
@@ -449,7 +478,15 @@ def _instruction_has_non_numeric_field_tokens(instruction: str) -> bool:
     return False
 
 
-def _pipe_ids_from_behavior(behavior: dict[str, Any]) -> set[str]:
+def pipe_ids_from_behavior(behavior: dict[str, Any]) -> set[str]:
+    """Extract target pipe IDs from a single behavior's action metadata.
+
+    Args:
+        behavior: Raw behavior dict (supports both camelCase and snake_case keys).
+
+    Returns:
+        Set of pipe ID strings found in ``metadata.pipeId`` across all actions.
+    """
     pids: set[str] = set()
     ap = behavior.get("actionParams") or behavior.get("action_params") or {}
     if not isinstance(ap, dict):
@@ -464,6 +501,22 @@ def _pipe_ids_from_behavior(behavior: dict[str, Any]) -> set[str]:
         if pid:
             pids.add(pid)
     return pids
+
+
+def collect_pipe_ids_from_behaviors(behaviors: list[dict[str, Any]]) -> list[str]:
+    """Collect all unique pipe IDs referenced in behavior metadata.
+
+    Args:
+        behaviors: List of raw behavior dicts.
+
+    Returns:
+        Deduplicated list of pipe ID strings.
+    """
+    ids: set[str] = set()
+    for b in behaviors:
+        if isinstance(b, dict):
+            ids.update(pipe_ids_from_behavior(b))
+    return list(ids)
 
 
 def _rewrite_instruction_field_tokens(
@@ -551,7 +604,7 @@ async def resolve_field_slugs_to_numeric(
             continue
         instr = abp.get("instruction")
         if isinstance(instr, str) and _instruction_has_non_numeric_field_tokens(instr):
-            pipes_needed.update(_pipe_ids_from_behavior(b))
+            pipes_needed.update(pipe_ids_from_behavior(b))
 
     if not pipes_needed:
         return behaviors

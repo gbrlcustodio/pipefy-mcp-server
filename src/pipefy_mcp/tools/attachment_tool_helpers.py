@@ -29,7 +29,7 @@ def build_upload_success_payload(
     card_id: str | int | None = None,
     table_record_id: str | None = None,
 ) -> dict[str, Any]:
-    """Structured success payload (FR-8).
+    """Structured success payload for a completed upload.
 
     Args:
         download_url: Permanent/signed download URL from Pipefy (may be None if API omits it).
@@ -102,7 +102,7 @@ def format_s3_upload_failure(upload_result: dict[str, Any]) -> str:
 
 
 def map_upload_error_to_message(exc: BaseException, step: UploadFlowStep) -> str:
-    """Map an exception to a short, actionable message (FR-9).
+    """Map an exception to a short, actionable message.
 
     Args:
         exc: Failure from transport, GraphQL, or validation.

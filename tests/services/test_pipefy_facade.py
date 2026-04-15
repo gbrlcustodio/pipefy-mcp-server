@@ -39,6 +39,9 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     table_service = AsyncMock()
 
     pipe_service.get_pipe = AsyncMock(return_value={"ok": "pipe"})
+    pipe_service.get_pipe_with_preferences = AsyncMock(
+        return_value={"ok": "pipe_prefs"}
+    )
     pipe_service.get_start_form_fields = AsyncMock(return_value={"ok": "fields"})
 
     card_service.create_card = AsyncMock(return_value={"ok": "create"})
@@ -183,6 +186,9 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 
     assert await client.get_pipe(1) == {"ok": "pipe"}
     pipe_service.get_pipe.assert_awaited_once_with(1)
+
+    assert await client.get_pipe_with_preferences(1) == {"ok": "pipe_prefs"}
+    pipe_service.get_pipe_with_preferences.assert_awaited_once_with(1)
 
     assert await client.get_start_form_fields(2, True) == {"ok": "fields"}
     pipe_service.get_start_form_fields.assert_awaited_once_with(2, True)

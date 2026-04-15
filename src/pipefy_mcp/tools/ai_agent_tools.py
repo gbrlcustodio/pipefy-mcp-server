@@ -10,6 +10,7 @@ from pydantic import ValidationError
 
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
     build_create_agent_partial_failure,
@@ -19,6 +20,7 @@ from pipefy_mcp.tools.ai_tool_helpers import (
     build_get_agents_success,
     build_toggle_agent_status_success,
     build_update_agent_success,
+    collect_pipe_ids_from_behaviors,
     enrich_behavior_error,
     fetch_pipe_validation_context,
     resolve_field_slugs_to_numeric,
@@ -28,12 +30,16 @@ from pipefy_mcp.tools.behavior_placeholder_interpolation import (
     expand_behaviors_placeholders,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
-from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
+from pipefy_mcp.tools.graphql_error_helpers import (
+    enrich_permission_denied_error,
+    extract_error_strings,
+)
 from pipefy_mcp.tools.phase_transition_helpers import (
     collect_ai_behavior_move_transition_problems,
 )
 
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30
+MEMBERSHIP_CHECK_TIMEOUT_SECONDS = 5
 
 
 _RECORD_NOT_SAVED_PATTERN = "RECORD_NOT_SAVED"
@@ -290,9 +296,12 @@ class AiAgentTools:
             try:
                 create_result = await client.create_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(
-                    enrich_behavior_error(exc, behaviors_expanded)
-                )
+                pipe_ids = collect_pipe_ids_from_behaviors(behaviors_expanded)
+                perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
+                error_text = enrich_behavior_error(exc, behaviors_expanded)
+                if perm_msg:
+                    error_text = f"{perm_msg}\n{error_text}"
+                return build_ai_tool_error(error_text)
 
             agent_uuid = create_result["agent_uuid"]
 
@@ -311,9 +320,14 @@ class AiAgentTools:
             try:
                 await client.update_ai_agent(update_input)
             except Exception as exc:  # noqa: BLE001
+                pipe_ids = collect_pipe_ids_from_behaviors(behaviors_expanded)
+                perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
+                error_text = await _enrich_with_validation(exc, behaviors_expanded)
+                if perm_msg:
+                    error_text = f"{perm_msg}\n{error_text}"
                 return build_create_agent_partial_failure(
                     agent_uuid=agent_uuid,
-                    error=await _enrich_with_validation(exc, behaviors_expanded),
+                    error=error_text,
                 )
 
             msg = f"AI Agent created and configured successfully. UUID: {agent_uuid}"
@@ -399,9 +413,12 @@ class AiAgentTools:
             try:
                 result = await client.update_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(
-                    await _enrich_with_validation(exc, resolved_behaviors)
-                )
+                pipe_ids = collect_pipe_ids_from_behaviors(resolved_behaviors)
+                perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
+                error_text = await _enrich_with_validation(exc, resolved_behaviors)
+                if perm_msg:
+                    error_text = f"{perm_msg}\n{error_text}"
+                return build_ai_tool_error(error_text)
 
             return build_update_agent_success(
                 agent_uuid=result["agent_uuid"],
@@ -687,6 +704,46 @@ class AiAgentTools:
                         f"fieldIds targeting it were not verified."
                     )
 
+            # Optional: verify service account membership on cross-pipe targets.
+            membership_problems: list[str] = []
+            sa_ids = settings.pipefy.service_account_ids
+            target_pipe_list = list(target_pipe_ids)
+            if sa_ids and target_pipe_list:
+                sa_set = set(sa_ids)
+                try:
+                    member_results = await asyncio.wait_for(
+                        asyncio.gather(
+                            *(
+                                client.get_pipe_members(tpid)
+                                for tpid in target_pipe_list
+                            ),
+                            return_exceptions=True,
+                        ),
+                        timeout=MEMBERSHIP_CHECK_TIMEOUT_SECONDS,
+                    )
+                    for tpid, mresult in zip(target_pipe_list, member_results):
+                        if isinstance(mresult, BaseException):
+                            await ctx.debug(
+                                f"Could not check membership for pipe {tpid}: {mresult}"
+                            )
+                            continue
+                        members = mresult.get("pipe", {}).get("members") or []
+                        member_ids = {
+                            str(m.get("user", {}).get("id", ""))
+                            for m in members
+                            if isinstance(m, dict)
+                        }
+                        if not sa_set & member_ids:
+                            membership_problems.append(
+                                f"Service account is not a member of target pipe "
+                                f"{tpid}. Use invite_members to add it before "
+                                f"creating the agent."
+                            )
+                except (TimeoutError, asyncio.TimeoutError):
+                    await ctx.debug(
+                        "Membership check timed out; skipping SA verification"
+                    )
+
             unknown_action_types = "error" if strict_unknown_action_types else "warning"
             problems, helper_warnings = validate_behaviors_against_pipe(
                 behaviors,
@@ -700,7 +757,7 @@ class AiAgentTools:
             transition_problems = await collect_ai_behavior_move_transition_problems(
                 client, behaviors
             )
-            problems = [*problems, *transition_problems]
+            problems = [*problems, *transition_problems, *membership_problems]
             warnings = [*tool_warnings, *helper_warnings]
 
             if problems:

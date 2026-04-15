@@ -19,6 +19,7 @@ from pipefy_mcp.tools.automation_tool_helpers import (
     handle_automation_tool_graphql_error,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
 from pipefy_mcp.tools.phase_transition_helpers import (
     validate_traditional_automation_move_transition_or_none,
 )
@@ -411,6 +412,16 @@ class AutomationTools:
                     extra_input=extra_input,
                 )
             except Exception as exc:  # noqa: BLE001
+                if arid and arid != pid:
+                    perm_msg = await enrich_permission_denied_error(
+                        exc, [pid, arid], client
+                    )
+                    if perm_msg:
+                        base = await handle_automation_tool_graphql_error(
+                            exc, ctx, debug
+                        )
+                        base["error"] = f"{perm_msg}\n{base.get('error', '')}"
+                        return base
                 return await handle_automation_tool_graphql_error(exc, ctx, debug)
             block = raw.get("createAutomation") or {}
             automation = block.get("automation") or {}

@@ -148,6 +148,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "upload_attachment_to_card",
         "upload_attachment_to_table_record",
         "validate_ai_agent_behaviors",
+        "validate_ai_automation_prompt",
     }
 )
 

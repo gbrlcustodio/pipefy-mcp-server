@@ -1,12 +1,12 @@
 # Automations & AI
 
-Traditional automations (if/then rules) and AI-powered automations and agents. **17 tools.**
+Traditional automations (if/then rules) and AI-powered automations and agents. **22 tools.** (Execution logs, usage exports, and credit dashboards are in [Observability](observability.md).)
 
 ---
 
 ## Traditional automations (rules engine)
 
-Eight tools manage Pipefy traditional automations: if/then rules bound to a pipe via the standard GraphQL API.
+Nine tools manage Pipefy traditional automations: if/then rules bound to a pipe via the standard GraphQL API.
 
 **Tip:** For **send-a-task** rules (`send_a_task` action), use `create_send_task_automation` (pipe, trigger, task title, recipients) instead of hand-building `action_params.taskParams` on `create_automation`. For other actions, call `get_automation_events` (global event catalog) and `get_automation_actions` with the target pipe (`repoId`) before `create_automation` to pick valid `trigger_id` / `action_id` values. Writes accept optional `extra_input` (camelCase API keys) and `debug=true` on errors.
 
@@ -16,6 +16,7 @@ Eight tools manage Pipefy traditional automations: if/then rules bound to a pipe
 | `get_automations` | Yes | Lists rules; optional `organization_id` and/or `pipe_id`. |
 | `get_automation_actions` | Yes | Catalog of action types for a pipe (IDs and field metadata). |
 | `get_automation_events` | Yes | Catalog of trigger event definitions (global list; tool still takes `pipe_id` for context). |
+| `simulate_automation` | Yes | Runs a dry-run simulation for an automation with a payload (see tool docstring). |
 | `create_automation` | No | Creates a rule: `pipe_id`, `name`, `trigger_id`, `action_id`; `active` defaults to true. Set `active: false` to create disabled. |
 | `create_send_task_automation` | No | Creates a send-a-task automation (`pipe_id`, trigger, task title, recipients). Created active; disable via `update_automation`. |
 | `update_automation` | No | Patches a rule via `extra_input` (`UpdateAutomationInput` fields). |
@@ -23,21 +24,30 @@ Eight tools manage Pipefy traditional automations: if/then rules bound to a pipe
 
 ---
 
-## AI automations & agents
+## AI automations
 
 AI automations are separate from traditional rules above. They are prompt-driven and use the internal API.
 
-| Tool | Role |
-|------|------|
-| `create_ai_automation` | Prompt-driven automation writing to one or more card fields (AI must be enabled on the pipe). |
-| `update_ai_automation` | Change name, `active`, prompt, `field_ids`, or `condition`. |
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `create_ai_automation` | No | Prompt-driven automation writing to one or more card fields (AI must be enabled on the pipe). |
+| `update_ai_automation` | No | Change name, `active`, prompt, `field_ids`, or `condition`. |
+| `get_ai_automation` | Yes | Loads one AI automation by id (same GraphQL read path as `get_automation`). |
+| `get_ai_automations` | Yes | Lists **only** `generate_with_ai` automations for the pipe (optional org resolution). |
+| `delete_ai_automation` | No | Permanently deletes an AI automation (`destructiveHint=True` — two-step confirm). |
+| `validate_ai_automation_prompt` | Yes | Pre-flight validation: field refs in the prompt, `field_ids`, optional `event_id`, and `pipe.preferences.aiAgentsEnabled`. |
 
 ### `create_ai_automation`: `condition` (contract)
 
-**Source of truth:** **Required-on-wire via default (branch B).** If the tool caller omits `condition`, the MCP layer applies `DEFAULT_CONDITION` in code (`CreateAiAutomationInput`): an empty-expression structure meaning “no extra trigger conditions” in Pipefy. The internal API **always** receives a `condition` key on create, avoiding ambiguous “key absent” behavior. Pass an explicit `condition` dict to override. **`update_ai_automation`:** omit `condition` to leave the existing rule unchanged; pass a dict to replace it.
-| `create_ai_agent` | Creates and configures an AI agent with `instruction` (= Pipefy UI "Description") and 1–5 `behaviors` in one call. `repo_uuid` is the pipe UUID from `get_pipe`. Optional: `data_source_ids`. |
-| `update_ai_agent` | Replaces full agent config; send the complete `behaviors` list (1-5). |
-| `toggle_ai_agent_status` | Enable/disable without resending configuration. |
+On **create**, if the caller omits `condition`, the MCP layer supplies `DEFAULT_CONDITION` (see `CreateAiAutomationInput` in `pipefy_mcp.models.ai_automation`) so Pipefy always receives an explicit condition object. Pass a `condition` dict to override. On **`update_ai_automation`**, omit `condition` to leave the existing rule unchanged; pass a dict to replace it.
+
+## AI agents
+
+| Tool | Read-only | Role |
+|------|-----------|------|
+| `create_ai_agent` | No | Creates and configures an AI agent with `instruction` (= Pipefy UI "Description") and 1–5 `behaviors` in one call. `repo_uuid` is the pipe UUID from `get_pipe`. Optional: `data_source_ids`. |
+| `update_ai_agent` | No | Replaces full agent config; send the complete `behaviors` list (1-5). |
+| `toggle_ai_agent_status` | No | Enable/disable without resending configuration. |
 
 **Tip:** Pipefy UI **Description** maps to the API/tool field `instruction` (agent-level purpose). The per-behavior prompt in the UI maps to `actionParams.aiBehaviorParams.instruction` on each behavior (behavior-level).
 

@@ -34,7 +34,10 @@ class PipefySettings(BaseModel):
 
     service_account_ids: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
-        description="Comma-separated user IDs protected from removal via MCP tools.",
+        description=(
+            "Pipefy user IDs for service accounts: protected from removal in member tools; "
+            "used for proactive cross-pipe membership checks in validate_ai_agent_behaviors."
+        ),
     )
 
     @field_validator("service_account_ids", mode="before")

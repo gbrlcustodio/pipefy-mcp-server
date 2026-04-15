@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pipefy_mcp.services.pipefy import PipefyClient
+
+import pipefy_mcp.settings as _settings_mod
 
 # Suffixes appended by InternalApiClient for service-layer diagnostics; MCP tools
-# should strip these from default user-visible errors (see task 4.2).
+# strip these from default user-visible errors.
 _INTERNAL_API_CODE_SUFFIX_RE = re.compile(r"\s*\[code=[^\]]*\]")
 _INTERNAL_API_CORRELATION_SUFFIX_RE = re.compile(r"\s*\[correlation_id=[^\]]*\]")
 _INTERNAL_API_CODE_BRACKET_CAPTURE_RE = re.compile(r"\[code=([^\]]*)\]")
@@ -145,10 +151,7 @@ def handle_tool_graphql_error(
     *,
     debug: bool = False,
 ) -> dict[str, Any]:
-    """Turn transport/GraphQL failures into a standard error payload.
-
-    Consolidates the repeated ``handle_*_tool_graphql_error`` pattern used across
-    domain helper modules. Returns ``{"success": False, "error": message}``.
+    """Turn transport/GraphQL failures into ``{"success": False, "error": message}``.
 
     Args:
         exc: Root exception from gql/httpx.
@@ -165,3 +168,81 @@ def handle_tool_graphql_error(
         "success": False,
         "error": with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid),
     }
+
+
+_PERMISSION_DENIED_CODE = "PERMISSION_DENIED"
+_ENRICHMENT_TIMEOUT_SECONDS = 5
+
+
+async def enrich_permission_denied_error(
+    exc: BaseException,
+    pipe_ids: list[str],
+    client: PipefyClient,
+) -> str | None:
+    """Enrich PERMISSION_DENIED errors with membership guidance.
+
+    When the exception contains a ``PERMISSION_DENIED`` GraphQL error code,
+    checks each ``pipe_id`` for membership and returns an actionable message
+    identifying which pipe(s) the service account is not a member of.
+
+    Returns ``None`` when the error is not PERMISSION_DENIED, when the service
+    account is already a member, or when enrichment itself fails (timeout,
+    network error). The caller falls back to its standard error path.
+
+    Args:
+        exc: GraphQL exception from a cross-pipe operation.
+        pipe_ids: Pipe IDs involved in the operation (source + target).
+        client: PipefyClient for membership lookups.
+    """
+    codes = extract_graphql_error_codes(exc)
+    if _PERMISSION_DENIED_CODE not in codes:
+        return None
+
+    unique_ids = list(dict.fromkeys(pid for pid in pipe_ids if pid))
+    if not unique_ids:
+        return None
+
+    try:
+        results = await asyncio.wait_for(
+            asyncio.gather(
+                *(client.get_pipe_members(pid) for pid in unique_ids),
+                return_exceptions=True,
+            ),
+            timeout=_ENRICHMENT_TIMEOUT_SECONDS,
+        )
+    except (TimeoutError, asyncio.TimeoutError):
+        return None
+
+    sa_ids = set(_settings_mod.settings.pipefy.service_account_ids)
+
+    missing_pipes: list[str] = []
+    for pid, result in zip(unique_ids, results):
+        if isinstance(result, BaseException):
+            missing_pipes.append(
+                f"Could not verify membership for pipe {pid}. "
+                f"Check if the service account is a member — use invite_members if not."
+            )
+            continue
+        members = result.get("pipe", {}).get("members") or []
+        pipe_name = result.get("pipe", {}).get("name") or f"pipe {pid}"
+        if not members:
+            missing_pipes.append(
+                f"Service account may not be a member of {pipe_name} (ID: {pid}). "
+                f"Use invite_members to add it."
+            )
+        elif sa_ids:
+            member_ids = {
+                str(m.get("user", {}).get("id", ""))
+                for m in members
+                if isinstance(m, dict)
+            }
+            if not sa_ids & member_ids:
+                missing_pipes.append(
+                    f"Service account is not a member of {pipe_name} (ID: {pid}). "
+                    f"Use invite_members to add it."
+                )
+
+    if not missing_pipes:
+        return None
+
+    return "\n".join(missing_pipes)

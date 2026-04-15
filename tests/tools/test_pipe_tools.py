@@ -62,6 +62,7 @@ def mock_pipefy_client():
     )
     client.internal_api_available = True
     client.update_card = AsyncMock()
+    client.get_pipe_members = AsyncMock()
 
     return client
 
@@ -382,6 +383,39 @@ class TestCreateCardTool:
             )
             assert result.isError is False
             mock_pipefy_client.update_card.assert_not_called()
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_permission_denied_enriches_error_payload(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+    ):
+        from gql.transport.exceptions import TransportQueryError
+
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.side_effect = TransportQueryError(
+            "forbidden",
+            errors=[
+                {
+                    "message": "forbidden",
+                    "extensions": {"code": "PERMISSION_DENIED"},
+                }
+            ],
+        )
+        mock_pipefy_client.get_pipe_members.side_effect = RuntimeError("no access")
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "invite_members" in payload["error"]
 
 
 @pytest.mark.anyio

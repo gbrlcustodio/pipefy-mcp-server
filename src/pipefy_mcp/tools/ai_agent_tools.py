@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.ai_tool_helpers import (
+    _pipe_ids_from_behavior,
     build_ai_tool_error,
     build_create_agent_partial_failure,
     build_create_agent_success,
@@ -28,7 +29,10 @@ from pipefy_mcp.tools.behavior_placeholder_interpolation import (
     expand_behaviors_placeholders,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
-from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
+from pipefy_mcp.tools.graphql_error_helpers import (
+    enrich_permission_denied_error,
+    extract_error_strings,
+)
 from pipefy_mcp.tools.phase_transition_helpers import (
     collect_ai_behavior_move_transition_problems,
 )
@@ -46,6 +50,15 @@ _PAYLOAD_OK_SUFFIX = (
     "Try the same behaviors on a different pipe to confirm. "
     "Do NOT retry with modified payload — the issue is the pipe, not the behaviors."
 )
+
+
+def _collect_pipe_ids_from_behaviors(behaviors: list[dict]) -> list[str]:
+    """Collect all unique pipe IDs referenced in behavior metadata."""
+    ids: set[str] = set()
+    for b in behaviors:
+        if isinstance(b, dict):
+            ids.update(_pipe_ids_from_behavior(b))
+    return list(ids)
 
 
 def _extract_pipe_id_from_behaviors(behaviors: list[dict]) -> str | None:
@@ -290,9 +303,14 @@ class AiAgentTools:
             try:
                 create_result = await client.create_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(
-                    enrich_behavior_error(exc, behaviors_expanded)
+                pipe_ids = _collect_pipe_ids_from_behaviors(behaviors_expanded)
+                perm_msg = await enrich_permission_denied_error(
+                    exc, pipe_ids, client
                 )
+                error_text = enrich_behavior_error(exc, behaviors_expanded)
+                if perm_msg:
+                    error_text = f"{perm_msg}\n{error_text}"
+                return build_ai_tool_error(error_text)
 
             agent_uuid = create_result["agent_uuid"]
 
@@ -311,9 +329,18 @@ class AiAgentTools:
             try:
                 await client.update_ai_agent(update_input)
             except Exception as exc:  # noqa: BLE001
+                pipe_ids = _collect_pipe_ids_from_behaviors(behaviors_expanded)
+                perm_msg = await enrich_permission_denied_error(
+                    exc, pipe_ids, client
+                )
+                error_text = await _enrich_with_validation(
+                    exc, behaviors_expanded
+                )
+                if perm_msg:
+                    error_text = f"{perm_msg}\n{error_text}"
                 return build_create_agent_partial_failure(
                     agent_uuid=agent_uuid,
-                    error=await _enrich_with_validation(exc, behaviors_expanded),
+                    error=error_text,
                 )
 
             msg = f"AI Agent created and configured successfully. UUID: {agent_uuid}"
@@ -399,9 +426,16 @@ class AiAgentTools:
             try:
                 result = await client.update_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(
-                    await _enrich_with_validation(exc, resolved_behaviors)
+                pipe_ids = _collect_pipe_ids_from_behaviors(resolved_behaviors)
+                perm_msg = await enrich_permission_denied_error(
+                    exc, pipe_ids, client
                 )
+                error_text = await _enrich_with_validation(
+                    exc, resolved_behaviors
+                )
+                if perm_msg:
+                    error_text = f"{perm_msg}\n{error_text}"
+                return build_ai_tool_error(error_text)
 
             return build_update_agent_success(
                 agent_uuid=result["agent_uuid"],

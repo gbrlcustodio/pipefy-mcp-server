@@ -1559,3 +1559,20 @@ async def test_update_table_field_no_updates_no_table_id(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "at least one" in payload["error"].lower() or "table_id" in payload["error"]
+
+
+@pytest.mark.anyio
+class TestPipefyIdCoercion:
+    """PipefyId coerces int IDs to str at the tool boundary."""
+
+    @pytest.mark.parametrize("table_session", [None], indirect=True)
+    async def test_get_table_coerces_int_table_id(
+        self, table_session, mock_table_client, extract_payload
+    ):
+        mock_table_client.get_table = AsyncMock(
+            return_value={"table": {"id": "42", "name": "Test Table"}}
+        )
+        async with table_session as session:
+            result = await session.call_tool("get_table", {"table_id": 42})
+        assert result.isError is False
+        mock_table_client.get_table.assert_awaited_once_with("42")

@@ -2122,3 +2122,35 @@ class TestDeleteCardRelation:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "OAuth" in payload["error"]
+
+
+@pytest.mark.anyio
+class TestPipefyIdCoercion:
+    """PipefyId coerces int IDs to str at the tool boundary."""
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_pipe_coerces_int_pipe_id(
+        self, client_session, mock_pipefy_client, extract_payload
+    ):
+        mock_pipefy_client.get_pipe = AsyncMock(
+            return_value={"pipe": {"id": "999", "name": "Test"}}
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_pipe", {"pipe_id": 999})
+        assert result.isError is False
+        mock_pipefy_client.get_pipe.assert_called_once_with("999")
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_move_card_to_phase_coerces_int_ids(
+        self, client_session, mock_pipefy_client
+    ):
+        mock_pipefy_client.move_card_to_phase = AsyncMock(
+            return_value={"moveCardToPhase": {"card": {"id": "1"}}}
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "move_card_to_phase",
+                {"card_id": 555, "destination_phase_id": 777},
+            )
+        assert result.isError is False
+        mock_pipefy_client.move_card_to_phase.assert_called_once_with("555", "777")

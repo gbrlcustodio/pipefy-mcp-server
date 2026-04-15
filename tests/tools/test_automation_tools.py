@@ -920,3 +920,22 @@ async def test_create_automation_cross_pipe_permission_denied_enriches_error(
     assert payload["success"] is False
     assert "invite_members" in payload["error"]
     assert "forbidden" in payload["error"]
+
+
+@pytest.mark.anyio
+class TestPipefyIdCoercion:
+    """PipefyId coerces int IDs to str at the tool boundary."""
+
+    @pytest.mark.parametrize("automation_session", [None], indirect=True)
+    async def test_get_automation_coerces_int_automation_id(
+        self, automation_session, mock_automation_client, extract_payload
+    ):
+        mock_automation_client.get_automation = AsyncMock(
+            return_value={"id": "500", "name": "Test"}
+        )
+        async with automation_session as session:
+            result = await session.call_tool(
+                "get_automation", {"automation_id": 500}
+            )
+        assert result.isError is False
+        mock_automation_client.get_automation.assert_awaited_once_with("500")

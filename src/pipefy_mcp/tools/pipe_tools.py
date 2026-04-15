@@ -87,8 +87,10 @@ class PipeTools:
             the intended values for certain fields, they can be provided in the
             ``fields`` argument.
 
-            Importantly, if elicitation is not supported, the provided fields will
-            be used as-is and must be provided.
+            When elicitation is not supported, the provided fields are filtered
+            to editable start-form field IDs and sent directly to the API.
+            Discover fields first via ``get_start_form_fields`` and pass all
+            required values.
 
             The Pipefy ``createCard`` mutation does not accept a title directly.
             If ``title`` is provided, the card is created first and then updated

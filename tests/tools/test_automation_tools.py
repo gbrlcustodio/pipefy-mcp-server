@@ -26,6 +26,7 @@ def mock_automation_client():
     client.simulate_automation = AsyncMock()
     client.delete_automation = AsyncMock()
     client.get_phase_allowed_move_targets = AsyncMock()
+    client.get_pipe_members = AsyncMock()
     return client
 
 
@@ -881,3 +882,41 @@ async def test_create_send_task_automation_listed_not_read_only(automation_sessi
     assert tool.annotations is not None
     assert tool.annotations.readOnlyHint is False
     assert tool.annotations.destructiveHint is not True
+
+
+## ---------------------------------------------------------------------------
+## FR-11: Cross-pipe PERMISSION_DENIED enrichment
+## ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_automation_cross_pipe_permission_denied_enriches_error(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.create_automation.side_effect = TransportQueryError(
+        "forbidden",
+        errors=[
+            {
+                "message": "forbidden",
+                "extensions": {"code": "PERMISSION_DENIED"},
+            }
+        ],
+    )
+    # get_pipe_members fails for the target pipe
+    mock_automation_client.get_pipe_members.side_effect = RuntimeError("no access")
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_automation",
+            {
+                "pipe_id": "100",
+                "name": "Cross-pipe rule",
+                "trigger_id": "card_created",
+                "action_id": "move_card",
+                "action_repo_id": "200",
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "invite_members" in payload["error"]
+    assert "forbidden" in payload["error"]

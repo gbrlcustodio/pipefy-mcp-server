@@ -217,17 +217,14 @@ async def enrich_permission_denied_error(
     missing_pipes: list[str] = []
     for pid, result in zip(unique_ids, results):
         if isinstance(result, BaseException):
-            # Could not fetch members for this pipe — likely the pipe we lack access to
-            pipe_name = f"pipe {pid}"
+            # Could not fetch members — could be access denied, network, or pipe not found
             missing_pipes.append(
-                f"Service account is not a member of {pipe_name}. "
-                f"Use invite_members to add it."
+                f"Could not verify membership for pipe {pid}. "
+                f"Check if the service account is a member — use invite_members if not."
             )
             continue
         members = result.get("pipe", {}).get("members") or []
         if not members:
-            # Empty members list means we got a response but no members visible
-            # (which can happen when we lack access)
             pipe_name = result.get("pipe", {}).get("name") or f"pipe {pid}"
             missing_pipes.append(
                 f"Service account may not be a member of {pipe_name} (ID: {pid}). "
@@ -237,4 +234,4 @@ async def enrich_permission_denied_error(
     if not missing_pipes:
         return None
 
-    return " | ".join(missing_pipes)
+    return "\n".join(missing_pipes)

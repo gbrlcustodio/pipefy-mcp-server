@@ -168,6 +168,7 @@ class AiAutomationTools:
 
             # Build a map of internal_id → label for all pipe fields
             all_field_ids: set[str] = set()
+            readonly_field_ids: set[str] = set()
             for phase in pipe_info.get("phases") or []:
                 for field in phase.get("fields") or []:
                     fid = str(field.get("internal_id") or field.get("id", ""))
@@ -175,16 +176,16 @@ class AiAutomationTools:
                     if fid:
                         all_field_ids.add(fid)
                         field_map[fid] = label
-                    if field.get("editable") is False:
-                        warnings.append(f"Field {fid} ({label}) is read-only.")
+                    if fid and field.get("editable") is False:
+                        readonly_field_ids.add(fid)
             for field in pipe_info.get("start_form_fields") or []:
                 fid = str(field.get("internal_id") or field.get("id", ""))
                 label = field.get("label", "")
                 if fid:
                     all_field_ids.add(fid)
                     field_map[fid] = label
-                if field.get("editable") is False:
-                    warnings.append(f"Field {fid} ({label}) is read-only.")
+                if fid and field.get("editable") is False:
+                    readonly_field_ids.add(fid)
 
             # 3. Validate prompt token IDs exist in the pipe
             for token_id in prompt_tokens:
@@ -234,8 +235,10 @@ class AiAutomationTools:
                     "Pipefy UI > Pipe Settings > AI."
                 )
 
-            # Only include referenced fields in the returned field_map
+            # Only include referenced fields in the returned field_map and warnings
             referenced_ids = set(prompt_tokens) | set(str(f) for f in field_ids)
+            for fid in referenced_ids & readonly_field_ids:
+                warnings.append(f"Field {fid} ({field_map.get(fid, '')}) is read-only.")
             filtered_map = {k: v for k, v in field_map.items() if k in referenced_ids}
 
             return build_validate_prompt_payload(

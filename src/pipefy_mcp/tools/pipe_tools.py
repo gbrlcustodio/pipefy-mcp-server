@@ -137,9 +137,10 @@ class PipeTools:
                 perm_msg = await enrich_permission_denied_error(
                     exc, [str(pipe_id)], client
                 )
+                error_text = str(exc)
                 if perm_msg:
-                    raise type(exc)(f"{perm_msg}\n{exc}") from exc
-                raise
+                    error_text = f"{perm_msg}\n{error_text}"
+                return {"success": False, "error": error_text}
             card_id = result.get("createCard", {}).get("card", {}).get("id")
             if card_id:
                 if title:

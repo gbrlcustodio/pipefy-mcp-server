@@ -479,7 +479,15 @@ def _instruction_has_non_numeric_field_tokens(instruction: str) -> bool:
     return False
 
 
-def _pipe_ids_from_behavior(behavior: dict[str, Any]) -> set[str]:
+def pipe_ids_from_behavior(behavior: dict[str, Any]) -> set[str]:
+    """Extract target pipe IDs from a single behavior's action metadata.
+
+    Args:
+        behavior: Raw behavior dict (supports both camelCase and snake_case keys).
+
+    Returns:
+        Set of pipe ID strings found in ``metadata.pipeId`` across all actions.
+    """
     pids: set[str] = set()
     ap = behavior.get("actionParams") or behavior.get("action_params") or {}
     if not isinstance(ap, dict):
@@ -494,6 +502,22 @@ def _pipe_ids_from_behavior(behavior: dict[str, Any]) -> set[str]:
         if pid:
             pids.add(pid)
     return pids
+
+
+def collect_pipe_ids_from_behaviors(behaviors: list[dict[str, Any]]) -> list[str]:
+    """Collect all unique pipe IDs referenced in behavior metadata.
+
+    Args:
+        behaviors: List of raw behavior dicts.
+
+    Returns:
+        Deduplicated list of pipe ID strings.
+    """
+    ids: set[str] = set()
+    for b in behaviors:
+        if isinstance(b, dict):
+            ids.update(pipe_ids_from_behavior(b))
+    return list(ids)
 
 
 def _rewrite_instruction_field_tokens(
@@ -581,7 +605,7 @@ async def resolve_field_slugs_to_numeric(
             continue
         instr = abp.get("instruction")
         if isinstance(instr, str) and _instruction_has_non_numeric_field_tokens(instr):
-            pipes_needed.update(_pipe_ids_from_behavior(b))
+            pipes_needed.update(pipe_ids_from_behavior(b))
 
     if not pipes_needed:
         return behaviors

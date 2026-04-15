@@ -57,6 +57,8 @@ class TestEnrichPermissionDeniedError:
         assert result is not None
         assert "pipe 200" in result
         assert "invite_members" in result
+        # DD-02: message is softened — does not assert definitive "is not a member"
+        assert "Could not verify membership" in result
 
     async def test_permission_denied_is_member_returns_none(self, mock_client):
         exc = _make_permission_denied_exc()

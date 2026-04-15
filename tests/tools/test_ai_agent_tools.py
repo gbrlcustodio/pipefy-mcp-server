@@ -1941,7 +1941,7 @@ class TestFetchPipeValidationContext:
 ## ---------------------------------------------------------------------------
 
 
-def _cross_pipe_behavior(source_pipe_id="1", target_pipe_id="999"):
+def _cross_pipe_behavior(target_pipe_id="999"):
     return {
         "name": "Cross-pipe create",
         "event_id": "card_created",
@@ -1969,8 +1969,8 @@ def _cross_pipe_behavior(source_pipe_id="1", target_pipe_id="999"):
     }
 
 
-def _pipe_graph_with_fields_for_both(source_pipe_id="1", target_pipe_id="999"):
-    """Pipe graph and relations enabling cross-pipe validation."""
+def _pipe_graph_with_fields_for_both():
+    """Pipe graph for cross-pipe validation tests."""
     return {
         "pipe": {
             "phases": [
@@ -2142,3 +2142,44 @@ class TestValidateAiAgentBehaviorsMembership:
         assert payload["success"] is True
         membership_problems = [p for p in payload["problems"] if "not a member" in p]
         assert membership_problems == []
+
+
+## ---------------------------------------------------------------------------
+## FR-11: Cross-pipe PERMISSION_DENIED enrichment at tool level
+## ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+class TestCreateAiAgentPermissionEnrichment:
+    async def test_permission_denied_enriches_error_with_membership_guidance(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.create_ai_agent.side_effect = TransportQueryError(
+            "forbidden",
+            errors=[
+                {
+                    "message": "forbidden",
+                    "extensions": {"code": "PERMISSION_DENIED"},
+                }
+            ],
+        )
+        # get_pipe_members fails for the target pipe (no access)
+        mock_pipefy_client.get_pipe_members.side_effect = RuntimeError("no access")
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "Agent",
+                    "repo_uuid": "uuid-1",
+                    "instruction": "Do stuff",
+                    "behaviors": [minimal_behavior_dict()],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        # Enrichment message is prepended to the error
+        assert "invite_members" in payload["error"]
+        assert "forbidden" in payload["error"]

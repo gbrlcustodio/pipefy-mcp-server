@@ -201,20 +201,20 @@ class AutomationTools:
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Dry-run a traditional automation action against a real card (safe simulation, no live side effects).
+            """Dry-run an **AI automation** (``generate_with_ai``) against a real card (safe simulation, no live side effects).
 
-            Runs ``createAutomationSimulation`` and returns the **full** ``automationSimulation`` row in one
-            synchronous round-trip (mutation + follow-up query). Use this before enabling risky rules
-            (especially **AI / ``generate_with_ai``**) to validate behavior on a ``sample_card_id``.
+            The Pipefy ``createAutomationSimulation`` API currently **only** accepts
+            ``action_id = "generate_with_ai"``; passing any other action (e.g.
+            ``move_single_card``, ``send_a_task``) returns a validation error. Use this
+            to preview AI-generated output on ``sample_card_id`` before enabling the rule.
 
             **Pipe context:** ``pipe_id`` is forwarded as ``event_repo_id`` and ``action_repo_id`` on the
             simulation input (Pipefy often returns ``INTERNAL_SERVER_ERROR`` if these are omitted). Override
-            via ``extra_input`` for cross-pipe setups. **Forward-compatible** ``action_id`` must be a **string**
-            (today's API includes ``generate_with_ai``; future enum values pass through as strings).
+            via ``extra_input`` for cross-pipe setups.
 
             Args:
                 pipe_id: Pipe ID — default ``event_repo_id`` / ``action_repo_id`` for the simulation input.
-                action_id: Simulation action id (string, e.g. ``generate_with_ai``).
+                action_id: Simulation action id — currently only ``generate_with_ai`` is accepted by the API.
                 sample_card_id: Card id the simulation executes against.
                 event_id: Optional trigger event id when the scenario needs it.
                 event_params: Optional JSON object (trigger parameters).

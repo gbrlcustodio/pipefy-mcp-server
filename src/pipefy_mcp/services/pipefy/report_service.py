@@ -353,9 +353,9 @@ class ReportService(BasePipefyClient):
             filter: ``ReportCardsFilter`` shape.
             columns: Column field IDs for the export file.
         """
-        input_obj: dict[str, Any] = {"organizationId": str(organization_id)}
+        input_obj: dict[str, Any] = {"organizationId": int(organization_id)}
         optional_fields = {
-            "organizationReportId": str(organization_report_id)
+            "organizationReportId": int(organization_report_id)
             if organization_report_id is not None
             else None,
             "pipeIds": [str(pid) for pid in pipe_ids] if pipe_ids is not None else None,

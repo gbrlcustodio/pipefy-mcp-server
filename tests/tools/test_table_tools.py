@@ -808,7 +808,8 @@ async def test_delete_table_field_graphql_error(
 
     async with table_session as session:
         result = await session.call_tool(
-            "delete_table_field", {"field_id": "x", "table_id": "tbl_1", "confirm": True}
+            "delete_table_field",
+            {"field_id": "x", "table_id": "tbl_1", "confirm": True},
         )
 
     assert extract_payload(result)["success"] is False

@@ -962,67 +962,53 @@ async def test_get_pipe_reports_blank_pipe_uuid(report_session, extract_payload)
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_get_organization_report_blank_report_id(report_session, extract_payload):
+async def test_get_organization_report_blank_report_id(report_session):
     async with report_session as session:
         result = await session.call_tool("get_organization_report", {"report_id": ""})
 
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "non-empty" in payload["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_get_organization_reports_blank_organization_id(
-    report_session, extract_payload
-):
+async def test_get_organization_reports_blank_organization_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
             "get_organization_reports", {"organization_id": ""}
         )
 
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "non-empty" in payload["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_get_pipe_report_export_blank_export_id(report_session, extract_payload):
+async def test_get_pipe_report_export_blank_export_id(report_session):
     async with report_session as session:
         result = await session.call_tool("get_pipe_report_export", {"export_id": ""})
 
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "non-empty" in payload["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_get_organization_report_export_blank_export_id(
-    report_session, extract_payload
-):
+async def test_get_organization_report_export_blank_export_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
             "get_organization_report_export", {"export_id": ""}
         )
 
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "non-empty" in payload["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_create_pipe_report_blank_pipe_id(report_session, extract_payload):
+async def test_create_pipe_report_blank_pipe_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
             "create_pipe_report", {"pipe_id": "", "name": "x"}
         )
 
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "pipe_id" in payload["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -1040,29 +1026,23 @@ async def test_create_pipe_report_blank_name(report_session, extract_payload):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_update_pipe_report_blank_report_id(report_session, extract_payload):
+async def test_update_pipe_report_blank_report_id(report_session):
     async with report_session as session:
         result = await session.call_tool("update_pipe_report", {"report_id": ""})
 
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "report_id" in payload["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_create_organization_report_blank_organization_id(
-    report_session, extract_payload
-):
+async def test_create_organization_report_blank_organization_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
             "create_organization_report",
             {"organization_id": "", "name": "x", "pipe_ids": ["1"]},
         )
 
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "organization_id" in payload["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -1081,43 +1061,35 @@ async def test_create_organization_report_blank_name(report_session, extract_pay
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_update_organization_report_blank_report_id(
-    report_session, extract_payload
-):
+async def test_update_organization_report_blank_report_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
             "update_organization_report", {"report_id": ""}
         )
 
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "report_id" in payload["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_export_pipe_report_blank_pipe_id(report_session, extract_payload):
+async def test_export_pipe_report_blank_pipe_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
             "export_pipe_report", {"pipe_id": "", "pipe_report_id": "x"}
         )
 
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "pipe_id" in payload["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
-async def test_export_pipe_report_blank_pipe_report_id(report_session, extract_payload):
+async def test_export_pipe_report_blank_pipe_report_id(report_session):
     async with report_session as session:
         result = await session.call_tool(
             "export_pipe_report", {"pipe_id": "x", "pipe_report_id": ""}
         )
 
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert "pipe_report_id" in payload["error"]
+    assert result.isError is True
 
 
 ## ---------------------------------------------------------------------------

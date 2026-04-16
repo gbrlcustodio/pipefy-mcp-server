@@ -353,12 +353,13 @@ class ReportService(BasePipefyClient):
             filter: ``ReportCardsFilter`` shape.
             columns: Column field IDs for the export file.
         """
+        # int() casts: live schema uses Int (not ID) for these fields — see ADR-002.
         input_obj: dict[str, Any] = {"organizationId": int(organization_id)}
         optional_fields = {
             "organizationReportId": int(organization_report_id)
             if organization_report_id is not None
             else None,
-            "pipeIds": [str(pid) for pid in pipe_ids] if pipe_ids is not None else None,
+            "pipeIds": [int(pid) for pid in pipe_ids] if pipe_ids is not None else None,
             "sortBy": sort_by,
             "filter": filter,
             "columns": columns,

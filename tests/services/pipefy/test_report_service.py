@@ -475,7 +475,7 @@ async def test_export_organization_report_success(mock_settings):
     assert variables["input"] == {
         "organizationId": 42,
         "organizationReportId": 7,
-        "pipeIds": ["10", "11"],
+        "pipeIds": [10, 11],
     }
     assert (
         result["exportOrganizationReport"]["organizationReportExport"]["state"]

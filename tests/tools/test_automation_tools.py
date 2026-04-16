@@ -113,15 +113,13 @@ async def test_get_automation_not_found_returns_empty_data_and_message(
 @pytest.mark.anyio
 @pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automation_rejects_empty_automation_id(
-    automation_session, mock_automation_client, extract_payload
+    automation_session, mock_automation_client
 ):
     async with automation_session as session:
         result = await session.call_tool("get_automation", {"automation_id": ""})
 
     mock_automation_client.get_automation.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "automation_id" in p["error"].lower()
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -139,7 +137,7 @@ async def test_get_automation_rejects_non_positive_int_id(
 @pytest.mark.anyio
 @pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_get_automations_rejects_empty_string_filters(
-    automation_session, mock_automation_client, extract_payload
+    automation_session, mock_automation_client
 ):
     async with automation_session as session:
         result = await session.call_tool(
@@ -148,9 +146,7 @@ async def test_get_automations_rejects_empty_string_filters(
         )
 
     mock_automation_client.get_automations.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "organization_id" in p["error"].lower()
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -692,7 +688,7 @@ async def test_simulate_automation_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_simulate_automation_rejects_invalid_pipe_id(
-    automation_session, mock_automation_client, extract_payload
+    automation_session, mock_automation_client
 ):
     async with automation_session as session:
         result = await session.call_tool(
@@ -705,7 +701,7 @@ async def test_simulate_automation_rejects_invalid_pipe_id(
         )
 
     mock_automation_client.simulate_automation.assert_not_called()
-    assert extract_payload(result)["success"] is False
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -920,6 +916,60 @@ async def test_create_automation_cross_pipe_permission_denied_enriches_error(
     assert payload["success"] is False
     assert "invite_members" in payload["error"]
     assert "forbidden" in payload["error"]
+
+
+@pytest.mark.anyio
+class TestCreateSendTaskAutomationActiveFlag:
+    """Verify the ``active`` flag is forwarded to AutomationService.create_automation."""
+
+    @pytest.mark.parametrize("automation_session", [None], indirect=True)
+    async def test_active_false_is_forwarded(
+        self, automation_session, mock_automation_client, extract_payload
+    ):
+        mock_automation_client.create_automation.return_value = {
+            "createAutomation": {
+                "automation": {"id": "st-d", "name": "Disabled", "active": False},
+            },
+        }
+        async with automation_session as session:
+            result = await session.call_tool(
+                "create_send_task_automation",
+                {
+                    "pipe_id": "p1",
+                    "name": "Disabled",
+                    "event_id": "card_created",
+                    "task_title": "Do",
+                    "recipients": "a@b.c",
+                    "active": False,
+                },
+            )
+        assert result.isError is False
+        kwargs = mock_automation_client.create_automation.await_args.kwargs
+        assert kwargs["active"] is False
+
+    @pytest.mark.parametrize("automation_session", [None], indirect=True)
+    async def test_default_active_true(
+        self, automation_session, mock_automation_client, extract_payload
+    ):
+        mock_automation_client.create_automation.return_value = {
+            "createAutomation": {
+                "automation": {"id": "st-a", "name": "Active", "active": True},
+            },
+        }
+        async with automation_session as session:
+            result = await session.call_tool(
+                "create_send_task_automation",
+                {
+                    "pipe_id": "p1",
+                    "name": "Active",
+                    "event_id": "card_created",
+                    "task_title": "Do",
+                    "recipients": "a@b.c",
+                },
+            )
+        assert result.isError is False
+        kwargs = mock_automation_client.create_automation.await_args.kwargs
+        assert kwargs["active"] is True
 
 
 @pytest.mark.anyio

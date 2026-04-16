@@ -32,9 +32,17 @@ class TestPipefyId:
         m = _IdModel(some_id="abc-def")
         assert m.some_id == "abc-def"
 
-    def test_preserves_empty_string(self):
-        m = _IdModel(some_id="")
-        assert m.some_id == ""
+    def test_strips_whitespace(self):
+        m = _IdModel(some_id="  25901  ")
+        assert m.some_id == "25901"
+
+    def test_rejects_empty_string(self):
+        with pytest.raises(Exception):
+            _IdModel(some_id="")
+
+    def test_rejects_whitespace_only(self):
+        with pytest.raises(Exception):
+            _IdModel(some_id="   ")
 
     def test_rejects_none(self):
         with pytest.raises(Exception):

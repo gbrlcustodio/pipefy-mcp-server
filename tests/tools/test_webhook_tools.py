@@ -876,7 +876,7 @@ async def test_send_inbox_email_rejects_blank_from(
 @pytest.mark.anyio
 @pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_inbox_email_rejects_invalid_card_id(
-    webhook_session, mock_webhook_client, extract_payload
+    webhook_session, mock_webhook_client
 ):
     async with webhook_session as session:
         result = await session.call_tool(
@@ -891,9 +891,7 @@ async def test_send_inbox_email_rejects_invalid_card_id(
         )
 
     mock_webhook_client.send_inbox_email.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "card_id" in p["error"]
+    assert result.isError is True
 
 
 # ---------------------------------------------------------------------------
@@ -904,7 +902,7 @@ async def test_send_inbox_email_rejects_invalid_card_id(
 @pytest.mark.anyio
 @pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_rejects_blank_template_id(
-    webhook_session, mock_webhook_client, extract_payload
+    webhook_session, mock_webhook_client
 ):
     async with webhook_session as session:
         result = await session.call_tool(
@@ -913,9 +911,7 @@ async def test_send_email_with_template_rejects_blank_template_id(
         )
 
     mock_webhook_client.send_email_with_template.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "email_template_id" in p["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -980,7 +976,7 @@ async def test_create_webhook_rejects_empty_actions_list(
 @pytest.mark.anyio
 @pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_create_webhook_rejects_invalid_pipe_id(
-    webhook_session, mock_webhook_client, extract_payload
+    webhook_session, mock_webhook_client
 ):
     async with webhook_session as session:
         result = await session.call_tool(
@@ -993,9 +989,7 @@ async def test_create_webhook_rejects_invalid_pipe_id(
         )
 
     mock_webhook_client.create_webhook.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "pipe_id" in p["error"]
+    assert result.isError is True
 
 
 # ---------------------------------------------------------------------------
@@ -1027,7 +1021,7 @@ async def test_get_email_templates_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_email_templates_rejects_invalid_repo_id(
-    webhook_session, mock_webhook_client, extract_payload
+    webhook_session, mock_webhook_client
 ):
     async with webhook_session as session:
         result = await session.call_tool(
@@ -1036,9 +1030,7 @@ async def test_get_email_templates_rejects_invalid_repo_id(
         )
 
     mock_webhook_client.get_email_templates.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "repo_id" in p["error"]
+    assert result.isError is True
 
 
 # ---------------------------------------------------------------------------
@@ -1049,7 +1041,7 @@ async def test_get_email_templates_rejects_invalid_repo_id(
 @pytest.mark.anyio
 @pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_get_card_inbox_emails_rejects_invalid_card_id(
-    webhook_session, mock_webhook_client, extract_payload
+    webhook_session, mock_webhook_client
 ):
     async with webhook_session as session:
         result = await session.call_tool(
@@ -1058,9 +1050,7 @@ async def test_get_card_inbox_emails_rejects_invalid_card_id(
         )
 
     mock_webhook_client.get_card_inbox_emails.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "card_id" in p["error"]
+    assert result.isError is True
 
 
 # ---------------------------------------------------------------------------
@@ -1071,7 +1061,7 @@ async def test_get_card_inbox_emails_rejects_invalid_card_id(
 @pytest.mark.anyio
 @pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_send_email_with_template_rejects_invalid_card_id(
-    webhook_session, mock_webhook_client, extract_payload
+    webhook_session, mock_webhook_client
 ):
     async with webhook_session as session:
         result = await session.call_tool(
@@ -1080,9 +1070,7 @@ async def test_send_email_with_template_rejects_invalid_card_id(
         )
 
     mock_webhook_client.send_email_with_template.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "card_id" in p["error"]
+    assert result.isError is True
 
 
 # ---------------------------------------------------------------------------
@@ -1094,7 +1082,7 @@ async def test_send_email_with_template_rejects_invalid_card_id(
 @pytest.mark.anyio
 @pytest.mark.parametrize("webhook_session", [None], indirect=True)
 async def test_delete_webhook_rejects_blank_webhook_id(
-    webhook_session, mock_webhook_client, extract_payload
+    webhook_session, mock_webhook_client
 ):
     async with webhook_session as session:
         result = await session.call_tool(
@@ -1103,6 +1091,4 @@ async def test_delete_webhook_rejects_blank_webhook_id(
         )
 
     mock_webhook_client.delete_webhook.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "webhook_id" in p["error"]
+    assert result.isError is True

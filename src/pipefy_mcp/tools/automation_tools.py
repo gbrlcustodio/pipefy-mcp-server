@@ -191,7 +191,7 @@ class AutomationTools:
         async def simulate_automation(
             ctx: Context,
             pipe_id: PipefyId,
-            action_id: PipefyId,
+            action_id: str,
             sample_card_id: PipefyId,
             event_id: PipefyId | None = None,
             event_params: Any | None = None,

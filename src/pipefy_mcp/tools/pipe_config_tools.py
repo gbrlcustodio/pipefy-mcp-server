@@ -230,10 +230,14 @@ class PipeConfigTools:
                 organization_id: Optional organization ID for the clone operation.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(pipe_template_id, "pipe_template_id")
+            pipe_template_id, err = validate_tool_id(
+                pipe_template_id, "pipe_template_id"
+            )
             if err is not None:
                 return err
-            ok, _, err = validate_optional_tool_id(organization_id, "organization_id")
+            ok, organization_id, err = validate_optional_tool_id(
+                organization_id, "organization_id"
+            )
             if not ok:
                 return err
             try:
@@ -273,7 +277,7 @@ class PipeConfigTools:
                 description: Optional phase description.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(pipe_id, "pipe_id")
+            pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
             if not isinstance(name, str) or not name.strip():
@@ -330,7 +334,7 @@ class PipeConfigTools:
                 only_admin_can_move_to_previous: If changing (deprecated in API).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(phase_id, "phase_id")
+            phase_id, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
                 return err
 
@@ -407,7 +411,7 @@ class PipeConfigTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(phase_id, "phase_id")
+            phase_id, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
                 return err
 
@@ -463,7 +467,7 @@ class PipeConfigTools:
                 extra_input: Additional ``CreatePhaseFieldInput`` fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(phase_id, "phase_id")
+            phase_id, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
                 return err
             if not isinstance(label, str) or not label.strip():
@@ -535,7 +539,7 @@ class PipeConfigTools:
                 extra_input: Additional UpdatePhaseFieldInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(field_id, "field_id")
+            field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
                 return err
             if not isinstance(label, str) or not label.strip():
@@ -600,21 +604,20 @@ class PipeConfigTools:
                 pipe_uuid: Pipe UUID for disambiguation when the slug is not unique across phases.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(field_id, "field_id")
+            field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
                 return err
-            fid = field_id.strip()
 
             guard = await check_destructive_confirmation(
                 ctx,
                 confirm=confirm,
-                resource_descriptor=f"phase field (ID: {fid})",
+                resource_descriptor=f"phase field (ID: {field_id})",
             )
             if guard is not None:
                 return guard
 
             try:
-                raw = await client.delete_phase_field(fid, pipe_uuid=pipe_uuid)
+                raw = await client.delete_phase_field(field_id, pipe_uuid=pipe_uuid)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Delete phase field failed.", debug=debug
@@ -643,7 +646,7 @@ class PipeConfigTools:
                 color: Label color (per Pipefy/API).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(pipe_id, "pipe_id")
+            pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
             if not isinstance(name, str) or not name.strip():
@@ -690,7 +693,7 @@ class PipeConfigTools:
                 extra_input: Additional UpdateLabelInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(label_id, "label_id")
+            label_id, err = validate_tool_id(label_id, "label_id")
             if err is not None:
                 return err
             update_attrs: dict[str, Any] = {
@@ -740,7 +743,7 @@ class PipeConfigTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(label_id, "label_id")
+            label_id, err = validate_tool_id(label_id, "label_id")
             if err is not None:
                 return err
 

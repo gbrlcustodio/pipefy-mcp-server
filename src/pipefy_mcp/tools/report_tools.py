@@ -636,7 +636,8 @@ class ReportTools:
             """Trigger an async organization report export. Poll `get_organization_report_export(export_id)` for completion.
 
             Args:
-                organization_id: Organization numeric ID.
+                organization_id: Organization numeric ID (must be coercible to int — Pipefy's
+                    ``exportOrganizationReport`` mutation accepts ``Int!`` only).
                 organization_report_id: Report to export; omit to export by pipes only.
                 pipe_ids: Pipe IDs to scope the export.
                 sort_by: ReportSortDirectionInput.
@@ -644,7 +645,7 @@ class ReportTools:
                 columns: Column field IDs for the export file.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(organization_id, "organization_id")
+            organization_id, err = validate_tool_id(organization_id, "organization_id")
             if err is not None:
                 return err
             try:

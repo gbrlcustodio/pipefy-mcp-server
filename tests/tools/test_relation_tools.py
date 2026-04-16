@@ -88,14 +88,13 @@ async def test_get_pipe_relations_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_get_pipe_relations_invalid_pipe_id(
-    relation_session, mock_relation_client, extract_payload
+    relation_session, mock_relation_client
 ):
     async with relation_session as session:
         result = await session.call_tool("get_pipe_relations", {"pipe_id": ""})
 
-    assert result.isError is False
+    assert result.isError is True
     mock_relation_client.get_pipe_relations.assert_not_called()
-    assert extract_payload(result)["success"] is False
 
 
 @pytest.mark.anyio
@@ -358,7 +357,7 @@ async def test_create_card_relation_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_create_card_relation_invalid_source_id(
-    relation_session, mock_relation_client, extract_payload
+    relation_session, mock_relation_client
 ):
     async with relation_session as session:
         result = await session.call_tool(
@@ -367,7 +366,7 @@ async def test_create_card_relation_invalid_source_id(
         )
 
     mock_relation_client.create_card_relation.assert_not_called()
-    assert extract_payload(result)["success"] is False
+    assert result.isError is True
 
 
 @pytest.mark.anyio

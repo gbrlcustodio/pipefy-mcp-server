@@ -224,7 +224,9 @@ class ObservabilityTools:
                 sort: SortCriteria dict (field + direction).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(organization_uuid, "organization_uuid")
+            organization_uuid, err = validate_tool_id(
+                organization_uuid, "organization_uuid"
+            )
             if err is not None:
                 return err
             if not filter_date_from or not filter_date_to:
@@ -270,7 +272,9 @@ class ObservabilityTools:
                 sort: SortCriteria dict (field + direction).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(organization_uuid, "organization_uuid")
+            organization_uuid, err = validate_tool_id(
+                organization_uuid, "organization_uuid"
+            )
             if err is not None:
                 return err
             if not filter_date_from or not filter_date_to:
@@ -309,7 +313,9 @@ class ObservabilityTools:
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(organization_uuid, "organization_uuid")
+            organization_uuid, err = validate_tool_id(
+                organization_uuid, "organization_uuid"
+            )
             if err is not None:
                 return err
             if period not in _VALID_PERIODS:
@@ -343,7 +349,7 @@ class ObservabilityTools:
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            _, err = validate_tool_id(organization_id, "organization_id")
+            organization_id, err = validate_tool_id(organization_id, "organization_id")
             if err is not None:
                 return err
             if period not in _VALID_PERIODS:

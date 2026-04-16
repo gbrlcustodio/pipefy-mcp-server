@@ -467,7 +467,7 @@ async def test_get_automation_jobs_export_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_rejects_empty_export_id(
-    observability_session, mock_observability_client, extract_payload
+    observability_session, mock_observability_client
 ):
     async with observability_session as session:
         result = await session.call_tool(
@@ -476,9 +476,7 @@ async def test_get_automation_jobs_export_rejects_empty_export_id(
         )
 
     mock_observability_client.get_automation_jobs_export.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "export_id" in p["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -727,7 +725,7 @@ async def test_get_ai_credit_usage_rejects_invalid_period(
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_agents_usage_rejects_empty_org_uuid(
-    observability_session, mock_observability_client, extract_payload
+    observability_session, mock_observability_client
 ):
     async with observability_session as session:
         result = await session.call_tool(
@@ -740,9 +738,7 @@ async def test_get_agents_usage_rejects_empty_org_uuid(
         )
 
     mock_observability_client.get_agents_usage.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "organization_uuid" in p["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -957,15 +953,13 @@ async def test_get_ai_credit_usage_coerces_int_organization_uuid(
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_logs_rejects_blank_automation_id(
-    observability_session, mock_observability_client, extract_payload
+    observability_session, mock_observability_client
 ):
     async with observability_session as session:
         result = await session.call_tool("get_automation_logs", {"automation_id": ""})
 
     mock_observability_client.get_automation_logs.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "automation_id" in p["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -993,15 +987,13 @@ async def test_get_automation_logs_rejects_out_of_bounds_first(
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_logs_by_repo_rejects_blank_repo_id(
-    observability_session, mock_observability_client, extract_payload
+    observability_session, mock_observability_client
 ):
     async with observability_session as session:
         result = await session.call_tool("get_automation_logs_by_repo", {"repo_id": ""})
 
     mock_observability_client.get_automation_logs_by_repo.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "repo_id" in p["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -1058,7 +1050,7 @@ async def test_get_agents_usage_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automations_usage_rejects_empty_org_uuid(
-    observability_session, mock_observability_client, extract_payload
+    observability_session, mock_observability_client
 ):
     async with observability_session as session:
         result = await session.call_tool(
@@ -1071,9 +1063,7 @@ async def test_get_automations_usage_rejects_empty_org_uuid(
         )
 
     mock_observability_client.get_automations_usage.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "organization_uuid" in p["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -1108,7 +1098,7 @@ async def test_get_automations_usage_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_credit_usage_rejects_empty_org_uuid(
-    observability_session, mock_observability_client, extract_payload
+    observability_session, mock_observability_client
 ):
     async with observability_session as session:
         result = await session.call_tool(
@@ -1117,9 +1107,7 @@ async def test_get_ai_credit_usage_rejects_empty_org_uuid(
         )
 
     mock_observability_client.get_ai_credit_usage.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "organization_uuid" in p["error"]
+    assert result.isError is True
 
 
 # ---------------------------------------------------------------------------
@@ -1130,7 +1118,7 @@ async def test_get_ai_credit_usage_rejects_empty_org_uuid(
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_export_automation_jobs_rejects_empty_org_id(
-    observability_session, mock_observability_client, extract_payload
+    observability_session, mock_observability_client
 ):
     async with observability_session as session:
         result = await session.call_tool(
@@ -1139,9 +1127,7 @@ async def test_export_automation_jobs_rejects_empty_org_id(
         )
 
     mock_observability_client.export_automation_jobs.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "organization_id" in p["error"]
+    assert result.isError is True
 
 
 @pytest.mark.anyio
@@ -1298,7 +1284,7 @@ async def test_get_automation_jobs_export_csv_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_automation_jobs_export_csv_rejects_empty_export_id(
-    observability_session, mock_observability_client, extract_payload
+    observability_session, mock_observability_client
 ):
     async with observability_session as session:
         result = await session.call_tool(
@@ -1307,6 +1293,4 @@ async def test_get_automation_jobs_export_csv_rejects_empty_export_id(
         )
 
     mock_observability_client.get_automation_jobs_export_csv.assert_not_called()
-    p = extract_payload(result)
-    assert p["success"] is False
-    assert "export_id" in p["error"]
+    assert result.isError is True

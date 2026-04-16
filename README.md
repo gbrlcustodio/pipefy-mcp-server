@@ -44,6 +44,9 @@ The server exposes **128 tools**, grouped below into **nine** surface areas. Can
 - **`debug=true`** — On failures, error text may include GraphQL codes and a `correlation_id` for support.
 - **`extra_input`** — Optional map of extra mutation fields (camelCase keys). Keys that duplicate the tool’s primary parameters are ignored.
 - **Destructive operations** — Deletes use a two-step contract: call with `confirm=false` (default) for a preview, then `confirm=true` only after explicit approval to execute.
+- **Automatic `PERMISSION_DENIED` enrichment** — On cross-pipe operations (relations, AI agents), errors carrying `extensions.code = PERMISSION_DENIED` are enriched with a membership hint pointing to `invite_members` when the service account is missing from the target pipe. Runs automatically (no `debug=true` required); implementation in [`enrich_permission_denied_error`](src/pipefy_mcp/tools/graphql_error_helpers.py).
+- **Service Account Protection** — When the optional [`PIPEFY_SERVICE_ACCOUNT_IDS`](.env.example) env var is set, the server guards `remove_member_from_pipe` and `set_role` against locking the service account out of its own pipes. See [Service Account Protection](docs/tools/members-email-webhooks.md#service-account-protection) for the full contract.
+- **Pre-flight validation for AI features** — Before creating/updating AI automations or AI agents, call [`validate_ai_automation_prompt`](docs/tools/automations-and-ai.md#ai-automations) and [`validate_ai_agent_behaviors`](docs/tools/automations-and-ai.md#ai-agent-read--delete) to catch prompt/field/event errors and membership gaps without round-tripping the write mutation.
 - **Introspection** — `introspect_type`, `introspect_query`, and `introspect_mutation` expose live schema; `search_schema` lists types by keyword (optional `kind` filter). Use `max_depth` where supported to expand nested types in one round trip.
 
 | Category | Tools | Description | Docs |
@@ -52,7 +55,7 @@ The server exposes **128 tools**, grouped below into **nine** surface areas. Can
 | **Database tables** | 17 | Tables, records (rows), schema columns (table fields), org-wide table discovery, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
 | **Relations** | 8 | Pipe relations, table relations by ID, card links, list/delete card-level relations. | [Details](docs/tools/relations.md) |
 | **Reports** | 17 | Pipe and organization reports: discovery, CRUD, single pipe report read, and async exports. | [Details](docs/tools/reports.md) |
-| **Automations & AI** | 22 | Traditional automations (rules engine), AI automations (including read/delete/validate), and AI agents. | [Details](docs/tools/automations-and-ai.md) |
+| **Automations & AI** | 22 | Traditional automations (rules engine), AI automations, and AI agents — including pre-flight validation (`validate_ai_automation_prompt`, `validate_ai_agent_behaviors`) to catch prompt/field/event errors before write. | [Details](docs/tools/automations-and-ai.md) |
 | **Observability** | 10 | AI agent and automation logs, usage stats, credits, job exports, status polling, and CSV fetch for finished exports. | [Details](docs/tools/observability.md) |
 | **Members, email & webhooks** | 11 | Pipe membership, card inbox emails, webhooks (list/update/create/delete), and transactional email sends. | [Details](docs/tools/members-email-webhooks.md) |
 | **Organization** | 1 | Fetch organization details (plan, members, pipes count). | [Details](docs/tools/organization.md) |

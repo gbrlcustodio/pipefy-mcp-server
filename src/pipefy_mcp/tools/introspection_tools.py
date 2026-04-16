@@ -28,6 +28,7 @@ class IntrospectionTools:
             """Inspect a Pipefy GraphQL type: fields, inputFields, or enumValues.
 
             Use before building raw queries to learn argument and return shapes.
+            Returns ``result`` (pretty-printed JSON string) and ``data`` (parsed dict).
 
             Args:
                 type_name: Schema type name exactly as defined (e.g. Card, Mutation).
@@ -49,6 +50,7 @@ class IntrospectionTools:
             """Inspect a root GraphQL mutation: arguments and return type.
 
             Use before execute_graphql to learn required inputs and payload shape.
+            Returns ``result`` (pretty-printed JSON string) and ``data`` (parsed dict).
 
             Args:
                 mutation_name: Mutation field name on the Mutation type (e.g. createCard).
@@ -72,6 +74,7 @@ class IntrospectionTools:
             """Inspect a root GraphQL query: arguments and return type.
 
             Use before execute_graphql to learn required inputs and payload shape.
+            Returns ``result`` (pretty-printed JSON string) and ``data`` (parsed dict).
 
             Args:
                 query_name: Query field name on the Query type (e.g. pipe, organization).
@@ -93,6 +96,7 @@ class IntrospectionTools:
             """Search GraphQL schema types by keyword in name or description.
 
             Case-insensitive; introspection types (names starting with __) are excluded server-side.
+            Returns ``result`` (pretty-printed JSON string) and ``data`` (parsed dict).
 
             Args:
                 keyword: Substring to find relevant types (e.g. pipe, card, automation).
@@ -118,6 +122,7 @@ class IntrospectionTools:
 
             Prefer dedicated tools when available. Use this as a fallback when no specific
             tool exists. Always introspect the mutation's input shape before executing.
+            Returns ``result`` (pretty-printed JSON string) and ``data`` (parsed dict).
 
             Args:
                 query: Full GraphQL document (query or mutation).

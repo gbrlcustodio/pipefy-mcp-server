@@ -27,7 +27,8 @@ class OrganizationTools:
             """Fetch Pipefy organization details by ID.
 
             Returns id, uuid, name, plan, role, members count, pipes count,
-            and creation date.
+            and creation date. The response includes both ``result`` (pretty-printed
+            JSON string) and ``data`` (parsed dict) for convenience.
 
             Args:
                 organization_id: Numeric organization ID.

@@ -12,7 +12,11 @@ def _format_graphql_data_for_llm(data: dict[str, Any]) -> str:
 
 
 def build_success_payload(data: dict[str, Any]) -> dict[str, Any]:
-    """``success: True`` with stringified ``result`` for MCP text content.
+    """``success: True`` with ``result`` (pretty-printed JSON string) and ``data`` (parsed object).
+
+    ``result`` is kept for backward compatibility (existing consumers may parse it
+    as text). ``data`` provides the same content as a native dict so typed clients
+    and AI agents can access fields directly without ``json.loads``.
 
     Args:
         data: Introspection or execution dict from the service layer.
@@ -20,6 +24,7 @@ def build_success_payload(data: dict[str, Any]) -> dict[str, Any]:
     return {
         "success": True,
         "result": _format_graphql_data_for_llm(data),
+        "data": data,
     }
 
 

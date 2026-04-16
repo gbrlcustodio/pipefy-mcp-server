@@ -280,9 +280,9 @@ mutation deleteCardRelation(
   $sourceId: ID!
 ) {
   deleteCardRelation(input: {
-    childId: $childId,
-    parentId: $parentId,
-    sourceId: $sourceId
+    child_id: $childId,
+    parent_id: $parentId,
+    source_id: $sourceId
   }) {
     success
   }

@@ -161,10 +161,42 @@ class FieldConditionTools:
         ) -> dict[str, Any]:
             """Create a conditional field rule (Pipefy ``createFieldCondition``).
 
+            **Working example** — hide field ``425848637`` when field ``425848636``
+            equals ``"Option A"``::
+
+                create_field_condition(
+                    phase_id="342182326",
+                    condition={
+                        "expressions": [
+                            {
+                                "structure_id": "0",
+                                "field_address": "425848636",
+                                "operation": "equals",
+                                "value": "Option A"
+                            }
+                        ],
+                        "expressions_structure": [["0"]]
+                    },
+                    actions=[
+                        {
+                            "phaseFieldId": "425848637",
+                            "actionId": "hide"
+                        }
+                    ]
+                )
+
+            ``expressions_structure`` is an array of arrays of **string** indices
+            (e.g. ``[["0"]]`` for one expression, ``[["0", "1"]]`` for AND). Each
+            expression must carry a ``structure_id`` (string) referencing its
+            position in the structure. Omitting either causes
+            ``"Structure can't be blank"``.
+
             Args:
                 ctx: MCP context for debug logging.
                 phase_id: Phase ID that owns the condition (``phaseId`` on the API input).
-                condition: ``ConditionInput`` dict (e.g. ``expressions``, ``expressions_structure``).
+                condition: ``ConditionInput`` dict. Must include ``expressions`` (list of expression
+                    objects with ``structure_id``, ``field_address``, ``operation``, ``value``) and
+                    ``expressions_structure`` (array of arrays of string indices).
                 actions: List of ``FieldConditionActionInput`` dicts; use ``phaseFieldId`` (often the
                     field's ``internal_id`` from ``get_phase_fields``). Each action must include
                     ``actionId`` (``hide`` or ``show``); legacy ``hidden`` is mapped to ``hide``.

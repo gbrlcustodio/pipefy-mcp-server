@@ -83,23 +83,20 @@ def test_extract_error_strings_uses_str_exc():
 
 @pytest.mark.unit
 def test_extract_error_strings_from_errors_list_dict_message():
-    """Errors list with dict items extracts 'message'."""
+    """Structured errors list preferred over raw str(exc)."""
     exc = Exception("outer")
     exc.errors = [{"message": "GraphQL error"}]
     result = extract_error_strings(exc)
-    assert "outer" in result
-    assert "GraphQL error" in result
+    assert result == ["GraphQL error"]
 
 
 @pytest.mark.unit
 def test_extract_error_strings_from_errors_list_string_items():
-    """Errors list with string items includes them."""
+    """Structured string items preferred over raw str(exc)."""
     exc = Exception("outer")
     exc.errors = ["first", "second"]
     result = extract_error_strings(exc)
-    assert "outer" in result
-    assert "first" in result
-    assert "second" in result
+    assert result == ["first", "second"]
 
 
 @pytest.mark.unit

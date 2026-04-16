@@ -21,9 +21,6 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     strip_expression_ids_for_create,
 )
 from pipefy_mcp.tools.validation_helpers import (
-    valid_repo_id as valid_phase_field_id,
-)
-from pipefy_mcp.tools.validation_helpers import (
     validate_tool_id,
 )
 
@@ -156,7 +153,7 @@ class FieldConditionTools:
         )
         async def create_field_condition(
             ctx: Context,
-            phase_id: str | int,
+            phase_id: PipefyId,
             condition: dict[str, Any],
             actions: list[dict[str, Any]],
             extra_input: dict[str, Any] | None = None,
@@ -164,10 +161,42 @@ class FieldConditionTools:
         ) -> dict[str, Any]:
             """Create a conditional field rule (Pipefy ``createFieldCondition``).
 
+            **Working example** — hide field ``425848637`` when field ``425848636``
+            equals ``"Option A"``::
+
+                create_field_condition(
+                    phase_id="342182326",
+                    condition={
+                        "expressions": [
+                            {
+                                "structure_id": "0",
+                                "field_address": "425848636",
+                                "operation": "equals",
+                                "value": "Option A"
+                            }
+                        ],
+                        "expressions_structure": [["0"]]
+                    },
+                    actions=[
+                        {
+                            "phaseFieldId": "425848637",
+                            "actionId": "hide"
+                        }
+                    ]
+                )
+
+            ``expressions_structure`` is an array of arrays of **string** indices
+            (e.g. ``[["0"]]`` for one expression, ``[["0", "1"]]`` for AND). Each
+            expression must carry a ``structure_id`` (string) referencing its
+            position in the structure. Omitting either causes
+            ``"Structure can't be blank"``.
+
             Args:
                 ctx: MCP context for debug logging.
                 phase_id: Phase ID that owns the condition (``phaseId`` on the API input).
-                condition: ``ConditionInput`` dict (e.g. ``expressions``, ``expressions_structure``).
+                condition: ``ConditionInput`` dict. Must include ``expressions`` (list of expression
+                    objects with ``structure_id``, ``field_address``, ``operation``, ``value``) and
+                    ``expressions_structure`` (array of arrays of string indices).
                 actions: List of ``FieldConditionActionInput`` dicts; use ``phaseFieldId`` (often the
                     field's ``internal_id`` from ``get_phase_fields``). Each action must include
                     ``actionId`` (``hide`` or ``show``); legacy ``hidden`` is mapped to ``hide``.
@@ -177,10 +206,9 @@ class FieldConditionTools:
             await ctx.debug(
                 f"create_field_condition: phase_id={phase_id!r}, debug={debug}"
             )
-            if not valid_phase_field_id(phase_id):
-                return build_pipe_tool_error_payload(
-                    message="Invalid 'phase_id'. Use a non-empty string or a positive integer.",
-                )
+            pid, err = validate_tool_id(phase_id, "phase_id")
+            if err is not None:
+                return err
             if not isinstance(condition, dict):
                 return build_pipe_tool_error_payload(
                     message="Invalid 'condition': provide an object/dict.",
@@ -213,7 +241,7 @@ class FieldConditionTools:
             actions_for_api = normalize_field_condition_actions(actions)
             try:
                 raw = await client.create_field_condition(
-                    phase_id,
+                    pid,
                     condition_for_api,
                     actions_for_api,
                     **merged,
@@ -239,7 +267,7 @@ class FieldConditionTools:
         )
         async def update_field_condition(
             ctx: Context,
-            condition_id: str | int,
+            condition_id: PipefyId,
             condition: dict[str, Any] | None = None,
             actions: list[dict[str, Any]] | None = None,
             extra_input: dict[str, Any] | None = None,
@@ -262,12 +290,9 @@ class FieldConditionTools:
             await ctx.debug(
                 f"update_field_condition: condition_id={condition_id!r}, debug={debug}"
             )
-            if not valid_phase_field_id(condition_id):
-                return build_pipe_tool_error_payload(
-                    message=(
-                        "Invalid 'condition_id'. Use a non-empty string or a positive integer."
-                    ),
-                )
+            cid_str, err = validate_tool_id(condition_id, "condition_id")
+            if err is not None:
+                return err
             if extra_input is not None and not isinstance(extra_input, dict):
                 return build_pipe_tool_error_payload(
                     message="Invalid 'extra_input': provide an object/dict or omit.",
@@ -306,13 +331,8 @@ class FieldConditionTools:
                         "'extra_input' to update."
                     ),
                 )
-            cid_key = (
-                condition_id.strip()
-                if isinstance(condition_id, str)
-                else str(condition_id)
-            )
             try:
-                raw = await client.update_field_condition(cid_key, **update_attrs)
+                raw = await client.update_field_condition(cid_str, **update_attrs)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Update field condition failed.", debug=debug
@@ -335,7 +355,7 @@ class FieldConditionTools:
         )
         async def delete_field_condition(
             ctx: Context[ServerSession, None],
-            condition_id: str | int,
+            condition_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -354,12 +374,9 @@ class FieldConditionTools:
             await ctx.debug(
                 f"delete_field_condition: condition_id={condition_id!r}, debug={debug}"
             )
-            if not valid_phase_field_id(condition_id):
-                return build_pipe_tool_error_payload(
-                    message=(
-                        "Invalid 'condition_id'. Use a non-empty string or a positive integer."
-                    ),
-                )
+            cid_str, err = validate_tool_id(condition_id, "condition_id")
+            if err is not None:
+                return err
 
             guard = await check_destructive_confirmation(
                 ctx,
@@ -369,13 +386,8 @@ class FieldConditionTools:
             if guard is not None:
                 return guard
 
-            cid_key = (
-                condition_id.strip()
-                if isinstance(condition_id, str)
-                else str(condition_id)
-            )
             try:
-                raw = await client.delete_field_condition(cid_key)
+                raw = await client.delete_field_condition(cid_str)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Delete field condition failed.", debug=debug

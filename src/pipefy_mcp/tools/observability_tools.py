@@ -15,6 +15,7 @@ from pipefy_mcp.tools.observability_tool_helpers import (
     build_observability_read_success_payload,
     handle_observability_tool_graphql_error,
 )
+from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 # --- Validation constants ---
 
@@ -204,7 +205,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_agents_usage(
-            organization_uuid: str | int,
+            organization_uuid: PipefyId,
             filter_date_from: str,
             filter_date_to: str,
             filters: dict[str, Any] | None = None,
@@ -223,11 +224,11 @@ class ObservabilityTools:
                 sort: SortCriteria dict (field + direction).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_uuid or not isinstance(organization_uuid, (str, int)):
-                return build_observability_error_payload(
-                    message="Invalid 'organization_uuid': provide a non-empty string or integer.",
-                )
-            organization_uuid = str(organization_uuid)
+            organization_uuid, err = validate_tool_id(
+                organization_uuid, "organization_uuid"
+            )
+            if err is not None:
+                return err
             if not filter_date_from or not filter_date_to:
                 return build_observability_error_payload(
                     message="Both 'filter_date_from' and 'filter_date_to' are required.",
@@ -252,7 +253,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_automations_usage(
-            organization_uuid: str | int,
+            organization_uuid: PipefyId,
             filter_date_from: str,
             filter_date_to: str,
             filters: dict[str, Any] | None = None,
@@ -271,11 +272,11 @@ class ObservabilityTools:
                 sort: SortCriteria dict (field + direction).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_uuid or not isinstance(organization_uuid, (str, int)):
-                return build_observability_error_payload(
-                    message="Invalid 'organization_uuid': provide a non-empty string or integer.",
-                )
-            organization_uuid = str(organization_uuid)
+            organization_uuid, err = validate_tool_id(
+                organization_uuid, "organization_uuid"
+            )
+            if err is not None:
+                return err
             if not filter_date_from or not filter_date_to:
                 return build_observability_error_payload(
                     message="Both 'filter_date_from' and 'filter_date_to' are required.",
@@ -300,7 +301,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_ai_credit_usage(
-            organization_uuid: str | int,
+            organization_uuid: PipefyId,
             period: str,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -312,11 +313,11 @@ class ObservabilityTools:
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_uuid or not isinstance(organization_uuid, (str, int)):
-                return build_observability_error_payload(
-                    message="Invalid 'organization_uuid': provide a non-empty string or integer.",
-                )
-            organization_uuid = str(organization_uuid)
+            organization_uuid, err = validate_tool_id(
+                organization_uuid, "organization_uuid"
+            )
+            if err is not None:
+                return err
             if period not in _VALID_PERIODS:
                 return build_observability_error_payload(
                     message=f"Invalid 'period': must be one of {sorted(_VALID_PERIODS)}.",
@@ -337,7 +338,7 @@ class ObservabilityTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def export_automation_jobs(
-            organization_id: str | int,
+            organization_id: PipefyId,
             period: str,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -348,11 +349,9 @@ class ObservabilityTools:
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not organization_id or not isinstance(organization_id, (str, int)):
-                return build_observability_error_payload(
-                    message="Invalid 'organization_id': provide a non-empty string or integer.",
-                )
-            organization_id = str(organization_id)
+            organization_id, err = validate_tool_id(organization_id, "organization_id")
+            if err is not None:
+                return err
             if period not in _VALID_PERIODS:
                 return build_observability_error_payload(
                     message=f"Invalid 'period': must be one of {sorted(_VALID_PERIODS)}.",

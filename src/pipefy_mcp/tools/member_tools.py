@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
@@ -16,7 +17,7 @@ from pipefy_mcp.tools.member_tool_helpers import (
     build_member_success_payload,
     handle_member_tool_graphql_error,
 )
-from pipefy_mcp.tools.validation_helpers import valid_repo_id
+from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 
 class MemberTools:
@@ -28,7 +29,7 @@ class MemberTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def invite_members(
-            pipe_id: str | int,
+            pipe_id: PipefyId,
             members: list[dict[str, Any]],
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -41,11 +42,9 @@ class MemberTools:
                 members: List of member dicts with `email` and `role_name`.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(pipe_id):
-                return build_member_error_payload(
-                    message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
-                )
-            pipe_id = str(pipe_id)
+            pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
             if not isinstance(members, list) or not members:
                 return build_member_error_payload(
                     message="Invalid 'members': provide a non-empty list of dicts with 'email' and 'role_name'.",
@@ -78,8 +77,8 @@ class MemberTools:
         )
         async def remove_member_from_pipe(
             ctx: Context[ServerSession, None],
-            pipe_id: str | int,
-            user_ids: list[str | int],
+            pipe_id: PipefyId,
+            user_ids: list[PipefyId],
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -99,17 +98,13 @@ class MemberTools:
                 confirm: Set to True to execute the removal (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(pipe_id):
-                return build_member_error_payload(
-                    message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
-                )
-            pipe_id = str(pipe_id)
+            pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
             if not isinstance(user_ids, list) or not user_ids:
                 return build_member_error_payload(
                     message="Invalid 'user_ids': provide a non-empty list of user IDs.",
                 )
-            # Agents may re-serialize numeric IDs as ints on the confirm call
-            user_ids = [str(uid) for uid in user_ids]
             if not all(uid.strip() for uid in user_ids):
                 return build_member_error_payload(
                     message="Invalid 'user_ids': each ID must be a non-empty string.",
@@ -173,8 +168,8 @@ class MemberTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def set_role(
-            pipe_id: str | int,
-            member_id: str | int,
+            pipe_id: PipefyId,
+            member_id: PipefyId,
             role_name: str,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -190,32 +185,25 @@ class MemberTools:
                 role_name: New role name (e.g. 'member', 'admin').
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(pipe_id):
-                return build_member_error_payload(
-                    message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
-                )
-            pipe_id = str(pipe_id)
-            member_id = str(member_id)
-            if not member_id.strip():
-                return build_member_error_payload(
-                    message="Invalid 'member_id': provide a non-empty string.",
-                )
+            pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
+            member_id, err = validate_tool_id(member_id, "member_id")
+            if err is not None:
+                return err
             if not isinstance(role_name, str) or not role_name.strip():
                 return build_member_error_payload(
                     message="Invalid 'role_name': provide a non-empty string.",
                 )
-            trimmed_member_id = member_id.strip()
             try:
-                raw = await client.set_role(
-                    pipe_id, trimmed_member_id, role_name.strip()
-                )
+                raw = await client.set_role(pipe_id, member_id, role_name.strip())
             except Exception as exc:  # noqa: BLE001
                 return handle_member_tool_graphql_error(
                     exc, "Set role failed.", debug=debug
                 )
             warning: str | None = None
             protected_ids = settings.pipefy.service_account_ids
-            if protected_ids and trimmed_member_id in protected_ids:
+            if protected_ids and member_id in protected_ids:
                 warning = (
                     "Warning: you changed the role of a service account. "
                     "Ensure the new role retains write permissions."

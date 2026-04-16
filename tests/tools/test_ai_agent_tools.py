@@ -1304,16 +1304,13 @@ class TestValidateAiAgentBehaviorsErrorPaths:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         async with client_session as session:
             result = await session.call_tool(
                 "validate_ai_agent_behaviors",
                 {"pipe_id": "  ", "behaviors": [minimal_behavior_dict()]},
             )
-        payload = extract_payload(result)
-        assert payload["success"] is False
-        assert "blank" in payload["error"].lower()
+        assert result.isError is True
 
     async def test_pydantic_validation_failure(
         self,

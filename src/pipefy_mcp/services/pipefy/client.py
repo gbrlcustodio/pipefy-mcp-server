@@ -352,9 +352,11 @@ class PipefyClient:
             field_id, table_id=table_id, **attrs
         )
 
-    async def delete_table_field(self, field_id: str | int) -> dict:
+    async def delete_table_field(
+        self, field_id: str | int, table_id: str | int
+    ) -> dict:
         """Delete a database table field by ID (permanent)."""
-        return await self._table_service.delete_table_field(field_id)
+        return await self._table_service.delete_table_field(field_id, table_id)
 
     async def get_pipe_relations(self, pipe_id: str | int) -> dict:
         """Get parent and child pipe relations for a pipe."""

@@ -27,7 +27,8 @@ class OrganizationTools:
             """Fetch Pipefy organization details by ID.
 
             Returns id, uuid, name, plan, role, members count, pipes count,
-            and creation date.
+            and creation date. The response includes both ``result`` (pretty-printed
+            JSON string) and ``data`` (parsed dict) for convenience.
 
             Args:
                 organization_id: Numeric organization ID.
@@ -36,4 +37,4 @@ class OrganizationTools:
                 result = await client.get_organization(organization_id)
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(str(exc))
-            return build_success_payload(result)
+            return build_success_payload(result, include_parsed=True)

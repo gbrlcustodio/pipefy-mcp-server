@@ -61,7 +61,7 @@ async def test_get_pipe_relations_success(
         result = await session.call_tool("get_pipe_relations", {"pipe_id": 1})
 
     assert result.isError is False
-    mock_relation_client.get_pipe_relations.assert_awaited_once_with(1)
+    mock_relation_client.get_pipe_relations.assert_awaited_once_with("1")
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["pipe"]["childrenRelations"][0]["name"] == "Child"
@@ -88,14 +88,13 @@ async def test_get_pipe_relations_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_get_pipe_relations_invalid_pipe_id(
-    relation_session, mock_relation_client, extract_payload
+    relation_session, mock_relation_client
 ):
     async with relation_session as session:
         result = await session.call_tool("get_pipe_relations", {"pipe_id": ""})
 
-    assert result.isError is False
+    assert result.isError is True
     mock_relation_client.get_pipe_relations.assert_not_called()
-    assert extract_payload(result)["success"] is False
 
 
 @pytest.mark.anyio
@@ -180,7 +179,7 @@ async def test_create_pipe_relation_success(
 
     assert result.isError is False
     mock_relation_client.create_pipe_relation.assert_awaited_once_with(
-        1, 2, "L", extra_input=None
+        "1", "2", "L", extra_input=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -238,7 +237,7 @@ async def test_update_pipe_relation_success(
 
     assert result.isError is False
     mock_relation_client.update_pipe_relation.assert_awaited_once_with(
-        9, "N", extra_input=None
+        "9", "N", extra_input=None
     )
     assert extract_payload(result)["success"] is True
 
@@ -277,7 +276,7 @@ async def test_delete_pipe_relation_success(
         )
 
     assert result.isError is False
-    mock_relation_client.delete_pipe_relation.assert_awaited_once_with(100)
+    mock_relation_client.delete_pipe_relation.assert_awaited_once_with("100")
     assert extract_payload(result)["success"] is True
 
 
@@ -328,7 +327,7 @@ async def test_create_card_relation_success(
 
     assert result.isError is False
     mock_relation_client.create_card_relation.assert_awaited_once_with(
-        10, 20, 30, extra_input=None
+        "10", "20", "30", extra_input=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -358,7 +357,7 @@ async def test_create_card_relation_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("relation_session", [None], indirect=True)
 async def test_create_card_relation_invalid_source_id(
-    relation_session, mock_relation_client, extract_payload
+    relation_session, mock_relation_client
 ):
     async with relation_session as session:
         result = await session.call_tool(
@@ -367,7 +366,7 @@ async def test_create_card_relation_invalid_source_id(
         )
 
     mock_relation_client.create_card_relation.assert_not_called()
-    assert extract_payload(result)["success"] is False
+    assert result.isError is True
 
 
 @pytest.mark.anyio

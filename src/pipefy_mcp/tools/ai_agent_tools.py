@@ -9,6 +9,7 @@ from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
 from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.ai_tool_helpers import (
@@ -552,7 +553,7 @@ class AiAgentTools:
         )
         async def validate_ai_agent_behaviors(
             ctx: Context,
-            pipe_id: str | int,
+            pipe_id: PipefyId,
             behaviors: list[dict],
             strict_unknown_action_types: bool = True,
         ) -> dict:

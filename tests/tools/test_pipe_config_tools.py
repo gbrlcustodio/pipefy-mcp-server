@@ -120,7 +120,7 @@ async def test_create_pipe_success(
         )
 
     assert result.isError is False
-    mock_pipe_config_client.create_pipe.assert_awaited_once_with("N", 10)
+    mock_pipe_config_client.create_pipe.assert_awaited_once_with("N", "10")
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "createPipe" in payload["result"]
@@ -158,7 +158,7 @@ async def test_update_pipe_success(
 
     assert result.isError is False
     mock_pipe_config_client.update_pipe.assert_awaited_once_with(
-        2, name="X", icon=None, color=None, preferences=None
+        "2", name="X", icon=None, color=None, preferences=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -195,7 +195,7 @@ async def test_delete_pipe_preview_does_not_delete(
         )
 
     assert result.isError is False
-    mock_pipe_config_client.get_pipe.assert_awaited_once_with(9)
+    mock_pipe_config_client.get_pipe.assert_awaited_once_with("9")
     mock_pipe_config_client.delete_pipe.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -219,10 +219,10 @@ async def test_delete_pipe_confirm_calls_mutation(
         )
 
     assert result.isError is False
-    mock_pipe_config_client.delete_pipe.assert_awaited_once_with(9)
+    mock_pipe_config_client.delete_pipe.assert_awaited_once_with("9")
     payload = extract_payload(result)
     assert payload["success"] is True
-    assert payload["pipe_id"] == 9
+    assert payload["pipe_id"] == "9"
 
 
 @pytest.mark.anyio
@@ -239,7 +239,7 @@ async def test_delete_pipe_invalid_id(
     payload = extract_payload(result)
     expected: DeletePipeErrorPayload = {
         "success": False,
-        "error": "Invalid 'pipe_id'. Provide a non-empty string or positive integer.",
+        "error": "Invalid 'pipe_id': provide a positive integer.",
     }
     assert payload == expected
 
@@ -288,7 +288,7 @@ async def test_clone_pipe_success(
         )
 
     mock_pipe_config_client.clone_pipe.assert_awaited_once_with(
-        100, organization_id=None
+        "100", organization_id=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -311,7 +311,7 @@ async def test_create_phase_success(
 
     assert result.isError is False
     mock_pipe_config_client.create_phase.assert_awaited_once_with(
-        1,
+        "1",
         "Todo",
         done=False,
         index=1,
@@ -338,7 +338,7 @@ async def test_update_phase_with_explicit_name(
 
     mock_pipe_config_client.get_phase_fields.assert_not_called()
     mock_pipe_config_client.update_phase.assert_awaited_once_with(
-        10,
+        "10",
         name="New",
     )
     payload = extract_payload(result)
@@ -365,9 +365,9 @@ async def test_update_phase_resolves_name_from_get_phase_fields(
             {"phase_id": 10, "done": True},
         )
 
-    mock_pipe_config_client.get_phase_fields.assert_awaited_once_with(10)
+    mock_pipe_config_client.get_phase_fields.assert_awaited_once_with("10")
     mock_pipe_config_client.update_phase.assert_awaited_once_with(
-        10,
+        "10",
         name="Old",
         done=True,
     )
@@ -402,7 +402,7 @@ async def test_delete_phase_success(
             "delete_phase", {"phase_id": 55, "confirm": True}
         )
 
-    mock_pipe_config_client.delete_phase.assert_awaited_once_with(55)
+    mock_pipe_config_client.delete_phase.assert_awaited_once_with("55")
     assert extract_payload(result)["success"] is True
 
 
@@ -453,7 +453,7 @@ async def test_create_phase_field_success(
         )
 
     mock_pipe_config_client.create_phase_field.assert_awaited_once_with(
-        1,
+        "1",
         "Email",
         "email",
         description="Contact",
@@ -491,7 +491,7 @@ async def test_create_phase_field_with_options(
         )
 
     mock_pipe_config_client.create_phase_field.assert_awaited_once_with(
-        1,
+        "1",
         "Prioridade",
         "select",
         options=["Alta", "Média", "Baixa"],
@@ -517,7 +517,7 @@ async def test_update_phase_field_success(
         )
 
     mock_pipe_config_client.update_phase_field.assert_awaited_once_with(
-        9,
+        "9",
         label="Renamed",
     )
     assert extract_payload(result)["success"] is True
@@ -616,7 +616,7 @@ async def test_delete_phase_field_success(
         )
 
     mock_pipe_config_client.delete_phase_field.assert_awaited_once_with(
-        100, pipe_uuid=None
+        "100", pipe_uuid=None
     )
     assert extract_payload(result)["success"] is True
 
@@ -675,7 +675,7 @@ async def test_create_label_success(
             {"pipe_id": 2, "name": "Bug", "color": "red"},
         )
 
-    mock_pipe_config_client.create_label.assert_awaited_once_with(2, "Bug", "red")
+    mock_pipe_config_client.create_label.assert_awaited_once_with("2", "Bug", "red")
     assert extract_payload(result)["success"] is True
 
 
@@ -694,7 +694,7 @@ async def test_update_label_success(
             {"label_id": 3, "name": "Story"},
         )
 
-    mock_pipe_config_client.update_label.assert_awaited_once_with(3, name="Story")
+    mock_pipe_config_client.update_label.assert_awaited_once_with("3", name="Story")
     assert extract_payload(result)["success"] is True
 
 
@@ -716,7 +716,7 @@ async def test_update_label_strips_id_from_extra_input__no_integration(
             },
         )
     mock_pipe_config_client.update_label.assert_awaited_once_with(
-        3,
+        "3",
         name="X",
         color="blue",
     )
@@ -737,7 +737,7 @@ async def test_delete_label_success(
             "delete_label", {"label_id": 40, "confirm": True}
         )
 
-    mock_pipe_config_client.delete_label.assert_awaited_once_with(40)
+    mock_pipe_config_client.delete_label.assert_awaited_once_with("40")
     assert extract_payload(result)["success"] is True
 
 
@@ -1029,7 +1029,7 @@ async def test_create_phase_field_strips_reserved_keys_from_extra_input__no_inte
         )
     assert extract_payload(result)["success"] is True
     mock_pipe_config_client.create_phase_field.assert_awaited_once_with(
-        1,
+        "1",
         "Email",
         "email",
         description="Kept",
@@ -1250,7 +1250,7 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
         )
     assert result.isError is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        1,
+        "1",
         expr,
         actions,
     )
@@ -1278,7 +1278,7 @@ async def test_create_field_condition_maps_hidden_action_id_to_hide__no_integrat
         )
     assert result.isError is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        1,
+        "1",
         expr,
         [{"phaseFieldId": "308821043", "whenEvaluator": True, "actionId": "hide"}],
     )
@@ -1324,7 +1324,7 @@ async def test_create_field_condition_strips_expression_ids__no_integration(
         )
     assert result.isError is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
-        1,
+        "1",
         expected_condition,
         actions,
     )

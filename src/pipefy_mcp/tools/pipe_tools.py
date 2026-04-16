@@ -7,7 +7,7 @@ from typing import Any, cast
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pydantic import TypeAdapter, ValidationError
+from pydantic import ValidationError
 
 from pipefy_mcp.models.comment import (
     CommentInput,
@@ -76,19 +76,25 @@ class PipeTools:
         )
         async def create_card(
             ctx: Context[ServerSession, None],
-            pipe_id: str | int,
+            pipe_id: PipefyId,
             title: str | None = None,
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
+            skip_elicitation: bool = False,
         ) -> dict:
             """Create a card in the pipe.
 
-            The fields can be interactively elicited, but, if the LLM is aware of
-            the intended values for certain fields, they can be provided in the
-            ``fields`` argument.
+            When ``skip_elicitation`` is True, field values from ``fields`` are
+            filtered to editable start-form field IDs and sent directly to the
+            API — no interactive form is shown. AI agents should set this to
+            True when they already know the field values.
 
-            Importantly, if elicitation is not supported, the provided fields will
-            be used as-is and must be provided.
+            When ``skip_elicitation`` is False (default) and the client supports
+            elicitation, an interactive form is presented even if ``fields``
+            carries pre-filled values — the human can review and adjust them.
+
+            Discover fields first via ``get_start_form_fields`` and pass all
+            required values.
 
             The Pipefy ``createCard`` mutation does not accept a title directly.
             If ``title`` is provided, the card is created first and then updated
@@ -100,9 +106,11 @@ class PipeTools:
                 pipe_id: The ID of the pipe where the card will be created.
                 title: Optional card title. Applied via updateCard after creation.
                 fields: A dictionary of fields that can be pre-filled on the card.
-                    This argument should be provided when the LLM is aware of the
-                    intended values for certain fields.
+                    When ``skip_elicitation`` is False, these pre-fill the interactive
+                    form. When True, they are sent directly to the API.
                 required_fields_only: If True, only elicit required fields. Default: False.
+                skip_elicitation: When True, bypass interactive elicitation and send
+                    ``fields`` directly to the API. Recommended for AI agent workflows.
             """
             form_fields = await client.get_start_form_fields(
                 pipe_id, required_fields_only
@@ -118,7 +126,7 @@ class PipeTools:
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
 
-            if can_elicit:
+            if can_elicit and not skip_elicitation:
                 try:
                     card_data = await PipeTools._elicit_field_details(
                         message=f"Creating a card in pipe {pipe_id}",
@@ -164,7 +172,7 @@ class PipeTools:
             ),
         )
         async def get_card(
-            card_id: str | int,
+            card_id: PipefyId,
             include_fields: bool = False,
         ) -> dict:
             """Load one card by ID for title, phase, assignees, labels, and optional field values.
@@ -249,7 +257,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def add_card_comment(
-            card_id: str | int, text: str
+            card_id: PipefyId, text: str
         ) -> AddCardCommentPayload:
             """Add a text comment to a Pipefy card.
 
@@ -281,7 +289,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_comment(
-            comment_id: str | int, text: str
+            comment_id: PipefyId, text: str
         ) -> UpdateCommentSuccessPayload | UpdateCommentErrorPayload:
             """Update an existing comment by its ID.
 
@@ -317,7 +325,7 @@ class PipeTools:
         )
         async def delete_comment(
             ctx: Context[ServerSession, None],
-            comment_id: str | int,
+            comment_id: PipefyId,
             confirm: bool = False,
         ) -> DeleteCommentPayload:
             """Delete a comment from Pipefy.
@@ -449,7 +457,7 @@ class PipeTools:
         )
         async def get_cards(
             ctx: Context[ServerSession, None],
-            pipe_id: str | int,
+            pipe_id: PipefyId,
             title: str | None = None,
             search: CardSearch | None = None,
             include_fields: bool = False,
@@ -500,7 +508,7 @@ class PipeTools:
             ),
         )
         async def find_cards(
-            pipe_id: str | int,
+            pipe_id: PipefyId,
             field_id: str,
             field_value: str,
             include_fields: bool = False,
@@ -549,7 +557,7 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_pipe(pipe_id: str | int) -> dict:
+        async def get_pipe(pipe_id: PipefyId) -> dict:
             """Load a pipe by ID: name, phases, labels, and start-form field definitions.
 
             Use this after resolving ``pipe_id`` (e.g. from ``search_pipes``) to inspect workflow
@@ -619,7 +627,7 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_pipe_members(pipe_id: str | int) -> dict:
+        async def get_pipe_members(pipe_id: PipefyId) -> dict:
             """List members of a pipe with roles and basic user profile fields.
 
             Use this to audit who has access, resolve user IDs for assignments, or before
@@ -638,7 +646,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True),
         )
         async def move_card_to_phase(
-            card_id: str | int, destination_phase_id: str | int
+            card_id: PipefyId, destination_phase_id: PipefyId
         ) -> dict:
             """Move a card to a target phase (Kanban column) within the same pipe.
 
@@ -673,7 +681,7 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_card_field(
-            card_id: str | int, field_id: str, new_value: Any
+            card_id: PipefyId, field_id: str, new_value: Any
         ) -> dict:
             """Update a single field of a card.
 
@@ -695,10 +703,10 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_card(
-            card_id: str | int,
+            card_id: PipefyId,
             title: str | None = None,
-            assignee_ids: list[str | int] | None = None,
-            label_ids: list[str | int] | None = None,
+            assignee_ids: list[PipefyId] | None = None,
+            label_ids: list[PipefyId] | None = None,
             due_date: str | None = None,
             field_updates: list[dict] | None = None,
         ) -> dict:
@@ -754,7 +762,7 @@ class PipeTools:
             ),
         )
         async def get_start_form_fields(
-            pipe_id: str | int, required_only: bool = False
+            pipe_id: PipefyId, required_only: bool = False
         ) -> dict:
             """Get the start form fields of a pipe.
 
@@ -786,7 +794,7 @@ class PipeTools:
             ),
         )
         async def get_phase_fields(
-            phase_id: str | int, required_only: bool = False
+            phase_id: PipefyId, required_only: bool = False
         ) -> dict:
             """Get the fields available in a specific phase.
 
@@ -820,26 +828,34 @@ class PipeTools:
         )
         async def fill_card_phase_fields(
             ctx: Context[ServerSession, None],
-            card_id: str | int,
-            phase_id: str | int,
+            card_id: PipefyId,
+            phase_id: PipefyId,
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
+            skip_elicitation: bool = False,
         ) -> dict:
-            """Fill in the phase fields for a card using interactive elicitation.
+            """Fill in the phase fields for a card.
 
-            This tool helps fill in the fields that are specific to a phase.
-            When elicitation is supported, it will prompt the user for field values.
+            When ``skip_elicitation`` is True, field values from ``fields`` are
+            filtered to editable phase field IDs and sent directly to the API.
+            AI agents should set this to True when they already know the values.
+
+            When ``skip_elicitation`` is False (default) and the client supports
+            elicitation, an interactive form is presented — ``fields`` pre-fills
+            it so the human can review and adjust.
 
             Args:
-                card_id: The ID of the card to update
-                phase_id: The ID of the phase whose fields should be filled
+                card_id: The ID of the card to update.
+                phase_id: The ID of the phase whose fields should be filled.
                 fields: A dictionary of fields that can be pre-filled.
-                        This argument should be provided when the LLM is aware
-                        of the intended values for certain fields.
-                required_fields_only: If True, only elicit required fields. Default: False
+                        When ``skip_elicitation`` is False, these pre-fill the
+                        interactive form. When True, they are sent directly.
+                required_fields_only: If True, only elicit required fields. Default: False.
+                skip_elicitation: When True, bypass interactive elicitation and send
+                    ``fields`` directly to the API. Recommended for AI agent workflows.
 
             Returns:
-                dict: GraphQL response with success status and updated card information
+                dict: GraphQL response with success status and updated card information.
             """
             phase_fields_result = await client.get_phase_fields(
                 phase_id, required_fields_only
@@ -855,7 +871,7 @@ class PipeTools:
             field_data = fields or {}
             can_elicit = supports_elicitation(ctx)
 
-            if can_elicit and expected_fields:
+            if can_elicit and expected_fields and not skip_elicitation:
                 try:
                     field_data = await PipeTools._elicit_field_details(
                         message=f"Filling fields for phase '{phase_name}' (ID: {phase_id})",
@@ -928,7 +944,7 @@ class PipeTools:
         )
         async def delete_card(
             ctx: Context[ServerSession, None],
-            card_id: str | int,
+            card_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> DeleteCardPayload:
@@ -949,24 +965,9 @@ class PipeTools:
             Returns:
                 Success/error status of the deletion.
             """
-            try:
-                coerced = TypeAdapter(PipefyId).validate_python(card_id)
-            except ValidationError:
-                return build_delete_card_error_payload(
-                    message=(
-                        "Invalid 'card_id'. Provide a non-empty string or positive "
-                        f"numeric ID (got {type(card_id).__name__})."
-                    )
-                )
-            card_id_str = str(coerced).strip()
-            if not card_id_str:
-                return build_delete_card_error_payload(
-                    message="Invalid 'card_id'. Please provide a non-empty card ID."
-                )
-            if card_id_str.isdigit() and int(card_id_str) <= 0:
-                return build_delete_card_error_payload(
-                    message="Invalid 'card_id'. Please provide a positive integer."
-                )
+            card_id_str, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return build_delete_card_error_payload(message=err["error"])
 
             try:
                 card_response = await client.get_card(card_id_str)

@@ -11,16 +11,29 @@ def _format_graphql_data_for_llm(data: dict[str, Any]) -> str:
     return json.dumps(data, indent=2, default=str, ensure_ascii=False)
 
 
-def build_success_payload(data: dict[str, Any]) -> dict[str, Any]:
-    """``success: True`` with stringified ``result`` for MCP text content.
+def build_success_payload(
+    data: dict[str, Any],
+    *,
+    include_parsed: bool = False,
+) -> dict[str, Any]:
+    """``success: True`` with ``result`` (pretty-printed JSON string).
+
+    When ``include_parsed`` is True, a ``data`` key is added with the same
+    content as a native dict so typed clients and AI agents can access fields
+    directly without ``json.loads``.  Off by default to avoid doubling the
+    payload size over the MCP transport.
 
     Args:
         data: Introspection or execution dict from the service layer.
+        include_parsed: When True, include ``data`` dict alongside ``result``.
     """
-    return {
+    payload: dict[str, Any] = {
         "success": True,
         "result": _format_graphql_data_for_llm(data),
     }
+    if include_parsed:
+        payload["data"] = data
+    return payload
 
 
 def build_error_payload(error_message: str) -> dict[str, Any]:

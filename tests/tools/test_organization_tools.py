@@ -58,6 +58,7 @@ async def test_get_organization_success(org_session, mock_org_client, extract_pa
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "My Org" in payload["result"]
+    assert payload["data"]["name"] == "My Org"
 
 
 @pytest.mark.anyio

@@ -50,6 +50,13 @@ def validate_tool_id(
     Returns ``(cleaned_id, None)`` on success or ``(None, error_payload)`` on
     failure.  Handles empty strings, booleans, zero, and negative numbers.
 
+    Callers should **rebind** the parameter to the cleaned value::
+
+        param, err = validate_tool_id(param, "param")
+
+    Discarding the cleaned value (``_, err = ...``) defeats whitespace
+    stripping and int→str normalization.
+
     Args:
         value: Raw ID value from the MCP tool parameter.
         label: Parameter name for the error message (e.g. ``card_id``).

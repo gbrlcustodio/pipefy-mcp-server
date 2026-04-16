@@ -13,7 +13,6 @@ from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
-    valid_repo_id,
     validate_tool_id,
 )
 from pipefy_mcp.tools.webhook_tool_helpers import (
@@ -48,13 +47,12 @@ class WebhookTools:
                 first: Max templates to return (default 50).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(repo_id):
-                return build_webhook_error_payload(
-                    message="Invalid 'repo_id': provide a non-empty string or positive integer.",
-                )
+            rid, err = validate_tool_id(repo_id, "repo_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.get_email_templates(
-                    str(repo_id).strip(),
+                    rid,
                     filter_by_name=filter_by_name.strip() if filter_by_name else None,
                     first=first,
                 )
@@ -85,10 +83,9 @@ class WebhookTools:
                 email_type: Optional filter: 'sent' or 'received' to get only that type.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(card_id):
-                return build_webhook_error_payload(
-                    message="Invalid 'card_id': provide a non-empty string or positive integer.",
-                )
+            cid, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return err
             trimmed_email_type = email_type.strip() if email_type else None
             if trimmed_email_type is not None and trimmed_email_type.lower() not in (
                 "sent",
@@ -99,7 +96,7 @@ class WebhookTools:
                 )
             try:
                 raw = await client.get_card_inbox_emails(
-                    card_id.strip(),
+                    cid,
                     email_type=trimmed_email_type,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -136,10 +133,9 @@ class WebhookTools:
                 extra_input: Optional extra CreateAndSendInboxEmailInput fields (html, cc, bcc).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(card_id):
-                return build_webhook_error_payload(
-                    message="Invalid 'card_id': provide a non-empty string or positive integer.",
-                )
+            cid, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return err
             if not isinstance(to, list) or not to:
                 return build_webhook_error_payload(
                     message="Invalid 'to': provide a non-empty list of email addresses.",
@@ -167,7 +163,7 @@ class WebhookTools:
                 return bad
             try:
                 raw = await client.send_inbox_email(
-                    card_id,
+                    cid,
                     [e.strip() for e in to],
                     subject.strip(),
                     body,
@@ -208,10 +204,9 @@ class WebhookTools:
                 extra_input: Optional extra CreateAndSendInboxEmailInput fields (cc, bcc).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(card_id):
-                return build_webhook_error_payload(
-                    message="Invalid 'card_id': provide a non-empty string or positive integer.",
-                )
+            cid, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return err
             if not email_template_id.strip():
                 return build_webhook_error_payload(
                     message="Invalid 'email_template_id': provide a non-empty string.",
@@ -230,7 +225,7 @@ class WebhookTools:
                 return bad
             try:
                 raw = await client.send_email_with_template(
-                    card_id.strip(),
+                    cid,
                     email_template_id.strip(),
                     to=to,
                     from_=from_,
@@ -301,10 +296,9 @@ class WebhookTools:
                 extra_input: Optional extra CreateWebhookInput fields (name, filters, headers).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not valid_repo_id(pipe_id):
-                return build_webhook_error_payload(
-                    message="Invalid 'pipe_id': provide a non-empty string or positive integer.",
-                )
+            pid, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
             if not isinstance(url, str) or not url.strip():
                 return build_webhook_error_payload(
                     message="Invalid 'url': provide a non-empty string.",
@@ -324,7 +318,7 @@ class WebhookTools:
                 return bad
             try:
                 raw = await client.create_webhook(
-                    pipe_id,
+                    pid,
                     url.strip(),
                     [a.strip() for a in actions],
                     **(extra_input or {}),
@@ -444,10 +438,9 @@ class WebhookTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if not isinstance(webhook_id, str) or not webhook_id.strip():
-                return build_webhook_error_payload(
-                    message="Invalid 'webhook_id': provide a non-empty string.",
-                )
+            wid, err = validate_tool_id(webhook_id, "webhook_id")
+            if err is not None:
+                return err
 
             guard = await check_destructive_confirmation(
                 ctx,
@@ -458,7 +451,7 @@ class WebhookTools:
                 return guard
 
             try:
-                raw = await client.delete_webhook(webhook_id.strip())
+                raw = await client.delete_webhook(wid)
             except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
                     exc, "Delete webhook failed.", debug=debug

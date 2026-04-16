@@ -17,6 +17,7 @@ from pipefy_mcp.tools.report_tool_helpers import (
     build_report_read_success_payload,
     handle_report_tool_graphql_error,
 )
+from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 
 def _blank_field_error(value: str, field: str) -> dict[str, Any] | None:
@@ -624,9 +625,9 @@ class ReportTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def export_organization_report(
-            organization_id: str | int,
-            organization_report_id: str | int | None = None,
-            pipe_ids: list[str | int] | None = None,
+            organization_id: PipefyId,
+            organization_report_id: PipefyId | None = None,
+            pipe_ids: list[PipefyId] | None = None,
             sort_by: dict | None = None,
             filter: dict | None = None,
             columns: list[str] | None = None,
@@ -635,7 +636,8 @@ class ReportTools:
             """Trigger an async organization report export. Poll `get_organization_report_export(export_id)` for completion.
 
             Args:
-                organization_id: Organization numeric ID.
+                organization_id: Organization numeric ID (must be coercible to int — Pipefy's
+                    ``exportOrganizationReport`` mutation accepts ``Int!`` only).
                 organization_report_id: Report to export; omit to export by pipes only.
                 pipe_ids: Pipe IDs to scope the export.
                 sort_by: ReportSortDirectionInput.
@@ -643,10 +645,9 @@ class ReportTools:
                 columns: Column field IDs for the export file.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            if organization_id < 1:
-                return build_report_error_payload(
-                    message="'organization_id' must be a positive integer.",
-                )
+            organization_id, err = validate_tool_id(organization_id, "organization_id")
+            if err is not None:
+                return err
             try:
                 raw = await client.export_organization_report(
                     organization_id,

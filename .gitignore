@@ -44,6 +44,8 @@ scripts/
 .cursor/
 .claude/
 CLAUDE.md
+# Cursor MCP workspace config (machine-specific paths or local server entries)
+.mcp.json
 
 # macOS
 .DS_Store

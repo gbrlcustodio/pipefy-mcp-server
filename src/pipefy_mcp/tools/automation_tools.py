@@ -10,6 +10,7 @@ from mcp.types import ToolAnnotations
 from pydantic import ValidationError
 
 from pipefy_mcp.models.send_task_automation import CreateSendTaskAutomationInput
+from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.automation_tool_helpers import (
     build_automation_error_payload,
@@ -25,27 +26,9 @@ from pipefy_mcp.tools.phase_transition_helpers import (
 )
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
-    valid_repo_id,
+    validate_optional_tool_id,
+    validate_tool_id,
 )
-
-
-def _normalize_optional_filter(value: str | int | None) -> tuple[bool, str | None]:
-    """Return (ok, value) for optional org/pipe filters; ok False when value is syntactically invalid."""
-    if value is None:
-        return True, None
-    if not valid_repo_id(value):
-        return False, None
-    if isinstance(value, int):
-        return True, str(value)
-    return True, value.strip()
-
-
-def _normalize_required_id(value: str | int) -> str | None:
-    if not valid_repo_id(value):
-        return None
-    if isinstance(value, int):
-        return str(value)
-    return value.strip()
 
 
 def _normalize_simulation_action_id(value: str | int) -> str | None:
@@ -67,7 +50,7 @@ class AutomationTools:
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
         )
         async def get_automation(
-            ctx: Context, automation_id: str | int
+            ctx: Context, automation_id: PipefyId
         ) -> dict[str, Any]:
             """Load one automation rule by ID, including trigger and action payloads.
 
@@ -86,14 +69,9 @@ class AutomationTools:
                 ``None`` when not found). On validation or GraphQL errors, ``success: False`` with
                 ``error``.
             """
-            aid = _normalize_required_id(automation_id)
-            if aid is None:
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'automation_id': provide a non-empty string or "
-                        "positive integer."
-                    ),
-                )
+            aid, aid_err = validate_tool_id(automation_id, "automation_id")
+            if aid_err is not None:
+                return aid_err
             try:
                 raw = await client.get_automation(aid)
             except Exception as exc:  # noqa: BLE001
@@ -110,8 +88,8 @@ class AutomationTools:
         )
         async def get_automations(
             ctx: Context,
-            organization_id: str | int | None = None,
-            pipe_id: str | int | None = None,
+            organization_id: PipefyId | None = None,
+            pipe_id: PipefyId | None = None,
         ) -> dict[str, Any]:
             """List traditional automation rules, optionally filtered by organization and/or pipe.
 
@@ -133,22 +111,14 @@ class AutomationTools:
                 summaries returned by the API. On validation or GraphQL errors, ``success: False``
                 with ``error``.
             """
-            ok_o, org = _normalize_optional_filter(organization_id)
-            ok_p, pipe = _normalize_optional_filter(pipe_id)
-            if not ok_o:
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'organization_id': provide a non-empty string or "
-                        "positive integer when supplied."
-                    ),
-                )
-            if not ok_p:
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'pipe_id': provide a non-empty string or "
-                        "positive integer when supplied."
-                    ),
-                )
+            ok_o, org, org_err = validate_optional_tool_id(
+                organization_id, "organization_id"
+            )
+            if org_err is not None:
+                return org_err
+            ok_p, pipe, pipe_err = validate_optional_tool_id(pipe_id, "pipe_id")
+            if pipe_err is not None:
+                return pipe_err
             try:
                 rows = await client.get_automations(
                     organization_id=org,
@@ -166,7 +136,7 @@ class AutomationTools:
         )
         async def get_automation_actions(
             ctx: Context,
-            pipe_id: str | int,
+            pipe_id: PipefyId,
         ) -> dict[str, Any]:
             """List automation action types available on a pipe (labels, fields, IDs).
 
@@ -176,14 +146,9 @@ class AutomationTools:
             Args:
                 pipe_id: Pipe ID.
             """
-            pid = _normalize_required_id(pipe_id)
-            if pid is None:
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'pipe_id': provide a non-empty string or "
-                        "positive integer."
-                    ),
-                )
+            pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
+            if pid_err is not None:
+                return pid_err
             try:
                 rows = await client.get_automation_actions(pid)
             except Exception as exc:  # noqa: BLE001
@@ -197,7 +162,7 @@ class AutomationTools:
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
         )
         async def get_automation_events(
-            ctx: Context, pipe_id: str | int
+            ctx: Context, pipe_id: PipefyId
         ) -> dict[str, Any]:
             """List automation trigger event definitions (IDs and metadata).
 
@@ -208,14 +173,9 @@ class AutomationTools:
             Args:
                 pipe_id: Pipe ID (context for the agent; required by the tool).
             """
-            pid = _normalize_required_id(pipe_id)
-            if pid is None:
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'pipe_id': provide a non-empty string or "
-                        "positive integer."
-                    ),
-                )
+            pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
+            if pid_err is not None:
+                return pid_err
             try:
                 rows = await client.get_automation_events(pid)
             except Exception as exc:  # noqa: BLE001
@@ -230,10 +190,10 @@ class AutomationTools:
         )
         async def simulate_automation(
             ctx: Context,
-            pipe_id: str | int,
-            action_id: str | int,
-            sample_card_id: str | int,
-            event_id: str | int | None = None,
+            pipe_id: PipefyId,
+            action_id: str,
+            sample_card_id: PipefyId,
+            event_id: PipefyId | None = None,
             event_params: Any | None = None,
             action_params: Any | None = None,
             condition: Any | None = None,
@@ -241,20 +201,20 @@ class AutomationTools:
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Dry-run a traditional automation action against a real card (safe simulation, no live side effects).
+            """Dry-run an **AI automation** (``generate_with_ai``) against a real card (safe simulation, no live side effects).
 
-            Runs ``createAutomationSimulation`` and returns the **full** ``automationSimulation`` row in one
-            synchronous round-trip (mutation + follow-up query). Use this before enabling risky rules
-            (especially **AI / ``generate_with_ai``**) to validate behavior on a ``sample_card_id``.
+            The Pipefy ``createAutomationSimulation`` API currently **only** accepts
+            ``action_id = "generate_with_ai"``; passing any other action (e.g.
+            ``move_single_card``, ``send_a_task``) returns a validation error. Use this
+            to preview AI-generated output on ``sample_card_id`` before enabling the rule.
 
             **Pipe context:** ``pipe_id`` is forwarded as ``event_repo_id`` and ``action_repo_id`` on the
             simulation input (Pipefy often returns ``INTERNAL_SERVER_ERROR`` if these are omitted). Override
-            via ``extra_input`` for cross-pipe setups. **Forward-compatible** ``action_id`` must be a **string**
-            (today's API includes ``generate_with_ai``; future enum values pass through as strings).
+            via ``extra_input`` for cross-pipe setups.
 
             Args:
                 pipe_id: Pipe ID — default ``event_repo_id`` / ``action_repo_id`` for the simulation input.
-                action_id: Simulation action id (string, e.g. ``generate_with_ai``).
+                action_id: Simulation action id — currently only ``generate_with_ai`` is accepted by the API.
                 sample_card_id: Card id the simulation executes against.
                 event_id: Optional trigger event id when the scenario needs it.
                 event_params: Optional JSON object (trigger parameters).
@@ -264,26 +224,25 @@ class AutomationTools:
                 extra_input: Optional map of extra ``CreateAutomationSimulationInput`` fields (merged last).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            pid = _normalize_required_id(pipe_id)
-            sid = _normalize_required_id(sample_card_id)
+            pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
+            if pid_err is not None:
+                return pid_err
+            sid, sid_err = validate_tool_id(sample_card_id, "sample_card_id")
+            if sid_err is not None:
+                return sid_err
             aid = _normalize_simulation_action_id(action_id)
-            if pid is None or sid is None or aid is None:
+            if aid is None:
                 return build_automation_error_payload(
                     message=(
-                        "Invalid 'pipe_id', 'sample_card_id', or 'action_id': use non-empty "
-                        "strings or positive integers where applicable."
+                        "Invalid 'action_id': use a non-empty string or "
+                        "positive integer."
                     ),
                 )
             eid: str | None = None
             if event_id is not None:
-                eid = _normalize_required_id(event_id)
-                if eid is None:
-                    return build_automation_error_payload(
-                        message=(
-                            "Invalid 'event_id': provide a non-empty string or "
-                            "positive integer when supplied."
-                        ),
-                    )
+                eid, eid_err = validate_tool_id(event_id, "event_id")
+                if eid_err is not None:
+                    return eid_err
             for arg_name, val in (
                 ("event_params", event_params),
                 ("action_params", action_params),
@@ -328,12 +287,12 @@ class AutomationTools:
         )
         async def create_automation(
             ctx: Context,
-            pipe_id: str | int,
+            pipe_id: PipefyId,
             name: str,
-            trigger_id: str | int,
-            action_id: str | int,
+            trigger_id: PipefyId,
+            action_id: PipefyId,
             active: bool = True,
-            action_repo_id: str | int | None = None,
+            action_repo_id: PipefyId | None = None,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -365,30 +324,24 @@ class AutomationTools:
                 extra_input: Optional extra fields for the mutation input (camelCase keys).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            pid = _normalize_required_id(pipe_id)
-            tid = _normalize_required_id(trigger_id)
-            aid = _normalize_required_id(action_id)
-            if pid is None or tid is None or aid is None:
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'pipe_id', 'trigger_id', or 'action_id': use non-empty "
-                        "strings or positive integers."
-                    ),
-                )
+            pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
+            if pid_err is not None:
+                return pid_err
+            tid, tid_err = validate_tool_id(trigger_id, "trigger_id")
+            if tid_err is not None:
+                return tid_err
+            aid, aid_err = validate_tool_id(action_id, "action_id")
+            if aid_err is not None:
+                return aid_err
             if not isinstance(name, str) or not name.strip():
                 return build_automation_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
                 )
-            arid: str | None = None
-            if action_repo_id is not None:
-                arid = _normalize_required_id(action_repo_id)
-                if arid is None:
-                    return build_automation_error_payload(
-                        message=(
-                            "Invalid 'action_repo_id': provide a non-empty string or "
-                            "positive integer."
-                        ),
-                    )
+            _, arid, arid_err = validate_optional_tool_id(
+                action_repo_id, "action_repo_id"
+            )
+            if arid_err is not None:
+                return arid_err
             bad = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -434,19 +387,20 @@ class AutomationTools:
         )
         async def create_send_task_automation(
             ctx: Context,
-            pipe_id: str | int,
+            pipe_id: PipefyId,
             name: str,
             event_id: str,
             task_title: str,
             recipients: str,
+            active: bool = True,
             event_params: dict[str, Any] | None = None,
             condition: dict[str, Any] | None = None,
         ) -> dict[str, Any]:
             """Create a traditional automation that sends a task to recipients when a trigger fires on a pipe.
 
-            The rule is created **active** so it runs immediately. Use ``update_automation`` with
-            ``extra_input`` that sets ``active`` to ``False`` to disable it, or ``delete_automation``
-            to remove it permanently.
+            By default the rule is created **active** (``active=True``). Set ``active=False``
+            to create the rule disabled — recommended when testing, so it does not fire
+            until you explicitly enable it via ``update_automation``.
 
             **Compatible triggers** (examples): ``card_created``, ``card_moved``, ``field_updated``,
             ``card_inbox_received_email``, ``all_children_in_phase``, ``manually_triggered``,
@@ -465,6 +419,7 @@ class AutomationTools:
                 event_id: Trigger event ID (e.g. ``card_created``).
                 task_title: Title of the task sent to recipients.
                 recipients: One or more e-mail addresses separated by commas.
+                active: When True (default), the rule is created enabled and will fire immediately. Set False to start disabled.
                 event_params: Optional trigger filter payload (camelCase/snake_case as returned by catalog tools).
                 condition: Optional condition expressions payload.
             """
@@ -500,7 +455,7 @@ class AutomationTools:
                     validated.name,
                     validated.event_id,
                     "send_a_task",
-                    active=True,
+                    active=active,
                     action_repo_id=None,
                     extra_input=extra_input,
                 )
@@ -517,7 +472,7 @@ class AutomationTools:
         )
         async def update_automation(
             ctx: Context,
-            automation_id: str | int,
+            automation_id: PipefyId,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -531,14 +486,9 @@ class AutomationTools:
                 extra_input: Optional fields to patch on the rule.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            rid = _normalize_required_id(automation_id)
-            if rid is None:
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'automation_id': provide a non-empty string or "
-                        "positive integer."
-                    ),
-                )
+            rid, rid_err = validate_tool_id(automation_id, "automation_id")
+            if rid_err is not None:
+                return rid_err
             bad = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -562,7 +512,7 @@ class AutomationTools:
         )
         async def delete_automation(
             ctx: Context[ServerSession, None],
-            automation_id: str | int,
+            automation_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -577,14 +527,9 @@ class AutomationTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
-            rid = _normalize_required_id(automation_id)
-            if rid is None:
-                return build_automation_error_payload(
-                    message=(
-                        "Invalid 'automation_id': provide a non-empty string or "
-                        "positive integer."
-                    ),
-                )
+            rid, rid_err = validate_tool_id(automation_id, "automation_id")
+            if rid_err is not None:
+                return rid_err
 
             guard = await check_destructive_confirmation(
                 ctx,

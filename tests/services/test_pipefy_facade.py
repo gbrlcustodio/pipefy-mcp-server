@@ -392,8 +392,8 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
         "fid", table_id=None, label="X"
     )
 
-    assert await client.delete_table_field(9) == {"ok": "delete_table_field"}
-    table_service.delete_table_field.assert_awaited_once_with(9)
+    assert await client.delete_table_field(9, "tbl_1") == {"ok": "delete_table_field"}
+    table_service.delete_table_field.assert_awaited_once_with(9, "tbl_1")
 
     assert await client.get_pipe_relations(42) == {"ok": "get_pipe_relations"}
     relation_service.get_pipe_relations.assert_awaited_once_with(42)
@@ -692,6 +692,11 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
         return_value={"deleteCardRelation": {"success": True}}
     )
     client.set_internal_api_client(internal)
+
+    # Pin the snake_case input keys that the internal API expects
+    assert "child_id: $childId" in INTERNAL_DELETE_CARD_RELATION_MUTATION
+    assert "parent_id: $parentId" in INTERNAL_DELETE_CARD_RELATION_MUTATION
+    assert "source_id: $sourceId" in INTERNAL_DELETE_CARD_RELATION_MUTATION
 
     result = await client.delete_card_relation("c1", "p2", "src-3")
 

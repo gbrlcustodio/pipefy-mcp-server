@@ -473,9 +473,9 @@ async def test_export_organization_report_success(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is EXPORT_ORGANIZATION_REPORT_MUTATION
     assert variables["input"] == {
-        "organizationId": "42",
-        "organizationReportId": "7",
-        "pipeIds": ["10", "11"],
+        "organizationId": 42,
+        "organizationReportId": 7,
+        "pipeIds": [10, 11],
     }
     assert (
         result["exportOrganizationReport"]["organizationReportExport"]["state"]

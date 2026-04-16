@@ -137,7 +137,6 @@ class TestGetAiAutomation:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         async with client_session as session:
             result = await session.call_tool(
@@ -145,9 +144,7 @@ class TestGetAiAutomation:
                 {"automation_id": ""},
             )
         mock_pipefy_client.get_automation.assert_not_called()
-        p = extract_payload(result)
-        assert p["success"] is False
-        assert "automation_id" in p["error"].lower()
+        assert result.isError is True
 
     async def test_rejects_non_positive_int_id(
         self,
@@ -325,7 +322,6 @@ class TestGetAiAutomations:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         async with client_session as session:
             result = await session.call_tool(
@@ -333,13 +329,12 @@ class TestGetAiAutomations:
                 {"pipe_id": ""},
             )
         mock_pipefy_client.get_automations.assert_not_called()
-        assert extract_payload(result)["success"] is False
+        assert result.isError is True
 
     async def test_rejects_invalid_organization_id(
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         async with client_session as session:
             result = await session.call_tool(
@@ -347,7 +342,7 @@ class TestGetAiAutomations:
                 {"pipe_id": "1", "organization_id": ""},
             )
         mock_pipefy_client.get_automations.assert_not_called()
-        assert extract_payload(result)["success"] is False
+        assert result.isError is True
 
     async def test_works_without_oauth_config(
         self,
@@ -480,7 +475,6 @@ class TestDeleteAiAutomation:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         async with client_session as session:
             result = await session.call_tool(
@@ -488,7 +482,7 @@ class TestDeleteAiAutomation:
                 {"automation_id": "", "confirm": True},
             )
         mock_pipefy_client.delete_automation.assert_not_called()
-        assert extract_payload(result)["success"] is False
+        assert result.isError is True
 
     async def test_has_destructive_hint(self, client_session):
         async with client_session as session:
@@ -1259,7 +1253,6 @@ class TestValidateAiAutomationPrompt:
         self,
         client_session,
         mock_pipefy_client,
-        extract_payload,
     ):
         async with client_session as session:
             result = await session.call_tool(
@@ -1271,8 +1264,7 @@ class TestValidateAiAutomationPrompt:
                 },
             )
         mock_pipefy_client.get_pipe_with_preferences.assert_not_called()
-        payload = extract_payload(result)
-        assert payload["success"] is False
+        assert result.isError is True
 
     async def test_event_fetch_failure_adds_warning(
         self,

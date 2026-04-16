@@ -790,10 +790,10 @@ async def test_delete_table_field_success(
 
     async with table_session as session:
         result = await session.call_tool(
-            "delete_table_field", {"field_id": 88, "confirm": True}
+            "delete_table_field", {"field_id": 88, "table_id": "tbl_1", "confirm": True}
         )
 
-    mock_table_client.delete_table_field.assert_awaited_once_with("88")
+    mock_table_client.delete_table_field.assert_awaited_once_with("88", "tbl_1")
     assert extract_payload(result)["success"] is True
 
 
@@ -808,7 +808,7 @@ async def test_delete_table_field_graphql_error(
 
     async with table_session as session:
         result = await session.call_tool(
-            "delete_table_field", {"field_id": "x", "confirm": True}
+            "delete_table_field", {"field_id": "x", "table_id": "tbl_1", "confirm": True}
         )
 
     assert extract_payload(result)["success"] is False
@@ -1264,7 +1264,7 @@ async def test_delete_table_field_invalid_field_id(
     async with table_session as session:
         result = await session.call_tool(
             "delete_table_field",
-            {"field_id": 0, "confirm": True},
+            {"field_id": 0, "table_id": "tbl_1", "confirm": True},
         )
 
     mock_table_client.delete_table_field.assert_not_called()
@@ -1281,7 +1281,7 @@ async def test_delete_table_field_preview_without_confirm(
     async with table_session as session:
         result = await session.call_tool(
             "delete_table_field",
-            {"field_id": "slug-1", "confirm": False},
+            {"field_id": "slug-1", "table_id": "tbl_1", "confirm": False},
         )
 
     mock_table_client.delete_table_field.assert_not_called()

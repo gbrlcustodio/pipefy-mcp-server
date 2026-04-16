@@ -445,11 +445,11 @@ async def test_update_table_field_raises_transport_query_error(mock_settings):
 @pytest.mark.asyncio
 async def test_delete_table_field_sends_id(mock_settings):
     service = _make_service(mock_settings, {"deleteTableField": {"success": True}})
-    result = await service.delete_table_field("fld")
+    result = await service.delete_table_field("fld", "tbl_123")
 
     query, variables = service.execute_query.call_args[0]
     assert query is DELETE_TABLE_FIELD_MUTATION
-    assert variables == {"input": {"id": "fld"}}
+    assert variables == {"input": {"id": "fld", "table_id": "tbl_123"}}
     assert result["deleteTableField"]["success"] is True
 
 
@@ -461,4 +461,4 @@ async def test_delete_table_field_raises_transport_query_error(mock_settings):
         side_effect=TransportQueryError("x", errors=[{"message": "e"}])
     )
     with pytest.raises(TransportQueryError):
-        await service.delete_table_field(1)
+        await service.delete_table_field(1, "tbl_123")

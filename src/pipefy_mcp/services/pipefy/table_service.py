@@ -264,15 +264,20 @@ class TableService(BasePipefyClient):
             {"input": payload},
         )
 
-    async def delete_table_field(self, field_id: str | int) -> dict[str, Any]:
+    async def delete_table_field(
+        self,
+        field_id: str | int,
+        table_id: str | int,
+    ) -> dict[str, Any]:
         """Delete a table field by ID (permanent).
 
         Args:
             field_id: Field ID to remove from the table schema.
+            table_id: Table ID containing this field (required by API).
         """
         return await self.execute_query(
             DELETE_TABLE_FIELD_MUTATION,
-            {"input": {"id": field_id}},
+            {"input": {"id": field_id, "table_id": str(table_id)}},
         )
 
     async def search_tables(

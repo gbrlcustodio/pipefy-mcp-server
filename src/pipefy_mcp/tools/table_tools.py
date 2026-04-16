@@ -824,6 +824,7 @@ class TableTools:
         async def delete_table_field(
             ctx: Context[ServerSession, None],
             field_id: PipefyId,
+            table_id: PipefyId,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -835,10 +836,14 @@ class TableTools:
 
             Args:
                 field_id: Table field ID to delete.
+                table_id: Table ID containing this field (required by the Pipefy API).
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             _, err = validate_tool_id(field_id, "field_id")
+            if err is not None:
+                return build_table_mutation_error_payload(message=err["error"])
+            _, err = validate_tool_id(table_id, "table_id")
             if err is not None:
                 return build_table_mutation_error_payload(message=err["error"])
 
@@ -851,7 +856,7 @@ class TableTools:
                 return guard
 
             try:
-                raw = await client.delete_table_field(field_id)
+                raw = await client.delete_table_field(field_id, table_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
                     exc, "Delete table field failed.", debug=debug

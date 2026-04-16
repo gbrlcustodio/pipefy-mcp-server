@@ -65,12 +65,16 @@ def extract_internal_api_bracket_correlation_id(message: str) -> str | None:
 
 
 def extract_error_strings(exc: BaseException) -> list[str]:
-    """Best-effort extraction of error messages from gql/GraphQL exceptions."""
-    messages: list[str] = []
+    """Best-effort extraction of error messages from gql/GraphQL exceptions.
 
-    raw = str(exc)
-    if raw:
-        messages.append(raw)
+    When the exception carries a structured ``errors`` list (e.g. gql
+    ``TransportQueryError``), only the extracted ``message`` strings are
+    returned — the raw ``str(exc)`` is skipped because it often contains
+    the full error dict with ``locations`` / ``extensions`` noise.  The
+    raw string is used as a fallback only when no structured messages
+    can be extracted.
+    """
+    structured: list[str] = []
 
     errors = getattr(exc, "errors", None)
     if isinstance(errors, list):
@@ -78,11 +82,17 @@ def extract_error_strings(exc: BaseException) -> list[str]:
             if isinstance(item, dict):
                 msg = item.get("message")
                 if isinstance(msg, str) and msg:
-                    messages.append(msg)
+                    structured.append(msg)
             elif isinstance(item, str) and item:
-                messages.append(item)
+                structured.append(item)
 
-    return messages
+    if structured:
+        return structured
+
+    raw = str(exc)
+    if raw:
+        return [raw]
+    return []
 
 
 def extract_graphql_error_codes(exc: BaseException) -> list[str]:

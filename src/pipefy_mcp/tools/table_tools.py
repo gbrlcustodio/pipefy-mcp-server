@@ -160,6 +160,11 @@ class TableTools:
             pass `after=endCursor` on the next call to fetch the following page.
             Default page size is 50; maximum is 200.
 
+            **Note:** The Pipefy API omits ``record_fields`` entries whose value is
+            null or empty — the response only includes populated fields. To discover
+            **all** fields defined on the table (including empty ones), call
+            ``get_table`` and cross-reference its ``table_fields``.
+
             Args:
                 table_id: Database table ID.
                 first: Page size (1–200, default 50).
@@ -206,6 +211,10 @@ class TableTools:
 
             Use this when you have a record ID (e.g. from ``get_table_records`` or ``find_records``)
             and need the full row: title and ``record_fields`` name/value pairs.
+
+            **Note:** The Pipefy API omits ``record_fields`` entries whose value is
+            null or empty. To discover all fields defined on the table, call
+            ``get_table`` and cross-reference its ``table_fields``.
 
             Args:
                 record_id: Table record ID (string or positive integer).

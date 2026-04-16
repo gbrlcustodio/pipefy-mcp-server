@@ -392,14 +392,15 @@ class AutomationTools:
             event_id: str,
             task_title: str,
             recipients: str,
+            active: bool = True,
             event_params: dict[str, Any] | None = None,
             condition: dict[str, Any] | None = None,
         ) -> dict[str, Any]:
             """Create a traditional automation that sends a task to recipients when a trigger fires on a pipe.
 
-            The rule is created **active** so it runs immediately. Use ``update_automation`` with
-            ``extra_input`` that sets ``active`` to ``False`` to disable it, or ``delete_automation``
-            to remove it permanently.
+            By default the rule is created **active** (``active=True``). Set ``active=False``
+            to create the rule disabled — recommended when testing, so it does not fire
+            until you explicitly enable it via ``update_automation``.
 
             **Compatible triggers** (examples): ``card_created``, ``card_moved``, ``field_updated``,
             ``card_inbox_received_email``, ``all_children_in_phase``, ``manually_triggered``,
@@ -418,6 +419,7 @@ class AutomationTools:
                 event_id: Trigger event ID (e.g. ``card_created``).
                 task_title: Title of the task sent to recipients.
                 recipients: One or more e-mail addresses separated by commas.
+                active: When True (default), the rule is created enabled and will fire immediately. Set False to start disabled.
                 event_params: Optional trigger filter payload (camelCase/snake_case as returned by catalog tools).
                 condition: Optional condition expressions payload.
             """
@@ -453,7 +455,7 @@ class AutomationTools:
                     validated.name,
                     validated.event_id,
                     "send_a_task",
-                    active=True,
+                    active=active,
                     action_repo_id=None,
                     extra_input=extra_input,
                 )

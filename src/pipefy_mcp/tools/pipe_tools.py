@@ -80,15 +80,19 @@ class PipeTools:
             title: str | None = None,
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
+            skip_elicitation: bool = False,
         ) -> dict:
             """Create a card in the pipe.
 
-            The fields can be interactively elicited, but, if the LLM is aware of
-            the intended values for certain fields, they can be provided in the
-            ``fields`` argument.
+            When ``skip_elicitation`` is True, field values from ``fields`` are
+            filtered to editable start-form field IDs and sent directly to the
+            API — no interactive form is shown. AI agents should set this to
+            True when they already know the field values.
 
-            When elicitation is not supported, the provided fields are filtered
-            to editable start-form field IDs and sent directly to the API.
+            When ``skip_elicitation`` is False (default) and the client supports
+            elicitation, an interactive form is presented even if ``fields``
+            carries pre-filled values — the human can review and adjust them.
+
             Discover fields first via ``get_start_form_fields`` and pass all
             required values.
 
@@ -102,9 +106,11 @@ class PipeTools:
                 pipe_id: The ID of the pipe where the card will be created.
                 title: Optional card title. Applied via updateCard after creation.
                 fields: A dictionary of fields that can be pre-filled on the card.
-                    This argument should be provided when the LLM is aware of the
-                    intended values for certain fields.
+                    When ``skip_elicitation`` is False, these pre-fill the interactive
+                    form. When True, they are sent directly to the API.
                 required_fields_only: If True, only elicit required fields. Default: False.
+                skip_elicitation: When True, bypass interactive elicitation and send
+                    ``fields`` directly to the API. Recommended for AI agent workflows.
             """
             form_fields = await client.get_start_form_fields(
                 pipe_id, required_fields_only
@@ -120,7 +126,7 @@ class PipeTools:
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
 
-            if can_elicit:
+            if can_elicit and not skip_elicitation:
                 try:
                     card_data = await PipeTools._elicit_field_details(
                         message=f"Creating a card in pipe {pipe_id}",
@@ -826,22 +832,30 @@ class PipeTools:
             phase_id: PipefyId,
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
+            skip_elicitation: bool = False,
         ) -> dict:
-            """Fill in the phase fields for a card using interactive elicitation.
+            """Fill in the phase fields for a card.
 
-            This tool helps fill in the fields that are specific to a phase.
-            When elicitation is supported, it will prompt the user for field values.
+            When ``skip_elicitation`` is True, field values from ``fields`` are
+            filtered to editable phase field IDs and sent directly to the API.
+            AI agents should set this to True when they already know the values.
+
+            When ``skip_elicitation`` is False (default) and the client supports
+            elicitation, an interactive form is presented — ``fields`` pre-fills
+            it so the human can review and adjust.
 
             Args:
-                card_id: The ID of the card to update
-                phase_id: The ID of the phase whose fields should be filled
+                card_id: The ID of the card to update.
+                phase_id: The ID of the phase whose fields should be filled.
                 fields: A dictionary of fields that can be pre-filled.
-                        This argument should be provided when the LLM is aware
-                        of the intended values for certain fields.
-                required_fields_only: If True, only elicit required fields. Default: False
+                        When ``skip_elicitation`` is False, these pre-fill the
+                        interactive form. When True, they are sent directly.
+                required_fields_only: If True, only elicit required fields. Default: False.
+                skip_elicitation: When True, bypass interactive elicitation and send
+                    ``fields`` directly to the API. Recommended for AI agent workflows.
 
             Returns:
-                dict: GraphQL response with success status and updated card information
+                dict: GraphQL response with success status and updated card information.
             """
             phase_fields_result = await client.get_phase_fields(
                 phase_id, required_fields_only
@@ -857,7 +871,7 @@ class PipeTools:
             field_data = fields or {}
             can_elicit = supports_elicitation(ctx)
 
-            if can_elicit and expected_fields:
+            if can_elicit and expected_fields and not skip_elicitation:
                 try:
                     field_data = await PipeTools._elicit_field_details(
                         message=f"Filling fields for phase '{phase_name}' (ID: {phase_id})",

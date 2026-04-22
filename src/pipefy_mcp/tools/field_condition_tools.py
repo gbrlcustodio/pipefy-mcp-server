@@ -156,16 +156,23 @@ class FieldConditionTools:
             phase_id: PipefyId,
             condition: dict[str, Any],
             actions: list[dict[str, Any]],
+            name: str | None = None,
             extra_input: dict[str, Any] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Create a conditional field rule (Pipefy ``createFieldCondition``).
+
+            ``name`` is **required** by the Pipefy API — omitting it returns
+            ``"Validation failed: Name can't be blank"``. Pass it as the top-level
+            ``name`` argument; for backwards compatibility it is also accepted inside
+            ``extra_input={"name": ...}`` (top-level wins when both are set).
 
             **Working example** — hide field ``425848637`` when field ``425848636``
             equals ``"Option A"``::
 
                 create_field_condition(
                     phase_id="342182326",
+                    name="Hide brief when campaign is Option A",
                     condition={
                         "expressions": [
                             {
@@ -200,7 +207,9 @@ class FieldConditionTools:
                 actions: List of ``FieldConditionActionInput`` dicts; use ``phaseFieldId`` (often the
                     field's ``internal_id`` from ``get_phase_fields``). Each action must include
                     ``actionId`` (``hide`` or ``show``); legacy ``hidden`` is mapped to ``hide``.
-                extra_input: Optional extra keys for ``createFieldConditionInput`` (e.g. ``name``, ``index``).
+                name: Rule display name. Required by the API; may also be provided via
+                    ``extra_input={"name": ...}`` for back-compat.
+                extra_input: Optional extra keys for ``createFieldConditionInput`` (e.g. ``index``).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             await ctx.debug(
@@ -237,6 +246,19 @@ class FieldConditionTools:
                 for k, v in (extra_input or {}).items()
                 if k not in _CREATE_FIELD_CONDITION_EXTRA_RESERVED
             }
+            if name is not None:
+                if not isinstance(name, str) or not name.strip():
+                    return build_pipe_tool_error_payload(
+                        message="Invalid 'name': provide a non-empty string or omit.",
+                    )
+                merged["name"] = name
+            if not merged.get("name"):
+                return build_pipe_tool_error_payload(
+                    message=(
+                        "Missing 'name': Pipefy requires a rule name. Pass 'name' as a "
+                        "top-level argument (or inside 'extra_input')."
+                    ),
+                )
             condition_for_api = strip_expression_ids_for_create(condition)
             actions_for_api = normalize_field_condition_actions(actions)
             try:
@@ -270,20 +292,24 @@ class FieldConditionTools:
             condition_id: PipefyId,
             condition: dict[str, Any] | None = None,
             actions: list[dict[str, Any]] | None = None,
+            name: str | None = None,
             extra_input: dict[str, Any] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Update an existing field condition.
 
-            Prefer the explicit ``condition`` and ``actions`` parameters (same shapes as
-            ``create_field_condition``) when changing rule logic. ``extra_input`` still
-            carries other ``UpdateFieldConditionInput`` keys (e.g. ``name``, ``index``).
+            Prefer the explicit ``condition``, ``actions``, and ``name`` parameters
+            (same shapes as ``create_field_condition``) when changing rule logic.
+            ``extra_input`` still carries other ``UpdateFieldConditionInput`` keys
+            (e.g. ``index``). ``name`` in ``extra_input`` is also accepted for
+            back-compat (top-level wins when both are set).
 
             Args:
                 ctx: MCP context for debug logging.
                 condition_id: Field condition ID to update.
                 condition: Optional ``ConditionInput`` dict (same as create).
                 actions: Optional list of ``FieldConditionActionInput`` dicts (same as create).
+                name: Optional new rule name.
                 extra_input: Additional fields to merge into ``UpdateFieldConditionInput``.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -320,6 +346,12 @@ class FieldConditionTools:
                 for k, v in (extra_input or {}).items()
                 if k not in _UPDATE_FIELD_CONDITION_EXTRA_RESERVED
             }
+            if name is not None:
+                if not isinstance(name, str) or not name.strip():
+                    return build_pipe_tool_error_payload(
+                        message="Invalid 'name': provide a non-empty string or omit.",
+                    )
+                update_attrs["name"] = name
             if condition is not None:
                 update_attrs["condition"] = strip_expression_ids_for_create(condition)
             if actions is not None:

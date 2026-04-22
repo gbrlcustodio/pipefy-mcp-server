@@ -1163,6 +1163,116 @@ async def test_create_field_condition_success(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_create_field_condition_top_level_name__no_integration(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    expr = {
+        "expressions": [{"field_address": "a", "operation": "equals", "value": "1"}],
+    }
+    actions = [{"phaseFieldId": "308821043", "actionId": "hide"}]
+    mock_pipe_config_client.create_field_condition.return_value = {
+        "createFieldCondition": {"fieldCondition": {"id": "cond-top"}},
+    }
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "create_field_condition",
+            {
+                "phase_id": "pf-99",
+                "condition": expr,
+                "actions": actions,
+                "name": "Top-level name",
+            },
+        )
+    assert result.isError is False
+    mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
+        "pf-99",
+        expr,
+        actions,
+        name="Top-level name",
+    )
+    assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_create_field_condition_top_level_name_wins_over_extra_input__no_integration(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    expr = {
+        "expressions": [{"field_address": "a", "operation": "equals", "value": "1"}],
+    }
+    actions = [{"phaseFieldId": "308821043", "actionId": "hide"}]
+    mock_pipe_config_client.create_field_condition.return_value = {
+        "createFieldCondition": {"fieldCondition": {"id": "cond-win"}},
+    }
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "create_field_condition",
+            {
+                "phase_id": "pf-99",
+                "condition": expr,
+                "actions": actions,
+                "name": "Top wins",
+                "extra_input": {"name": "Loser", "index": 3},
+            },
+        )
+    assert result.isError is False
+    mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
+        "pf-99",
+        expr,
+        actions,
+        index=3,
+        name="Top wins",
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_create_field_condition_rejects_missing_name__no_integration(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    expr = {
+        "expressions": [{"field_address": "a", "operation": "equals", "value": "1"}],
+    }
+    actions = [{"phaseFieldId": "308821043", "actionId": "hide"}]
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "create_field_condition",
+            {"phase_id": "pf-99", "condition": expr, "actions": actions},
+        )
+    mock_pipe_config_client.create_field_condition.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "name" in payload["error"].lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_create_field_condition_rejects_blank_name__no_integration(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    expr = {
+        "expressions": [{"field_address": "a", "operation": "equals", "value": "1"}],
+    }
+    actions = [{"phaseFieldId": "308821043", "actionId": "hide"}]
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "create_field_condition",
+            {
+                "phase_id": "pf-99",
+                "condition": expr,
+                "actions": actions,
+                "name": "   ",
+            },
+        )
+    mock_pipe_config_client.create_field_condition.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "name" in payload["error"].lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_rejects_empty_condition__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1246,6 +1356,7 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
                 "phase_id": 1,
                 "condition": expr,
                 "actions": actions,
+                "name": "R",
             },
         )
     assert result.isError is False
@@ -1253,6 +1364,7 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
         "1",
         expr,
         actions,
+        name="R",
     )
     assert extract_payload(result)["success"] is True
 
@@ -1274,13 +1386,14 @@ async def test_create_field_condition_maps_hidden_action_id_to_hide__no_integrat
     async with pipe_config_session as session:
         result = await session.call_tool(
             "create_field_condition",
-            {"phase_id": 1, "condition": expr, "actions": actions_in},
+            {"phase_id": 1, "condition": expr, "actions": actions_in, "name": "R"},
         )
     assert result.isError is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "1",
         expr,
         [{"phaseFieldId": "308821043", "whenEvaluator": True, "actionId": "hide"}],
+        name="R",
     )
     assert extract_payload(result)["success"] is True
 
@@ -1320,13 +1433,19 @@ async def test_create_field_condition_strips_expression_ids__no_integration(
     async with pipe_config_session as session:
         result = await session.call_tool(
             "create_field_condition",
-            {"phase_id": 1, "condition": expr_with_id, "actions": actions},
+            {
+                "phase_id": 1,
+                "condition": expr_with_id,
+                "actions": actions,
+                "name": "R",
+            },
         )
     assert result.isError is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "1",
         expected_condition,
         actions,
+        name="R",
     )
     assert extract_payload(result)["success"] is True
     assert extract_payload(result)["condition_id"] == "cond-stripped"
@@ -1353,6 +1472,7 @@ async def test_create_field_condition_error(
                 "phase_id": "pf-1",
                 "condition": expr,
                 "actions": actions,
+                "name": "R",
                 "extra_input": None,
                 "debug": False,
             },
@@ -1433,6 +1553,45 @@ async def test_update_field_condition_success_with_explicit_condition_and_action
         actions=actions_for_api,
     )
     assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_update_field_condition_top_level_name__no_integration(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.update_field_condition.return_value = {
+        "updateFieldCondition": {"fieldCondition": {"id": "cond-8"}},
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "update_field_condition",
+            {"condition_id": "cond-8", "name": "Top name"},
+        )
+
+    assert result.isError is False
+    mock_pipe_config_client.update_field_condition.assert_awaited_once_with(
+        "cond-8",
+        name="Top name",
+    )
+    assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_update_field_condition_rejects_blank_name__no_integration(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "update_field_condition",
+            {"condition_id": "cond-8", "name": "   "},
+        )
+    mock_pipe_config_client.update_field_condition.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "name" in payload["error"].lower()
 
 
 @pytest.mark.anyio

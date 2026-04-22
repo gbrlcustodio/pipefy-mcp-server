@@ -602,6 +602,82 @@ async def test_set_role_no_warning_when_protected_list_empty(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_invite_members_rejects_missing_email_or_role(
+    member_session, mock_member_client, extract_payload
+):
+    async with member_session as session:
+        result = await session.call_tool(
+            "invite_members",
+            {"pipe_id": "pipe-1", "members": [{"email": "x@y.com"}]},
+        )
+    mock_member_client.invite_members.assert_not_awaited()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "email" in payload["error"]
+    assert "role_name" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_remove_member_preview_does_not_call_mutation(
+    member_session, mock_member_client, extract_payload
+):
+    """Default ``confirm=false`` must surface the preview guard and skip the API."""
+    async with member_session as session:
+        result = await session.call_tool(
+            "remove_member_from_pipe",
+            {"pipe_id": "100", "user_ids": ["user-1"]},  # no confirm → preview
+        )
+    mock_member_client.remove_members_from_pipe.assert_not_awaited()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload.get("requires_confirmation") is True
+    assert "1 member(s)" in payload["resource"]
+    assert "pipe 100" in payload["resource"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_remove_member_blocks_multiple_service_accounts_with_plural_message(
+    member_session, mock_member_client, extract_payload
+):
+    """The plural SA-blocked branch has its own wording and must trigger when >1 SA is targeted."""
+    with patch("pipefy_mcp.tools.member_tools.settings") as mock_settings:
+        mock_settings.pipefy.service_account_ids = ["sa-a", "sa-b"]
+        async with member_session as session:
+            result = await session.call_tool(
+                "remove_member_from_pipe",
+                {
+                    "pipe_id": "100",
+                    "user_ids": ["sa-a", "sa-b", "regular"],
+                    "confirm": True,
+                },
+            )
+    mock_member_client.remove_members_from_pipe.assert_not_awaited()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "sa-a, sa-b" in payload["error"]
+    assert "service accounts" in payload["error"].lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_set_role_rejects_blank_role_name(
+    member_session, mock_member_client, extract_payload
+):
+    async with member_session as session:
+        result = await session.call_tool(
+            "set_role",
+            {"pipe_id": "p1", "member_id": "m1", "role_name": "   "},
+        )
+    mock_member_client.set_role.assert_not_awaited()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "role_name" in payload["error"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_set_role_graphql_error(
     member_session, mock_member_client, extract_payload
 ):

@@ -1,6 +1,7 @@
 """Tests for attachment MCP tools (mocked PipefyClient)."""
 
 import base64
+import socket
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -14,6 +15,7 @@ from mcp.shared.memory import (
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.attachment_tools import (
     AttachmentTools,
+    _download_file_bytes,
     _validate_url_safe,
 )
 
@@ -143,6 +145,129 @@ class TestValidateUrlSafe:
     async def test_accepts_public_ip(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("93.184.216.34", 0))]
         await _validate_url_safe("https://example.com/file.pdf")  # should not raise
+
+    @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
+    async def test_rejects_unresolvable_hostname(self, mock_getaddrinfo):
+        mock_getaddrinfo.side_effect = socket.gaierror("DNS resolution failed")
+        with pytest.raises(ValueError, match="Could not resolve hostname"):
+            await _validate_url_safe("https://nope.invalid/file.pdf")
+
+
+# ---------------------------------------------------------------------------
+# _download_file_bytes redirect + streaming-size protections
+# ---------------------------------------------------------------------------
+
+
+def _httpx_multi_response_cm_mock(*responses):
+    """Build an AsyncClient mock whose .stream() yields the supplied responses in order."""
+    mock_inner = MagicMock()
+    iter_ = iter(responses)
+
+    def _next_stream(*_args, **_kwargs):
+        resp = next(iter_)
+        stream_cm = MagicMock()
+        stream_cm.__aenter__ = AsyncMock(return_value=resp)
+        stream_cm.__aexit__ = AsyncMock(return_value=False)
+        return stream_cm
+
+    mock_inner.stream = MagicMock(side_effect=_next_stream)
+
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    return mock_cm
+
+
+def _make_response(*, status_code=200, headers=None, body=b"hello"):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.headers = headers or {}
+    resp.raise_for_status = MagicMock()
+
+    async def _aiter():
+        yield body
+
+    resp.aiter_bytes = _aiter
+    return resp
+
+
+@pytest.mark.anyio
+async def test_download_rejects_redirect_without_location_header():
+    """A 302 without a Location header is treated as unsafe."""
+    resp = _make_response(status_code=302, headers={})
+    mock_cm = _httpx_multi_response_cm_mock(resp)
+    with (
+        patch(
+            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
+        ),
+        patch(_VALIDATE_PATCH),
+    ):
+        with pytest.raises(ValueError, match="Redirect without Location header"):
+            await _download_file_bytes("https://example.com/a")
+
+
+@pytest.mark.anyio
+async def test_download_follows_safe_redirect_chain():
+    """Redirects are followed up to the limit and intermediate hops are SSRF-validated."""
+    r1 = _make_response(status_code=301, headers={"location": "https://example.com/b"})
+    r2 = _make_response(status_code=200, headers={}, body=b"final-bytes")
+    mock_cm = _httpx_multi_response_cm_mock(r1, r2)
+    with (
+        patch(
+            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
+        ),
+        patch(_VALIDATE_PATCH) as mock_validate,
+    ):
+        result = await _download_file_bytes("https://example.com/a")
+    assert result == b"final-bytes"
+    # Both the initial URL and the redirect target must go through _validate_url_safe.
+    assert mock_validate.await_count == 2
+
+
+@pytest.mark.anyio
+async def test_download_rejects_too_many_redirects():
+    """Redirect loop / chain longer than _MAX_REDIRECTS is rejected."""
+    # 5 redirects, all pointing forward — exceeds _MAX_REDIRECTS = 3.
+    redirects = [
+        _make_response(
+            status_code=302, headers={"location": f"https://example.com/hop{i}"}
+        )
+        for i in range(5)
+    ]
+    mock_cm = _httpx_multi_response_cm_mock(*redirects)
+    with (
+        patch(
+            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
+        ),
+        patch(_VALIDATE_PATCH),
+    ):
+        with pytest.raises(ValueError, match="Too many redirects"):
+            await _download_file_bytes("https://example.com/a")
+
+
+@pytest.mark.anyio
+async def test_download_rejects_streaming_body_exceeding_size_limit():
+    """Body size is enforced during streaming even when Content-Length is absent."""
+    large_chunk = b"x" * (101 * 1024 * 1024)  # 101 MiB > 100 MiB limit
+
+    resp = MagicMock()
+    resp.status_code = 200
+    resp.headers = {}  # no Content-Length → must rely on streaming accumulator
+    resp.raise_for_status = MagicMock()
+
+    async def _aiter():
+        yield large_chunk
+
+    resp.aiter_bytes = _aiter
+    mock_cm = _httpx_multi_response_cm_mock(resp)
+    with (
+        patch(
+            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
+        ),
+        patch(_VALIDATE_PATCH),
+    ):
+        with pytest.raises(ValueError, match="File too large"):
+            await _download_file_bytes("https://example.com/huge.bin")
 
 
 @pytest.mark.anyio

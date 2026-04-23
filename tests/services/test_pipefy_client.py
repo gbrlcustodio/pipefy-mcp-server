@@ -852,5 +852,8 @@ async def test_search_pipes_delegates_to_pipe_service():
 
     result = await client.search_pipes(pipe_name)
 
-    pipe_service.search_pipes.assert_called_once_with(pipe_name)
+    pipe_service.search_pipes.assert_called_once_with(
+        pipe_name,
+        max_pipes_per_org=500,
+    )
     assert result == expected

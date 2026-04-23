@@ -12,6 +12,7 @@ from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
     GET_PHASE_FIELDS_QUERY,
+    SEARCH_PIPES_QUERY,
 )
 from pipefy_mcp.settings import PipefySettings
 
@@ -192,8 +193,13 @@ async def test_search_pipes_without_name_returns_all(
     service = _make_service(mock_settings, {"organizations": mock_organizations})
     result = await service.search_pipes()
 
-    assert result == {"organizations": mock_organizations}, (
-        "Expected all organizations returned"
+    assert result["organizations"] == mock_organizations
+    assert result["search_limits"]["max_pipes_per_org"] == 500
+    assert result["search_limits"]["graphql_name_search"] is False
+    assert result["search_limits"]["pipes_truncated"] is False
+    service.execute_query.assert_awaited_once_with(
+        SEARCH_PIPES_QUERY,
+        {"nameSearch": None},
     )
 
 
@@ -307,6 +313,10 @@ async def test_search_pipes_fuzzy_matching(
     service = _make_service(mock_settings, {"organizations": mock_organizations})
     result = await service.search_pipes(pipe_name=search_term)
 
+    service.execute_query.assert_awaited_once_with(
+        SEARCH_PIPES_QUERY,
+        {"nameSearch": search_term},
+    )
     assert len(result["organizations"]) == len(expected_org_ids)
     for i, org in enumerate(result["organizations"]):
         assert org["id"] == expected_org_ids[i]
@@ -327,9 +337,8 @@ async def test_search_pipes_no_matches_returns_empty(
     service = _make_service(mock_settings, {"organizations": mock_organizations})
     result = await service.search_pipes(pipe_name="XyzNonExistent123")
 
-    assert result == {"organizations": []}, (
-        "Expected empty organizations when no matches"
-    )
+    assert result["organizations"] == []
+    assert "search_limits" in result
 
 
 @pytest.mark.unit
@@ -368,10 +377,10 @@ async def test_search_pipes_all_organizations_empty(mock_settings):
     service.execute_query = AsyncMock(return_value={"organizations": []})
 
     result = await service.search_pipes()
-    assert result == {"organizations": []}
+    assert result["organizations"] == []
 
     result = await service.search_pipes(pipe_name="anything")
-    assert result == {"organizations": []}
+    assert result["organizations"] == []
 
 
 @pytest.mark.unit
@@ -399,6 +408,20 @@ async def test_search_pipes_case_insensitive_substring(
     result = await service.search_pipes(pipe_name="bug")
     pipe_names = [p["name"] for org in result["organizations"] for p in org["pipes"]]
     assert "Bug Tracker [v2.0]" in pipe_names
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_truncates_per_org_when_over_cap(mock_settings):
+    """When an org has more pipes than max_pipes_per_org, list is sliced."""
+    pipes = [{"id": str(i), "name": f"Pipe {i}"} for i in range(5)]
+    mock_orgs = [{"id": "1", "name": "Org", "pipes": pipes}]
+    service = _make_service(mock_settings, {"organizations": mock_orgs})
+    result = await service.search_pipes(max_pipes_per_org=2)
+
+    assert len(result["organizations"][0]["pipes"]) == 2
+    assert result["organizations"][0]["pipes_truncated"] is True
+    assert result["search_limits"]["pipes_truncated"] is True
 
 
 @pytest.mark.unit

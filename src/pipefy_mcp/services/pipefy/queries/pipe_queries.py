@@ -53,11 +53,11 @@ GET_START_FORM_FIELDS_QUERY = gql(
 
 SEARCH_PIPES_QUERY = gql(
     """
-    {
+    query SearchPipes($nameSearch: String) {
         organizations {
             id
             name
-            pipes {
+            pipes(name_search: $nameSearch) {
                 id
                 name
                 description

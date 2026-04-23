@@ -828,7 +828,7 @@ async def test_search_tables_without_name_calls_client_with_none(
         result = await session.call_tool("search_tables", {})
 
     assert result.isError is False
-    mock_table_client.search_tables.assert_awaited_once_with(None)
+    mock_table_client.search_tables.assert_awaited_once_with(None, first=100)
 
 
 @pytest.mark.anyio
@@ -842,7 +842,7 @@ async def test_search_tables_with_name_passes_it_to_client(
         result = await session.call_tool("search_tables", {"table_name": "Clients"})
 
     assert result.isError is False
-    mock_table_client.search_tables.assert_awaited_once_with("Clients")
+    mock_table_client.search_tables.assert_awaited_once_with("Clients", first=100)
 
 
 @pytest.mark.anyio

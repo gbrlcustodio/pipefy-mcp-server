@@ -54,20 +54,27 @@ class TableTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def search_tables(table_name: str | None = None) -> dict[str, Any]:
+        async def search_tables(
+            table_name: str | None = None,
+            first: int = 100,
+        ) -> dict[str, Any]:
             """Search for all accessible databases (tables) across all organizations.
 
             Use this tool to find a table's ID when you only know its name.
-            Returns all tables from all organizations, optionally filtered by name.
+            Returns up to ``first`` tables per organization from the GraphQL connection
+            (clamped 1--500, default 100). Optionally filtered by name client-side on that page.
 
             When filtering by name, uses substring matching first (score 100) and
             falls back to fuzzy matching with a 70% similarity threshold.
             Only tables with a match score of 70 or higher are included in results.
             Results are sorted by match score (best matches first).
 
+            If an org has more rows than ``first``, ``tables_has_next_page`` is set on that
+            org and in ``search_limits`` (cursor pagination is not yet exposed on this tool).
+
             Args:
                 table_name: Optional table name to search for (case-insensitive partial match).
-                            If not provided, returns all available tables.
+                first: GraphQL ``tables(first: ...)`` per organization (1--500).
 
             Returns:
                 dict: Contains 'organizations' array, each with:
@@ -79,8 +86,10 @@ class TableTools:
                           - description: Table description
                           - match_score: Match score (0-100) when table_name is provided,
                                          100 for substring matches, fuzzy score otherwise.
+                      And ``search_limits`` (``tables_first``, ``tables_has_next_page``).
             """
-            return await client.search_tables(table_name)
+            nfirst = max(1, min(500, int(first)))
+            return await client.search_tables(table_name, first=nfirst)
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),

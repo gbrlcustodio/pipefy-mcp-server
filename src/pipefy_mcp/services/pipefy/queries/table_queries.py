@@ -264,15 +264,19 @@ __all__ = [
 
 SEARCH_TABLES_QUERY = gql(
     """
-    {
+    query SearchTables($first: Int!) {
         organizations {
             id
             name
-            tables {
+            tables(first: $first) {
                 nodes {
                     id
                     name
                     description
+                }
+                pageInfo {
+                    hasNextPage
+                    endCursor
                 }
             }
         }

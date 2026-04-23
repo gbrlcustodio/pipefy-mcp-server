@@ -910,19 +910,28 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def search_pipes(pipe_name: str | None = None) -> dict:
+        async def search_pipes(
+            pipe_name: str | None = None,
+            max_pipes_per_org: int = 500,
+        ) -> dict:
             """Search for all accessible pipes across all organizations.
 
             Use this tool to find a pipe's ID when you only know its name.
-            Returns all pipes from all organizations, optionally filtered by name.
+            Returns pipes from all organizations, optionally filtered by name.
 
             When filtering by name, uses fuzzy matching with a 70% similarity threshold.
             Only pipes with a match score of 70 or higher are included in the results.
             Results are sorted by match score (best matches first).
 
+            Without a name filter, each organization returns at most ``max_pipes_per_org``
+            pipes (capped 1--500) to avoid huge responses. With a name filter, the API
+            receives a server-side ``name_search`` hint; results are still capped per org
+            after scoring. Check ``search_limits`` and per-org ``pipes_truncated`` when present.
+
             Args:
                 pipe_name: Optional pipe name to search for (case-insensitive partial match).
-                           If not provided, returns all available pipes.
+                           If not provided, returns up to ``max_pipes_per_org`` pipes per org.
+                max_pipes_per_org: Maximum pipes per organization (1--500, default 500).
 
             Returns:
                 dict: Contains 'organizations' array, each with:
@@ -933,8 +942,10 @@ class PipeTools:
                           - name: Pipe name
                           - description: Pipe description
                           - match_score: Fuzzy match score (0-100) when pipe_name is provided.
+                      And ``search_limits`` with applied caps.
             """
-            return await client.search_pipes(pipe_name)
+            mpc = max(1, min(500, int(max_pipes_per_org)))
+            return await client.search_pipes(pipe_name, max_pipes_per_org=mpc)
 
         @mcp.tool(
             annotations=ToolAnnotations(

@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -35,6 +35,47 @@ async def test_execute_query_passes_variables_to_session(valid_settings):
 
     mock_session.execute.assert_called_once_with(query, variable_values=variables)
     assert result == {"ok": True}
+    assert mock_client_cls.call_args.kwargs["fetch_schema_from_transport"] is False
+    assert "schema" not in mock_client_cls.call_args.kwargs
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_reuse_fetches_once_then_passes_cached_schema(
+    valid_settings,
+):
+    """With gql_reuse_fetched_graphql_schema, first Client run introspects; next reuses schema."""
+    settings = valid_settings.model_copy(
+        update={"gql_reuse_fetched_graphql_schema": True}
+    )
+    query = object()
+    variables: dict = {}
+    cached_schema = object()
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(side_effect=[{"one": 1}, {"two": 2}])
+
+    def _make_context_client():
+        inst = MagicMock()
+        inst.__aenter__ = AsyncMock(return_value=mock_session)
+        inst.__aexit__ = AsyncMock(return_value=None)
+        return inst
+
+    with patch("pipefy_mcp.services.pipefy.base_client.Client") as mock_client_cls:
+        first, second = _make_context_client(), _make_context_client()
+        first.schema = cached_schema
+        second.schema = None
+        mock_client_cls.side_effect = [first, second]
+
+        base = BasePipefyClient(settings=settings)
+        assert await base.execute_query(query, variables) == {"one": 1}
+        assert await base.execute_query(query, variables) == {"two": 2}
+
+    assert mock_client_cls.call_count == 2
+    assert mock_client_cls.call_args_list[0].kwargs["fetch_schema_from_transport"] is True
+    assert mock_client_cls.call_args_list[1].kwargs["fetch_schema_from_transport"] is (
+        False
+    )
+    assert mock_client_cls.call_args_list[1].kwargs["schema"] is cached_schema
 
 
 @pytest.mark.unit

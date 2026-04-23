@@ -154,7 +154,7 @@ class TableService(BasePipefyClient):
 
         Args:
             table_id: Target table ID.
-            fields: Field values as a dict (field_id → value) or list of `FieldValueInput` dicts.
+            fields: Field values as a dict (field_id -> value) or list of `FieldValueInput` dicts.
             **attrs: Other `CreateTableRecordInput` keys (e.g. title, assignee_ids), when not None.
         """
         input_obj: dict[str, Any] = {
@@ -293,6 +293,7 @@ class TableService(BasePipefyClient):
         self,
         table_name: str | None = None,
         *,
+        # 70: WRatio score_cutoff default - balanced manually for typo/abbrev. recall vs. spurious matches.
         match_threshold: int = 70,
         first: int = SEARCH_TABLES_FIRST_DEFAULT,
     ) -> dict[str, Any]:

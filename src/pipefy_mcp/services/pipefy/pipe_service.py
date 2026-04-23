@@ -91,6 +91,7 @@ class PipeService(BasePipefyClient):
         self,
         pipe_name: str | None = None,
         *,
+        # 70: WRatio score_cutoff default - balanced manually for typo/abbrev. recall vs. spurious matches.
         match_threshold: int = 70,
         max_pipes_per_org: int = SEARCH_PIPES_MAX_PER_ORG_CAP,
     ) -> dict:

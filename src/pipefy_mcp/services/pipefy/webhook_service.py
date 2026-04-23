@@ -20,19 +20,12 @@ from pipefy_mcp.services.pipefy.queries.webhook_queries import (
     GET_WEBHOOKS_QUERY,
     UPDATE_WEBHOOK_MUTATION,
 )
+from pipefy_mcp.services.pipefy.utils.url_ssrf import (
+    validate_https_service_endpoint_url,
+)
 from pipefy_mcp.settings import PipefySettings
 
 logger = logging.getLogger(__name__)
-
-_DEFAULT_WEBHOOK_NAME = "Pipefy Webhook"
-
-
-def _require_https(url: str, context: str = "url") -> None:
-    """Raise ValueError if url is not HTTPS."""
-    if not url.strip().lower().startswith("https://"):
-        raise ValueError(
-            f"Invalid '{context}': must be HTTPS. HTTP URLs are not allowed."
-        )
 
 
 class WebhookService(BasePipefyClient):
@@ -226,12 +219,14 @@ class WebhookService(BasePipefyClient):
             actions: List of event action strings (e.g. ['card.create', 'card.move']).
             **attrs: Extra CreateWebhookInput fields (name, filters, headers, etc.).
         """
-        _require_https(url, "url")
+        validate_https_service_endpoint_url(
+            url, "url", allow_insecure=self.settings.allow_insecure_urls
+        )
         input_obj: dict[str, Any] = {
             "pipe_id": str(pipe_id),
             "url": url,
             "actions": actions,
-            "name": attrs.get("name", _DEFAULT_WEBHOOK_NAME),
+            "name": attrs.get("name", self.settings.default_webhook_name),
         }
         for key, value in attrs.items():
             if key == "name":
@@ -268,7 +263,11 @@ class WebhookService(BasePipefyClient):
         input_obj: dict[str, Any] = {"id": str(webhook_id)}
         url_val = attrs.get("url")
         if url_val is not None:
-            _require_https(str(url_val), "url")
+            validate_https_service_endpoint_url(
+                str(url_val),
+                "url",
+                allow_insecure=self.settings.allow_insecure_urls,
+            )
         for key, value in attrs.items():
             if key == "id":
                 continue

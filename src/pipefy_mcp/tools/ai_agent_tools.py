@@ -29,6 +29,7 @@ from pipefy_mcp.tools.ai_tool_helpers import (
 )
 from pipefy_mcp.tools.behavior_placeholder_interpolation import (
     expand_behaviors_placeholders,
+    normalize_pipefy_ai_instruction_tokens,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
@@ -41,6 +42,11 @@ from pipefy_mcp.tools.phase_transition_helpers import (
 
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30
 MEMBERSHIP_CHECK_TIMEOUT_SECONDS = 5
+# Defense in depth: cross-pipe field validation is N targets × one GraphQL get_pipe;
+# a caller could otherwise submit huge behavior lists referencing many distinct pipes.
+MAX_CROSS_PIPE_FIELD_FETCH = 100
+# Caller-derived; cap avoids pathological payloads and unbounded gather width.
+_MAX_CROSS_PIPE_FETCH_TARGETS = 100
 
 
 _RECORD_NOT_SAVED_PATTERN = "RECORD_NOT_SAVED"
@@ -51,7 +57,7 @@ _PAYLOAD_OK_SUFFIX = (
     "The API rejection is likely a pipe-specific restriction "
     "(orchestration pipe, feature flags, or plan limitation). "
     "Try the same behaviors on a different pipe to confirm. "
-    "Do NOT retry with modified payload — the issue is the pipe, not the behaviors."
+    "Do NOT retry with modified payload: the issue is the pipe, not the behaviors."
 )
 
 
@@ -248,10 +254,14 @@ class AiAgentTools:
                 not accept ``update_card_field`` as an actionType for AI behaviors.
               - **``metadata: {}`` is never valid** for known action types — it causes
                 ``RECORD_NOT_SAVED``. Always include the required keys.
-              - Behavior ``instruction``: use ``%{field:<internal_id>}``; slugs are rewritten to ids
-                when an action supplies ``pipeId``. ``%{action:<uuid>}`` lines are appended per action;
-                do not set ``referenceId`` manually. Bare ``{field:…}`` / ``{action:uuid}`` get a ``%``
-                prefix before the API call.
+              - Behavior ``instruction``: the Pipefy AI Agent UI renders chip tokens only
+                for the ``%{field:<internal_id>}`` / ``%{action:<uuid>}`` namespaces. Slugs
+                are rewritten to internal ids when an action supplies ``pipeId``. The tool
+                normalizes all of these aliases to the canonical form before the API call:
+                ``{field:X}`` / ``{action:<uuid>}`` / ``%{<digits>}`` / ``{<digits>}`` —
+                the last two are the ``create_ai_automation`` syntax which the UI does **not**
+                render as chips, so we promote them to ``%{field:<digits>}``. ``%{action:<uuid>}``
+                lines are appended per action automatically; do not set ``referenceId`` manually.
             - **Template params:** per behavior you may pass ``template_params`` (or ``placeholders``)
                 with string values and use ``{{name}}`` in any string (instruction, metadata IDs, etc.).
                 Optionally set ``instruction_template`` instead of ``actionParams.aiBehaviorParams.instruction``
@@ -279,6 +289,7 @@ class AiAgentTools:
                 return build_ai_tool_error("repo_uuid must not be blank")
             if not instruction or not instruction.strip():
                 return build_ai_tool_error("instruction must not be blank")
+            instruction = normalize_pipefy_ai_instruction_tokens(instruction)
             try:
                 behaviors_expanded = expand_behaviors_placeholders(behaviors)
             except ValueError as exc:
@@ -357,6 +368,11 @@ class AiAgentTools:
             and send the full payload back. The server replaces ``referenceId`` and appends
             ``%{action:<uuid>}`` lines to the instruction on each update (same as create flow).
 
+            Instruction token aliases are normalized before the API call (same rules as
+            ``create_ai_agent``): ``{field:X}`` / ``{action:<uuid>}`` / ``%{<digits>}`` /
+            ``{<digits>}`` are rewritten to ``%{field:<internal_id>}`` so the Pipefy UI
+            renders chip tokens correctly.
+
             Known ``actionType`` values and their required ``metadata`` (same as ``create_ai_agent``):
               - ``move_card`` → ``{"destinationPhaseId": "<phase_id>"}``
               - ``update_card`` → ``{"pipeId": "<pipe_id>", "fieldsAttributes": [{"fieldId": "...", "inputMode": "fill_with_ai", "value": ""}]}``
@@ -392,6 +408,8 @@ class AiAgentTools:
                 return build_ai_tool_error("name must not be blank")
             if not repo_uuid or not repo_uuid.strip():
                 return build_ai_tool_error("repo_uuid must not be blank")
+            if instruction:
+                instruction = normalize_pipefy_ai_instruction_tokens(instruction)
             try:
                 behaviors_expanded = expand_behaviors_placeholders(behaviors)
             except ValueError as exc:
@@ -678,12 +696,33 @@ class AiAgentTools:
                         if meta_pipe and meta_pipe != pid:
                             target_pipe_ids.add(meta_pipe)
 
-            for target_pid in target_pipe_ids:
-                try:
-                    target_data = await asyncio.wait_for(
-                        client.get_pipe(target_pid),
-                        timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
-                    )
+            target_pipe_list = sorted(target_pipe_ids)
+            if len(target_pipe_list) > MAX_CROSS_PIPE_FIELD_FETCH:
+                return build_ai_tool_error(
+                    f"Too many distinct cross-pipe target pipes ({len(target_pipe_list)}). "
+                    f"Maximum is {MAX_CROSS_PIPE_FIELD_FETCH}. Reduce the number of distinct "
+                    "create_connected_card metadata.pipeId values (or split validation)."
+                )
+            if target_pipe_list:
+                fetch_results = await asyncio.gather(
+                    *(
+                        asyncio.wait_for(
+                            client.get_pipe(tpid),
+                            timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
+                        )
+                        for tpid in target_pipe_list
+                    ),
+                    return_exceptions=True,
+                )
+                for tpid, result in zip(target_pipe_list, fetch_results, strict=True):
+                    if isinstance(result, BaseException):
+                        await ctx.debug(f"Could not fetch target pipe {tpid}: {result}")
+                        tool_warnings.append(
+                            f"Could not load fields for target pipe {tpid}; "
+                            f"fieldIds targeting it were not verified."
+                        )
+                        continue
+                    target_data = result
                     target_info = target_data.get("pipe", {})
                     target_fields: set[str] = set()
                     for phase in target_info.get("phases") or []:
@@ -695,20 +734,11 @@ class AiAgentTools:
                         fid = field.get("id") or field.get("internal_id")
                         if fid:
                             target_fields.add(str(fid))
-                    cross_pipe_field_ids[target_pid] = target_fields
-                except Exception:  # noqa: BLE001
-                    await ctx.debug(
-                        f"Could not fetch target pipe {target_pid}; skipping its field checks"
-                    )
-                    tool_warnings.append(
-                        f"Could not load fields for target pipe {target_pid}; "
-                        f"fieldIds targeting it were not verified."
-                    )
+                    cross_pipe_field_ids[tpid] = target_fields
 
             # Optional: verify service account membership on cross-pipe targets.
             membership_problems: list[str] = []
             sa_ids = settings.pipefy.service_account_ids
-            target_pipe_list = list(target_pipe_ids)
             if sa_ids and target_pipe_list:
                 sa_set = set(sa_ids)
                 try:

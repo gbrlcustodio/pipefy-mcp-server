@@ -24,6 +24,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     map_add_card_comment_error_to_message,
     map_delete_card_error_to_message,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 # =============================================================================
 # UserCancelledError
@@ -162,7 +163,7 @@ def test_map_add_card_comment_error_uses_errors_attribute():
 def test_build_add_card_comment_error_payload():
     """Error payload has success False and given message."""
     out = build_add_card_comment_error_payload(message="Something failed")
-    assert out == {"success": False, "error": "Something failed"}
+    assert out == tool_error("Something failed")
 
 
 # =============================================================================
@@ -192,7 +193,7 @@ def test_build_delete_card_success_payload():
 def test_build_delete_card_error_payload():
     """Error payload has success False and given message."""
     out = build_delete_card_error_payload(message="Delete failed")
-    assert out == {"success": False, "error": "Delete failed"}
+    assert out == tool_error("Delete failed")
 
 
 # =============================================================================

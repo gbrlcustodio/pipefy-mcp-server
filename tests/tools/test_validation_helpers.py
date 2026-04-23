@@ -2,6 +2,7 @@
 
 import pytest
 
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     format_json_preview,
     mutation_error_if_not_optional_dict,
@@ -49,7 +50,7 @@ def test_mutation_error_if_not_optional_dict_rejects_non_mapping():
     err = mutation_error_if_not_optional_dict("x", arg_name="extra_input")
     assert err is not None
     assert err["success"] is False
-    assert "extra_input" in err["error"]
+    assert "extra_input" in tool_error_message(err)
     err_list = mutation_error_if_not_optional_dict([], arg_name="extra_input")
     assert err_list is not None
     assert err_list["success"] is False
@@ -76,7 +77,7 @@ class TestValidateToolId:
         val, err = validate_tool_id("", "card_id")
         assert val is None
         assert err["success"] is False
-        assert "card_id" in err["error"]
+        assert "card_id" in tool_error_message(err)
 
     def test_rejects_whitespace_only(self):
         val, err = validate_tool_id("   ", "card_id")
@@ -123,4 +124,4 @@ class TestValidateOptionalToolId:
         assert ok is False
         assert val is None
         assert err["success"] is False
-        assert "org_id" in err["error"]
+        assert "org_id" in tool_error_message(err)

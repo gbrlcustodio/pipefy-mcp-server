@@ -1,9 +1,15 @@
 # Repository Guidelines
 
+## Documentation map
+- **`README.md`** — Overview for users and contributors: getting started, MCP tools summary, development, testing, and schema hygiene.
+- **`docs/setup.md`** — First-time install, environment variables, MCP client config (optional `bootstrap.sh`).
+- **`docs/dependencies.md`** — Rationale for main dependencies.
+- **`docs/tools/`** — Per-area reference (parameters, edge cases, cross-cutting behavior). Start from the filenames that match the domain you touch (e.g. `pipes-and-cards.md`, `automations-and-ai.md`, `introspection.md`).
+
 ## Project Structure & Module Organization
 - `src/pipefy_mcp/` contains the MCP server implementation. Key areas include `tools/` (tool definitions), `services/pipefy/` (GraphQL clients, queries, services), `models/`, and `core/`.
 - `tests/` mirrors the source layout with unit tests for tools, services, models, and the server entrypoints.
-- `README.md` documents usage, tool behavior, and local development notes.
+- `README.md` documents usage, tool behavior, and local development notes (see **Documentation map** above).
 
 ## Build, Test and Development Commands
 - `uv sync` installs dependencies using `uv` (recommended in this repo).

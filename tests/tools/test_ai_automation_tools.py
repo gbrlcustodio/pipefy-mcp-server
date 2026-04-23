@@ -12,6 +12,7 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture
@@ -24,6 +25,7 @@ def mock_pipefy_client():
     client.delete_automation = AsyncMock()
     client.get_pipe_with_preferences = AsyncMock()
     client.get_automation_events = AsyncMock()
+    client.get_ai_credit_usage = AsyncMock()
     client.ai_automation_available = True
     return client
 
@@ -114,7 +116,7 @@ class TestGetAiAutomation:
         assert result.isError is False
         p = extract_payload(result)
         assert p["success"] is False
-        assert "boom" in p["error"]
+        assert "boom" in tool_error_message(p)
 
     async def test_not_found_empty_data(
         self,
@@ -178,7 +180,7 @@ class TestGetAiAutomation:
             )
         p = extract_payload(result)
         assert p["success"] is False
-        assert "nope" in p["error"]
+        assert "nope" in tool_error_message(p)
 
     async def test_succeeds_when_oauth_not_configured_public_query(
         self,
@@ -316,7 +318,7 @@ class TestGetAiAutomations:
             )
         p = extract_payload(result)
         assert p["success"] is False
-        assert "no access" in p["error"]
+        assert "no access" in tool_error_message(p)
 
     async def test_rejects_invalid_pipe_id(
         self,
@@ -435,7 +437,7 @@ class TestDeleteAiAutomation:
             )
         p = extract_payload(result)
         assert p["success"] is False
-        assert "forbidden" in p["error"]
+        assert "forbidden" in tool_error_message(p)
 
     async def test_works_without_oauth_config(
         self,
@@ -469,7 +471,7 @@ class TestDeleteAiAutomation:
             )
         p = extract_payload(result)
         assert p["success"] is False
-        assert "did not succeed" in p["error"].lower()
+        assert "did not succeed" in tool_error_message(p).lower()
 
     async def test_rejects_invalid_automation_id(
         self,
@@ -550,7 +552,7 @@ class TestCreateAiAutomation:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert isinstance(payload["error"], str)
+        assert isinstance(tool_error_message(payload), str)
 
     async def test_internal_api_style_error_strips_code_and_correlation_from_payload(
         self,
@@ -575,7 +577,7 @@ class TestCreateAiAutomation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        err = payload["error"]
+        err = tool_error_message(payload)
         assert "[code=" not in err
         assert "[correlation_id=" not in err
         assert "Invalid prompt" in err
@@ -605,7 +607,7 @@ class TestCreateAiAutomation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        err = payload["error"]
+        err = tool_error_message(payload)
         assert "[code=" not in err
         assert "[correlation_id=" not in err
         assert "Invalid prompt" in err
@@ -636,7 +638,7 @@ class TestCreateAiAutomation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        err = payload["error"]
+        err = tool_error_message(payload)
         assert "[code=" not in err
         assert "[correlation_id=" not in err
         assert "Could not create the AI automation" in err
@@ -794,7 +796,7 @@ class TestUpdateAiAutomation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        err = payload["error"]
+        err = tool_error_message(payload)
         assert "[code=" not in err
         assert "[correlation_id=" not in err
         assert "Not found" in err
@@ -822,7 +824,7 @@ class TestUpdateAiAutomation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        err = payload["error"]
+        err = tool_error_message(payload)
         assert "[code=" not in err
         assert "Not found" in err
         assert "(debug:" in err
@@ -856,7 +858,7 @@ class TestAiAutomationNotConfigured:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "OAuth" in payload["error"]
+        assert "OAuth" in tool_error_message(payload)
 
     async def test_update_returns_error_payload_when_not_configured(
         self,
@@ -871,7 +873,7 @@ class TestAiAutomationNotConfigured:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "OAuth" in payload["error"]
+        assert "OAuth" in tool_error_message(payload)
 
     async def test_delete_works_without_oauth_config(
         self,
@@ -1247,7 +1249,7 @@ class TestValidateAiAutomationPrompt:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "network error" in payload["error"]
+        assert "network error" in tool_error_message(payload)
 
     async def test_rejects_invalid_pipe_id(
         self,
@@ -1319,3 +1321,182 @@ class TestValidateAiAutomationPrompt:
         assert "100" in payload["field_map"]
         assert "300" in payload["field_map"]
         assert "200" not in payload["field_map"]
+
+
+# AI credit check — three-case matrix exercised below. Uses a variant of
+# MOCK_PIPE_WITH_PREFS that carries ``organizationId`` so the credit branch
+# runs; tests explicitly set ``get_ai_credit_usage`` to shape ``aiCreditUsageStats``.
+MOCK_PIPE_WITH_ORG = {
+    "pipe": {
+        **MOCK_PIPE_WITH_PREFS["pipe"],
+        "organizationId": "org-42",
+    }
+}
+
+
+@pytest.mark.anyio
+class TestValidateAiAutomationPromptCreditCheck:
+    async def test_ai_automations_disabled_blocks_with_problem(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_ORG
+        mock_pipefy_client.get_ai_credit_usage.return_value = {
+            "aiCreditUsageStats": {
+                "active": False,
+                "usage": 0,
+                "limit": 0,
+                "hasAddon": False,
+                "aiAutomation": {"enabled": False},
+            }
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is False
+        assert any(
+            "AI Automations are disabled on this organization" in p
+            for p in payload["problems"]
+        )
+
+    async def test_exhausted_budget_emits_warning_not_problem(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_ORG
+        mock_pipefy_client.get_ai_credit_usage.return_value = {
+            "aiCreditUsageStats": {
+                "active": True,
+                "usage": 1500,
+                "limit": 1000,
+                "hasAddon": False,
+                "aiAutomation": {"enabled": True},
+            }
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is True
+        assert any("AI credit budget exhausted" in w for w in payload["warnings"])
+
+    async def test_limit_zero_is_silent(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Sandbox / custom plans with uncapped billing report limit=0;
+        emitting a warning there is noise, so the check stays silent."""
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_ORG
+        mock_pipefy_client.get_ai_credit_usage.return_value = {
+            "aiCreditUsageStats": {
+                "active": True,
+                "usage": 1392,
+                "limit": 0,
+                "hasAddon": False,
+                "aiAutomation": {"enabled": True},
+            }
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is True
+        assert not any("credit" in w.lower() for w in payload["warnings"])
+        assert not any("AI Automations are disabled" in p for p in payload["problems"])
+
+    async def test_addon_skips_exhausted_warning(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """``hasAddon`` means billing will absorb overage; don't warn."""
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_ORG
+        mock_pipefy_client.get_ai_credit_usage.return_value = {
+            "aiCreditUsageStats": {
+                "active": True,
+                "usage": 1500,
+                "limit": 1000,
+                "hasAddon": True,
+                "aiAutomation": {"enabled": True},
+            }
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert not any("credit" in w.lower() for w in payload["warnings"])
+
+    async def test_credit_lookup_failure_is_silent(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Credit check is informational; a lookup error must not block the preflight."""
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_ORG
+        mock_pipefy_client.get_ai_credit_usage.side_effect = RuntimeError("upstream")
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is True
+
+    async def test_skipped_when_organization_id_missing(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Old mocks without ``organizationId`` must not trigger the credit lookup."""
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        mock_pipefy_client.get_ai_credit_usage.assert_not_called()

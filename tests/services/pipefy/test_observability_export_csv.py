@@ -1,6 +1,7 @@
 """Unit tests for observability export CSV helpers."""
 
 import io
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -12,6 +13,19 @@ from pipefy_mcp.services.pipefy.observability_export_csv import (
     is_allowed_pipefy_export_download_url,
     xlsx_first_sheet_to_csv_limited,
 )
+
+
+@pytest.fixture(autouse=True)
+def _skip_real_dns_for_download_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Avoid real DNS in download_bytes tests; url_ssrf is covered separately."""
+
+    async def _ok(_hostname: str) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "pipefy_mcp.services.pipefy.observability_export_csv.assert_hostname_resolves_to_public_ips",
+        _ok,
+    )
 
 
 def _minimal_xlsx_bytes() -> bytes:
@@ -132,6 +146,97 @@ async def test_download_bytes_rejects_streaming_body_exceeding_max():
     ):
         with pytest.raises(ValueError, match="exceeds max_download_bytes"):
             await download_bytes("https://app.pipefy.com/export.xlsx", max_bytes=1000)
+
+
+def _mock_stream_client_for_redirect(
+    *,
+    status_code: int,
+    location: str | None,
+    final_body: bytes | None = None,
+) -> MagicMock:
+    """Build AsyncClient mock: first response may be redirect; then optional 200 body."""
+
+    call_count = {"n": 0}
+
+    def make_stream(*_args: Any, **_kwargs: Any) -> AsyncMock:
+        mock_response = AsyncMock()
+        n = call_count["n"]
+        call_count["n"] = n + 1
+
+        if n == 0 and status_code in (301, 302, 303, 307, 308):
+            mock_response.status_code = status_code
+            mock_response.headers = {"location": location or ""}
+            mock_response.raise_for_status = MagicMock()
+            mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response.__aexit__ = AsyncMock(return_value=False)
+            return mock_response
+
+        mock_response.status_code = 200
+        mock_response.headers = (
+            {"content-length": str(len(final_body))} if final_body is not None else {}
+        )
+        mock_response.raise_for_status = MagicMock()
+
+        async def aiter() -> Any:
+            if final_body:
+                yield final_body
+
+        mock_response.aiter_bytes = aiter
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=False)
+        return mock_response
+
+    mock_client = AsyncMock()
+    mock_client.stream = MagicMock(side_effect=make_stream)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    return mock_client
+
+
+@pytest.mark.asyncio
+async def test_download_bytes_rejects_redirect_to_localhost():
+    mock_client = _mock_stream_client_for_redirect(
+        status_code=302,
+        location="http://127.0.0.1/internal",
+    )
+    with patch(
+        "pipefy_mcp.services.pipefy.observability_export_csv.httpx.AsyncClient",
+        return_value=mock_client,
+    ):
+        with pytest.raises(ValueError, match="not an allowed Pipefy https URL"):
+            await download_bytes("https://app.pipefy.com/export.xlsx", max_bytes=1024)
+
+
+@pytest.mark.asyncio
+async def test_download_bytes_rejects_redirect_to_imds():
+    mock_client = _mock_stream_client_for_redirect(
+        status_code=302,
+        location="http://169.254.169.254/latest/meta-data/",
+    )
+    with patch(
+        "pipefy_mcp.services.pipefy.observability_export_csv.httpx.AsyncClient",
+        return_value=mock_client,
+    ):
+        with pytest.raises(ValueError, match="not an allowed Pipefy https URL"):
+            await download_bytes("https://app.pipefy.com/export.xlsx", max_bytes=1024)
+
+
+@pytest.mark.asyncio
+async def test_download_bytes_follows_safe_relative_redirect():
+    body = b"xlsx-bytes"
+    mock_client = _mock_stream_client_for_redirect(
+        status_code=302,
+        location="/other/export.xlsx",
+        final_body=body,
+    )
+
+    with patch(
+        "pipefy_mcp.services.pipefy.observability_export_csv.httpx.AsyncClient",
+        return_value=mock_client,
+    ):
+        result = await download_bytes("https://app.pipefy.com/a.xlsx", max_bytes=1024)
+    assert result == body
+    assert mock_client.stream.call_count == 2
 
 
 @pytest.mark.asyncio

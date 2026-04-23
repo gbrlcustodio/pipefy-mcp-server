@@ -9,6 +9,7 @@ from typing_extensions import TypedDict
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 
 class MemberMutationSuccessPayload(TypedDict):
@@ -50,7 +51,7 @@ def build_member_error_payload(*, message: str) -> dict[str, Any]:
     Args:
         message: User-visible failure reason.
     """
-    return {"success": False, "error": message}
+    return tool_error(message)
 
 
 def handle_member_tool_graphql_error(
@@ -61,3 +62,12 @@ def handle_member_tool_graphql_error(
 ) -> dict[str, Any]:
     """Delegate to :func:`handle_tool_graphql_error`."""
     return handle_tool_graphql_error(exc, fallback_msg, debug=debug)
+
+
+__all__ = [
+    "MemberMutationSuccessPayload",
+    "MemberMutationWarningPayload",
+    "build_member_error_payload",
+    "build_member_success_payload",
+    "handle_member_tool_graphql_error",
+]

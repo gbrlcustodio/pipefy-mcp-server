@@ -932,6 +932,39 @@ async def test_execute_graphql_hint_lookup_failure_does_not_mask_error(mock_sett
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_execute_graphql_hint_lookup_unexpected_error_propagates(
+    mock_settings, caplog
+):
+    """Non-domain failures during hint detection are logged and not swallowed."""
+    call_count = 0
+
+    async def mock_execute(query, variables):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise TransportQueryError(
+                "GraphQL Error",
+                errors=[
+                    {"message": "Cannot query field 'createCard' on type 'Query'."}
+                ],
+            )
+        raise RuntimeError("simulated bug during hint introspection")
+
+    service = SchemaIntrospectionService(settings=mock_settings)
+    service.execute_query = AsyncMock(side_effect=mock_execute)
+
+    with caplog.at_level("ERROR"):
+        with pytest.raises(RuntimeError, match="simulated bug"):
+            await service.execute_graphql("query Q { createCard { id } }", None)
+
+    assert any(
+        "Unexpected error while detecting root type mismatch hint" in r.message
+        for r in caplog.records
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_execute_graphql_syntax_error_returns_validation_error(mock_settings):
     """Malformed query strings fail before transport; return a clear validation error."""
     service = _make_service(mock_settings, {})

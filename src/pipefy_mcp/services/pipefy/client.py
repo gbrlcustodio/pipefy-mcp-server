@@ -31,7 +31,10 @@ from pipefy_mcp.services.pipefy.member_service import MemberService
 from pipefy_mcp.services.pipefy.observability_service import ObservabilityService
 from pipefy_mcp.services.pipefy.organization_service import OrganizationService
 from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
-from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.services.pipefy.pipe_service import (
+    SEARCH_PIPES_MAX_PER_ORG_CAP,
+    PipeService,
+)
 from pipefy_mcp.services.pipefy.queries.card_queries import (
     INTERNAL_DELETE_CARD_RELATION_MUTATION,
 )
@@ -40,7 +43,10 @@ from pipefy_mcp.services.pipefy.report_service import ReportService
 from pipefy_mcp.services.pipefy.schema_introspection_service import (
     SchemaIntrospectionService,
 )
-from pipefy_mcp.services.pipefy.table_service import TableService
+from pipefy_mcp.services.pipefy.table_service import (
+    SEARCH_TABLES_FIRST_DEFAULT,
+    TableService,
+)
 from pipefy_mcp.services.pipefy.types import (
     AgentServiceResult,
     AiAgentGraphPayload,
@@ -861,13 +867,26 @@ class PipefyClient:
         """Get the start form fields of a pipe."""
         return await self._pipe_service.get_start_form_fields(pipe_id, required_only)
 
-    async def search_pipes(self, pipe_name: str | None = None) -> dict:
+    async def search_pipes(
+        self,
+        pipe_name: str | None = None,
+        *,
+        max_pipes_per_org: int = SEARCH_PIPES_MAX_PER_ORG_CAP,
+    ) -> dict:
         """Search for pipes across all organizations"""
-        return await self._pipe_service.search_pipes(pipe_name)
+        return await self._pipe_service.search_pipes(
+            pipe_name,
+            max_pipes_per_org=max_pipes_per_org,
+        )
 
-    async def search_tables(self, table_name: str | None = None) -> dict:
+    async def search_tables(
+        self,
+        table_name: str | None = None,
+        *,
+        first: int = SEARCH_TABLES_FIRST_DEFAULT,
+    ) -> dict:
         """Search for databases (tables) across all organizations"""
-        return await self._table_service.search_tables(table_name)
+        return await self._table_service.search_tables(table_name, first=first)
 
     async def get_phase_fields(
         self, phase_id: str | int, required_only: bool = False

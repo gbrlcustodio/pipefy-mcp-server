@@ -1,6 +1,7 @@
 """Tests for pipe configuration MCP tools (mocked PipefyClient)."""
 
 from datetime import timedelta
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,6 +20,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     field_condition_phase_field_id_looks_like_slug,
 )
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
 
 
 @pytest.mark.unit
@@ -237,10 +239,10 @@ async def test_delete_pipe_invalid_id(
         )
     mock_pipe_config_client.get_pipe.assert_not_called()
     payload = extract_payload(result)
-    expected: DeletePipeErrorPayload = {
-        "success": False,
-        "error": "Invalid 'pipe_id': provide a positive integer.",
-    }
+    expected = cast(
+        DeletePipeErrorPayload,
+        tool_error("Invalid 'pipe_id': provide a positive integer."),
+    )
     assert payload == expected
 
 
@@ -269,7 +271,7 @@ async def test_delete_pipe_maps_not_found_on_get_pipe(
     mock_pipe_config_client.delete_pipe.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not found" in payload["error"].lower()
+    assert "not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -597,7 +599,7 @@ async def test_update_phase_field_rejects_blank_label(
     mock_pipe_config_client.update_phase_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "label" in payload["error"].lower()
+    assert "label" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -691,10 +693,12 @@ async def test_update_label_success(
     async with pipe_config_session as session:
         result = await session.call_tool(
             "update_label",
-            {"label_id": 3, "name": "Story"},
+            {"label_id": 3, "name": "Story", "color": "blue"},
         )
 
-    mock_pipe_config_client.update_label.assert_awaited_once_with("3", name="Story")
+    mock_pipe_config_client.update_label.assert_awaited_once_with(
+        "3", name="Story", color="blue"
+    )
     assert extract_payload(result)["success"] is True
 
 
@@ -712,7 +716,8 @@ async def test_update_label_strips_id_from_extra_input__no_integration(
             {
                 "label_id": 3,
                 "name": "X",
-                "extra_input": {"id": 999, "color": "blue"},
+                "color": "blue",
+                "extra_input": {"id": 999},
             },
         )
     mock_pipe_config_client.update_label.assert_awaited_once_with(
@@ -721,6 +726,39 @@ async def test_update_label_strips_id_from_extra_input__no_integration(
         color="blue",
     )
     assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_update_label_missing_color_rejected_at_tool_boundary(
+    pipe_config_session, mock_pipe_config_client
+):
+    """Pipefy's ``UpdateLabelInput`` declares name and color NON_NULL;
+    omitting either raises a protocol-level validation error before the
+    tool body runs, so the mutation is never called."""
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "update_label",
+            {"label_id": 3, "name": "Story"},
+        )
+    mock_pipe_config_client.update_label.assert_not_called()
+    assert result.isError is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_update_label_empty_color_returns_error(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "update_label",
+            {"label_id": 3, "name": "Story", "color": "   "},
+        )
+    mock_pipe_config_client.update_label.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "color" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -775,7 +813,7 @@ async def test_create_pipe_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Organization not found" in payload["error"]
+    assert "Organization not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -794,7 +832,7 @@ async def test_update_pipe_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Pipe locked" in payload["error"]
+    assert "Pipe locked" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -813,7 +851,7 @@ async def test_clone_pipe_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Template missing" in payload["error"]
+    assert "Template missing" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -832,7 +870,7 @@ async def test_create_phase_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Pipe not found" in payload["error"]
+    assert "Pipe not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -851,7 +889,7 @@ async def test_update_phase_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Phase invalid" in payload["error"]
+    assert "Phase invalid" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -870,7 +908,7 @@ async def test_update_phase_get_phase_fields_error_returns_failure__no_integrati
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Forbidden" in payload["error"]
+    assert "Forbidden" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -888,7 +926,7 @@ async def test_delete_phase_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Cannot delete" in payload["error"]
+    assert "Cannot delete" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -907,7 +945,7 @@ async def test_create_phase_field_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Invalid type" in payload["error"]
+    assert "Invalid type" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -926,7 +964,7 @@ async def test_update_phase_field_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Field gone" in payload["error"]
+    assert "Field gone" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -945,7 +983,116 @@ async def test_delete_phase_field_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Nope" in payload["error"]
+    assert "Nope" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_field_cascade_diagnosis_with_pipe_id(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """When the parent phase was deleted earlier in the session, Pipefy returns
+    a generic ``INTERNAL_SERVER_ERROR``. With ``pipe_id`` supplied, the tool
+    verifies the field is really gone and returns an actionable message
+    instead of the opaque upstream error."""
+    mock_pipe_config_client.delete_phase_field.side_effect = TransportQueryError(
+        "GraphQL Error",
+        errors=[
+            {
+                "message": "Something went wrong",
+                "extensions": {"code": "INTERNAL_SERVER_ERROR"},
+            }
+        ],
+    )
+    # After failure, verify path fetches pipe + phases and finds no matching field.
+    mock_pipe_config_client.get_pipe.return_value = {
+        "pipe": {"id": "77", "phases": [{"id": "700"}, {"id": "701"}]}
+    }
+    mock_pipe_config_client.get_phase_fields.return_value = {
+        "phase_id": "700",
+        "fields": [
+            {"id": "unrelated_field", "uuid": "xyz"},
+        ],
+    }
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase_field",
+            {
+                "field_id": "gone_field",
+                "confirm": True,
+                "pipe_id": "77",
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    msg = tool_error_message(payload)
+    assert "no longer exists" in msg
+    assert "cascaded" in msg.lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_field_cascade_diagnosis_field_still_exists(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """If the field is still present somewhere, the error is NOT a cascade —
+    fall back to the generic upstream error instead of misleading the caller."""
+    mock_pipe_config_client.delete_phase_field.side_effect = TransportQueryError(
+        "GraphQL Error",
+        errors=[
+            {
+                "message": "Something went wrong",
+                "extensions": {"code": "INTERNAL_SERVER_ERROR"},
+            }
+        ],
+    )
+    mock_pipe_config_client.get_pipe.return_value = {
+        "pipe": {"id": "77", "phases": [{"id": "700"}]}
+    }
+    mock_pipe_config_client.get_phase_fields.return_value = {
+        "phase_id": "700",
+        "fields": [{"id": "still_here", "uuid": "abc"}],
+    }
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase_field",
+            {
+                "field_id": "still_here",
+                "confirm": True,
+                "pipe_id": "77",
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    msg = tool_error_message(payload)
+    assert "no longer exists" not in msg
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_field_cascade_diagnosis_skipped_without_pipe_id(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """Without ``pipe_id`` the tool cannot diagnose; it preserves the raw error
+    and does NOT perform the extra read-backs."""
+    mock_pipe_config_client.delete_phase_field.side_effect = TransportQueryError(
+        "GraphQL Error",
+        errors=[
+            {
+                "message": "Something went wrong",
+                "extensions": {"code": "INTERNAL_SERVER_ERROR"},
+            }
+        ],
+    )
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase_field",
+            {"field_id": "any_field", "confirm": True},
+        )
+    mock_pipe_config_client.get_pipe.assert_not_called()
+    mock_pipe_config_client.get_phase_fields.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
 
 
 @pytest.mark.anyio
@@ -964,7 +1111,7 @@ async def test_create_label_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Bad color" in payload["error"]
+    assert "Bad color" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -979,11 +1126,11 @@ async def test_update_label_graphql_error_returns_failure__no_integration(
     async with pipe_config_session as session:
         result = await session.call_tool(
             "update_label",
-            {"label_id": 3, "name": "Story"},
+            {"label_id": 3, "name": "Story", "color": "blue"},
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Label missing" in payload["error"]
+    assert "Label missing" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1001,7 +1148,7 @@ async def test_delete_label_graphql_error_returns_failure__no_integration(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Still in use" in payload["error"]
+    assert "Still in use" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1243,7 +1390,7 @@ async def test_create_field_condition_rejects_missing_name__no_integration(
     mock_pipe_config_client.create_field_condition.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "name" in payload["error"].lower()
+    assert "name" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -1268,7 +1415,7 @@ async def test_create_field_condition_rejects_blank_name__no_integration(
     mock_pipe_config_client.create_field_condition.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "name" in payload["error"].lower()
+    assert "name" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -1288,7 +1435,7 @@ async def test_create_field_condition_rejects_empty_condition__no_integration(
     mock_pipe_config_client.create_field_condition.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "non-empty" in payload["error"].lower()
+    assert "non-empty" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -1308,7 +1455,7 @@ async def test_create_field_condition_rejects_empty_expressions__no_integration(
     mock_pipe_config_client.create_field_condition.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "expressions" in payload["error"].lower()
+    assert "expressions" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -1332,8 +1479,8 @@ async def test_create_field_condition_rejects_slug_like_phase_field_id__no_integ
     mock_pipe_config_client.create_field_condition.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "internal_id" in payload["error"]
-    assert "get_phase_fields" in payload["error"]
+    assert "internal_id" in tool_error_message(payload)
+    assert "get_phase_fields" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1481,7 +1628,7 @@ async def test_create_field_condition_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Invalid condition" in payload["error"]
+    assert "Invalid condition" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1591,7 +1738,7 @@ async def test_update_field_condition_rejects_blank_name__no_integration(
     mock_pipe_config_client.update_field_condition.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "name" in payload["error"].lower()
+    assert "name" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -1617,7 +1764,7 @@ async def test_update_field_condition_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Not found" in payload["error"]
+    assert "Not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1659,7 +1806,7 @@ async def test_delete_field_condition_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Forbidden" in payload["error"]
+    assert "Forbidden" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

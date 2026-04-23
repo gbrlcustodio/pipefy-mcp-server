@@ -12,6 +12,8 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.table_tools import TableTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tests.pagination_test_defaults import DEFAULT_FIRST
 
 
 @pytest.fixture
@@ -86,7 +88,7 @@ async def test_get_table_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not found" in payload["error"]
+    assert "not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -133,11 +135,11 @@ async def test_get_table_records_success_and_pagination(
     async with table_session as session:
         result = await session.call_tool(
             "get_table_records",
-            {"table_id": "t1", "first": 50},
+            {"table_id": "t1", "first": DEFAULT_FIRST},
         )
 
     mock_table_client.get_table_records.assert_awaited_once_with(
-        "t1", first=50, after=None
+        "t1", first=DEFAULT_FIRST, after=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -251,8 +253,8 @@ async def test_create_table_rejects_non_object_extra_input(
     mock_table_client.create_table.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "extra_input" in payload["error"]
-    assert "dict" in payload["error"].lower()
+    assert "extra_input" in tool_error_message(payload)
+    assert "dict" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -278,7 +280,7 @@ async def test_update_table_rejects_non_object_extra_input(
     else:
         mock_table_client.update_table.assert_not_called()
         assert payload["success"] is False
-        assert "extra_input" in payload["error"]
+        assert "extra_input" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -300,7 +302,7 @@ async def test_create_table_record_rejects_non_object_extra_input(
     mock_table_client.create_table_record.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "extra_input" in payload["error"]
+    assert "extra_input" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -323,7 +325,7 @@ async def test_create_table_field_rejects_non_object_extra_input(
     mock_table_client.create_table_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "extra_input" in payload["error"]
+    assert "extra_input" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -366,7 +368,7 @@ async def test_update_table_field_rejects_non_object_extra_input(
     mock_table_client.update_table_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "extra_input" in payload["error"]
+    assert "extra_input" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -383,8 +385,8 @@ async def test_update_table_record_rejects_unsupported_field_keys_only(
     mock_table_client.update_table_record.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "title" in payload["error"]
-    assert "due_date" in payload["error"]
+    assert "title" in tool_error_message(payload)
+    assert "due_date" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -401,8 +403,8 @@ async def test_create_table_record_rejects_list_entry_missing_field_keys(
     mock_table_client.create_table_record.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "index 0" in payload["error"]
-    assert "field_value" in payload["error"]
+    assert "index 0" in tool_error_message(payload)
+    assert "field_value" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -419,7 +421,7 @@ async def test_create_table_record_rejects_non_dict_list_entry(
     mock_table_client.create_table_record.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "index 0" in payload["error"]
+    assert "index 0" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -828,7 +830,7 @@ async def test_search_tables_without_name_calls_client_with_none(
         result = await session.call_tool("search_tables", {})
 
     assert result.isError is False
-    mock_table_client.search_tables.assert_awaited_once_with(None)
+    mock_table_client.search_tables.assert_awaited_once_with(None, first=100)
 
 
 @pytest.mark.anyio
@@ -842,7 +844,7 @@ async def test_search_tables_with_name_passes_it_to_client(
         result = await session.call_tool("search_tables", {"table_name": "Clients"})
 
     assert result.isError is False
-    mock_table_client.search_tables.assert_awaited_once_with("Clients")
+    mock_table_client.search_tables.assert_awaited_once_with("Clients", first=100)
 
 
 @pytest.mark.anyio
@@ -884,7 +886,7 @@ async def test_get_table_invalid_table_id(
     mock_table_client.get_table.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "table_id" in payload["error"]
+    assert "table_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -911,7 +913,7 @@ async def test_get_tables_empty_list(table_session, mock_table_client, extract_p
     mock_table_client.get_tables.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "table_ids" in payload["error"]
+    assert "table_ids" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -932,7 +934,7 @@ async def test_get_table_records_invalid_table_id(
     mock_table_client.get_table_records.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "table_id" in payload["error"]
+    assert "table_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -948,7 +950,7 @@ async def test_get_table_records_first_too_small(
     mock_table_client.get_table_records.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "first" in payload["error"]
+    assert "first" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -964,7 +966,7 @@ async def test_get_table_records_first_too_large(
     mock_table_client.get_table_records.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "first" in payload["error"]
+    assert "first" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -983,7 +985,7 @@ async def test_get_table_record_invalid_record_id(
     mock_table_client.get_table_record.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "record_id" in payload["error"]
+    assert "record_id" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1005,7 +1007,7 @@ async def test_find_records_invalid_table_id(
     mock_table_client.find_records.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "table_id" in payload["error"]
+    assert "table_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1022,7 +1024,7 @@ async def test_find_records_blank_field_id(
     mock_table_client.find_records.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "field_id" in payload["error"]
+    assert "field_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1069,7 +1071,7 @@ async def test_update_table_record_invalid_record_id(
     mock_table_client.update_table_record.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "record_id" in payload["error"]
+    assert "record_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1107,7 +1109,7 @@ async def test_delete_table_record_invalid_record_id(
     mock_table_client.delete_table_record.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "record_id" in payload["error"]
+    assert "record_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1146,7 +1148,7 @@ async def test_set_table_record_field_value_invalid_record_id(
     mock_table_client.set_table_record_field_value.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "record_id" in payload["error"]
+    assert "record_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1163,7 +1165,7 @@ async def test_set_table_record_field_value_invalid_field_id_zero(
     mock_table_client.set_table_record_field_value.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "field_id" in payload["error"]
+    assert "field_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1200,7 +1202,7 @@ async def test_create_table_field_invalid_table_id(
     mock_table_client.create_table_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "table_id" in payload["error"]
+    assert "table_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1217,7 +1219,7 @@ async def test_create_table_field_empty_label(
     mock_table_client.create_table_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "label" in payload["error"]
+    assert "label" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1234,7 +1236,7 @@ async def test_create_table_field_empty_field_type(
     mock_table_client.create_table_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "field_type" in payload["error"]
+    assert "field_type" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1256,7 +1258,7 @@ async def test_update_table_field_invalid_field_id(
     mock_table_client.update_table_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "field_id" in payload["error"]
+    assert "field_id" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1278,7 +1280,7 @@ async def test_delete_table_field_invalid_field_id(
     mock_table_client.delete_table_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "field_id" in payload["error"]
+    assert "field_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1317,7 +1319,7 @@ async def test_create_table_record_empty_dict_fields(
     mock_table_client.create_table_record.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "fields" in payload["error"]
+    assert "fields" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1334,7 +1336,7 @@ async def test_create_table_record_empty_list_fields(
     mock_table_client.create_table_record.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "fields" in payload["error"]
+    assert "fields" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1356,7 +1358,7 @@ async def test_create_table_blank_name(
     mock_table_client.create_table.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "name" in payload["error"]
+    assert "name" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1373,7 +1375,7 @@ async def test_create_table_invalid_organization_id(
     mock_table_client.create_table.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "organization_id" in payload["error"]
+    assert "organization_id" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1395,7 +1397,7 @@ async def test_update_table_invalid_table_id(
     mock_table_client.update_table.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "table_id" in payload["error"]
+    assert "table_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1412,7 +1414,7 @@ async def test_update_table_no_changes(
     mock_table_client.update_table.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "at least one" in payload["error"]
+    assert "at least one" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1435,7 +1437,7 @@ async def test_delete_table_invalid_table_id(
     mock_table_client.delete_table.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "table_id" in payload["error"]
+    assert "table_id" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1457,7 +1459,7 @@ async def test_create_table_record_invalid_table_id(
     mock_table_client.create_table_record.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "table_id" in payload["error"]
+    assert "table_id" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1479,7 +1481,7 @@ async def test_set_table_record_field_value_null_value(
     mock_table_client.set_table_record_field_value.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "value" in payload["error"]
+    assert "value" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1546,7 +1548,9 @@ async def test_get_tables_invalid_id_in_list(
     mock_table_client.get_tables.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "each" in payload["error"].lower() or "Each" in payload["error"]
+    assert "each" in tool_error_message(
+        payload
+    ).lower() or "Each" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1568,7 +1572,9 @@ async def test_update_table_field_no_updates_no_table_id(
     mock_table_client.update_table_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "at least one" in payload["error"].lower() or "table_id" in payload["error"]
+    assert "at least one" in tool_error_message(
+        payload
+    ).lower() or "table_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

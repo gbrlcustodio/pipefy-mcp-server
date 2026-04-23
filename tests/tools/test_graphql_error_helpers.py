@@ -46,6 +46,7 @@ def _isolate_sa_ids(monkeypatch):
     """Default: no service_account_ids configured (tests opt in explicitly)."""
     mock_settings = MagicMock()
     mock_settings.pipefy.service_account_ids = []
+    mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 5.0
     monkeypatch.setattr(settings_mod, "settings", mock_settings)
 
 
@@ -99,6 +100,25 @@ class TestEnrichPermissionDeniedError:
         result = await enrich_permission_denied_error(exc, ["100"], mock_client)
         assert result is None
 
+    async def test_uses_configured_enrichment_timeout(self, mock_client, monkeypatch):
+        """Waits for ``settings.pipefy.permission_denied_enrichment_timeout_seconds``."""
+        import asyncio
+
+        mock_settings = MagicMock()
+        mock_settings.pipefy.service_account_ids = []
+        mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 0.1
+        monkeypatch.setattr(settings_mod, "settings", mock_settings)
+
+        exc = _make_permission_denied_exc()
+
+        async def slow_fetch(*args, **kwargs):
+            await asyncio.sleep(1.0)
+            return {"pipe": {"members": []}}
+
+        mock_client.get_pipe_members.side_effect = slow_fetch
+        result = await enrich_permission_denied_error(exc, ["100"], mock_client)
+        assert result is None
+
     async def test_empty_pipe_ids_returns_none(self, mock_client):
         exc = _make_permission_denied_exc()
         result = await enrich_permission_denied_error(exc, [], mock_client)
@@ -135,6 +155,7 @@ class TestEnrichPermissionDeniedError:
         even if the members list is non-empty (bug reproduction)."""
         mock_settings = MagicMock()
         mock_settings.pipefy.service_account_ids = ["sa-42"]
+        mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 5.0
         monkeypatch.setattr(settings_mod, "settings", mock_settings)
 
         exc = _make_permission_denied_exc()
@@ -159,6 +180,7 @@ class TestEnrichPermissionDeniedError:
         pipe's members, enrichment must return None (no false positive)."""
         mock_settings = MagicMock()
         mock_settings.pipefy.service_account_ids = ["sa-42"]
+        mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 5.0
         monkeypatch.setattr(settings_mod, "settings", mock_settings)
 
         exc = _make_permission_denied_exc()

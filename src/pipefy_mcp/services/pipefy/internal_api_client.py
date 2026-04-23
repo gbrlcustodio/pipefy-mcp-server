@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from typing import Any
-from urllib.parse import urlparse
 
 import httpx
 from httpx import Timeout
 from httpx_auth import OAuth2ClientCredentials
+
+from pipefy_mcp.services.pipefy.utils.url_ssrf import (
+    validate_https_service_endpoint_url,
+)
 
 REQUEST_TIMEOUT_SECONDS = 30
 
@@ -25,6 +28,8 @@ class InternalApiClient:
         oauth_url: str,
         oauth_client: str,
         oauth_secret: str,
+        *,
+        allow_insecure_urls: bool = False,
     ) -> None:
         """Create an internal API client.
 
@@ -33,18 +38,14 @@ class InternalApiClient:
             oauth_url: OAuth token URL.
             oauth_client: OAuth client ID.
             oauth_secret: OAuth client secret.
+            allow_insecure_urls: When True, allow http and internal hosts (must match settings).
         """
-        for label, val in (("internal_api URL", url), ("OAuth URL", oauth_url)):
-            stripped = val.strip().lower()
-            if not stripped.startswith("https://"):
-                raise ValueError(f"{label} must use HTTPS")
-            parsed = urlparse(val.strip())
-            if not parsed.hostname:
-                raise ValueError(f"{label} must include a hostname")
-            if parsed.hostname in ("localhost", "127.0.0.1", "::1"):
-                raise ValueError(
-                    f"{label} must not point to localhost ({parsed.hostname})"
-                )
+        validate_https_service_endpoint_url(
+            url.strip(), "internal_api URL", allow_insecure=allow_insecure_urls
+        )
+        validate_https_service_endpoint_url(
+            oauth_url.strip(), "OAuth URL", allow_insecure=allow_insecure_urls
+        )
         self._url = url
         self._auth = OAuth2ClientCredentials(
             token_url=oauth_url,

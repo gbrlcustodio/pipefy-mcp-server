@@ -2,7 +2,7 @@ import json
 from datetime import timedelta
 from random import randint
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
@@ -24,6 +24,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     DeleteCardErrorPayload,
 )
 from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
 
 # =============================================================================
 # Fixtures
@@ -415,7 +416,7 @@ class TestCreateCardTool:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "invite_members" in payload["error"]
+        assert "invite_members" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -505,7 +506,7 @@ class TestGetLabels:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "access denied" in payload["error"].lower()
+        assert "access denied" in tool_error_message(payload).lower()
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_labels_get_pipe_exception_returns_error_payload(
@@ -618,7 +619,7 @@ class TestDirectToolCalls:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload.get("success") is False
-        assert "99" in payload["error"]
+        assert "99" in tool_error_message(payload)
         assert payload["valid_destinations"] == [{"id": "11", "name": "Done"}]
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -777,7 +778,9 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert "comment" in payload["error"].lower() or "comment_id" in payload["error"]
+        assert "comment" in tool_error_message(
+            payload
+        ).lower() or "comment_id" in tool_error_message(payload)
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_delete_comment_success(
@@ -844,7 +847,7 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert "permission" in payload["error"].lower()
+        assert "permission" in tool_error_message(payload).lower()
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_delete_comment_comment_not_found_returns_mapped_error_payload(
@@ -870,7 +873,9 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert "comment" in payload["error"].lower() or "not found" in payload["error"]
+        assert "comment" in tool_error_message(
+            payload
+        ).lower() or "not found" in tool_error_message(payload)
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_delete_comment_preview_then_confirm_true_runs_mutation(
@@ -1120,7 +1125,9 @@ class TestAddCardCommentTool:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert "Card not found" in payload["error"] or "card_id" in payload["error"]
+        assert "Card not found" in tool_error_message(
+            payload
+        ) or "card_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1319,10 +1326,7 @@ class TestFillCardPhaseFieldsTool:
             assert result.isError is False
             mock_pipefy_client.update_card.assert_not_called()
             response = extract_payload(result)
-            assert response == {
-                "success": False,
-                "error": "Phase field update cancelled by user.",
-            }
+            assert response == tool_error("Phase field update cancelled by user.")
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_without_elicitation(
@@ -1630,10 +1634,10 @@ class TestDeleteCardTool:
             mock_pipefy_client.delete_card.assert_not_called()
 
             payload = extract_payload(result)
-            expected_payload: DeleteCardErrorPayload = {
-                "success": False,
-                "error": "Invalid 'card_id': provide a positive integer.",
-            }
+            expected_payload = cast(
+                DeleteCardErrorPayload,
+                tool_error("Invalid 'card_id': provide a positive integer."),
+            )
             assert payload == expected_payload
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -1669,10 +1673,12 @@ class TestDeleteCardTool:
             mock_pipefy_client.delete_card.assert_not_called()
 
             payload = extract_payload(result)
-            expected_payload: DeleteCardErrorPayload = {
-                "success": False,
-                "error": "Card with ID 99999 not found. Verify the card exists and you have access permissions.",
-            }
+            expected_payload = cast(
+                DeleteCardErrorPayload,
+                tool_error(
+                    "Card with ID 99999 not found. Verify the card exists and you have access permissions."
+                ),
+            )
             assert payload == expected_payload
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -1715,10 +1721,12 @@ class TestDeleteCardTool:
             mock_pipefy_client.delete_card.assert_called_once_with("12345")
 
             payload = extract_payload(result)
-            expected_payload: DeleteCardErrorPayload = {
-                "success": False,
-                "error": "You don't have permission to delete card 12345. Please check your access permissions.",
-            }
+            expected_payload = cast(
+                DeleteCardErrorPayload,
+                tool_error(
+                    "You don't have permission to delete card 12345. Please check your access permissions."
+                ),
+            )
             assert payload == expected_payload
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
@@ -1749,10 +1757,12 @@ class TestDeleteCardTool:
             mock_pipefy_client.delete_card.assert_called_once_with("12345")
 
             payload = extract_payload(result)
-            expected_payload: DeleteCardErrorPayload = {
-                "success": False,
-                "error": "Failed to delete card 'Test Card' (ID: 12345). Please try again or contact support.",
-            }
+            expected_payload = cast(
+                DeleteCardErrorPayload,
+                tool_error(
+                    "Failed to delete card 'Test Card' (ID: 12345). Please try again or contact support."
+                ),
+            )
             assert payload == expected_payload
 
     @pytest.mark.parametrize(
@@ -1868,8 +1878,10 @@ class TestDeleteCardTool:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert "codes=" in payload["error"] or "correlation_id=" in payload["error"]
-        assert "PERMISSION_DENIED" in payload["error"]
+        assert "codes=" in tool_error_message(
+            payload
+        ) or "correlation_id=" in tool_error_message(payload)
+        assert "PERMISSION_DENIED" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1991,7 +2003,7 @@ class TestGetCardRelations:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "not found" in payload["error"].lower()
+        assert "not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -2106,7 +2118,7 @@ class TestDeleteCardRelation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "did not succeed" in payload["error"].lower()
+        assert "did not succeed" in tool_error_message(payload).lower()
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_not_configured_returns_oauth_message(
@@ -2131,7 +2143,7 @@ class TestDeleteCardRelation:
         mock_pipefy_client.delete_card_relation.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "OAuth" in payload["error"]
+        assert "OAuth" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -2332,3 +2344,65 @@ class TestSkipElicitation:
             card_id="99",
             field_updates=[{"field_id": "status", "value": "approved"}],
         )
+
+
+# =============================================================================
+# structured_output=False on comment/card mutation tools
+# =============================================================================
+#
+# These four tools used TypedDict return annotations, which FastMCP auto-detects
+# as structured output. The resulting ``CallToolResult`` carried a
+# ``structuredContent`` field that MCP clients surface wrapped in ``{"result":
+# {...}}`` — visually different from the 13 other ``delete_*`` tools that
+# return plain ``dict[str, Any]``. We disable structured output on the four
+# outliers so all comment/card/delete tools share the same envelope shape.
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("client_session", [None], indirect=True)
+@pytest.mark.parametrize(
+    "tool_name,args,prep",
+    [
+        (
+            "add_card_comment",
+            {"card_id": "1", "text": "hi"},
+            None,
+        ),
+        (
+            "update_comment",
+            {"comment_id": "1", "text": "hi"},
+            None,
+        ),
+        (
+            "delete_comment",
+            {"comment_id": "1", "confirm": True},
+            None,
+        ),
+        (
+            "delete_card",
+            {"card_id": "1", "confirm": True},
+            "delete_card",
+        ),
+    ],
+)
+async def test_comment_and_card_mutations_emit_unstructured_content(
+    client_session, mock_pipefy_client, tool_name, args, prep
+):
+    """Tools keep their TypedDict return hints for callers, but
+    ``structured_output=False`` prevents the ``{"result": {...}}`` wrap that
+    FastMCP otherwise generates when a tool declares structured output."""
+    if prep == "delete_card":
+        mock_pipefy_client.get_card.return_value = {
+            "card": {
+                "id": "1",
+                "title": "T",
+                "pipe": {"name": "P"},
+            }
+        }
+        mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": True}}
+    async with client_session as session:
+        result = await session.call_tool(tool_name, args)
+    assert result.isError is False
+    # The tool body returns a plain success dict; structured_output=False
+    # means no structuredContent is emitted on the MCP protocol side.
+    assert result.structuredContent is None

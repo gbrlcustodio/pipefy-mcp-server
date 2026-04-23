@@ -9,6 +9,7 @@ from mcp.types import ToolAnnotations
 
 from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 from pipefy_mcp.tools.observability_tool_helpers import (
     build_observability_error_payload,
     build_observability_mutation_success_payload,
@@ -32,6 +33,25 @@ _DEFAULT_CSV_CHARS = 400_000
 _MIN_EXPORT_DOWNLOAD_BYTES = 4096
 _MAX_EXPORT_DOWNLOAD_BYTES = 80 * 1024 * 1024
 _DEFAULT_EXPORT_DOWNLOAD_BYTES = 50 * 1024 * 1024
+
+
+def _rewrite_ai_agent_log_not_found(exc: BaseException, log_uuid: str) -> str | None:
+    """Translate the Pipefy resolver's internal type leak to tool semantics.
+
+    The ``aiAgentLogDetails`` resolver looks up by ``AutomationAction`` under
+    the hood; when the UUID isn't found, the upstream error string exposes
+    that internal type (``"Couldn't find AutomationAction with 'id'=..."``).
+    ``TransportQueryError`` hides per-error messages behind ``.errors``, so we
+    check both ``str(exc)`` and the structured error list.
+    """
+    candidates = [str(exc), *extract_error_strings(exc)]
+    for msg in candidates:
+        lowered = msg.lower()
+        if "automationaction" in lowered and (
+            "couldn't find" in lowered or "not find" in lowered
+        ):
+            return f"AI agent log not found with uuid: {log_uuid}"
+    return None
 
 
 class ObservabilityTools:
@@ -104,6 +124,9 @@ class ObservabilityTools:
             try:
                 raw = await client.get_ai_agent_log_details(log_uuid)
             except Exception as exc:  # noqa: BLE001
+                rewritten = _rewrite_ai_agent_log_not_found(exc, log_uuid)
+                if rewritten is not None:
+                    return build_observability_error_payload(message=rewritten)
                 return handle_observability_tool_graphql_error(
                     exc, "Get AI agent log details failed.", debug=debug
                 )

@@ -12,7 +12,7 @@ Every tool with ``destructiveHint=True`` should call
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from mcp.server.fastmcp import Context
 from mcp.server.session import ServerSession
@@ -38,7 +38,7 @@ async def check_destructive_confirmation(
     *,
     confirm: bool,
     resource_descriptor: str,
-) -> dict[str, Any] | None:
+) -> DestructivePreviewPayload | None:
     """Gate a destructive operation behind explicit ``confirm=True``.
 
     Call this **after** fetching resource info but **before** executing the
@@ -53,7 +53,7 @@ async def check_destructive_confirmation(
 
     Returns:
         ``None`` when the caller should proceed with the deletion.
-        A preview ``dict`` when ``confirm`` is false — the caller must return
+        A preview payload when ``confirm`` is false — the caller must return
         it as-is.
     """
     if confirm:

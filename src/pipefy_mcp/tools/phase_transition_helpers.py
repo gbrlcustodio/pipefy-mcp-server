@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.transition_hints import (
     TRANSITION_RULES_HINT,
     format_allowed_destinations_phrase,
 )
+
+logger = logging.getLogger(__name__)
 
 # Traditional automation action IDs that move the current card to another phase (same repo).
 _AUTOMATION_MOVE_CARD_ACTION_IDS = frozenset({"move_single_card"})
@@ -36,6 +40,10 @@ async def try_enrich_move_card_to_phase_failure(
     try:
         card_payload = await client.get_card(card_id, include_fields=False)
     except Exception:
+        logger.debug(
+            "Move-card error enrichment: get_card failed; skipping enriched message",
+            exc_info=True,
+        )
         return None
     card = card_payload.get("card") or {}
     current = card.get("current_phase") or {}
@@ -46,6 +54,12 @@ async def try_enrich_move_card_to_phase_failure(
     try:
         phase_payload = await client.get_phase_allowed_move_targets(cur_id)
     except Exception:
+        logger.debug(
+            "Move-card error enrichment: get_phase_allowed_move_targets failed; "
+            "skipping enriched message (phase_id=%s)",
+            cur_id,
+            exc_info=True,
+        )
         return None
     phase = phase_payload.get("phase") or {}
     allowed = phase.get("cards_can_be_moved_to_phases") or []
@@ -61,12 +75,10 @@ async def try_enrich_move_card_to_phase_failure(
         f"id {destination_phase_id}. Valid destinations from that phase: {valid_label}. "
         f"{TRANSITION_RULES_HINT}"
     )
-    return {
-        "success": False,
-        "error": msg,
-        "valid_destinations": allowed,
-        "current_phase": {"id": str(cur_id), "name": cur_name or None},
-    }
+    out: dict[str, Any] = tool_error(msg)
+    out["valid_destinations"] = allowed
+    out["current_phase"] = {"id": str(cur_id), "name": cur_name or None}
+    return out
 
 
 async def collect_ai_behavior_move_transition_problems(
@@ -92,7 +104,14 @@ async def collect_ai_behavior_move_transition_problems(
         if phase_id_str not in cache:
             try:
                 data = await client.get_phase_allowed_move_targets(phase_id_str)
-            except Exception:
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "AI behavior transition validation: "
+                    "get_phase_allowed_move_targets failed; "
+                    "skipping validation for phase_id=%s",
+                    phase_id_str,
+                    exc_info=True,
+                )
                 cache[phase_id_str] = ("", [])
             else:
                 ph = data.get("phase") or {}
@@ -212,7 +231,14 @@ async def validate_traditional_automation_move_transition_or_none(
     dest_s = str(dest)
     try:
         data = await client.get_phase_allowed_move_targets(src_s)
-    except Exception:
+    except Exception:  # noqa: BLE001
+        logger.debug(
+            "Traditional automation move-transition validation: "
+            "get_phase_allowed_move_targets failed; skipping validation "
+            "(phase_id=%s)",
+            src_s,
+            exc_info=True,
+        )
         return None
     ph = data.get("phase") or {}
     allowed = ph.get("cards_can_be_moved_to_phases") or []

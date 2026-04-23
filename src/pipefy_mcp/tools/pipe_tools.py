@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
@@ -17,7 +17,7 @@ from pipefy_mcp.models.comment import (
 from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.services.pipefy.types import CardSearch
+from pipefy_mcp.services.pipefy.types import CardSearch, copy_card_search
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
@@ -58,6 +58,7 @@ from pipefy_mcp.tools.relation_tool_helpers import (
     build_relation_mutation_success_payload,
     handle_relation_tool_graphql_error,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 # Key for findCards response; used when reading edges and adding empty message.
@@ -135,7 +136,7 @@ class PipeTools:
                         ctx=ctx,
                     )
                 except UserCancelledError:
-                    return {"error": "Card creation cancelled by user."}
+                    return tool_error("Card creation cancelled by user.")
             elif expected_fields:
                 card_data = _filter_fields_by_definitions(card_data, expected_fields)
 
@@ -148,7 +149,7 @@ class PipeTools:
                 error_text = str(exc)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
-                return {"success": False, "error": error_text}
+                return tool_error(error_text)
             card_id = result.get("createCard", {}).get("card", {}).get("id")
             if card_id:
                 if title:
@@ -230,10 +231,7 @@ class PipeTools:
 
             card_node = raw.get("card")
             if card_node is None:
-                return {
-                    "success": False,
-                    "error": "Card not found or access denied.",
-                }
+                return tool_error("Card not found or access denied.")
 
             # Public GraphQL returns snake_case (``child_relations``); accept camelCase too.
             child = (
@@ -255,6 +253,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            structured_output=False,
         )
         async def add_card_comment(
             card_id: PipefyId, text: str
@@ -287,6 +286,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            structured_output=False,
         )
         async def update_comment(
             comment_id: PipefyId, text: str
@@ -322,6 +322,7 @@ class PipeTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            structured_output=False,
         )
         async def delete_comment(
             ctx: Context[ServerSession, None],
@@ -483,7 +484,7 @@ class PipeTools:
                 first: Max cards to return per page.
                 after: Cursor for fetching the next page (from ``pageInfo.endCursor`` of a previous call).
             """
-            merged_search: CardSearch = cast(CardSearch, dict(search) if search else {})
+            merged_search: CardSearch = copy_card_search(search) if search else {}
             if title:
                 merged_search["title"] = title
 
@@ -608,10 +609,7 @@ class PipeTools:
 
             pipe_node = raw.get("pipe")
             if pipe_node is None:
-                return {
-                    "success": False,
-                    "error": "Pipe not found or access denied.",
-                }
+                return tool_error("Pipe not found or access denied.")
 
             labels = pipe_node.get("labels")
             if labels is None:
@@ -880,10 +878,7 @@ class PipeTools:
                         ctx=ctx,
                     )
                 except UserCancelledError:
-                    return {
-                        "success": False,
-                        "error": "Phase field update cancelled by user.",
-                    }
+                    return tool_error("Phase field update cancelled by user.")
             elif expected_fields:
                 field_data = _filter_fields_by_definitions(field_data, expected_fields)
 
@@ -910,19 +905,28 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def search_pipes(pipe_name: str | None = None) -> dict:
+        async def search_pipes(
+            pipe_name: str | None = None,
+            max_pipes_per_org: int = 500,
+        ) -> dict:
             """Search for all accessible pipes across all organizations.
 
             Use this tool to find a pipe's ID when you only know its name.
-            Returns all pipes from all organizations, optionally filtered by name.
+            Returns pipes from all organizations, optionally filtered by name.
 
             When filtering by name, uses fuzzy matching with a 70% similarity threshold.
             Only pipes with a match score of 70 or higher are included in the results.
             Results are sorted by match score (best matches first).
 
+            Without a name filter, each organization returns at most ``max_pipes_per_org``
+            pipes (capped 1--500) to avoid huge responses. With a name filter, the API
+            receives a server-side ``name_search`` hint; results are still capped per org
+            after scoring. Check ``search_limits`` and per-org ``pipes_truncated`` when present.
+
             Args:
                 pipe_name: Optional pipe name to search for (case-insensitive partial match).
-                           If not provided, returns all available pipes.
+                           If not provided, returns up to ``max_pipes_per_org`` pipes per org.
+                max_pipes_per_org: Maximum pipes per organization (1--500, default 500).
 
             Returns:
                 dict: Contains 'organizations' array, each with:
@@ -933,14 +937,17 @@ class PipeTools:
                           - name: Pipe name
                           - description: Pipe description
                           - match_score: Fuzzy match score (0-100) when pipe_name is provided.
+                      And ``search_limits`` with applied caps.
             """
-            return await client.search_pipes(pipe_name)
+            mpc = max(1, min(500, int(max_pipes_per_org)))
+            return await client.search_pipes(pipe_name, max_pipes_per_org=mpc)
 
         @mcp.tool(
             annotations=ToolAnnotations(
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            structured_output=False,
         )
         async def delete_card(
             ctx: Context[ServerSession, None],
@@ -967,7 +974,7 @@ class PipeTools:
             """
             card_id_str, err = validate_tool_id(card_id, "card_id")
             if err is not None:
-                return build_delete_card_error_payload(message=err["error"])
+                return build_delete_card_error_payload(message=tool_error_message(err))
 
             try:
                 card_response = await client.get_card(card_id_str)

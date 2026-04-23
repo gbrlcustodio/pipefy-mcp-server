@@ -20,6 +20,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     normalize_field_condition_actions,
     strip_expression_ids_for_create,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.validation_helpers import (
     validate_tool_id,
 )
@@ -85,10 +86,7 @@ class FieldConditionTools:
 
             phase = raw.get("phase")
             if phase is None:
-                return {
-                    "success": False,
-                    "error": "Phase not found or access denied.",
-                }
+                return tool_error("Phase not found or access denied.")
 
             rows = phase.get("fieldConditions")
             if rows is None:
@@ -136,10 +134,7 @@ class FieldConditionTools:
 
             fc = raw.get("fieldCondition")
             if fc is None:
-                return {
-                    "success": False,
-                    "error": "Field condition not found or access denied.",
-                }
+                return tool_error("Field condition not found or access denied.")
             return {
                 "success": True,
                 "message": "Field condition loaded.",

@@ -14,6 +14,7 @@ from mcp.shared.memory import (
 import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.models.ai_agent import UpdateAiAgentInput
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from tests.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
 
 
@@ -109,8 +110,8 @@ class TestCreateAiAgent:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert isinstance(payload["error"], str)
-        assert "GraphQL error" in payload["error"]
+        assert isinstance(tool_error_message(payload), str)
+        assert "GraphQL error" in tool_error_message(payload)
         mock_pipefy_client.update_ai_agent.assert_not_called()
 
     async def test_validation_error_returns_error_payload(
@@ -205,7 +206,7 @@ class TestCreateAiAgent:
         assert payload["success"] is False
         assert payload["agent_uuid"] == "created-uuid"
         assert "error" in payload
-        assert "update failed" in payload["error"]
+        assert "update failed" in tool_error_message(payload)
 
     async def test_graphql_error_extracts_messages(
         self,
@@ -229,7 +230,7 @@ class TestCreateAiAgent:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "permission denied" in payload["error"]
+        assert "permission denied" in tool_error_message(payload)
         mock_pipefy_client.update_ai_agent.assert_not_called()
 
     async def test_empty_behaviors_returns_validation_error(
@@ -299,7 +300,7 @@ class TestCreateAiAgent:
         mock_pipefy_client.create_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "repo_uuid" in payload["error"]
+        assert "repo_uuid" in tool_error_message(payload)
 
     async def test_blank_name_returns_error_before_api_call(
         self,
@@ -321,7 +322,7 @@ class TestCreateAiAgent:
         mock_pipefy_client.create_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "name" in payload["error"]
+        assert "name" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -426,7 +427,7 @@ class TestUpdateAiAgent:
         mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "uuid" in payload["error"]
+        assert "uuid" in tool_error_message(payload)
 
     async def test_service_error_returns_error_payload(
         self,
@@ -483,9 +484,9 @@ class TestUpdateAiAgent:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "RECORD_NOT_SAVED" in payload["error"]
-        assert "pipe-specific restriction" in payload["error"]
-        assert "Do NOT retry" in payload["error"]
+        assert "RECORD_NOT_SAVED" in tool_error_message(payload)
+        assert "pipe-specific restriction" in tool_error_message(payload)
+        assert "Do NOT retry" in tool_error_message(payload)
 
     async def test_record_not_saved_with_invalid_payload_shows_problems(
         self,
@@ -517,9 +518,9 @@ class TestUpdateAiAgent:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "RECORD_NOT_SAVED" in payload["error"]
-        assert "Validation found problems" in payload["error"]
-        assert '"999"' in payload["error"]
+        assert "RECORD_NOT_SAVED" in tool_error_message(payload)
+        assert "Validation found problems" in tool_error_message(payload)
+        assert '"999"' in tool_error_message(payload)
 
     async def test_non_record_not_saved_error_uses_standard_enrichment(
         self,
@@ -541,8 +542,8 @@ class TestUpdateAiAgent:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "timeout" in payload["error"]
-        assert "pipe-specific restriction" not in payload["error"]
+        assert "timeout" in tool_error_message(payload)
+        assert "pipe-specific restriction" not in tool_error_message(payload)
         mock_pipefy_client.get_pipe.assert_not_called()
 
 
@@ -609,7 +610,7 @@ class TestToggleAiAgentStatus:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert isinstance(payload["error"], str)
+        assert isinstance(tool_error_message(payload), str)
 
     async def test_graphql_error_extracts_message(
         self,
@@ -628,7 +629,7 @@ class TestToggleAiAgentStatus:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "locked" in payload["error"]
+        assert "locked" in tool_error_message(payload)
 
 
 def _behavior_update_card_on_pipe(pipe_id="1", field_id="100"):
@@ -959,7 +960,7 @@ class TestGetAiAgent:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "not found" in payload["error"].lower()
+        assert "not found" in tool_error_message(payload).lower()
 
     async def test_blank_uuid_returns_error_payload(
         self, client_session, mock_pipefy_client, extract_payload
@@ -969,7 +970,7 @@ class TestGetAiAgent:
         mock_pipefy_client.get_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "blank" in payload["error"].lower()
+        assert "blank" in tool_error_message(payload).lower()
 
     async def test_graphql_error_returns_error_payload(
         self,
@@ -985,7 +986,7 @@ class TestGetAiAgent:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "not found" in payload["error"]
+        assert "not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1016,7 +1017,7 @@ class TestGetAiAgents:
         mock_pipefy_client.get_ai_agents.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "blank" in payload["error"].lower()
+        assert "blank" in tool_error_message(payload).lower()
 
     async def test_graphql_error_returns_error_payload(
         self,
@@ -1035,7 +1036,7 @@ class TestGetAiAgents:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "denied" in payload["error"]
+        assert "denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1072,7 +1073,7 @@ class TestDeleteAiAgent:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "success=false" in payload["error"].lower()
+        assert "success=false" in tool_error_message(payload).lower()
 
     async def test_blank_uuid_returns_error_payload(
         self, client_session, mock_pipefy_client, extract_payload
@@ -1082,7 +1083,7 @@ class TestDeleteAiAgent:
         mock_pipefy_client.delete_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "blank" in payload["error"].lower()
+        assert "blank" in tool_error_message(payload).lower()
 
     async def test_graphql_error_returns_error_payload(
         self,
@@ -1101,7 +1102,7 @@ class TestDeleteAiAgent:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "gone" in payload["error"]
+        assert "gone" in tool_error_message(payload)
 
     async def test_has_destructive_hint(self, client_session):
         async with client_session as session:
@@ -1127,7 +1128,7 @@ class TestGetAiAgentGraphqlError:
             result = await session.call_tool("get_ai_agent", {"uuid": "agent-1"})
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "server down" in payload["error"]
+        assert "server down" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1162,7 +1163,7 @@ class TestGetAiAgentsErrorPaths:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "boom" in payload["error"]
+        assert "boom" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1182,7 +1183,7 @@ class TestToggleAiAgentStatusErrorPaths:
         mock_pipefy_client.toggle_ai_agent_status.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "blank" in payload["error"].lower()
+        assert "blank" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -1217,7 +1218,7 @@ class TestDeleteAiAgentConfirmationGuard:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "network" in payload["error"]
+        assert "network" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1243,7 +1244,7 @@ class TestCreateAiAgentBlankInstruction:
         mock_pipefy_client.create_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "instruction" in payload["error"]
+        assert "instruction" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1270,7 +1271,7 @@ class TestUpdateAiAgentBlankFields:
         mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "name" in payload["error"]
+        assert "name" in tool_error_message(payload)
 
     async def test_blank_repo_uuid_returns_error(
         self,
@@ -1292,7 +1293,7 @@ class TestUpdateAiAgentBlankFields:
         mock_pipefy_client.update_ai_agent.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "repo_uuid" in payload["error"]
+        assert "repo_uuid" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1369,7 +1370,7 @@ class TestValidateAiAgentBehaviorsErrorPaths:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "timed out" in payload["error"].lower()
+        assert "timed out" in tool_error_message(payload).lower()
 
     async def test_pipe_fetch_generic_error(
         self,
@@ -1386,7 +1387,7 @@ class TestValidateAiAgentBehaviorsErrorPaths:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "db down" in payload["error"]
+        assert "db down" in tool_error_message(payload)
 
     async def test_start_form_fields_collected(
         self,
@@ -1682,6 +1683,185 @@ class TestValidateAiAgentBehaviorsErrorPaths:
         assert payload["success"] is True
         assert any("999" in w for w in payload["warnings"])
 
+    async def test_target_pipe_fetch_max_distinct_pipes_rejected(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+        monkeypatch,
+    ):
+        """Enforces MAX_CROSS_PIPE_FIELD_FETCH on distinct create_connected_card targets."""
+        from pipefy_mcp.tools import ai_agent_tools
+
+        monkeypatch.setattr(ai_agent_tools, "MAX_CROSS_PIPE_FIELD_FETCH", 1)
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field()
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [
+                {"child": {"id": "999"}},
+                {"child": {"id": "888"}},
+            ],
+            "parents": [],
+        }
+        b1 = {
+            "name": "Cross1",
+            "event_id": "card_created",
+            "actionParams": {
+                "aiBehaviorParams": {
+                    "instruction": "go",
+                    "actionsAttributes": [
+                        {
+                            "name": "cc",
+                            "actionType": "create_connected_card",
+                            "metadata": {
+                                "pipeId": "999",
+                                "fieldsAttributes": [
+                                    {
+                                        "fieldId": "tf-1",
+                                        "inputMode": "fill_with_ai",
+                                        "value": "",
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            },
+        }
+        b2 = {
+            "name": "Cross2",
+            "event_id": "card_created",
+            "actionParams": {
+                "aiBehaviorParams": {
+                    "instruction": "go2",
+                    "actionsAttributes": [
+                        {
+                            "name": "cc2",
+                            "actionType": "create_connected_card",
+                            "metadata": {
+                                "pipeId": "888",
+                                "fieldsAttributes": [
+                                    {
+                                        "fieldId": "tf-8",
+                                        "inputMode": "fill_with_ai",
+                                        "value": "",
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            },
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {"pipe_id": "1", "behaviors": [b1, b2]},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "Too many distinct cross-pipe target pipes" in tool_error_message(
+            payload
+        )
+
+    async def test_target_pipe_fetch_two_targets_parallel_uses_per_pipe_data(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Cross-pipe fetches run in parallel; responses must map by pipe id, not call order."""
+        rel = {
+            "children": [
+                {"child": {"id": "999"}},
+                {"child": {"id": "888"}},
+            ],
+            "parents": [],
+        }
+        main = _pipe_graph_with_field()
+        t999 = {
+            "pipe": {
+                "phases": [{"id": "tp-1", "fields": [{"id": "tf-1"}]}],
+                "start_form_fields": [],
+            }
+        }
+        t888 = {
+            "pipe": {
+                "phases": [{"id": "tp-2", "fields": [{"id": "tf-88"}]}],
+                "start_form_fields": [],
+            }
+        }
+
+        async def get_pipe_by_id(tpid, *args, **kwargs):
+            tpid = str(tpid)
+            if tpid == "1":
+                return main
+            if tpid == "999":
+                return t999
+            if tpid == "888":
+                return t888
+            return {"pipe": {}}
+
+        mock_pipefy_client.get_pipe.side_effect = get_pipe_by_id
+        mock_pipefy_client.get_pipe_relations.return_value = rel
+        b1 = {
+            "name": "B1",
+            "event_id": "card_created",
+            "actionParams": {
+                "aiBehaviorParams": {
+                    "instruction": "go",
+                    "actionsAttributes": [
+                        {
+                            "name": "cc1",
+                            "actionType": "create_connected_card",
+                            "metadata": {
+                                "pipeId": "999",
+                                "fieldsAttributes": [
+                                    {
+                                        "fieldId": "tf-1",
+                                        "inputMode": "fill_with_ai",
+                                        "value": "",
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            },
+        }
+        b2 = {
+            "name": "B2",
+            "event_id": "card_created",
+            "actionParams": {
+                "aiBehaviorParams": {
+                    "instruction": "go2",
+                    "actionsAttributes": [
+                        {
+                            "name": "cc2",
+                            "actionType": "create_connected_card",
+                            "metadata": {
+                                "pipeId": "888",
+                                "fieldsAttributes": [
+                                    {
+                                        "fieldId": "tf-88",
+                                        "inputMode": "fill_with_ai",
+                                        "value": "",
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            },
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {"pipe_id": "1", "behaviors": [b1, b2]},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is True
+
 
 @pytest.mark.anyio
 class TestEnrichWithValidation:
@@ -1726,7 +1906,7 @@ class TestEnrichWithValidation:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "RECORD_NOT_SAVED" in payload["error"]
+        assert "RECORD_NOT_SAVED" in tool_error_message(payload)
         # No pipe_id found, so no validation suffix
         mock_pipefy_client.get_pipe.assert_not_called()
 
@@ -1757,10 +1937,10 @@ class TestEnrichWithValidation:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "RECORD_NOT_SAVED" in payload["error"]
+        assert "RECORD_NOT_SAVED" in tool_error_message(payload)
         # Falls back to standard enrichment, no validation suffix
-        assert "Validation found problems" not in payload["error"]
-        assert "pipe-specific restriction" not in payload["error"]
+        assert "Validation found problems" not in tool_error_message(payload)
+        assert "pipe-specific restriction" not in tool_error_message(payload)
 
     async def test_record_not_saved_with_start_form_fields_and_relations(
         self,
@@ -1796,9 +1976,9 @@ class TestEnrichWithValidation:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "RECORD_NOT_SAVED" in payload["error"]
+        assert "RECORD_NOT_SAVED" in tool_error_message(payload)
         # sf-100 is valid (in start_form_fields), so payload should pass validation
-        assert "pipe-specific restriction" in payload["error"]
+        assert "pipe-specific restriction" in tool_error_message(payload)
 
     async def test_record_not_saved_relations_fetch_fails_still_validates(
         self,
@@ -1830,9 +2010,9 @@ class TestEnrichWithValidation:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "RECORD_NOT_SAVED" in payload["error"]
+        assert "RECORD_NOT_SAVED" in tool_error_message(payload)
         # Field is valid, relations failed, still validates with related_pipe_ids=None
-        assert "pipe-specific restriction" in payload["error"]
+        assert "pipe-specific restriction" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -2185,5 +2365,5 @@ class TestCreateAiAgentPermissionEnrichment:
         payload = extract_payload(result)
         assert payload["success"] is False
         # Enrichment message is prepended to the error
-        assert "invite_members" in payload["error"]
-        assert "forbidden" in payload["error"]
+        assert "invite_members" in tool_error_message(payload)
+        assert "forbidden" in tool_error_message(payload)

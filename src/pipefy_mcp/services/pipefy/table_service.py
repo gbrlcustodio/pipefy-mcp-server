@@ -29,6 +29,15 @@ from pipefy_mcp.services.pipefy.queries.table_queries import (
 from pipefy_mcp.services.pipefy.utils.formatters import convert_fields_to_array
 from pipefy_mcp.settings import PipefySettings
 
+SEARCH_TABLES_FIRST_DEFAULT: int = 100
+SEARCH_TABLES_FIRST_MAX: int = 500
+SEARCH_TABLES_FIRST_MIN: int = 1
+
+
+def _clamp_tables_first(value: int) -> int:
+    return max(SEARCH_TABLES_FIRST_MIN, min(SEARCH_TABLES_FIRST_MAX, value))
+
+
 UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS = frozenset(
     {"title", "due_date", "status_id", "statusId"}
 )
@@ -145,7 +154,7 @@ class TableService(BasePipefyClient):
 
         Args:
             table_id: Target table ID.
-            fields: Field values as a dict (field_id → value) or list of `FieldValueInput` dicts.
+            fields: Field values as a dict (field_id -> value) or list of `FieldValueInput` dicts.
             **attrs: Other `CreateTableRecordInput` keys (e.g. title, assignee_ids), when not None.
         """
         input_obj: dict[str, Any] = {
@@ -281,39 +290,68 @@ class TableService(BasePipefyClient):
         )
 
     async def search_tables(
-        self, table_name: str | None = None, match_threshold: int = 70
+        self,
+        table_name: str | None = None,
+        *,
+        # 70: WRatio score_cutoff default - balanced manually for typo/abbrev. recall vs. spurious matches.
+        match_threshold: int = 70,
+        first: int = SEARCH_TABLES_FIRST_DEFAULT,
     ) -> dict[str, Any]:
         """Search for databases (tables) across all organizations using fuzzy matching.
 
         Args:
             table_name: Optional table name to search for (fuzzy match).
                         Supports partial matches.
-                        If not provided, returns all tables.
+                        If not provided, returns up to ``first`` tables per organization.
             match_threshold: Minimum fuzzy match score (0-100). Default: 70.
+            first: GraphQL ``tables(first: ...)`` per organization (clamped 1--500).
+                Additional pages require a follow-up API design (cursor per org).
 
         Returns:
             Organizations (with nested tables) matching the fuzzy filter, sorted by score.
+            Includes ``search_limits`` with the effective ``first`` and ``tables_has_next_page``
+            when any org's connection reports ``hasNextPage``.
         """
-        result = await self.execute_query(SEARCH_TABLES_QUERY, {})
+        first_clamped = _clamp_tables_first(first)
+        result = await self.execute_query(
+            SEARCH_TABLES_QUERY,
+            {"first": first_clamped},
+        )
         organizations = result.get("organizations", [])
+
+        limits: dict[str, object] = {
+            "tables_first": first_clamped,
+            "tables_has_next_page": False,
+        }
+
+        def _normalize_org(org: dict) -> dict:
+            conn = org.get("tables") or {}
+            nodes = list(conn.get("nodes") or [])
+            page_info = conn.get("pageInfo") or {}
+            has_next = bool(page_info.get("hasNextPage"))
+            if has_next:
+                limits["tables_has_next_page"] = True
+            row: dict[str, Any] = {
+                "id": org.get("id"),
+                "name": org.get("name"),
+                "tables": nodes,
+            }
+            if has_next:
+                row["tables_has_next_page"] = True
+                row["tables_page_end_cursor"] = page_info.get("endCursor")
+            return row
 
         if not table_name:
             return {
-                "organizations": [
-                    {
-                        "id": org.get("id"),
-                        "name": org.get("name"),
-                        "tables": org.get("tables", {}).get("nodes", []),
-                    }
-                    for org in organizations
-                ]
+                "organizations": [_normalize_org(org) for org in organizations],
+                "search_limits": limits,
             }
 
         filtered_orgs = []
 
         for org in organizations:
             matching_tables = []
-            for table in org.get("tables", {}).get("nodes", []):
+            for table in (org.get("tables") or {}).get("nodes", []) or []:
                 table_display_name = table.get("name", "")
                 if table_name.lower() in table_display_name.lower():
                     matching_tables.append((100.0, table))
@@ -326,15 +364,22 @@ class TableService(BasePipefyClient):
 
             if matching_tables:
                 matching_tables.sort(key=lambda x: x[0], reverse=True)
-                filtered_orgs.append(
-                    {
-                        "id": org.get("id"),
-                        "name": org.get("name"),
-                        "tables": [
-                            {**table, "match_score": round(score, 1)}
-                            for score, table in matching_tables
-                        ],
-                    }
-                )
+                conn = org.get("tables") or {}
+                page_info = conn.get("pageInfo") or {}
+                has_next = bool(page_info.get("hasNextPage"))
+                if has_next:
+                    limits["tables_has_next_page"] = True
+                entry: dict[str, Any] = {
+                    "id": org.get("id"),
+                    "name": org.get("name"),
+                    "tables": [
+                        {**table, "match_score": round(score, 1)}
+                        for score, table in matching_tables
+                    ],
+                }
+                if has_next:
+                    entry["tables_has_next_page"] = True
+                    entry["tables_page_end_cursor"] = page_info.get("endCursor")
+                filtered_orgs.append(entry)
 
-        return {"organizations": filtered_orgs}
+        return {"organizations": filtered_orgs, "search_limits": limits}

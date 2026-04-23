@@ -12,6 +12,7 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.report_tools import ReportTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture
@@ -93,7 +94,7 @@ async def test_get_pipe_reports_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not allowed" in payload["error"]
+    assert "not allowed" in tool_error_message(payload)
 
 
 class TestGetPipeReport:
@@ -162,8 +163,8 @@ class TestGetPipeReport:
         )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "not found" in payload["error"].lower()
-        assert "missing" in payload["error"]
+        assert "not found" in tool_error_message(payload).lower()
+        assert "missing" in tool_error_message(payload)
 
     @pytest.mark.anyio
     @pytest.mark.parametrize("report_session", [None], indirect=True)
@@ -183,7 +184,7 @@ class TestGetPipeReport:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "unavailable" in payload["error"]
+        assert "unavailable" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -433,7 +434,7 @@ async def test_create_pipe_report_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "invalid pipe" in payload["error"]
+    assert "invalid pipe" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -459,9 +460,11 @@ async def test_create_pipe_report_graphql_error_with_debug(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "invalid pipe" in payload["error"]
-    assert "codes=" in payload["error"] or "correlation_id=" in payload["error"]
-    assert "PERMISSION_DENIED" in payload["error"]
+    assert "invalid pipe" in tool_error_message(payload)
+    assert "codes=" in tool_error_message(
+        payload
+    ) or "correlation_id=" in tool_error_message(payload)
+    assert "PERMISSION_DENIED" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -643,7 +646,7 @@ async def test_export_pipe_report_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "export denied" in payload["error"]
+    assert "export denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -957,7 +960,7 @@ async def test_get_pipe_reports_blank_pipe_uuid(report_session, extract_payload)
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "non-empty" in payload["error"]
+    assert "non-empty" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1021,7 +1024,7 @@ async def test_create_pipe_report_blank_name(report_session, extract_payload):
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "name" in payload["error"]
+    assert "name" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1056,7 +1059,7 @@ async def test_create_organization_report_blank_name(report_session, extract_pay
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "name" in payload["error"]
+    assert "name" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1107,7 +1110,7 @@ async def test_get_pipe_reports_first_less_than_one(report_session, extract_payl
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "positive integer" in payload["error"]
+    assert "positive integer" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1122,7 +1125,7 @@ async def test_get_organization_reports_first_less_than_one(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "positive integer" in payload["error"]
+    assert "positive integer" in tool_error_message(payload)
 
 
 ## ---------------------------------------------------------------------------
@@ -1143,7 +1146,7 @@ async def test_create_organization_report_empty_pipe_ids(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "pipe_ids" in payload["error"]
+    assert "pipe_ids" in tool_error_message(payload)
 
 
 ## ---------------------------------------------------------------------------
@@ -1164,7 +1167,7 @@ async def test_export_organization_report_organization_id_less_than_one(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "positive integer" in payload["error"]
+    assert "positive integer" in tool_error_message(payload)
 
 
 ## ---------------------------------------------------------------------------
@@ -1188,7 +1191,7 @@ async def test_get_organization_report_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "org not found" in payload["error"]
+    assert "org not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1207,7 +1210,7 @@ async def test_get_organization_reports_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "access denied" in payload["error"]
+    assert "access denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1226,7 +1229,7 @@ async def test_get_pipe_report_export_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "export not found" in payload["error"]
+    assert "export not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1245,7 +1248,7 @@ async def test_get_organization_report_export_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "export error" in payload["error"]
+    assert "export error" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1264,7 +1267,7 @@ async def test_update_pipe_report_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "update denied" in payload["error"]
+    assert "update denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1283,7 +1286,7 @@ async def test_delete_pipe_report_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "delete denied" in payload["error"]
+    assert "delete denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1303,7 +1306,7 @@ async def test_create_organization_report_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "org create failed" in payload["error"]
+    assert "org create failed" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1322,7 +1325,7 @@ async def test_update_organization_report_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "org update failed" in payload["error"]
+    assert "org update failed" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1341,7 +1344,7 @@ async def test_delete_organization_report_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "org delete failed" in payload["error"]
+    assert "org delete failed" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1361,4 +1364,4 @@ async def test_export_organization_report_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "export org failed" in payload["error"]
+    assert "export org failed" in tool_error_message(payload)

@@ -8,6 +8,7 @@ degrades the actionable error messages that agents and humans rely on.
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,6 +20,7 @@ from pipefy_mcp.tools.phase_transition_helpers import (
     try_enrich_move_card_to_phase_failure,
     validate_traditional_automation_move_transition_or_none,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture
@@ -45,6 +47,16 @@ async def test_enrich_returns_none_when_get_card_raises(mock_client):
 
 
 @pytest.mark.anyio
+async def test_enrich_logs_debug_when_get_card_raises(mock_client, caplog):
+    caplog.set_level(logging.DEBUG, logger="pipefy_mcp.tools.phase_transition_helpers")
+    mock_client.get_card.side_effect = Exception("network")
+    await try_enrich_move_card_to_phase_failure(
+        mock_client, card_id="c1", destination_phase_id="p-dest"
+    )
+    assert "get_card failed" in caplog.text
+
+
+@pytest.mark.anyio
 async def test_enrich_returns_none_when_current_phase_missing(mock_client):
     mock_client.get_card.return_value = {"card": {"id": "c1"}}  # no current_phase
     result = await try_enrich_move_card_to_phase_failure(
@@ -64,6 +76,20 @@ async def test_enrich_returns_none_when_phase_query_raises(mock_client):
         mock_client, card_id="c1", destination_phase_id="p-dest"
     )
     assert result is None
+
+
+@pytest.mark.anyio
+async def test_enrich_logs_debug_when_phase_query_raises(mock_client, caplog):
+    caplog.set_level(logging.DEBUG, logger="pipefy_mcp.tools.phase_transition_helpers")
+    mock_client.get_card.return_value = {
+        "card": {"id": "c1", "current_phase": {"id": "src-phase", "name": "Src"}}
+    }
+    mock_client.get_phase_allowed_move_targets.side_effect = Exception("gql fail")
+    await try_enrich_move_card_to_phase_failure(
+        mock_client, card_id="c1", destination_phase_id="p-dest"
+    )
+    assert "get_phase_allowed_move_targets failed" in caplog.text
+    assert "src-phase" in caplog.text
 
 
 @pytest.mark.anyio
@@ -100,9 +126,10 @@ async def test_enrich_builds_structured_error_with_valid_destinations(mock_clien
     )
     assert result is not None
     assert result["success"] is False
-    assert "Inbox" in result["error"]
-    assert "p-bad" in result["error"]
-    assert "Doing (p-ok)" in result["error"]
+    em = tool_error_message(result)
+    assert "Inbox" in em
+    assert "p-bad" in em
+    assert "Doing (p-ok)" in em
     assert result["valid_destinations"] == allowed
     assert result["current_phase"] == {"id": "src-phase", "name": "Inbox"}
 
@@ -119,8 +146,9 @@ async def test_enrich_falls_back_to_id_label_when_phase_has_no_name(mock_client)
         mock_client, card_id="c1", destination_phase_id="p-bad"
     )
     assert result is not None
-    assert "id src-phase" in result["error"]
-    assert "(none configured)" in result["error"]
+    em = tool_error_message(result)
+    assert "id src-phase" in em
+    assert "(none configured)" in em
     assert result["current_phase"] == {"id": "src-phase", "name": None}
 
 
@@ -259,6 +287,23 @@ async def test_validate_trad_move_returns_none_on_phase_query_error(mock_client)
 
 
 @pytest.mark.anyio
+async def test_validate_trad_move_logs_debug_on_phase_query_error(mock_client, caplog):
+    caplog.set_level(logging.DEBUG, logger="pipefy_mcp.tools.phase_transition_helpers")
+    mock_client.get_phase_allowed_move_targets.side_effect = Exception("gql fail")
+    await validate_traditional_automation_move_transition_or_none(
+        mock_client,
+        trigger_id="card_moved",
+        action_id="move_single_card",
+        extra_input={
+            "event_params": {"to_phase_id": "src"},
+            "action_params": {"to_phase_id": "dest"},
+        },
+    )
+    assert "get_phase_allowed_move_targets failed" in caplog.text
+    assert "src" in caplog.text
+
+
+@pytest.mark.anyio
 async def test_validate_trad_move_returns_none_when_transition_is_allowed(mock_client):
     mock_client.get_phase_allowed_move_targets.return_value = {
         "phase": {
@@ -358,6 +403,34 @@ async def test_ai_behavior_validation_ignores_non_move_actions(mock_client):
         mock_client, behaviors
     )
     assert problems == []
+
+
+@pytest.mark.anyio
+async def test_ai_behavior_validation_logs_debug_on_phase_query_error(
+    mock_client, caplog
+):
+    caplog.set_level(logging.DEBUG, logger="pipefy_mcp.tools.phase_transition_helpers")
+    mock_client.get_phase_allowed_move_targets.side_effect = Exception("gql fail")
+    behaviors = [
+        {
+            "name": "rule",
+            "event_id": "card_moved",
+            "eventParams": {"to_phase_id": "src-phase"},
+            "actionParams": {
+                "aiBehaviorParams": {
+                    "actionsAttributes": [
+                        {
+                            "actionType": "move_card",
+                            "metadata": {"destinationPhaseId": "p-dest"},
+                        }
+                    ]
+                }
+            },
+        }
+    ]
+    await collect_ai_behavior_move_transition_problems(mock_client, behaviors)
+    assert "get_phase_allowed_move_targets failed" in caplog.text
+    assert "src-phase" in caplog.text
 
 
 @pytest.mark.anyio

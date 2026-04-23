@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any
 
+from pipefy_mcp.tools.tool_error_envelope import tool_error
+
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
@@ -62,23 +64,14 @@ def validate_tool_id(
         label: Parameter name for the error message (e.g. ``card_id``).
     """
     if isinstance(value, bool) or not valid_repo_id(value):
-        return None, {
-            "success": False,
-            "error": (
-                f"Invalid '{label}': provide a non-empty string or positive integer."
-            ),
-        }
+        return None, tool_error(
+            f"Invalid '{label}': provide a non-empty string or positive integer."
+        )
     s = str(value).strip() if isinstance(value, int) else value.strip()
     if not s:
-        return None, {
-            "success": False,
-            "error": f"Invalid '{label}': provide a non-empty ID.",
-        }
+        return None, tool_error(f"Invalid '{label}': provide a non-empty ID.")
     if _is_non_positive_numeric(s):
-        return None, {
-            "success": False,
-            "error": f"Invalid '{label}': provide a positive integer.",
-        }
+        return None, tool_error(f"Invalid '{label}': provide a positive integer.")
     return s, None
 
 
@@ -121,10 +114,17 @@ def mutation_error_if_not_optional_dict(
         omitted or is already a ``dict``.
     """
     if value is not None and not isinstance(value, dict):
-        return {
-            "success": False,
-            "error": (
-                f"Invalid '{arg_name}': provide a JSON object (dict) when supplied."
-            ),
-        }
+        return tool_error(
+            f"Invalid '{arg_name}': provide a JSON object (dict) when supplied."
+        )
     return None
+
+
+__all__ = [
+    "UUID_RE",
+    "format_json_preview",
+    "mutation_error_if_not_optional_dict",
+    "valid_repo_id",
+    "validate_optional_tool_id",
+    "validate_tool_id",
+]

@@ -24,6 +24,7 @@ from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_erro
 from pipefy_mcp.tools.phase_transition_helpers import (
     validate_traditional_automation_move_transition_or_none,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     validate_optional_tool_id,
@@ -373,8 +374,13 @@ class AutomationTools:
                         base = await handle_automation_tool_graphql_error(
                             exc, ctx, debug
                         )
-                        base["error"] = f"{perm_msg}\n{base.get('error', '')}"
-                        return base
+                        prev = tool_error_message(base)
+                        err_body = base.get("error")
+                        c = err_body.get("code") if isinstance(err_body, dict) else None
+                        return build_automation_error_payload(
+                            message=f"{perm_msg}\n{prev}",
+                            code=c if isinstance(c, str) else None,
+                        )
                 return await handle_automation_tool_graphql_error(exc, ctx, debug)
             block = raw.get("createAutomation") or {}
             automation = block.get("automation") or {}

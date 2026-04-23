@@ -17,6 +17,7 @@ from pipefy_mcp.services.pipefy.queries.webhook_queries import (
 )
 from pipefy_mcp.services.pipefy.webhook_service import WebhookService
 from pipefy_mcp.settings import PipefySettings
+from tests.pagination_test_defaults import DEFAULT_FIRST
 
 
 @pytest.fixture
@@ -50,7 +51,7 @@ async def test_get_email_templates_success(mock_settings):
     query, variables = service.execute_query.call_args[0]
     assert query is GET_EMAIL_TEMPLATES_QUERY
     assert variables["repoId"] == "307061640"
-    assert variables["first"] == 50
+    assert variables["first"] == DEFAULT_FIRST
     assert result == payload
 
 
@@ -228,7 +229,30 @@ async def test_create_webhook_success(mock_settings):
     assert inp["pipe_id"] == "601"
     assert inp["url"] == "https://example.com/hook"
     assert inp["actions"] == ["card.create"]
+    assert inp["name"] == "Pipefy Webhook"
     assert result == payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_webhook_uses_settings_default_name(mock_settings):
+    """When name is omitted, create_webhook uses pipefy.default_webhook_name."""
+    custom = mock_settings.model_copy(
+        update={"default_webhook_name": "MCP default hook"}
+    )
+    payload = {
+        "createWebhook": {
+            "webhook": {"id": "w1", "url": "https://x.com/h", "actions": []}
+        }
+    }
+    service = _make_service(custom, payload)
+    await service.create_webhook(
+        pipe_id="1",
+        url="https://x.com/hook",
+        actions=["card.create"],
+    )
+    _query, variables = service.execute_query.call_args[0]
+    assert variables["input"]["name"] == "MCP default hook"
 
 
 @pytest.mark.unit
@@ -248,6 +272,16 @@ async def test_create_webhook_rejects_http_url(mock_settings):
     service = WebhookService(settings=mock_settings)
     with pytest.raises(ValueError, match="HTTPS"):
         await service.create_webhook("p1", "http://insecure.com/hook", ["card.create"])
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_webhook_rejects_https_loopback(mock_settings):
+    service = WebhookService(settings=mock_settings)
+    with pytest.raises(ValueError, match="127.0.0.1|private|loopback|link-local"):
+        await service.create_webhook(
+            "p1", "https://127.0.0.1:8080/hook", ["card.create"]
+        )
 
 
 @pytest.mark.unit

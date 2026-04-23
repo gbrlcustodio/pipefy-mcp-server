@@ -12,6 +12,7 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.observability_tools import _MAX_PAGE_SIZE, ObservabilityTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture
@@ -101,7 +102,7 @@ async def test_get_ai_agent_logs_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not authorized" in payload["error"]
+    assert "not authorized" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -357,7 +358,7 @@ async def test_get_ai_credit_usage_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "forbidden" in payload["error"]
+    assert "forbidden" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -378,7 +379,7 @@ async def test_get_ai_credit_usage_value_error_from_client(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Organization not found" in payload["error"]
+    assert "Organization not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -461,7 +462,7 @@ async def test_get_automation_jobs_export_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not found" in payload["error"]
+    assert "not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -646,7 +647,7 @@ async def test_get_automation_jobs_export_csv_value_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "processing" in payload["error"]
+    assert "processing" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -663,7 +664,7 @@ async def test_get_automation_jobs_export_csv_rejects_bad_max_chars(
     mock_observability_client.get_automation_jobs_export_csv.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "max_output_chars" in p["error"]
+    assert "max_output_chars" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -688,7 +689,7 @@ async def test_get_ai_agent_logs_rejects_invalid_repo_uuid(
     mock_observability_client.get_ai_agent_logs.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "repo_uuid" in p["error"]
+    assert "repo_uuid" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -702,7 +703,7 @@ async def test_get_ai_agent_log_details_rejects_invalid_log_uuid(
     mock_observability_client.get_ai_agent_log_details.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "log_uuid" in p["error"]
+    assert "log_uuid" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -719,7 +720,7 @@ async def test_get_ai_credit_usage_rejects_invalid_period(
     mock_observability_client.get_ai_credit_usage.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "period" in p["error"]
+    assert "period" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -759,7 +760,7 @@ async def test_get_agents_usage_rejects_missing_dates(
     mock_observability_client.get_agents_usage.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "filter_date" in p["error"].lower()
+    assert "filter_date" in tool_error_message(p).lower()
 
 
 @pytest.mark.anyio
@@ -776,7 +777,7 @@ async def test_get_ai_agent_logs_rejects_out_of_bounds_first(
     mock_observability_client.get_ai_agent_logs.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "first" in p["error"].lower()
+    assert "first" in tool_error_message(p).lower()
 
 
 @pytest.mark.anyio
@@ -803,9 +804,11 @@ async def test_get_ai_agent_logs_debug_true_appends_codes(
     assert result.isError is False
     p = extract_payload(result)
     assert p["success"] is False
-    assert "not authorized" in p["error"]
-    assert "codes=" in p["error"] or "correlation_id=" in p["error"]
-    assert "PERMISSION_DENIED" in p["error"]
+    assert "not authorized" in tool_error_message(p)
+    assert "codes=" in tool_error_message(p) or "correlation_id=" in tool_error_message(
+        p
+    )
+    assert "PERMISSION_DENIED" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -833,8 +836,8 @@ async def test_get_ai_credit_usage_debug_true_appends_codes(
     assert result.isError is False
     p = extract_payload(result)
     assert p["success"] is False
-    assert "forbidden" in p["error"]
-    assert "FORBIDDEN" in p["error"]
+    assert "forbidden" in tool_error_message(p)
+    assert "FORBIDDEN" in tool_error_message(p)
 
 
 # --- Int-to-str coercion tests ---
@@ -976,7 +979,7 @@ async def test_get_automation_logs_rejects_out_of_bounds_first(
     mock_observability_client.get_automation_logs.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "first" in p["error"].lower()
+    assert "first" in tool_error_message(p).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -1010,7 +1013,7 @@ async def test_get_automation_logs_by_repo_rejects_out_of_bounds_first(
     mock_observability_client.get_automation_logs_by_repo.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "first" in p["error"].lower()
+    assert "first" in tool_error_message(p).lower()
 
 
 # ---------------------------------------------------------------------------
@@ -1039,7 +1042,7 @@ async def test_get_agents_usage_graphql_error(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "unauthorized" in p["error"]
+    assert "unauthorized" in tool_error_message(p)
 
 
 # ---------------------------------------------------------------------------
@@ -1087,7 +1090,7 @@ async def test_get_automations_usage_graphql_error(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "service unavailable" in p["error"]
+    assert "service unavailable" in tool_error_message(p)
 
 
 # ---------------------------------------------------------------------------
@@ -1144,7 +1147,7 @@ async def test_export_automation_jobs_rejects_invalid_period(
     mock_observability_client.export_automation_jobs.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "period" in p["error"]
+    assert "period" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -1164,7 +1167,7 @@ async def test_export_automation_jobs_graphql_error(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "rate limited" in p["error"]
+    assert "rate limited" in tool_error_message(p)
 
 
 # ---------------------------------------------------------------------------
@@ -1188,7 +1191,40 @@ async def test_get_ai_agent_log_details_graphql_error(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "log not found" in p["error"]
+    assert "log not found" in tool_error_message(p)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_agent_log_details_rewrites_automationaction_not_found(
+    observability_session, mock_observability_client, extract_payload
+):
+    """The upstream resolver leaks its internal type (``AutomationAction``) when
+    the UUID isn't found; the tool rewrites to tool-level semantics."""
+    mock_observability_client.get_ai_agent_log_details.side_effect = (
+        TransportQueryError(
+            "failed",
+            errors=[
+                {
+                    "message": (
+                        "Couldn't find AutomationAction with 'id'="
+                        "00000000-0000-0000-0000-000000000000"
+                    )
+                }
+            ],
+        )
+    )
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_agent_log_details",
+            {"log_uuid": "00000000-0000-0000-0000-000000000000"},
+        )
+    p = extract_payload(result)
+    assert p["success"] is False
+    msg = tool_error_message(p)
+    assert "AutomationAction" not in msg
+    assert "AI agent log not found" in msg
+    assert "00000000-0000-0000-0000-000000000000" in msg
 
 
 # ---------------------------------------------------------------------------
@@ -1212,7 +1248,7 @@ async def test_get_automation_logs_graphql_error(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "internal error" in p["error"]
+    assert "internal error" in tool_error_message(p)
 
 
 # ---------------------------------------------------------------------------
@@ -1236,7 +1272,7 @@ async def test_get_automation_logs_by_repo_graphql_error(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "timeout" in p["error"]
+    assert "timeout" in tool_error_message(p)
 
 
 # ---------------------------------------------------------------------------
@@ -1258,7 +1294,7 @@ async def test_get_automation_jobs_export_csv_rejects_bad_max_download_bytes(
     mock_observability_client.get_automation_jobs_export_csv.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "max_download_bytes" in p["error"]
+    assert "max_download_bytes" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -1278,7 +1314,9 @@ async def test_get_automation_jobs_export_csv_graphql_error(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "CSV failed" in p["error"] or "network failure" in p["error"]
+    assert "CSV failed" in tool_error_message(
+        p
+    ) or "network failure" in tool_error_message(p)
 
 
 @pytest.mark.anyio

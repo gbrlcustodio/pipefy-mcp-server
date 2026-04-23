@@ -9,6 +9,7 @@ import httpx
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
+from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 UploadFlowStep = Literal[
     "validation",
@@ -66,11 +67,9 @@ def build_upload_error_payload(
         message: Actionable reason for the caller.
         step: Failed stage (``file_download``, ``presigned_url``, ``s3_upload``, ``field_update``).
     """
-    return {
-        "success": False,
-        "error": message,
-        "step": step,
-    }
+    out: dict[str, Any] = tool_error(message)
+    out["step"] = step
+    return out
 
 
 def format_s3_upload_failure(upload_result: dict[str, Any]) -> str:
@@ -143,3 +142,12 @@ def map_upload_error_to_message(exc: BaseException, step: UploadFlowStep) -> str
     if msgs:
         return "; ".join(dict.fromkeys(msgs))
     return f"{type(exc).__name__}: {exc}".strip()
+
+
+__all__ = [
+    "UploadFlowStep",
+    "build_upload_error_payload",
+    "build_upload_success_payload",
+    "format_s3_upload_failure",
+    "map_upload_error_to_message",
+]

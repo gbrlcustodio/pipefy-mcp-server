@@ -10,6 +10,7 @@ from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_error_strings,
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
     with_debug_suffix,
@@ -22,6 +23,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     handle_pipe_config_tool_graphql_error,
     map_delete_pipe_error_to_message,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
     validate_tool_id,
@@ -30,6 +32,72 @@ from pipefy_mcp.tools.validation_helpers import (
 _CREATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"phase_id", "label", "type"})
 _UPDATE_PHASE_FIELD_EXTRA_RESERVED = frozenset({"id", "uuid"})
 _UPDATE_LABEL_EXTRA_RESERVED = frozenset({"id"})
+# Upstream signatures for the generic Pipefy failure that most often means the
+# parent phase was deleted in the same session and the field was cascaded.
+_CASCADE_ERROR_MARKERS = ("internal_server_error", "something went wrong")
+
+
+async def _diagnose_phase_field_cascade(
+    client: PipefyClient,
+    exc: BaseException,
+    field_id: str,
+    pipe_id: str | None,
+) -> dict[str, Any] | None:
+    """Return an enriched error payload if the field was likely cascaded.
+
+    Only runs when ``pipe_id`` is provided and the raw exception matches the
+    generic Pipefy INTERNAL_SERVER_ERROR shape. Walks every phase of the pipe
+    to confirm that ``field_id`` is no longer present; if absent everywhere,
+    we infer the phase was deleted earlier in the same session (which cascades
+    the field) and return an actionable message instead of the opaque upstream
+    error.
+    """
+    if pipe_id is None:
+        return None
+    # gql's ``TransportQueryError`` hides the structured per-error ``message``
+    # and ``extensions.code`` behind attributes, so ``str(exc)`` alone only
+    # returns the outer wrapper ("GraphQL Error"). Combine both signals.
+    signal_parts: list[str] = [str(exc).lower()]
+    signal_parts.extend(m.lower() for m in extract_error_strings(exc))
+    signal_parts.extend(c.lower() for c in extract_graphql_error_codes(exc))
+    if not any(
+        marker in part for marker in _CASCADE_ERROR_MARKERS for part in signal_parts
+    ):
+        return None
+    try:
+        pipe_data = await client.get_pipe(pipe_id)
+    except Exception:  # noqa: BLE001
+        return None
+    pipe_obj = (pipe_data or {}).get("pipe") or {}
+    phase_ids = [
+        str(p.get("id"))
+        for p in (pipe_obj.get("phases") or [])
+        if p.get("id") is not None
+    ]
+    for pid in phase_ids:
+        try:
+            fields_data = await client.get_phase_fields(pid)
+        except Exception:  # noqa: BLE001
+            continue
+        fields = fields_data.get("fields") if isinstance(fields_data, dict) else None
+        if not isinstance(fields, list):
+            continue
+        for f in fields:
+            if not isinstance(f, dict):
+                continue
+            if str(f.get("id")) == field_id or str(f.get("uuid")) == field_id:
+                # Field still exists — the error is not a cascade.
+                return None
+    return build_pipe_tool_error_payload(
+        message=(
+            f"Phase field '{field_id}' no longer exists in pipe {pipe_id}. "
+            "The Pipefy API returned INTERNAL_SERVER_ERROR, which typically "
+            "means the parent phase was deleted in the same session and the "
+            "field was cascaded automatically — no further action needed. "
+            "If you expected the field to still exist, verify with "
+            "get_phase_fields on each phase of this pipe."
+        ),
+    )
 
 
 class PipeConfigTools:
@@ -150,7 +218,7 @@ class PipeConfigTools:
             """
             pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
-                return build_delete_pipe_error_payload(message=err["error"])
+                return build_delete_pipe_error_payload(message=tool_error_message(err))
 
             pipe_name = "Unknown"
             try:
@@ -586,6 +654,7 @@ class PipeConfigTools:
             field_id: PipefyId,
             confirm: bool = False,
             pipe_uuid: str | None = None,
+            pipe_id: PipefyId | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete a phase field permanently.
@@ -598,15 +667,30 @@ class PipeConfigTools:
             When the slug is shared across phases, pass ``pipe_uuid`` to
             disambiguate (available from ``get_pipe``).
 
+            **Cascade-aware error diagnosis:** pass ``pipe_id`` (numeric) to enable
+            a post-hoc check when the Pipefy API returns a generic
+            ``INTERNAL_SERVER_ERROR``. This error often fires when the parent
+            phase was deleted earlier in the same session and the field was
+            cascaded automatically. When ``pipe_id`` is provided, the tool
+            verifies whether the field still exists in the pipe's phases and
+            returns an actionable message; without ``pipe_id`` the raw
+            upstream error is returned.
+
             Args:
                 field_id: Field slug or uuid (from create_phase_field or get_phase_fields).
                 confirm: Set to True to execute the deletion (step 2).
                 pipe_uuid: Pipe UUID for disambiguation when the slug is not unique across phases.
+                pipe_id: Numeric pipe ID; enables cascade-aware error diagnosis when set.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
                 return err
+            ok_p, pipe_id_norm, pid_err = validate_optional_tool_id(pipe_id, "pipe_id")
+            if not ok_p:
+                return build_pipe_tool_error_payload(
+                    message=tool_error_message(pid_err)
+                )
 
             guard = await check_destructive_confirmation(
                 ctx,
@@ -619,6 +703,11 @@ class PipeConfigTools:
             try:
                 raw = await client.delete_phase_field(field_id, pipe_uuid=pipe_uuid)
             except Exception as exc:  # noqa: BLE001
+                enriched = await _diagnose_phase_field_cascade(
+                    client, exc, field_id, pipe_id_norm
+                )
+                if enriched is not None:
+                    return enriched
                 return handle_pipe_config_tool_graphql_error(
                     exc, "Delete phase field failed.", debug=debug
                 )
@@ -679,36 +768,43 @@ class PipeConfigTools:
         )
         async def update_label(
             label_id: PipefyId,
-            name: str | None = None,
-            color: str | None = None,
+            name: str,
+            color: str,
             extra_input: dict[str, Any] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Update a pipe label.
 
+            Both ``name`` and ``color`` are **required on every call**. Pipefy's
+            ``UpdateLabelInput`` schema declares both as NON_NULL — there is no
+            partial-update path. To change just one attribute, fetch the current
+            value for the other via ``get_labels(pipe_id)`` and pass it through.
+
             Args:
                 label_id: Label ID to update.
-                name: New name, if changing.
-                color: New color, if changing.
+                name: New label name (non-empty).
+                color: New label color, hex string (non-empty).
                 extra_input: Additional UpdateLabelInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             label_id, err = validate_tool_id(label_id, "label_id")
             if err is not None:
                 return err
+            if not isinstance(name, str) or not name.strip():
+                return build_pipe_tool_error_payload(
+                    message="Invalid 'name': provide a non-empty string.",
+                )
+            if not isinstance(color, str) or not color.strip():
+                return build_pipe_tool_error_payload(
+                    message="Invalid 'color': provide a non-empty string.",
+                )
             update_attrs: dict[str, Any] = {
                 k: v
                 for k, v in (extra_input or {}).items()
                 if k not in _UPDATE_LABEL_EXTRA_RESERVED
             }
-            if name is not None:
-                update_attrs["name"] = name
-            if color is not None:
-                update_attrs["color"] = color
-            if not update_attrs:
-                return build_pipe_tool_error_payload(
-                    message="Provide at least one attribute to update.",
-                )
+            update_attrs["name"] = name.strip()
+            update_attrs["color"] = color.strip()
             try:
                 raw = await client.update_label(label_id, **update_attrs)
             except Exception as exc:  # noqa: BLE001

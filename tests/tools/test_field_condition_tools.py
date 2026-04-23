@@ -13,6 +13,7 @@ from mcp.shared.memory import (
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture
@@ -185,7 +186,7 @@ class TestGetFieldCondition:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "access denied" in payload["error"].lower()
+        assert "access denied" in tool_error_message(payload).lower()
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_condition_graphql_error_returns_error_payload(

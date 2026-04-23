@@ -15,6 +15,13 @@ from pipefy_mcp.services.pipefy.queries.pipe_queries import (
 )
 from pipefy_mcp.settings import PipefySettings
 
+SEARCH_PIPES_MAX_PER_ORG_CAP: int = 500
+SEARCH_PIPES_MAX_PER_ORG_MIN: int = 1
+
+
+def _clamp_max_pipes_per_org(value: int) -> int:
+    return max(SEARCH_PIPES_MAX_PER_ORG_MIN, min(SEARCH_PIPES_MAX_PER_ORG_CAP, value))
+
 
 class PipeService(BasePipefyClient):
     """Service for Pipe-related operations."""
@@ -81,56 +88,95 @@ class PipeService(BasePipefyClient):
         return {"start_form_fields": fields}
 
     async def search_pipes(
-        self, pipe_name: str | None = None, match_threshold: int = 70
+        self,
+        pipe_name: str | None = None,
+        *,
+        # 70: WRatio score_cutoff default - balanced manually for typo/abbrev. recall vs. spurious matches.
+        match_threshold: int = 70,
+        max_pipes_per_org: int = SEARCH_PIPES_MAX_PER_ORG_CAP,
     ) -> dict:
         """Search for pipes across all organizations using fuzzy matching.
 
         Args:
             pipe_name: Optional pipe name to search for (fuzzy match).
                        Supports partial matches.
-                       If not provided, returns all pipes.
+                       If not provided, returns pipes up to ``max_pipes_per_org`` each org.
+            match_threshold: Minimum fuzzy score (0--100) when ``pipe_name`` is set.
+            max_pipes_per_org: Max pipes returned per organization after the API response
+                (clamped 1--500). The GraphQL ``name_search`` argument is set when
+                ``pipe_name`` is non-empty to reduce payload size server-side.
 
         Returns:
             dict: A dictionary containing organizations with their pipes.
                   If pipe_name is provided, only pipes matching the name are included,
                   sorted by match score (best matches first).
+                  May include ``search_limits`` describing caps applied.
         """
-        result = await self.execute_query(SEARCH_PIPES_QUERY, {})
+        stripped = pipe_name.strip() if pipe_name else None
+        name_search = stripped if stripped else None
+        per_org_cap = _clamp_max_pipes_per_org(max_pipes_per_org)
+        result = await self.execute_query(
+            SEARCH_PIPES_QUERY,
+            {"nameSearch": name_search},
+        )
 
-        organizations = result.get("organizations", [])
+        raw_orgs = result.get("organizations", [])
+        limits: dict[str, object] = {
+            "max_pipes_per_org": per_org_cap,
+            "graphql_name_search": name_search is not None,
+            "pipes_truncated": False,
+        }
 
-        if not pipe_name:
-            return {"organizations": organizations}
+        if not stripped:
+            organizations: list[dict] = []
+            for org in raw_orgs:
+                pipes = list(org.get("pipes") or [])
+                truncated = len(pipes) > per_org_cap
+                if truncated:
+                    pipes = pipes[:per_org_cap]
+                    limits["pipes_truncated"] = True
+                row: dict = {
+                    "id": org.get("id"),
+                    "name": org.get("name"),
+                    "pipes": pipes,
+                }
+                if truncated:
+                    row["pipes_truncated"] = True
+                organizations.append(row)
+            return {"organizations": organizations, "search_limits": limits}
 
         filtered_orgs = []
 
-        for org in organizations:
+        for org in raw_orgs:
             matching_pipes = []
             for pipe in org.get("pipes", []):
                 pipe_display_name = pipe.get("name", "")
-                if pipe_name.lower() in pipe_display_name.lower():
+                if stripped.lower() in pipe_display_name.lower():
                     matching_pipes.append((100.0, pipe))
                 else:
                     score = fuzz.WRatio(
-                        pipe_name, pipe_display_name, score_cutoff=match_threshold
+                        stripped, pipe_display_name, score_cutoff=match_threshold
                     )
                     if score:
                         matching_pipes.append((score, pipe))
 
             if matching_pipes:
                 matching_pipes.sort(key=lambda x: x[0], reverse=True)
-                filtered_orgs.append(
-                    {
-                        "id": org.get("id"),
-                        "name": org.get("name"),
-                        "pipes": [
-                            {**pipe, "match_score": round(score, 1)}
-                            for score, pipe in matching_pipes
-                        ],
-                    }
-                )
+                sliced = matching_pipes[:per_org_cap]
+                entry: dict = {
+                    "id": org.get("id"),
+                    "name": org.get("name"),
+                    "pipes": [
+                        {**pipe, "match_score": round(score, 1)}
+                        for score, pipe in sliced
+                    ],
+                }
+                if len(matching_pipes) > per_org_cap:
+                    entry["pipes_truncated"] = True
+                    limits["pipes_truncated"] = True
+                filtered_orgs.append(entry)
 
-        return {"organizations": filtered_orgs}
+        return {"organizations": filtered_orgs, "search_limits": limits}
 
     async def get_phase_allowed_move_targets(self, phase_id: str | int) -> dict:
         """List phases a card may move to from ``phase_id`` (UI transition rules).

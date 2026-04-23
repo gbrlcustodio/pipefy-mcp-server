@@ -9,6 +9,7 @@ from typing_extensions import TypedDict
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
+from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
 from pipefy_mcp.tools.validation_helpers import format_json_preview
 
 
@@ -41,7 +42,7 @@ class DeleteTableSuccessPayload(TypedDict):
 
 class DeleteTableErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
 def _pagination_from_connection_block(block: dict[str, Any]) -> dict[str, Any] | None:
@@ -94,7 +95,7 @@ def build_table_error_payload(*, message: str) -> dict[str, Any]:
     Args:
         message: User-visible failure reason.
     """
-    return {"success": False, "error": message}
+    return tool_error(message)
 
 
 build_table_read_error_payload = build_table_error_payload
@@ -170,7 +171,7 @@ def build_delete_table_error_payload(*, message: str) -> DeleteTableErrorPayload
     Args:
         message: User-visible failure reason.
     """
-    return cast(DeleteTableErrorPayload, {"success": False, "error": message})
+    return cast(DeleteTableErrorPayload, tool_error(message))
 
 
 def map_delete_table_error_to_message(
@@ -211,3 +212,22 @@ def handle_table_tool_graphql_error(
 ) -> dict[str, Any]:
     """Delegate to :func:`handle_tool_graphql_error`."""
     return handle_tool_graphql_error(exc, fallback_msg, debug=debug)
+
+
+__all__ = [
+    "DeleteTableErrorPayload",
+    "DeleteTablePreviewPayload",
+    "DeleteTableSuccessPayload",
+    "TableMutationSuccessPayload",
+    "TableReadSuccessPayload",
+    "build_delete_table_error_payload",
+    "build_delete_table_preview_payload",
+    "build_delete_table_success_payload",
+    "build_table_error_payload",
+    "build_table_mutation_error_payload",
+    "build_table_mutation_success_payload",
+    "build_table_read_error_payload",
+    "build_table_read_success_payload",
+    "handle_table_tool_graphql_error",
+    "map_delete_table_error_to_message",
+]

@@ -12,6 +12,7 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.organization_tools import OrganizationTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture
@@ -74,7 +75,7 @@ async def test_get_organization_not_found_returns_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not found" in payload["error"].lower()
+    assert "not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -90,7 +91,8 @@ async def test_get_organization_transport_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert isinstance(payload.get("error"), str)
+    err = payload.get("error")
+    assert isinstance(err, dict) and "message" in err
 
 
 ## ---------------------------------------------------------------------------

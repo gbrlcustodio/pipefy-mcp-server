@@ -27,8 +27,6 @@ from pipefy_mcp.settings import PipefySettings
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_WEBHOOK_NAME = "Pipefy Webhook"
-
 
 class WebhookService(BasePipefyClient):
     """Send inbox emails and manage webhooks (list, create, update, delete)."""
@@ -228,7 +226,7 @@ class WebhookService(BasePipefyClient):
             "pipe_id": str(pipe_id),
             "url": url,
             "actions": actions,
-            "name": attrs.get("name", _DEFAULT_WEBHOOK_NAME),
+            "name": attrs.get("name", self.settings.default_webhook_name),
         }
         for key, value in attrs.items():
             if key == "name":

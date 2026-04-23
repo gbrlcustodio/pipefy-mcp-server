@@ -16,6 +16,15 @@ class CardSearch(TypedDict, total=False):
     include_done: bool
 
 
+def copy_card_search(search: CardSearch) -> CardSearch:
+    """Shallow copy containing only keys defined on :class:`CardSearch`.
+
+    Drops any extra keys so MCP-supplied dicts match the schema expected by
+    :meth:`PipefyClient.get_cards`.
+    """
+    return {k: search[k] for k in CardSearch.__optional_keys__ if k in search}
+
+
 class AiAgentGraphPayload(TypedDict, total=False):
     """Common fields returned by Pipefy ``aiAgent`` (additional keys may be present)."""
 

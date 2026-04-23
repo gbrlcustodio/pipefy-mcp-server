@@ -5,14 +5,30 @@ from __future__ import annotations
 import csv
 import io
 from typing import Final
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from openpyxl import load_workbook
 
+from pipefy_mcp.services.pipefy.utils.url_ssrf import (
+    assert_hostname_resolves_to_public_ips,
+)
+
 _ALLOWED_HOST_SUFFIX: Final[str] = ".pipefy.com"
 
 _DEFAULT_DOWNLOAD_TIMEOUT: Final[int] = 120
+
+_MAX_REDIRECTS: Final[int] = 3
+
+
+async def _validate_export_download_url_before_fetch(url: str) -> None:
+    if not is_allowed_pipefy_export_download_url(url):
+        raise ValueError("Download URL is not an allowed Pipefy https URL.")
+    parsed = urlparse(url.strip())
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Download URL has no hostname.")
+    await assert_hostname_resolves_to_public_ips(hostname)
 
 
 def is_allowed_pipefy_export_download_url(url: str) -> bool:
@@ -82,6 +98,9 @@ def xlsx_first_sheet_to_csv_limited(
 async def download_bytes(url: str, *, max_bytes: int) -> bytes:
     """GET a URL and return the body, enforcing a size limit.
 
+    Redirects are followed manually so each hop is checked for host allowlisting
+    and private-IP DNS results (mitigates open-redirect SSRF).
+
     Args:
         url: HTTPS URL to fetch.
         max_bytes: Abort with ``ValueError`` if Content-Length or streamed size exceeds this.
@@ -90,37 +109,46 @@ async def download_bytes(url: str, *, max_bytes: int) -> bytes:
         ValueError: On disallowed URL, oversize body, or non-success status.
         httpx.HTTPError: On transport errors.
     """
-    if not is_allowed_pipefy_export_download_url(url):
-        raise ValueError("Download URL is not an allowed Pipefy https URL.")
-
+    current_url = url.strip()
     timeout = httpx.Timeout(_DEFAULT_DOWNLOAD_TIMEOUT)
     limits = httpx.Limits(max_keepalive_connections=5, max_connections=5)
     async with httpx.AsyncClient(
-        timeout=timeout, limits=limits, follow_redirects=True
+        timeout=timeout, limits=limits, follow_redirects=False
     ) as client:
-        async with client.stream("GET", url) as response:
-            response.raise_for_status()
-            cl = response.headers.get("content-length")
-            if cl is not None:
-                try:
-                    declared = int(cl)
-                except ValueError:
-                    pass
-                else:
-                    if declared > max_bytes:
+        for _ in range(_MAX_REDIRECTS + 1):
+            await _validate_export_download_url_before_fetch(current_url)
+            async with client.stream("GET", current_url) as response:
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("location")
+                    if not location:
+                        raise ValueError("Redirect without Location header.")
+                    current_url = urljoin(current_url, location.strip())
+                    continue
+
+                response.raise_for_status()
+                cl = response.headers.get("content-length")
+                if cl is not None:
+                    try:
+                        declared = int(cl)
+                    except ValueError:
+                        pass
+                    else:
+                        if declared > max_bytes:
+                            raise ValueError(
+                                f"Export file exceeds max_download_bytes ({max_bytes} bytes)."
+                            )
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > max_bytes:
                         raise ValueError(
                             f"Export file exceeds max_download_bytes ({max_bytes} bytes)."
                         )
-            chunks: list[bytes] = []
-            total = 0
-            async for chunk in response.aiter_bytes():
-                total += len(chunk)
-                if total > max_bytes:
-                    raise ValueError(
-                        f"Export file exceeds max_download_bytes ({max_bytes} bytes)."
-                    )
-                chunks.append(chunk)
-            return b"".join(chunks)
+                    chunks.append(chunk)
+                return b"".join(chunks)
+
+        raise ValueError(f"Too many redirects (max {_MAX_REDIRECTS}).")
 
 
 __all__ = [

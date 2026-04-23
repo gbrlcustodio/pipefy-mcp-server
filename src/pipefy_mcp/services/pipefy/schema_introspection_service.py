@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -18,6 +19,8 @@ from pipefy_mcp.services.pipefy.queries.introspection_queries import (
     SCHEMA_TYPES_QUERY,
 )
 from pipefy_mcp.settings import PipefySettings
+
+logger = logging.getLogger(__name__)
 
 
 class SchemaIntrospectionService(BasePipefyClient):
@@ -232,8 +235,14 @@ class SchemaIntrospectionService(BasePipefyClient):
                         f"not a {current_type.lower()}. "
                         f"Use a {other_type.lower()} operation instead."
                     )
-        except Exception:  # noqa: BLE001
+        except (TransportQueryError, GraphQLError, KeyError, TypeError):
             return None
+        except Exception:
+            logger.exception(
+                "Unexpected error while detecting root type mismatch hint for field %r",
+                field_name,
+            )
+            raise
         return None
 
     async def execute_graphql(

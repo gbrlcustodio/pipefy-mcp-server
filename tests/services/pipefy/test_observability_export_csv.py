@@ -173,9 +173,7 @@ def _mock_stream_client_for_redirect(
 
         mock_response.status_code = 200
         mock_response.headers = (
-            {"content-length": str(len(final_body))}
-            if final_body is not None
-            else {}
+            {"content-length": str(len(final_body))} if final_body is not None else {}
         )
         mock_response.raise_for_status = MagicMock()
 

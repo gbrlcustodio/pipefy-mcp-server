@@ -1,5 +1,3 @@
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-
 """Unit tests for field condition read tools (get_field_conditions, get_field_condition)."""
 
 from datetime import timedelta
@@ -15,6 +13,7 @@ from mcp.shared.memory import (
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture

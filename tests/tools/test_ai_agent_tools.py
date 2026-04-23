@@ -1,5 +1,3 @@
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-
 """Tests for AI Agent MCP tools."""
 
 import asyncio
@@ -16,6 +14,7 @@ from mcp.shared.memory import (
 import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.models.ai_agent import UpdateAiAgentInput
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from tests.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
 
 
@@ -1760,7 +1759,9 @@ class TestValidateAiAgentBehaviorsErrorPaths:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "Too many distinct cross-pipe target pipes" in tool_error_message(payload)
+        assert "Too many distinct cross-pipe target pipes" in tool_error_message(
+            payload
+        )
 
     async def test_target_pipe_fetch_two_targets_parallel_uses_per_pipe_data(
         self,

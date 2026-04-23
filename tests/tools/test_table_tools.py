@@ -1548,7 +1548,9 @@ async def test_get_tables_invalid_id_in_list(
     mock_table_client.get_tables.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "each" in tool_error_message(payload).lower() or "Each" in tool_error_message(payload)
+    assert "each" in tool_error_message(
+        payload
+    ).lower() or "Each" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -1570,7 +1572,9 @@ async def test_update_table_field_no_updates_no_table_id(
     mock_table_client.update_table_field.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "at least one" in tool_error_message(payload).lower() or "table_id" in tool_error_message(payload)
+    assert "at least one" in tool_error_message(
+        payload
+    ).lower() or "table_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

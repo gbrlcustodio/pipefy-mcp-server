@@ -1,5 +1,3 @@
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-
 """Tests for report MCP tools (mocked PipefyClient)."""
 
 from datetime import timedelta
@@ -14,6 +12,7 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.report_tools import ReportTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture
@@ -462,7 +461,9 @@ async def test_create_pipe_report_graphql_error_with_debug(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "invalid pipe" in tool_error_message(payload)
-    assert "codes=" in tool_error_message(payload) or "correlation_id=" in tool_error_message(payload)
+    assert "codes=" in tool_error_message(
+        payload
+    ) or "correlation_id=" in tool_error_message(payload)
     assert "PERMISSION_DENIED" in tool_error_message(payload)
 
 

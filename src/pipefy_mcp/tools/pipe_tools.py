@@ -970,9 +970,7 @@ class PipeTools:
             """
             card_id_str, err = validate_tool_id(card_id, "card_id")
             if err is not None:
-                return build_delete_card_error_payload(
-                    message=tool_error_message(err)
-                )
+                return build_delete_card_error_payload(message=tool_error_message(err))
 
             try:
                 card_response = await client.get_card(card_id_str)

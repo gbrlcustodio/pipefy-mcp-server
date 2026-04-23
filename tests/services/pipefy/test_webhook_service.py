@@ -240,7 +240,11 @@ async def test_create_webhook_uses_settings_default_name(mock_settings):
     custom = mock_settings.model_copy(
         update={"default_webhook_name": "MCP default hook"}
     )
-    payload = {"createWebhook": {"webhook": {"id": "w1", "url": "https://x.com/h", "actions": []}}}
+    payload = {
+        "createWebhook": {
+            "webhook": {"id": "w1", "url": "https://x.com/h", "actions": []}
+        }
+    }
     service = _make_service(custom, payload)
     await service.create_webhook(
         pipe_id="1",

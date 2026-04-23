@@ -1,5 +1,3 @@
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-
 """End-to-end style scenarios for introspection tools (mocked client, real helpers)."""
 
 from datetime import timedelta
@@ -13,6 +11,7 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture

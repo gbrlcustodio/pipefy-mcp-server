@@ -334,7 +334,9 @@ class TableTools:
                 )
             organization_id, err = validate_tool_id(organization_id, "organization_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
             bad_extra = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -376,7 +378,9 @@ class TableTools:
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
             bad_extra = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -515,7 +519,9 @@ class TableTools:
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
             if not isinstance(fields, (dict, list)):
                 return build_table_mutation_error_payload(
                     message="Invalid 'fields': provide a dict (field_id -> value) or a list of field objects.",
@@ -585,7 +591,9 @@ class TableTools:
             """
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
             if not isinstance(fields, dict) or not fields:
                 return build_table_mutation_error_payload(
                     message="Invalid 'fields': provide a non-empty dict with at least one attribute.",
@@ -633,7 +641,9 @@ class TableTools:
             """
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
 
             guard = await check_destructive_confirmation(
                 ctx,
@@ -673,10 +683,14 @@ class TableTools:
             """
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
             if value is None:
                 return build_table_mutation_error_payload(
                     message="Invalid 'value': cannot be null.",
@@ -722,7 +736,9 @@ class TableTools:
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
             if not isinstance(label, str) or not label.strip():
                 return build_table_mutation_error_payload(
                     message="Invalid 'label': provide a non-empty string.",
@@ -785,10 +801,14 @@ class TableTools:
             """
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
             ok, table_id, opt_err = validate_optional_tool_id(table_id, "table_id")
             if not ok:
-                return build_table_mutation_error_payload(message=tool_error_message(opt_err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(opt_err)
+                )
             bad_extra = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -863,10 +883,14 @@ class TableTools:
             """
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=tool_error_message(err))
+                return build_table_mutation_error_payload(
+                    message=tool_error_message(err)
+                )
 
             guard = await check_destructive_confirmation(
                 ctx,

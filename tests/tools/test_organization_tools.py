@@ -1,5 +1,3 @@
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-
 """Tests for organization MCP tools (mocked PipefyClient)."""
 
 from datetime import timedelta
@@ -14,6 +12,7 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.organization_tools import OrganizationTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture

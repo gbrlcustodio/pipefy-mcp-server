@@ -376,11 +376,7 @@ class AutomationTools:
                         )
                         prev = tool_error_message(base)
                         err_body = base.get("error")
-                        c = (
-                            err_body.get("code")
-                            if isinstance(err_body, dict)
-                            else None
-                        )
+                        c = err_body.get("code") if isinstance(err_body, dict) else None
                         return build_automation_error_payload(
                             message=f"{perm_msg}\n{prev}",
                             code=c if isinstance(c, str) else None,

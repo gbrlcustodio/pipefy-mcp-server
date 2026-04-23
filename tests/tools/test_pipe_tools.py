@@ -778,7 +778,9 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert "comment" in tool_error_message(payload).lower() or "comment_id" in tool_error_message(payload)
+        assert "comment" in tool_error_message(
+            payload
+        ).lower() or "comment_id" in tool_error_message(payload)
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_delete_comment_success(
@@ -871,7 +873,9 @@ class TestDirectToolCalls:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert "comment" in tool_error_message(payload).lower() or "not found" in tool_error_message(payload)
+        assert "comment" in tool_error_message(
+            payload
+        ).lower() or "not found" in tool_error_message(payload)
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_delete_comment_preview_then_confirm_true_runs_mutation(
@@ -1121,7 +1125,9 @@ class TestAddCardCommentTool:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert "Card not found" in tool_error_message(payload) or "card_id" in tool_error_message(payload)
+        assert "Card not found" in tool_error_message(
+            payload
+        ) or "card_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1872,7 +1878,9 @@ class TestDeleteCardTool:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert "codes=" in tool_error_message(payload) or "correlation_id=" in tool_error_message(payload)
+        assert "codes=" in tool_error_message(
+            payload
+        ) or "correlation_id=" in tool_error_message(payload)
         assert "PERMISSION_DENIED" in tool_error_message(payload)
 
 

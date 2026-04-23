@@ -324,10 +324,14 @@ class AiAutomationTools:
                 organization_id, "organization_id"
             )
             if not ok_o:
-                return build_automation_error_payload(message=tool_error_message(org_err))
+                return build_automation_error_payload(
+                    message=tool_error_message(org_err)
+                )
             pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
             if pid_err is not None:
-                return build_automation_error_payload(message=tool_error_message(pid_err))
+                return build_automation_error_payload(
+                    message=tool_error_message(pid_err)
+                )
             try:
                 rows = await client.get_automations(
                     organization_id=org,
@@ -372,7 +376,9 @@ class AiAutomationTools:
 
             rid, rid_err = validate_tool_id(automation_id, "automation_id")
             if rid_err is not None:
-                return build_automation_error_payload(message=tool_error_message(rid_err))
+                return build_automation_error_payload(
+                    message=tool_error_message(rid_err)
+                )
 
             guard = await check_destructive_confirmation(
                 ctx,

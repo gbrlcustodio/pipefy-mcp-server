@@ -1,5 +1,3 @@
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-
 """Tests for observability MCP tools (mocked PipefyClient)."""
 
 from datetime import timedelta
@@ -14,6 +12,7 @@ from mcp.shared.memory import (
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.observability_tools import _MAX_PAGE_SIZE, ObservabilityTools
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture
@@ -806,7 +805,9 @@ async def test_get_ai_agent_logs_debug_true_appends_codes(
     p = extract_payload(result)
     assert p["success"] is False
     assert "not authorized" in tool_error_message(p)
-    assert "codes=" in tool_error_message(p) or "correlation_id=" in tool_error_message(p)
+    assert "codes=" in tool_error_message(p) or "correlation_id=" in tool_error_message(
+        p
+    )
     assert "PERMISSION_DENIED" in tool_error_message(p)
 
 
@@ -1280,7 +1281,9 @@ async def test_get_automation_jobs_export_csv_graphql_error(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "CSV failed" in tool_error_message(p) or "network failure" in tool_error_message(p)
+    assert "CSV failed" in tool_error_message(
+        p
+    ) or "network failure" in tool_error_message(p)
 
 
 @pytest.mark.anyio

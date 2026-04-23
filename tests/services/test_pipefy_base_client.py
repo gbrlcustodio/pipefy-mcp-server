@@ -71,7 +71,9 @@ async def test_execute_query_reuse_fetches_once_then_passes_cached_schema(
         assert await base.execute_query(query, variables) == {"two": 2}
 
     assert mock_client_cls.call_count == 2
-    assert mock_client_cls.call_args_list[0].kwargs["fetch_schema_from_transport"] is True
+    assert (
+        mock_client_cls.call_args_list[0].kwargs["fetch_schema_from_transport"] is True
+    )
     assert mock_client_cls.call_args_list[1].kwargs["fetch_schema_from_transport"] is (
         False
     )

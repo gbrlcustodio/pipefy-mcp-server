@@ -1,5 +1,3 @@
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-
 """Tests for attachment MCP tools (mocked PipefyClient)."""
 
 import base64
@@ -20,6 +18,7 @@ from pipefy_mcp.tools.attachment_tools import (
     _download_file_bytes,
     _validate_url_safe,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 PRESIGNED_PUT_URL = (
     "https://s3.example.com/orgs/o/u/f/report.pdf"
@@ -623,7 +622,8 @@ async def test_upload_attachment_to_card_rejects_ssrf_url(
     assert payload["success"] is False
     assert payload["step"] == "file_download"
     assert (
-        "private" in tool_error_message(payload).lower() or "internal" in tool_error_message(payload).lower()
+        "private" in tool_error_message(payload).lower()
+        or "internal" in tool_error_message(payload).lower()
     )
     mock_attachment_client.create_presigned_url.assert_not_called()
 
@@ -690,7 +690,8 @@ async def test_upload_attachment_to_card_rejects_oversized_content_length(
     assert payload["success"] is False
     assert payload["step"] == "file_download"
     assert (
-        "too large" in tool_error_message(payload).lower() or "limit" in tool_error_message(payload).lower()
+        "too large" in tool_error_message(payload).lower()
+        or "limit" in tool_error_message(payload).lower()
     )
     mock_attachment_client.create_presigned_url.assert_not_called()
 

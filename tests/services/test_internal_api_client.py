@@ -375,3 +375,25 @@ def test_internal_api_client_rejects_localhost():
             oauth_client="id",
             oauth_secret="secret",
         )
+
+
+@pytest.mark.unit
+def test_internal_api_client_rejects_private_literal_ip():
+    with pytest.raises(ValueError, match="private|loopback|link-local"):
+        InternalApiClient(
+            url="https://10.0.0.1/internal_api",
+            oauth_url="https://auth.pipefy.com/oauth/token",
+            oauth_client="id",
+            oauth_secret="secret",
+        )
+
+
+@pytest.mark.unit
+def test_internal_api_client_allow_insecure_accepts_http():
+    InternalApiClient(
+        url="http://127.0.0.1/internal_api",
+        oauth_url="http://127.0.0.1/oauth/token",
+        oauth_client="id",
+        oauth_secret="secret",
+        allow_insecure_urls=True,
+    )

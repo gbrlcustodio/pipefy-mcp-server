@@ -252,6 +252,16 @@ async def test_create_webhook_rejects_http_url(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_webhook_rejects_https_loopback(mock_settings):
+    service = WebhookService(settings=mock_settings)
+    with pytest.raises(ValueError, match="127.0.0.1|private|loopback|link-local"):
+        await service.create_webhook(
+            "p1", "https://127.0.0.1:8080/hook", ["card.create"]
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_delete_webhook_success(mock_settings):
     payload = {"deleteWebhook": {"success": True}}
     service = _make_service(mock_settings, payload)

@@ -39,6 +39,7 @@ class ServicesContainer:
                 oauth_url=oauth_url,
                 oauth_client=oauth_client,
                 oauth_secret=oauth_secret,
+                allow_insecure_urls=settings.pipefy.allow_insecure_urls,
             )
             self.pipefy_client.set_internal_api_client(internal_client)
             self.pipefy_client.set_ai_automation_service(

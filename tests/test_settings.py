@@ -34,3 +34,41 @@ def test_service_account_ids_empty_env_is_empty_list(monkeypatch):
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_IDS", "")
     settings = Settings()
     assert settings.pipefy.service_account_ids == []
+
+
+@pytest.mark.unit
+def test_pipefy_settings_rejects_http_graphql_when_secure():
+    with pytest.raises(ValueError, match="graphql_url.*HTTPS"):
+        PipefySettings(
+            graphql_url="http://app.pipefy.com/graphql",
+            oauth_url="https://auth.pipefy.com/oauth/token",
+            internal_api_url="https://app.pipefy.com/internal_api",
+        )
+
+
+@pytest.mark.unit
+def test_pipefy_settings_rejects_loopback_graphql():
+    with pytest.raises(ValueError, match="graphql_url.*localhost|127"):
+        PipefySettings(
+            graphql_url="https://127.0.0.1/graphql",
+            oauth_url="https://auth.pipefy.com/oauth/token",
+            internal_api_url="https://app.pipefy.com/internal_api",
+        )
+
+
+@pytest.mark.unit
+def test_pipefy_settings_allow_insecure_urls_permits_http_localhost():
+    s = PipefySettings(
+        allow_insecure_urls=True,
+        graphql_url="http://localhost/graphql",
+        oauth_url="http://localhost/oauth/token",
+        internal_api_url="http://localhost/internal_api",
+    )
+    assert s.graphql_url == "http://localhost/graphql"
+
+
+@pytest.mark.unit
+def test_allow_insecure_urls_from_env(monkeypatch):
+    monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
+    settings = Settings()
+    assert settings.pipefy.allow_insecure_urls is True

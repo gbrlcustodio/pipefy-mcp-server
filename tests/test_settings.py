@@ -1,6 +1,7 @@
 """Tests for ``Settings`` / ``PipefySettings`` (env loading and coercion)."""
 
 import pytest
+from pydantic import ValidationError
 
 from pipefy_mcp.settings import PipefySettings, Settings
 
@@ -72,3 +73,51 @@ def test_allow_insecure_urls_from_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
     settings = Settings()
     assert settings.pipefy.allow_insecure_urls is True
+
+
+@pytest.mark.unit
+def test_permission_denied_enrichment_timeout_defaults_to_five():
+    assert PipefySettings().permission_denied_enrichment_timeout_seconds == 5.0
+
+
+@pytest.mark.unit
+def test_permission_denied_enrichment_timeout_rejects_too_low():
+    with pytest.raises(ValidationError):
+        PipefySettings(permission_denied_enrichment_timeout_seconds=0.05)
+
+
+@pytest.mark.unit
+def test_permission_denied_enrichment_timeout_from_env(monkeypatch):
+    monkeypatch.setenv("PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS", "8.5")
+    settings = Settings()
+    assert settings.pipefy.permission_denied_enrichment_timeout_seconds == 8.5
+
+
+@pytest.mark.unit
+def test_gql_reuse_fetched_graphql_schema_defaults_to_false():
+    assert PipefySettings().gql_reuse_fetched_graphql_schema is False
+
+
+@pytest.mark.unit
+def test_gql_reuse_fetched_graphql_schema_from_env(monkeypatch):
+    monkeypatch.setenv("PIPEFY_GQL_REUSE_FETCHED_GRAPHQL_SCHEMA", "true")
+    settings = Settings()
+    assert settings.pipefy.gql_reuse_fetched_graphql_schema is True
+
+
+@pytest.mark.unit
+def test_default_webhook_name_defaults():
+    assert PipefySettings().default_webhook_name == "Pipefy Webhook"
+
+
+@pytest.mark.unit
+def test_default_webhook_name_from_env(monkeypatch):
+    monkeypatch.setenv("PIPEFY_DEFAULT_WEBHOOK_NAME", "ACME Inbound")
+    settings = Settings()
+    assert settings.pipefy.default_webhook_name == "ACME Inbound"
+
+
+@pytest.mark.unit
+def test_default_webhook_name_rejects_empty_string():
+    with pytest.raises(ValidationError):
+        PipefySettings(default_webhook_name="")

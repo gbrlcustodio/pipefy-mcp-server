@@ -287,6 +287,23 @@ async def test_validate_trad_move_returns_none_on_phase_query_error(mock_client)
 
 
 @pytest.mark.anyio
+async def test_validate_trad_move_logs_debug_on_phase_query_error(mock_client, caplog):
+    caplog.set_level(logging.DEBUG, logger="pipefy_mcp.tools.phase_transition_helpers")
+    mock_client.get_phase_allowed_move_targets.side_effect = Exception("gql fail")
+    await validate_traditional_automation_move_transition_or_none(
+        mock_client,
+        trigger_id="card_moved",
+        action_id="move_single_card",
+        extra_input={
+            "event_params": {"to_phase_id": "src"},
+            "action_params": {"to_phase_id": "dest"},
+        },
+    )
+    assert "get_phase_allowed_move_targets failed" in caplog.text
+    assert "src" in caplog.text
+
+
+@pytest.mark.anyio
 async def test_validate_trad_move_returns_none_when_transition_is_allowed(mock_client):
     mock_client.get_phase_allowed_move_targets.return_value = {
         "phase": {
@@ -386,6 +403,34 @@ async def test_ai_behavior_validation_ignores_non_move_actions(mock_client):
         mock_client, behaviors
     )
     assert problems == []
+
+
+@pytest.mark.anyio
+async def test_ai_behavior_validation_logs_debug_on_phase_query_error(
+    mock_client, caplog
+):
+    caplog.set_level(logging.DEBUG, logger="pipefy_mcp.tools.phase_transition_helpers")
+    mock_client.get_phase_allowed_move_targets.side_effect = Exception("gql fail")
+    behaviors = [
+        {
+            "name": "rule",
+            "event_id": "card_moved",
+            "eventParams": {"to_phase_id": "src-phase"},
+            "actionParams": {
+                "aiBehaviorParams": {
+                    "actionsAttributes": [
+                        {
+                            "actionType": "move_card",
+                            "metadata": {"destinationPhaseId": "p-dest"},
+                        }
+                    ]
+                }
+            },
+        }
+    ]
+    await collect_ai_behavior_move_transition_problems(mock_client, behaviors)
+    assert "get_phase_allowed_move_targets failed" in caplog.text
+    assert "src-phase" in caplog.text
 
 
 @pytest.mark.anyio

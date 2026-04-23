@@ -104,7 +104,14 @@ async def collect_ai_behavior_move_transition_problems(
         if phase_id_str not in cache:
             try:
                 data = await client.get_phase_allowed_move_targets(phase_id_str)
-            except Exception:
+            except Exception:  # noqa: BLE001
+                logger.debug(
+                    "AI behavior transition validation: "
+                    "get_phase_allowed_move_targets failed; "
+                    "skipping validation for phase_id=%s",
+                    phase_id_str,
+                    exc_info=True,
+                )
                 cache[phase_id_str] = ("", [])
             else:
                 ph = data.get("phase") or {}
@@ -224,7 +231,14 @@ async def validate_traditional_automation_move_transition_or_none(
     dest_s = str(dest)
     try:
         data = await client.get_phase_allowed_move_targets(src_s)
-    except Exception:
+    except Exception:  # noqa: BLE001
+        logger.debug(
+            "Traditional automation move-transition validation: "
+            "get_phase_allowed_move_targets failed; skipping validation "
+            "(phase_id=%s)",
+            src_s,
+            exc_info=True,
+        )
         return None
     ph = data.get("phase") or {}
     allowed = ph.get("cards_can_be_moved_to_phases") or []

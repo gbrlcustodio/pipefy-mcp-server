@@ -11,6 +11,12 @@ _PIPEFY_FIELD_REF = re.compile(r"(?<!\%)\{field:([^}]+)\}")
 _PIPEFY_ACTION_UUID = re.compile(
     r"(?<!\%)\{action:([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12})\}"
 )
+# Numeric-only aliases — callers often borrow the ``%{internal_id}`` syntax from
+# ``create_ai_automation`` (where it renders correctly) without the ``field:``
+# namespace that the AI Agent UI requires for chip rendering. Rewrite both the
+# wrapped (``%{123}``) and bare (``{123}``) variants to ``%{field:123}``.
+_PIPEFY_PREFIXED_NUMERIC_FIELD = re.compile(r"%\{(\d+)\}")
+_PIPEFY_UNPREFIXED_NUMERIC_FIELD = re.compile(r"(?<!\%)\{(\d+)\}")
 
 _TEMPLATE_PARAM_SOURCE_KEYS = (
     "template_params",
@@ -64,7 +70,22 @@ def _deep_interpolate(obj: Any, params: dict[str, str]) -> Any:
 
 
 def normalize_pipefy_ai_instruction_tokens(text: str) -> str:
-    """Prefix ``{field:…}`` and ``{action:<uuid>}`` with ``%`` when missing (Pipefy instruction syntax).
+    """Normalize AI Agent instruction tokens to the canonical ``%{field:…}`` / ``%{action:…}`` syntax.
+
+    The Pipefy AI Agent UI only renders chip tokens for the ``field:`` / ``action:``
+    namespaces. Callers often pass the AI Automation-style ``%{<internal_id>}``
+    (bare numeric) which the API stores verbatim but the UI displays as plain
+    text. This function rewrites the common variants to the chip-friendly form:
+
+      * ``{field:X}``          → ``%{field:X}``   (missing ``%`` prefix)
+      * ``{action:<uuid>}``    → ``%{action:<uuid>}``
+      * ``%{<digits>}``        → ``%{field:<digits>}`` (missing ``field:`` namespace)
+      * ``{<digits>}``         → ``%{field:<digits>}`` (missing both prefix and namespace)
+
+    Already-canonical tokens (``%{field:X}``, ``%{action:<uuid>}``) are left
+    untouched. Non-numeric bare tokens without a namespace (e.g. ``{foo}``) are
+    also left alone — they may be template placeholders for
+    :func:`expand_behavior_placeholders`.
 
     Args:
         text: ``aiBehaviorParams.instruction`` value (or fragment).
@@ -72,7 +93,9 @@ def normalize_pipefy_ai_instruction_tokens(text: str) -> str:
     if not text:
         return text
     out = _PIPEFY_FIELD_REF.sub(r"%{field:\1}", text)
-    return _PIPEFY_ACTION_UUID.sub(r"%{action:\1}", out)
+    out = _PIPEFY_ACTION_UUID.sub(r"%{action:\1}", out)
+    out = _PIPEFY_PREFIXED_NUMERIC_FIELD.sub(r"%{field:\1}", out)
+    return _PIPEFY_UNPREFIXED_NUMERIC_FIELD.sub(r"%{field:\1}", out)
 
 
 def _normalize_instruction_in_behavior(behavior: dict[str, Any]) -> None:

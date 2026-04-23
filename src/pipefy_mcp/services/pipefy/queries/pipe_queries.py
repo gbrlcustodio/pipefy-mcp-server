@@ -130,6 +130,7 @@ GET_PIPE_WITH_PREFERENCES_QUERY = gql(
             id
             uuid
             name
+            organizationId
             preferences {
                 aiAgentsEnabled
             }

@@ -54,6 +54,40 @@ def test_normalize_pipefy_tokens_adds_percent_prefix():
 
 
 @pytest.mark.unit
+def test_normalize_promotes_bare_numeric_ids_to_field_namespace():
+    """The AI Agent UI only renders chips for the ``field:`` / ``action:``
+    namespaces. Callers often borrow the ``create_ai_automation`` style
+    (bare ``%{<internal_id>}``) which stores fine via the API but the UI
+    displays as plain text. We rewrite those variants to the canonical form."""
+    text = "Read %{427911984} and {427911985} and %{field:427911986} and %{action:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}"
+    out = normalize_pipefy_ai_instruction_tokens(text)
+    # Bare numeric variants promoted to %{field:<id>}
+    assert "%{field:427911984}" in out
+    assert "%{field:427911985}" in out
+    # Already-canonical tokens left alone
+    assert out.count("%{field:427911986}") == 1
+    assert "%{action:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa}" in out
+    # And the rewritten variants must not leak their old form
+    assert "%{427911984}" not in out.replace("%{field:427911984}", "")
+    assert "{427911985}" not in out.replace("%{field:427911985}", "")
+
+
+@pytest.mark.unit
+def test_normalize_leaves_non_numeric_bare_tokens_alone():
+    """``{foo}`` without a namespace and with non-numeric content is left
+    untouched — it may be a ``{{placeholder}}`` template param key or literal
+    user text. Only numeric content is interpreted as a field internal_id."""
+    text = "Keep {foo} and {bar:baz} as-is."
+    out = normalize_pipefy_ai_instruction_tokens(text)
+    assert out == text
+
+
+@pytest.mark.unit
+def test_normalize_empty_and_none_safe():
+    assert normalize_pipefy_ai_instruction_tokens("") == ""
+
+
+@pytest.mark.unit
 def test_expand_normalizes_instruction_tokens_without_template_params():
     b = _minimal_behavior()
     b["actionParams"]["aiBehaviorParams"]["instruction"] = (

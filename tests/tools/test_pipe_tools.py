@@ -2344,3 +2344,65 @@ class TestSkipElicitation:
             card_id="99",
             field_updates=[{"field_id": "status", "value": "approved"}],
         )
+
+
+# =============================================================================
+# structured_output=False on comment/card mutation tools
+# =============================================================================
+#
+# These four tools used TypedDict return annotations, which FastMCP auto-detects
+# as structured output. The resulting ``CallToolResult`` carried a
+# ``structuredContent`` field that MCP clients surface wrapped in ``{"result":
+# {...}}`` — visually different from the 13 other ``delete_*`` tools that
+# return plain ``dict[str, Any]``. We disable structured output on the four
+# outliers so all comment/card/delete tools share the same envelope shape.
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("client_session", [None], indirect=True)
+@pytest.mark.parametrize(
+    "tool_name,args,prep",
+    [
+        (
+            "add_card_comment",
+            {"card_id": "1", "text": "hi"},
+            None,
+        ),
+        (
+            "update_comment",
+            {"comment_id": "1", "text": "hi"},
+            None,
+        ),
+        (
+            "delete_comment",
+            {"comment_id": "1", "confirm": True},
+            None,
+        ),
+        (
+            "delete_card",
+            {"card_id": "1", "confirm": True},
+            "delete_card",
+        ),
+    ],
+)
+async def test_comment_and_card_mutations_emit_unstructured_content(
+    client_session, mock_pipefy_client, tool_name, args, prep
+):
+    """Tools keep their TypedDict return hints for callers, but
+    ``structured_output=False`` prevents the ``{"result": {...}}`` wrap that
+    FastMCP otherwise generates when a tool declares structured output."""
+    if prep == "delete_card":
+        mock_pipefy_client.get_card.return_value = {
+            "card": {
+                "id": "1",
+                "title": "T",
+                "pipe": {"name": "P"},
+            }
+        }
+        mock_pipefy_client.delete_card.return_value = {"deleteCard": {"success": True}}
+    async with client_session as session:
+        result = await session.call_tool(tool_name, args)
+    assert result.isError is False
+    # The tool body returns a plain success dict; structured_output=False
+    # means no structuredContent is emitted on the MCP protocol side.
+    assert result.structuredContent is None

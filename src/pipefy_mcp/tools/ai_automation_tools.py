@@ -125,8 +125,17 @@ class AiAutomationTools:
             """Pre-flight validation for AI automation prompts before calling ``create_ai_automation``.
 
             Checks that the prompt references valid pipe fields, output field IDs exist,
-            the optional event ID is valid, and AI is enabled on the pipe. Catches common
-            mistakes in a single read-only call instead of 2-3 failed mutation roundtrips.
+            the optional event ID is valid, AI is enabled on the pipe, and the
+            org-level AI credit budget is usable. Catches common mistakes in a
+            single read-only call instead of 2-3 failed mutation roundtrips.
+
+            Credit-budget signals:
+              - ``active: False`` or ``aiAutomation.enabled: False`` → **blocking problem**
+                ("AI Automations are disabled on this organization…").
+              - ``limit > 0 and usage >= limit and not hasAddon`` → **warning**
+                ("AI credit budget exhausted…"). Rule creation still proceeds.
+              - ``limit == 0`` → silent (common in sandbox/custom plans with
+                uncapped billing).
 
             Args:
                 pipe_id: Pipe where the AI automation will run.
@@ -235,6 +244,39 @@ class AiAutomationTools:
                     "AI is not enabled for this pipe. Enable it in "
                     "Pipefy UI > Pipe Settings > AI."
                 )
+
+            # 7. Check org-level AI credit budget. Informational only when the
+            # org is active and either under limit or has unlimited billing
+            # (limit=0, common in sandbox/custom plans). Blocking only when AI
+            # Automations are disabled at the org level.
+            org_id = pipe_info.get("organizationId")
+            if org_id:
+                try:
+                    usage_data = await client.get_ai_credit_usage(
+                        str(org_id), "current_month"
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    await ctx.debug(f"Could not check AI credit usage: {exc}")
+                else:
+                    stats = (usage_data or {}).get("aiCreditUsageStats") or {}
+                    active = stats.get("active")
+                    usage = stats.get("usage") or 0
+                    limit = stats.get("limit") or 0
+                    has_addon = bool(stats.get("hasAddon"))
+                    ai_auto = stats.get("aiAutomation") or {}
+                    ai_auto_enabled = ai_auto.get("enabled")
+                    if active is False or ai_auto_enabled is False:
+                        problems.append(
+                            "AI Automations are disabled on this organization. "
+                            "Created rules will not execute. Contact your "
+                            "Pipefy admin to enable AI Automations for the org."
+                        )
+                    elif limit > 0 and usage >= limit and not has_addon:
+                        warnings.append(
+                            f"AI credit budget exhausted ({usage}/{limit}). "
+                            "Rules will be created but may not execute until "
+                            "credits reset or an addon is enabled."
+                        )
 
             # Only include referenced fields in the returned field_map and warnings
             referenced_ids = set(prompt_tokens) | set(str(f) for f in field_ids)
@@ -417,6 +459,12 @@ class AiAutomationTools:
 
             Best for straightforward field-filling use cases (e.g. summarize, classify, extract data into a field).
             Requires AI to be enabled for the pipe in Pipefy UI.
+
+            **Pre-flight (strongly recommended):** call ``validate_ai_automation_prompt`` first.
+            It verifies prompt field references, output field IDs, event ID, AI-enabled
+            status on the pipe, *and* the org-level AI credit budget. Without the pre-flight,
+            a rule may be created successfully but never execute (e.g. AI Automations
+            disabled at the org level, or credit budget exhausted).
 
             Args:
                 name: Automation name.

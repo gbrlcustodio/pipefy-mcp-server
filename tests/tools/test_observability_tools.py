@@ -1194,6 +1194,39 @@ async def test_get_ai_agent_log_details_graphql_error(
     assert "log not found" in tool_error_message(p)
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_ai_agent_log_details_rewrites_automationaction_not_found(
+    observability_session, mock_observability_client, extract_payload
+):
+    """The upstream resolver leaks its internal type (``AutomationAction``) when
+    the UUID isn't found; the tool rewrites to tool-level semantics."""
+    mock_observability_client.get_ai_agent_log_details.side_effect = (
+        TransportQueryError(
+            "failed",
+            errors=[
+                {
+                    "message": (
+                        "Couldn't find AutomationAction with 'id'="
+                        "00000000-0000-0000-0000-000000000000"
+                    )
+                }
+            ],
+        )
+    )
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_ai_agent_log_details",
+            {"log_uuid": "00000000-0000-0000-0000-000000000000"},
+        )
+    p = extract_payload(result)
+    assert p["success"] is False
+    msg = tool_error_message(p)
+    assert "AutomationAction" not in msg
+    assert "AI agent log not found" in msg
+    assert "00000000-0000-0000-0000-000000000000" in msg
+
+
 # ---------------------------------------------------------------------------
 # get_automation_logs — GraphQL error
 # ---------------------------------------------------------------------------

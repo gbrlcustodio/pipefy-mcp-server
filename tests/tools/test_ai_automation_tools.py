@@ -25,6 +25,7 @@ def mock_pipefy_client():
     client.delete_automation = AsyncMock()
     client.get_pipe_with_preferences = AsyncMock()
     client.get_automation_events = AsyncMock()
+    client.get_ai_credit_usage = AsyncMock()
     client.ai_automation_available = True
     return client
 
@@ -1320,3 +1321,182 @@ class TestValidateAiAutomationPrompt:
         assert "100" in payload["field_map"]
         assert "300" in payload["field_map"]
         assert "200" not in payload["field_map"]
+
+
+# AI credit check — three-case matrix exercised below. Uses a variant of
+# MOCK_PIPE_WITH_PREFS that carries ``organizationId`` so the credit branch
+# runs; tests explicitly set ``get_ai_credit_usage`` to shape ``aiCreditUsageStats``.
+MOCK_PIPE_WITH_ORG = {
+    "pipe": {
+        **MOCK_PIPE_WITH_PREFS["pipe"],
+        "organizationId": "org-42",
+    }
+}
+
+
+@pytest.mark.anyio
+class TestValidateAiAutomationPromptCreditCheck:
+    async def test_ai_automations_disabled_blocks_with_problem(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_ORG
+        mock_pipefy_client.get_ai_credit_usage.return_value = {
+            "aiCreditUsageStats": {
+                "active": False,
+                "usage": 0,
+                "limit": 0,
+                "hasAddon": False,
+                "aiAutomation": {"enabled": False},
+            }
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is False
+        assert any(
+            "AI Automations are disabled on this organization" in p
+            for p in payload["problems"]
+        )
+
+    async def test_exhausted_budget_emits_warning_not_problem(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_ORG
+        mock_pipefy_client.get_ai_credit_usage.return_value = {
+            "aiCreditUsageStats": {
+                "active": True,
+                "usage": 1500,
+                "limit": 1000,
+                "hasAddon": False,
+                "aiAutomation": {"enabled": True},
+            }
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is True
+        assert any("AI credit budget exhausted" in w for w in payload["warnings"])
+
+    async def test_limit_zero_is_silent(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Sandbox / custom plans with uncapped billing report limit=0;
+        emitting a warning there is noise, so the check stays silent."""
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_ORG
+        mock_pipefy_client.get_ai_credit_usage.return_value = {
+            "aiCreditUsageStats": {
+                "active": True,
+                "usage": 1392,
+                "limit": 0,
+                "hasAddon": False,
+                "aiAutomation": {"enabled": True},
+            }
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["valid"] is True
+        assert not any("credit" in w.lower() for w in payload["warnings"])
+        assert not any("AI Automations are disabled" in p for p in payload["problems"])
+
+    async def test_addon_skips_exhausted_warning(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """``hasAddon`` means billing will absorb overage; don't warn."""
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_ORG
+        mock_pipefy_client.get_ai_credit_usage.return_value = {
+            "aiCreditUsageStats": {
+                "active": True,
+                "usage": 1500,
+                "limit": 1000,
+                "hasAddon": True,
+                "aiAutomation": {"enabled": True},
+            }
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert not any("credit" in w.lower() for w in payload["warnings"])
+
+    async def test_credit_lookup_failure_is_silent(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Credit check is informational; a lookup error must not block the preflight."""
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_ORG
+        mock_pipefy_client.get_ai_credit_usage.side_effect = RuntimeError("upstream")
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is True
+
+    async def test_skipped_when_organization_id_missing(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Old mocks without ``organizationId`` must not trigger the credit lookup."""
+        mock_pipefy_client.get_pipe_with_preferences.return_value = MOCK_PIPE_WITH_PREFS
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_automation_prompt",
+                {
+                    "pipe_id": "303",
+                    "prompt": "Summarize: %{100}",
+                    "field_ids": ["100"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        mock_pipefy_client.get_ai_credit_usage.assert_not_called()

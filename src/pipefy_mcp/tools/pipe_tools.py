@@ -253,6 +253,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            structured_output=False,
         )
         async def add_card_comment(
             card_id: PipefyId, text: str
@@ -285,6 +286,7 @@ class PipeTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
+            structured_output=False,
         )
         async def update_comment(
             comment_id: PipefyId, text: str
@@ -320,6 +322,7 @@ class PipeTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            structured_output=False,
         )
         async def delete_comment(
             ctx: Context[ServerSession, None],
@@ -944,6 +947,7 @@ class PipeTools:
                 readOnlyHint=False,
                 destructiveHint=True,
             ),
+            structured_output=False,
         )
         async def delete_card(
             ctx: Context[ServerSession, None],

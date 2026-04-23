@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field
 
 from pipefy_mcp.models.validators import NonBlankStr, PipefyId
 
@@ -35,11 +35,3 @@ class CreateSendTaskAutomationInput(BaseModel):
     recipients: NonBlankStr
     event_params: dict | None = None
     condition: dict | None = None
-
-    @field_validator("pipe_id")
-    @classmethod
-    def _strip_pipe_id(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("pipe_id cannot be blank")
-        return stripped

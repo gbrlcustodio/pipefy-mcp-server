@@ -35,6 +35,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     strip_internal_api_diagnostic_markers,
     with_debug_suffix,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
     validate_tool_id,
@@ -144,7 +145,7 @@ class AiAutomationTools:
             )
             pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
             if pid_err is not None:
-                return build_ai_tool_error(pid_err["error"])
+                return build_ai_tool_error(tool_error_message(pid_err))
 
             problems: list[str] = []
             warnings: list[str] = []
@@ -206,7 +207,7 @@ class AiAutomationTools:
             if event_id is not None:
                 ok_e, eid, eid_err = validate_optional_tool_id(event_id, "event_id")
                 if not ok_e:
-                    problems.append(eid_err["error"])
+                    problems.append(tool_error_message(eid_err))
                 elif eid:
                     try:
                         events = await client.get_automation_events(pid)
@@ -222,7 +223,7 @@ class AiAutomationTools:
                     except Exception as exc:  # noqa: BLE001
                         await ctx.debug(f"Could not fetch automation events: {exc}")
                         warnings.append(
-                            "Could not verify event_id — automation events "
+                            "Could not verify event_id: automation events "
                             "endpoint returned an error."
                         )
 
@@ -276,7 +277,7 @@ class AiAutomationTools:
             await ctx.debug(f"get_ai_automation: automation_id={automation_id}")
             aid, err = validate_tool_id(automation_id, "automation_id")
             if err is not None:
-                return build_automation_error_payload(message=err["error"])
+                return build_automation_error_payload(message=tool_error_message(err))
             try:
                 raw = await client.get_automation(aid)
             except Exception as exc:  # noqa: BLE001
@@ -323,10 +324,10 @@ class AiAutomationTools:
                 organization_id, "organization_id"
             )
             if not ok_o:
-                return build_automation_error_payload(message=org_err["error"])
+                return build_automation_error_payload(message=tool_error_message(org_err))
             pid, pid_err = validate_tool_id(pipe_id, "pipe_id")
             if pid_err is not None:
-                return build_automation_error_payload(message=pid_err["error"])
+                return build_automation_error_payload(message=tool_error_message(pid_err))
             try:
                 rows = await client.get_automations(
                     organization_id=org,
@@ -371,7 +372,7 @@ class AiAutomationTools:
 
             rid, rid_err = validate_tool_id(automation_id, "automation_id")
             if rid_err is not None:
-                return build_automation_error_payload(message=rid_err["error"])
+                return build_automation_error_payload(message=tool_error_message(rid_err))
 
             guard = await check_destructive_confirmation(
                 ctx,

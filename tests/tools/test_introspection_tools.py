@@ -1,3 +1,5 @@
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+
 """Tests for GraphQL introspection MCP tools (mocked PipefyClient)."""
 
 from datetime import timedelta
@@ -94,7 +96,7 @@ async def test_introspect_type_not_found_returns_error_payload(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not found" in payload["error"].lower()
+    assert "not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -110,7 +112,8 @@ async def test_introspect_type_transport_error_returns_structured_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert isinstance(payload.get("error"), str)
+    assert isinstance(payload.get("error"), dict)
+    assert "message" in payload["error"]
 
 
 @pytest.mark.anyio
@@ -200,7 +203,7 @@ async def test_introspect_mutation_not_found_returns_error_payload(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not found" in payload["error"].lower()
+    assert "not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -250,7 +253,7 @@ async def test_introspect_query_not_found_returns_error_payload(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not found" in payload["error"].lower()
+    assert "not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -358,7 +361,7 @@ async def test_execute_graphql_graphql_errors_surface_as_failure(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert (
-        "nope" in payload["error"].lower()
+        "nope" in tool_error_message(payload).lower()
         or "nope" in payload.get("result", "").lower()
     )
 
@@ -380,7 +383,7 @@ async def test_execute_graphql_syntax_error_returns_error_payload(
     mock_introspection_client.execute_graphql.assert_awaited_once()
     payload = extract_payload(result)
     assert payload["success"] is False
-    err = payload["error"].lower()
+    err = tool_error_message(payload).lower()
     assert "syntax" in err or "invalid" in err or "unexpected" in err
 
 
@@ -400,4 +403,4 @@ async def test_execute_graphql_transport_error_returns_error_payload(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Connection refused" in payload["error"]
+    assert "Connection refused" in tool_error_message(payload)

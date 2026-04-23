@@ -9,6 +9,7 @@ from pipefy_mcp.tools.destructive_tool_guard import (
     DestructivePreviewPayload,
 )
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
+from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
 
 
 class UserCancelledError(Exception):
@@ -22,7 +23,7 @@ class AddCardCommentSuccessPayload(TypedDict):
 
 class AddCardCommentErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
 AddCardCommentPayload = AddCardCommentSuccessPayload | AddCardCommentErrorPayload
@@ -35,7 +36,7 @@ class UpdateCommentSuccessPayload(TypedDict):
 
 class UpdateCommentErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
 UpdateCommentPayload = UpdateCommentSuccessPayload | UpdateCommentErrorPayload
@@ -47,7 +48,7 @@ class DeleteCommentSuccessPayload(TypedDict):
 
 class DeleteCommentErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
 DeleteCommentPayload = (
@@ -65,7 +66,7 @@ class DeleteCardSuccessPayload(TypedDict):
 
 class DeleteCardErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
 DeleteCardPayload = (
@@ -182,7 +183,7 @@ def map_delete_comment_error_to_message(exc: BaseException) -> str:
 
 
 def _build_comment_error_payload(message: str) -> dict:
-    return {"success": False, "error": message}
+    return tool_error(message)
 
 
 def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentErrorPayload:
@@ -256,7 +257,7 @@ def build_delete_card_error_payload(*, message: str) -> DeleteCardErrorPayload:
     Args:
         message: User-visible failure reason.
     """
-    return {"success": False, "error": message}
+    return cast(DeleteCardErrorPayload, tool_error(message))
 
 
 def _filter_editable_field_definitions(field_definitions: list) -> list[dict]:
@@ -319,3 +320,33 @@ def map_delete_card_error_to_message(
         f"Failed to delete card '{card_title}' (ID: {card_id}). "
         "Please try again or contact support."
     )
+
+
+__all__ = [
+    "AddCardCommentErrorPayload",
+    "AddCardCommentPayload",
+    "AddCardCommentSuccessPayload",
+    "DeleteCardErrorPayload",
+    "DeleteCardPayload",
+    "DeleteCardSuccessPayload",
+    "DeleteCommentErrorPayload",
+    "DeleteCommentPayload",
+    "DeleteCommentSuccessPayload",
+    "FIND_CARDS_EMPTY_MESSAGE",
+    "UpdateCommentErrorPayload",
+    "UpdateCommentPayload",
+    "UpdateCommentSuccessPayload",
+    "UserCancelledError",
+    "build_add_card_comment_error_payload",
+    "build_add_card_comment_success_payload",
+    "build_delete_card_error_payload",
+    "build_delete_card_success_payload",
+    "build_delete_comment_error_payload",
+    "build_delete_comment_success_payload",
+    "build_update_comment_error_payload",
+    "build_update_comment_success_payload",
+    "map_add_card_comment_error_to_message",
+    "map_delete_card_error_to_message",
+    "map_delete_comment_error_to_message",
+    "map_update_comment_error_to_message",
+]

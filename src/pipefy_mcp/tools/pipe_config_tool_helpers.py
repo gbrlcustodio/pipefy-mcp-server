@@ -7,6 +7,7 @@ from typing_extensions import TypedDict
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
+from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
 from pipefy_mcp.tools.validation_helpers import UUID_RE, format_json_preview
 
 
@@ -26,7 +27,7 @@ class DeletePipeSuccessPayload(TypedDict):
 
 class DeletePipeErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
 DeletePipePayload = (
@@ -97,7 +98,7 @@ def build_pipe_tool_error_payload(*, message: str) -> dict[str, Any]:
     Args:
         message: User-visible failure reason.
     """
-    return {"success": False, "error": message}
+    return tool_error(message)
 
 
 def build_field_condition_success_payload(
@@ -189,7 +190,7 @@ def build_delete_pipe_error_payload(*, message: str) -> DeletePipeErrorPayload:
     Args:
         message: User-visible failure reason.
     """
-    return cast(DeletePipeErrorPayload, {"success": False, "error": message})
+    return cast(DeletePipeErrorPayload, tool_error(message))
 
 
 def map_delete_pipe_error_to_message(

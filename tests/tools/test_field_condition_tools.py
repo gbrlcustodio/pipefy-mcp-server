@@ -1,3 +1,5 @@
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+
 """Unit tests for field condition read tools (get_field_conditions, get_field_condition)."""
 
 from datetime import timedelta
@@ -185,7 +187,7 @@ class TestGetFieldCondition:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "access denied" in payload["error"].lower()
+        assert "access denied" in tool_error_message(payload).lower()
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_field_condition_graphql_error_returns_error_payload(

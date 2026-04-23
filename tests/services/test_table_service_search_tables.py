@@ -7,6 +7,7 @@ import pytest
 from pipefy_mcp.services.pipefy.queries.table_queries import SEARCH_TABLES_QUERY
 from pipefy_mcp.services.pipefy.table_service import TableService
 from pipefy_mcp.settings import PipefySettings
+from tests.pagination_test_defaults import DEFAULT_FIRST
 
 
 def _table_connection(
@@ -179,9 +180,11 @@ async def test_search_tables_propagates_has_next_page(mock_settings):
         }
     ]
     service = _make_service(mock_settings, {"organizations": orgs})
-    result = await service.search_tables(first=50)
+    result = await service.search_tables(first=DEFAULT_FIRST)
 
     assert result["search_limits"]["tables_has_next_page"] is True
     assert result["organizations"][0]["tables_has_next_page"] is True
     assert result["organizations"][0]["tables_page_end_cursor"] == "c1"
-    service.execute_query.assert_awaited_once_with(SEARCH_TABLES_QUERY, {"first": 50})
+    service.execute_query.assert_awaited_once_with(
+        SEARCH_TABLES_QUERY, {"first": DEFAULT_FIRST}
+    )

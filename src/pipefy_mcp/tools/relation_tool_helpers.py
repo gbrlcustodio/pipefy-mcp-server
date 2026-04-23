@@ -9,6 +9,7 @@ from typing_extensions import TypedDict
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 
 class RelationReadSuccessPayload(TypedDict):
@@ -50,7 +51,7 @@ def build_relation_error_payload(*, message: str) -> dict[str, Any]:
     Args:
         message: User-visible failure reason.
     """
-    return {"success": False, "error": message}
+    return tool_error(message)
 
 
 def build_relation_mutation_success_payload(
@@ -78,3 +79,13 @@ def handle_relation_tool_graphql_error(
 ) -> dict[str, Any]:
     """Delegate to :func:`handle_tool_graphql_error`."""
     return handle_tool_graphql_error(exc, fallback_msg, debug=debug)
+
+
+__all__ = [
+    "RelationMutationSuccessPayload",
+    "RelationReadSuccessPayload",
+    "build_relation_error_payload",
+    "build_relation_mutation_success_payload",
+    "build_relation_read_success_payload",
+    "handle_relation_tool_graphql_error",
+]

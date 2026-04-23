@@ -4,7 +4,7 @@ from __future__ import annotations
 
 TRANSITION_RULES_HINT = (
     "Phase transition rules are configured in the Pipefy UI "
-    "(Pipe settings → Phase → Connections) and are not editable via API. "
+    "(Pipe settings -> Phase -> Connections) and are not editable via API. "
     "Use get_phase_allowed_move_targets on the source phase to list valid destinations "
     "(GraphQL field phase.cards_can_be_moved_to_phases)."
 )
@@ -27,3 +27,9 @@ def format_allowed_destinations_phrase(allowed_phases: list[dict]) -> str:
         elif pid is not None:
             parts.append(str(pid))
     return ", ".join(parts) if parts else "(none configured)"
+
+
+__all__ = [
+    "TRANSITION_RULES_HINT",
+    "format_allowed_destinations_phrase",
+]

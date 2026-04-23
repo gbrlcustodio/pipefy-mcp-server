@@ -1,3 +1,5 @@
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+
 """Tests for AI Automation MCP tools."""
 
 from datetime import timedelta
@@ -114,7 +116,7 @@ class TestGetAiAutomation:
         assert result.isError is False
         p = extract_payload(result)
         assert p["success"] is False
-        assert "boom" in p["error"]
+        assert "boom" in tool_error_message(p)
 
     async def test_not_found_empty_data(
         self,
@@ -178,7 +180,7 @@ class TestGetAiAutomation:
             )
         p = extract_payload(result)
         assert p["success"] is False
-        assert "nope" in p["error"]
+        assert "nope" in tool_error_message(p)
 
     async def test_succeeds_when_oauth_not_configured_public_query(
         self,
@@ -316,7 +318,7 @@ class TestGetAiAutomations:
             )
         p = extract_payload(result)
         assert p["success"] is False
-        assert "no access" in p["error"]
+        assert "no access" in tool_error_message(p)
 
     async def test_rejects_invalid_pipe_id(
         self,
@@ -435,7 +437,7 @@ class TestDeleteAiAutomation:
             )
         p = extract_payload(result)
         assert p["success"] is False
-        assert "forbidden" in p["error"]
+        assert "forbidden" in tool_error_message(p)
 
     async def test_works_without_oauth_config(
         self,
@@ -469,7 +471,7 @@ class TestDeleteAiAutomation:
             )
         p = extract_payload(result)
         assert p["success"] is False
-        assert "did not succeed" in p["error"].lower()
+        assert "did not succeed" in tool_error_message(p).lower()
 
     async def test_rejects_invalid_automation_id(
         self,
@@ -550,7 +552,7 @@ class TestCreateAiAutomation:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "error" in payload
-        assert isinstance(payload["error"], str)
+        assert isinstance(tool_error_message(payload), str)
 
     async def test_internal_api_style_error_strips_code_and_correlation_from_payload(
         self,
@@ -575,7 +577,7 @@ class TestCreateAiAutomation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        err = payload["error"]
+        err = tool_error_message(payload)
         assert "[code=" not in err
         assert "[correlation_id=" not in err
         assert "Invalid prompt" in err
@@ -605,7 +607,7 @@ class TestCreateAiAutomation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        err = payload["error"]
+        err = tool_error_message(payload)
         assert "[code=" not in err
         assert "[correlation_id=" not in err
         assert "Invalid prompt" in err
@@ -636,7 +638,7 @@ class TestCreateAiAutomation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        err = payload["error"]
+        err = tool_error_message(payload)
         assert "[code=" not in err
         assert "[correlation_id=" not in err
         assert "Could not create the AI automation" in err
@@ -794,7 +796,7 @@ class TestUpdateAiAutomation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        err = payload["error"]
+        err = tool_error_message(payload)
         assert "[code=" not in err
         assert "[correlation_id=" not in err
         assert "Not found" in err
@@ -822,7 +824,7 @@ class TestUpdateAiAutomation:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        err = payload["error"]
+        err = tool_error_message(payload)
         assert "[code=" not in err
         assert "Not found" in err
         assert "(debug:" in err
@@ -856,7 +858,7 @@ class TestAiAutomationNotConfigured:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "OAuth" in payload["error"]
+        assert "OAuth" in tool_error_message(payload)
 
     async def test_update_returns_error_payload_when_not_configured(
         self,
@@ -871,7 +873,7 @@ class TestAiAutomationNotConfigured:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "OAuth" in payload["error"]
+        assert "OAuth" in tool_error_message(payload)
 
     async def test_delete_works_without_oauth_config(
         self,
@@ -1247,7 +1249,7 @@ class TestValidateAiAutomationPrompt:
             )
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "network error" in payload["error"]
+        assert "network error" in tool_error_message(payload)
 
     async def test_rejects_invalid_pipe_id(
         self,

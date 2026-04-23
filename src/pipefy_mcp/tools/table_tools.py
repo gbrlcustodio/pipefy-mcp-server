@@ -30,6 +30,7 @@ from pipefy_mcp.tools.table_tool_helpers import (
     handle_table_tool_graphql_error,
     map_delete_table_error_to_message,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     validate_optional_tool_id,
@@ -115,7 +116,7 @@ class TableTools:
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_read_error_payload(message=err["error"])
+                return build_table_read_error_payload(message=tool_error_message(err))
             try:
                 raw = await client.get_table(table_id)
             except Exception as exc:  # noqa: BLE001
@@ -183,7 +184,7 @@ class TableTools:
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_read_error_payload(message=err["error"])
+                return build_table_read_error_payload(message=tool_error_message(err))
             if (
                 not isinstance(first, int)
                 or first < _TABLE_RECORDS_FIRST_MIN
@@ -237,7 +238,7 @@ class TableTools:
             """
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
-                return build_table_read_error_payload(message=err["error"])
+                return build_table_read_error_payload(message=tool_error_message(err))
             try:
                 raw = await client.get_table_record(record_id)
             except Exception as exc:  # noqa: BLE001
@@ -271,7 +272,7 @@ class TableTools:
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_read_error_payload(message=err["error"])
+                return build_table_read_error_payload(message=tool_error_message(err))
             if not isinstance(field_id, str) or not field_id.strip():
                 return build_table_read_error_payload(
                     message="Invalid 'field_id': provide a non-empty string.",
@@ -333,7 +334,7 @@ class TableTools:
                 )
             organization_id, err = validate_tool_id(organization_id, "organization_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
             bad_extra = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -375,7 +376,7 @@ class TableTools:
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
             bad_extra = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -432,7 +433,7 @@ class TableTools:
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_delete_table_error_payload(message=err["error"])
+                return build_delete_table_error_payload(message=tool_error_message(err))
 
             table_name = "Unknown"
             try:
@@ -507,17 +508,17 @@ class TableTools:
 
             Args:
                 table_id: Target table ID.
-                fields: Map of field_id → value, or list of objects with field_id / field_value.
+                fields: Map of field_id -> value, or list of objects with field_id / field_value.
                 title: Optional record title.
                 extra_input: Other `CreateTableRecordInput` keys (e.g. label_ids).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
             if not isinstance(fields, (dict, list)):
                 return build_table_mutation_error_payload(
-                    message="Invalid 'fields': provide a dict (field_id → value) or a list of field objects.",
+                    message="Invalid 'fields': provide a dict (field_id -> value) or a list of field objects.",
                 )
             if isinstance(fields, dict) and len(fields) == 0:
                 return build_table_mutation_error_payload(
@@ -584,7 +585,7 @@ class TableTools:
             """
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
             if not isinstance(fields, dict) or not fields:
                 return build_table_mutation_error_payload(
                     message="Invalid 'fields': provide a non-empty dict with at least one attribute.",
@@ -632,7 +633,7 @@ class TableTools:
             """
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
 
             guard = await check_destructive_confirmation(
                 ctx,
@@ -672,10 +673,10 @@ class TableTools:
             """
             record_id, err = validate_tool_id(record_id, "record_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
             if value is None:
                 return build_table_mutation_error_payload(
                     message="Invalid 'value': cannot be null.",
@@ -721,7 +722,7 @@ class TableTools:
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
             if not isinstance(label, str) or not label.strip():
                 return build_table_mutation_error_payload(
                     message="Invalid 'label': provide a non-empty string.",
@@ -784,10 +785,10 @@ class TableTools:
             """
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
             ok, table_id, opt_err = validate_optional_tool_id(table_id, "table_id")
             if not ok:
-                return build_table_mutation_error_payload(message=opt_err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(opt_err))
             bad_extra = mutation_error_if_not_optional_dict(
                 extra_input, arg_name="extra_input"
             )
@@ -862,10 +863,10 @@ class TableTools:
             """
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
-                return build_table_mutation_error_payload(message=err["error"])
+                return build_table_mutation_error_payload(message=tool_error_message(err))
 
             guard = await check_destructive_confirmation(
                 ctx,

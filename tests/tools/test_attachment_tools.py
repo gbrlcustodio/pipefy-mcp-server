@@ -1,3 +1,5 @@
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+
 """Tests for attachment MCP tools (mocked PipefyClient)."""
 
 import base64
@@ -401,7 +403,7 @@ async def test_upload_attachment_to_card_presigned_graphql_error(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload["step"] == "presigned_url"
-    assert "denied" in payload["error"]
+    assert "denied" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -455,7 +457,7 @@ async def test_upload_attachment_to_card_field_update_failure(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload["step"] == "field_update"
-    assert "attachment" in payload["error"]
+    assert "attachment" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -621,7 +623,7 @@ async def test_upload_attachment_to_card_rejects_ssrf_url(
     assert payload["success"] is False
     assert payload["step"] == "file_download"
     assert (
-        "private" in payload["error"].lower() or "internal" in payload["error"].lower()
+        "private" in tool_error_message(payload).lower() or "internal" in tool_error_message(payload).lower()
     )
     mock_attachment_client.create_presigned_url.assert_not_called()
 
@@ -646,7 +648,7 @@ async def test_upload_attachment_to_card_rejects_file_scheme(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload["step"] == "file_download"
-    assert "http" in payload["error"].lower()
+    assert "http" in tool_error_message(payload).lower()
     mock_attachment_client.create_presigned_url.assert_not_called()
 
 
@@ -688,7 +690,7 @@ async def test_upload_attachment_to_card_rejects_oversized_content_length(
     assert payload["success"] is False
     assert payload["step"] == "file_download"
     assert (
-        "too large" in payload["error"].lower() or "limit" in payload["error"].lower()
+        "too large" in tool_error_message(payload).lower() or "limit" in tool_error_message(payload).lower()
     )
     mock_attachment_client.create_presigned_url.assert_not_called()
 

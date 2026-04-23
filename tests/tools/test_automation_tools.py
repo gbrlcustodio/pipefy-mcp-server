@@ -1,3 +1,5 @@
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+
 """Tests for traditional automation MCP tools (mocked PipefyClient)."""
 
 from datetime import timedelta
@@ -90,7 +92,7 @@ async def test_get_automation_graphql_error(
     assert result.isError is False
     p = extract_payload(result)
     assert p["success"] is False
-    assert "not found" in p["error"]
+    assert "not found" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -168,7 +170,7 @@ async def test_create_automation_rejects_empty_name(
     mock_automation_client.create_automation.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "name" in p["error"].lower()
+    assert "name" in tool_error_message(p).lower()
 
 
 @pytest.mark.anyio
@@ -191,8 +193,8 @@ async def test_create_automation_rejects_non_dict_extra_input(
     mock_automation_client.create_automation.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "extra_input" in p["error"].lower()
-    assert "dict" in p["error"].lower()
+    assert "extra_input" in tool_error_message(p).lower()
+    assert "dict" in tool_error_message(p).lower()
 
 
 @pytest.mark.anyio
@@ -245,7 +247,7 @@ async def test_get_automations_graphql_error(
         )
 
     assert extract_payload(result)["success"] is False
-    assert "denied" in extract_payload(result)["error"]
+    assert "denied" in tool_error_message(extract_payload(result))
 
 
 @pytest.mark.anyio
@@ -318,7 +320,7 @@ async def test_get_automation_events_graphql_error(
         )
 
     assert extract_payload(result)["success"] is False
-    assert "nope" in extract_payload(result)["error"]
+    assert "nope" in tool_error_message(extract_payload(result))
 
 
 @pytest.mark.anyio
@@ -419,7 +421,7 @@ async def test_create_automation_rejects_move_when_transition_not_allowed(
     mock_automation_client.create_automation.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "99" in payload["error"]
+    assert "99" in tool_error_message(payload)
     mock_automation_client.get_phase_allowed_move_targets.assert_awaited_once_with("10")
 
 
@@ -491,7 +493,7 @@ async def test_create_automation_error(
         )
 
     assert extract_payload(result)["success"] is False
-    assert "invalid event" in extract_payload(result)["error"]
+    assert "invalid event" in tool_error_message(extract_payload(result))
 
 
 @pytest.mark.anyio
@@ -542,7 +544,7 @@ async def test_update_automation_error(
         )
 
     assert extract_payload(result)["success"] is False
-    assert "not found" in extract_payload(result)["error"]
+    assert "not found" in tool_error_message(extract_payload(result))
 
 
 @pytest.mark.anyio
@@ -579,7 +581,7 @@ async def test_delete_automation_error(
         )
 
     assert extract_payload(result)["success"] is False
-    assert "forbidden" in extract_payload(result)["error"]
+    assert "forbidden" in tool_error_message(extract_payload(result))
 
 
 @pytest.mark.anyio
@@ -682,7 +684,7 @@ async def test_simulate_automation_graphql_error(
         )
 
     assert extract_payload(result)["success"] is False
-    assert "bad simulation" in extract_payload(result)["error"]
+    assert "bad simulation" in tool_error_message(extract_payload(result))
 
 
 @pytest.mark.anyio
@@ -841,7 +843,7 @@ async def test_create_send_task_automation_validation_scheduler(
     mock_automation_client.create_automation.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "send_a_task" in p["error"]
+    assert "send_a_task" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -866,7 +868,7 @@ async def test_create_send_task_automation_graphql_error(
         )
 
     assert extract_payload(result)["success"] is False
-    assert "mutation blocked" in extract_payload(result)["error"]
+    assert "mutation blocked" in tool_error_message(extract_payload(result))
 
 
 @pytest.mark.anyio
@@ -914,8 +916,8 @@ async def test_create_automation_cross_pipe_permission_denied_enriches_error(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "invite_members" in payload["error"]
-    assert "forbidden" in payload["error"]
+    assert "invite_members" in tool_error_message(payload)
+    assert "forbidden" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

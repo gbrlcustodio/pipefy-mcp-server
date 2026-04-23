@@ -117,13 +117,13 @@ class MemberTools:
                 if blocked:
                     if len(blocked) == 1:
                         msg = (
-                            f"Cannot remove service account {blocked[0]} — "
+                            f"Cannot remove service account {blocked[0]} - "
                             "this would break all write operations for this pipe. "
                             "Remove it via the Pipefy UI if intentional."
                         )
                     else:
                         msg = (
-                            f"Cannot remove service accounts {', '.join(blocked)} — "
+                            f"Cannot remove service accounts {', '.join(blocked)} - "
                             "this would break all write operations for this pipe. "
                             "Remove it via the Pipefy UI if intentional."
                         )
@@ -148,7 +148,7 @@ class MemberTools:
                 return build_member_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 await ctx.debug(
-                    f"remove_member_from_pipe: mutation failed — {type(exc).__name__}: {exc}"
+                    f"remove_member_from_pipe: mutation failed: {type(exc).__name__}: {exc}"
                 )
                 return handle_member_tool_graphql_error(
                     exc, "Remove members from pipe failed.", debug=debug

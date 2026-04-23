@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from pipefy_mcp.services.pipefy import PipefyClient
 
 import pipefy_mcp.settings as _settings_mod
+from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 # Suffixes appended by InternalApiClient for service-layer diagnostics; MCP tools
 # strip these from default user-visible errors.
@@ -69,7 +70,7 @@ def extract_error_strings(exc: BaseException) -> list[str]:
 
     When the exception carries a structured ``errors`` list (e.g. gql
     ``TransportQueryError``), only the extracted ``message`` strings are
-    returned — the raw ``str(exc)`` is skipped because it often contains
+    returned; the raw ``str(exc)`` is skipped because it often contains
     the full error dict with ``locations`` / ``extensions`` noise.  The
     raw string is used as a fallback only when no structured messages
     can be extracted.
@@ -161,27 +162,24 @@ def handle_tool_graphql_error(
     *,
     debug: bool = False,
 ) -> dict[str, Any]:
-    """Turn transport/GraphQL failures into ``{"success": False, "error": message}``.
+    """Turn transport/GraphQL failures into a structured :func:`tool_error` payload.
 
     Args:
         exc: Root exception from gql/httpx.
         fallback_msg: Used when ``extract_error_strings`` is empty.
-        debug: When True, append codes and ``correlation_id``.
+        debug: When True, append codes and ``correlation_id`` to the message.
     """
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else fallback_msg
-    if not debug:
-        return {"success": False, "error": base}
     codes = extract_graphql_error_codes(exc)
-    cid = extract_graphql_correlation_id(exc)
-    return {
-        "success": False,
-        "error": with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid),
-    }
+    first_code = codes[0] if codes else None
+    if debug:
+        cid = extract_graphql_correlation_id(exc)
+        base = with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid)
+    return tool_error(base, code=first_code)
 
 
 _PERMISSION_DENIED_CODE = "PERMISSION_DENIED"
-_ENRICHMENT_TIMEOUT_SECONDS = 5
 
 
 async def enrich_permission_denied_error(
@@ -212,13 +210,14 @@ async def enrich_permission_denied_error(
     if not unique_ids:
         return None
 
+    timeout = _settings_mod.settings.pipefy.permission_denied_enrichment_timeout_seconds
     try:
         results = await asyncio.wait_for(
             asyncio.gather(
                 *(client.get_pipe_members(pid) for pid in unique_ids),
                 return_exceptions=True,
             ),
-            timeout=_ENRICHMENT_TIMEOUT_SECONDS,
+            timeout=timeout,
         )
     except (TimeoutError, asyncio.TimeoutError):
         return None
@@ -230,7 +229,7 @@ async def enrich_permission_denied_error(
         if isinstance(result, BaseException):
             missing_pipes.append(
                 f"Could not verify membership for pipe {pid}. "
-                f"Check if the service account is a member — use invite_members if not."
+                f"Check if the service account is a member; use invite_members if not."
             )
             continue
         members = result.get("pipe", {}).get("members") or []
@@ -256,3 +255,16 @@ async def enrich_permission_denied_error(
         return None
 
     return "\n".join(missing_pipes)
+
+
+__all__ = [
+    "enrich_permission_denied_error",
+    "extract_error_strings",
+    "extract_graphql_correlation_id",
+    "extract_graphql_error_codes",
+    "extract_internal_api_bracket_codes",
+    "extract_internal_api_bracket_correlation_id",
+    "handle_tool_graphql_error",
+    "strip_internal_api_diagnostic_markers",
+    "with_debug_suffix",
+]

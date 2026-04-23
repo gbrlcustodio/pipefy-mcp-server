@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from mcp.server.fastmcp import Context
 from typing_extensions import TypedDict
@@ -19,6 +19,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_error_codes,
     with_debug_suffix,
 )
+from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
 
 AutomationReadToolData = (
     AutomationRuleRecord
@@ -49,7 +50,7 @@ class AutomationSimulationSuccessPayload(TypedDict):
 
 class AutomationToolErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
 def build_automation_mutation_success_payload(
@@ -109,15 +110,18 @@ def build_automation_read_success_payload(
 def build_automation_error_payload(
     message: str,
     debug: str | None = None,
+    *,
+    code: str | None = None,
 ) -> AutomationToolErrorPayload:
     """``success: False``; optional ``debug`` suffix in brackets.
 
     Args:
         message: Primary error text.
         debug: Extra detail appended as ``… [debug]`` when set.
+        code: Optional machine-readable code (e.g. GraphQL ``extensions.code``).
     """
     text = message if not debug else f"{message} [{debug}]"
-    return {"success": False, "error": text}
+    return cast(AutomationToolErrorPayload, tool_error(text, code=code))
 
 
 async def handle_automation_tool_graphql_error(
@@ -134,9 +138,24 @@ async def handle_automation_tool_graphql_error(
     """
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else "Automation request failed."
+    codes = extract_graphql_error_codes(exc)
+    first_code = codes[0] if codes else None
     if debug:
         await ctx.debug(f"automation GraphQL error: {exc!r}")
-        codes = extract_graphql_error_codes(exc)
         cid = extract_graphql_correlation_id(exc)
         base = with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid)
-    return build_automation_error_payload(message=base)
+    return build_automation_error_payload(message=base, code=first_code)
+
+
+__all__ = [
+    "AutomationMutationSuccessPayload",
+    "AutomationReadSuccessPayload",
+    "AutomationReadToolData",
+    "AutomationSimulationSuccessPayload",
+    "AutomationToolErrorPayload",
+    "build_automation_error_payload",
+    "build_automation_mutation_success_payload",
+    "build_automation_read_success_payload",
+    "build_automation_simulation_success_payload",
+    "handle_automation_tool_graphql_error",
+]

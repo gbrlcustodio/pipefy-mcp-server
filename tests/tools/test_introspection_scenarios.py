@@ -1,3 +1,5 @@
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+
 """End-to-end style scenarios for introspection tools (mocked client, real helpers)."""
 
 from datetime import timedelta
@@ -167,4 +169,4 @@ async def test_scenario_execute_graphql_error_surfaces_to_agent(
         )
     payload = extract_payload(r)
     assert payload["success"] is False
-    assert "permission" in payload["error"].lower()
+    assert "permission" in tool_error_message(payload).lower()

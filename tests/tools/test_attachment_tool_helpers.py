@@ -14,6 +14,7 @@ from pipefy_mcp.tools.attachment_tool_helpers import (
     format_s3_upload_failure,
     map_upload_error_to_message,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 
 @pytest.mark.unit
@@ -55,11 +56,9 @@ def test_build_upload_success_payload_table():
 @pytest.mark.unit
 def test_build_upload_error_payload_shape():
     out = build_upload_error_payload(message="failed", step="s3_upload")
-    assert out == {
-        "success": False,
-        "error": "failed",
-        "step": "s3_upload",
-    }
+    err = tool_error("failed")
+    err["step"] = "s3_upload"
+    assert out == err
 
 
 @pytest.mark.unit

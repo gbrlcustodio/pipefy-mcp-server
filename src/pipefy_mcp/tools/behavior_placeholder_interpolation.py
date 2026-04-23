@@ -24,10 +24,11 @@ def _string_params(params: dict[Any, Any]) -> dict[str, str]:
     return {str(k): str(v) for k, v in params.items() if v is not None}
 
 
-def _merge_template_param_sources(behavior: dict[str, Any]) -> dict[str, str]:
+def _merge_template_param_sources(working_copy: dict[str, Any]) -> dict[str, str]:
+    """Extract template param maps; **mutates** ``working_copy`` in place (pops source keys)."""
     merged: dict[str, str] = {}
     for key in _TEMPLATE_PARAM_SOURCE_KEYS:
-        raw = behavior.pop(key, None)
+        raw = working_copy.pop(key, None)
         if isinstance(raw, dict):
             merged.update(_string_params(raw))
     return merged
@@ -110,6 +111,8 @@ def expand_behavior_placeholders(behavior: dict[str, Any]) -> dict[str, Any]:
     Returns:
         New dict with the same shape expected by ``BehaviorInput``, without template-only keys.
     """
+    # ``deepcopy`` first so the input ``behavior`` is never aliased; later steps
+    # intentionally mutate this tree in place (pops, nested instruction updates).
     result: dict[str, Any] = copy.deepcopy(behavior)
     params = _merge_template_param_sources(result)
 
@@ -158,3 +161,10 @@ def expand_behaviors_placeholders(
         Expanded list safe for Pydantic ``BehaviorInput`` validation.
     """
     return [expand_behavior_placeholders(b) for b in behaviors]
+
+
+__all__ = [
+    "expand_behavior_placeholders",
+    "expand_behaviors_placeholders",
+    "normalize_pipefy_ai_instruction_tokens",
+]

@@ -11,7 +11,9 @@ from mcp.shared.memory import (
 )
 
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.webhook_tools import WebhookTools
+from tests.pagination_test_defaults import DEFAULT_FIRST
 
 
 @pytest.fixture
@@ -108,7 +110,7 @@ async def test_send_inbox_email_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "inbox not enabled" in payload["error"]
+    assert "inbox not enabled" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -140,7 +142,7 @@ async def test_get_email_templates_success(
     mock_webhook_client.get_email_templates.assert_awaited_once_with(
         "307061640",
         filter_by_name=None,
-        first=50,
+        first=DEFAULT_FIRST,
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -203,7 +205,7 @@ async def test_send_email_with_template_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "template not found" in payload["error"]
+    assert "template not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -227,7 +229,7 @@ async def test_send_email_with_template_rejects_non_numeric_card_id(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "numeric card ID" in payload["error"]
+    assert "numeric card ID" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -252,7 +254,7 @@ async def test_create_webhook_rejects_http_url(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "HTTPS" in payload["error"]
+    assert "HTTPS" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -269,7 +271,7 @@ async def test_get_card_inbox_emails_invalid_email_type(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "email_type" in payload["error"]
+    assert "email_type" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -328,7 +330,7 @@ async def test_create_webhook_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "invalid url" in payload["error"]
+    assert "invalid url" in tool_error_message(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -402,7 +404,7 @@ class TestGetWebhooks:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "pipe not found" in payload["error"]
+        assert "pipe not found" in tool_error_message(payload)
 
     @pytest.mark.anyio
     @pytest.mark.parametrize("webhook_session", [None], indirect=True)
@@ -472,7 +474,7 @@ class TestUpdateWebhook:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "webhook gone" in payload["error"]
+        assert "webhook gone" in tool_error_message(payload)
 
     @pytest.mark.anyio
     @pytest.mark.parametrize("webhook_session", [None], indirect=True)
@@ -488,7 +490,7 @@ class TestUpdateWebhook:
         mock_webhook_client.update_webhook.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "at least one" in payload["error"]
+        assert "at least one" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -552,7 +554,7 @@ async def test_delete_webhook_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "webhook not found" in payload["error"]
+    assert "webhook not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -650,7 +652,7 @@ async def test_get_card_inbox_emails_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "card not found" in payload["error"]
+    assert "card not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -680,7 +682,7 @@ async def test_get_email_templates_coerces_int_repo_id(
         result = await session.call_tool("get_email_templates", {"repo_id": 301})
     assert result.isError is False
     mock_webhook_client.get_email_templates.assert_awaited_once_with(
-        "301", filter_by_name=None, first=50
+        "301", filter_by_name=None, first=DEFAULT_FIRST
     )
 
 
@@ -801,7 +803,7 @@ async def test_send_inbox_email_rejects_empty_to_list(
     mock_webhook_client.send_inbox_email.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "'to'" in p["error"]
+    assert "'to'" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -824,7 +826,7 @@ async def test_send_inbox_email_rejects_to_with_blank_items(
     mock_webhook_client.send_inbox_email.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "each recipient" in p["error"]
+    assert "each recipient" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -847,7 +849,7 @@ async def test_send_inbox_email_rejects_blank_subject(
     mock_webhook_client.send_inbox_email.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "'subject'" in p["error"]
+    assert "'subject'" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -870,7 +872,7 @@ async def test_send_inbox_email_rejects_blank_from(
     mock_webhook_client.send_inbox_email.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "'from_'" in p["error"]
+    assert "'from_'" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -931,7 +933,7 @@ async def test_send_email_with_template_value_error_from_client(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "Template has no subject or body" in p["error"]
+    assert "Template has no subject or body" in tool_error_message(p)
 
 
 # ---------------------------------------------------------------------------
@@ -953,7 +955,7 @@ async def test_create_webhook_rejects_blank_url(
     mock_webhook_client.create_webhook.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "'url'" in p["error"]
+    assert "'url'" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -970,7 +972,7 @@ async def test_create_webhook_rejects_empty_actions_list(
     mock_webhook_client.create_webhook.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "'actions'" in p["error"]
+    assert "'actions'" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -1015,7 +1017,7 @@ async def test_get_email_templates_graphql_error(
     assert result.isError is False
     p = extract_payload(result)
     assert p["success"] is False
-    assert "pipe not found" in p["error"]
+    assert "pipe not found" in tool_error_message(p)
 
 
 @pytest.mark.anyio

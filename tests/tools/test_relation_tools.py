@@ -1,3 +1,5 @@
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+
 """Tests for relation MCP tools (mocked PipefyClient)."""
 
 from datetime import timedelta
@@ -82,7 +84,7 @@ async def test_get_pipe_relations_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not allowed" in payload["error"]
+    assert "not allowed" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -109,7 +111,7 @@ async def test_get_pipe_relations_rejects_pipe_id_zero(
     mock_relation_client.get_pipe_relations.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "pipe_id" in p["error"].lower()
+    assert "pipe_id" in tool_error_message(p).lower()
 
 
 @pytest.mark.anyio
@@ -202,7 +204,7 @@ async def test_create_pipe_relation_graphql_error(
         )
 
     assert extract_payload(result)["success"] is False
-    assert "reject" in extract_payload(result)["error"]
+    assert "reject" in tool_error_message(extract_payload(result))
 
 
 @pytest.mark.anyio
@@ -296,7 +298,7 @@ async def test_delete_pipe_relation_graphql_error(
         )
 
     assert extract_payload(result)["success"] is False
-    assert "denied" in extract_payload(result)["error"]
+    assert "denied" in tool_error_message(extract_payload(result))
 
 
 @pytest.mark.anyio
@@ -351,7 +353,7 @@ async def test_create_card_relation_graphql_error(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "invalid link" in p["error"]
+    assert "invalid link" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -388,8 +390,8 @@ async def test_create_pipe_relation_rejects_non_dict_extra_input(
     mock_relation_client.create_pipe_relation.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "extra_input" in p["error"]
-    assert "dict" in p["error"]
+    assert "extra_input" in tool_error_message(p)
+    assert "dict" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -406,7 +408,7 @@ async def test_update_pipe_relation_rejects_non_dict_extra_input(
     mock_relation_client.update_pipe_relation.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "extra_input" in p["error"]
+    assert "extra_input" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -428,4 +430,4 @@ async def test_create_card_relation_rejects_non_dict_extra_input(
     mock_relation_client.create_card_relation.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
-    assert "extra_input" in p["error"]
+    assert "extra_input" in tool_error_message(p)

@@ -1,3 +1,5 @@
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+
 """Tests for member MCP tools (mocked PipefyClient)."""
 
 from datetime import timedelta
@@ -64,7 +66,7 @@ async def test_invite_members_rejects_empty_members(member_session, extract_payl
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "members" in payload["error"]
+    assert "members" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -81,7 +83,7 @@ async def test_remove_member_from_pipe_rejects_empty_user_ids(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "user_ids" in payload["error"]
+    assert "user_ids" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -135,7 +137,7 @@ async def test_invite_members_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "invalid email" in payload["error"]
+    assert "invalid email" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -164,8 +166,8 @@ async def test_remove_member_from_pipe_blocks_protected_service_account(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "sa-user-1" in payload["error"]
-    assert "service account" in payload["error"].lower()
+    assert "sa-user-1" in tool_error_message(payload)
+    assert "service account" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -247,7 +249,7 @@ async def test_remove_member_from_pipe_value_error_from_client(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "pipe_id" in payload["error"]
+    assert "pipe_id" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -457,7 +459,7 @@ async def test_remove_member_from_pipe_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "forbidden" in payload["error"]
+    assert "forbidden" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -613,8 +615,8 @@ async def test_invite_members_rejects_missing_email_or_role(
     mock_member_client.invite_members.assert_not_awaited()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "email" in payload["error"]
-    assert "role_name" in payload["error"]
+    assert "email" in tool_error_message(payload)
+    assert "role_name" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -656,8 +658,8 @@ async def test_remove_member_blocks_multiple_service_accounts_with_plural_messag
     mock_member_client.remove_members_from_pipe.assert_not_awaited()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "sa-a, sa-b" in payload["error"]
-    assert "service accounts" in payload["error"].lower()
+    assert "sa-a, sa-b" in tool_error_message(payload)
+    assert "service accounts" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -673,7 +675,7 @@ async def test_set_role_rejects_blank_role_name(
     mock_member_client.set_role.assert_not_awaited()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "role_name" in payload["error"]
+    assert "role_name" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -694,4 +696,4 @@ async def test_set_role_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "invalid role" in payload["error"]
+    assert "invalid role" in tool_error_message(payload)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from typing_extensions import TypedDict
 
@@ -14,6 +14,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     strip_internal_api_diagnostic_markers,
 )
+from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
 
 if TYPE_CHECKING:
     from pipefy_mcp.services.pipefy import PipefyClient
@@ -75,13 +76,13 @@ class DeleteAiAgentSuccessPayload(TypedDict):
 
 class AiToolErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
 class CreateAgentPartialFailurePayload(TypedDict):
     success: Literal[False]
     agent_uuid: str
-    error: str
+    error: ToolErrorDetail
 
 
 def build_create_automation_success(
@@ -181,7 +182,7 @@ def build_ai_tool_error(message: str) -> AiToolErrorPayload:
     Args:
         message: User-visible failure reason.
     """
-    return {"success": False, "error": message}
+    return cast(AiToolErrorPayload, tool_error(message))
 
 
 def build_validate_prompt_payload(
@@ -215,7 +216,9 @@ def build_create_agent_partial_failure(
         agent_uuid: Agent UUID from ``createAiAgent`` (retry update or delete).
         error: Why the chained update failed.
     """
-    return {"success": False, "agent_uuid": agent_uuid, "error": error}
+    body: dict[str, Any] = tool_error(error)
+    body["agent_uuid"] = agent_uuid
+    return cast(CreateAgentPartialFailurePayload, body)
 
 
 # --- Error enrichment for behavior-level failures ---
@@ -749,3 +752,37 @@ def enrich_behavior_error(
     if hints:
         parts.append("Hints: " + " ".join(hints))
     return "\n".join(parts)
+
+
+__all__ = [
+    "AiToolErrorPayload",
+    "CreateAgentPartialFailurePayload",
+    "CreateAiAgentSuccessPayload",
+    "CreateAiAutomationSuccessPayload",
+    "DeleteAiAgentSuccessPayload",
+    "GetAiAgentSuccessPayload",
+    "GetAiAgentsSuccessPayload",
+    "KNOWN_AI_ACTION_TYPES",
+    "ToggleAiAgentStatusSuccessPayload",
+    "UpdateAiAgentSuccessPayload",
+    "UpdateAiAutomationSuccessPayload",
+    "ValidateAiAutomationPromptPayload",
+    "build_ai_tool_error",
+    "build_create_agent_partial_failure",
+    "build_create_agent_success",
+    "build_create_automation_success",
+    "build_delete_agent_success",
+    "build_field_slug_map",
+    "build_get_agent_success",
+    "build_get_agents_success",
+    "build_toggle_agent_status_success",
+    "build_update_agent_success",
+    "build_update_automation_success",
+    "build_validate_prompt_payload",
+    "collect_pipe_ids_from_behaviors",
+    "enrich_behavior_error",
+    "fetch_pipe_validation_context",
+    "pipe_ids_from_behavior",
+    "resolve_field_slugs_to_numeric",
+    "validate_behaviors_against_pipe",
+]

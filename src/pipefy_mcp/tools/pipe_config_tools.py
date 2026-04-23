@@ -22,6 +22,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     handle_pipe_config_tool_graphql_error,
     map_delete_pipe_error_to_message,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
     validate_tool_id,
@@ -150,7 +151,7 @@ class PipeConfigTools:
             """
             pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
-                return build_delete_pipe_error_payload(message=err["error"])
+                return build_delete_pipe_error_payload(message=tool_error_message(err))
 
             pipe_name = "Unknown"
             try:

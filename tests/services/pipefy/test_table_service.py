@@ -24,6 +24,7 @@ from pipefy_mcp.services.pipefy.queries.table_queries import (
 )
 from pipefy_mcp.services.pipefy.table_service import TableService
 from pipefy_mcp.settings import PipefySettings
+from tests.pagination_test_defaults import DEFAULT_FIRST
 
 
 @pytest.fixture
@@ -104,7 +105,7 @@ async def test_get_table_records_default_first_and_pagination_passthrough(
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_TABLE_RECORDS_QUERY
-    assert variables == {"tableId": "99", "first": 50}
+    assert variables == {"tableId": "99", "first": DEFAULT_FIRST}
     assert result["table_records"]["pageInfo"]["hasNextPage"] is True
     assert result["table_records"]["pageInfo"]["endCursor"] == "c2"
 

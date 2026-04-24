@@ -503,6 +503,7 @@ class TestCreateAiAutomation:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         mock_pipefy_client.create_ai_automation.return_value = {
             "automation_id": "123",
@@ -528,6 +529,36 @@ class TestCreateAiAutomation:
         }
         assert isinstance(payload["message"], str)
         assert isinstance(payload["automation_id"], str)
+
+    async def test_success_unified_envelope(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+        unified_envelope,
+    ):
+        """Default flag=True — automation_id sits under ``data``."""
+        mock_pipefy_client.create_ai_automation.return_value = {
+            "automation_id": "123",
+            "message": "AI Automation created successfully. ID: 123",
+        }
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_automation",
+                {
+                    "name": "My Auto",
+                    "event_id": "card_created",
+                    "pipe_id": "303",
+                    "prompt": "Summarize %{133}",
+                    "field_ids": ["133"],
+                },
+            )
+        payload = extract_payload(result)
+        assert payload == {
+            "success": True,
+            "data": {"automation_id": "123"},
+            "message": "AI Automation created successfully. ID: 123",
+        }
 
     async def test_service_error_returns_error_payload(
         self,
@@ -741,6 +772,7 @@ class TestUpdateAiAutomation:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         mock_pipefy_client.update_ai_automation.return_value = {
             "automation_id": "789",

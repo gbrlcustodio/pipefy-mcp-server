@@ -4,6 +4,38 @@ import json
 
 import pytest
 
+from pipefy_mcp.settings import settings
+
+
+@pytest.fixture
+def legacy_envelope(monkeypatch):
+    """Force the legacy (pre-unified) success shape by disabling the flag.
+
+    Use this in tests that assert byte-identical pre-PR output from a migrated
+    helper or tool. Without it, the default-TRUE ``PIPEFY_MCP_UNIFIED_ENVELOPE``
+    causes migrated helpers to emit the unified ``{success, data, message?}`` shape.
+    """
+    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", False)
+    return False
+
+
+@pytest.fixture
+def unified_envelope(monkeypatch):
+    """Force the unified envelope shape (explicit, not relying on default)."""
+    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", True)
+    return True
+
+
+@pytest.fixture(params=[True, False], ids=["flag-on", "flag-off"])
+def envelope_flag(request, monkeypatch):
+    """Parametrize a test across both flag states via monkeypatch.
+
+    Tests that use this fixture receive the current flag value as ``envelope_flag``
+    and run twice — once with ``True`` (unified) and once with ``False`` (legacy).
+    """
+    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", request.param)
+    return request.param
+
 
 def _extract_payload_impl(result):
     """Extract tool payload from CallToolResult across MCP SDK versions."""

@@ -143,6 +143,7 @@ class TestCreateAiAgent:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        envelope_flag,
     ):
         mock_pipefy_client.create_ai_agent.return_value = {
             "agent_uuid": "new-uuid",
@@ -179,7 +180,10 @@ class TestCreateAiAgent:
         assert update_arg.data_source_ids == ["ds-1", "ds-2"]
         payload = extract_payload(result)
         assert payload["success"] is True
-        assert payload["agent_uuid"] == "new-uuid"
+        if envelope_flag:
+            assert payload["data"]["agent_uuid"] == "new-uuid"
+        else:
+            assert payload["agent_uuid"] == "new-uuid"
 
     async def test_partial_failure_returns_uuid_and_error(
         self,
@@ -333,6 +337,7 @@ class TestUpdateAiAgent:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         mock_pipefy_client.update_ai_agent.return_value = {
             "agent_uuid": "agent-uuid",
@@ -874,6 +879,7 @@ class TestGetAiAgent:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         agent = {
             "uuid": "agent-1",
@@ -893,11 +899,30 @@ class TestGetAiAgent:
         payload = extract_payload(result)
         assert payload == {"success": True, "agent": agent}
 
+    async def test_success_unified_envelope(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+        unified_envelope,
+    ):
+        """Flag=True — agent payload sits under ``data.agent`` (ADR-0001)."""
+        agent = {"uuid": "agent-1", "name": "Assistant"}
+        mock_pipefy_client.get_ai_agent.return_value = agent
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_ai_agent",
+                {"uuid": "agent-1"},
+            )
+        payload = extract_payload(result)
+        assert payload == {"success": True, "data": {"agent": agent}}
+
     async def test_success_with_behaviors(
         self,
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         """Behaviors from the API are included verbatim in the MCP tool response."""
         from tests.ai_agent_test_payloads import mock_agent_with_behaviors
@@ -924,6 +949,7 @@ class TestGetAiAgent:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         """When API returns behaviors: null, the tool response exposes it.
 
@@ -997,6 +1023,7 @@ class TestGetAiAgents:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         agents = [{"uuid": "a1", "name": "One"}]
         mock_pipefy_client.get_ai_agents.return_value = agents
@@ -1009,6 +1036,24 @@ class TestGetAiAgents:
         mock_pipefy_client.get_ai_agents.assert_awaited_once_with("pipe-uuid-9")
         payload = extract_payload(result)
         assert payload == {"success": True, "agents": agents}
+
+    async def test_success_unified_envelope(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+        unified_envelope,
+    ):
+        """Flag=True — agents list sits under ``data.agents`` (ADR-0001)."""
+        agents = [{"uuid": "a1"}, {"uuid": "a2"}]
+        mock_pipefy_client.get_ai_agents.return_value = agents
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_ai_agents",
+                {"repo_uuid": "pipe-uuid-9"},
+            )
+        payload = extract_payload(result)
+        assert payload == {"success": True, "data": {"agents": agents}}
 
     async def test_blank_repo_uuid_returns_error_payload(
         self, client_session, mock_pipefy_client, extract_payload
@@ -1141,6 +1186,7 @@ class TestGetAiAgentsErrorPaths:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         mock_pipefy_client.get_ai_agents.return_value = []
         async with client_session as session:

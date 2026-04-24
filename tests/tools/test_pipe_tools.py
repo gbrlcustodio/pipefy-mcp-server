@@ -682,6 +682,7 @@ class TestDirectToolCalls:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         """update_comment with valid input returns success payload with comment_id."""
         async with client_session as session:
@@ -700,6 +701,7 @@ class TestDirectToolCalls:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         """update_comment with comment_id=0 coerces to '0' via PipefyId and calls the API."""
         async with client_session as session:
@@ -1060,6 +1062,7 @@ class TestAddCardCommentTool:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         async with client_session as session:
             result = await session.call_tool(
@@ -1080,6 +1083,7 @@ class TestAddCardCommentTool:
         client_session,
         mock_pipefy_client,
         extract_payload,
+        legacy_envelope,
     ):
         async with client_session as session:
             result = await session.call_tool(

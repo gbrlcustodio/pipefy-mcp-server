@@ -4,6 +4,14 @@ import pytest
 from gql.transport.exceptions import TransportQueryError
 
 from pipefy_mcp.tools.ai_tool_helpers import (
+    build_create_agent_success,
+    build_create_automation_success,
+    build_delete_agent_success,
+    build_get_agent_success,
+    build_get_agents_success,
+    build_toggle_agent_status_success,
+    build_update_agent_success,
+    build_update_automation_success,
     enrich_behavior_error,
     validate_behaviors_against_pipe,
 )
@@ -32,6 +40,104 @@ def _make_behaviors(*specs):
             }
         )
     return result
+
+
+# --- Unified-envelope / legacy-shape parity for AI success builders ---
+
+
+@pytest.mark.unit
+def test_build_create_agent_success_parametrized_flag(envelope_flag):
+    out = build_create_agent_success(agent_uuid="abc", message="ok")
+    if envelope_flag:
+        assert out == {
+            "success": True,
+            "data": {"agent_uuid": "abc"},
+            "message": "ok",
+        }
+    else:
+        assert out == {"success": True, "agent_uuid": "abc", "message": "ok"}
+
+
+@pytest.mark.unit
+def test_build_update_agent_success_parametrized_flag(envelope_flag):
+    out = build_update_agent_success(agent_uuid="u1", message="updated")
+    if envelope_flag:
+        assert out == {
+            "success": True,
+            "data": {"agent_uuid": "u1"},
+            "message": "updated",
+        }
+    else:
+        assert out == {"success": True, "agent_uuid": "u1", "message": "updated"}
+
+
+@pytest.mark.unit
+def test_build_create_automation_success_parametrized_flag(envelope_flag):
+    out = build_create_automation_success(automation_id="42", message="created")
+    if envelope_flag:
+        assert out == {
+            "success": True,
+            "data": {"automation_id": "42"},
+            "message": "created",
+        }
+    else:
+        assert out == {
+            "success": True,
+            "automation_id": "42",
+            "message": "created",
+        }
+
+
+@pytest.mark.unit
+def test_build_update_automation_success_parametrized_flag(envelope_flag):
+    out = build_update_automation_success(automation_id="42", message="updated")
+    if envelope_flag:
+        assert out == {
+            "success": True,
+            "data": {"automation_id": "42"},
+            "message": "updated",
+        }
+    else:
+        assert out == {
+            "success": True,
+            "automation_id": "42",
+            "message": "updated",
+        }
+
+
+@pytest.mark.unit
+def test_build_toggle_agent_status_success_parametrized_flag(envelope_flag):
+    out = build_toggle_agent_status_success(message="toggled")
+    # Same shape under both flag states — no domain key to wrap.
+    assert out == {"success": True, "message": "toggled"}
+
+
+@pytest.mark.unit
+def test_build_get_agent_success_parametrized_flag(envelope_flag):
+    agent_payload = {"aiAgent": {"uuid": "u", "name": "n"}}
+    out = build_get_agent_success(agent_payload)
+    if envelope_flag:
+        # ADR-0001: verbatim wrap preserves outer 'agent' key inside data.
+        assert out == {"success": True, "data": {"agent": agent_payload}}
+    else:
+        assert out == {"success": True, "agent": agent_payload}
+
+
+@pytest.mark.unit
+def test_build_get_agents_success_parametrized_flag(envelope_flag):
+    agents = [{"uuid": "a"}, {"uuid": "b"}]
+    out = build_get_agents_success(agents)
+    if envelope_flag:
+        assert out == {"success": True, "data": {"agents": agents}}
+    else:
+        assert out == {"success": True, "agents": agents}
+
+
+@pytest.mark.unit
+def test_build_delete_agent_success_parametrized_flag(envelope_flag):
+    out = build_delete_agent_success(message="gone")
+    # No domain key — same shape under both flag states.
+    assert out == {"success": True, "message": "gone"}
 
 
 @pytest.mark.unit

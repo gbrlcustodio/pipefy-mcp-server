@@ -397,7 +397,7 @@ async def test_all_read_tools_have_readonly_hint(report_session):
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_pipe_report_success(
-    report_session, mock_report_client, extract_payload
+    report_session, mock_report_client, extract_payload, legacy_envelope
 ):
     mock_report_client.create_pipe_report.return_value = {
         "createPipeReport": {"pipeReport": {"id": "r10", "name": "New Report"}}
@@ -472,7 +472,7 @@ async def test_create_pipe_report_graphql_error_with_debug(
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_pipe_report_success(
-    report_session, mock_report_client, extract_payload
+    report_session, mock_report_client, extract_payload, legacy_envelope
 ):
     mock_report_client.update_pipe_report.return_value = {
         "updatePipeReport": {"pipeReport": {"id": "r10", "name": "Updated"}}
@@ -522,7 +522,7 @@ async def test_delete_pipe_report_success(
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_create_organization_report_success(
-    report_session, mock_report_client, extract_payload
+    report_session, mock_report_client, extract_payload, legacy_envelope
 ):
     mock_report_client.create_organization_report.return_value = {
         "createOrganizationReport": {
@@ -600,7 +600,7 @@ async def test_delete_organization_report_success(
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_pipe_report_success(
-    report_session, mock_report_client, extract_payload
+    report_session, mock_report_client, extract_payload, legacy_envelope
 ):
     mock_report_client.export_pipe_report.return_value = {
         "exportPipeReport": {
@@ -654,7 +654,7 @@ async def test_export_pipe_report_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_organization_report_success(
-    report_session, mock_report_client, extract_payload
+    report_session, mock_report_client, extract_payload, legacy_envelope
 ):
     mock_report_client.export_organization_report.return_value = {
         "exportOrganizationReport": {
@@ -694,7 +694,7 @@ async def test_export_organization_report_success(
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_export_pipe_audit_logs_success(
-    report_session, mock_report_client, extract_payload
+    report_session, mock_report_client, extract_payload, legacy_envelope
 ):
     mock_report_client.export_pipe_audit_logs.return_value = {
         "exportPipeAuditLogsReport": {"success": True},

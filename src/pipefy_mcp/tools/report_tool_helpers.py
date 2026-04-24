@@ -6,10 +6,11 @@ from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
 
+from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error
+from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_success
 
 
 class ReportReadSuccessPayload(TypedDict):
@@ -28,13 +29,15 @@ def build_report_read_success_payload(
     data: dict[str, Any],
     *,
     message: str,
-) -> ReportReadSuccessPayload:
+) -> dict[str, Any]:
     """``success``, ``message``, and GraphQL ``data`` for read tools.
 
     Args:
         data: Subtree returned by the report query.
         message: Short summary for the client.
     """
+    if settings.pipefy.mcp_unified_envelope:
+        return tool_success(data=data, message=message)
     return cast(
         ReportReadSuccessPayload,
         {
@@ -49,13 +52,17 @@ def build_report_mutation_success_payload(
     *,
     message: str,
     data: dict[str, Any],
-) -> ReportMutationSuccessPayload:
+) -> dict[str, Any]:
     """``success``, ``message``, and mutation ``result``.
 
     Args:
         message: Short summary for the client.
-        data: Raw mutation payload (stored as ``result``).
+        data: Raw mutation payload (stored as ``result`` under flag=false;
+            under the unified envelope the same dict moves to ``data`` to
+            match every other migrated helper).
     """
+    if settings.pipefy.mcp_unified_envelope:
+        return tool_success(data=data, message=message)
     return cast(
         ReportMutationSuccessPayload,
         {"success": True, "message": message, "result": data},

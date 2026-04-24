@@ -10,11 +10,16 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 from typing_extensions import TypedDict
 
 from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload
+from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     strip_internal_api_diagnostic_markers,
 )
-from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
+from pipefy_mcp.tools.tool_error_envelope import (
+    ToolErrorDetail,
+    tool_error,
+    tool_success,
+)
 
 if TYPE_CHECKING:
     from pipefy_mcp.services.pipefy import PipefyClient
@@ -87,89 +92,99 @@ class CreateAgentPartialFailurePayload(TypedDict):
 
 def build_create_automation_success(
     *, automation_id: str, message: str
-) -> CreateAiAutomationSuccessPayload:
+) -> dict[str, Any]:
     """Successful AI automation create.
 
     Args:
         automation_id: New automation id from the API.
         message: Short summary for the client.
     """
+    if settings.pipefy.mcp_unified_envelope:
+        return tool_success(data={"automation_id": automation_id}, message=message)
     return {"success": True, "automation_id": automation_id, "message": message}
 
 
 def build_update_automation_success(
     *, automation_id: str, message: str
-) -> UpdateAiAutomationSuccessPayload:
+) -> dict[str, Any]:
     """Successful AI automation update.
 
     Args:
         automation_id: Target automation id.
         message: Short summary for the client.
     """
+    if settings.pipefy.mcp_unified_envelope:
+        return tool_success(data={"automation_id": automation_id}, message=message)
     return {"success": True, "automation_id": automation_id, "message": message}
 
 
-def build_create_agent_success(
-    *, agent_uuid: str, message: str
-) -> CreateAiAgentSuccessPayload:
+def build_create_agent_success(*, agent_uuid: str, message: str) -> dict[str, Any]:
     """Successful AI agent create.
 
     Args:
         agent_uuid: New agent UUID from the API.
         message: Short summary for the client.
     """
+    if settings.pipefy.mcp_unified_envelope:
+        return tool_success(data={"agent_uuid": agent_uuid}, message=message)
     return {"success": True, "agent_uuid": agent_uuid, "message": message}
 
 
-def build_update_agent_success(
-    *, agent_uuid: str, message: str
-) -> UpdateAiAgentSuccessPayload:
+def build_update_agent_success(*, agent_uuid: str, message: str) -> dict[str, Any]:
     """Successful AI agent update.
 
     Args:
         agent_uuid: Target agent UUID.
         message: Short summary for the client.
     """
+    if settings.pipefy.mcp_unified_envelope:
+        return tool_success(data={"agent_uuid": agent_uuid}, message=message)
     return {"success": True, "agent_uuid": agent_uuid, "message": message}
 
 
-def build_toggle_agent_status_success(
-    *, message: str
-) -> ToggleAiAgentStatusSuccessPayload:
+def build_toggle_agent_status_success(*, message: str) -> dict[str, Any]:
     """Successful agent enable/disable.
 
     Args:
         message: Short summary for the client.
     """
+    if settings.pipefy.mcp_unified_envelope:
+        return tool_success(message=message)
     return {"success": True, "message": message}
 
 
-def build_get_agent_success(agent: AiAgentGraphPayload) -> GetAiAgentSuccessPayload:
+def build_get_agent_success(agent: AiAgentGraphPayload) -> dict[str, Any]:
     """Single-agent read envelope.
 
     Args:
         agent: ``aiAgent`` subtree (may be empty dict when missing).
     """
+    if settings.pipefy.mcp_unified_envelope:
+        return tool_success(data={"agent": agent})
     return {"success": True, "agent": agent}
 
 
 def build_get_agents_success(
     agents: list[AiAgentGraphPayload],
-) -> GetAiAgentsSuccessPayload:
+) -> dict[str, Any]:
     """List-agents read envelope.
 
     Args:
         agents: Unwrapped connection nodes for the repo.
     """
+    if settings.pipefy.mcp_unified_envelope:
+        return tool_success(data={"agents": agents})
     return {"success": True, "agents": agents}
 
 
-def build_delete_agent_success(*, message: str) -> DeleteAiAgentSuccessPayload:
+def build_delete_agent_success(*, message: str) -> dict[str, Any]:
     """Successful AI agent delete.
 
     Args:
         message: Short summary for the client.
     """
+    if settings.pipefy.mcp_unified_envelope:
+        return tool_success(message=message)
     return {"success": True, "message": message}
 
 

@@ -173,8 +173,10 @@ class PipeTools:
             ),
         )
         async def get_card(
+            ctx: Context[ServerSession, None],
             card_id: PipefyId,
             include_fields: bool = False,
+            debug: bool = False,
         ) -> dict:
             """Load one card by ID for title, phase, assignees, labels, and optional field values.
 
@@ -184,13 +186,28 @@ class PipeTools:
 
             Args:
                 card_id: Pipefy card ID (string or positive integer).
+                    Discover via: ``find_cards`` or ``get_cards(pipe_id)``.
                 include_fields: If True, include each custom field's name and value on the card node.
+                debug: When True, append GraphQL codes and correlation_id on errors.
 
             Returns:
                 dict: GraphQL ``card`` query payload (typically ``card`` with ``id``, ``title``,
                 ``phase``, ``assignees``, ``labels``, and—when requested—``fields``).
             """
-            return await client.get_card(card_id, include_fields=include_fields)
+            await ctx.debug(f"get_card: card_id={card_id}")
+            card_id_str, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return err
+            try:
+                return await client.get_card(card_id_str, include_fields=include_fields)
+            except Exception as exc:  # noqa: BLE001
+                return handle_tool_graphql_error(
+                    exc,
+                    "Failed to load card.",
+                    debug=debug,
+                    resource_kind="card",
+                    resource_id=card_id_str,
+                )
 
         @mcp.tool(
             annotations=ToolAnnotations(
@@ -226,7 +243,11 @@ class PipeTools:
                 raw = await client.get_card_relations(card_id_str)
             except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
-                    exc, "Get card relations failed.", debug=debug
+                    exc,
+                    "Get card relations failed.",
+                    debug=debug,
+                    resource_kind="card",
+                    resource_id=card_id_str,
                 )
 
             card_node = raw.get("card")
@@ -438,7 +459,11 @@ class PipeTools:
                 raw = await client.delete_card_relation(cid, pid, sid)
             except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
-                    exc, "Delete card relation failed.", debug=debug
+                    exc,
+                    "Delete card relation failed.",
+                    debug=debug,
+                    resource_kind="card",
+                    resource_id=str(cid),
                 )
 
             node = raw.get("deleteCardRelation") or {}
@@ -558,7 +583,11 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_pipe(pipe_id: PipefyId) -> dict:
+        async def get_pipe(
+            ctx: Context[ServerSession, None],
+            pipe_id: PipefyId,
+            debug: bool = False,
+        ) -> dict:
             """Load a pipe by ID: name, phases, labels, and start-form field definitions.
 
             Use this after resolving ``pipe_id`` (e.g. from ``search_pipes``) to inspect workflow
@@ -567,12 +596,27 @@ class PipeTools:
 
             Args:
                 pipe_id: Pipe identifier (string or positive integer).
+                    Discover via: ``search_pipes`` or ``get_organization``.
+                debug: When True, append GraphQL codes and correlation_id on errors.
 
             Returns:
                 dict: GraphQL response containing a ``pipe`` object with ``id``, ``name``,
                 ``phases``, ``labels``, ``start_form_fields``, and related metadata from the API.
             """
-            return await client.get_pipe(pipe_id)
+            await ctx.debug(f"get_pipe: pipe_id={pipe_id}")
+            pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
+            try:
+                return await client.get_pipe(pipe_id_str)
+            except Exception as exc:  # noqa: BLE001
+                return handle_tool_graphql_error(
+                    exc,
+                    "Failed to load pipe.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=pipe_id_str,
+                )
 
         @mcp.tool(
             annotations=ToolAnnotations(
@@ -605,7 +649,13 @@ class PipeTools:
             try:
                 raw = await client.get_pipe(pipe_id_str)
             except Exception as exc:  # noqa: BLE001
-                return handle_tool_graphql_error(exc, "Get labels failed.", debug=debug)
+                return handle_tool_graphql_error(
+                    exc,
+                    "Get labels failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=pipe_id_str,
+                )
 
             pipe_node = raw.get("pipe")
             if pipe_node is None:
@@ -625,7 +675,11 @@ class PipeTools:
                 readOnlyHint=True,
             ),
         )
-        async def get_pipe_members(pipe_id: PipefyId) -> dict:
+        async def get_pipe_members(
+            ctx: Context[ServerSession, None],
+            pipe_id: PipefyId,
+            debug: bool = False,
+        ) -> dict:
             """List members of a pipe with roles and basic user profile fields.
 
             Use this to audit who has access, resolve user IDs for assignments, or before
@@ -633,12 +687,27 @@ class PipeTools:
 
             Args:
                 pipe_id: Pipe identifier (string or positive integer).
+                    Discover via: ``search_pipes`` or ``get_organization``.
+                debug: When True, append GraphQL codes and correlation_id on errors.
 
             Returns:
                 dict: GraphQL payload whose ``pipe.members`` entries include ``user``
                 (``id``, ``uuid``, ``name``, ``email``) and ``role_name`` per member.
             """
-            return await client.get_pipe_members(pipe_id)
+            await ctx.debug(f"get_pipe_members: pipe_id={pipe_id}")
+            pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
+            try:
+                return await client.get_pipe_members(pipe_id_str)
+            except Exception as exc:  # noqa: BLE001
+                return handle_tool_graphql_error(
+                    exc,
+                    "Failed to load pipe members.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=pipe_id_str,
+                )
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True),
@@ -655,7 +724,9 @@ class PipeTools:
 
             Args:
                 card_id: The card to move.
+                    Discover via: ``find_cards`` or ``get_cards(pipe_id)``.
                 destination_phase_id: Target phase ID (must be allowed for the current phase).
+                    Discover via: ``get_pipe(pipe_id).phases[].id``.
 
             Returns:
                 dict: Pipefy move mutation response on success. On some validation failures,
@@ -687,8 +758,10 @@ class PipeTools:
             will be replaced with the new value provided.
 
             Args:
-                card_id: The ID of the card containing the field to update
-                field_id: The ID (slug) of the field to update
+                card_id: The ID of the card containing the field to update.
+                    Discover via: ``find_cards`` or ``get_cards(pipe_id)``.
+                field_id: The ID (slug) of the field to update.
+                    Discover via: ``get_phase_fields(phase_id)[].id`` (or ``internal_id`` for numeric forms).
                 new_value: The new value for the field (string, number, list, etc.)
 
             Returns:
@@ -844,10 +917,13 @@ class PipeTools:
 
             Args:
                 card_id: The ID of the card to update.
+                    Discover via: ``find_cards`` or ``get_cards(pipe_id)``.
                 phase_id: The ID of the phase whose fields should be filled.
+                    Discover via: ``get_pipe(pipe_id).phases[].id``.
                 fields: A dictionary of fields that can be pre-filled.
                         When ``skip_elicitation`` is False, these pre-fill the
                         interactive form. When True, they are sent directly.
+                        Discover via: ``get_phase_fields(phase_id)[].id`` for valid keys.
                 required_fields_only: If True, only elicit required fields. Default: False.
                 skip_elicitation: When True, bypass interactive elicitation and send
                     ``fields`` directly to the API. Recommended for AI agent workflows.

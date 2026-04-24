@@ -270,12 +270,15 @@ class AiAgentTools:
             Args:
                 name: Agent display name.
                 repo_uuid: UUID of the pipe (from ``get_pipe``), not the numeric pipe ID.
+                    Discover via: ``search_pipes`` then ``get_pipe(pipe_id).uuid``.
                 instruction: Agent-level purpose (Pipefy UI "Description"; API ``instruction``).
                 behaviors: 1–5 behavior dicts. Each requires ``name``, ``event_id``, and
                     ``actionParams.aiBehaviorParams`` with a non-empty ``actionsAttributes`` list.
                     Optional: ``eventParams`` to filter event triggers (e.g. ``triggerFieldIds``, ``to_phase_id``).
                     Optional: ``template_params`` / ``placeholders``, ``instruction_template``.
                     See example above for the full shape.
+                    Discover via: ``get_automation_events(pipe_id)`` for ``event_id`` and
+                    ``get_phase_fields(phase_id)`` for ``triggerFieldIds`` / ``destinationPhaseId``.
                 data_source_ids: Optional knowledge-source IDs (same as ``update_ai_agent``).
             """
             await ctx.debug(
@@ -389,14 +392,17 @@ class AiAgentTools:
 
             Args:
                 uuid: UUID of the agent to update.
+                    Discover via: ``get_ai_agents(repo_uuid)[].uuid``.
                 name: Agent display name.
                 repo_uuid: UUID of the pipe (from ``get_pipe``).
+                    Discover via: ``search_pipes`` then ``get_pipe(pipe_id).uuid``.
                 instruction: Agent-level purpose (Pipefy UI "Description"; API ``instruction``).
                 behaviors: 1–5 behavior dicts. Same shape as ``create_ai_agent``: each needs ``name``,
                     ``event_id``, and ``actionParams.aiBehaviorParams.actionsAttributes``.
                     Accepts both ``snake_case`` and ``camelCase`` keys.
                     Optional: ``template_params`` / ``placeholders`` and ``instruction_template``
                     (same interpolation as ``create_ai_agent``).
+                    Discover via: ``get_automation_events(pipe_id)`` and ``get_phase_fields(phase_id)``.
                 data_source_ids: Optional list of data source IDs.
             """
             await ctx.debug(
@@ -611,9 +617,12 @@ class AiAgentTools:
 
             Args:
                 pipe_id: Numeric pipe ID (used to fetch fields, phases, and relations).
+                    Discover via: ``search_pipes`` or ``get_organization``.
                 behaviors: 1–5 behavior dicts (same shape as ``create_ai_agent``). Each must
                     include ``name``, ``event_id`` (or ``eventId``), and ``actionParams`` with
                     ``aiBehaviorParams`` (``instruction`` + ``actionsAttributes``).
+                    Discover via: ``get_automation_events(pipe_id)`` for ``event_id`` and
+                    ``get_phase_fields(phase_id)`` for field references inside ``actionsAttributes``.
                 strict_unknown_action_types: When ``True`` (default), unknown ``actionType`` values
                     are reported in ``problems``. When ``False``, they appear in ``warnings`` only.
             """

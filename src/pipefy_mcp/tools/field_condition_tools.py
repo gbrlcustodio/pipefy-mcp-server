@@ -81,7 +81,11 @@ class FieldConditionTools:
                 raw = await client.get_field_conditions(phase_id_str)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "List field conditions failed.", debug=debug
+                    exc,
+                    "List field conditions failed.",
+                    debug=debug,
+                    resource_kind="phase",
+                    resource_id=phase_id_str,
                 )
 
             phase = raw.get("phase")
@@ -129,7 +133,11 @@ class FieldConditionTools:
                 raw = await client.get_field_condition(cid)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Get field condition failed.", debug=debug
+                    exc,
+                    "Get field condition failed.",
+                    debug=debug,
+                    resource_kind="field_condition",
+                    resource_id=cid,
                 )
 
             fc = raw.get("fieldCondition")
@@ -196,12 +204,15 @@ class FieldConditionTools:
             Args:
                 ctx: MCP context for debug logging.
                 phase_id: Phase ID that owns the condition (``phaseId`` on the API input).
+                    Discover via: ``get_pipe(pipe_id)`` then inspect ``phases[].id``.
                 condition: ``ConditionInput`` dict. Must include ``expressions`` (list of expression
                     objects with ``structure_id``, ``field_address``, ``operation``, ``value``) and
                     ``expressions_structure`` (array of arrays of string indices).
+                    Discover via: ``get_phase_fields(phase_id)[].internal_id`` for ``field_address``.
                 actions: List of ``FieldConditionActionInput`` dicts; use ``phaseFieldId`` (often the
                     field's ``internal_id`` from ``get_phase_fields``). Each action must include
                     ``actionId`` (``hide`` or ``show``); legacy ``hidden`` is mapped to ``hide``.
+                    Discover via: ``get_phase_fields(phase_id)[].internal_id`` for ``phaseFieldId``.
                 name: Rule display name. Required by the API; may also be provided via
                     ``extra_input={"name": ...}`` for back-compat.
                 extra_input: Optional extra keys for ``createFieldConditionInput`` (e.g. ``index``).
@@ -216,10 +227,12 @@ class FieldConditionTools:
             if not isinstance(condition, dict):
                 return build_pipe_tool_error_payload(
                     message="Invalid 'condition': provide an object/dict.",
+                    code="INVALID_ARGUMENTS",
                 )
             if not condition:
                 return build_pipe_tool_error_payload(
                     message="Invalid 'condition': provide a non-empty object (e.g. expressions).",
+                    code="INVALID_ARGUMENTS",
                 )
             expressions = condition.get("expressions")
             if isinstance(expressions, list) and len(expressions) == 0:
@@ -228,14 +241,18 @@ class FieldConditionTools:
                         "Invalid 'condition': 'expressions' must not be empty; "
                         "provide at least one expression."
                     ),
+                    code="INVALID_ARGUMENTS",
                 )
             if extra_input is not None and not isinstance(extra_input, dict):
                 return build_pipe_tool_error_payload(
                     message="Invalid 'extra_input': provide an object/dict or omit.",
+                    code="INVALID_ARGUMENTS",
                 )
             act_err = field_condition_actions_error_message(actions)
             if act_err:
-                return build_pipe_tool_error_payload(message=act_err)
+                return build_pipe_tool_error_payload(
+                    message=act_err, code="INVALID_ARGUMENTS"
+                )
             merged: dict[str, Any] = {
                 k: v
                 for k, v in (extra_input or {}).items()
@@ -245,6 +262,7 @@ class FieldConditionTools:
                 if not isinstance(name, str) or not name.strip():
                     return build_pipe_tool_error_payload(
                         message="Invalid 'name': provide a non-empty string or omit.",
+                        code="INVALID_ARGUMENTS",
                     )
                 merged["name"] = name
             if not merged.get("name"):
@@ -253,6 +271,7 @@ class FieldConditionTools:
                         "Missing 'name': Pipefy requires a rule name. Pass 'name' as a "
                         "top-level argument (or inside 'extra_input')."
                     ),
+                    code="INVALID_ARGUMENTS",
                 )
             condition_for_api = strip_expression_ids_for_create(condition)
             actions_for_api = normalize_field_condition_actions(actions)
@@ -265,7 +284,15 @@ class FieldConditionTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Create field condition failed.", debug=debug
+                    exc,
+                    "Create field condition failed.",
+                    debug=debug,
+                    resource_kind="phase",
+                    resource_id=pid,
+                    invalid_args_hint=(
+                        "Use 'get_phase_fields' to list valid 'internal_id' values for "
+                        "'field_address' / 'phaseFieldId'."
+                    ),
                 )
             fc = raw.get("createFieldCondition", {}).get("fieldCondition") or {}
             cid = fc.get("id")
@@ -274,6 +301,7 @@ class FieldConditionTools:
                     message=(
                         "Create field condition succeeded but no condition id was returned."
                     ),
+                    code="INVALID_ARGUMENTS",
                 )
             return build_field_condition_success_payload(str(cid), "created")
 
@@ -302,8 +330,11 @@ class FieldConditionTools:
             Args:
                 ctx: MCP context for debug logging.
                 condition_id: Field condition ID to update.
+                    Discover via: ``get_field_conditions(phase_id)[].id``.
                 condition: Optional ``ConditionInput`` dict (same as create).
+                    Discover via: ``get_phase_fields(phase_id)[].internal_id`` for ``field_address``.
                 actions: Optional list of ``FieldConditionActionInput`` dicts (same as create).
+                    Discover via: ``get_phase_fields(phase_id)[].internal_id`` for ``phaseFieldId``.
                 name: Optional new rule name.
                 extra_input: Additional fields to merge into ``UpdateFieldConditionInput``.
                 debug: When True, append GraphQL codes and correlation_id to errors.
@@ -317,10 +348,12 @@ class FieldConditionTools:
             if extra_input is not None and not isinstance(extra_input, dict):
                 return build_pipe_tool_error_payload(
                     message="Invalid 'extra_input': provide an object/dict or omit.",
+                    code="INVALID_ARGUMENTS",
                 )
             if condition is not None and not isinstance(condition, dict):
                 return build_pipe_tool_error_payload(
                     message="Invalid 'condition': provide an object/dict or omit.",
+                    code="INVALID_ARGUMENTS",
                 )
             if condition is not None:
                 expressions = condition.get("expressions")
@@ -330,11 +363,14 @@ class FieldConditionTools:
                             "Invalid 'condition': 'expressions' must not be empty; "
                             "provide at least one expression."
                         ),
+                        code="INVALID_ARGUMENTS",
                     )
             if actions is not None:
                 act_err = field_condition_actions_error_message(actions)
                 if act_err:
-                    return build_pipe_tool_error_payload(message=act_err)
+                    return build_pipe_tool_error_payload(
+                        message=act_err, code="INVALID_ARGUMENTS"
+                    )
 
             update_attrs: dict[str, Any] = {
                 k: v
@@ -345,6 +381,7 @@ class FieldConditionTools:
                 if not isinstance(name, str) or not name.strip():
                     return build_pipe_tool_error_payload(
                         message="Invalid 'name': provide a non-empty string or omit.",
+                        code="INVALID_ARGUMENTS",
                     )
                 update_attrs["name"] = name
             if condition is not None:
@@ -357,12 +394,21 @@ class FieldConditionTools:
                         "Provide at least one of: 'condition', 'actions', or a non-empty "
                         "'extra_input' to update."
                     ),
+                    code="INVALID_ARGUMENTS",
                 )
             try:
                 raw = await client.update_field_condition(cid_str, **update_attrs)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Update field condition failed.", debug=debug
+                    exc,
+                    "Update field condition failed.",
+                    debug=debug,
+                    resource_kind="field_condition",
+                    resource_id=cid_str,
+                    invalid_args_hint=(
+                        "Use 'get_phase_fields' to list valid 'internal_id' values for "
+                        "'field_address' / 'phaseFieldId'."
+                    ),
                 )
             fc = raw.get("updateFieldCondition", {}).get("fieldCondition") or {}
             out_id = fc.get("id")
@@ -371,6 +417,7 @@ class FieldConditionTools:
                     message=(
                         "Update field condition succeeded but no condition id was returned."
                     ),
+                    code="INVALID_ARGUMENTS",
                 )
             return build_field_condition_success_payload(str(out_id), "updated")
 
@@ -417,7 +464,11 @@ class FieldConditionTools:
                 raw = await client.delete_field_condition(cid_str)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Delete field condition failed.", debug=debug
+                    exc,
+                    "Delete field condition failed.",
+                    debug=debug,
+                    resource_kind="field_condition",
+                    resource_id=cid_str,
                 )
             ok = bool(raw.get("success"))
             return build_field_condition_delete_payload(ok)

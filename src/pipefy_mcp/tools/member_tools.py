@@ -62,7 +62,11 @@ class MemberTools:
                 raw = await client.invite_members(pipe_id, members)
             except Exception as exc:  # noqa: BLE001
                 return handle_member_tool_graphql_error(
-                    exc, "Invite members failed.", debug=debug
+                    exc,
+                    "Invite members failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pipe_id),
                 )
             return build_member_success_payload(
                 message="Members invited.",
@@ -151,7 +155,12 @@ class MemberTools:
                     f"remove_member_from_pipe: mutation failed: {type(exc).__name__}: {exc}"
                 )
                 return handle_member_tool_graphql_error(
-                    exc, "Remove members from pipe failed.", debug=debug
+                    exc,
+                    "Remove members from pipe failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pipe_id),
+                    invalid_args_hint="Use 'get_pipe_members(pipe_id)' to list current members.",
                 )
 
             await ctx.debug(
@@ -199,7 +208,11 @@ class MemberTools:
                 raw = await client.set_role(pipe_id, member_id, role_name.strip())
             except Exception as exc:  # noqa: BLE001
                 return handle_member_tool_graphql_error(
-                    exc, "Set role failed.", debug=debug
+                    exc,
+                    "Set role failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pipe_id),
                 )
             warning: str | None = None
             protected_ids = settings.pipefy.service_account_ids

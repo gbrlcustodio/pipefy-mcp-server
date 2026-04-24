@@ -120,7 +120,12 @@ class TableTools:
             try:
                 raw = await client.get_table(table_id)
             except Exception as exc:  # noqa: BLE001
-                return handle_table_tool_graphql_error(exc, "Get table failed.")
+                return handle_table_tool_graphql_error(
+                    exc,
+                    "Get table failed.",
+                    resource_kind="table",
+                    resource_id=str(table_id),
+                )
             return build_table_read_success_payload(
                 raw,
                 message="Table metadata retrieved.",
@@ -152,7 +157,11 @@ class TableTools:
             try:
                 raw = await client.get_tables(cleaned_ids)
             except Exception as exc:  # noqa: BLE001
-                return handle_table_tool_graphql_error(exc, "Get tables failed.")
+                return handle_table_tool_graphql_error(
+                    exc,
+                    "Get tables failed.",
+                    resource_kind="table",
+                )
             return build_table_read_success_payload(
                 raw,
                 message="Tables metadata retrieved.",
@@ -208,7 +217,10 @@ class TableTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
-                    exc, "List table records failed."
+                    exc,
+                    "List table records failed.",
+                    resource_kind="table",
+                    resource_id=str(table_id),
                 )
             return build_table_read_success_payload(
                 raw,
@@ -242,7 +254,12 @@ class TableTools:
             try:
                 raw = await client.get_table_record(record_id)
             except Exception as exc:  # noqa: BLE001
-                return handle_table_tool_graphql_error(exc, "Get table record failed.")
+                return handle_table_tool_graphql_error(
+                    exc,
+                    "Get table record failed.",
+                    resource_kind="table_record",
+                    resource_id=str(record_id),
+                )
             return build_table_read_success_payload(
                 raw,
                 message="Table record retrieved.",
@@ -305,7 +322,12 @@ class TableTools:
                     after=after.strip() if isinstance(after, str) else after,
                 )
             except Exception as exc:  # noqa: BLE001
-                return handle_table_tool_graphql_error(exc, "Find records failed.")
+                return handle_table_tool_graphql_error(
+                    exc,
+                    "Find records failed.",
+                    resource_kind="table",
+                    resource_id=str(table_id),
+                )
             return build_table_read_success_payload(
                 raw,
                 message="Record search completed.",
@@ -350,7 +372,11 @@ class TableTools:
                 raw = await client.create_table(name.strip(), organization_id, **merged)
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
-                    exc, "Create table failed.", debug=debug
+                    exc,
+                    "Create table failed.",
+                    debug=debug,
+                    resource_kind="organization",
+                    resource_id=str(organization_id),
                 )
             return build_table_mutation_success_payload(
                 message="Table created.",
@@ -406,7 +432,11 @@ class TableTools:
                 raw = await client.update_table(table_id, **kwargs)
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
-                    exc, "Update table failed.", debug=debug
+                    exc,
+                    "Update table failed.",
+                    debug=debug,
+                    resource_kind="table",
+                    resource_id=str(table_id),
                 )
             return build_table_mutation_success_payload(
                 message="Table updated.",
@@ -512,7 +542,9 @@ class TableTools:
 
             Args:
                 table_id: Target table ID.
+                    Discover via: ``search_tables`` or ``get_tables(table_ids)``.
                 fields: Map of field_id -> value, or list of objects with field_id / field_value.
+                    Discover via: ``get_table(table_id).table_fields[].id``.
                 title: Optional record title.
                 extra_input: Other `CreateTableRecordInput` keys (e.g. label_ids).
                 debug: When True, append GraphQL codes and correlation_id to errors.
@@ -565,7 +597,11 @@ class TableTools:
                 raw = await client.create_table_record(table_id, fields, **merged_attrs)
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
-                    exc, "Create table record failed.", debug=debug
+                    exc,
+                    "Create table record failed.",
+                    debug=debug,
+                    resource_kind="table",
+                    resource_id=str(table_id),
                 )
             return build_table_mutation_success_payload(
                 message="Table record created.",
@@ -586,6 +622,8 @@ class TableTools:
 
             Args:
                 record_id: Record ID.
+                    Discover via: ``find_records(table_id, field_id, field_value)`` or
+                    ``get_table_records(table_id)[].id``.
                 fields: Keys may include title, due_date, status_id (or statusId).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -609,7 +647,11 @@ class TableTools:
                 raw = await client.update_table_record(record_id, fields)
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
-                    exc, "Update table record failed.", debug=debug
+                    exc,
+                    "Update table record failed.",
+                    debug=debug,
+                    resource_kind="table_record",
+                    resource_id=str(record_id),
                 )
             return build_table_mutation_success_payload(
                 message="Table record updated.",
@@ -657,7 +699,11 @@ class TableTools:
                 raw = await client.delete_table_record(record_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
-                    exc, "Delete table record failed.", debug=debug
+                    exc,
+                    "Delete table record failed.",
+                    debug=debug,
+                    resource_kind="table_record",
+                    resource_id=str(record_id),
                 )
             return build_table_mutation_success_payload(
                 message="Table record deleted.",
@@ -677,7 +723,10 @@ class TableTools:
 
             Args:
                 record_id: Record ID.
+                    Discover via: ``find_records(table_id, field_id, field_value)`` or
+                    ``get_table_records(table_id)[].id``.
                 field_id: Table field ID.
+                    Discover via: ``get_table(table_id).table_fields[].id``.
                 value: New value (string/number/list as required by the field type).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -701,7 +750,12 @@ class TableTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
-                    exc, "Set table record field value failed.", debug=debug
+                    exc,
+                    "Set table record field value failed.",
+                    debug=debug,
+                    resource_kind="table_record",
+                    resource_id=str(record_id),
+                    invalid_args_hint="Use 'get_table' to list valid field IDs for this table.",
                 )
             return build_table_mutation_success_payload(
                 message="Field value updated.",
@@ -729,6 +783,7 @@ class TableTools:
 
             Args:
                 table_id: Database table ID.
+                    Discover via: ``search_tables`` or ``get_tables(table_ids)``.
                 label: Field label in the UI.
                 field_type: Pipefy field type string (API input key `type`). See common types above.
                 extra_input: Additional CreateTableFieldInput keys to merge (e.g. required, options).
@@ -765,7 +820,11 @@ class TableTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
-                    exc, "Create table field failed.", debug=debug
+                    exc,
+                    "Create table field failed.",
+                    debug=debug,
+                    resource_kind="table",
+                    resource_id=str(table_id),
                 )
             return build_table_mutation_success_payload(
                 message="Table field created.",
@@ -849,7 +908,11 @@ class TableTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
-                    exc, "Update table field failed.", debug=debug
+                    exc,
+                    "Update table field failed.",
+                    debug=debug,
+                    resource_kind="table_field",
+                    resource_id=str(field_id),
                 )
             return build_table_mutation_success_payload(
                 message="Table field updated.",
@@ -904,7 +967,11 @@ class TableTools:
                 raw = await client.delete_table_field(field_id, table_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_table_tool_graphql_error(
-                    exc, "Delete table field failed.", debug=debug
+                    exc,
+                    "Delete table field failed.",
+                    debug=debug,
+                    resource_kind="table_field",
+                    resource_id=str(field_id),
                 )
             return build_table_mutation_success_payload(
                 message="Table field deleted.",

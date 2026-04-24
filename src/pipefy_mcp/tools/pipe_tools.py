@@ -545,18 +545,22 @@ class PipeTools:
                 after=after,
             )
             if settings.pipefy.mcp_unified_envelope:
-                page_info = (
-                    (raw.get("cards") or {}).get("pageInfo")
-                    if isinstance(raw, dict)
-                    else None
-                )
+                # When the caller omits ``first`` the tool falls through to the
+                # Pipefy API default page; there is no requested page size to
+                # report back, so omit the pagination block rather than publish
+                # ``page_size=0`` (which our own validator would reject).
+                pagination = None
+                if first is not None:
+                    page_info = (
+                        (raw.get("cards") or {}).get("pageInfo")
+                        if isinstance(raw, dict)
+                        else None
+                    )
+                    pagination = build_pagination_info(
+                        page_info=page_info, page_size=first
+                    )
                 return tool_success(
-                    data=raw,
-                    message="Cards retrieved.",
-                    pagination=build_pagination_info(
-                        page_info=page_info,
-                        page_size=first if first is not None else 0,
-                    ),
+                    data=raw, message="Cards retrieved.", pagination=pagination
                 )
             return raw
 

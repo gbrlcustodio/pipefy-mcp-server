@@ -14,6 +14,7 @@ from pipefy_mcp.tools.destructive_tool_guard import (
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 from pipefy_mcp.tools.tool_error_envelope import (
     ToolErrorDetail,
+    ToolSuccessPayload,
     tool_error,
     tool_success,
 )
@@ -33,7 +34,9 @@ class AddCardCommentErrorPayload(TypedDict):
     error: ToolErrorDetail
 
 
-AddCardCommentPayload = AddCardCommentSuccessPayload | AddCardCommentErrorPayload
+AddCardCommentPayload = (
+    AddCardCommentSuccessPayload | ToolSuccessPayload | AddCardCommentErrorPayload
+)
 
 
 class UpdateCommentSuccessPayload(TypedDict):
@@ -46,7 +49,9 @@ class UpdateCommentErrorPayload(TypedDict):
     error: ToolErrorDetail
 
 
-UpdateCommentPayload = UpdateCommentSuccessPayload | UpdateCommentErrorPayload
+UpdateCommentPayload = (
+    UpdateCommentSuccessPayload | ToolSuccessPayload | UpdateCommentErrorPayload
+)
 
 
 class DeleteCommentSuccessPayload(TypedDict):
@@ -59,7 +64,10 @@ class DeleteCommentErrorPayload(TypedDict):
 
 
 DeleteCommentPayload = (
-    DestructivePreviewPayload | DeleteCommentSuccessPayload | DeleteCommentErrorPayload
+    DestructivePreviewPayload
+    | DeleteCommentSuccessPayload
+    | ToolSuccessPayload
+    | DeleteCommentErrorPayload
 )
 
 
@@ -80,6 +88,7 @@ DeleteCardPayload = (
     DestructivePreviewPayload
     | DestructiveCancelledPayload
     | DeleteCardSuccessPayload
+    | ToolSuccessPayload
     | DeleteCardErrorPayload
 )
 

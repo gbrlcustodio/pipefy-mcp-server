@@ -84,11 +84,9 @@ class PipefySettings(BaseModel):
     mcp_unified_envelope: bool = Field(
         default=True,
         description=(
-            "When true (env: PIPEFY_MCP_UNIFIED_ENVELOPE), migrated MCP tools emit the "
-            "unified success shape `{success, data, message?, pagination?}`. Set to "
-            "false to restore the legacy per-tool shapes for migrated helpers without a "
-            "redeploy. Read per tool call (never cached at import). See "
-            "envelope-pagination-unification ADR-0002."
+            "When true (env: PIPEFY_MCP_UNIFIED_ENVELOPE), migrated MCP tools return "
+            "{success, data, message?, pagination?}. When false, legacy shapes. "
+            "Read at call time, not cached at import."
         ),
     )
 

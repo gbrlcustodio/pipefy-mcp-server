@@ -8,8 +8,8 @@ All tools that return ``{"success": false, ...}`` should use
 * **Failure** - ``{"success": false, "error": {"message": str, "code"?: str, "details"?: dict}}``.
   Optional top-level fields (e.g. ``valid_destinations``) are allowed for tools
   that already expose extra context.
-* **Success** - remains tool-specific (flat fields or ``data``) until a follow-up
-  unification pass.
+* **Success** - use :func:`tool_success` for the unified shape; other tools may
+  still return legacy flat payloads.
 
 **User-visible text (N1):** Strings passed to :func:`tool_error` and other returned
 ``error.message`` (and equivalent warnings) use ASCII only: straight ``'`` / ``"``,
@@ -52,11 +52,7 @@ class ToolFailurePayload(TypedDict):
 
 
 class ToolSuccessPayload(TypedDict, total=False):
-    """``success: true`` with optional ``data``, ``message``, ``pagination`` keys.
-
-    Canonical unified success envelope. See ADR-0001 (verbatim GraphQL wrap under
-    ``data``) and ADR-0002 (feature-flag default TRUE).
-    """
+    """``success: true`` with optional ``data``, ``message``, ``pagination``."""
 
     success: Literal[True]
     data: dict[str, Any]
@@ -94,8 +90,7 @@ def tool_success(
     """Canonical success payload. Optional keys omitted when args are ``None``.
 
     Args:
-        data: Verbatim payload (e.g. raw Pipefy GraphQL subtree). Preserves
-            query-name wrappers per ADR-0001 — callers SHOULD NOT unwrap.
+        data: Verbatim GraphQL subtree; keep query-root keys inside this dict.
         message: Optional short human-readable summary.
         pagination: Optional top-level pagination block (typically built by
             :func:`pipefy_mcp.tools.pagination_helpers.build_pagination_info`).

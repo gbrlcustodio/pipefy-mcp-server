@@ -57,9 +57,7 @@ def build_report_mutation_success_payload(
 
     Args:
         message: Short summary for the client.
-        data: Raw mutation payload (stored as ``result`` under flag=false;
-            under the unified envelope the same dict moves to ``data`` to
-            match every other migrated helper).
+        data: Mutation payload (legacy path exposes it as ``result``).
     """
     if settings.pipefy.mcp_unified_envelope:
         return tool_success(data=data, message=message)

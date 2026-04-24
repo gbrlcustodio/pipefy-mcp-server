@@ -1,11 +1,4 @@
-"""Pagination helpers — unified bounds validation and cursor info for MCP tools.
-
-Introduced by the envelope-pagination-unification capability (Proposal 7). Every
-paginated tool migrated to the unified envelope uses :func:`validate_page_size`
-to reject out-of-bounds ``first`` with a structured ``INVALID_ARGUMENTS`` error,
-and :func:`build_pagination_info` to emit a consistent top-level
-``pagination: {has_more, end_cursor, page_size}`` block.
-"""
+"""Bounds validation and top-level ``pagination`` for unified MCP tool responses."""
 
 from __future__ import annotations
 
@@ -45,9 +38,8 @@ def validate_page_size(
     """Normalize and validate a pagination ``first`` argument.
 
     Returns ``(DEFAULT_PAGE_SIZE, None)`` when ``first`` is None. On valid
-    integer input returns ``(int(first), None)``. On invalid input returns
-    ``(0, <tool_error dict>)`` — the caller SHOULD propagate the error dict
-    verbatim.
+    integer input returns ``(n, None)``. On invalid input returns
+    ``(0, error_dict)``; return that dict from the tool unchanged.
 
     Args:
         first: The requested page size, or None to use the default.

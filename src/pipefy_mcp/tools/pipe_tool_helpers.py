@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
 
+from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.services.pipefy.types import CardSearch
 from pipefy_mcp.tools.destructive_tool_guard import (
     DestructiveCancelledPayload,
     DestructivePreviewPayload,
@@ -78,6 +80,44 @@ DeleteCardPayload = (
 
 # Message returned by find_cards tool when the API returns no matching cards.
 FIND_CARDS_EMPTY_MESSAGE = "No cards found for this field/value."
+
+
+async def find_label_dependents(
+    client: PipefyClient,
+    *,
+    pipe_id: str,
+    label_id: str,
+    sample_size: int = 5,
+) -> dict[str, Any] | None:
+    """Sample cards that carry ``label_id`` in ``pipe_id`` (for delete preview)."""
+    try:
+        search: CardSearch = {"label_ids": [str(label_id)]}
+        payload = await client.get_cards(
+            pipe_id,
+            search,
+            include_fields=False,
+            first=sample_size + 1,
+        )
+    except Exception:  # noqa: BLE001
+        return None
+    cards_root = (payload or {}).get("cards") or {}
+    edges = cards_root.get("edges") or []
+    ids: list[str] = []
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        node = edge.get("node") or {}
+        cid = node.get("id")
+        if cid is not None:
+            ids.append(str(cid))
+    if not ids:
+        return None
+    has_more = len(ids) > sample_size
+    return {
+        "sample_card_ids": ids[:sample_size],
+        "sample_size": sample_size,
+        "has_more": has_more,
+    }
 
 
 def build_add_card_comment_success_payload(
@@ -333,6 +373,7 @@ __all__ = [
     "DeleteCommentPayload",
     "DeleteCommentSuccessPayload",
     "FIND_CARDS_EMPTY_MESSAGE",
+    "find_label_dependents",
     "UpdateCommentErrorPayload",
     "UpdateCommentPayload",
     "UpdateCommentSuccessPayload",

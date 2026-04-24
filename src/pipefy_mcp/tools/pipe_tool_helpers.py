@@ -89,7 +89,20 @@ async def find_label_dependents(
     label_id: str,
     sample_size: int = 5,
 ) -> dict[str, Any] | None:
-    """Sample cards that carry ``label_id`` in ``pipe_id`` (for delete preview)."""
+    """Sample cards that carry ``label_id`` in ``pipe_id`` (for delete preview).
+
+    Returns ``None`` when no cards use the label or when the auxiliary
+    ``get_cards`` query fails. Otherwise returns a dict with:
+
+    * ``sample_card_ids``: up to ``sample_size`` card ids.
+    * ``sample_size``: **actual** length of ``sample_card_ids`` — so consumers
+      can render accurate counts ("3 cards" not "5 cards") when fewer than the
+      cap carry the label.
+    * ``sample_cap``: the ``sample_size`` parameter value (the cap that was
+      applied while sampling).
+    * ``has_more``: ``True`` when Pipefy returned more cards than the cap
+      (the real cascade is strictly larger than the sample).
+    """
     try:
         search: CardSearch = {"label_ids": [str(label_id)]}
         payload = await client.get_cards(
@@ -112,10 +125,12 @@ async def find_label_dependents(
             ids.append(str(cid))
     if not ids:
         return None
+    sampled = ids[:sample_size]
     has_more = len(ids) > sample_size
     return {
-        "sample_card_ids": ids[:sample_size],
-        "sample_size": sample_size,
+        "sample_card_ids": sampled,
+        "sample_size": len(sampled),
+        "sample_cap": sample_size,
         "has_more": has_more,
     }
 

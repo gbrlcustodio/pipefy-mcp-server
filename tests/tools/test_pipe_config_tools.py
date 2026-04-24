@@ -83,6 +83,7 @@ def mock_pipe_config_client():
     client.update_label = AsyncMock()
     client.delete_label = AsyncMock()
     client.get_cards = AsyncMock()
+    client.get_phase_cards_count = AsyncMock()
     client.create_field_condition = AsyncMock()
     client.update_field_condition = AsyncMock()
     client.delete_field_condition = AsyncMock()
@@ -438,12 +439,14 @@ async def test_delete_phase_without_pipe_id_skips_dependent_lookups(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
     async with pipe_config_session as session:
-        result = await session.call_tool("delete_phase", {"phase_id": 55, "confirm": False})
+        result = await session.call_tool(
+            "delete_phase", {"phase_id": 55, "confirm": False}
+        )
 
     assert extract_payload(result)["success"] is False
     mock_pipe_config_client.get_field_conditions.assert_not_called()
     mock_pipe_config_client.get_automations.assert_not_called()
-    mock_pipe_config_client.get_cards.assert_not_called()
+    mock_pipe_config_client.get_phase_cards_count.assert_not_called()
     mock_pipe_config_client.get_automation.assert_not_called()
     mock_pipe_config_client.get_phase_fields.assert_not_called()
 
@@ -464,7 +467,7 @@ async def test_delete_phase_confirm_true_skips_dependent_lookups(
     assert extract_payload(result)["success"] is True
     mock_pipe_config_client.get_field_conditions.assert_not_called()
     mock_pipe_config_client.get_automations.assert_not_called()
-    mock_pipe_config_client.get_cards.assert_not_called()
+    mock_pipe_config_client.get_phase_cards_count.assert_not_called()
     mock_pipe_config_client.get_automation.assert_not_called()
     mock_pipe_config_client.get_phase_fields.assert_not_called()
 
@@ -489,9 +492,7 @@ async def test_delete_phase_preview_all_sublookups_succeed(
         "name": "Move to phase",
         "event_params": {"to_phase_id": "55"},
     }
-    mock_pipe_config_client.get_cards.return_value = {
-        "cards": {"totalCount": 2, "edges": []}
-    }
+    mock_pipe_config_client.get_phase_cards_count.return_value = 2
     mock_pipe_config_client.get_phase_fields.return_value = {
         "fields": [
             {"id": "f1", "label": "A"},
@@ -516,6 +517,9 @@ async def test_delete_phase_preview_all_sublookups_succeed(
     assert "hint" in deps
     assert "2 card(s)" in deps["hint"]
     assert "irreversible" in deps["hint"]
+    # Pin the cheap-count contract: native scalar, zero card enumeration.
+    mock_pipe_config_client.get_phase_cards_count.assert_awaited_once_with("55")
+    mock_pipe_config_client.get_cards.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -533,9 +537,7 @@ async def test_delete_phase_preview_partial_failure_automations_raises(
     mock_pipe_config_client.get_automations.side_effect = TransportQueryError(
         "GraphQL Error", errors=[{"message": "Internal"}]
     )
-    mock_pipe_config_client.get_cards.return_value = {
-        "cards": {"totalCount": 1, "edges": []}
-    }
+    mock_pipe_config_client.get_phase_cards_count.return_value = 1
     mock_pipe_config_client.get_phase_fields.return_value = {
         "fields": [{"id": "f1"}],
     }
@@ -564,7 +566,7 @@ async def test_delete_phase_preview_all_sublookups_fail(
     err = TransportQueryError("GraphQL Error", errors=[{"message": "x"}])
     mock_pipe_config_client.get_field_conditions.side_effect = err
     mock_pipe_config_client.get_automations.side_effect = err
-    mock_pipe_config_client.get_cards.side_effect = err
+    mock_pipe_config_client.get_phase_cards_count.side_effect = err
     mock_pipe_config_client.get_phase_fields.side_effect = err
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -589,17 +591,21 @@ async def test_delete_phase_sublookups_run_in_parallel(
         await asyncio.sleep(0.05)
         return []
 
-    async def _slow_get_cards(*_a, **_kw):
+    async def _slow_get_phase_cards_count(*_a, **_kw):
         await asyncio.sleep(0.05)
-        return {"cards": {"totalCount": 0, "edges": []}}
+        return 0
 
     async def _slow_get_phase_fields(*_a, **_kw):
         await asyncio.sleep(0.05)
         return {"fields": []}
 
-    mock_pipe_config_client.get_field_conditions.side_effect = _slow_get_field_conditions
+    mock_pipe_config_client.get_field_conditions.side_effect = (
+        _slow_get_field_conditions
+    )
     mock_pipe_config_client.get_automations.side_effect = _slow_get_automations
-    mock_pipe_config_client.get_cards.side_effect = _slow_get_cards
+    mock_pipe_config_client.get_phase_cards_count.side_effect = (
+        _slow_get_phase_cards_count
+    )
     mock_pipe_config_client.get_phase_fields.side_effect = _slow_get_phase_fields
     t0 = time.perf_counter()
     async with pipe_config_session as session:
@@ -621,9 +627,7 @@ async def test_delete_phase_cards_not_enumerated(
         "phase": {"fieldConditions": []}
     }
     mock_pipe_config_client.get_automations.return_value = []
-    mock_pipe_config_client.get_cards.return_value = {
-        "cards": {"totalCount": 3, "edges": [{"node": {"id": "1"}}]}  # ids ignored
-    }
+    mock_pipe_config_client.get_phase_cards_count.return_value = 3
     mock_pipe_config_client.get_phase_fields.return_value = {"fields": []}
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -635,6 +639,8 @@ async def test_delete_phase_cards_not_enumerated(
     assert "cards" not in deps
     assert deps.get("cards_count") == 3
     assert isinstance(deps.get("cards_count"), int)
+    # Cheap path: native scalar, no get_cards enumeration.
+    mock_pipe_config_client.get_cards.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -1219,10 +1225,43 @@ async def test_delete_label_preview_with_cards_in_use(
     assert deps is not None
     cul = deps["cards_using_label"]
     assert cul["sample_size"] == 5
+    assert cul["sample_cap"] == 5
     assert cul["has_more"] is True
     assert len(cul["sample_card_ids"]) == 5
     assert cul["sample_card_ids"][0] == "1"
+    assert "More than 5 card(s)" in deps["hint"]
     assert "Proceed if that is intended" in deps["hint"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_label_preview_partial_sample_reports_actual_count(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """3 cards in use — hint must say `3 card(s)`, not the cap `5`."""
+    mock_pipe_config_client.get_cards.return_value = {
+        "cards": {
+            "edges": [{"node": {"id": str(i)}} for i in range(1, 4)],
+            "pageInfo": {"hasNextPage": False},
+        }
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_label",
+            {"label_id": 40, "pipe_id": 2, "confirm": False},
+        )
+
+    payload = extract_payload(result)
+    deps = payload.get("dependents")
+    assert deps is not None
+    cul = deps["cards_using_label"]
+    assert cul["sample_size"] == 3
+    assert cul["sample_cap"] == 5
+    assert cul["has_more"] is False
+    assert cul["sample_card_ids"] == ["1", "2", "3"]
+    assert "3 card(s)" in deps["hint"]
+    assert "More than" not in deps["hint"]
 
 
 @pytest.mark.anyio

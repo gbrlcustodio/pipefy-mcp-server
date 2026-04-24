@@ -16,7 +16,6 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     with_debug_suffix,
 )
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
-    _resolve_phase_field_identifiers,
     build_delete_pipe_error_payload,
     build_delete_pipe_success_payload,
     build_pipe_mutation_success_payload,
@@ -25,6 +24,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     handle_pipe_config_tool_graphql_error,
     map_delete_pipe_error_to_message,
     resolve_phase_dependents,
+    resolve_phase_field_identifiers,
 )
 from pipefy_mcp.tools.pipe_tool_helpers import find_label_dependents
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
@@ -786,7 +786,7 @@ class PipeConfigTools:
             async def _resolve_deps() -> dict[str, Any] | None:
                 if not phase_id_norm:
                     return None
-                field_meta = await _resolve_phase_field_identifiers(
+                field_meta = await resolve_phase_field_identifiers(
                     client, phase_id_norm, field_id
                 )
                 conditions = await find_phase_field_dependents(
@@ -992,10 +992,15 @@ class PipeConfigTools:
                 )
                 if not deps:
                     return None
+                count_phrase = (
+                    f"More than {deps['sample_cap']}"
+                    if deps["has_more"]
+                    else f"{deps['sample_size']}"
+                )
                 return {
                     "cards_using_label": deps,
                     "hint": (
-                        f"At least {deps['sample_size']} card(s) currently use this label. "
+                        f"{count_phrase} card(s) currently use this label. "
                         "Delete proceeds silently — labels are removed from cards automatically. "
                         "Proceed if that is intended."
                     ),

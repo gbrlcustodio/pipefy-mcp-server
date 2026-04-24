@@ -379,7 +379,7 @@ async def find_phase_field_dependents(
     return out
 
 
-async def _resolve_phase_field_identifiers(
+async def resolve_phase_field_identifiers(
     client: PipefyClient,
     phase_id: str,
     field_id: str,
@@ -503,46 +503,15 @@ def _build_phase_dependents_hint(deps: dict[str, Any]) -> str:
     return f"Deleting this phase will remove {body}. This action is irreversible."
 
 
-async def _count_cards_in_phase(
-    client: PipefyClient, pipe_id: str, phase_id: str
-) -> int:
-    """Count cards in ``phase_id`` without returning card ids (O(1) if API exposes total)."""
-    try:
-        # Pipefy ``CardSearch`` may accept phase filters beyond our TypedDict.
-        data = await client.get_cards(
-            str(pipe_id),
-            cast(
-                Any,
-                {
-                    "inbox_phase_id": str(phase_id),
-                },
-            ),
-            include_fields=False,
-            first=1,
-        )
-    except Exception:  # noqa: BLE001
-        raise
-    cards_block = (data or {}).get("cards")
-    if not isinstance(cards_block, dict):
-        raise ValueError("cards_count_unavailable")
-    for tkey in ("totalCount", "count", "total_count"):
-        raw = cards_block.get(tkey)
-        if raw is not None:
-            return int(raw)
-    edges = cards_block.get("edges")
-    if isinstance(edges, list) and len(edges) == 0:
-        return 0
-    raise ValueError("cards_count_unavailable")
-
-
 async def _automations_referencing_phase(
     client: PipefyClient, pipe_id: str, phase_id: str
-) -> list[dict[str, Any]] | BaseException:
-    """List automations in ``pipe_id`` whose config references ``phase_id`` (summary rows)."""
-    try:
-        rows = await client.get_automations(pipe_id=str(pipe_id))
-    except Exception as exc:  # noqa: BLE001
-        return exc
+) -> list[dict[str, Any]]:
+    """List automations in ``pipe_id`` whose config references ``phase_id`` (summary rows).
+
+    Returns a filtered summary list. Exceptions propagate to the outer gather.
+    Inner per-automation detail fetches are allowed to fail individually.
+    """
+    rows = await client.get_automations(pipe_id=str(pipe_id))
     if not rows:
         return []
     ids = [str(r.get("id")) for r in rows if isinstance(r, dict) and r.get("id")]
@@ -552,14 +521,10 @@ async def _automations_referencing_phase(
         *[client.get_automation(i) for i in ids],
         return_exceptions=True,
     )
-    full_rows: list[dict[str, Any]] = []
-    for item in full_list:
-        if isinstance(item, BaseException) or not item:
-            continue
-        if isinstance(item, dict):
-            full_rows.append(item)
-    matched = _filter_automations_by_phase(full_rows, str(phase_id))
-    return matched
+    full_rows: list[dict[str, Any]] = [
+        item for item in full_list if isinstance(item, dict) and item
+    ]
+    return _filter_automations_by_phase(full_rows, str(phase_id))
 
 
 async def resolve_phase_dependents(
@@ -567,8 +532,15 @@ async def resolve_phase_dependents(
 ) -> dict[str, Any] | None:
     """Plan-dependent facts for delete-phase preview: conditions, automations, counts, hint.
 
-    Sub-lookups run in parallel. If a sub-lookup fails, that key is omitted. When every
-    lookup is empty or failed, returns ``None`` (no ``dependents`` in the guard).
+    Sub-lookups run in parallel via :func:`asyncio.gather` with
+    ``return_exceptions=True``. If a sub-lookup fails, its key is omitted. When
+    every lookup is empty or failed, returns ``None`` (the guard then emits
+    the preview without a ``dependents`` key).
+
+    The card count uses :meth:`PipefyClient.get_phase_cards_count` — the native
+    ``Phase.cards_count`` scalar. Pipefy's ``CardSearch`` input does not expose
+    a phase filter, so the historical ``cards(search: {inbox_phase_id})`` path
+    would not actually restrict cards to the phase.
     """
     p_id = str(pipe_id).strip()
     ph_id = str(phase_id).strip()
@@ -578,7 +550,7 @@ async def resolve_phase_dependents(
     results = await asyncio.gather(
         client.get_field_conditions(ph_id),
         _automations_referencing_phase(client, p_id, ph_id),
-        _count_cards_in_phase(client, p_id, ph_id),
+        client.get_phase_cards_count(ph_id),
         client.get_phase_fields(ph_id),
         return_exceptions=True,
     )
@@ -641,5 +613,6 @@ __all__ = [
     "map_delete_pipe_error_to_message",
     "normalize_field_condition_actions",
     "resolve_phase_dependents",
+    "resolve_phase_field_identifiers",
     "strip_expression_ids_for_create",
 ]

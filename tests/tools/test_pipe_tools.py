@@ -1013,7 +1013,6 @@ class TestGetCardsTool:
         payload = extract_payload(result)
         assert payload == expected
 
-    @pytest.mark.parametrize("flag_value", [True, False])
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_cards_out_of_bounds_returns_invalid_arguments(
         self,
@@ -1021,12 +1020,8 @@ class TestGetCardsTool:
         mock_pipefy_client,
         pipe_id,
         extract_payload,
-        flag_value,
-        monkeypatch,
+        envelope_flag,
     ):
-        from pipefy_mcp.settings import settings
-
-        monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", flag_value)
         mock_pipefy_client.get_cards = AsyncMock(return_value={"cards": {}})
         async with client_session as session:
             result = await session.call_tool(

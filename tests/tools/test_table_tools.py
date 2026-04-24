@@ -1033,14 +1033,10 @@ async def test_get_table_records_invalid_table_id(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("flag_value", [True, False])
 @pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_first_too_small(
-    table_session, mock_table_client, extract_payload, flag_value, monkeypatch
+    table_session, mock_table_client, extract_payload, envelope_flag
 ):
-    from pipefy_mcp.settings import settings
-
-    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", flag_value)
     async with table_session as session:
         result = await session.call_tool(
             "get_table_records", {"table_id": "t1", "first": 0}
@@ -1054,14 +1050,10 @@ async def test_get_table_records_first_too_small(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("flag_value", [True, False])
 @pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_first_too_large(
-    table_session, mock_table_client, extract_payload, flag_value, monkeypatch
+    table_session, mock_table_client, extract_payload, envelope_flag
 ):
-    from pipefy_mcp.settings import settings
-
-    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", flag_value)
     async with table_session as session:
         result = await session.call_tool(
             "get_table_records", {"table_id": "t1", "first": 201}
@@ -1076,14 +1068,10 @@ async def test_get_table_records_first_too_large(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("flag_value", [True, False])
 @pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_search_tables_out_of_bounds_returns_invalid_arguments(
-    table_session, mock_table_client, extract_payload, flag_value, monkeypatch
+    table_session, mock_table_client, extract_payload, envelope_flag
 ):
-    from pipefy_mcp.settings import settings
-
-    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", flag_value)
     async with table_session as session:
         result = await session.call_tool("search_tables", {"first": 99999})
     mock_table_client.search_tables.assert_not_called()

@@ -26,6 +26,10 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
     """Lifespan function to manage the lifecycle of the server."""
     try:
         logger.info("Initializing services")
+        logger.info(
+            "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
+            "enabled" if settings.pipefy.mcp_unified_envelope else "disabled",
+        )
         install_pipefy_validation_envelope()
         services_container = ServicesContainer.get_instance()
         services_container.initialize_services(settings)

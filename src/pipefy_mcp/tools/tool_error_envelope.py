@@ -29,8 +29,10 @@ from typing_extensions import NotRequired, TypedDict
 __all__ = [
     "ToolErrorDetail",
     "ToolFailurePayload",
+    "ToolSuccessPayload",
     "tool_error",
     "tool_error_message",
+    "tool_success",
 ]
 
 
@@ -47,6 +49,19 @@ class ToolFailurePayload(TypedDict):
 
     success: Literal[False]
     error: ToolErrorDetail
+
+
+class ToolSuccessPayload(TypedDict, total=False):
+    """``success: true`` with optional ``data``, ``message``, ``pagination`` keys.
+
+    Canonical unified success envelope. See ADR-0001 (verbatim GraphQL wrap under
+    ``data``) and ADR-0002 (feature-flag default TRUE).
+    """
+
+    success: Literal[True]
+    data: dict[str, Any]
+    message: str
+    pagination: dict[str, Any]
 
 
 def tool_error(
@@ -68,6 +83,31 @@ def tool_error(
     if details:
         err["details"] = details
     return {"success": False, "error": err}
+
+
+def tool_success(
+    data: dict[str, Any] | None = None,
+    *,
+    message: str | None = None,
+    pagination: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Canonical success payload. Optional keys omitted when args are ``None``.
+
+    Args:
+        data: Verbatim payload (e.g. raw Pipefy GraphQL subtree). Preserves
+            query-name wrappers per ADR-0001 — callers SHOULD NOT unwrap.
+        message: Optional short human-readable summary.
+        pagination: Optional top-level pagination block (typically built by
+            :func:`pipefy_mcp.tools.pagination_helpers.build_pagination_info`).
+    """
+    payload: dict[str, Any] = {"success": True}
+    if data is not None:
+        payload["data"] = data
+    if message is not None:
+        payload["message"] = message
+    if pagination is not None:
+        payload["pagination"] = pagination
+    return payload
 
 
 def tool_error_message(payload: Mapping[str, Any]) -> str:

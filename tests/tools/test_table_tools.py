@@ -927,6 +927,44 @@ async def test_search_tables_unified_envelope(
     }
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_search_tables_unified_has_more_stays_false_even_with_aggregate_has_next_page(
+    table_session, mock_table_client, extract_payload, unified_envelope
+):
+    """Flag=true, aggregate ``tables_has_next_page=True`` — top-level ``has_more`` stays False.
+
+    The outer tool does not accept ``after`` and is therefore not paginable;
+    publishing ``has_more=True`` with ``end_cursor=None`` would mislead agents
+    into looping on a null cursor. Per-org cursors inside ``data`` carry the
+    real signal (see DD-02).
+    """
+    response = {
+        "organizations": [
+            {
+                "id": "org1",
+                "name": "Acme",
+                "tables": [],
+                "tables_has_next_page": True,
+                "tables_page_end_cursor": "org1-cursor-abc",
+            }
+        ],
+        "search_limits": {"tables_first": 100, "tables_has_next_page": True},
+    }
+    mock_table_client.search_tables.return_value = response
+    async with table_session as session:
+        result = await session.call_tool("search_tables", {"table_name": "Clients"})
+    payload = extract_payload(result)
+    assert payload["pagination"]["has_more"] is False
+    assert payload["pagination"]["end_cursor"] is None
+    # Per-org cursors are preserved inside ``data`` for agents that need them.
+    assert payload["data"]["search_limits"]["tables_has_next_page"] is True
+    assert (
+        payload["data"]["organizations"][0]["tables_page_end_cursor"]
+        == "org1-cursor-abc"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Input validation: get_table
 # ---------------------------------------------------------------------------

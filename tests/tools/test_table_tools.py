@@ -14,6 +14,7 @@ from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.table_tools import TableTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from tests.pagination_test_defaults import DEFAULT_FIRST
+from tests.tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture
@@ -896,7 +897,7 @@ async def test_get_table_empty_table_id(table_session, mock_table_client):
         result = await session.call_tool("get_table", {"table_id": ""})
 
     mock_table_client.get_table.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 # ---------------------------------------------------------------------------
@@ -1180,7 +1181,7 @@ async def test_set_table_record_field_value_blank_field_id(
         )
 
     mock_table_client.set_table_record_field_value.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 # ---------------------------------------------------------------------------

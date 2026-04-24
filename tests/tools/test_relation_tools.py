@@ -13,6 +13,7 @@ from mcp.shared.memory import (
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.relation_tools import RelationTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tests.tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture
@@ -94,7 +95,7 @@ async def test_get_pipe_relations_invalid_pipe_id(
     async with relation_session as session:
         result = await session.call_tool("get_pipe_relations", {"pipe_id": ""})
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
     mock_relation_client.get_pipe_relations.assert_not_called()
 
 
@@ -367,7 +368,7 @@ async def test_create_card_relation_invalid_source_id(
         )
 
     mock_relation_client.create_card_relation.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio

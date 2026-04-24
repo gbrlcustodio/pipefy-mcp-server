@@ -13,6 +13,7 @@ from mcp.shared.memory import (
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.observability_tools import _MAX_PAGE_SIZE, ObservabilityTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tests.tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture
@@ -477,7 +478,7 @@ async def test_get_automation_jobs_export_rejects_empty_export_id(
         )
 
     mock_observability_client.get_automation_jobs_export.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -739,7 +740,7 @@ async def test_get_agents_usage_rejects_empty_org_uuid(
         )
 
     mock_observability_client.get_agents_usage.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -804,11 +805,12 @@ async def test_get_ai_agent_logs_debug_true_appends_codes(
     assert result.isError is False
     p = extract_payload(result)
     assert p["success"] is False
-    assert "not authorized" in tool_error_message(p)
-    assert "codes=" in tool_error_message(p) or "correlation_id=" in tool_error_message(
-        p
-    )
-    assert "PERMISSION_DENIED" in tool_error_message(p)
+    # The ambiguity enricher rewrote the raw "not authorized" into a
+    # dual-meaning message; the debug suffix still carries the code + correlation.
+    msg = tool_error_message(p)
+    assert "may lack access" in msg
+    assert "codes=" in msg or "correlation_id=" in msg
+    assert "PERMISSION_DENIED" in msg
 
 
 @pytest.mark.anyio
@@ -962,7 +964,7 @@ async def test_get_automation_logs_rejects_blank_automation_id(
         result = await session.call_tool("get_automation_logs", {"automation_id": ""})
 
     mock_observability_client.get_automation_logs.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -996,7 +998,7 @@ async def test_get_automation_logs_by_repo_rejects_blank_repo_id(
         result = await session.call_tool("get_automation_logs_by_repo", {"repo_id": ""})
 
     mock_observability_client.get_automation_logs_by_repo.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1066,7 +1068,7 @@ async def test_get_automations_usage_rejects_empty_org_uuid(
         )
 
     mock_observability_client.get_automations_usage.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1110,7 +1112,7 @@ async def test_get_ai_credit_usage_rejects_empty_org_uuid(
         )
 
     mock_observability_client.get_ai_credit_usage.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 # ---------------------------------------------------------------------------
@@ -1130,7 +1132,7 @@ async def test_export_automation_jobs_rejects_empty_org_id(
         )
 
     mock_observability_client.export_automation_jobs.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1191,7 +1193,7 @@ async def test_get_ai_agent_log_details_graphql_error(
 
     p = extract_payload(result)
     assert p["success"] is False
-    assert "log not found" in tool_error_message(p)
+    assert "Ai agent log not found" in tool_error_message(p)
 
 
 @pytest.mark.anyio
@@ -1331,4 +1333,4 @@ async def test_get_automation_jobs_export_csv_rejects_empty_export_id(
         )
 
     mock_observability_client.get_automation_jobs_export_csv.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)

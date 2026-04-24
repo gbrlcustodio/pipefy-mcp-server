@@ -13,6 +13,7 @@ from mcp.shared.memory import (
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tests.tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture
@@ -460,11 +461,12 @@ async def test_create_pipe_report_graphql_error_with_debug(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "invalid pipe" in tool_error_message(payload)
-    assert "codes=" in tool_error_message(
-        payload
-    ) or "correlation_id=" in tool_error_message(payload)
-    assert "PERMISSION_DENIED" in tool_error_message(payload)
+    # The ambiguity enricher rewrote the raw "invalid pipe" into a dual-meaning
+    # message; the debug suffix still carries the code + correlation id.
+    msg = tool_error_message(payload)
+    assert "may lack access" in msg
+    assert "codes=" in msg or "correlation_id=" in msg
+    assert "PERMISSION_DENIED" in msg
 
 
 @pytest.mark.anyio
@@ -969,7 +971,7 @@ async def test_get_organization_report_blank_report_id(report_session):
     async with report_session as session:
         result = await session.call_tool("get_organization_report", {"report_id": ""})
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -980,7 +982,7 @@ async def test_get_organization_reports_blank_organization_id(report_session):
             "get_organization_reports", {"organization_id": ""}
         )
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -989,7 +991,7 @@ async def test_get_pipe_report_export_blank_export_id(report_session):
     async with report_session as session:
         result = await session.call_tool("get_pipe_report_export", {"export_id": ""})
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1000,7 +1002,7 @@ async def test_get_organization_report_export_blank_export_id(report_session):
             "get_organization_report_export", {"export_id": ""}
         )
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1011,7 +1013,7 @@ async def test_create_pipe_report_blank_pipe_id(report_session):
             "create_pipe_report", {"pipe_id": "", "name": "x"}
         )
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1033,7 +1035,7 @@ async def test_update_pipe_report_blank_report_id(report_session):
     async with report_session as session:
         result = await session.call_tool("update_pipe_report", {"report_id": ""})
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1045,7 +1047,7 @@ async def test_create_organization_report_blank_organization_id(report_session):
             {"organization_id": "", "name": "x", "pipe_ids": ["1"]},
         )
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1070,7 +1072,7 @@ async def test_update_organization_report_blank_report_id(report_session):
             "update_organization_report", {"report_id": ""}
         )
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1081,7 +1083,7 @@ async def test_export_pipe_report_blank_pipe_id(report_session):
             "export_pipe_report", {"pipe_id": "", "pipe_report_id": "x"}
         )
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1092,7 +1094,7 @@ async def test_export_pipe_report_blank_pipe_report_id(report_session):
             "export_pipe_report", {"pipe_id": "x", "pipe_report_id": ""}
         )
 
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 ## ---------------------------------------------------------------------------
@@ -1191,7 +1193,7 @@ async def test_get_organization_report_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "org not found" in tool_error_message(payload)
+    assert "Organization report not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1229,7 +1231,7 @@ async def test_get_pipe_report_export_graphql_error(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "export not found" in tool_error_message(payload)
+    assert "Pipe report not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

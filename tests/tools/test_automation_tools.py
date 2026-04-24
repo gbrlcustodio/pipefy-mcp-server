@@ -13,6 +13,7 @@ from mcp.shared.memory import (
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.automation_tools import AutomationTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tests.tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture
@@ -120,7 +121,7 @@ async def test_get_automation_rejects_empty_automation_id(
         result = await session.call_tool("get_automation", {"automation_id": ""})
 
     mock_automation_client.get_automation.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -147,7 +148,7 @@ async def test_get_automations_rejects_empty_string_filters(
         )
 
     mock_automation_client.get_automations.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -702,7 +703,7 @@ async def test_simulate_automation_rejects_invalid_pipe_id(
         )
 
     mock_automation_client.simulate_automation.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -915,8 +916,13 @@ async def test_create_automation_cross_pipe_permission_denied_enriches_error(
         )
     payload = extract_payload(result)
     assert payload["success"] is False
+    # Cross-pipe permission-denied enrichment ran (prepends membership hint via
+    # the async enrich_permission_denied_error at the call site).
     assert "invite_members" in tool_error_message(payload)
-    assert "forbidden" in tool_error_message(payload)
+    # handle_automation_tool_graphql_error's ambiguity enricher also ran
+    # (rewrites the raw "forbidden" into a dual-meaning NOT_FOUND/denied hint).
+    assert "may lack access" in tool_error_message(payload)
+    assert payload["error"]["code"] == "PERMISSION_DENIED"
 
 
 @pytest.mark.anyio

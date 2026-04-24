@@ -79,8 +79,12 @@ class TableTools:
             Only tables with a match score of 70 or higher are included in results.
             Results are sorted by match score (best matches first).
 
-            If an org has more rows than ``first``, ``tables_has_next_page`` is set on that
-            org and in ``search_limits`` (cursor pagination is not yet exposed on this tool).
+            **Pagination.** The top-level ``pagination.has_more`` is always ``False``
+            because this tool does not accept ``after``; the outer call is not
+            paginable. Per-organization cursors live inside
+            ``data.organizations[i].tables_page_end_cursor`` (set when that org has
+            more rows than ``first``). The legacy ``search_limits.tables_has_next_page``
+            key remains as an aggregate hint.
 
             Args:
                 table_name: Optional table name to search for (case-insensitive partial match).
@@ -103,14 +107,16 @@ class TableTools:
                 return err
             raw = await client.search_tables(table_name, first=nfirst)
             if settings.pipefy.mcp_unified_envelope:
-                aggregate_has_more = bool(
-                    (raw.get("search_limits") or {}).get("tables_has_next_page")
-                )
+                # The outer call is not paginable (no ``after`` argument), so
+                # ``has_more=False`` is the honest signal. Agents that need to
+                # detect "more rows exist somewhere" check
+                # ``data.search_limits.tables_has_next_page`` or the per-org
+                # ``tables_page_end_cursor`` fields.
                 return tool_success(
                     data=raw,
                     message="Tables search retrieved.",
                     pagination={
-                        "has_more": aggregate_has_more,
+                        "has_more": False,
                         "end_cursor": None,
                         "page_size": nfirst,
                     },

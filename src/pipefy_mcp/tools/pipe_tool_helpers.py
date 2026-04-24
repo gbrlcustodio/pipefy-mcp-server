@@ -24,7 +24,12 @@ class UserCancelledError(Exception):
     """Raised when a user cancels an interactive flow."""
 
 
-class AddCardCommentSuccessPayload(TypedDict):
+# The ``Legacy*SuccessPayload`` TypedDicts below describe the flag=false shape
+# only. Under the default ``PIPEFY_MCP_UNIFIED_ENVELOPE=true``, helpers return
+# ``ToolSuccessPayload`` instead (see ADR-0001).
+
+
+class LegacyAddCardCommentSuccessPayload(TypedDict):
     success: Literal[True]
     comment_id: str
 
@@ -35,11 +40,11 @@ class AddCardCommentErrorPayload(TypedDict):
 
 
 AddCardCommentPayload = (
-    AddCardCommentSuccessPayload | ToolSuccessPayload | AddCardCommentErrorPayload
+    LegacyAddCardCommentSuccessPayload | ToolSuccessPayload | AddCardCommentErrorPayload
 )
 
 
-class UpdateCommentSuccessPayload(TypedDict):
+class LegacyUpdateCommentSuccessPayload(TypedDict):
     success: Literal[True]
     comment_id: str
 
@@ -50,11 +55,11 @@ class UpdateCommentErrorPayload(TypedDict):
 
 
 UpdateCommentPayload = (
-    UpdateCommentSuccessPayload | ToolSuccessPayload | UpdateCommentErrorPayload
+    LegacyUpdateCommentSuccessPayload | ToolSuccessPayload | UpdateCommentErrorPayload
 )
 
 
-class DeleteCommentSuccessPayload(TypedDict):
+class LegacyDeleteCommentSuccessPayload(TypedDict):
     success: Literal[True]
 
 
@@ -65,13 +70,13 @@ class DeleteCommentErrorPayload(TypedDict):
 
 DeleteCommentPayload = (
     DestructivePreviewPayload
-    | DeleteCommentSuccessPayload
+    | LegacyDeleteCommentSuccessPayload
     | ToolSuccessPayload
     | DeleteCommentErrorPayload
 )
 
 
-class DeleteCardSuccessPayload(TypedDict):
+class LegacyDeleteCardSuccessPayload(TypedDict):
     success: Literal[True]
     card_id: str | int
     card_title: str
@@ -87,7 +92,7 @@ class DeleteCardErrorPayload(TypedDict):
 DeleteCardPayload = (
     DestructivePreviewPayload
     | DestructiveCancelledPayload
-    | DeleteCardSuccessPayload
+    | LegacyDeleteCardSuccessPayload
     | ToolSuccessPayload
     | DeleteCardErrorPayload
 )
@@ -408,18 +413,18 @@ def map_delete_card_error_to_message(
 __all__ = [
     "AddCardCommentErrorPayload",
     "AddCardCommentPayload",
-    "AddCardCommentSuccessPayload",
     "DeleteCardErrorPayload",
     "DeleteCardPayload",
-    "DeleteCardSuccessPayload",
     "DeleteCommentErrorPayload",
     "DeleteCommentPayload",
-    "DeleteCommentSuccessPayload",
     "FIND_CARDS_EMPTY_MESSAGE",
+    "LegacyAddCardCommentSuccessPayload",
+    "LegacyDeleteCardSuccessPayload",
+    "LegacyDeleteCommentSuccessPayload",
+    "LegacyUpdateCommentSuccessPayload",
     "find_label_dependents",
     "UpdateCommentErrorPayload",
     "UpdateCommentPayload",
-    "UpdateCommentSuccessPayload",
     "UserCancelledError",
     "build_add_card_comment_error_payload",
     "build_add_card_comment_success_payload",

@@ -41,8 +41,13 @@ def validate_page_size(
     integer input returns ``(n, None)``. On invalid input returns
     ``(0, error_dict)``; return that dict from the tool unchanged.
 
+    String digits (e.g. ``"100"``) are accepted and coerced to ``int`` on
+    purpose — some MCP clients pass scalar arguments as strings. Anything that
+    ``int(...)`` cannot parse yields an ``INVALID_ARGUMENTS`` error.
+
     Args:
-        first: The requested page size, or None to use the default.
+        first: The requested page size, or None to use the default. Accepts
+            ``int`` or a digit-string parseable by ``int(...)``.
         arg_name: Name of the tool argument (appears in the error message to
             help agents fix their call). Default "first".
         max_size: Upper bound. Defaults to ``MAX_PAGE_SIZE``; tools with an

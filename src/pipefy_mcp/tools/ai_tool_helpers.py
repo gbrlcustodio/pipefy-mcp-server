@@ -35,46 +35,51 @@ class ValidateAiAutomationPromptPayload(TypedDict):
     field_map: dict[str, str]
 
 
-class CreateAiAutomationSuccessPayload(TypedDict):
+# The ``Legacy*SuccessPayload`` TypedDicts below describe the flag=false shape
+# only. Under the default ``PIPEFY_MCP_UNIFIED_ENVELOPE=true``, helpers return
+# ``ToolSuccessPayload`` instead (see ADR-0001).
+
+
+class LegacyCreateAiAutomationSuccessPayload(TypedDict):
     success: Literal[True]
     automation_id: str
     message: str
 
 
-class UpdateAiAutomationSuccessPayload(TypedDict):
+class LegacyUpdateAiAutomationSuccessPayload(TypedDict):
     success: Literal[True]
     automation_id: str
     message: str
 
 
-class CreateAiAgentSuccessPayload(TypedDict):
+class LegacyCreateAiAgentSuccessPayload(TypedDict):
     success: Literal[True]
     agent_uuid: str
     message: str
 
 
-class UpdateAiAgentSuccessPayload(TypedDict):
+class LegacyUpdateAiAgentSuccessPayload(TypedDict):
     success: Literal[True]
     agent_uuid: str
     message: str
 
 
-class ToggleAiAgentStatusSuccessPayload(TypedDict):
+class LegacyToggleAiAgentStatusSuccessPayload(TypedDict):
     success: Literal[True]
     message: str
 
 
-class GetAiAgentSuccessPayload(TypedDict):
+class LegacyGetAiAgentSuccessPayload(TypedDict):
     success: Literal[True]
     agent: AiAgentGraphPayload
 
 
-class GetAiAgentsSuccessPayload(TypedDict):
+class LegacyGetAiAgentsSuccessPayload(TypedDict):
     success: Literal[True]
     agents: list[AiAgentGraphPayload]
 
 
-class DeleteAiAgentSuccessPayload(TypedDict):
+class LegacyDeleteAiAgentSuccessPayload(TypedDict):
     success: Literal[True]
     message: str
 
@@ -772,15 +777,15 @@ def enrich_behavior_error(
 __all__ = [
     "AiToolErrorPayload",
     "CreateAgentPartialFailurePayload",
-    "CreateAiAgentSuccessPayload",
-    "CreateAiAutomationSuccessPayload",
-    "DeleteAiAgentSuccessPayload",
-    "GetAiAgentSuccessPayload",
-    "GetAiAgentsSuccessPayload",
     "KNOWN_AI_ACTION_TYPES",
-    "ToggleAiAgentStatusSuccessPayload",
-    "UpdateAiAgentSuccessPayload",
-    "UpdateAiAutomationSuccessPayload",
+    "LegacyCreateAiAgentSuccessPayload",
+    "LegacyCreateAiAutomationSuccessPayload",
+    "LegacyDeleteAiAgentSuccessPayload",
+    "LegacyGetAiAgentSuccessPayload",
+    "LegacyGetAiAgentsSuccessPayload",
+    "LegacyToggleAiAgentStatusSuccessPayload",
+    "LegacyUpdateAiAgentSuccessPayload",
+    "LegacyUpdateAiAutomationSuccessPayload",
     "ValidateAiAutomationPromptPayload",
     "build_ai_tool_error",
     "build_create_agent_partial_failure",

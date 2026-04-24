@@ -40,8 +40,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     AddCardCommentPayload,
     DeleteCardPayload,
     DeleteCommentPayload,
-    UpdateCommentErrorPayload,
-    UpdateCommentSuccessPayload,
+    UpdateCommentPayload,
     UserCancelledError,
     _filter_editable_field_definitions,
     _filter_fields_by_definitions,
@@ -320,7 +319,7 @@ class PipeTools:
         )
         async def update_comment(
             comment_id: PipefyId, text: str
-        ) -> UpdateCommentSuccessPayload | UpdateCommentErrorPayload:
+        ) -> UpdateCommentPayload:
             """Update an existing comment by its ID.
 
             Args:

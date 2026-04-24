@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
@@ -12,14 +12,18 @@ from pipefy_mcp.tools.graphql_error_helpers import (
 )
 from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_success
 
+# The ``Legacy*SuccessPayload`` TypedDicts below describe the flag=false shape
+# only. Under the default ``PIPEFY_MCP_UNIFIED_ENVELOPE=true``, helpers return
+# ``ToolSuccessPayload`` instead (see ADR-0001).
 
-class ReportReadSuccessPayload(TypedDict):
+
+class LegacyReportReadSuccessPayload(TypedDict):
     success: Literal[True]
     message: str
     data: dict[str, Any]
 
 
-class ReportMutationSuccessPayload(TypedDict):
+class LegacyReportMutationSuccessPayload(TypedDict):
     success: Literal[True]
     message: str
     result: dict[str, Any]
@@ -38,14 +42,7 @@ def build_report_read_success_payload(
     """
     if settings.pipefy.mcp_unified_envelope:
         return tool_success(data=data, message=message)
-    return cast(
-        ReportReadSuccessPayload,
-        {
-            "success": True,
-            "message": message,
-            "data": data,
-        },
-    )
+    return {"success": True, "message": message, "data": data}
 
 
 def build_report_mutation_success_payload(
@@ -61,10 +58,7 @@ def build_report_mutation_success_payload(
     """
     if settings.pipefy.mcp_unified_envelope:
         return tool_success(data=data, message=message)
-    return cast(
-        ReportMutationSuccessPayload,
-        {"success": True, "message": message, "result": data},
-    )
+    return {"success": True, "message": message, "result": data}
 
 
 def build_report_error_payload(*, message: str) -> dict[str, Any]:
@@ -97,8 +91,8 @@ def handle_report_tool_graphql_error(
 
 
 __all__ = [
-    "ReportMutationSuccessPayload",
-    "ReportReadSuccessPayload",
+    "LegacyReportMutationSuccessPayload",
+    "LegacyReportReadSuccessPayload",
     "build_report_error_payload",
     "build_report_mutation_success_payload",
     "build_report_read_success_payload",

@@ -50,17 +50,31 @@ def test_user_cancelled_error_can_be_raised_and_caught():
 
 
 @pytest.mark.unit
-def test_build_add_card_comment_success_payload_converts_comment_id_to_str():
-    """Success payload uses string comment_id."""
+def test_build_add_card_comment_success_payload_converts_comment_id_to_str(
+    legacy_envelope,
+):
+    """Legacy shape — success payload uses flat string comment_id."""
     out = build_add_card_comment_success_payload(comment_id=12345)
     assert out == {"success": True, "comment_id": "12345"}
 
 
 @pytest.mark.unit
-def test_build_add_card_comment_success_payload_accepts_str_comment_id():
-    """Success payload accepts string comment_id as-is."""
+def test_build_add_card_comment_success_payload_accepts_str_comment_id(
+    legacy_envelope,
+):
+    """Legacy shape — success payload accepts string comment_id as-is."""
     out = build_add_card_comment_success_payload(comment_id="c_abc")
     assert out == {"success": True, "comment_id": "c_abc"}
+
+
+@pytest.mark.unit
+def test_build_add_card_comment_success_payload_parametrized_flag(envelope_flag):
+    """Both flag states — flag-on wraps comment_id under ``data``; flag-off is flat."""
+    out = build_add_card_comment_success_payload(comment_id=42)
+    if envelope_flag:
+        assert out == {"success": True, "data": {"comment_id": "42"}}
+    else:
+        assert out == {"success": True, "comment_id": "42"}
 
 
 # =============================================================================
@@ -172,8 +186,8 @@ def test_build_add_card_comment_error_payload():
 
 
 @pytest.mark.unit
-def test_build_delete_card_success_payload():
-    """Success payload includes card and pipe info and confirmation message."""
+def test_build_delete_card_success_payload(legacy_envelope):
+    """Legacy shape — success payload includes flat card and pipe info."""
     out = build_delete_card_success_payload(
         card_id=99, card_title="My Card", pipe_name="My Pipe"
     )
@@ -181,6 +195,22 @@ def test_build_delete_card_success_payload():
     assert out["card_id"] == 99
     assert out["card_title"] == "My Card"
     assert out["pipe_name"] == "My Pipe"
+    assert "permanently deleted" in out["message"]
+
+
+@pytest.mark.unit
+def test_build_delete_card_success_payload_flag_on(unified_envelope):
+    """Unified shape — card fields move inside ``data``; message stays top-level."""
+    out = build_delete_card_success_payload(
+        card_id=99, card_title="My Card", pipe_name="My Pipe"
+    )
+    assert set(out.keys()) == {"success", "data", "message"}
+    assert out["success"] is True
+    assert out["data"] == {
+        "card_id": 99,
+        "card_title": "My Card",
+        "pipe_name": "My Pipe",
+    }
     assert "permanently deleted" in out["message"]
 
 

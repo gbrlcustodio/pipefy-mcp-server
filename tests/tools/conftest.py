@@ -4,6 +4,29 @@ import json
 
 import pytest
 
+from pipefy_mcp.settings import settings
+
+
+@pytest.fixture
+def legacy_envelope(monkeypatch):
+    """Disable unified envelope (``PIPEFY_MCP_UNIFIED_ENVELOPE`` off)."""
+    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", False)
+    return False
+
+
+@pytest.fixture
+def unified_envelope(monkeypatch):
+    """Enable unified envelope (explicit)."""
+    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", True)
+    return True
+
+
+@pytest.fixture(params=[True, False], ids=["flag-on", "flag-off"])
+def envelope_flag(request, monkeypatch):
+    """Runs the test twice: unified envelope on, then off."""
+    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", request.param)
+    return request.param
+
 
 def _extract_payload_impl(result):
     """Extract tool payload from CallToolResult across MCP SDK versions."""

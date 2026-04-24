@@ -8,8 +8,8 @@ All tools that return ``{"success": false, ...}`` should use
 * **Failure** - ``{"success": false, "error": {"message": str, "code"?: str, "details"?: dict}}``.
   Optional top-level fields (e.g. ``valid_destinations``) are allowed for tools
   that already expose extra context.
-* **Success** - remains tool-specific (flat fields or ``data``) until a follow-up
-  unification pass.
+* **Success** - use :func:`tool_success` for the unified shape; other tools may
+  still return legacy flat payloads.
 
 **User-visible text (N1):** Strings passed to :func:`tool_error` and other returned
 ``error.message`` (and equivalent warnings) use ASCII only: straight ``'`` / ``"``,
@@ -26,12 +26,25 @@ from typing import Any, Literal, Mapping
 
 from typing_extensions import NotRequired, TypedDict
 
+from pipefy_mcp.settings import settings
+
 __all__ = [
     "ToolErrorDetail",
     "ToolFailurePayload",
+    "ToolSuccessPayload",
+    "is_unified_envelope_enabled",
     "tool_error",
     "tool_error_message",
+    "tool_success",
 ]
+
+
+def is_unified_envelope_enabled() -> bool:
+    """Whether unified tool envelopes are enabled (``PIPEFY_MCP_UNIFIED_ENVELOPE``).
+
+    Read from settings at call time so tests and toggles apply without restart.
+    """
+    return settings.pipefy.mcp_unified_envelope
 
 
 class ToolErrorDetail(TypedDict):
@@ -47,6 +60,15 @@ class ToolFailurePayload(TypedDict):
 
     success: Literal[False]
     error: ToolErrorDetail
+
+
+class ToolSuccessPayload(TypedDict, total=False):
+    """``success: true`` with optional ``data``, ``message``, ``pagination``."""
+
+    success: Literal[True]
+    data: dict[str, Any]
+    message: str
+    pagination: dict[str, Any]
 
 
 def tool_error(
@@ -68,6 +90,30 @@ def tool_error(
     if details:
         err["details"] = details
     return {"success": False, "error": err}
+
+
+def tool_success(
+    data: dict[str, Any] | None = None,
+    *,
+    message: str | None = None,
+    pagination: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Canonical success payload. Optional keys omitted when args are ``None``.
+
+    Args:
+        data: Verbatim GraphQL subtree; keep query-root keys inside this dict.
+        message: Optional short human-readable summary.
+        pagination: Optional top-level pagination block (typically built by
+            :func:`pipefy_mcp.tools.pagination_helpers.build_pagination_info`).
+    """
+    payload: dict[str, Any] = {"success": True}
+    if data is not None:
+        payload["data"] = data
+    if message is not None:
+        payload["message"] = message
+    if pagination is not None:
+        payload["pagination"] = pagination
+    return payload
 
 
 def tool_error_message(payload: Mapping[str, Any]) -> str:

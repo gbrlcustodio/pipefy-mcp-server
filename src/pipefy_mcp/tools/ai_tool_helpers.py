@@ -14,7 +14,12 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     strip_internal_api_diagnostic_markers,
 )
-from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
+from pipefy_mcp.tools.tool_error_envelope import (
+    ToolErrorDetail,
+    is_unified_envelope_enabled,
+    tool_error,
+    tool_success,
+)
 
 if TYPE_CHECKING:
     from pipefy_mcp.services.pipefy import PipefyClient
@@ -30,46 +35,51 @@ class ValidateAiAutomationPromptPayload(TypedDict):
     field_map: dict[str, str]
 
 
-class CreateAiAutomationSuccessPayload(TypedDict):
+# The ``Legacy*SuccessPayload`` TypedDicts below describe the flag=false shape
+# only. Under the default ``PIPEFY_MCP_UNIFIED_ENVELOPE=true``, helpers return
+# ``ToolSuccessPayload`` instead (see ADR-0001).
+
+
+class LegacyCreateAiAutomationSuccessPayload(TypedDict):
     success: Literal[True]
     automation_id: str
     message: str
 
 
-class UpdateAiAutomationSuccessPayload(TypedDict):
+class LegacyUpdateAiAutomationSuccessPayload(TypedDict):
     success: Literal[True]
     automation_id: str
     message: str
 
 
-class CreateAiAgentSuccessPayload(TypedDict):
+class LegacyCreateAiAgentSuccessPayload(TypedDict):
     success: Literal[True]
     agent_uuid: str
     message: str
 
 
-class UpdateAiAgentSuccessPayload(TypedDict):
+class LegacyUpdateAiAgentSuccessPayload(TypedDict):
     success: Literal[True]
     agent_uuid: str
     message: str
 
 
-class ToggleAiAgentStatusSuccessPayload(TypedDict):
+class LegacyToggleAiAgentStatusSuccessPayload(TypedDict):
     success: Literal[True]
     message: str
 
 
-class GetAiAgentSuccessPayload(TypedDict):
+class LegacyGetAiAgentSuccessPayload(TypedDict):
     success: Literal[True]
     agent: AiAgentGraphPayload
 
 
-class GetAiAgentsSuccessPayload(TypedDict):
+class LegacyGetAiAgentsSuccessPayload(TypedDict):
     success: Literal[True]
     agents: list[AiAgentGraphPayload]
 
 
-class DeleteAiAgentSuccessPayload(TypedDict):
+class LegacyDeleteAiAgentSuccessPayload(TypedDict):
     success: Literal[True]
     message: str
 
@@ -87,89 +97,99 @@ class CreateAgentPartialFailurePayload(TypedDict):
 
 def build_create_automation_success(
     *, automation_id: str, message: str
-) -> CreateAiAutomationSuccessPayload:
+) -> dict[str, Any]:
     """Successful AI automation create.
 
     Args:
         automation_id: New automation id from the API.
         message: Short summary for the client.
     """
+    if is_unified_envelope_enabled():
+        return tool_success(data={"automation_id": automation_id}, message=message)
     return {"success": True, "automation_id": automation_id, "message": message}
 
 
 def build_update_automation_success(
     *, automation_id: str, message: str
-) -> UpdateAiAutomationSuccessPayload:
+) -> dict[str, Any]:
     """Successful AI automation update.
 
     Args:
         automation_id: Target automation id.
         message: Short summary for the client.
     """
+    if is_unified_envelope_enabled():
+        return tool_success(data={"automation_id": automation_id}, message=message)
     return {"success": True, "automation_id": automation_id, "message": message}
 
 
-def build_create_agent_success(
-    *, agent_uuid: str, message: str
-) -> CreateAiAgentSuccessPayload:
+def build_create_agent_success(*, agent_uuid: str, message: str) -> dict[str, Any]:
     """Successful AI agent create.
 
     Args:
         agent_uuid: New agent UUID from the API.
         message: Short summary for the client.
     """
+    if is_unified_envelope_enabled():
+        return tool_success(data={"agent_uuid": agent_uuid}, message=message)
     return {"success": True, "agent_uuid": agent_uuid, "message": message}
 
 
-def build_update_agent_success(
-    *, agent_uuid: str, message: str
-) -> UpdateAiAgentSuccessPayload:
+def build_update_agent_success(*, agent_uuid: str, message: str) -> dict[str, Any]:
     """Successful AI agent update.
 
     Args:
         agent_uuid: Target agent UUID.
         message: Short summary for the client.
     """
+    if is_unified_envelope_enabled():
+        return tool_success(data={"agent_uuid": agent_uuid}, message=message)
     return {"success": True, "agent_uuid": agent_uuid, "message": message}
 
 
-def build_toggle_agent_status_success(
-    *, message: str
-) -> ToggleAiAgentStatusSuccessPayload:
+def build_toggle_agent_status_success(*, message: str) -> dict[str, Any]:
     """Successful agent enable/disable.
 
     Args:
         message: Short summary for the client.
     """
+    if is_unified_envelope_enabled():
+        return tool_success(message=message)
     return {"success": True, "message": message}
 
 
-def build_get_agent_success(agent: AiAgentGraphPayload) -> GetAiAgentSuccessPayload:
+def build_get_agent_success(agent: AiAgentGraphPayload) -> dict[str, Any]:
     """Single-agent read envelope.
 
     Args:
         agent: ``aiAgent`` subtree (may be empty dict when missing).
     """
+    if is_unified_envelope_enabled():
+        return tool_success(data={"agent": agent})
     return {"success": True, "agent": agent}
 
 
 def build_get_agents_success(
     agents: list[AiAgentGraphPayload],
-) -> GetAiAgentsSuccessPayload:
+) -> dict[str, Any]:
     """List-agents read envelope.
 
     Args:
         agents: Unwrapped connection nodes for the repo.
     """
+    if is_unified_envelope_enabled():
+        return tool_success(data={"agents": agents})
     return {"success": True, "agents": agents}
 
 
-def build_delete_agent_success(*, message: str) -> DeleteAiAgentSuccessPayload:
+def build_delete_agent_success(*, message: str) -> dict[str, Any]:
     """Successful AI agent delete.
 
     Args:
         message: Short summary for the client.
     """
+    if is_unified_envelope_enabled():
+        return tool_success(message=message)
     return {"success": True, "message": message}
 
 
@@ -221,9 +241,6 @@ def build_create_agent_partial_failure(
     return cast(CreateAgentPartialFailurePayload, body)
 
 
-# --- Error enrichment for behavior-level failures ---
-
-# Patterns the Pipefy API returns that map to actionable advice.
 _BEHAVIOR_ERROR_EMPTY_AFTER_SANITIZE = (
     "The AI behavior request failed. Check behaviors and pipe context, then retry."
 )
@@ -277,9 +294,6 @@ def _summarize_behaviors(behaviors: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-# --- Behavior validation against pipe context ---
-
-# actionTypes that the Pipefy AI behavior system recognizes.
 KNOWN_AI_ACTION_TYPES = frozenset(
     {
         "create_card",
@@ -339,7 +353,6 @@ def validate_behaviors_against_pipe(
         abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
         attrs = abp.get("actionsAttributes") or abp.get("actions_attributes") or []
 
-        # Check eventParams phase references
         ep = b.get("eventParams") or b.get("event_params") or {}
         to_phase = ep.get("to_phase_id") or ep.get("toPhaseId")
         if to_phase and str(to_phase) not in pipe_phase_ids:
@@ -364,7 +377,6 @@ def validate_behaviors_against_pipe(
                 elif unknown_action_types == "warning":
                     warnings.append(msg)
 
-            # Check destinationPhaseId for move_card
             if action_type == "move_card":
                 dest = metadata.get("destinationPhaseId", "")
                 if dest and str(dest) not in pipe_phase_ids:
@@ -373,11 +385,6 @@ def validate_behaviors_against_pipe(
                         f'destinationPhaseId "{dest}" not found in pipe phases.'
                     )
 
-            # Check fieldsAttributes fieldId references.
-            # Same-pipe actions check against pipe_field_ids; cross-pipe actions
-            # check against cross_pipe_field_ids when available.
-            # Skip fieldId validation for create_table_record (table fields) and
-            # send_email_template (no pipe field list; pipeId omission would mis-route checks).
             if action_type not in ("create_table_record", "send_email_template"):
                 action_pipe = str(metadata.get("pipeId", ""))
                 targets_source = not action_pipe or action_pipe == pipe_id
@@ -416,7 +423,6 @@ def validate_behaviors_against_pipe(
                     "against this pipe. Verify IDs with get_table or get_table_record."
                 )
 
-            # Check create_connected_card relation (skipped when related_pipe_ids is None)
             if action_type == "create_connected_card" and related_pipe_ids is not None:
                 target_pipe = metadata.get("pipeId", "")
                 if target_pipe and str(target_pipe) not in related_pipe_ids:
@@ -428,9 +434,6 @@ def validate_behaviors_against_pipe(
                     )
 
     return problems, warnings
-
-
-# --- Slug → numeric fieldId resolution ---
 
 
 def _extract_slug_field_ids_by_pipe(
@@ -757,15 +760,15 @@ def enrich_behavior_error(
 __all__ = [
     "AiToolErrorPayload",
     "CreateAgentPartialFailurePayload",
-    "CreateAiAgentSuccessPayload",
-    "CreateAiAutomationSuccessPayload",
-    "DeleteAiAgentSuccessPayload",
-    "GetAiAgentSuccessPayload",
-    "GetAiAgentsSuccessPayload",
     "KNOWN_AI_ACTION_TYPES",
-    "ToggleAiAgentStatusSuccessPayload",
-    "UpdateAiAgentSuccessPayload",
-    "UpdateAiAutomationSuccessPayload",
+    "LegacyCreateAiAgentSuccessPayload",
+    "LegacyCreateAiAutomationSuccessPayload",
+    "LegacyDeleteAiAgentSuccessPayload",
+    "LegacyGetAiAgentSuccessPayload",
+    "LegacyGetAiAgentsSuccessPayload",
+    "LegacyToggleAiAgentStatusSuccessPayload",
+    "LegacyUpdateAiAgentSuccessPayload",
+    "LegacyUpdateAiAutomationSuccessPayload",
     "ValidateAiAutomationPromptPayload",
     "build_ai_tool_error",
     "build_create_agent_partial_failure",

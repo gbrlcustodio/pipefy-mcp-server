@@ -11,14 +11,25 @@ from pipefy_mcp.tools.destructive_tool_guard import (
     DestructivePreviewPayload,
 )
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
-from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
+from pipefy_mcp.tools.tool_error_envelope import (
+    ToolErrorDetail,
+    ToolSuccessPayload,
+    is_unified_envelope_enabled,
+    tool_error,
+    tool_success,
+)
 
 
 class UserCancelledError(Exception):
     """Raised when a user cancels an interactive flow."""
 
 
-class AddCardCommentSuccessPayload(TypedDict):
+# The ``Legacy*SuccessPayload`` TypedDicts below describe the flag=false shape
+# only. Under the default ``PIPEFY_MCP_UNIFIED_ENVELOPE=true``, helpers return
+# ``ToolSuccessPayload`` instead (see ADR-0001).
+
+
+class LegacyAddCardCommentSuccessPayload(TypedDict):
     success: Literal[True]
     comment_id: str
 
@@ -28,10 +39,12 @@ class AddCardCommentErrorPayload(TypedDict):
     error: ToolErrorDetail
 
 
-AddCardCommentPayload = AddCardCommentSuccessPayload | AddCardCommentErrorPayload
+AddCardCommentPayload = (
+    LegacyAddCardCommentSuccessPayload | ToolSuccessPayload | AddCardCommentErrorPayload
+)
 
 
-class UpdateCommentSuccessPayload(TypedDict):
+class LegacyUpdateCommentSuccessPayload(TypedDict):
     success: Literal[True]
     comment_id: str
 
@@ -41,10 +54,12 @@ class UpdateCommentErrorPayload(TypedDict):
     error: ToolErrorDetail
 
 
-UpdateCommentPayload = UpdateCommentSuccessPayload | UpdateCommentErrorPayload
+UpdateCommentPayload = (
+    LegacyUpdateCommentSuccessPayload | ToolSuccessPayload | UpdateCommentErrorPayload
+)
 
 
-class DeleteCommentSuccessPayload(TypedDict):
+class LegacyDeleteCommentSuccessPayload(TypedDict):
     success: Literal[True]
 
 
@@ -54,11 +69,14 @@ class DeleteCommentErrorPayload(TypedDict):
 
 
 DeleteCommentPayload = (
-    DestructivePreviewPayload | DeleteCommentSuccessPayload | DeleteCommentErrorPayload
+    DestructivePreviewPayload
+    | LegacyDeleteCommentSuccessPayload
+    | ToolSuccessPayload
+    | DeleteCommentErrorPayload
 )
 
 
-class DeleteCardSuccessPayload(TypedDict):
+class LegacyDeleteCardSuccessPayload(TypedDict):
     success: Literal[True]
     card_id: str | int
     card_title: str
@@ -74,7 +92,8 @@ class DeleteCardErrorPayload(TypedDict):
 DeleteCardPayload = (
     DestructivePreviewPayload
     | DestructiveCancelledPayload
-    | DeleteCardSuccessPayload
+    | LegacyDeleteCardSuccessPayload
+    | ToolSuccessPayload
     | DeleteCardErrorPayload
 )
 
@@ -135,15 +154,16 @@ async def find_label_dependents(
     }
 
 
-def build_add_card_comment_success_payload(
-    *, comment_id: object
-) -> AddCardCommentSuccessPayload:
+def build_add_card_comment_success_payload(*, comment_id: object) -> dict[str, Any]:
     """Recorded comment id.
 
     Args:
         comment_id: New comment id from the API (coerced to str).
     """
-    return {"success": True, "comment_id": str(comment_id)}
+    cid = str(comment_id)
+    if is_unified_envelope_enabled():
+        return tool_success(data={"comment_id": cid})
+    return {"success": True, "comment_id": cid}
 
 
 # Markers for mapping GraphQL errors to user-friendly messages.
@@ -250,15 +270,16 @@ def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentError
     return cast(AddCardCommentErrorPayload, _build_comment_error_payload(message))
 
 
-def build_update_comment_success_payload(
-    *, comment_id: object
-) -> UpdateCommentSuccessPayload:
+def build_update_comment_success_payload(*, comment_id: object) -> dict[str, Any]:
     """Updated comment id.
 
     Args:
         comment_id: Updated comment id (coerced to str).
     """
-    return {"success": True, "comment_id": str(comment_id)}
+    cid = str(comment_id)
+    if is_unified_envelope_enabled():
+        return tool_success(data={"comment_id": cid})
+    return {"success": True, "comment_id": cid}
 
 
 def build_update_comment_error_payload(*, message: str) -> UpdateCommentErrorPayload:
@@ -270,8 +291,10 @@ def build_update_comment_error_payload(*, message: str) -> UpdateCommentErrorPay
     return cast(UpdateCommentErrorPayload, _build_comment_error_payload(message))
 
 
-def build_delete_comment_success_payload() -> DeleteCommentSuccessPayload:
+def build_delete_comment_success_payload() -> dict[str, Any]:
     """Minimal success body after delete_comment."""
+    if is_unified_envelope_enabled():
+        return tool_success()
     return {"success": True}
 
 
@@ -286,7 +309,7 @@ def build_delete_comment_error_payload(*, message: str) -> DeleteCommentErrorPay
 
 def build_delete_card_success_payload(
     *, card_id: str | int, card_title: str, pipe_name: str
-) -> DeleteCardSuccessPayload:
+) -> dict[str, Any]:
     """Confirmed card deletion.
 
     Args:
@@ -294,15 +317,25 @@ def build_delete_card_success_payload(
         card_title: Card title for messaging.
         pipe_name: Pipe name for messaging.
     """
+    message = (
+        f"Card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}' "
+        "has been permanently deleted."
+    )
+    if is_unified_envelope_enabled():
+        return tool_success(
+            data={
+                "card_id": card_id,
+                "card_title": card_title,
+                "pipe_name": pipe_name,
+            },
+            message=message,
+        )
     return {
         "success": True,
         "card_id": card_id,
         "card_title": card_title,
         "pipe_name": pipe_name,
-        "message": (
-            f"Card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}' "
-            "has been permanently deleted."
-        ),
+        "message": message,
     }
 
 
@@ -380,18 +413,18 @@ def map_delete_card_error_to_message(
 __all__ = [
     "AddCardCommentErrorPayload",
     "AddCardCommentPayload",
-    "AddCardCommentSuccessPayload",
     "DeleteCardErrorPayload",
     "DeleteCardPayload",
-    "DeleteCardSuccessPayload",
     "DeleteCommentErrorPayload",
     "DeleteCommentPayload",
-    "DeleteCommentSuccessPayload",
     "FIND_CARDS_EMPTY_MESSAGE",
+    "LegacyAddCardCommentSuccessPayload",
+    "LegacyDeleteCardSuccessPayload",
+    "LegacyDeleteCommentSuccessPayload",
+    "LegacyUpdateCommentSuccessPayload",
     "find_label_dependents",
     "UpdateCommentErrorPayload",
     "UpdateCommentPayload",
-    "UpdateCommentSuccessPayload",
     "UserCancelledError",
     "build_add_card_comment_error_payload",
     "build_add_card_comment_success_payload",

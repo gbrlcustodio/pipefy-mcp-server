@@ -81,6 +81,15 @@ class PipefySettings(BaseModel):
         ),
     )
 
+    mcp_unified_envelope: bool = Field(
+        default=True,
+        description=(
+            "When true (env: PIPEFY_MCP_UNIFIED_ENVELOPE), migrated MCP tools return "
+            "{success, data, message?, pagination?}. When false, legacy shapes. "
+            "Read at call time, not cached at import."
+        ),
+    )
+
     @field_validator("service_account_ids", mode="before")
     @classmethod
     def _coerce_service_account_ids(cls, value: object) -> list[str]:

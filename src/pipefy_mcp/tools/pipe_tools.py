@@ -27,6 +27,10 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     with_debug_suffix,
 )
 from pipefy_mcp.tools.mcp_capabilities import supports_elicitation
+from pipefy_mcp.tools.pagination_helpers import (
+    build_pagination_info,
+    validate_page_size,
+)
 from pipefy_mcp.tools.phase_transition_helpers import (
     try_enrich_move_card_to_phase_failure,
 )
@@ -35,8 +39,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     AddCardCommentPayload,
     DeleteCardPayload,
     DeleteCommentPayload,
-    UpdateCommentErrorPayload,
-    UpdateCommentSuccessPayload,
+    UpdateCommentPayload,
     UserCancelledError,
     _filter_editable_field_definitions,
     _filter_fields_by_definitions,
@@ -58,7 +61,12 @@ from pipefy_mcp.tools.relation_tool_helpers import (
     build_relation_mutation_success_payload,
     handle_relation_tool_graphql_error,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
+from pipefy_mcp.tools.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_error,
+    tool_error_message,
+    tool_success,
+)
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 # Key for findCards response; used when reading edges and adding empty message.
@@ -311,7 +319,7 @@ class PipeTools:
         )
         async def update_comment(
             comment_id: PipefyId, text: str
-        ) -> UpdateCommentSuccessPayload | UpdateCommentErrorPayload:
+        ) -> UpdateCommentPayload:
             """Update an existing comment by its ID.
 
             Args:
@@ -506,9 +514,15 @@ class PipeTools:
                 search: Optional search filters (title, assignee_ids, label_ids,
                     include_done, etc.). See ``CardSearch`` for all supported keys.
                 include_fields: If True, include each card's custom fields (name, value) in the response.
-                first: Max cards to return per page.
+                first: Max cards to return per page (1-500).
                 after: Cursor for fetching the next page (from ``pageInfo.endCursor`` of a previous call).
             """
+            if first is not None:
+                validated_first, err = validate_page_size(first)
+                if err is not None:
+                    return err
+                first = validated_first
+
             merged_search: CardSearch = copy_card_search(search) if search else {}
             if title:
                 merged_search["title"] = title
@@ -520,13 +534,28 @@ class PipeTools:
             await ctx.debug(
                 f"Getting cards for pipe {pipe_id} (include_fields={include_fields}, search={effective_search})"
             )
-            return await client.get_cards(
+            raw = await client.get_cards(
                 pipe_id,
                 effective_search,
                 include_fields=include_fields,
                 first=first,
                 after=after,
             )
+            if is_unified_envelope_enabled():
+                pagination = None
+                if first is not None:
+                    page_info = (
+                        (raw.get("cards") or {}).get("pageInfo")
+                        if isinstance(raw, dict)
+                        else None
+                    )
+                    pagination = build_pagination_info(
+                        page_info=page_info, page_size=first
+                    )
+                return tool_success(
+                    data=raw, message="Cards retrieved.", pagination=pagination
+                )
+            return raw
 
         @mcp.tool(
             annotations=ToolAnnotations(

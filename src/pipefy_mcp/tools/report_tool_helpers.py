@@ -2,23 +2,31 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error
+from pipefy_mcp.tools.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_error,
+    tool_success,
+)
+
+# The ``Legacy*SuccessPayload`` TypedDicts below describe the flag=false shape
+# only. Under the default ``PIPEFY_MCP_UNIFIED_ENVELOPE=true``, helpers return
+# ``ToolSuccessPayload`` instead (see ADR-0001).
 
 
-class ReportReadSuccessPayload(TypedDict):
+class LegacyReportReadSuccessPayload(TypedDict):
     success: Literal[True]
     message: str
     data: dict[str, Any]
 
 
-class ReportMutationSuccessPayload(TypedDict):
+class LegacyReportMutationSuccessPayload(TypedDict):
     success: Literal[True]
     message: str
     result: dict[str, Any]
@@ -28,38 +36,32 @@ def build_report_read_success_payload(
     data: dict[str, Any],
     *,
     message: str,
-) -> ReportReadSuccessPayload:
+) -> dict[str, Any]:
     """``success``, ``message``, and GraphQL ``data`` for read tools.
 
     Args:
         data: Subtree returned by the report query.
         message: Short summary for the client.
     """
-    return cast(
-        ReportReadSuccessPayload,
-        {
-            "success": True,
-            "message": message,
-            "data": data,
-        },
-    )
+    if is_unified_envelope_enabled():
+        return tool_success(data=data, message=message)
+    return {"success": True, "message": message, "data": data}
 
 
 def build_report_mutation_success_payload(
     *,
     message: str,
     data: dict[str, Any],
-) -> ReportMutationSuccessPayload:
+) -> dict[str, Any]:
     """``success``, ``message``, and mutation ``result``.
 
     Args:
         message: Short summary for the client.
-        data: Raw mutation payload (stored as ``result``).
+        data: Mutation payload (legacy path exposes it as ``result``).
     """
-    return cast(
-        ReportMutationSuccessPayload,
-        {"success": True, "message": message, "result": data},
-    )
+    if is_unified_envelope_enabled():
+        return tool_success(data=data, message=message)
+    return {"success": True, "message": message, "result": data}
 
 
 def build_report_error_payload(*, message: str) -> dict[str, Any]:
@@ -92,8 +94,8 @@ def handle_report_tool_graphql_error(
 
 
 __all__ = [
-    "ReportMutationSuccessPayload",
-    "ReportReadSuccessPayload",
+    "LegacyReportMutationSuccessPayload",
+    "LegacyReportReadSuccessPayload",
     "build_report_error_payload",
     "build_report_mutation_success_payload",
     "build_report_read_success_payload",

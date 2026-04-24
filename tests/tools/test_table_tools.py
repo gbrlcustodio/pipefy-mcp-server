@@ -124,8 +124,9 @@ async def test_get_tables_graphql_error(
 @pytest.mark.anyio
 @pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_success_and_pagination(
-    table_session, mock_table_client, extract_payload
+    table_session, mock_table_client, extract_payload, legacy_envelope
 ):
+    """Flag=false — legacy pagination shape (pageInfo camelCase)."""
     mock_table_client.get_table_records.return_value = {
         "table_records": {
             "edges": [],
@@ -146,6 +147,34 @@ async def test_get_table_records_success_and_pagination(
     assert payload["success"] is True
     assert payload["pagination"]["hasNextPage"] is True
     assert payload["pagination"]["endCursor"] == "n1"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_get_table_records_unified_envelope_pagination(
+    table_session, mock_table_client, extract_payload, unified_envelope
+):
+    """Flag=true — pagination block uses snake_case keys and includes page_size."""
+    mock_table_client.get_table_records.return_value = {
+        "table_records": {
+            "edges": [],
+            "pageInfo": {"hasNextPage": True, "endCursor": "n1"},
+        }
+    }
+    async with table_session as session:
+        result = await session.call_tool(
+            "get_table_records",
+            {"table_id": "t1", "first": DEFAULT_FIRST},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["pagination"] == {
+        "has_more": True,
+        "end_cursor": "n1",
+        "page_size": DEFAULT_FIRST,
+    }
+    assert "data" in payload
+    assert "table_records" in payload["data"]
 
 
 @pytest.mark.anyio
@@ -851,7 +880,7 @@ async def test_search_tables_with_name_passes_it_to_client(
 @pytest.mark.anyio
 @pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_search_tables_returns_client_response(
-    table_session, mock_table_client, extract_payload
+    table_session, mock_table_client, extract_payload, legacy_envelope
 ):
     expected = {
         "organizations": [
@@ -869,6 +898,71 @@ async def test_search_tables_returns_client_response(
 
     payload = extract_payload(result)
     assert payload == expected
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_search_tables_unified_envelope(
+    table_session, mock_table_client, extract_payload, unified_envelope
+):
+    """Flag=true — raw GraphQL wraps under ``data`` and top-level pagination is added."""
+    expected = {
+        "organizations": [
+            {"id": "org1", "name": "Acme", "tables": []},
+        ],
+        "search_limits": {"tables_first": 100, "tables_has_next_page": False},
+    }
+    mock_table_client.search_tables.return_value = expected
+
+    async with table_session as session:
+        result = await session.call_tool("search_tables", {"table_name": "Clients"})
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"] == expected
+    assert payload["pagination"] == {
+        "has_more": False,
+        "end_cursor": None,
+        "page_size": 100,
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_search_tables_unified_has_more_stays_false_even_with_aggregate_has_next_page(
+    table_session, mock_table_client, extract_payload, unified_envelope
+):
+    """Flag=true, aggregate ``tables_has_next_page=True`` — top-level ``has_more`` stays False.
+
+    The outer tool does not accept ``after`` and is therefore not paginable;
+    publishing ``has_more=True`` with ``end_cursor=None`` would mislead agents
+    into looping on a null cursor. Per-org cursors inside ``data`` carry the
+    real signal (see DD-02).
+    """
+    response = {
+        "organizations": [
+            {
+                "id": "org1",
+                "name": "Acme",
+                "tables": [],
+                "tables_has_next_page": True,
+                "tables_page_end_cursor": "org1-cursor-abc",
+            }
+        ],
+        "search_limits": {"tables_first": 100, "tables_has_next_page": True},
+    }
+    mock_table_client.search_tables.return_value = response
+    async with table_session as session:
+        result = await session.call_tool("search_tables", {"table_name": "Clients"})
+    payload = extract_payload(result)
+    assert payload["pagination"]["has_more"] is False
+    assert payload["pagination"]["end_cursor"] is None
+    # Per-org cursors are preserved inside ``data`` for agents that need them.
+    assert payload["data"]["search_limits"]["tables_has_next_page"] is True
+    assert (
+        payload["data"]["organizations"][0]["tables_page_end_cursor"]
+        == "org1-cursor-abc"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -941,7 +1035,7 @@ async def test_get_table_records_invalid_table_id(
 @pytest.mark.anyio
 @pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_first_too_small(
-    table_session, mock_table_client, extract_payload
+    table_session, mock_table_client, extract_payload, envelope_flag
 ):
     async with table_session as session:
         result = await session.call_tool(
@@ -951,13 +1045,14 @@ async def test_get_table_records_first_too_small(
     mock_table_client.get_table_records.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "first" in tool_error_message(payload)
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert payload["error"]["details"] == {"min": 1, "max": 200, "provided": 0}
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_get_table_records_first_too_large(
-    table_session, mock_table_client, extract_payload
+    table_session, mock_table_client, extract_payload, envelope_flag
 ):
     async with table_session as session:
         result = await session.call_tool(
@@ -967,7 +1062,23 @@ async def test_get_table_records_first_too_large(
     mock_table_client.get_table_records.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "first" in tool_error_message(payload)
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    # table_records uses the API-imposed max of 200 (not the default 500).
+    assert payload["error"]["details"] == {"min": 1, "max": 200, "provided": 201}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_search_tables_out_of_bounds_returns_invalid_arguments(
+    table_session, mock_table_client, extract_payload, envelope_flag
+):
+    async with table_session as session:
+        result = await session.call_tool("search_tables", {"first": 99999})
+    mock_table_client.search_tables.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert payload["error"]["details"] == {"min": 1, "max": 500, "provided": 99999}
 
 
 # ---------------------------------------------------------------------------

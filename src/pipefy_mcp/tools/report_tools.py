@@ -11,11 +11,19 @@ from mcp.types import ToolAnnotations
 from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.pagination_helpers import (
+    build_pagination_info,
+    validate_page_size,
+)
 from pipefy_mcp.tools.report_tool_helpers import (
     build_report_error_payload,
     build_report_mutation_success_payload,
     build_report_read_success_payload,
     handle_report_tool_graphql_error,
+)
+from pipefy_mcp.tools.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_success,
 )
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
@@ -58,14 +66,13 @@ class ReportTools:
             err = _blank_field_error(pipe_uuid, "pipe_uuid")
             if err is not None:
                 return err
-            if first < 1:
-                return build_report_error_payload(
-                    message="'first' must be a positive integer.",
-                )
+            nfirst, page_err = validate_page_size(first)
+            if page_err is not None:
+                return page_err
             try:
                 raw = await client.get_pipe_reports(
                     pipe_uuid,
-                    first=first,
+                    first=nfirst,
                     after=after,
                     search=search,
                     report_id=report_id,
@@ -78,6 +85,15 @@ class ReportTools:
                     debug=debug,
                     resource_kind="pipe",
                     resource_id=pipe_uuid,
+                )
+            if is_unified_envelope_enabled():
+                page_info = (raw.get("pipeReports") or {}).get("pageInfo")
+                return tool_success(
+                    data=raw,
+                    message="Pipe reports retrieved.",
+                    pagination=build_pagination_info(
+                        page_info=page_info, page_size=nfirst
+                    ),
                 )
             return build_report_read_success_payload(
                 raw,
@@ -259,13 +275,12 @@ class ReportTools:
             err = _blank_field_error(organization_id, "organization_id")
             if err is not None:
                 return err
-            if first < 1:
-                return build_report_error_payload(
-                    message="'first' must be a positive integer.",
-                )
+            nfirst, page_err = validate_page_size(first)
+            if page_err is not None:
+                return page_err
             try:
                 raw = await client.get_organization_reports(
-                    organization_id, first=first, after=after
+                    organization_id, first=nfirst, after=after
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
@@ -274,6 +289,15 @@ class ReportTools:
                     debug=debug,
                     resource_kind="organization",
                     resource_id=str(organization_id),
+                )
+            if is_unified_envelope_enabled():
+                page_info = (raw.get("organizationReports") or {}).get("pageInfo")
+                return tool_success(
+                    data=raw,
+                    message="Organization reports retrieved.",
+                    pagination=build_pagination_info(
+                        page_info=page_info, page_size=nfirst
+                    ),
                 )
             return build_report_read_success_payload(
                 raw,
@@ -399,7 +423,7 @@ class ReportTools:
             featured_field: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Update a pipe report. All params except `report_id` are optional -- only provided values are changed.
+            """Update a pipe report; omitted parameters are unchanged.
 
             Args:
                 report_id: Pipe report ID.
@@ -547,7 +571,7 @@ class ReportTools:
             pipe_ids: list[str] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Update an organization report. All params except `report_id` are optional -- only provided values are changed.
+            """Update an organization report; omitted parameters are unchanged.
 
             Args:
                 report_id: Organization report ID.

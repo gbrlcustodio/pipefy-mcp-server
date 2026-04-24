@@ -46,9 +46,7 @@ from pipefy_mcp.tools.validation_helpers import (
 )
 
 _TABLE_RECORDS_FIRST_MIN = 1
-# Pipefy's ``table_records(first: ...)`` is capped at 200 server-side; the
-# unified validator receives ``max_size=200`` so the error matches what the API
-# would reject, rather than using the global ``MAX_PAGE_SIZE`` default (500).
+# ``table_records(first:)`` is capped at 200; align validator max with the API (not 500).
 _TABLE_RECORDS_FIRST_MAX = 200
 _SEARCH_TABLES_FIRST_MAX = 500
 
@@ -110,11 +108,6 @@ class TableTools:
                 return err
             raw = await client.search_tables(table_name, first=nfirst)
             if is_unified_envelope_enabled():
-                # The outer call is not paginable (no ``after`` argument), so
-                # ``has_more=False`` is the honest signal. Agents that need to
-                # detect "more rows exist somewhere" check
-                # ``data.search_limits.tables_has_next_page`` or the per-org
-                # ``tables_page_end_cursor`` fields.
                 return tool_success(
                     data=raw,
                     message="Tables search retrieved.",

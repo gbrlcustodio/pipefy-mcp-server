@@ -40,13 +40,9 @@ __all__ = [
 
 
 def is_unified_envelope_enabled() -> bool:
-    """Return the current ``PIPEFY_MCP_UNIFIED_ENVELOPE`` flag value.
+    """Whether unified tool envelopes are enabled (``PIPEFY_MCP_UNIFIED_ENVELOPE``).
 
-    Reads ``settings.pipefy.mcp_unified_envelope`` at call time (REQ-2) so
-    tests and runtime toggles take effect immediately. Migrated helpers use
-    this single accessor instead of dotting into ``settings`` directly, which
-    keeps the ``read-per-call`` guarantee centralised and makes the eventual
-    flag-removal cleanup a single-file change.
+    Read from settings at call time so tests and toggles apply without restart.
     """
     return settings.pipefy.mcp_unified_envelope
 

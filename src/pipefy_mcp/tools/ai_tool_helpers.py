@@ -241,9 +241,6 @@ def build_create_agent_partial_failure(
     return cast(CreateAgentPartialFailurePayload, body)
 
 
-# --- Error enrichment for behavior-level failures ---
-
-# Patterns the Pipefy API returns that map to actionable advice.
 _BEHAVIOR_ERROR_EMPTY_AFTER_SANITIZE = (
     "The AI behavior request failed. Check behaviors and pipe context, then retry."
 )
@@ -297,9 +294,6 @@ def _summarize_behaviors(behaviors: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-# --- Behavior validation against pipe context ---
-
-# actionTypes that the Pipefy AI behavior system recognizes.
 KNOWN_AI_ACTION_TYPES = frozenset(
     {
         "create_card",
@@ -359,7 +353,6 @@ def validate_behaviors_against_pipe(
         abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
         attrs = abp.get("actionsAttributes") or abp.get("actions_attributes") or []
 
-        # Check eventParams phase references
         ep = b.get("eventParams") or b.get("event_params") or {}
         to_phase = ep.get("to_phase_id") or ep.get("toPhaseId")
         if to_phase and str(to_phase) not in pipe_phase_ids:
@@ -384,7 +377,6 @@ def validate_behaviors_against_pipe(
                 elif unknown_action_types == "warning":
                     warnings.append(msg)
 
-            # Check destinationPhaseId for move_card
             if action_type == "move_card":
                 dest = metadata.get("destinationPhaseId", "")
                 if dest and str(dest) not in pipe_phase_ids:
@@ -393,11 +385,6 @@ def validate_behaviors_against_pipe(
                         f'destinationPhaseId "{dest}" not found in pipe phases.'
                     )
 
-            # Check fieldsAttributes fieldId references.
-            # Same-pipe actions check against pipe_field_ids; cross-pipe actions
-            # check against cross_pipe_field_ids when available.
-            # Skip fieldId validation for create_table_record (table fields) and
-            # send_email_template (no pipe field list; pipeId omission would mis-route checks).
             if action_type not in ("create_table_record", "send_email_template"):
                 action_pipe = str(metadata.get("pipeId", ""))
                 targets_source = not action_pipe or action_pipe == pipe_id
@@ -436,7 +423,6 @@ def validate_behaviors_against_pipe(
                     "against this pipe. Verify IDs with get_table or get_table_record."
                 )
 
-            # Check create_connected_card relation (skipped when related_pipe_ids is None)
             if action_type == "create_connected_card" and related_pipe_ids is not None:
                 target_pipe = metadata.get("pipeId", "")
                 if target_pipe and str(target_pipe) not in related_pipe_ids:
@@ -448,9 +434,6 @@ def validate_behaviors_against_pipe(
                     )
 
     return problems, warnings
-
-
-# --- Slug → numeric fieldId resolution ---
 
 
 def _extract_slug_field_ids_by_pipe(

@@ -423,7 +423,7 @@ class ReportTools:
             featured_field: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Update a pipe report. All params except `report_id` are optional -- only provided values are changed.
+            """Update a pipe report; omitted parameters are unchanged.
 
             Args:
                 report_id: Pipe report ID.
@@ -571,7 +571,7 @@ class ReportTools:
             pipe_ids: list[str] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Update an organization report. All params except `report_id` are optional -- only provided values are changed.
+            """Update an organization report; omitted parameters are unchanged.
 
             Args:
                 report_id: Organization report ID.

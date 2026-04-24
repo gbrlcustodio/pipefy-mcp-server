@@ -517,8 +517,6 @@ class PipeTools:
                 first: Max cards to return per page (1-500).
                 after: Cursor for fetching the next page (from ``pageInfo.endCursor`` of a previous call).
             """
-            # Only validate when the caller supplied a value; ``None`` means
-            # "use the API default page" and is left unchanged.
             if first is not None:
                 validated_first, err = validate_page_size(first)
                 if err is not None:
@@ -544,10 +542,6 @@ class PipeTools:
                 after=after,
             )
             if is_unified_envelope_enabled():
-                # When the caller omits ``first`` the tool falls through to the
-                # Pipefy API default page; there is no requested page size to
-                # report back, so omit the pagination block rather than publish
-                # ``page_size=0`` (which our own validator would reject).
                 pagination = None
                 if first is not None:
                     page_info = (

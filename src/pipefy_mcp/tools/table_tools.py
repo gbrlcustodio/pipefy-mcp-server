@@ -14,7 +14,6 @@ from pipefy_mcp.services.pipefy.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
 )
-from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_correlation_id,
@@ -35,7 +34,11 @@ from pipefy_mcp.tools.table_tool_helpers import (
     handle_table_tool_graphql_error,
     map_delete_table_error_to_message,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message, tool_success
+from pipefy_mcp.tools.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_error_message,
+    tool_success,
+)
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     validate_optional_tool_id,
@@ -106,7 +109,7 @@ class TableTools:
             if err is not None:
                 return err
             raw = await client.search_tables(table_name, first=nfirst)
-            if settings.pipefy.mcp_unified_envelope:
+            if is_unified_envelope_enabled():
                 # The outer call is not paginable (no ``after`` argument), so
                 # ``has_more=False`` is the honest signal. Agents that need to
                 # detect "more rows exist somewhere" check
@@ -247,7 +250,7 @@ class TableTools:
                     resource_kind="table",
                     resource_id=str(table_id),
                 )
-            if settings.pipefy.mcp_unified_envelope:
+            if is_unified_envelope_enabled():
                 page_info = (raw.get("table_records") or {}).get("pageInfo")
                 return tool_success(
                     data=raw,

@@ -6,11 +6,14 @@ from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
-from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_success
+from pipefy_mcp.tools.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_error,
+    tool_success,
+)
 
 # The ``Legacy*SuccessPayload`` TypedDicts below describe the flag=false shape
 # only. Under the default ``PIPEFY_MCP_UNIFIED_ENVELOPE=true``, helpers return
@@ -40,7 +43,7 @@ def build_report_read_success_payload(
         data: Subtree returned by the report query.
         message: Short summary for the client.
     """
-    if settings.pipefy.mcp_unified_envelope:
+    if is_unified_envelope_enabled():
         return tool_success(data=data, message=message)
     return {"success": True, "message": message, "data": data}
 
@@ -56,7 +59,7 @@ def build_report_mutation_success_payload(
         message: Short summary for the client.
         data: Mutation payload (legacy path exposes it as ``result``).
     """
-    if settings.pipefy.mcp_unified_envelope:
+    if is_unified_envelope_enabled():
         return tool_success(data=data, message=message)
     return {"success": True, "message": message, "result": data}
 

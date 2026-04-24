@@ -10,7 +10,6 @@ from mcp.types import ToolAnnotations
 
 from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.pagination_helpers import (
     build_pagination_info,
@@ -22,7 +21,10 @@ from pipefy_mcp.tools.report_tool_helpers import (
     build_report_read_success_payload,
     handle_report_tool_graphql_error,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_success
+from pipefy_mcp.tools.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_success,
+)
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 
@@ -84,7 +86,7 @@ class ReportTools:
                     resource_kind="pipe",
                     resource_id=pipe_uuid,
                 )
-            if settings.pipefy.mcp_unified_envelope:
+            if is_unified_envelope_enabled():
                 page_info = (raw.get("pipeReports") or {}).get("pageInfo")
                 return tool_success(
                     data=raw,
@@ -288,7 +290,7 @@ class ReportTools:
                     resource_kind="organization",
                     resource_id=str(organization_id),
                 )
-            if settings.pipefy.mcp_unified_envelope:
+            if is_unified_envelope_enabled():
                 page_info = (raw.get("organizationReports") or {}).get("pageInfo")
                 return tool_success(
                     data=raw,

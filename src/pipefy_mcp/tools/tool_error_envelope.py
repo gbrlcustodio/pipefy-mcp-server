@@ -26,14 +26,29 @@ from typing import Any, Literal, Mapping
 
 from typing_extensions import NotRequired, TypedDict
 
+from pipefy_mcp.settings import settings
+
 __all__ = [
     "ToolErrorDetail",
     "ToolFailurePayload",
     "ToolSuccessPayload",
+    "is_unified_envelope_enabled",
     "tool_error",
     "tool_error_message",
     "tool_success",
 ]
+
+
+def is_unified_envelope_enabled() -> bool:
+    """Return the current ``PIPEFY_MCP_UNIFIED_ENVELOPE`` flag value.
+
+    Reads ``settings.pipefy.mcp_unified_envelope`` at call time (REQ-2) so
+    tests and runtime toggles take effect immediately. Migrated helpers use
+    this single accessor instead of dotting into ``settings`` directly, which
+    keeps the ``read-per-call`` guarantee centralised and makes the eventual
+    flag-removal cleanup a single-file change.
+    """
+    return settings.pipefy.mcp_unified_envelope
 
 
 class ToolErrorDetail(TypedDict):

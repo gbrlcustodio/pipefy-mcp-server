@@ -6,7 +6,6 @@ from typing_extensions import TypedDict
 
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch
-from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.destructive_tool_guard import (
     DestructiveCancelledPayload,
     DestructivePreviewPayload,
@@ -15,6 +14,7 @@ from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 from pipefy_mcp.tools.tool_error_envelope import (
     ToolErrorDetail,
     ToolSuccessPayload,
+    is_unified_envelope_enabled,
     tool_error,
     tool_success,
 )
@@ -161,7 +161,7 @@ def build_add_card_comment_success_payload(*, comment_id: object) -> dict[str, A
         comment_id: New comment id from the API (coerced to str).
     """
     cid = str(comment_id)
-    if settings.pipefy.mcp_unified_envelope:
+    if is_unified_envelope_enabled():
         return tool_success(data={"comment_id": cid})
     return {"success": True, "comment_id": cid}
 
@@ -277,7 +277,7 @@ def build_update_comment_success_payload(*, comment_id: object) -> dict[str, Any
         comment_id: Updated comment id (coerced to str).
     """
     cid = str(comment_id)
-    if settings.pipefy.mcp_unified_envelope:
+    if is_unified_envelope_enabled():
         return tool_success(data={"comment_id": cid})
     return {"success": True, "comment_id": cid}
 
@@ -293,7 +293,7 @@ def build_update_comment_error_payload(*, message: str) -> UpdateCommentErrorPay
 
 def build_delete_comment_success_payload() -> dict[str, Any]:
     """Minimal success body after delete_comment."""
-    if settings.pipefy.mcp_unified_envelope:
+    if is_unified_envelope_enabled():
         return tool_success()
     return {"success": True}
 
@@ -321,7 +321,7 @@ def build_delete_card_success_payload(
         f"Card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}' "
         "has been permanently deleted."
     )
-    if settings.pipefy.mcp_unified_envelope:
+    if is_unified_envelope_enabled():
         return tool_success(
             data={
                 "card_id": card_id,

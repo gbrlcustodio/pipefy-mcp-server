@@ -18,7 +18,6 @@ from pipefy_mcp.models.form import create_form_model
 from pipefy_mcp.models.validators import PipefyId
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.services.pipefy.types import CardSearch, copy_card_search
-from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
@@ -63,6 +62,7 @@ from pipefy_mcp.tools.relation_tool_helpers import (
     handle_relation_tool_graphql_error,
 )
 from pipefy_mcp.tools.tool_error_envelope import (
+    is_unified_envelope_enabled,
     tool_error,
     tool_error_message,
     tool_success,
@@ -543,7 +543,7 @@ class PipeTools:
                 first=first,
                 after=after,
             )
-            if settings.pipefy.mcp_unified_envelope:
+            if is_unified_envelope_enabled():
                 # When the caller omits ``first`` the tool falls through to the
                 # Pipefy API default page; there is no requested page size to
                 # report back, so omit the pagination block rather than publish

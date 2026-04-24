@@ -1143,9 +1143,7 @@ async def test_get_pipe_reports_flag_off_no_top_level_pagination(
         }
     }
     async with report_session as session:
-        result = await session.call_tool(
-            "get_pipe_reports", {"pipe_uuid": "uuid-1"}
-        )
+        result = await session.call_tool("get_pipe_reports", {"pipe_uuid": "uuid-1"})
     payload = extract_payload(result)
     assert payload["success"] is True
     assert "pagination" not in payload  # legacy shape has no top-level pagination

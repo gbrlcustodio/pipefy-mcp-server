@@ -1,4 +1,4 @@
-"""Unit tests for the canonical tool_success helper (REQ-1)."""
+"""Unit tests for ``tool_success``."""
 
 from pipefy_mcp.tools.tool_error_envelope import tool_success
 

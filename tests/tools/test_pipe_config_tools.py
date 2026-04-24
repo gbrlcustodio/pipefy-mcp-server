@@ -1,5 +1,7 @@
 """Tests for pipe configuration MCP tools (mocked PipefyClient)."""
 
+import asyncio
+import time
 from datetime import timedelta
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
@@ -80,11 +82,14 @@ def mock_pipe_config_client():
     client.create_label = AsyncMock()
     client.update_label = AsyncMock()
     client.delete_label = AsyncMock()
+    client.get_cards = AsyncMock()
     client.create_field_condition = AsyncMock()
     client.update_field_condition = AsyncMock()
     client.delete_field_condition = AsyncMock()
     client.get_field_conditions = AsyncMock()
     client.get_field_condition = AsyncMock()
+    client.get_automations = AsyncMock()
+    client.get_automation = AsyncMock()
     return client
 
 
@@ -429,6 +434,211 @@ async def test_delete_phase_preview_does_not_delete(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_without_pipe_id_skips_dependent_lookups(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    async with pipe_config_session as session:
+        result = await session.call_tool("delete_phase", {"phase_id": 55, "confirm": False})
+
+    assert extract_payload(result)["success"] is False
+    mock_pipe_config_client.get_field_conditions.assert_not_called()
+    mock_pipe_config_client.get_automations.assert_not_called()
+    mock_pipe_config_client.get_cards.assert_not_called()
+    mock_pipe_config_client.get_automation.assert_not_called()
+    mock_pipe_config_client.get_phase_fields.assert_not_called()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_confirm_true_skips_dependent_lookups(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.delete_phase.return_value = {
+        "deletePhase": {"success": True},
+    }
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase",
+            {"phase_id": 55, "pipe_id": 1, "confirm": True},
+        )
+    assert extract_payload(result)["success"] is True
+    mock_pipe_config_client.get_field_conditions.assert_not_called()
+    mock_pipe_config_client.get_automations.assert_not_called()
+    mock_pipe_config_client.get_cards.assert_not_called()
+    mock_pipe_config_client.get_automation.assert_not_called()
+    mock_pipe_config_client.get_phase_fields.assert_not_called()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_preview_all_sublookups_succeed(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_field_conditions.return_value = {
+        "phase": {
+            "fieldConditions": [
+                {"id": "c1", "name": "Cond A", "actions": []},
+            ]
+        }
+    }
+    mock_pipe_config_client.get_automations.return_value = [
+        {"id": "a1", "name": "Move to phase", "active": True, "action_id": "x"},
+    ]
+    mock_pipe_config_client.get_automation.return_value = {
+        "id": "a1",
+        "name": "Move to phase",
+        "event_params": {"to_phase_id": "55"},
+    }
+    mock_pipe_config_client.get_cards.return_value = {
+        "cards": {"totalCount": 2, "edges": []}
+    }
+    mock_pipe_config_client.get_phase_fields.return_value = {
+        "fields": [
+            {"id": "f1", "label": "A"},
+            {"id": "f2", "label": "B"},
+        ],
+    }
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase",
+            {"phase_id": 55, "pipe_id": 1, "confirm": False},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    deps = payload.get("dependents")
+    assert deps is not None
+    assert len(deps["field_conditions"]) == 1
+    assert deps["field_conditions"][0]["id"] == "c1"
+    assert len(deps["automations"]) == 1
+    assert deps["automations"][0]["id"] == "a1"
+    assert deps["cards_count"] == 2
+    assert deps["phase_fields_count"] == 2
+    assert "hint" in deps
+    assert "2 card(s)" in deps["hint"]
+    assert "irreversible" in deps["hint"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_preview_partial_failure_automations_raises(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_field_conditions.return_value = {
+        "phase": {
+            "fieldConditions": [
+                {"id": "c1", "name": "Cond A", "actions": []},
+            ]
+        }
+    }
+    mock_pipe_config_client.get_automations.side_effect = TransportQueryError(
+        "GraphQL Error", errors=[{"message": "Internal"}]
+    )
+    mock_pipe_config_client.get_cards.return_value = {
+        "cards": {"totalCount": 1, "edges": []}
+    }
+    mock_pipe_config_client.get_phase_fields.return_value = {
+        "fields": [{"id": "f1"}],
+    }
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase",
+            {"phase_id": 55, "pipe_id": 1, "confirm": False},
+        )
+    payload = extract_payload(result)
+    deps = payload.get("dependents")
+    assert deps is not None
+    assert "automations" not in deps
+    assert len(deps["field_conditions"]) == 1
+    assert deps["cards_count"] == 1
+    assert deps["phase_fields_count"] == 1
+    hint = deps.get("hint", "")
+    assert "1 card(s)" in hint
+    assert "automation" not in hint
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_preview_all_sublookups_fail(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    err = TransportQueryError("GraphQL Error", errors=[{"message": "x"}])
+    mock_pipe_config_client.get_field_conditions.side_effect = err
+    mock_pipe_config_client.get_automations.side_effect = err
+    mock_pipe_config_client.get_cards.side_effect = err
+    mock_pipe_config_client.get_phase_fields.side_effect = err
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase",
+            {"phase_id": 55, "pipe_id": 1, "confirm": False},
+        )
+    assert "dependents" not in extract_payload(result)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_sublookups_run_in_parallel(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """Four slow sub-lookups; wall time should be ~one delay, not four."""
+
+    async def _slow_get_field_conditions(*_a, **_kw):
+        await asyncio.sleep(0.05)
+        return {"phase": {"fieldConditions": []}}
+
+    async def _slow_get_automations(*_a, **_kw):
+        await asyncio.sleep(0.05)
+        return []
+
+    async def _slow_get_cards(*_a, **_kw):
+        await asyncio.sleep(0.05)
+        return {"cards": {"totalCount": 0, "edges": []}}
+
+    async def _slow_get_phase_fields(*_a, **_kw):
+        await asyncio.sleep(0.05)
+        return {"fields": []}
+
+    mock_pipe_config_client.get_field_conditions.side_effect = _slow_get_field_conditions
+    mock_pipe_config_client.get_automations.side_effect = _slow_get_automations
+    mock_pipe_config_client.get_cards.side_effect = _slow_get_cards
+    mock_pipe_config_client.get_phase_fields.side_effect = _slow_get_phase_fields
+    t0 = time.perf_counter()
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase",
+            {"phase_id": 55, "pipe_id": 1, "confirm": False},
+        )
+    elapsed = time.perf_counter() - t0
+    assert extract_payload(result)["success"] is False
+    assert elapsed < 0.15
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_cards_not_enumerated(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_field_conditions.return_value = {
+        "phase": {"fieldConditions": []}
+    }
+    mock_pipe_config_client.get_automations.return_value = []
+    mock_pipe_config_client.get_cards.return_value = {
+        "cards": {"totalCount": 3, "edges": [{"node": {"id": "1"}}]}  # ids ignored
+    }
+    mock_pipe_config_client.get_phase_fields.return_value = {"fields": []}
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase",
+            {"phase_id": 55, "pipe_id": 1, "confirm": False},
+        )
+    deps = extract_payload(result).get("dependents")
+    assert deps is not None
+    assert "cards" not in deps
+    assert deps.get("cards_count") == 3
+    assert isinstance(deps.get("cards_count"), int)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_phase_field_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -644,6 +854,187 @@ async def test_delete_phase_field_preview_does_not_delete(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_field_preview_lists_dependent_conditions(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_phase_fields.return_value = {
+        "fields": [
+            {
+                "id": "my_field",
+                "internal_id": "308821043",
+                "uuid": "aaa-bbb-ccc",
+            }
+        ]
+    }
+    mock_pipe_config_client.get_field_conditions.return_value = {
+        "phase": {
+            "fieldConditions": [
+                {
+                    "id": "cond-1",
+                    "name": "Show when X",
+                    "actions": [{"phaseFieldId": "308821043"}],
+                }
+            ]
+        }
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase_field",
+            {"field_id": "my_field", "phase_id": 50, "confirm": False},
+        )
+
+    mock_pipe_config_client.delete_phase_field.assert_not_called()
+    mock_pipe_config_client.get_phase_fields.assert_awaited_once_with("50")
+    mock_pipe_config_client.get_field_conditions.assert_awaited_once_with("50")
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    deps = payload.get("dependents")
+    assert deps is not None
+    assert len(deps["field_conditions"]) == 1
+    assert deps["field_conditions"][0]["id"] == "cond-1"
+    assert deps["field_conditions"][0]["name"] == "Show when X"
+    assert deps["field_conditions"][0]["action_count"] == 1
+    assert "delete_field_condition" in deps["hint"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_field_preview_no_deps_unchanged(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_phase_fields.return_value = {
+        "fields": [
+            {
+                "id": "my_field",
+                "internal_id": "308821043",
+                "uuid": "aaa-bbb-ccc",
+            }
+        ]
+    }
+    mock_pipe_config_client.get_field_conditions.return_value = {
+        "phase": {"fieldConditions": []}
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase_field",
+            {"field_id": "my_field", "phase_id": 50, "confirm": False},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "dependents" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_field_no_phase_id_skips_enrichment(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase_field",
+            {"field_id": 100, "confirm": False},
+        )
+
+    mock_pipe_config_client.get_field_conditions.assert_not_called()
+    mock_pipe_config_client.get_phase_fields.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "dependents" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_field_identifier_match_by_uuid(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_phase_fields.return_value = {
+        "fields": [
+            {
+                "id": "other_slug",
+                "internal_id": "999999999",
+                "uuid": "match-uuid-001",
+            }
+        ]
+    }
+    mock_pipe_config_client.get_field_conditions.return_value = {
+        "phase": {
+            "fieldConditions": [
+                {
+                    "id": "c-uuid",
+                    "name": "By uuid",
+                    "actions": [{"phaseFieldId": "match-uuid-001"}],
+                }
+            ]
+        }
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase_field",
+            {
+                "field_id": "match-uuid-001",
+                "phase_id": 50,
+                "confirm": False,
+            },
+        )
+
+    payload = extract_payload(result)
+    deps = payload.get("dependents")
+    assert deps is not None
+    assert deps["field_conditions"][0]["id"] == "c-uuid"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_field_enrichment_failure_degrades_gracefully(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_phase_fields.return_value = {
+        "fields": [
+            {"id": "f1", "internal_id": "1", "uuid": "u1"},
+        ]
+    }
+    mock_pipe_config_client.get_field_conditions.side_effect = TransportQueryError(
+        "GraphQL Error",
+        errors=[{"message": "Permission denied"}],
+    )
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase_field",
+            {"field_id": "f1", "phase_id": 50, "confirm": False},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "dependents" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_field_confirm_true_skips_enrichment(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.delete_phase_field.return_value = {
+        "deletePhaseField": {"success": True},
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase_field",
+            {"field_id": 100, "phase_id": 50, "confirm": True},
+        )
+
+    mock_pipe_config_client.get_field_conditions.assert_not_called()
+    mock_pipe_config_client.get_phase_fields.assert_not_called()
+    assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_success_with_string_slug(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -796,6 +1187,116 @@ async def test_delete_label_preview_does_not_delete(
     assert payload["resource"] == "label (ID: 40)"
     assert "⚠️" in payload["message"]
     assert "confirm=True" in payload["message"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_label_preview_with_cards_in_use(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_cards.return_value = {
+        "cards": {
+            "edges": [{"node": {"id": str(i)}} for i in range(1, 7)],
+            "pageInfo": {"hasNextPage": True},
+        }
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_label",
+            {"label_id": 40, "pipe_id": 2, "confirm": False},
+        )
+
+    mock_pipe_config_client.delete_label.assert_not_called()
+    mock_pipe_config_client.get_cards.assert_awaited_once()
+    call = mock_pipe_config_client.get_cards.await_args
+    assert call.args[0] == "2"
+    assert call.kwargs["first"] == 6
+    assert call.args[1]["label_ids"] == ["40"]
+
+    payload = extract_payload(result)
+    deps = payload.get("dependents")
+    assert deps is not None
+    cul = deps["cards_using_label"]
+    assert cul["sample_size"] == 5
+    assert cul["has_more"] is True
+    assert len(cul["sample_card_ids"]) == 5
+    assert cul["sample_card_ids"][0] == "1"
+    assert "Proceed if that is intended" in deps["hint"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_label_preview_unused_label_no_dependents(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_cards.return_value = {
+        "cards": {"edges": [], "pageInfo": {"hasNextPage": False}}
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_label",
+            {"label_id": 40, "pipe_id": 2, "confirm": False},
+        )
+
+    payload = extract_payload(result)
+    assert "dependents" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_label_preview_get_cards_fails_degrades(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_cards.side_effect = TransportQueryError(
+        "GraphQL Error",
+        errors=[{"message": "Forbidden"}],
+    )
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_label",
+            {"label_id": 40, "pipe_id": 2, "confirm": False},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "dependents" not in payload
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_label_confirm_true_skips_resolver(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.delete_label.return_value = {
+        "deleteLabel": {"success": True},
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_label",
+            {"label_id": 40, "pipe_id": 2, "confirm": True},
+        )
+
+    mock_pipe_config_client.get_cards.assert_not_called()
+    assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_label_preview_without_pipe_id_skips_cards_lookup(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_label",
+            {"label_id": 40, "confirm": False},
+        )
+
+    mock_pipe_config_client.get_cards.assert_not_called()
+    assert "dependents" not in extract_payload(result)
 
 
 @pytest.mark.anyio

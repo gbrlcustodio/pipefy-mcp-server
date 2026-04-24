@@ -1102,6 +1102,122 @@ async def test_export_pipe_report_blank_pipe_report_id(report_session):
 ## ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Unified-envelope pagination & bounds (REQ-5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_get_pipe_reports_flag_on_emits_pagination(
+    report_session, mock_report_client, extract_payload, unified_envelope
+):
+    mock_report_client.get_pipe_reports.return_value = {
+        "pipeReports": {
+            "edges": [{"node": {"id": "r1"}}],
+            "pageInfo": {"hasNextPage": True, "endCursor": "c1"},
+        }
+    }
+    async with report_session as session:
+        result = await session.call_tool(
+            "get_pipe_reports", {"pipe_uuid": "uuid-1", "first": 25}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["pagination"] == {
+        "has_more": True,
+        "end_cursor": "c1",
+        "page_size": 25,
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_get_pipe_reports_flag_off_no_top_level_pagination(
+    report_session, mock_report_client, extract_payload, legacy_envelope
+):
+    mock_report_client.get_pipe_reports.return_value = {
+        "pipeReports": {
+            "edges": [],
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
+        }
+    }
+    async with report_session as session:
+        result = await session.call_tool(
+            "get_pipe_reports", {"pipe_uuid": "uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert "pagination" not in payload  # legacy shape has no top-level pagination
+    # Legacy cursor paths inside the raw GraphQL are preserved.
+    assert payload["data"]["pipeReports"]["pageInfo"]["hasNextPage"] is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("flag_value", [True, False])
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_get_pipe_reports_out_of_bounds_returns_invalid_arguments_regardless_of_flag(
+    report_session, mock_report_client, extract_payload, flag_value, monkeypatch
+):
+    from pipefy_mcp.settings import settings
+
+    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", flag_value)
+    async with report_session as session:
+        result = await session.call_tool(
+            "get_pipe_reports", {"pipe_uuid": "uuid-1", "first": 99999}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert payload["error"]["details"] == {"min": 1, "max": 500, "provided": 99999}
+    mock_report_client.get_pipe_reports.assert_not_called()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_get_organization_reports_flag_on_emits_pagination(
+    report_session, mock_report_client, extract_payload, unified_envelope
+):
+    mock_report_client.get_organization_reports.return_value = {
+        "organizationReports": {
+            "edges": [],
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
+        }
+    }
+    async with report_session as session:
+        result = await session.call_tool(
+            "get_organization_reports",
+            {"organization_id": "org-1", "first": 10},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["pagination"] == {
+        "has_more": False,
+        "end_cursor": None,
+        "page_size": 10,
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("flag_value", [True, False])
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_get_organization_reports_out_of_bounds_returns_invalid_arguments(
+    report_session, mock_report_client, extract_payload, flag_value, monkeypatch
+):
+    from pipefy_mcp.settings import settings
+
+    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", flag_value)
+    async with report_session as session:
+        result = await session.call_tool(
+            "get_organization_reports",
+            {"organization_id": "org-1", "first": 99999},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert payload["error"]["details"] == {"min": 1, "max": 500, "provided": 99999}
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_get_pipe_reports_first_less_than_one(report_session, extract_payload):
@@ -1112,7 +1228,9 @@ async def test_get_pipe_reports_first_less_than_one(report_session, extract_payl
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "positive integer" in tool_error_message(payload)
+    # Bounds enforcement now uses the shared INVALID_ARGUMENTS envelope.
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert payload["error"]["details"] == {"min": 1, "max": 500, "provided": 0}
 
 
 @pytest.mark.anyio
@@ -1127,7 +1245,8 @@ async def test_get_organization_reports_first_less_than_one(
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "positive integer" in tool_error_message(payload)
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert payload["error"]["details"] == {"min": 1, "max": 500, "provided": 0}
 
 
 ## ---------------------------------------------------------------------------

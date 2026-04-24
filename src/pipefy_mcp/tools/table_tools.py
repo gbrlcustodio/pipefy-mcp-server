@@ -14,11 +14,16 @@ from pipefy_mcp.services.pipefy.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
 )
+from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
     with_debug_suffix,
+)
+from pipefy_mcp.tools.pagination_helpers import (
+    build_pagination_info,
+    validate_page_size,
 )
 from pipefy_mcp.tools.table_tool_helpers import (
     build_delete_table_error_payload,
@@ -30,7 +35,7 @@ from pipefy_mcp.tools.table_tool_helpers import (
     handle_table_tool_graphql_error,
     map_delete_table_error_to_message,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from pipefy_mcp.tools.tool_error_envelope import tool_error_message, tool_success
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     validate_optional_tool_id,
@@ -38,7 +43,11 @@ from pipefy_mcp.tools.validation_helpers import (
 )
 
 _TABLE_RECORDS_FIRST_MIN = 1
+# Pipefy's ``table_records(first: ...)`` is capped at 200 server-side; the
+# unified validator receives ``max_size=200`` so the error matches what the API
+# would reject, rather than using the global ``MAX_PAGE_SIZE`` default (500).
 _TABLE_RECORDS_FIRST_MAX = 200
+_SEARCH_TABLES_FIRST_MAX = 500
 
 
 _CREATE_TABLE_EXTRA_RESERVED = frozenset({"name", "organization_id"})
@@ -63,7 +72,7 @@ class TableTools:
 
             Use this tool to find a table's ID when you only know its name.
             Returns up to ``first`` tables per organization from the GraphQL connection
-            (clamped 1--500, default 100). Optionally filtered by name client-side on that page.
+            (1-500, default 100). Optionally filtered by name client-side on that page.
 
             When filtering by name, uses substring matching first (score 100) and
             falls back to fuzzy matching with a 70% similarity threshold.
@@ -75,7 +84,7 @@ class TableTools:
 
             Args:
                 table_name: Optional table name to search for (case-insensitive partial match).
-                first: GraphQL ``tables(first: ...)`` per organization (1--500).
+                first: GraphQL ``tables(first: ...)`` per organization (1-500).
 
             Returns:
                 dict: Contains 'organizations' array, each with:
@@ -89,8 +98,24 @@ class TableTools:
                                          100 for substring matches, fuzzy score otherwise.
                       And ``search_limits`` (``tables_first``, ``tables_has_next_page``).
             """
-            nfirst = max(1, min(500, int(first)))
-            return await client.search_tables(table_name, first=nfirst)
+            nfirst, err = validate_page_size(first, max_size=_SEARCH_TABLES_FIRST_MAX)
+            if err is not None:
+                return err
+            raw = await client.search_tables(table_name, first=nfirst)
+            if settings.pipefy.mcp_unified_envelope:
+                aggregate_has_more = bool(
+                    (raw.get("search_limits") or {}).get("tables_has_next_page")
+                )
+                return tool_success(
+                    data=raw,
+                    message="Tables search retrieved.",
+                    pagination={
+                        "has_more": aggregate_has_more,
+                        "end_cursor": None,
+                        "page_size": nfirst,
+                    },
+                )
+            return raw
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
@@ -194,17 +219,11 @@ class TableTools:
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
                 return build_table_read_error_payload(message=tool_error_message(err))
-            if (
-                not isinstance(first, int)
-                or first < _TABLE_RECORDS_FIRST_MIN
-                or first > _TABLE_RECORDS_FIRST_MAX
-            ):
-                return build_table_read_error_payload(
-                    message=(
-                        "Invalid 'first': use an integer between "
-                        f"{_TABLE_RECORDS_FIRST_MIN} and {_TABLE_RECORDS_FIRST_MAX}."
-                    ),
-                )
+            nfirst, page_err = validate_page_size(
+                first, max_size=_TABLE_RECORDS_FIRST_MAX
+            )
+            if page_err is not None:
+                return page_err
             if after is not None and (not isinstance(after, str) or not after.strip()):
                 return build_table_read_error_payload(
                     message="Invalid 'after': omit or pass a non-empty cursor string.",
@@ -212,7 +231,7 @@ class TableTools:
             try:
                 raw = await client.get_table_records(
                     table_id,
-                    first=first,
+                    first=nfirst,
                     after=after.strip() if isinstance(after, str) else after,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -221,6 +240,15 @@ class TableTools:
                     "List table records failed.",
                     resource_kind="table",
                     resource_id=str(table_id),
+                )
+            if settings.pipefy.mcp_unified_envelope:
+                page_info = (raw.get("table_records") or {}).get("pageInfo")
+                return tool_success(
+                    data=raw,
+                    message="Table records page retrieved.",
+                    pagination=build_pagination_info(
+                        page_info=page_info, page_size=nfirst
+                    ),
                 )
             return build_table_read_success_payload(
                 raw,

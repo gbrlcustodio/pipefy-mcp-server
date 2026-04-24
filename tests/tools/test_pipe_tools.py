@@ -940,6 +940,85 @@ class TestGetCardsTool:
         )
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_cards_flag_on_emits_pagination(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+        unified_envelope,
+    ):
+        """Flag=true — response is the unified envelope with a top-level pagination block."""
+        mock_pipefy_client.get_cards = AsyncMock(
+            return_value={
+                "cards": {
+                    "edges": [{"node": {"id": "1"}}],
+                    "pageInfo": {"hasNextPage": True, "endCursor": "x"},
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_cards", {"pipe_id": pipe_id, "first": 10}
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["pagination"] == {
+            "has_more": True,
+            "end_cursor": "x",
+            "page_size": 10,
+        }
+        assert payload["data"]["cards"]["edges"][0]["node"]["id"] == "1"
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_cards_flag_off_returns_raw_graphql(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+        legacy_envelope,
+    ):
+        """Flag=false — tool returns the client response verbatim (legacy shape)."""
+        expected = {"cards": {"edges": [], "pageInfo": {"hasNextPage": False}}}
+        mock_pipefy_client.get_cards = AsyncMock(return_value=expected)
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_cards", {"pipe_id": pipe_id, "first": 10}
+            )
+        payload = extract_payload(result)
+        assert payload == expected
+
+    @pytest.mark.parametrize("flag_value", [True, False])
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_cards_out_of_bounds_returns_invalid_arguments(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+        flag_value,
+        monkeypatch,
+    ):
+        from pipefy_mcp.settings import settings
+
+        monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", flag_value)
+        mock_pipefy_client.get_cards = AsyncMock(return_value={"cards": {}})
+        async with client_session as session:
+            result = await session.call_tool(
+                "get_cards", {"pipe_id": pipe_id, "first": 99999}
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+        assert payload["error"]["details"] == {
+            "min": 1,
+            "max": 500,
+            "provided": 99999,
+        }
+        mock_pipefy_client.get_cards.assert_not_called()
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_cards_title_param_merges_into_search(
         self, client_session, mock_pipefy_client, pipe_id
     ):

@@ -11,6 +11,7 @@ from graphql import print_ast
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
 from pipefy_mcp.services.pipefy.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
+    GET_PHASE_CARDS_COUNT_QUERY,
     GET_PHASE_FIELDS_QUERY,
     SEARCH_PIPES_QUERY,
 )
@@ -455,6 +456,38 @@ async def test_get_phase_allowed_move_targets_sends_phase_id(mock_settings):
     assert service.execute_query.call_args[0][0] is GET_PHASE_ALLOWED_MOVES_QUERY
     assert service.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
     assert result == api_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_cards_count_returns_native_scalar(mock_settings):
+    phase_id = 342182334
+    api_response = {"phase": {"id": str(phase_id), "cards_count": 42}}
+    service = _make_service(mock_settings, api_response)
+
+    result = await service.get_phase_cards_count(phase_id)
+
+    service.execute_query.assert_called_once()
+    assert service.execute_query.call_args[0][0] is GET_PHASE_CARDS_COUNT_QUERY
+    assert service.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
+    assert result == 42
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_cards_count_raises_when_missing(mock_settings):
+    service = _make_service(mock_settings, {"phase": None})
+
+    with pytest.raises(ValueError, match="cards_count"):
+        await service.get_phase_cards_count(1)
+
+
+def test_get_phase_cards_count_query_selects_native_scalar():
+    query_text = print_ast(GET_PHASE_CARDS_COUNT_QUERY)
+    assert "cards_count" in query_text
+    # No card enumeration — must not touch the CardConnection edges/nodes.
+    assert "edges" not in query_text
+    assert "nodes" not in query_text
 
 
 @pytest.mark.unit

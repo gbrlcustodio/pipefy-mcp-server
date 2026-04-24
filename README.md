@@ -1,13 +1,12 @@
-# MCP server for Pipefy
+<div align="center">
+  <img
+    src="docs/images/pipefy-developers-banner.png"
+    alt="Pipefy Developers — Where developers orchestrate intelligence"
+    width="100%"
+  />
+</div>
 
-<p align="center">
-  <strong>Open-source MCP for Pipefy: 128 tools across pipes, cards, tables, relations, reports, automations, AI agents and observability — built for your IDE, with pagination, introspection and safe deletes.</strong>
-</p>
-
-<p align="center">
-  🚧 <strong>Alpha Release:</strong> Building in public. <br>
-  📢 Share your feedback on GitHub issues or at dev@pipefy.com.
-</p>
+**Open-source MCP for Pipefy** — **128 tools** for pipes, cards, tables, relations, automations, AI, observability and more. Alpha · built in public — [feedback & issues](https://github.com/gbrlcustodio/pipefy-mcp-server/issues) or **dev@pipefy.com**
 
 <p align="center">
   <a href="https://github.com/gbrlcustodio/pipefy-mcp-server/actions"><img src="https://github.com/gbrlcustodio/pipefy-mcp-server/workflows/CI/badge.svg" alt="CI Status" /></a>
@@ -17,7 +16,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
 </p>
 
-> **⚠️ Disclaimer:** This is a "Build in public" project primarily aimed at developer workflows. It is **not** the official, supported Pipefy integration for external enterprise clients, but rather a tool to facilitate the development experience for those who use Pipefy for task management.
+> **Disclaimer:** Community project for developer workflows — not Pipefy’s official or supported integration for external enterprise use.
 
 ## Table of contents
 <p align="center">
@@ -26,6 +25,7 @@
   <a href="#why-these-dependencies">Why these dependencies?</a> •
   <a href="#mcp-clients">MCP clients</a> •
   <a href="#development--testing">Development & Testing</a> •
+  <a href="docs/tools/cross-cutting.md">Cross-cutting</a> •
   <a href="#contributing">Contributing</a>
 </p>
 
@@ -39,16 +39,7 @@ The server exposes **128 tools**, grouped below into **nine** surface areas. Can
 
 **Cross-cutting behavior**
 
-- **Pagination** — List-style tools accept `first` and `after`. Continue with `pageInfo.endCursor` while `pageInfo.hasNextPage` is true.
-- **IDs** — Pipefy GraphQL uses string IDs. Pass IDs as strings (e.g. `"301234"`). Some parameters also accept JSON integers; the server normalizes to string before calling the API. Success payloads return string IDs. Empty, zero, or otherwise invalid IDs fail validation before any network call. More detail: [Pipefy IDs and type safety](docs/tools/pipes-and-cards.md#pipefy-ids-type-safety).
-- **`debug=true`** — On failures, error text may include GraphQL codes and a `correlation_id` for support.
-- **`extra_input`** — Optional map of extra mutation fields (camelCase keys). Keys that duplicate the tool’s primary parameters are ignored.
-- **Destructive operations** — Deletes use a two-step contract: call with `confirm=false` (default) for a preview, then `confirm=true` only after explicit approval to execute.
-- **Automatic `PERMISSION_DENIED` enrichment** — On cross-pipe operations (relations, AI agents), errors carrying `extensions.code = PERMISSION_DENIED` are enriched with a membership hint pointing to `invite_members` when the service account is missing from the target pipe. Runs automatically (no `debug=true` required); implementation in [`enrich_permission_denied_error`](src/pipefy_mcp/tools/graphql_error_helpers.py).
-- **Service Account Protection** — When the optional [`PIPEFY_SERVICE_ACCOUNT_IDS`](.env.example) env var is set, the server guards `remove_member_from_pipe` and `set_role` against locking the service account out of its own pipes. See [Service Account Protection](docs/tools/members-email-webhooks.md#service-account-protection) for the full contract.
-- **Pre-flight validation for AI features** — Before creating/updating AI automations or AI agents, call [`validate_ai_automation_prompt`](docs/tools/automations-and-ai.md#ai-automations) and [`validate_ai_agent_behaviors`](docs/tools/automations-and-ai.md#ai-agent-read--delete) to catch prompt/field/event errors and membership gaps without round-tripping the write mutation.
-- **Introspection** — `introspect_type`, `introspect_query`, and `introspect_mutation` expose live schema; `search_schema` lists types by keyword (optional `kind` filter). Use `max_depth` where supported to expand nested types in one round trip. Set `include_parsed=true` to also receive a `data` dict for programmatic access.
-- **Error payloads** — When a GraphQL exception carries a structured `errors` list, error payloads now return only the extracted `message` strings (without the noisy `str(exc)` wrapper that previously included `locations` / `extensions`). The raw string is used as a fallback only when no structured messages can be extracted.
+Rules that apply to many tools (pagination, IDs, `debug`, `extra_input`, two-step deletes, permissions, introspection, error shape, and more) live in **[`docs/tools/cross-cutting.md`](docs/tools/cross-cutting.md)**. That page also notes **dependents** on destructive previews when optional scope args (e.g. `pipe_id` / `phase_id`) are used. Per-tool parameters stay in docstrings and the category links below.
 
 | Category | Tools | Description | Docs |
 |----------|:-----:|-------------|------|
@@ -56,7 +47,7 @@ The server exposes **128 tools**, grouped below into **nine** surface areas. Can
 | **Database tables** | 17 | Tables, records (rows), schema columns (table fields), org-wide table discovery, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
 | **Relations** | 8 | Pipe relations, table relations by ID, card links, list/delete card-level relations. | [Details](docs/tools/relations.md) |
 | **Reports** | 17 | Pipe and organization reports: discovery, CRUD, single pipe report read, and async exports. | [Details](docs/tools/reports.md) |
-| **Automations & AI** | 22 | Traditional automations (rules engine), AI automations, and AI agents — including pre-flight validation (`validate_ai_automation_prompt`, `validate_ai_agent_behaviors`) to catch prompt/field/event errors before write. | [Details](docs/tools/automations-and-ai.md) |
+| **Automations & AI** | 22 | Traditional automations (rules engine), AI automations, and AI agents, with pre-flight validators for safer writes. | [Details](docs/tools/automations-and-ai.md) |
 | **Observability** | 10 | AI agent and automation logs, usage stats, credits, job exports, status polling, and CSV fetch for finished exports. | [Details](docs/tools/observability.md) |
 | **Members, email & webhooks** | 11 | Pipe membership, card inbox emails, webhooks (list/update/create/delete), and transactional email sends. | [Details](docs/tools/members-email-webhooks.md) |
 | **Organization** | 1 | Fetch organization details (plan, members, pipes count). | [Details](docs/tools/organization.md) |
@@ -147,15 +138,6 @@ uv run ruff format src/
 
 1. Implement the tool in the appropriate module under `src/pipefy_mcp/tools/` and call its `*Tools.register(...)` from `ToolRegistry.register_tools()` in [`src/pipefy_mcp/tools/registry.py`](src/pipefy_mcp/tools/registry.py) if it is not already wired.
 2. Add the **exact tool name** (as exposed to MCP clients) to **`PIPEFY_TOOL_NAMES`** in the same file. The server uses that set for collision checks at startup and for cleanup after a failed registration; `tests/test_server.py` also asserts the live tool list matches this set.
-
-### Manual smoke test (Cursor MCP)
-
-After meaningful changes to **`server.py`**, the **lifespan**, or **tool registration** (including `PIPEFY_TOOL_NAMES`), validate the real stack—not only unit tests:
-
-1. Add or enable this server in **Cursor MCP settings** and run the server, for example: `uv run pipefy-mcp-server` — this starts the MCP server defined in this repo so Cursor can connect to it.
-2. From the chat or MCP tools panel, confirm tools load (e.g. list tools / invoke a simple read-only tool you care about).
-
-Inspector (`npx @modelcontextprotocol/inspector …`) remains useful for protocol debugging; Cursor MCP is the preferred sign-off for “tools work as we use them.”
 
 ## Contributing
 We are building this in public and we need your feedback!

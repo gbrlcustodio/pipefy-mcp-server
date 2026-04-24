@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
 
+from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
@@ -340,6 +342,253 @@ def field_condition_actions_error_message(
     return None
 
 
+async def find_phase_field_dependents(
+    client: PipefyClient,
+    *,
+    phase_id: str,
+    field_internal_id: str | None,
+    field_uuid: str | None,
+    field_slug: str | None,
+) -> list[dict[str, Any]]:
+    """Return field conditions on ``phase_id`` whose actions reference the field."""
+    try:
+        payload = await client.get_field_conditions(phase_id)
+    except Exception:  # noqa: BLE001
+        return []
+    phase = (payload or {}).get("phase") or {}
+    conditions = phase.get("fieldConditions") or []
+    targets = {str(t) for t in (field_internal_id, field_uuid, field_slug) if t}
+    out: list[dict[str, Any]] = []
+    for cond in conditions:
+        if not isinstance(cond, dict):
+            continue
+        actions = cond.get("actions") or []
+        for action in actions:
+            if not isinstance(action, dict):
+                continue
+            raw_pf = action.get("phaseFieldId")
+            if raw_pf is not None and str(raw_pf) in targets:
+                out.append(
+                    {
+                        "id": cond.get("id"),
+                        "name": cond.get("name"),
+                        "action_count": len(actions),
+                    }
+                )
+                break
+    return out
+
+
+async def resolve_phase_field_identifiers(
+    client: PipefyClient,
+    phase_id: str,
+    field_id: str,
+) -> dict[str, Any]:
+    """Map a phase field token to internal_id / uuid / slug when present."""
+    try:
+        payload = await client.get_phase_fields(phase_id)
+    except Exception:  # noqa: BLE001
+        return {}
+    fields = (payload or {}).get("fields") or []
+    needle = str(field_id).strip()
+    for field in fields:
+        if not isinstance(field, dict):
+            continue
+        internal = field.get("internal_id")
+        uuid_val = field.get("uuid")
+        slug = field.get("id")
+        candidates = {
+            str(x)
+            for x in (internal, uuid_val, slug)
+            if x is not None and str(x).strip()
+        }
+        if needle in candidates:
+            out: dict[str, Any] = {}
+            if internal is not None:
+                out["internal_id"] = str(internal)
+            if uuid_val is not None:
+                out["uuid"] = str(uuid_val)
+            if slug is not None:
+                out["slug"] = str(slug)
+            return out
+    return {}
+
+
+def _field_conditions_list_from_get_payload(payload: object) -> list[dict[str, Any]]:
+    """Unwrap field conditions from ``get_field_conditions`` (GraphQL ``phase.fieldConditions``)."""
+    if not isinstance(payload, dict):
+        return []
+    raw_phase = payload.get("phase")
+    if isinstance(raw_phase, dict):
+        rows = raw_phase.get("fieldConditions")
+        if isinstance(rows, list):
+            return [c for c in rows if isinstance(c, dict)]
+    return []
+
+
+def _automation_mentions_phase(automation: dict[str, Any], phase_id: str) -> bool:
+    """True when any trigger/action parameter references the given phase id."""
+    key = str(phase_id)
+    event_params = automation.get("event_params")
+    if isinstance(event_params, dict):
+        for attr in (
+            "fromPhaseId",
+            "inPhaseId",
+            "to_phase_id",
+        ):
+            v = event_params.get(attr)
+            if v is not None and str(v) == key:
+                return True
+        ep = event_params.get("phase")
+        if isinstance(ep, dict) and str(ep.get("id") or "") == key:
+            return True
+    action_params = automation.get("action_params")
+    if isinstance(action_params, dict):
+        to_ph = action_params.get("to_phase_id")
+        if to_ph is not None and str(to_ph) == key:
+            return True
+        ap = action_params.get("phase")
+        if isinstance(ap, dict) and str(ap.get("id") or "") == key:
+            return True
+    return False
+
+
+def _filter_automations_by_phase(
+    full_automations: list[dict[str, Any]],
+    phase_id: str,
+) -> list[dict[str, Any]]:
+    """Keep automations whose event/action configuration references ``phase_id``."""
+    out: list[dict[str, Any]] = []
+    for row in full_automations:
+        if _automation_mentions_phase(row, str(phase_id)):
+            out.append(
+                {
+                    "id": row.get("id"),
+                    "name": row.get("name"),
+                }
+            )
+    return out
+
+
+def _build_phase_dependents_hint(deps: dict[str, Any]) -> str:
+    """Human-readable count summary of phase dependents for destructive preview."""
+    cards = deps.get("cards_count")
+    field_count = deps.get("phase_fields_count")
+    conditions = deps.get("field_conditions")
+    automations = deps.get("automations")
+    n_cond = len(conditions) if isinstance(conditions, list) else 0
+    n_auto = len(automations) if isinstance(automations, list) else 0
+
+    phrases: list[str] = []
+    if isinstance(cards, int):
+        phrases.append(f"{cards} card(s)")
+    if isinstance(field_count, int):
+        phrases.append(f"{field_count} phase field(s)")
+    if n_cond:
+        phrases.append(
+            f"{n_cond} field condition(s)" if n_cond != 1 else "1 field condition"
+        )
+    if n_auto:
+        phrases.append(f"{n_auto} automation(s)" if n_auto != 1 else "1 automation")
+
+    if not phrases:
+        return "Deleting this phase is irreversible."
+
+    if len(phrases) == 1:
+        body = phrases[0]
+    elif len(phrases) == 2:
+        body = f"{phrases[0]} and {phrases[1]}"
+    else:
+        body = ", ".join(phrases[:-1]) + f" and {phrases[-1]}"
+    return f"Deleting this phase will remove {body}. This action is irreversible."
+
+
+async def _automations_referencing_phase(
+    client: PipefyClient, pipe_id: str, phase_id: str
+) -> list[dict[str, Any]]:
+    """List automations in ``pipe_id`` whose config references ``phase_id`` (summary rows).
+
+    Returns a filtered summary list. Exceptions propagate to the outer gather.
+    Inner per-automation detail fetches are allowed to fail individually.
+    """
+    rows = await client.get_automations(pipe_id=str(pipe_id))
+    if not rows:
+        return []
+    ids = [str(r.get("id")) for r in rows if isinstance(r, dict) and r.get("id")]
+    if not ids:
+        return []
+    full_list = await asyncio.gather(
+        *[client.get_automation(i) for i in ids],
+        return_exceptions=True,
+    )
+    full_rows: list[dict[str, Any]] = [
+        item for item in full_list if isinstance(item, dict) and item
+    ]
+    return _filter_automations_by_phase(full_rows, str(phase_id))
+
+
+async def resolve_phase_dependents(
+    client: PipefyClient, *, pipe_id: str, phase_id: str
+) -> dict[str, Any] | None:
+    """Plan-dependent facts for delete-phase preview: conditions, automations, counts, hint.
+
+    Sub-lookups run in parallel via :func:`asyncio.gather` with
+    ``return_exceptions=True``. If a sub-lookup fails, its key is omitted. When
+    every lookup is empty or failed, returns ``None`` (the guard then emits
+    the preview without a ``dependents`` key).
+
+    The card count uses :meth:`PipefyClient.get_phase_cards_count` — the native
+    ``Phase.cards_count`` scalar. Pipefy's ``CardSearch`` input does not expose
+    a phase filter, so the historical ``cards(search: {inbox_phase_id})`` path
+    would not actually restrict cards to the phase.
+    """
+    p_id = str(pipe_id).strip()
+    ph_id = str(phase_id).strip()
+    if not p_id or not ph_id:
+        return None
+
+    results = await asyncio.gather(
+        client.get_field_conditions(ph_id),
+        _automations_referencing_phase(client, p_id, ph_id),
+        client.get_phase_cards_count(ph_id),
+        client.get_phase_fields(ph_id),
+        return_exceptions=True,
+    )
+    labels = (
+        "field_conditions",
+        "automations",
+        "cards_count",
+        "phase_fields",
+    )
+    rmap = dict(zip(labels, results, strict=True))
+    out: dict[str, Any] = {}
+
+    fc = rmap["field_conditions"]
+    if not isinstance(fc, BaseException):
+        conds = _field_conditions_list_from_get_payload(fc)
+        if conds:
+            out["field_conditions"] = [
+                {"id": c.get("id"), "name": c.get("name")} for c in conds
+            ]
+    aut = rmap["automations"]
+    if not isinstance(aut, BaseException) and aut:
+        out["automations"] = aut
+    cc = rmap["cards_count"]
+    if not isinstance(cc, BaseException) and isinstance(cc, int):
+        out["cards_count"] = cc
+
+    pf = rmap["phase_fields"]
+    if not isinstance(pf, BaseException):
+        fields = (pf or {}).get("fields") or []
+        if isinstance(fields, list):
+            out["phase_fields_count"] = len([f for f in fields if isinstance(f, dict)])
+
+    if not out:
+        return None
+    out["hint"] = _build_phase_dependents_hint(out)
+    return out
+
+
 __all__ = [
     "DeletePipeErrorPayload",
     "DeletePipePayload",
@@ -359,8 +608,11 @@ __all__ = [
     "build_pipe_tool_error_payload",
     "field_condition_actions_error_message",
     "field_condition_phase_field_id_looks_like_slug",
+    "find_phase_field_dependents",
     "handle_pipe_config_tool_graphql_error",
     "map_delete_pipe_error_to_message",
     "normalize_field_condition_actions",
+    "resolve_phase_dependents",
+    "resolve_phase_field_identifiers",
     "strip_expression_ids_for_create",
 ]

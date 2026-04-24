@@ -20,9 +20,13 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     build_delete_pipe_success_payload,
     build_pipe_mutation_success_payload,
     build_pipe_tool_error_payload,
+    find_phase_field_dependents,
     handle_pipe_config_tool_graphql_error,
     map_delete_pipe_error_to_message,
+    resolve_phase_dependents,
+    resolve_phase_field_identifiers,
 )
+from pipefy_mcp.tools.pipe_tool_helpers import find_label_dependents
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
@@ -496,6 +500,7 @@ class PipeConfigTools:
         async def delete_phase(
             ctx: Context[ServerSession, None],
             phase_id: PipefyId,
+            pipe_id: PipefyId | None = None,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -507,17 +512,34 @@ class PipeConfigTools:
 
             Args:
                 phase_id: Phase ID to delete.
+                pipe_id: Pipe the phase belongs to; when set, the preview may list conditions,
+                    automations targeting this phase, a card count, and phase field count
+                    (``confirm=False`` only; extra API calls).
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             phase_id, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
                 return err
+            ok_pi, pipe_id_norm, pi_err = validate_optional_tool_id(pipe_id, "pipe_id")
+            if not ok_pi:
+                return build_pipe_tool_error_payload(
+                    message=tool_error_message(pi_err),
+                    code="INVALID_ARGUMENTS",
+                )
+
+            async def _resolve_phase_deps() -> dict[str, Any] | None:
+                if not pipe_id_norm:
+                    return None
+                return await resolve_phase_dependents(
+                    client, pipe_id=pipe_id_norm, phase_id=phase_id
+                )
 
             guard = await check_destructive_confirmation(
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"phase (ID: {phase_id})",
+                dependents_resolver=_resolve_phase_deps,
             )
             if guard is not None:
                 return guard
@@ -707,6 +729,7 @@ class PipeConfigTools:
             confirm: bool = False,
             pipe_uuid: str | None = None,
             pipe_id: PipefyId | None = None,
+            phase_id: PipefyId | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Delete a phase field permanently.
@@ -728,6 +751,9 @@ class PipeConfigTools:
             returns an actionable message; without ``pipe_id`` the raw
             upstream error is returned.
 
+            **Preview dependents:** pass ``phase_id`` with ``confirm=False`` to include
+            referencing ``field_conditions`` in the preview (extra read APIs).
+
             Args:
                 field_id: Field slug or uuid (from create_phase_field or get_phase_fields).
                     Discover via: ``get_phase_fields(phase_id)[].id`` or ``.uuid``.
@@ -735,6 +761,8 @@ class PipeConfigTools:
                 pipe_uuid: Pipe UUID for disambiguation when the slug is not unique across phases.
                 pipe_id: Numeric pipe ID; enables cascade-aware error diagnosis when set.
                     Discover via: ``search_pipes`` or ``get_organization``.
+                phase_id: Phase that owns the field; when set, the preview lists dependent
+                    field conditions (``confirm=False`` only).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             field_id, err = validate_tool_id(field_id, "field_id")
@@ -746,11 +774,44 @@ class PipeConfigTools:
                     message=tool_error_message(pid_err),
                     code="INVALID_ARGUMENTS",
                 )
+            ok_ph, phase_id_norm, ph_err = validate_optional_tool_id(
+                phase_id, "phase_id"
+            )
+            if not ok_ph:
+                return build_pipe_tool_error_payload(
+                    message=tool_error_message(ph_err),
+                    code="INVALID_ARGUMENTS",
+                )
+
+            async def _resolve_deps() -> dict[str, Any] | None:
+                if not phase_id_norm:
+                    return None
+                field_meta = await resolve_phase_field_identifiers(
+                    client, phase_id_norm, field_id
+                )
+                conditions = await find_phase_field_dependents(
+                    client,
+                    phase_id=phase_id_norm,
+                    field_internal_id=field_meta.get("internal_id"),
+                    field_uuid=field_meta.get("uuid"),
+                    field_slug=field_meta.get("slug"),
+                )
+                if not conditions:
+                    return None
+                return {
+                    "field_conditions": conditions,
+                    "hint": (
+                        f"{len(conditions)} field condition(s) reference this phase field. "
+                        "Delete them first with `delete_field_condition`, or proceed if "
+                        "orphans are acceptable."
+                    ),
+                }
 
             guard = await check_destructive_confirmation(
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"phase field (ID: {field_id})",
+                dependents_resolver=_resolve_deps,
             )
             if guard is not None:
                 return guard
@@ -896,6 +957,7 @@ class PipeConfigTools:
         async def delete_label(
             ctx: Context[ServerSession, None],
             label_id: PipefyId,
+            pipe_id: PipefyId | None = None,
             confirm: bool = False,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -907,17 +969,48 @@ class PipeConfigTools:
 
             Args:
                 label_id: Label ID to delete.
+                pipe_id: Pipe that owns the label; when set, the preview may include a sample
+                    of cards using this label (``confirm=False`` only).
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             label_id, err = validate_tool_id(label_id, "label_id")
             if err is not None:
                 return err
+            ok_pi, pipe_id_norm, pi_err = validate_optional_tool_id(pipe_id, "pipe_id")
+            if not ok_pi:
+                return build_pipe_tool_error_payload(
+                    message=tool_error_message(pi_err),
+                    code="INVALID_ARGUMENTS",
+                )
+
+            async def _resolve_deps() -> dict[str, Any] | None:
+                if not pipe_id_norm:
+                    return None
+                deps = await find_label_dependents(
+                    client, pipe_id=pipe_id_norm, label_id=str(label_id)
+                )
+                if not deps:
+                    return None
+                count_phrase = (
+                    f"More than {deps['sample_cap']}"
+                    if deps["has_more"]
+                    else f"{deps['sample_size']}"
+                )
+                return {
+                    "cards_using_label": deps,
+                    "hint": (
+                        f"{count_phrase} card(s) currently use this label. "
+                        "Delete proceeds silently — labels are removed from cards automatically. "
+                        "Proceed if that is intended."
+                    ),
+                }
 
             guard = await check_destructive_confirmation(
                 ctx,
                 confirm=confirm,
                 resource_descriptor=f"label (ID: {label_id})",
+                dependents_resolver=_resolve_deps,
             )
             if guard is not None:
                 return guard

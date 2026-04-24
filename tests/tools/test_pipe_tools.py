@@ -971,6 +971,30 @@ class TestGetCardsTool:
         assert payload["data"]["cards"]["edges"][0]["node"]["id"] == "1"
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_cards_flag_on_no_first_omits_pagination(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+        unified_envelope,
+    ):
+        """Flag=true with first=None — pagination block is omitted.
+
+        Regression: the earlier implementation emitted ``page_size=0`` in this
+        case, which the shared ``validate_page_size`` itself would reject as
+        ``INVALID_ARGUMENTS``.
+        """
+        mock_pipefy_client.get_cards = AsyncMock(
+            return_value={"cards": {"edges": [], "pageInfo": {"hasNextPage": False}}}
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_cards", {"pipe_id": pipe_id})
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert "pagination" not in payload
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_get_cards_flag_off_returns_raw_graphql(
         self,
         client_session,

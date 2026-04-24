@@ -6,6 +6,7 @@ from rapidfuzz import fuzz
 from pipefy_mcp.services.pipefy.base_client import BasePipefyClient
 from pipefy_mcp.services.pipefy.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
+    GET_PHASE_CARDS_COUNT_QUERY,
     GET_PHASE_FIELDS_QUERY,
     GET_PIPE_MEMBERS_QUERY,
     GET_PIPE_QUERY,
@@ -192,6 +193,28 @@ class PipeService(BasePipefyClient):
         """
         variables = {"phase_id": str(phase_id)}
         return await self.execute_query(GET_PHASE_ALLOWED_MOVES_QUERY, variables)
+
+    async def get_phase_cards_count(self, phase_id: str | int) -> int:
+        """Return the total card count for ``phase_id`` via ``Phase.cards_count``.
+
+        Uses the native schema scalar — no card enumeration, no phase filter
+        workaround on ``CardSearch`` (which does not expose one).
+
+        Args:
+            phase_id: Phase ID.
+
+        Returns:
+            Integer card count as reported by Pipefy.
+
+        Raises:
+            ValueError: ``phase.cards_count`` is missing from the response.
+        """
+        variables = {"phase_id": str(phase_id)}
+        result = await self.execute_query(GET_PHASE_CARDS_COUNT_QUERY, variables)
+        phase = (result or {}).get("phase")
+        if not isinstance(phase, dict) or phase.get("cards_count") is None:
+            raise ValueError("phase.cards_count missing from response")
+        return int(phase["cards_count"])
 
     async def get_phase_fields(
         self, phase_id: str | int, required_only: bool = False

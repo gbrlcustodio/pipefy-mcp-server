@@ -898,6 +898,10 @@ class PipefyClient:
         """Phases reachable from ``phase_id`` per Pipefy transition rules (read-only)."""
         return await self._pipe_service.get_phase_allowed_move_targets(phase_id)
 
+    async def get_phase_cards_count(self, phase_id: str | int) -> int:
+        """Total card count for ``phase_id`` via native ``Phase.cards_count``."""
+        return await self._pipe_service.get_phase_cards_count(phase_id)
+
     async def get_pipe_reports(
         self,
         pipe_uuid: str,

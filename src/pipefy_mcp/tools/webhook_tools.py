@@ -58,7 +58,11 @@ class WebhookTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
-                    exc, "List email templates failed.", debug=debug
+                    exc,
+                    "List email templates failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(rid),
                 )
             return build_webhook_success_payload(
                 message="Email templates listed.",
@@ -101,7 +105,11 @@ class WebhookTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
-                    exc, "Get card inbox emails failed.", debug=debug
+                    exc,
+                    "Get card inbox emails failed.",
+                    debug=debug,
+                    resource_kind="card",
+                    resource_id=str(cid),
                 )
             return build_webhook_success_payload(
                 message="Card inbox emails listed.",
@@ -172,7 +180,11 @@ class WebhookTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
-                    exc, "Send inbox email failed.", debug=debug
+                    exc,
+                    "Send inbox email failed.",
+                    debug=debug,
+                    resource_kind="card",
+                    resource_id=str(cid),
                 )
             return build_webhook_success_payload(
                 message="Email sent.",
@@ -235,7 +247,11 @@ class WebhookTools:
                 return build_webhook_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
-                    exc, "Send email with template failed.", debug=debug
+                    exc,
+                    "Send email with template failed.",
+                    debug=debug,
+                    resource_kind="email_template",
+                    resource_id=str(email_template_id),
                 )
             return build_webhook_success_payload(
                 message="Email sent with template.",
@@ -267,7 +283,11 @@ class WebhookTools:
                 raw = await client.get_webhooks(pid)
             except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
-                    exc, "List webhooks failed.", debug=debug
+                    exc,
+                    "List webhooks failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pid),
                 )
             return build_webhook_success_payload(
                 message="Webhooks listed.",
@@ -291,6 +311,7 @@ class WebhookTools:
 
             Args:
                 pipe_id: ID of the pipe.
+                    Discover via: ``search_pipes`` or ``get_organization``.
                 url: HTTPS URL to receive events.
                 actions: List of event action strings.
                 extra_input: Optional extra CreateWebhookInput fields (name, filters, headers).
@@ -327,7 +348,11 @@ class WebhookTools:
                 return build_webhook_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
-                    exc, "Create webhook failed.", debug=debug
+                    exc,
+                    "Create webhook failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pid),
                 )
             return build_webhook_success_payload(
                 message="Webhook created.",
@@ -352,6 +377,7 @@ class WebhookTools:
 
             Args:
                 webhook_id: ID of the webhook to update.
+                    Discover via: ``get_webhooks(pipe_id)[].id``.
                 name: Optional new display name.
                 url: Optional new HTTPS callback URL.
                 actions: Optional new list of event action strings (non-empty when provided).
@@ -407,7 +433,11 @@ class WebhookTools:
                 return build_webhook_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
-                    exc, "Update webhook failed.", debug=debug
+                    exc,
+                    "Update webhook failed.",
+                    debug=debug,
+                    resource_kind="webhook",
+                    resource_id=str(wid),
                 )
             return build_webhook_success_payload(
                 message="Webhook updated.",
@@ -454,7 +484,11 @@ class WebhookTools:
                 raw = await client.delete_webhook(wid)
             except Exception as exc:  # noqa: BLE001
                 return handle_webhook_tool_graphql_error(
-                    exc, "Delete webhook failed.", debug=debug
+                    exc,
+                    "Delete webhook failed.",
+                    debug=debug,
+                    resource_kind="webhook",
+                    resource_id=str(wid),
                 )
             return build_webhook_success_payload(
                 message="Webhook deleted.",

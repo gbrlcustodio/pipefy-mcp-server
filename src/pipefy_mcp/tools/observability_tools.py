@@ -98,7 +98,11 @@ class ObservabilityTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_observability_tool_graphql_error(
-                    exc, "Get AI agent logs failed.", debug=debug
+                    exc,
+                    "Get AI agent logs failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=repo_uuid,
                 )
             return build_observability_read_success_payload(
                 raw, message="AI agent logs retrieved."
@@ -128,7 +132,11 @@ class ObservabilityTools:
                 if rewritten is not None:
                     return build_observability_error_payload(message=rewritten)
                 return handle_observability_tool_graphql_error(
-                    exc, "Get AI agent log details failed.", debug=debug
+                    exc,
+                    "Get AI agent log details failed.",
+                    debug=debug,
+                    resource_kind="ai_agent_log",
+                    resource_id=log_uuid,
                 )
             return build_observability_read_success_payload(
                 raw, message="AI agent log details retrieved."
@@ -173,7 +181,11 @@ class ObservabilityTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_observability_tool_graphql_error(
-                    exc, "Get automation logs failed.", debug=debug
+                    exc,
+                    "Get automation logs failed.",
+                    debug=debug,
+                    resource_kind="automation",
+                    resource_id=str(automation_id),
                 )
             return build_observability_read_success_payload(
                 raw, message="Automation logs retrieved."
@@ -218,7 +230,11 @@ class ObservabilityTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_observability_tool_graphql_error(
-                    exc, "Get automation logs by repo failed.", debug=debug
+                    exc,
+                    "Get automation logs by repo failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(repo_id),
                 )
             return build_observability_read_success_payload(
                 raw, message="Automation logs by repo retrieved."
@@ -266,7 +282,11 @@ class ObservabilityTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_observability_tool_graphql_error(
-                    exc, "Get agents usage failed.", debug=debug
+                    exc,
+                    "Get agents usage failed.",
+                    debug=debug,
+                    resource_kind="organization",
+                    resource_id=str(organization_uuid),
                 )
             return build_observability_read_success_payload(
                 raw, message="Agents usage retrieved."
@@ -314,7 +334,11 @@ class ObservabilityTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_observability_tool_graphql_error(
-                    exc, "Get automations usage failed.", debug=debug
+                    exc,
+                    "Get automations usage failed.",
+                    debug=debug,
+                    resource_kind="organization",
+                    resource_id=str(organization_uuid),
                 )
             return build_observability_read_success_payload(
                 raw, message="Automations usage retrieved."
@@ -351,7 +375,11 @@ class ObservabilityTools:
                 return build_observability_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_observability_tool_graphql_error(
-                    exc, "Get AI credit usage failed.", debug=debug
+                    exc,
+                    "Get AI credit usage failed.",
+                    debug=debug,
+                    resource_kind="organization",
+                    resource_id=str(organization_uuid),
                 )
             return build_observability_read_success_payload(
                 raw, message="AI credit usage retrieved."
@@ -383,7 +411,11 @@ class ObservabilityTools:
                 raw = await client.export_automation_jobs(organization_id, period)
             except Exception as exc:  # noqa: BLE001
                 return handle_observability_tool_graphql_error(
-                    exc, "Export automation jobs failed.", debug=debug
+                    exc,
+                    "Export automation jobs failed.",
+                    debug=debug,
+                    resource_kind="organization",
+                    resource_id=str(organization_id),
                 )
             return build_observability_mutation_success_payload(
                 message="Automation jobs export triggered.",
@@ -411,7 +443,11 @@ class ObservabilityTools:
                 raw = await client.get_automation_jobs_export(export_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_observability_tool_graphql_error(
-                    exc, "Get automation jobs export failed.", debug=debug
+                    exc,
+                    "Get automation jobs export failed.",
+                    debug=debug,
+                    resource_kind="automation",
+                    resource_id=str(export_id),
                 )
             return build_observability_read_success_payload(
                 raw, message="Automation jobs export retrieved."
@@ -471,6 +507,8 @@ class ObservabilityTools:
                     exc,
                     "Get automation jobs export as CSV failed.",
                     debug=debug,
+                    resource_kind="automation",
+                    resource_id=str(export_id),
                 )
             return build_observability_read_success_payload(
                 raw, message="Automation jobs export converted to CSV (first sheet)."

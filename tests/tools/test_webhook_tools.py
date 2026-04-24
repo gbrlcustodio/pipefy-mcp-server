@@ -14,6 +14,7 @@ from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 from tests.pagination_test_defaults import DEFAULT_FIRST
+from tests.tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture
@@ -404,7 +405,7 @@ class TestGetWebhooks:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "pipe not found" in tool_error_message(payload)
+        assert "pipe not found" in tool_error_message(payload).lower()
 
     @pytest.mark.anyio
     @pytest.mark.parametrize("webhook_session", [None], indirect=True)
@@ -554,7 +555,7 @@ async def test_delete_webhook_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "webhook not found" in tool_error_message(payload)
+    assert "webhook not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -652,7 +653,7 @@ async def test_get_card_inbox_emails_graphql_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "card not found" in tool_error_message(payload)
+    assert "card not found" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -893,7 +894,7 @@ async def test_send_inbox_email_rejects_invalid_card_id(
         )
 
     mock_webhook_client.send_inbox_email.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 # ---------------------------------------------------------------------------
@@ -913,7 +914,7 @@ async def test_send_email_with_template_rejects_blank_template_id(
         )
 
     mock_webhook_client.send_email_with_template.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -991,7 +992,7 @@ async def test_create_webhook_rejects_invalid_pipe_id(
         )
 
     mock_webhook_client.create_webhook.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 # ---------------------------------------------------------------------------
@@ -1017,7 +1018,7 @@ async def test_get_email_templates_graphql_error(
     assert result.isError is False
     p = extract_payload(result)
     assert p["success"] is False
-    assert "pipe not found" in tool_error_message(p)
+    assert "pipe not found" in tool_error_message(p).lower()
 
 
 @pytest.mark.anyio
@@ -1032,7 +1033,7 @@ async def test_get_email_templates_rejects_invalid_repo_id(
         )
 
     mock_webhook_client.get_email_templates.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 # ---------------------------------------------------------------------------
@@ -1052,7 +1053,7 @@ async def test_get_card_inbox_emails_rejects_invalid_card_id(
         )
 
     mock_webhook_client.get_card_inbox_emails.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 # ---------------------------------------------------------------------------
@@ -1072,7 +1073,7 @@ async def test_send_email_with_template_rejects_invalid_card_id(
         )
 
     mock_webhook_client.send_email_with_template.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 # ---------------------------------------------------------------------------
@@ -1093,4 +1094,4 @@ async def test_delete_webhook_rejects_blank_webhook_id(
         )
 
     mock_webhook_client.delete_webhook.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)

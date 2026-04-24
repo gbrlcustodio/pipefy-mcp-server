@@ -72,9 +72,19 @@ def handle_pipe_config_tool_graphql_error(
     fallback_msg: str,
     *,
     debug: bool = False,
+    resource_kind: str | None = None,
+    resource_id: str | None = None,
+    invalid_args_hint: str | None = None,
 ) -> dict[str, Any]:
-    """Delegate to :func:`handle_tool_graphql_error`."""
-    return handle_tool_graphql_error(exc, fallback_msg, debug=debug)
+    """Delegate to :func:`handle_tool_graphql_error` with enrichment opt-ins."""
+    return handle_tool_graphql_error(
+        exc,
+        fallback_msg,
+        debug=debug,
+        resource_kind=resource_kind,
+        resource_id=resource_id,
+        invalid_args_hint=invalid_args_hint,
+    )
 
 
 def build_pipe_mutation_success_payload(
@@ -92,13 +102,19 @@ def build_pipe_mutation_success_payload(
     )
 
 
-def build_pipe_tool_error_payload(*, message: str) -> dict[str, Any]:
+def build_pipe_tool_error_payload(
+    *, message: str, code: str | None = None
+) -> dict[str, Any]:
     """``success: False`` with ``error`` text.
 
     Args:
         message: User-visible failure reason.
+        code: Optional machine-readable error code. Pass
+            ``"INVALID_ARGUMENTS"`` for pre-API argument-shape failures so
+            the envelope matches the shape of arg-coercion errors
+            emitted by :class:`pipefy_mcp.tools.validation_envelope.PipefyValidationTool`.
     """
-    return tool_error(message)
+    return tool_error(message, code=code)
 
 
 def build_field_condition_success_payload(

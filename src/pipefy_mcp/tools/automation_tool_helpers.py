@@ -17,6 +17,8 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
+    strip_internal_api_diagnostic_markers,
+    try_enrich_graphql_error,
     with_debug_suffix,
 )
 from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
@@ -128,22 +130,48 @@ async def handle_automation_tool_graphql_error(
     exc: BaseException,
     ctx: Context,
     debug: bool,
+    *,
+    resource_kind: str | None = None,
+    resource_id: str | None = None,
+    invalid_args_hint: str | None = None,
 ) -> AutomationToolErrorPayload:
     """Format ``exc`` as ``build_automation_error_payload``; optional MCP debug log.
+
+    Mirrors :func:`handle_tool_graphql_error` enrichment precedence so automation
+    tools surface the same discovery hints as other domains.
 
     Args:
         exc: Root exception from gql/httpx.
         ctx: MCP context for ``ctx.debug`` when ``debug`` is True.
         debug: Log raw exception and append codes / ``correlation_id`` to the message.
+        resource_kind: Optional canonical kind; opts into NOT_FOUND enrichment.
+        resource_id: Optional resource id; surfaced in the enriched message.
+        invalid_args_hint: Optional tool-specific hint for BAD_USER_INPUT errors.
     """
-    msgs = extract_error_strings(exc)
-    base = "; ".join(msgs) if msgs else "Automation request failed."
-    codes = extract_graphql_error_codes(exc)
-    first_code = codes[0] if codes else None
     if debug:
         await ctx.debug(f"automation GraphQL error: {exc!r}")
-        cid = extract_graphql_correlation_id(exc)
-        base = with_debug_suffix(base, debug=True, codes=codes, correlation_id=cid)
+
+    codes = extract_graphql_error_codes(exc)
+    first_code = codes[0] if codes else None
+    cid = extract_graphql_correlation_id(exc) if debug else None
+
+    enriched_result = try_enrich_graphql_error(
+        exc,
+        codes=codes,
+        debug=debug,
+        correlation_id=cid,
+        resource_kind=resource_kind,
+        resource_id=resource_id,
+        invalid_args_hint=invalid_args_hint,
+    )
+    if enriched_result is not None:
+        message, code = enriched_result
+        return build_automation_error_payload(message=message, code=code)
+
+    msgs = extract_error_strings(exc)
+    base = "; ".join(msgs) if msgs else "Automation request failed."
+    base = strip_internal_api_diagnostic_markers(base)
+    base = with_debug_suffix(base, debug=debug, codes=codes, correlation_id=cid)
     return build_automation_error_payload(message=base, code=first_code)
 
 

@@ -97,6 +97,7 @@ async def _diagnose_phase_field_cascade(
             "If you expected the field to still exist, verify with "
             "get_phase_fields on each phase of this pipe."
         ),
+        code="NOT_FOUND",
     )
 
 
@@ -127,6 +128,7 @@ class PipeConfigTools:
             if not isinstance(name, str) or not name.strip():
                 return build_pipe_tool_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
+                    code="INVALID_ARGUMENTS",
                 )
             org_id, err = validate_tool_id(organization_id, "organization_id")
             if err is not None:
@@ -135,7 +137,11 @@ class PipeConfigTools:
                 raw = await client.create_pipe(name.strip(), org_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Create pipe failed.", debug=debug
+                    exc,
+                    "Create pipe failed.",
+                    debug=debug,
+                    resource_kind="organization",
+                    resource_id=org_id,
                 )
             return build_pipe_mutation_success_payload(
                 label="Pipe created.",
@@ -176,6 +182,7 @@ class PipeConfigTools:
                     message=(
                         "Provide at least one of: name, icon, color, preferences."
                     ),
+                    code="INVALID_ARGUMENTS",
                 )
             try:
                 raw = await client.update_pipe(
@@ -187,7 +194,11 @@ class PipeConfigTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Update pipe failed.", debug=debug
+                    exc,
+                    "Update pipe failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=pipe_id_str,
                 )
             return build_pipe_mutation_success_payload(
                 label="Pipe updated.",
@@ -315,7 +326,11 @@ class PipeConfigTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Clone pipe failed.", debug=debug
+                    exc,
+                    "Clone pipe failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pipe_template_id),
                 )
             return build_pipe_mutation_success_payload(
                 label="Pipe(s) cloned.",
@@ -351,6 +366,7 @@ class PipeConfigTools:
             if not isinstance(name, str) or not name.strip():
                 return build_pipe_tool_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
+                    code="INVALID_ARGUMENTS",
                 )
             try:
                 raw = await client.create_phase(
@@ -362,7 +378,11 @@ class PipeConfigTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Create phase failed.", debug=debug
+                    exc,
+                    "Create phase failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pipe_id),
                 )
             return build_pipe_mutation_success_payload(
                 label="Phase created.",
@@ -393,6 +413,7 @@ class PipeConfigTools:
 
             Args:
                 phase_id: Phase ID to update.
+                    Discover via: ``get_pipe(pipe_id).phases[].id``.
                 name: New name, if changing.
                 description: New description, if changing.
                 done: Whether the phase is a final phase, if changing.
@@ -429,6 +450,7 @@ class PipeConfigTools:
             if not update_attrs:
                 return build_pipe_tool_error_payload(
                     message="Provide at least one attribute to update.",
+                    code="INVALID_ARGUMENTS",
                 )
 
             if "name" not in update_attrs:
@@ -436,12 +458,17 @@ class PipeConfigTools:
                     phase_info = await client.get_phase_fields(phase_id)
                 except Exception as exc:  # noqa: BLE001
                     return handle_pipe_config_tool_graphql_error(
-                        exc, "Could not load phase.", debug=debug
+                        exc,
+                        "Could not load phase.",
+                        debug=debug,
+                        resource_kind="phase",
+                        resource_id=str(phase_id),
                     )
                 current = phase_info.get("phase_name")
                 if not current:
                     return build_pipe_tool_error_payload(
                         message=f"Phase {phase_id} not found or has no name.",
+                        code="INVALID_ARGUMENTS",
                     )
                 update_attrs["name"] = current
 
@@ -449,7 +476,11 @@ class PipeConfigTools:
                 raw = await client.update_phase(phase_id, **update_attrs)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Update phase failed.", debug=debug
+                    exc,
+                    "Update phase failed.",
+                    debug=debug,
+                    resource_kind="phase",
+                    resource_id=str(phase_id),
                 )
             return build_pipe_mutation_success_payload(
                 label="Phase updated.",
@@ -495,7 +526,11 @@ class PipeConfigTools:
                 raw = await client.delete_phase(phase_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Delete phase failed.", debug=debug
+                    exc,
+                    "Delete phase failed.",
+                    debug=debug,
+                    resource_kind="phase",
+                    resource_id=str(phase_id),
                 )
             return build_pipe_mutation_success_payload(
                 label="Phase deleted.",
@@ -527,6 +562,7 @@ class PipeConfigTools:
 
             Args:
                 phase_id: Phase that will receive the field.
+                    Discover via: ``get_pipe(pipe_id).phases[].id``.
                 label: Field label shown in the UI.
                 field_type: Pipefy field type string (API input field ``type``).
                 options: Option values for select/radio/checklist fields (e.g. ["Alta", "Média", "Baixa"]).
@@ -541,10 +577,12 @@ class PipeConfigTools:
             if not isinstance(label, str) or not label.strip():
                 return build_pipe_tool_error_payload(
                     message="Invalid 'label': provide a non-empty string.",
+                    code="INVALID_ARGUMENTS",
                 )
             if not isinstance(field_type, str) or not field_type.strip():
                 return build_pipe_tool_error_payload(
                     message="Invalid 'field_type': provide a non-empty string.",
+                    code="INVALID_ARGUMENTS",
                 )
             merged: dict[str, Any] = {
                 k: v
@@ -566,7 +604,11 @@ class PipeConfigTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Create phase field failed.", debug=debug
+                    exc,
+                    "Create phase field failed.",
+                    debug=debug,
+                    resource_kind="phase",
+                    resource_id=str(phase_id),
                 )
             return build_pipe_mutation_success_payload(
                 label="Phase field created.",
@@ -599,11 +641,13 @@ class PipeConfigTools:
 
             Args:
                 field_id: Field slug (from create_phase_field or get_phase_fields).
+                    Discover via: ``get_phase_fields(phase_id)[].id`` (or ``uuid`` for disambiguation).
                 label: Field label (required by the Pipefy API even if unchanged — pass the current value).
                 description: New description, if changing.
                 required: Whether the field is required, if changing.
                 options: Field options list (e.g. ["Alta", "Média", "Baixa"] for select fields).
                 uuid: Field UUID for disambiguation when the slug exists on multiple phases.
+                    Discover via: ``get_phase_fields(phase_id)[].uuid``.
                 extra_input: Additional UpdatePhaseFieldInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -616,6 +660,7 @@ class PipeConfigTools:
                         "Invalid 'label': the Pipefy API requires label on every update "
                         "(pass the current label if unchanged)."
                     ),
+                    code="INVALID_ARGUMENTS",
                 )
             update_attrs: dict[str, Any] = {
                 k: v
@@ -636,7 +681,14 @@ class PipeConfigTools:
                 raw = await client.update_phase_field(fid, **update_attrs)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Update phase field failed.", debug=debug
+                    exc,
+                    "Update phase field failed.",
+                    debug=debug,
+                    resource_kind="phase_field",
+                    resource_id=str(fid),
+                    invalid_args_hint=(
+                        "Use 'get_phase_fields' to list valid field slugs and UUIDs."
+                    ),
                 )
             return build_pipe_mutation_success_payload(
                 label="Phase field updated.",
@@ -678,9 +730,11 @@ class PipeConfigTools:
 
             Args:
                 field_id: Field slug or uuid (from create_phase_field or get_phase_fields).
+                    Discover via: ``get_phase_fields(phase_id)[].id`` or ``.uuid``.
                 confirm: Set to True to execute the deletion (step 2).
                 pipe_uuid: Pipe UUID for disambiguation when the slug is not unique across phases.
                 pipe_id: Numeric pipe ID; enables cascade-aware error diagnosis when set.
+                    Discover via: ``search_pipes`` or ``get_organization``.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             field_id, err = validate_tool_id(field_id, "field_id")
@@ -689,7 +743,8 @@ class PipeConfigTools:
             ok_p, pipe_id_norm, pid_err = validate_optional_tool_id(pipe_id, "pipe_id")
             if not ok_p:
                 return build_pipe_tool_error_payload(
-                    message=tool_error_message(pid_err)
+                    message=tool_error_message(pid_err),
+                    code="INVALID_ARGUMENTS",
                 )
 
             guard = await check_destructive_confirmation(
@@ -709,7 +764,11 @@ class PipeConfigTools:
                 if enriched is not None:
                     return enriched
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Delete phase field failed.", debug=debug
+                    exc,
+                    "Delete phase field failed.",
+                    debug=debug,
+                    resource_kind="phase_field",
+                    resource_id=str(field_id),
                 )
             return build_pipe_mutation_success_payload(
                 label="Phase field deleted.",
@@ -741,10 +800,12 @@ class PipeConfigTools:
             if not isinstance(name, str) or not name.strip():
                 return build_pipe_tool_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
+                    code="INVALID_ARGUMENTS",
                 )
             if not isinstance(color, str) or not color.strip():
                 return build_pipe_tool_error_payload(
                     message="Invalid 'color': provide a non-empty string.",
+                    code="INVALID_ARGUMENTS",
                 )
             try:
                 raw = await client.create_label(
@@ -754,7 +815,11 @@ class PipeConfigTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Create label failed.", debug=debug
+                    exc,
+                    "Create label failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pipe_id),
                 )
             return build_pipe_mutation_success_payload(
                 label="Label created.",
@@ -793,10 +858,12 @@ class PipeConfigTools:
             if not isinstance(name, str) or not name.strip():
                 return build_pipe_tool_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
+                    code="INVALID_ARGUMENTS",
                 )
             if not isinstance(color, str) or not color.strip():
                 return build_pipe_tool_error_payload(
                     message="Invalid 'color': provide a non-empty string.",
+                    code="INVALID_ARGUMENTS",
                 )
             update_attrs: dict[str, Any] = {
                 k: v
@@ -809,7 +876,11 @@ class PipeConfigTools:
                 raw = await client.update_label(label_id, **update_attrs)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Update label failed.", debug=debug
+                    exc,
+                    "Update label failed.",
+                    debug=debug,
+                    resource_kind="label",
+                    resource_id=str(label_id),
                 )
             return build_pipe_mutation_success_payload(
                 label="Label updated.",
@@ -855,7 +926,11 @@ class PipeConfigTools:
                 raw = await client.delete_label(label_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
-                    exc, "Delete label failed.", debug=debug
+                    exc,
+                    "Delete label failed.",
+                    debug=debug,
+                    resource_kind="label",
+                    resource_id=str(label_id),
                 )
             return build_pipe_mutation_success_payload(
                 label="Label deleted.",

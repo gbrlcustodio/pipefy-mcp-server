@@ -13,6 +13,7 @@ from mcp.shared.memory import (
 from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tests.tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture
@@ -146,7 +147,7 @@ class TestGetAiAutomation:
                 {"automation_id": ""},
             )
         mock_pipefy_client.get_automation.assert_not_called()
-        assert result.isError is True
+        assert_invalid_arguments_envelope(result)
 
     async def test_rejects_non_positive_int_id(
         self,
@@ -331,7 +332,7 @@ class TestGetAiAutomations:
                 {"pipe_id": ""},
             )
         mock_pipefy_client.get_automations.assert_not_called()
-        assert result.isError is True
+        assert_invalid_arguments_envelope(result)
 
     async def test_rejects_invalid_organization_id(
         self,
@@ -344,7 +345,7 @@ class TestGetAiAutomations:
                 {"pipe_id": "1", "organization_id": ""},
             )
         mock_pipefy_client.get_automations.assert_not_called()
-        assert result.isError is True
+        assert_invalid_arguments_envelope(result)
 
     async def test_works_without_oauth_config(
         self,
@@ -484,7 +485,7 @@ class TestDeleteAiAutomation:
                 {"automation_id": "", "confirm": True},
             )
         mock_pipefy_client.delete_automation.assert_not_called()
-        assert result.isError is True
+        assert_invalid_arguments_envelope(result)
 
     async def test_has_destructive_hint(self, client_session):
         async with client_session as session:
@@ -799,7 +800,8 @@ class TestUpdateAiAutomation:
         err = tool_error_message(payload)
         assert "[code=" not in err
         assert "[correlation_id=" not in err
-        assert "Not found" in err
+        assert "Ai automation not found (ID: 789)" in err
+        assert "get_ai_automations" in err
         assert "corr-9" not in err
 
     async def test_update_debug_true_includes_correlation_and_codes(
@@ -826,10 +828,54 @@ class TestUpdateAiAutomation:
         assert payload["success"] is False
         err = tool_error_message(payload)
         assert "[code=" not in err
-        assert "Not found" in err
+        assert "Ai automation not found (ID: 789)" in err
         assert "(debug:" in err
         assert "NOT_FOUND" in err
         assert "corr-9" in err
+
+    async def test_update_plain_api_automation_not_found_gets_discovery_hint(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.update_ai_automation.side_effect = ValueError(
+            "API error: Automation not found with id: 99999999999"
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_ai_automation",
+                {"automation_id": "99999999999", "name": "x"},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        err = tool_error_message(payload)
+        assert "Ai automation not found (ID: 99999999999)" in err
+        assert "get_ai_automations" in err
+        assert payload["error"]["code"] == "NOT_FOUND"
+
+    async def test_update_permission_denied_gets_gap_a_ambiguity_hint(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        mock_pipefy_client.update_ai_automation.side_effect = ValueError(
+            "Permission denied [code=PERMISSION_DENIED] [correlation_id=c1]"
+        )
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_ai_automation",
+                {"automation_id": "42", "name": "x"},
+            )
+        assert result.isError is False
+        payload = extract_payload(result)
+        err = tool_error_message(payload)
+        assert "may not exist OR" in err
+        assert "get_ai_automations" in err
+        assert "get_pipe_members" not in err
+        assert payload["error"]["code"] == "PERMISSION_DENIED"
 
 
 ## ---------------------------------------------------------------------------
@@ -1266,7 +1312,7 @@ class TestValidateAiAutomationPrompt:
                 },
             )
         mock_pipefy_client.get_pipe_with_preferences.assert_not_called()
-        assert result.isError is True
+        assert_invalid_arguments_envelope(result)
 
     async def test_event_fetch_failure_adds_warning(
         self,

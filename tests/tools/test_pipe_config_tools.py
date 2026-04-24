@@ -21,6 +21,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
 )
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
+from tests.tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.mark.unit
@@ -742,7 +743,7 @@ async def test_update_label_missing_color_rejected_at_tool_boundary(
             {"label_id": 3, "name": "Story"},
         )
     mock_pipe_config_client.update_label.assert_not_called()
-    assert result.isError is True
+    assert_invalid_arguments_envelope(result)
 
 
 @pytest.mark.anyio
@@ -1310,6 +1311,42 @@ async def test_create_field_condition_success(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_create_field_condition_slug_like_phase_field_id_carries_invalid_arguments_code(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """Pre-API arg validation must surface ``error.code = INVALID_ARGUMENTS``.
+
+    Hit by smoke Phase 6 Probe 5: a slug-looking ``phaseFieldId`` (e.g.
+    ``"nome_do_campo"``) triggers ``field_condition_actions_error_message``
+    before any Pipefy call. The envelope must match the shape of coercion
+    errors so agents can branch on ``error.code`` consistently.
+    """
+    expr = {
+        "expressions": [{"field_address": "a", "operation": "equals", "value": "1"}],
+    }
+    # Slug-like phaseFieldId (non-digit) triggers the looks_like_slug check.
+    actions = [{"phaseFieldId": "nome_do_campo", "actionId": "hide"}]
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "create_field_condition",
+            {
+                "phase_id": "pf-99",
+                "condition": expr,
+                "actions": actions,
+                "name": "probe-5",
+            },
+        )
+
+    assert result.isError is False
+    mock_pipe_config_client.create_field_condition.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "get_phase_fields" in payload["error"]["message"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_create_field_condition_top_level_name__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
@@ -1764,7 +1801,7 @@ async def test_update_field_condition_error(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "Not found" in tool_error_message(payload)
+    assert "Field condition not found" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

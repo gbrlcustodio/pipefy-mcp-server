@@ -16,6 +16,7 @@ from pipefy_mcp.core.pipefy_tool_lifecycle import (
 )
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.registry import ToolRegistry
+from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
     """Lifespan function to manage the lifecycle of the server."""
     try:
         logger.info("Initializing services")
+        install_pipefy_validation_envelope()
         services_container = ServicesContainer.get_instance()
         services_container.initialize_services(settings)
         prepare_app_for_repeat_pipefy_tool_registration(app)

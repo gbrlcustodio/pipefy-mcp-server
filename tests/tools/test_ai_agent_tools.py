@@ -16,6 +16,7 @@ from pipefy_mcp.models.ai_agent import UpdateAiAgentInput
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from tests.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
+from tests.tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture(autouse=True)
@@ -1311,7 +1312,7 @@ class TestValidateAiAgentBehaviorsErrorPaths:
                 "validate_ai_agent_behaviors",
                 {"pipe_id": "  ", "behaviors": [minimal_behavior_dict()]},
             )
-        assert result.isError is True
+        assert_invalid_arguments_envelope(result)
 
     async def test_pydantic_validation_failure(
         self,

@@ -59,9 +59,19 @@ def handle_member_tool_graphql_error(
     fallback_msg: str,
     *,
     debug: bool = False,
+    resource_kind: str | None = None,
+    resource_id: str | None = None,
+    invalid_args_hint: str | None = None,
 ) -> dict[str, Any]:
-    """Delegate to :func:`handle_tool_graphql_error`."""
-    return handle_tool_graphql_error(exc, fallback_msg, debug=debug)
+    """Delegate to :func:`handle_tool_graphql_error` with enrichment opt-ins."""
+    return handle_tool_graphql_error(
+        exc,
+        fallback_msg,
+        debug=debug,
+        resource_kind=resource_kind,
+        resource_id=resource_id,
+        invalid_args_hint=invalid_args_hint,
+    )
 
 
 __all__ = [

@@ -73,7 +73,11 @@ class ReportTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Get pipe reports failed.", debug=debug
+                    exc,
+                    "Get pipe reports failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=pipe_uuid,
                 )
             return build_report_read_success_payload(
                 raw,
@@ -116,7 +120,11 @@ class ReportTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Get pipe report failed.", debug=debug
+                    exc,
+                    "Get pipe report failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=pipe_uuid,
                 )
             edges = (raw.get("pipeReports") or {}).get("edges") or []
             node: dict[str, Any] | None = None
@@ -156,7 +164,11 @@ class ReportTools:
                 raw = await client.get_pipe_report_columns(pipe_uuid)
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Get pipe report columns failed.", debug=debug
+                    exc,
+                    "Get pipe report columns failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=pipe_uuid,
                 )
             return build_report_read_success_payload(
                 raw,
@@ -185,7 +197,11 @@ class ReportTools:
                 raw = await client.get_pipe_report_filterable_fields(pipe_uuid)
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Get pipe report filterable fields failed.", debug=debug
+                    exc,
+                    "Get pipe report filterable fields failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=pipe_uuid,
                 )
             return build_report_read_success_payload(
                 raw,
@@ -212,7 +228,11 @@ class ReportTools:
                 raw = await client.get_organization_report(report_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Get organization report failed.", debug=debug
+                    exc,
+                    "Get organization report failed.",
+                    debug=debug,
+                    resource_kind="organization_report",
+                    resource_id=str(report_id),
                 )
             return build_report_read_success_payload(
                 raw,
@@ -249,7 +269,11 @@ class ReportTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Get organization reports failed.", debug=debug
+                    exc,
+                    "Get organization reports failed.",
+                    debug=debug,
+                    resource_kind="organization",
+                    resource_id=str(organization_id),
                 )
             return build_report_read_success_payload(
                 raw,
@@ -276,7 +300,11 @@ class ReportTools:
                 raw = await client.get_pipe_report_export(export_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Get pipe report export failed.", debug=debug
+                    exc,
+                    "Get pipe report export failed.",
+                    debug=debug,
+                    resource_kind="pipe_report",
+                    resource_id=str(export_id),
                 )
             return build_report_read_success_payload(
                 raw,
@@ -303,7 +331,11 @@ class ReportTools:
                 raw = await client.get_organization_report_export(export_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Get organization report export failed.", debug=debug
+                    exc,
+                    "Get organization report export failed.",
+                    debug=debug,
+                    resource_kind="organization_report",
+                    resource_id=str(export_id),
                 )
             return build_report_read_success_payload(
                 raw,
@@ -343,7 +375,11 @@ class ReportTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Create pipe report failed.", debug=debug
+                    exc,
+                    "Create pipe report failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pipe_id),
                 )
             return build_report_mutation_success_payload(
                 message="Pipe report created.",
@@ -390,7 +426,11 @@ class ReportTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Update pipe report failed.", debug=debug
+                    exc,
+                    "Update pipe report failed.",
+                    debug=debug,
+                    resource_kind="pipe_report",
+                    resource_id=str(report_id),
                 )
             return build_report_mutation_success_payload(
                 message="Pipe report updated.",
@@ -436,7 +476,11 @@ class ReportTools:
                 raw = await client.delete_pipe_report(report_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Delete pipe report failed.", debug=debug
+                    exc,
+                    "Delete pipe report failed.",
+                    debug=debug,
+                    resource_kind="pipe_report",
+                    resource_id=str(report_id),
                 )
             return build_report_mutation_success_payload(
                 message="Pipe report deleted.",
@@ -480,7 +524,11 @@ class ReportTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Create organization report failed.", debug=debug
+                    exc,
+                    "Create organization report failed.",
+                    debug=debug,
+                    resource_kind="organization",
+                    resource_id=str(organization_id),
                 )
             return build_report_mutation_success_payload(
                 message="Organization report created.",
@@ -524,7 +572,11 @@ class ReportTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Update organization report failed.", debug=debug
+                    exc,
+                    "Update organization report failed.",
+                    debug=debug,
+                    resource_kind="organization_report",
+                    resource_id=str(report_id),
                 )
             return build_report_mutation_success_payload(
                 message="Organization report updated.",
@@ -570,7 +622,11 @@ class ReportTools:
                 raw = await client.delete_organization_report(report_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Delete organization report failed.", debug=debug
+                    exc,
+                    "Delete organization report failed.",
+                    debug=debug,
+                    resource_kind="organization_report",
+                    resource_id=str(report_id),
                 )
             return build_report_mutation_success_payload(
                 message="Organization report deleted.",
@@ -614,7 +670,11 @@ class ReportTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Export pipe report failed.", debug=debug
+                    exc,
+                    "Export pipe report failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pipe_id),
                 )
             return build_report_mutation_success_payload(
                 message="Pipe report export started.",
@@ -659,7 +719,11 @@ class ReportTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Export organization report failed.", debug=debug
+                    exc,
+                    "Export organization report failed.",
+                    debug=debug,
+                    resource_kind="organization",
+                    resource_id=str(organization_id),
                 )
             return build_report_mutation_success_payload(
                 message="Organization report export started.",
@@ -691,7 +755,11 @@ class ReportTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
-                    exc, "Export pipe audit logs failed.", debug=debug
+                    exc,
+                    "Export pipe audit logs failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=pipe_uuid,
                 )
             return build_report_mutation_success_payload(
                 message="Pipe audit logs export queued.",

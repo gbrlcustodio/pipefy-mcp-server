@@ -139,9 +139,13 @@ class AiAutomationTools:
 
             Args:
                 pipe_id: Pipe where the AI automation will run.
+                    Discover via: ``search_pipes`` or ``get_organization``.
                 prompt: AI prompt text with ``%{internal_id}`` field references.
+                    Discover via: ``get_phase_fields(phase_id)[].internal_id``.
                 field_ids: Output field internal IDs where the AI writes results.
+                    Discover via: ``get_phase_fields(phase_id)[].internal_id``.
                 event_id: Optional trigger event ID to validate (e.g. ``card_created``).
+                    Discover via: ``get_automation_events(pipe_id)``.
 
             Returns:
                 ``valid`` is True when no problems found. ``problems`` lists blocking
@@ -323,7 +327,13 @@ class AiAutomationTools:
             try:
                 raw = await client.get_automation(aid)
             except Exception as exc:  # noqa: BLE001
-                return await handle_automation_tool_graphql_error(exc, ctx, debug)
+                return await handle_automation_tool_graphql_error(
+                    exc,
+                    ctx,
+                    debug,
+                    resource_kind="ai_automation",
+                    resource_id=aid,
+                )
             message = (
                 "No automation found for the given ID."
                 if not raw
@@ -380,7 +390,13 @@ class AiAutomationTools:
                     pipe_id=pid,
                 )
             except Exception as exc:  # noqa: BLE001
-                return await handle_automation_tool_graphql_error(exc, ctx, debug)
+                return await handle_automation_tool_graphql_error(
+                    exc,
+                    ctx,
+                    debug,
+                    resource_kind="pipe",
+                    resource_id=pid,
+                )
             filtered = _filter_ai_automation_summaries(rows)
             return build_automation_read_success_payload(
                 filtered,
@@ -433,7 +449,13 @@ class AiAutomationTools:
             try:
                 raw = await client.delete_automation(rid)
             except Exception as exc:  # noqa: BLE001
-                return await handle_automation_tool_graphql_error(exc, ctx, debug)
+                return await handle_automation_tool_graphql_error(
+                    exc,
+                    ctx,
+                    debug,
+                    resource_kind="ai_automation",
+                    resource_id=rid,
+                )
             if not raw.get("success"):
                 return build_automation_error_payload(
                     message="Delete AI automation did not succeed.",
@@ -469,9 +491,13 @@ class AiAutomationTools:
             Args:
                 name: Automation name.
                 event_id: Event trigger (e.g. card_created, card_moved).
+                    Discover via: ``get_automation_events(pipe_id)``.
                 pipe_id: Pipe ID where the automation runs.
+                    Discover via: ``search_pipes`` or ``get_organization``.
                 prompt: AI prompt text. MUST reference at least one pipe field using %{internal_id} syntax (e.g. "Summarize the brief: %{425829426}"). Use the pipe's field internal_id values. Without a field reference the API rejects the request.
+                    Discover via: ``get_phase_fields(phase_id)[].internal_id`` for ``%{internal_id}`` tokens.
                 field_ids: List of field internal IDs where the AI writes its output.
+                    Discover via: ``get_phase_fields(phase_id)[].internal_id``.
                 skills_ids: AI skill IDs to attach. Defaults to empty (no skills).
                 event_params: Trigger-specific filters (e.g. {"to_phase_id": "..."} for card_moved, {"triggerFieldIds": [...]} for field_updated).
                 condition: Optional trigger condition dict. Omit to use the built-in placeholder (empty expression list) so Pipefy always receives a condition on create. Pass a dict to set a custom condition.
@@ -533,6 +559,7 @@ class AiAutomationTools:
 
             Args:
                 automation_id: ID of the automation to update.
+                    Discover via: ``get_ai_automations(repo_uuid)[].id``.
                 name: New automation name (optional).
                 active: Whether the automation is active (optional).
                 prompt: New AI prompt text (optional). Must use %{internal_id} syntax to reference pipe fields (e.g. "Classify %{425829426}").
@@ -563,8 +590,12 @@ class AiAutomationTools:
             try:
                 result = await client.update_ai_automation(validated)
             except Exception as exc:  # noqa: BLE001
-                return _ai_automation_api_failure_payload(
-                    exc, fallback=AI_AUTOMATION_UPDATE_FAILED, debug=debug
+                return await handle_automation_tool_graphql_error(
+                    exc,
+                    ctx,
+                    debug,
+                    resource_kind="ai_automation",
+                    resource_id=str(validated.automation_id),
                 )
 
             return build_update_automation_success(

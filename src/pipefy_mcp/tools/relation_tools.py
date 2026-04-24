@@ -48,7 +48,10 @@ class RelationTools:
                 raw = await client.get_pipe_relations(pipe_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
-                    exc, "Get pipe relations failed."
+                    exc,
+                    "Get pipe relations failed.",
+                    resource_kind="pipe",
+                    resource_id=str(pipe_id),
                 )
             return build_relation_read_success_payload(
                 raw,
@@ -84,7 +87,9 @@ class RelationTools:
                 raw = await client.get_table_relations(validated_ids)
             except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
-                    exc, "Get table relations failed."
+                    exc,
+                    "Get table relations failed.",
+                    resource_kind="table",
                 )
             return build_relation_read_success_payload(
                 raw,
@@ -108,7 +113,9 @@ class RelationTools:
 
             Args:
                 parent_id: Parent pipe ID.
+                    Discover via: ``search_pipes`` or ``get_organization``.
                 child_id: Child pipe ID.
+                    Discover via: ``search_pipes`` or ``get_organization``.
                 name: Relation name/label.
                 extra_input: Optional extra fields for the mutation input.
                 debug: When True, append GraphQL codes and correlation_id to errors.
@@ -137,7 +144,11 @@ class RelationTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
-                    exc, "Create pipe relation failed.", debug=debug
+                    exc,
+                    "Create pipe relation failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(parent_id),
                 )
             return build_relation_mutation_success_payload(
                 message="Pipe relation created.",
@@ -184,7 +195,11 @@ class RelationTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
-                    exc, "Update pipe relation failed.", debug=debug
+                    exc,
+                    "Update pipe relation failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(relation_id),
                 )
             return build_relation_mutation_success_payload(
                 message="Pipe relation updated.",
@@ -231,7 +246,11 @@ class RelationTools:
                 raw = await client.delete_pipe_relation(relation_id)
             except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
-                    exc, "Delete pipe relation failed.", debug=debug
+                    exc,
+                    "Delete pipe relation failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(relation_id),
                 )
             return build_relation_mutation_success_payload(
                 message="Pipe relation deleted.",
@@ -255,8 +274,11 @@ class RelationTools:
 
             Args:
                 parent_id: Parent card ID.
+                    Discover via: ``find_cards`` or ``get_cards(pipe_id)``.
                 child_id: Child card ID.
+                    Discover via: ``find_cards`` or ``get_cards(pipe_id)``.
                 source_id: Pipe relation ID that defines the parent/child pipe link.
+                    Discover via: ``get_pipe_relations(pipe_id)[].id``.
                 extra_input: Optional ``CreateCardRelationInput`` fields (camelCase), e.g. ``sourceType`` (default ``PipeRelation``).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -283,7 +305,11 @@ class RelationTools:
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_relation_tool_graphql_error(
-                    exc, "Create card relation failed.", debug=debug
+                    exc,
+                    "Create card relation failed.",
+                    debug=debug,
+                    resource_kind="card",
+                    resource_id=str(parent_id),
                 )
             return build_relation_mutation_success_payload(
                 message="Card relation created.",

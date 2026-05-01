@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Literal, cast
 
 from typing_extensions import TypedDict
@@ -107,6 +108,7 @@ async def find_label_dependents(
     pipe_id: str,
     label_id: str,
     sample_size: int = 5,
+    retry_on_empty: bool = True,
 ) -> dict[str, Any] | None:
     """Sample cards that carry ``label_id`` in ``pipe_id`` (for delete preview).
 
@@ -121,27 +123,45 @@ async def find_label_dependents(
       applied while sampling).
     * ``has_more``: ``True`` when Pipefy returned more cards than the cap
       (the real cascade is strictly larger than the sample).
+
+    Args:
+        client: Pipefy client for ``get_cards``.
+        pipe_id: Pipe that owns the label.
+        label_id: Label id to match via ``label_ids`` search.
+        sample_size: Max number of card ids to return in ``sample_card_ids``.
+        retry_on_empty: When True (default), if the first ``get_cards`` returns
+            no edges, wait briefly and query once more. Pipefy's label index can
+            lag 1-3s after attaching a label; set False for time-sensitive tests.
     """
-    try:
-        search: CardSearch = {"label_ids": [str(label_id)]}
-        payload = await client.get_cards(
-            pipe_id,
-            search,
-            include_fields=False,
-            first=sample_size + 1,
-        )
-    except Exception:  # noqa: BLE001
-        return None
-    cards_root = (payload or {}).get("cards") or {}
-    edges = cards_root.get("edges") or []
-    ids: list[str] = []
-    for edge in edges:
-        if not isinstance(edge, dict):
-            continue
-        node = edge.get("node") or {}
-        cid = node.get("id")
-        if cid is not None:
-            ids.append(str(cid))
+
+    async def _query() -> list[str]:
+        try:
+            search: CardSearch = {"label_ids": [str(label_id)]}
+            payload = await client.get_cards(
+                pipe_id,
+                search,
+                include_fields=False,
+                first=sample_size + 1,
+            )
+        except Exception:  # noqa: BLE001
+            return []
+        cards_root = (payload or {}).get("cards") or {}
+        edges = cards_root.get("edges") or []
+        out: list[str] = []
+        for edge in edges:
+            if not isinstance(edge, dict):
+                continue
+            node = edge.get("node") or {}
+            cid = node.get("id")
+            if cid is not None:
+                out.append(str(cid))
+        return out
+
+    ids = await _query()
+    if not ids and retry_on_empty:
+        await asyncio.sleep(1.5)
+        ids = await _query()
+
     if not ids:
         return None
     sampled = ids[:sample_size]

@@ -4,6 +4,9 @@ Tests validate payload builders, error message mappers, and field filters
 without invoking the MCP server or Pipefy client.
 """
 
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 from pipefy_mcp.tools.graphql_error_helpers import (
@@ -21,6 +24,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
     build_delete_card_success_payload,
+    find_label_dependents,
     map_add_card_comment_error_to_message,
     map_delete_card_error_to_message,
 )
@@ -186,6 +190,78 @@ def test_extract_error_strings_structured_errors_list_still_wins():
             return "{'message': 'from dict repr'}"
 
     assert extract_error_strings(FakeExc()) == ["from structured list"]
+
+
+# =============================================================================
+# find_label_dependents
+# =============================================================================
+
+
+@pytest.mark.unit
+async def test_find_label_dependents_retries_when_first_query_empty(monkeypatch):
+    """Empty first get_cards then cards on second call returns dependents."""
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr(asyncio, "sleep", sleep_mock)
+
+    client = MagicMock()
+    client.get_cards = AsyncMock(
+        side_effect=[
+            {"cards": {"edges": []}},
+            {
+                "cards": {
+                    "edges": [{"node": {"id": "card_1"}}, {"node": {"id": "card_2"}}]
+                }
+            },
+        ]
+    )
+
+    result = await find_label_dependents(
+        client,
+        pipe_id="pipe_1",
+        label_id="lab_1",
+        sample_size=5,
+    )
+    assert result is not None
+    assert result["sample_card_ids"] == ["card_1", "card_2"]
+    assert result["sample_size"] == 2
+    assert result["has_more"] is False
+    assert client.get_cards.call_count == 2
+    sleep_mock.assert_awaited_once_with(1.5)
+
+
+@pytest.mark.unit
+async def test_find_label_dependents_retry_on_empty_false_skips_second_query():
+    """retry_on_empty=False avoids second get_cards when first is empty."""
+    client = MagicMock()
+    client.get_cards = AsyncMock(return_value={"cards": {"edges": []}})
+
+    result = await find_label_dependents(
+        client,
+        pipe_id="pipe_1",
+        label_id="lab_1",
+        retry_on_empty=False,
+    )
+    assert result is None
+    assert client.get_cards.call_count == 1
+
+
+@pytest.mark.unit
+async def test_find_label_dependents_none_after_two_empty_queries(monkeypatch):
+    """Two empty responses yield None; sleep runs once between attempts."""
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr(asyncio, "sleep", sleep_mock)
+
+    client = MagicMock()
+    client.get_cards = AsyncMock(return_value={"cards": {"edges": []}})
+
+    result = await find_label_dependents(
+        client,
+        pipe_id="pipe_1",
+        label_id="lab_1",
+    )
+    assert result is None
+    assert client.get_cards.call_count == 2
+    sleep_mock.assert_awaited_once_with(1.5)
 
 
 # =============================================================================

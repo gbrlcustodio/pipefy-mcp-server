@@ -123,6 +123,71 @@ def test_extract_error_strings_skips_empty_message_and_blank_strings():
     assert result == ["ok"]
 
 
+@pytest.mark.unit
+def test_extract_error_strings_dict_repr_fallback_extracts_message():
+    """Single-error Python dict repr yields inner message only."""
+
+    class FakeExc(Exception):
+        def __str__(self):
+            return (
+                "{'message': 'Invalid inputs: Field X is required', "
+                "'locations': [{'line': 2, 'column': 3}], "
+                "'path': ['createCard'], "
+                "'extensions': {'code': 'MULTIPLE_INVALID_INPUT'}}"
+            )
+
+    exc = FakeExc()
+    exc.errors = None
+    assert extract_error_strings(exc) == ["Invalid inputs: Field X is required"]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_dict_repr_with_double_quotes_inside_message():
+    """Message containing double-quoted field names parses correctly."""
+
+    class FakeExc(Exception):
+        def __str__(self):
+            return (
+                "{'message': 'Field \"Objetivo da demanda\" is required', "
+                "'extensions': {'code': 'MULTIPLE_INVALID_INPUT'}}"
+            )
+
+    exc = FakeExc()
+    assert extract_error_strings(exc) == ['Field "Objetivo da demanda" is required']
+
+
+@pytest.mark.unit
+def test_extract_error_strings_plain_string_exc_preserved():
+    """Non-dict-repr str(exc) flows through unchanged."""
+    exc = RuntimeError("network timeout")
+    assert extract_error_strings(exc) == ["network timeout"]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_malformed_dict_repr_falls_back():
+    """Broken dict repr does not crash; returns raw string."""
+
+    class FakeExc(Exception):
+        def __str__(self):
+            return "{'message': 'unterminated..."
+
+    exc = FakeExc()
+    assert extract_error_strings(exc) == ["{'message': 'unterminated..."]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_structured_errors_list_still_wins():
+    """When exc.errors is populated, the raw fallback is not consulted."""
+
+    class FakeExc(Exception):
+        errors = [{"message": "from structured list"}]
+
+        def __str__(self):
+            return "{'message': 'from dict repr'}"
+
+    assert extract_error_strings(FakeExc()) == ["from structured list"]
+
+
 # =============================================================================
 # map_add_card_comment_error_to_message
 # =============================================================================

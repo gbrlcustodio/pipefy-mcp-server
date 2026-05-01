@@ -569,6 +569,7 @@ class PipeTools:
             include_fields: bool = False,
             first: int | None = None,
             after: str | None = None,
+            debug: bool = False,
         ) -> dict:
             """Find cards in the pipe where a specific custom field equals a given value.
 
@@ -592,15 +593,24 @@ class PipeTools:
                 include_fields: If True, include each card's custom fields (name, value) in the response.
                 first: Max cards per page (optional).
                 after: Cursor from ``pageInfo.endCursor`` for the next page (optional).
+                debug: When True, append GraphQL codes and correlation_id on errors.
             """
-            response = await client.find_cards(
-                pipe_id,
-                field_id,
-                field_value,
-                include_fields=include_fields,
-                first=first,
-                after=after,
-            )
+            try:
+                response = await client.find_cards(
+                    pipe_id,
+                    field_id,
+                    field_value,
+                    include_fields=include_fields,
+                    first=first,
+                    after=after,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return handle_tool_graphql_error(
+                    exc,
+                    "Find cards failed.",
+                    debug=debug,
+                    resource_kind="phase_field",
+                )
             edges = response.get(FIND_CARDS_RESPONSE_KEY, {}).get("edges")
             if not edges:
                 response = dict(response)
@@ -779,7 +789,10 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def update_card_field(
-            card_id: PipefyId, field_id: str, new_value: Any
+            card_id: PipefyId,
+            field_id: str,
+            new_value: Any,
+            debug: bool = False,
         ) -> dict:
             """Update a single field of a card.
 
@@ -792,12 +805,21 @@ class PipeTools:
                 field_id: The ID (slug) of the field to update.
                     Discover via: ``get_phase_fields(phase_id)[].id`` (or ``internal_id`` for numeric forms).
                 new_value: The new value for the field (string, number, list, etc.)
+                debug: When True, append GraphQL codes and correlation_id on errors.
 
             Returns:
                 dict: GraphQL response with success status and updated card information
                       including the card's id, title, fields, and updated_at timestamp
             """
-            return await client.update_card_field(card_id, field_id, new_value)
+            try:
+                return await client.update_card_field(card_id, field_id, new_value)
+            except Exception as exc:  # noqa: BLE001
+                return handle_tool_graphql_error(
+                    exc,
+                    "Update card field failed.",
+                    debug=debug,
+                    resource_kind="phase_field",
+                )
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),

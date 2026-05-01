@@ -1151,6 +1151,77 @@ class TestFindCardsTool:
         assert payload.get("message") == FIND_CARDS_EMPTY_MESSAGE
         assert payload.get(FIND_CARDS_RESPONSE_KEY, {}).get("edges") == []
 
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_find_cards_graphql_error_returns_enriched_envelope(
+        self, client_session, mock_pipefy_client, pipe_id, extract_payload
+    ):
+        """Bad field_id (RESOURCE_NOT_FOUND) returns envelope with get_phase_fields hint."""
+        from gql.transport.exceptions import TransportQueryError
+
+        mock_pipefy_client.find_cards = AsyncMock(
+            side_effect=TransportQueryError(
+                "GraphQL Error",
+                errors=[
+                    {
+                        "message": "Field not found with id: title",
+                        "extensions": {"code": "RESOURCE_NOT_FOUND"},
+                    }
+                ],
+            )
+        )
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "find_cards",
+                {
+                    "pipe_id": pipe_id,
+                    "field_id": "title",
+                    "field_value": "anything",
+                },
+            )
+
+        assert result.isError is False, "Raw exception leaked instead of envelope"
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "get_phase_fields" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+class TestUpdateCardFieldTool:
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_update_card_field_graphql_error_returns_enriched_envelope(
+        self, client_session, mock_pipefy_client, extract_payload
+    ):
+        """Bad field_id slug returns envelope mentioning get_phase_fields, not raw exception."""
+        from gql.transport.exceptions import TransportQueryError
+
+        mock_pipefy_client.update_card_field = AsyncMock(
+            side_effect=TransportQueryError(
+                "GraphQL Error",
+                errors=[
+                    {
+                        "message": "Field not found with id: nonexistent_slug_xyz",
+                        "extensions": {"code": "RESOURCE_NOT_FOUND"},
+                    }
+                ],
+            )
+        )
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "update_card_field",
+                {
+                    "card_id": 12345,
+                    "field_id": "nonexistent_slug_xyz",
+                    "new_value": "x",
+                },
+            )
+
+        assert result.isError is False, "Raw exception leaked instead of envelope"
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "get_phase_fields" in tool_error_message(payload)
+
 
 @pytest.mark.anyio
 class TestAddCardCommentTool:

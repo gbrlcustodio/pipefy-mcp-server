@@ -4,6 +4,9 @@ Tests validate payload builders, error message mappers, and field filters
 without invoking the MCP server or Pipefy client.
 """
 
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 from pipefy_mcp.tools.graphql_error_helpers import (
@@ -21,6 +24,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
     build_delete_card_success_payload,
+    find_label_dependents,
     map_add_card_comment_error_to_message,
     map_delete_card_error_to_message,
 )
@@ -121,6 +125,143 @@ def test_extract_error_strings_skips_empty_message_and_blank_strings():
     exc.errors = [{"message": ""}, {"message": "ok"}, ""]
     result = extract_error_strings(exc)
     assert result == ["ok"]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_dict_repr_fallback_extracts_message():
+    """Single-error Python dict repr yields inner message only."""
+
+    class FakeExc(Exception):
+        def __str__(self):
+            return (
+                "{'message': 'Invalid inputs: Field X is required', "
+                "'locations': [{'line': 2, 'column': 3}], "
+                "'path': ['createCard'], "
+                "'extensions': {'code': 'MULTIPLE_INVALID_INPUT'}}"
+            )
+
+    exc = FakeExc()
+    exc.errors = None
+    assert extract_error_strings(exc) == ["Invalid inputs: Field X is required"]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_dict_repr_with_double_quotes_inside_message():
+    """Message containing double-quoted field names parses correctly."""
+
+    class FakeExc(Exception):
+        def __str__(self):
+            return (
+                "{'message': 'Field \"Objetivo da demanda\" is required', "
+                "'extensions': {'code': 'MULTIPLE_INVALID_INPUT'}}"
+            )
+
+    exc = FakeExc()
+    assert extract_error_strings(exc) == ['Field "Objetivo da demanda" is required']
+
+
+@pytest.mark.unit
+def test_extract_error_strings_plain_string_exc_preserved():
+    """Non-dict-repr str(exc) flows through unchanged."""
+    exc = RuntimeError("network timeout")
+    assert extract_error_strings(exc) == ["network timeout"]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_malformed_dict_repr_falls_back():
+    """Broken dict repr does not crash; returns raw string."""
+
+    class FakeExc(Exception):
+        def __str__(self):
+            return "{'message': 'unterminated..."
+
+    exc = FakeExc()
+    assert extract_error_strings(exc) == ["{'message': 'unterminated..."]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_structured_errors_list_still_wins():
+    """When exc.errors is populated, the raw fallback is not consulted."""
+
+    class FakeExc(Exception):
+        errors = [{"message": "from structured list"}]
+
+        def __str__(self):
+            return "{'message': 'from dict repr'}"
+
+    assert extract_error_strings(FakeExc()) == ["from structured list"]
+
+
+# =============================================================================
+# find_label_dependents
+# =============================================================================
+
+
+@pytest.mark.unit
+async def test_find_label_dependents_retries_when_first_query_empty(monkeypatch):
+    """Empty first get_cards then cards on second call returns dependents."""
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr(asyncio, "sleep", sleep_mock)
+
+    client = MagicMock()
+    client.get_cards = AsyncMock(
+        side_effect=[
+            {"cards": {"edges": []}},
+            {
+                "cards": {
+                    "edges": [{"node": {"id": "card_1"}}, {"node": {"id": "card_2"}}]
+                }
+            },
+        ]
+    )
+
+    result = await find_label_dependents(
+        client,
+        pipe_id="pipe_1",
+        label_id="lab_1",
+        sample_size=5,
+    )
+    assert result is not None
+    assert result["sample_card_ids"] == ["card_1", "card_2"]
+    assert result["sample_size"] == 2
+    assert result["has_more"] is False
+    assert client.get_cards.call_count == 2
+    sleep_mock.assert_awaited_once_with(1.5)
+
+
+@pytest.mark.unit
+async def test_find_label_dependents_retry_on_empty_false_skips_second_query():
+    """retry_on_empty=False avoids second get_cards when first is empty."""
+    client = MagicMock()
+    client.get_cards = AsyncMock(return_value={"cards": {"edges": []}})
+
+    result = await find_label_dependents(
+        client,
+        pipe_id="pipe_1",
+        label_id="lab_1",
+        retry_on_empty=False,
+    )
+    assert result is None
+    assert client.get_cards.call_count == 1
+
+
+@pytest.mark.unit
+async def test_find_label_dependents_none_after_two_empty_queries(monkeypatch):
+    """Two empty responses yield None; sleep runs once between attempts."""
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr(asyncio, "sleep", sleep_mock)
+
+    client = MagicMock()
+    client.get_cards = AsyncMock(return_value={"cards": {"edges": []}})
+
+    result = await find_label_dependents(
+        client,
+        pipe_id="pipe_1",
+        label_id="lab_1",
+    )
+    assert result is None
+    assert client.get_cards.call_count == 2
+    sleep_mock.assert_awaited_once_with(1.5)
 
 
 # =============================================================================

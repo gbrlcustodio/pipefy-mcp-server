@@ -26,6 +26,7 @@ zero-regression behavior for call sites that have not been migrated yet.
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import re
 from typing import TYPE_CHECKING, Any
@@ -44,6 +45,32 @@ _INTERNAL_API_CODE_BRACKET_CAPTURE_RE = re.compile(r"\[code=([^\]]*)\]")
 _INTERNAL_API_CORRELATION_BRACKET_CAPTURE_RE = re.compile(
     r"\[correlation_id=([^\]]*)\]"
 )
+
+_DICT_REPR_PREFIX_RE = re.compile(r"^\s*\{\s*['\"]message['\"]\s*:")
+
+
+def _try_extract_message_from_dict_repr(raw: str) -> str | None:
+    """Return inner ``message`` when ``str(exc)`` is a single-error dict repr.
+
+    Some gql wrappers stringify as a Python dict (single quotes), not JSON.
+    Structured codes and correlation_id are still parsed by sibling helpers from
+    the same raw string.
+
+    Args:
+        raw: ``str(exc)`` when ``exc.errors`` did not yield messages.
+    """
+    if not _DICT_REPR_PREFIX_RE.match(raw):
+        return None
+    try:
+        parsed = ast.literal_eval(raw)
+    except (ValueError, SyntaxError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    msg = parsed.get("message")
+    if isinstance(msg, str) and msg:
+        return msg
+    return None
 
 
 def strip_internal_api_diagnostic_markers(message: str) -> str:
@@ -97,7 +124,8 @@ def extract_error_strings(exc: BaseException) -> list[str]:
     returned; the raw ``str(exc)`` is skipped because it often contains
     the full error dict with ``locations`` / ``extensions`` noise.  The
     raw string is used as a fallback only when no structured messages
-    can be extracted.
+    can be extracted. When that raw string looks like a Python dict repr
+    with a top-level ``message`` key, only the inner message string is returned.
     """
     structured: list[str] = []
 
@@ -115,9 +143,14 @@ def extract_error_strings(exc: BaseException) -> list[str]:
         return structured
 
     raw = str(exc)
-    if raw:
-        return [raw]
-    return []
+    if not raw:
+        return []
+
+    extracted = _try_extract_message_from_dict_repr(raw)
+    if extracted:
+        return [extracted]
+
+    return [raw]
 
 
 def extract_graphql_error_codes(exc: BaseException) -> list[str]:

@@ -6,8 +6,6 @@
   />
 </div>
 
-**Open-source MCP for Pipefy** — **128 tools** for pipes, cards, tables, relations, automations, AI, observability and more. Alpha · built in public — [feedback & issues](https://github.com/gbrlcustodio/pipefy-mcp-server/issues) or **dev@pipefy.com**
-
 <p align="center">
   <a href="https://github.com/gbrlcustodio/pipefy-mcp-server/actions"><img src="https://github.com/gbrlcustodio/pipefy-mcp-server/workflows/CI/badge.svg" alt="CI Status" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+" /></a>
@@ -15,6 +13,9 @@
   <a href="https://modelcontextprotocol.io/introduction"><img src="https://img.shields.io/badge/MCP-Server-orange" alt="MCP Server" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
 </p>
+
+**Open-source MCP for Pipefy** — **128 tools** for pipes, cards, tables, relations, automations, AI, observability and more. Alpha · built in public — [feedback & issues](https://github.com/gbrlcustodio/pipefy-mcp-server/issues) or **dev@pipefy.com**
+
 
 > **Disclaimer:** Community project for developer workflows — not Pipefy’s official or supported integration for external enterprise use.
 

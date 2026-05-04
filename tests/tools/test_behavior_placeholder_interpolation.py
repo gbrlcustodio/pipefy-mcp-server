@@ -7,7 +7,9 @@ import pytest
 from pipefy_mcp.tools.behavior_placeholder_interpolation import (
     expand_behavior_placeholders,
     expand_behaviors_placeholders,
+    extract_referenced_field_ids,
     normalize_pipefy_ai_instruction_tokens,
+    populate_referenced_field_ids,
 )
 
 
@@ -197,3 +199,125 @@ def test_placeholders_overrides_template_params_same_key():
 
     out = expand_behavior_placeholders(b)
     assert out["actionParams"]["aiBehaviorParams"]["instruction"] == "second"
+
+
+@pytest.mark.unit
+def test_extract_referenced_field_ids_empty_instruction():
+    assert extract_referenced_field_ids("") == []
+    assert extract_referenced_field_ids(None) == []  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_extract_referenced_field_ids_single():
+    assert extract_referenced_field_ids("Validate %{field:159}") == ["159"]
+
+
+@pytest.mark.unit
+def test_extract_referenced_field_ids_multiple_preserves_order():
+    text = "Use %{field:200} then %{field:100} then %{field:300}"
+    assert extract_referenced_field_ids(text) == ["200", "100", "300"]
+
+
+@pytest.mark.unit
+def test_extract_referenced_field_ids_deduplicates():
+    text = "%{field:159} %{field:160} %{field:159}"
+    assert extract_referenced_field_ids(text) == ["159", "160"]
+
+
+@pytest.mark.unit
+def test_extract_referenced_field_ids_skips_slug_refs():
+    """Pipefy-core's ``referencedFieldIds`` is a list of numeric ids; slug-form
+    references should be resolved upstream before this runs."""
+    text = "Numeric %{field:159} and slug %{field:my_slug_field}"
+    assert extract_referenced_field_ids(text) == ["159"]
+
+
+@pytest.mark.unit
+def test_extract_referenced_field_ids_no_tokens():
+    assert extract_referenced_field_ids("Just text, no tokens.") == []
+
+
+@pytest.mark.unit
+def test_extract_referenced_field_ids_skips_dotted_connected_refs():
+    """Dotted connected-pipe refs like ``%{field:136.135}`` are handled by
+    pipefy-core's importer for clone-time static analysis but are not picked up
+    by pipefy-core's runtime ``start_behavior_execution.rb`` parser. Mirroring
+    runtime here keeps populated ids aligned with what actually arrives in
+    ``BehaviorRequest.card.fields[]``."""
+    text = "Bare %{field:159} and dotted %{field:136.135}"
+    assert extract_referenced_field_ids(text) == ["159"]
+
+
+@pytest.mark.unit
+def test_extract_referenced_field_ids_ignores_action_tokens():
+    text = "%{action:78164d3e-8b69-47dd-9dcc-56014f8a55c6} and %{field:159}"
+    assert extract_referenced_field_ids(text) == ["159"]
+
+
+@pytest.mark.unit
+def test_populate_sets_referenced_field_ids_when_missing():
+    b = _minimal_behavior()
+    b["actionParams"]["aiBehaviorParams"]["instruction"] = (
+        "Hi %{field:159} %{field:160}"
+    )
+    populate_referenced_field_ids(b)
+    assert b["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] == ["159", "160"]
+
+
+@pytest.mark.unit
+def test_populate_leaves_caller_supplied_non_empty_list_alone():
+    b = _minimal_behavior()
+    b["actionParams"]["aiBehaviorParams"]["instruction"] = "Hi %{field:159}"
+    b["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] = ["999"]
+    populate_referenced_field_ids(b)
+    assert b["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] == ["999"]
+
+
+@pytest.mark.unit
+def test_populate_overwrites_empty_list():
+    """Empty list is treated as missing — common after a first populate-then-
+    slug-resolve pass where the initial pass found no numeric tokens."""
+    b = _minimal_behavior()
+    b["actionParams"]["aiBehaviorParams"]["instruction"] = "Hi %{field:159}"
+    b["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] = []
+    populate_referenced_field_ids(b)
+    assert b["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] == ["159"]
+
+
+@pytest.mark.unit
+def test_populate_with_snake_case_keys():
+    b = {
+        "name": "B",
+        "event_id": "card_created",
+        "action_params": {
+            "ai_behavior_params": {
+                "instruction": "Hi %{field:159}",
+                "actionsAttributes": [],
+            }
+        },
+    }
+    populate_referenced_field_ids(b)
+    assert b["action_params"]["ai_behavior_params"]["referencedFieldIds"] == ["159"]
+
+
+@pytest.mark.unit
+def test_populate_noop_when_action_params_missing():
+    b = {"name": "B", "event_id": "card_created"}
+    populate_referenced_field_ids(b)
+    assert "referencedFieldIds" not in b
+    assert b == {"name": "B", "event_id": "card_created"}
+
+
+@pytest.mark.unit
+def test_populate_noop_when_ai_behavior_params_missing():
+    b = {"name": "B", "actionParams": {"otherKey": "other"}}
+    populate_referenced_field_ids(b)
+    assert "referencedFieldIds" not in b["actionParams"]
+
+
+@pytest.mark.unit
+def test_populate_empty_list_when_no_tokens():
+    b = _minimal_behavior()
+    b["actionParams"]["aiBehaviorParams"]["instruction"] = "Just text."
+    populate_referenced_field_ids(b)
+    assert b["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] == []

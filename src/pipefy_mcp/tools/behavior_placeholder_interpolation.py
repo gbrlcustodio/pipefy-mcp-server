@@ -17,6 +17,10 @@ _PIPEFY_ACTION_UUID = re.compile(
 # wrapped (``%{123}``) and bare (``{123}``) variants to ``%{field:123}``.
 _PIPEFY_PREFIXED_NUMERIC_FIELD = re.compile(r"%\{(\d+)\}")
 _PIPEFY_UNPREFIXED_NUMERIC_FIELD = re.compile(r"(?<!\%)\{(\d+)\}")
+# Numeric `%{field:<digits>}` references in a (post-normalization) behavior
+# instruction. Used to populate `aiBehaviorParams.referencedFieldIds` so
+# pipefy-core forwards the referenced fields' values in the BehaviorRequest.
+_PIPEFY_NUMERIC_FIELD_REF = re.compile(r"%\{field:(\d+)\}")
 
 _TEMPLATE_PARAM_SOURCE_KEYS = (
     "template_params",
@@ -96,6 +100,71 @@ def normalize_pipefy_ai_instruction_tokens(text: str) -> str:
     out = _PIPEFY_ACTION_UUID.sub(r"%{action:\1}", out)
     out = _PIPEFY_PREFIXED_NUMERIC_FIELD.sub(r"%{field:\1}", out)
     return _PIPEFY_UNPREFIXED_NUMERIC_FIELD.sub(r"%{field:\1}", out)
+
+
+def extract_referenced_field_ids(instruction: str) -> list[str]:
+    """Extract numeric field ids referenced in an instruction's ``%{field:<digits>}`` tokens.
+
+    Only matches the canonical numeric form (post :func:`normalize_pipefy_ai_instruction_tokens`
+    and post-slug-resolution). Slug-form references like ``%{field:my_slug}`` are
+    intentionally skipped — they should be resolved to numeric ids before this runs.
+
+    The regex deliberately matches bare digits only, mirroring pipefy-core's
+    runtime parser in ``start_behavior_execution.rb`` which forwards card fields
+    based on this same shape. Dotted connected-pipe references like
+    ``%{field:136.135}`` (handled by pipefy-core's importer for clone-time static
+    analysis) are not picked up at runtime, so populating them here would not
+    change what arrives in ``BehaviorRequest.card.fields[]``.
+
+    Args:
+        instruction: Behavior instruction text.
+
+    Returns:
+        Field ids in first-occurrence order, deduplicated, as strings.
+    """
+    if not instruction:
+        return []
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for match in _PIPEFY_NUMERIC_FIELD_REF.finditer(instruction):
+        fid = match.group(1)
+        if fid not in seen:
+            seen.add(fid)
+            ordered.append(fid)
+    return ordered
+
+
+def populate_referenced_field_ids(behavior: dict[str, Any]) -> None:
+    """Set ``aiBehaviorParams.referencedFieldIds`` from the behavior's instruction.
+
+    Idempotent and conservative: if ``referencedFieldIds`` is already a non-empty
+    list (caller-supplied), leaves it alone. Otherwise overwrites with the
+    extracted ids — including the empty list when no tokens are present.
+
+    pipefy-core uses this stored list to decide which card fields to forward in
+    the ``BehaviorRequest.card.fields[]`` array at trigger time. When it is null,
+    the array arrives empty and pipefy-ai's placeholder resolver has nothing to
+    substitute.
+
+    Should run **after** slug resolution so that slug-form refs already became
+    numeric. Running it before slug resolution would capture only the numeric
+    subset and the non-empty guard would then prevent a second pass from filling
+    in the resolved slugs.
+
+    Mutates ``behavior`` in place.
+    """
+    ap = behavior.get("actionParams") or behavior.get("action_params")
+    if not isinstance(ap, dict):
+        return
+    abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params")
+    if not isinstance(abp, dict):
+        return
+    existing = abp.get("referencedFieldIds") or abp.get("referenced_field_ids")
+    if isinstance(existing, list) and existing:
+        return
+    instruction = abp.get("instruction")
+    if isinstance(instruction, str):
+        abp["referencedFieldIds"] = extract_referenced_field_ids(instruction)
 
 
 def _normalize_instruction_in_behavior(behavior: dict[str, Any]) -> None:
@@ -189,5 +258,7 @@ def expand_behaviors_placeholders(
 __all__ = [
     "expand_behavior_placeholders",
     "expand_behaviors_placeholders",
+    "extract_referenced_field_ids",
     "normalize_pipefy_ai_instruction_tokens",
+    "populate_referenced_field_ids",
 ]

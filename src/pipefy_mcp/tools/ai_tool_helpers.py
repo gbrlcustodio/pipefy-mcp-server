@@ -659,6 +659,42 @@ async def resolve_field_slugs_to_numeric(
     return resolved
 
 
+async def resolve_and_populate_field_refs(
+    client: PipefyClient,
+    behaviors: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Resolve slug fieldIds to numeric and populate ``referencedFieldIds``.
+
+    Wraps :func:`resolve_field_slugs_to_numeric` and then runs
+    :func:`populate_referenced_field_ids` on each behavior so the per-behavior
+    ``referencedFieldIds`` list reflects the **post-resolution** instruction.
+
+    Running populate after slug resolution is required for the mixed case where
+    a single instruction contains both numeric (``%{field:159}``) and slug
+    (``%{field:my_slug}``) refs: populating earlier would capture only the
+    numeric subset and the conservative non-empty guard inside
+    :func:`populate_referenced_field_ids` would then prevent a second pass from
+    picking up the slug-resolved ids.
+
+    Args:
+        client: PipefyClient for fetching field-slug maps.
+        behaviors: Behavior dicts (same shape as ``create_ai_agent``).
+
+    Returns:
+        Resolved-and-populated behavior dicts.
+    """
+    # Local import keeps the module-level dependency graph flat (the helpers
+    # module doesn't otherwise need to know about the interpolation module).
+    from pipefy_mcp.tools.behavior_placeholder_interpolation import (
+        populate_referenced_field_ids,
+    )
+
+    resolved = await resolve_field_slugs_to_numeric(client, behaviors)
+    for b in resolved:
+        populate_referenced_field_ids(b)
+    return resolved
+
+
 async def fetch_pipe_validation_context(
     client: PipefyClient,
     pipe_id: str,
@@ -786,6 +822,7 @@ __all__ = [
     "enrich_behavior_error",
     "fetch_pipe_validation_context",
     "pipe_ids_from_behavior",
+    "resolve_and_populate_field_refs",
     "resolve_field_slugs_to_numeric",
     "validate_behaviors_against_pipe",
 ]

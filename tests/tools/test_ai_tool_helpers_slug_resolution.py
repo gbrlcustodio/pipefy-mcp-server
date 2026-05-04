@@ -7,6 +7,7 @@ import pytest
 
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_field_slug_map,
+    resolve_and_populate_field_refs,
     resolve_field_slugs_to_numeric,
 )
 
@@ -387,3 +388,96 @@ async def test_resolve_skips_behaviors_without_pipe_id():
     # No API calls, behaviors returned as-is
     client.get_pipe.assert_not_called()
     assert resolved == behaviors
+
+
+# --- resolve_and_populate_field_refs tests ---
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_resolve_and_populate_pure_numeric_instruction():
+    client = AsyncMock()
+
+    b = _behavior_with_fields("306996636", ["427911728"])
+    b["actionParams"]["aiBehaviorParams"]["instruction"] = (
+        "Use %{field:111} and %{field:222}"
+    )
+    resolved = await resolve_and_populate_field_refs(client, [b])
+
+    # No slug → no API call
+    client.get_pipe.assert_not_called()
+    assert resolved[0]["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] == [
+        "111",
+        "222",
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_resolve_and_populate_pure_slug_instruction():
+    client = AsyncMock()
+    client.get_pipe = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [],
+                "start_form_fields": [
+                    {"id": "briefing", "internal_id": "111"},
+                ],
+            }
+        }
+    )
+
+    b = _behavior_with_fields("306996636", ["111"])
+    b["actionParams"]["aiBehaviorParams"]["instruction"] = "Read %{field:briefing}"
+    resolved = await resolve_and_populate_field_refs(client, [b])
+
+    abp = resolved[0]["actionParams"]["aiBehaviorParams"]
+    assert abp["instruction"] == "Read %{field:111}"
+    assert abp["referencedFieldIds"] == ["111"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_resolve_and_populate_mixed_numeric_and_slug_instruction():
+    """Regression test: when an instruction mixes already-numeric refs with slug
+    refs, both must end up in ``referencedFieldIds``. Earlier versions called
+    ``populate_referenced_field_ids`` before slug resolution; the conservative
+    non-empty guard then prevented the slug-resolved id from being added on a
+    second pass, silently dropping it from the list pipefy-core uses to forward
+    card field values at trigger time."""
+    client = AsyncMock()
+    client.get_pipe = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [],
+                "start_form_fields": [
+                    {"id": "briefing", "internal_id": "222"},
+                ],
+            }
+        }
+    )
+
+    b = _behavior_with_fields("306996636", ["222"])
+    b["actionParams"]["aiBehaviorParams"]["instruction"] = (
+        "Use %{field:111} and %{field:briefing}"
+    )
+    resolved = await resolve_and_populate_field_refs(client, [b])
+
+    abp = resolved[0]["actionParams"]["aiBehaviorParams"]
+    assert abp["instruction"] == "Use %{field:111} and %{field:222}"
+    assert abp["referencedFieldIds"] == ["111", "222"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_resolve_and_populate_preserves_caller_supplied_refs():
+    client = AsyncMock()
+
+    b = _behavior_with_fields("306996636", ["111"])
+    b["actionParams"]["aiBehaviorParams"]["instruction"] = "Use %{field:111}"
+    b["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] = ["999"]
+    resolved = await resolve_and_populate_field_refs(client, [b])
+
+    assert resolved[0]["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] == [
+        "999"
+    ]

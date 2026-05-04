@@ -24,7 +24,7 @@ from pipefy_mcp.tools.ai_tool_helpers import (
     collect_pipe_ids_from_behaviors,
     enrich_behavior_error,
     fetch_pipe_validation_context,
-    resolve_field_slugs_to_numeric,
+    resolve_and_populate_field_refs,
     validate_behaviors_against_pipe,
 )
 from pipefy_mcp.tools.behavior_placeholder_interpolation import (
@@ -320,7 +320,7 @@ class AiAgentTools:
 
             agent_uuid = create_result["agent_uuid"]
 
-            resolved_behaviors = await resolve_field_slugs_to_numeric(
+            resolved_behaviors = await resolve_and_populate_field_refs(
                 client,
                 [b.model_dump(by_alias=True) for b in validated.behaviors],
             )
@@ -420,7 +420,7 @@ class AiAgentTools:
                 behaviors_expanded = expand_behaviors_placeholders(behaviors)
             except ValueError as exc:
                 return build_ai_tool_error(str(exc))
-            resolved_behaviors = await resolve_field_slugs_to_numeric(
+            resolved_behaviors = await resolve_and_populate_field_refs(
                 client, behaviors_expanded
             )
             try:
@@ -599,6 +599,12 @@ class AiAgentTools:
 
             Runs Pydantic model validation (same as the mutation tools) plus cross-references
             against live pipe data. Does not persist anything.
+
+            Note: this validation runs against the user-supplied behaviors verbatim. Slug
+            resolution (``%{field:<slug>}`` → ``%{field:<internal_id>}``) and
+            ``referencedFieldIds`` population happen only in ``create_ai_agent`` /
+            ``update_ai_agent``, so the persisted state may differ slightly from what is
+            checked here when behaviors include slug-form field references.
 
             Response fields:
               - ``success``: the tool finished without an unexpected failure (same idea as other

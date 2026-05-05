@@ -39,10 +39,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      PIPEFY_GRAPHQL_URL: 'GRAPHQL_URL'
-      PIPEFY_OAUTH_URL: 'OAUTH_URL'
-      PIPEFY_OAUTH_CLIENT: 'CLIENT'
-      PIPEFY_OAUTH_SECRET: 'SECRET'
+      # Valid https:// URLs (required by Settings URL validation; values are dummies for unit tests)
+      PIPEFY_GRAPHQL_URL: 'https://app.pipefy.com/graphql'
+      PIPEFY_INTERNAL_API_URL: 'https://app.pipefy.com/internal_api'
+      PIPEFY_OAUTH_URL: 'https://app.pipefy.com/oauth/token'
+      PIPEFY_OAUTH_CLIENT: 'CI_DUMMY_CLIENT'
+      PIPEFY_OAUTH_SECRET: 'CI_DUMMY_SECRET'
     steps:
     - uses: actions/checkout@v6
     - name: Set up Python
@@ -56,4 +58,4 @@ jobs:
     - name: Install dependencies
       run: uv sync --locked --all-extras --dev
     - name: Run tests
-      run: uv run pytest
+      run: uv run pytest -m "not integration"

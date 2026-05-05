@@ -4,7 +4,11 @@ import pytest
 
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.client import PipefyClient
+from pipefy_mcp.services.pipefy.pipe_config_service import PipeConfigService
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.services.pipefy.schema_introspection_service import (
+    SchemaIntrospectionService,
+)
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -18,7 +22,7 @@ def _mock_settings() -> PipefySettings:
 
 
 def _make_facade_client(execute_return_value: dict):
-    """Create a PipefyClient with execute_query mocked on both services.
+    """Create a PipefyClient with execute_query mocked on pipe, card, and introspection services.
 
     Returns (client, mock_execute_query) so tests can inspect call args.
     """
@@ -26,10 +30,14 @@ def _make_facade_client(execute_return_value: dict):
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = PipeService(settings=settings)
     client._card_service = CardService(settings=settings)
+    client._pipe_config_service = PipeConfigService(settings=settings)
+    client._introspection_service = SchemaIntrospectionService(settings=settings)
 
     mock_execute = AsyncMock(return_value=execute_return_value)
     client._pipe_service.execute_query = mock_execute
     client._card_service.execute_query = mock_execute
+    client._pipe_config_service.execute_query = mock_execute
+    client._introspection_service.execute_query = mock_execute
 
     return client, mock_execute
 
@@ -48,7 +56,7 @@ async def test_create_card_with_dict_fields():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == pipe_id
+    assert variables["pipe_id"] == str(pipe_id)
     assert isinstance(variables["fields"], list)
     assert len(variables["fields"]) == 2
     assert variables["fields"][0] == {
@@ -81,7 +89,7 @@ async def test_create_card_with_array_fields():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == pipe_id
+    assert variables["pipe_id"] == str(pipe_id)
     assert len(variables["fields"]) == 2
     assert variables["fields"][0] == {
         "field_id": "title",
@@ -109,7 +117,7 @@ async def test_create_card_with_empty_dict():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == pipe_id
+    assert variables["pipe_id"] == str(pipe_id)
     assert variables["fields"] == []
     assert result == {"createCard": {"card": {"id": "12345"}}}
 
@@ -128,7 +136,7 @@ async def test_create_card_with_single_field():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == pipe_id
+    assert variables["pipe_id"] == str(pipe_id)
     assert len(variables["fields"]) == 1
     assert variables["fields"][0] == {
         "field_id": "title",
@@ -178,7 +186,7 @@ async def test_get_start_form_fields_returns_all_fields():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == pipe_id
+    assert variables["pipe_id"] == str(pipe_id)
     assert "start_form_fields" in result
     assert len(result["start_form_fields"]) == 2
     assert result["start_form_fields"][0]["id"] == "title"
@@ -321,7 +329,7 @@ async def test_update_card_field_success():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["input"]["card_id"] == card_id
+    assert variables["input"]["card_id"] == str(card_id)
     assert variables["input"]["field_id"] == field_id
     assert variables["input"]["new_value"] == new_value
     assert result == mock_response
@@ -359,7 +367,7 @@ async def test_update_card_replacement_mode_with_title():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["input"]["id"] == card_id
+    assert variables["input"]["id"] == str(card_id)
     assert variables["input"]["title"] == new_title
     assert result == mock_response
 
@@ -387,7 +395,7 @@ async def test_update_card_with_fields_dict_uses_update_fields_values():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["input"]["nodeId"] == card_id
+    assert variables["input"]["nodeId"] == str(card_id)
     assert "values" in variables["input"]
     values = variables["input"]["values"]
     assert len(values) == 2
@@ -432,7 +440,7 @@ async def test_update_card_replacement_mode_with_assignees_and_labels():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["input"]["id"] == card_id
+    assert variables["input"]["id"] == str(card_id)
     assert variables["input"]["assignee_ids"] == assignee_ids
     assert variables["input"]["label_ids"] == label_ids
     assert result == mock_response
@@ -462,7 +470,7 @@ async def test_update_card_incremental_mode_with_add_operation():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["input"]["nodeId"] == card_id
+    assert variables["input"]["nodeId"] == str(card_id)
     assert "values" in variables["input"]
     assert result == mock_response
 
@@ -487,7 +495,7 @@ async def test_update_card_incremental_mode_with_remove_operation():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["input"]["nodeId"] == card_id
+    assert variables["input"]["nodeId"] == str(card_id)
     assert result == mock_response
 
 
@@ -526,6 +534,14 @@ def test_public_import_path_exports_pipefy_client():
 
 
 @pytest.mark.unit
+def test_public_import_path_exports_table_service():
+    from pipefy_mcp.services.pipefy import TableService as PublicTableService
+    from pipefy_mcp.services.pipefy.table_service import TableService
+
+    assert PublicTableService is TableService
+
+
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_pipe_passes_pipe_id_variable():
     """Test get_pipe passes pipe_id under variable_values unchanged."""
@@ -536,7 +552,7 @@ async def test_get_pipe_passes_pipe_id_variable():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables == {"pipe_id": pipe_id}
+    assert variables == {"pipe_id": str(pipe_id)}
     assert result == {"pipe": {"id": str(pipe_id)}}
 
 
@@ -579,7 +595,7 @@ async def test_get_card_passes_card_id_variable():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables == {"card_id": card_id, "includeFields": False}
+    assert variables == {"card_id": str(card_id), "includeFields": False}
     assert result == mock_response
 
 
@@ -594,7 +610,7 @@ async def test_get_cards_with_none_search_sends_empty_search_dict():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == pipe_id
+    assert variables["pipe_id"] == str(pipe_id)
     assert variables["search"] == {}
     assert result == {"cards": {"edges": []}}
 
@@ -611,7 +627,7 @@ async def test_get_cards_with_search_dict_passes_search_as_is():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == pipe_id
+    assert variables["pipe_id"] == str(pipe_id)
     assert variables["search"] == search
     assert result == {"cards": {"edges": []}}
 
@@ -632,7 +648,9 @@ async def test_get_cards_with_include_fields_true_passes_include_fields_to_servi
 
     result = await client.get_cards(pipe_id, search=None, include_fields=True)
 
-    card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=True)
+    card_service.get_cards.assert_awaited_once_with(
+        pipe_id, None, include_fields=True, first=None, after=None
+    )
     assert result == expected
 
 
@@ -652,7 +670,9 @@ async def test_get_cards_with_include_fields_false_passes_include_fields_to_serv
 
     result = await client.get_cards(pipe_id, search=None, include_fields=False)
 
-    card_service.get_cards.assert_awaited_once_with(pipe_id, None, include_fields=False)
+    card_service.get_cards.assert_awaited_once_with(
+        pipe_id, None, include_fields=False, first=None, after=None
+    )
     assert result == expected
 
 
@@ -677,7 +697,12 @@ async def test_find_cards_delegates_to_card_service_with_include_fields_true():
     )
 
     card_service.find_cards.assert_awaited_once_with(
-        pipe_id, field_id, field_value, include_fields=True
+        pipe_id,
+        field_id,
+        field_value,
+        include_fields=True,
+        first=None,
+        after=None,
     )
     assert result == expected
 
@@ -703,7 +728,12 @@ async def test_find_cards_delegates_to_card_service_with_include_fields_false():
     )
 
     card_service.find_cards.assert_awaited_once_with(
-        pipe_id, field_id, field_value, include_fields=False
+        pipe_id,
+        field_id,
+        field_value,
+        include_fields=False,
+        first=None,
+        after=None,
     )
     assert result == expected
 
@@ -782,9 +812,30 @@ async def test_move_card_to_phase_variable_shape():
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
     assert variables == {
-        "input": {"card_id": card_id, "destination_phase_id": destination_phase_id}
+        "input": {
+            "card_id": str(card_id),
+            "destination_phase_id": str(destination_phase_id),
+        }
     }
     assert result == {"moveCardToPhase": {"clientMutationId": None}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_allowed_move_targets_delegates_to_pipe_service():
+    expected = {
+        "phase": {
+            "id": "5",
+            "name": "Backlog",
+            "cards_can_be_moved_to_phases": [{"id": "6", "name": "Doing"}],
+        }
+    }
+    client, mock_execute = _make_facade_client(expected)
+    result = await client.get_phase_allowed_move_targets(5)
+
+    mock_execute.assert_awaited()
+    assert mock_execute.call_args[0][1] == {"phase_id": "5"}
+    assert result == expected
 
 
 @pytest.mark.asyncio
@@ -801,5 +852,8 @@ async def test_search_pipes_delegates_to_pipe_service():
 
     result = await client.search_pipes(pipe_name)
 
-    pipe_service.search_pipes.assert_called_once_with(pipe_name)
+    pipe_service.search_pipes.assert_called_once_with(
+        pipe_name,
+        max_pipes_per_org=500,
+    )
     assert result == expected

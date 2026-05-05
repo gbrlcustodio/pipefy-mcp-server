@@ -1,28 +1,47 @@
+from __future__ import annotations
+
 from typing import Self
 
 from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.services.pipefy.ai_automation_service import AiAutomationService
+from pipefy_mcp.services.pipefy.internal_api_client import InternalApiClient
 from pipefy_mcp.settings import Settings
 
 
 class ServicesContainer:
-    """Container for all services"""
+    """Container for all services."""
 
     _instance: Self | None = None
     pipefy_client: PipefyClient | None = None
 
     @classmethod
     def get_instance(cls) -> Self:
-        """Get the singleton instance of the container"""
+        """Get the singleton instance of the container."""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
-    def __init__(self):
-        """Initialize the container"""
-        pass
-
     def initialize_services(self, settings: Settings) -> None:
+        """Create and wire all services.
+
+        Args:
+            settings: Application settings with Pipefy credentials.
+        """
         self.pipefy_client = PipefyClient(settings=settings.pipefy)
 
-    def shutdown(self) -> None:
-        pass
+        oauth_url = settings.pipefy.oauth_url
+        oauth_client = settings.pipefy.oauth_client
+        oauth_secret = settings.pipefy.oauth_secret
+
+        if oauth_url and oauth_client and oauth_secret:
+            internal_client = InternalApiClient(
+                url=settings.pipefy.internal_api_url,
+                oauth_url=oauth_url,
+                oauth_client=oauth_client,
+                oauth_secret=oauth_secret,
+                allow_insecure_urls=settings.pipefy.allow_insecure_urls,
+            )
+            self.pipefy_client.set_internal_api_client(internal_client)
+            self.pipefy_client.set_ai_automation_service(
+                AiAutomationService(client=internal_client)
+            )

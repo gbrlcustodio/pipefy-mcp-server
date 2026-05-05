@@ -10,6 +10,7 @@ import pytest
 from pipefy_mcp.services.pipefy.card_service import CardService
 from pipefy_mcp.services.pipefy.queries.card_queries import (
     FIND_CARDS_QUERY,
+    GET_CARD_RELATIONS_QUERY,
     GET_CARDS_QUERY,
 )
 from pipefy_mcp.settings import PipefySettings
@@ -42,7 +43,7 @@ async def test_create_card_converts_fields_and_sets_generated_by_ai(mock_setting
     result = await service.create_card(pipe_id, fields)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables["pipe_id"] == pipe_id, "Expected pipe_id in variables"
+    assert variables["pipe_id"] == str(pipe_id), "Expected pipe_id in variables"
     assert variables["fields"] == [
         {"field_id": "title", "field_value": "Teste-MCP", "generated_by_ai": True}
     ], "Expected fields converted to array format"
@@ -62,7 +63,7 @@ async def test_create_card_with_empty_dict_sends_empty_list(mock_settings):
     result = await service.create_card(pipe_id, fields)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables["pipe_id"] == pipe_id, "Expected pipe_id in variables"
+    assert variables["pipe_id"] == str(pipe_id), "Expected pipe_id in variables"
     assert variables["fields"] == [], "Empty dict should result in empty list"
     assert result == {"createCard": {"card": {"id": "12345"}}}, (
         "Expected createCard response"
@@ -80,7 +81,7 @@ async def test_get_cards_with_none_search_sends_empty_search(mock_settings):
 
     variables = service.execute_query.call_args[0][1]
     assert variables == {
-        "pipe_id": pipe_id,
+        "pipe_id": str(pipe_id),
         "search": {},
         "includeFields": False,
     }, "Expected empty search and includeFields=False"
@@ -135,9 +136,29 @@ async def test_find_cards_sends_pipeId_search_and_includeFields(mock_settings):
     query_used = service.execute_query.call_args[0][0]
     variables = service.execute_query.call_args[0][1]
     assert query_used is FIND_CARDS_QUERY
-    assert variables["pipeId"] == pipe_id
+    assert variables["pipeId"] == str(pipe_id)
     assert variables["search"] == {"fieldId": field_id, "fieldValue": field_value}
     assert variables["includeFields"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_find_cards_passes_first_and_after(mock_settings):
+    pipe_id = 1
+    field_id = "f"
+    field_value = "v"
+    service = _make_service(mock_settings, {"findCards": {"edges": []}})
+    await service.find_cards(
+        pipe_id,
+        field_id,
+        field_value,
+        include_fields=False,
+        first=20,
+        after="c1",
+    )
+    variables = service.execute_query.call_args[0][1]
+    assert variables["first"] == 20
+    assert variables["after"] == "c1"
 
 
 @pytest.mark.unit
@@ -169,7 +190,20 @@ async def test_get_card_passes_card_id_and_includeFields(mock_settings):
     await service.get_card(card_id, include_fields=False)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"card_id": card_id, "includeFields": False}
+    assert variables == {"card_id": str(card_id), "includeFields": False}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_card_accepts_alphanumeric_id(mock_settings):
+    """Test get_card passes an alphanumeric ID through to GraphQL variables unchanged."""
+    service = _make_service(
+        mock_settings, {"card": {"id": "Yr5RUVCi", "title": "Test"}}
+    )
+    await service.get_card("Yr5RUVCi")
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables == {"card_id": "Yr5RUVCi", "includeFields": False}
 
 
 @pytest.mark.unit
@@ -191,7 +225,7 @@ async def test_get_card_with_include_fields_true_passes_includeFields(mock_setti
     await service.get_card(card_id, include_fields=True)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"card_id": card_id, "includeFields": True}
+    assert variables == {"card_id": str(card_id), "includeFields": True}
 
 
 @pytest.mark.unit
@@ -207,7 +241,10 @@ async def test_move_card_to_phase_variable_shape(mock_settings):
     result = await service.move_card_to_phase(card_id, destination_phase_id)
 
     variables = service.execute_query.call_args[0][1]
-    expected_input = {"card_id": card_id, "destination_phase_id": destination_phase_id}
+    expected_input = {
+        "card_id": str(card_id),
+        "destination_phase_id": str(destination_phase_id),
+    }
     assert variables == {"input": expected_input}, "Expected correct input shape"
     assert result == {"moveCardToPhase": {"clientMutationId": None}}, (
         "Expected mutation response"
@@ -225,7 +262,7 @@ async def test_update_card_attribute_mode_uses_update_card_shape(mock_settings):
     result = await service.update_card(card_id, title=new_title)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"input": {"id": card_id, "title": new_title}}, (
+    assert variables == {"input": {"id": str(card_id), "title": new_title}}, (
         "Expected updateCard input"
     )
     assert result == {"updateCard": {"card": {"id": "12345"}}}, (
@@ -244,7 +281,7 @@ async def test_update_card_with_due_date_includes_due_date_in_input(mock_setting
     result = await service.update_card(card_id, due_date=due_date)
 
     variables = service.execute_query.call_args[0][1]
-    expected_input = {"id": card_id, "due_date": due_date}
+    expected_input = {"id": str(card_id), "due_date": due_date}
     assert variables == {"input": expected_input}, "Expected due_date in input"
     assert result == {"updateCard": {"card": {"id": "12345"}}}, (
         "Expected updateCard response"
@@ -262,7 +299,7 @@ async def test_update_card_field_mode_uses_update_fields_values_shape(mock_setti
     result = await service.update_card(card_id, field_updates=field_updates)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables["input"]["nodeId"] == card_id, "Expected nodeId in input"
+    assert variables["input"]["nodeId"] == str(card_id), "Expected nodeId in input"
     expected_values = [
         {
             "fieldId": "field_1",
@@ -292,7 +329,7 @@ async def test_create_comment_variable_shape_and_return_passthrough(mock_setting
     result = await service.create_comment(card_id=card_id, text=text)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"input": {"card_id": card_id, "text": text}}, (
+    assert variables == {"input": {"card_id": str(card_id), "text": text}}, (
         "Expected correct input shape"
     )
     assert result == {"createComment": {"comment": {"id": "c_987"}}}, (
@@ -313,7 +350,7 @@ async def test_update_comment_variable_shape_and_return_structure(mock_settings)
     result = await service.update_comment(comment_id, text)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"input": {"id": comment_id, "text": text}}, (
+    assert variables == {"input": {"id": str(comment_id), "text": text}}, (
         "Expected correct input shape"
     )
     assert result == {"updateComment": {"comment": {"id": "c_999"}}}, (
@@ -331,7 +368,9 @@ async def test_delete_comment_variable_shape_and_success_return(mock_settings):
     result = await service.delete_comment(comment_id)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"input": {"id": comment_id}}, "Expected correct input shape"
+    assert variables == {"input": {"id": str(comment_id)}}, (
+        "Expected correct input shape"
+    )
     assert result == {"deleteComment": {"success": True}}, (
         "Expected deleteComment success response"
     )
@@ -347,7 +386,7 @@ async def test_delete_card_success_scenario(mock_settings):
     result = await service.delete_card(card_id)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"input": {"id": card_id}}, "Expected correct input shape"
+    assert variables == {"input": {"id": str(card_id)}}, "Expected correct input shape"
     assert result == {"deleteCard": {"success": True}}, "Expected deleteCard response"
 
 
@@ -383,3 +422,28 @@ async def test_delete_card_permission_denied_error(mock_settings):
     assert result == {
         "deleteCard": {"success": False, "errors": ["PERMISSION_DENIED"]}
     }, "Expected error response passthrough"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_card_relations_uses_query_and_cardId_variable(mock_settings):
+    """Test get_card_relations calls GET_CARD_RELATIONS_QUERY with cardId."""
+    card_id = 999
+    expected = {
+        "card": {
+            "child_relations": [],
+            "parent_relations": [{"name": "rel", "pipe": {"id": "1", "name": "P"}}],
+        }
+    }
+    service = _make_service(mock_settings, expected)
+    result = await service.get_card_relations(card_id)
+
+    query_used = service.execute_query.call_args[0][0]
+    variables = service.execute_query.call_args[0][1]
+    assert query_used is GET_CARD_RELATIONS_QUERY
+    assert variables == {"cardId": "999"}
+    assert result == expected
+
+    # delete_card_relation is routed through InternalApiClient (not CardService)
+    # because the mutation is only available on the internal GraphQL schema.
+    # See tests/services/test_pipefy_facade.py for the facade delegation test.

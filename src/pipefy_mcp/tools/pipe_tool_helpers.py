@@ -1,64 +1,85 @@
-import re
-from typing import Literal, cast
+from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import asyncio
+from typing import Any, Literal, cast
+
 from typing_extensions import TypedDict
+
+from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.services.pipefy.types import CardSearch
+from pipefy_mcp.tools.destructive_tool_guard import (
+    DestructiveCancelledPayload,
+    DestructivePreviewPayload,
+)
+from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
+from pipefy_mcp.tools.tool_error_envelope import (
+    ToolErrorDetail,
+    ToolSuccessPayload,
+    is_unified_envelope_enabled,
+    tool_error,
+    tool_success,
+)
 
 
 class UserCancelledError(Exception):
     """Raised when a user cancels an interactive flow."""
 
 
-class AddCardCommentSuccessPayload(TypedDict):
+# The ``Legacy*SuccessPayload`` TypedDicts below describe the flag=false shape
+# only. Under the default ``PIPEFY_MCP_UNIFIED_ENVELOPE=true``, helpers return
+# ``ToolSuccessPayload`` instead (see ADR-0001).
+
+
+class LegacyAddCardCommentSuccessPayload(TypedDict):
     success: Literal[True]
     comment_id: str
 
 
 class AddCardCommentErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
-AddCardCommentPayload = AddCardCommentSuccessPayload | AddCardCommentErrorPayload
+AddCardCommentPayload = (
+    LegacyAddCardCommentSuccessPayload | ToolSuccessPayload | AddCardCommentErrorPayload
+)
 
 
-class UpdateCommentSuccessPayload(TypedDict):
+class LegacyUpdateCommentSuccessPayload(TypedDict):
     success: Literal[True]
     comment_id: str
 
 
 class UpdateCommentErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
-UpdateCommentPayload = UpdateCommentSuccessPayload | UpdateCommentErrorPayload
+UpdateCommentPayload = (
+    LegacyUpdateCommentSuccessPayload | ToolSuccessPayload | UpdateCommentErrorPayload
+)
 
 
-class DeleteCommentSuccessPayload(TypedDict):
+class LegacyDeleteCommentSuccessPayload(TypedDict):
     success: Literal[True]
 
 
 class DeleteCommentErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
-DeleteCommentPayload = DeleteCommentSuccessPayload | DeleteCommentErrorPayload
+DeleteCommentPayload = (
+    DestructivePreviewPayload
+    | LegacyDeleteCommentSuccessPayload
+    | ToolSuccessPayload
+    | DeleteCommentErrorPayload
+)
 
 
-class DeleteCardPreviewPayload(TypedDict):
-    success: Literal[False]
-    requires_confirmation: Literal[True]
-    card_id: int
-    card_title: str
-    pipe_name: str
-    message: str
-
-
-class DeleteCardSuccessPayload(TypedDict):
+class LegacyDeleteCardSuccessPayload(TypedDict):
     success: Literal[True]
-    card_id: int
+    card_id: str | int
     card_title: str
     pipe_name: str
     message: str
@@ -66,50 +87,103 @@ class DeleteCardSuccessPayload(TypedDict):
 
 class DeleteCardErrorPayload(TypedDict):
     success: Literal[False]
-    error: str
+    error: ToolErrorDetail
 
 
 DeleteCardPayload = (
-    DeleteCardPreviewPayload | DeleteCardSuccessPayload | DeleteCardErrorPayload
+    DestructivePreviewPayload
+    | DestructiveCancelledPayload
+    | LegacyDeleteCardSuccessPayload
+    | ToolSuccessPayload
+    | DeleteCardErrorPayload
 )
 
 # Message returned by find_cards tool when the API returns no matching cards.
 FIND_CARDS_EMPTY_MESSAGE = "No cards found for this field/value."
 
 
-class DeleteCardConfirmation(BaseModel):
-    confirm: bool = Field(
-        ...,
-        description="Set to true to confirm deletion, or false to cancel.",
-    )
+async def find_label_dependents(
+    client: PipefyClient,
+    *,
+    pipe_id: str,
+    label_id: str,
+    sample_size: int = 5,
+    retry_on_empty: bool = True,
+) -> dict[str, Any] | None:
+    """Sample cards that carry ``label_id`` in ``pipe_id`` (for delete preview).
+
+    Returns ``None`` when no cards use the label or when the auxiliary
+    ``get_cards`` query fails. Otherwise returns a dict with:
+
+    * ``sample_card_ids``: up to ``sample_size`` card ids.
+    * ``sample_size``: **actual** length of ``sample_card_ids`` — so consumers
+      can render accurate counts ("3 cards" not "5 cards") when fewer than the
+      cap carry the label.
+    * ``sample_cap``: the ``sample_size`` parameter value (the cap that was
+      applied while sampling).
+    * ``has_more``: ``True`` when Pipefy returned more cards than the cap
+      (the real cascade is strictly larger than the sample).
+
+    Args:
+        client: Pipefy client for ``get_cards``.
+        pipe_id: Pipe that owns the label.
+        label_id: Label id to match via ``label_ids`` search.
+        sample_size: Max number of card ids to return in ``sample_card_ids``.
+        retry_on_empty: When True (default), if the first ``get_cards`` returns
+            no edges, wait briefly and query once more. Pipefy's label index can
+            lag 1-3s after attaching a label; set False for time-sensitive tests.
+    """
+
+    async def _query() -> list[str]:
+        try:
+            search: CardSearch = {"label_ids": [str(label_id)]}
+            payload = await client.get_cards(
+                pipe_id,
+                search,
+                include_fields=False,
+                first=sample_size + 1,
+            )
+        except Exception:  # noqa: BLE001
+            return []
+        cards_root = (payload or {}).get("cards") or {}
+        edges = cards_root.get("edges") or []
+        out: list[str] = []
+        for edge in edges:
+            if not isinstance(edge, dict):
+                continue
+            node = edge.get("node") or {}
+            cid = node.get("id")
+            if cid is not None:
+                out.append(str(cid))
+        return out
+
+    ids = await _query()
+    if not ids and retry_on_empty:
+        await asyncio.sleep(1.5)
+        ids = await _query()
+
+    if not ids:
+        return None
+    sampled = ids[:sample_size]
+    has_more = len(ids) > sample_size
+    return {
+        "sample_card_ids": sampled,
+        "sample_size": len(sampled),
+        "sample_cap": sample_size,
+        "has_more": has_more,
+    }
 
 
-def build_add_card_comment_success_payload(
-    *, comment_id: object
-) -> AddCardCommentSuccessPayload:
-    """Build the public success payload for add_card_comment."""
-    return {"success": True, "comment_id": str(comment_id)}
+def build_add_card_comment_success_payload(*, comment_id: object) -> dict[str, Any]:
+    """Recorded comment id.
 
-
-def _extract_error_strings(exc: BaseException) -> list[str]:
-    """Best-effort extraction of error messages from gql/GraphQL exceptions."""
-    messages: list[str] = []
-
-    raw = str(exc)
-    if raw:
-        messages.append(raw)
-
-    errors = getattr(exc, "errors", None)
-    if isinstance(errors, list):
-        for item in errors:
-            if isinstance(item, dict):
-                msg = item.get("message")
-                if isinstance(msg, str) and msg:
-                    messages.append(msg)
-            elif isinstance(item, str) and item:
-                messages.append(item)
-
-    return messages
+    Args:
+        comment_id: New comment id from the API (coerced to str).
+    """
+    cid = str(comment_id)
+    if is_unified_envelope_enabled():
+        return tool_success(data={"comment_id": cid})
+    return {"success": True, "comment_id": cid}
 
 
 # Markers for mapping GraphQL errors to user-friendly messages.
@@ -157,7 +231,7 @@ def _map_comment_like_error(
     invalid_markers: list[str] | None = None,
 ) -> str:
     """Map exception to a friendly message using shared not-found/permission/invalid markers."""
-    messages = _extract_error_strings(exc)
+    messages = extract_error_strings(exc)
     haystack = " ".join(messages).lower()
     markers = invalid_markers if invalid_markers is not None else _INVALID_INPUT_MARKERS
     if any(m in haystack for m in _NOT_FOUND_MARKERS):
@@ -170,7 +244,7 @@ def _map_comment_like_error(
 
 
 def map_add_card_comment_error_to_message(exc: BaseException) -> str:
-    """Map a GraphQL exception into a stable, friendly English message."""
+    """Heuristic English message for add_comment failures."""
     return _map_comment_like_error(
         exc,
         not_found_msg="Card not found. Please verify 'card_id' and access permissions.",
@@ -181,7 +255,7 @@ def map_add_card_comment_error_to_message(exc: BaseException) -> str:
 
 
 def map_update_comment_error_to_message(exc: BaseException) -> str:
-    """Map a GraphQL exception into a stable, friendly English message."""
+    """Heuristic English message for update_comment failures."""
     return _map_comment_like_error(
         exc,
         not_found_msg="Comment not found. Please verify 'comment_id' and access permissions.",
@@ -192,7 +266,7 @@ def map_update_comment_error_to_message(exc: BaseException) -> str:
 
 
 def map_delete_comment_error_to_message(exc: BaseException) -> str:
-    """Map a GraphQL exception into a stable, friendly English message."""
+    """Heuristic English message for delete_comment failures."""
     return _map_comment_like_error(
         exc,
         not_found_msg="Comment not found. Please verify 'comment_id' and access permissions.",
@@ -204,73 +278,94 @@ def map_delete_comment_error_to_message(exc: BaseException) -> str:
 
 
 def _build_comment_error_payload(message: str) -> dict:
-    return {"success": False, "error": message}
+    return tool_error(message)
 
 
 def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentErrorPayload:
-    """Build the public error payload for add_card_comment."""
+    """add_card_comment failure envelope.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return cast(AddCardCommentErrorPayload, _build_comment_error_payload(message))
 
 
-def build_update_comment_success_payload(
-    *, comment_id: object
-) -> UpdateCommentSuccessPayload:
-    """Build the public success payload for update_comment."""
-    return {"success": True, "comment_id": str(comment_id)}
+def build_update_comment_success_payload(*, comment_id: object) -> dict[str, Any]:
+    """Updated comment id.
+
+    Args:
+        comment_id: Updated comment id (coerced to str).
+    """
+    cid = str(comment_id)
+    if is_unified_envelope_enabled():
+        return tool_success(data={"comment_id": cid})
+    return {"success": True, "comment_id": cid}
 
 
 def build_update_comment_error_payload(*, message: str) -> UpdateCommentErrorPayload:
-    """Build the public error payload for update_comment."""
+    """update_comment failure envelope.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return cast(UpdateCommentErrorPayload, _build_comment_error_payload(message))
 
 
-def build_delete_comment_success_payload() -> DeleteCommentSuccessPayload:
-    """Build the public success payload for delete_comment."""
+def build_delete_comment_success_payload() -> dict[str, Any]:
+    """Minimal success body after delete_comment."""
+    if is_unified_envelope_enabled():
+        return tool_success()
     return {"success": True}
 
 
 def build_delete_comment_error_payload(*, message: str) -> DeleteCommentErrorPayload:
-    """Build the public error payload for delete_comment."""
+    """delete_comment failure envelope.
+
+    Args:
+        message: User-visible failure reason.
+    """
     return cast(DeleteCommentErrorPayload, _build_comment_error_payload(message))
 
 
-def build_delete_card_preview_payload(
-    *, card_id: int, card_title: str, pipe_name: str
-) -> DeleteCardPreviewPayload:
-    """Build the preview payload for delete_card."""
-    return {
-        "success": False,
-        "requires_confirmation": True,
-        "card_id": card_id,
-        "card_title": card_title,
-        "pipe_name": pipe_name,
-        "message": (
-            "⚠️ You are about to permanently delete card "
-            f"'{card_title}' (ID: {card_id}) from pipe '{pipe_name}'. "
-            "This action is irreversible. Set 'confirm=True' to proceed."
-        ),
-    }
-
-
 def build_delete_card_success_payload(
-    *, card_id: int, card_title: str, pipe_name: str
-) -> DeleteCardSuccessPayload:
-    """Build the success payload for delete_card."""
+    *, card_id: str | int, card_title: str, pipe_name: str
+) -> dict[str, Any]:
+    """Confirmed card deletion.
+
+    Args:
+        card_id: Deleted card id.
+        card_title: Card title for messaging.
+        pipe_name: Pipe name for messaging.
+    """
+    message = (
+        f"Card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}' "
+        "has been permanently deleted."
+    )
+    if is_unified_envelope_enabled():
+        return tool_success(
+            data={
+                "card_id": card_id,
+                "card_title": card_title,
+                "pipe_name": pipe_name,
+            },
+            message=message,
+        )
     return {
         "success": True,
         "card_id": card_id,
         "card_title": card_title,
         "pipe_name": pipe_name,
-        "message": (
-            f"Card '{card_title}' (ID: {card_id}) from pipe '{pipe_name}' "
-            "has been permanently deleted."
-        ),
+        "message": message,
     }
 
 
 def build_delete_card_error_payload(*, message: str) -> DeleteCardErrorPayload:
-    """Build the error payload for delete_card."""
-    return {"success": False, "error": message}
+    """delete_card failure envelope.
+
+    Args:
+        message: User-visible failure reason.
+    """
+    return cast(DeleteCardErrorPayload, tool_error(message))
 
 
 def _filter_editable_field_definitions(field_definitions: list) -> list[dict]:
@@ -302,72 +397,10 @@ def _filter_fields_by_definitions(
     }
 
 
-def _extract_graphql_error_codes(exc: BaseException) -> list[str]:
-    """Extract GraphQL `extensions.code` values from gql/GraphQL exceptions."""
-    codes: list[str] = []
-
-    errors = getattr(exc, "errors", None)
-    if isinstance(errors, list):
-        for item in errors:
-            if not isinstance(item, dict):
-                continue
-            extensions = item.get("extensions")
-            if not isinstance(extensions, dict):
-                continue
-            code = extensions.get("code")
-            if isinstance(code, str) and code:
-                codes.append(code)
-
-    # Best-effort parse from exception string when extensions are missing
-    raw = str(exc)
-    if raw:
-        for match in re.findall(r"""['"]code['"]\s*[:=]\s*['"]([A-Z_]+)['"]""", raw):
-            codes.append(match)
-
-    # De-dup while preserving order
-    seen: set[str] = set()
-    unique: list[str] = []
-    for code in codes:
-        if code not in seen:
-            seen.add(code)
-            unique.append(code)
-    return unique
-
-
-def _extract_graphql_correlation_id(exc: BaseException) -> str | None:
-    """Best-effort extraction of correlation_id from GraphQL exception strings."""
-    raw = str(exc)
-    if not raw:
-        return None
-
-    match = re.search(r"""['"]correlation_id['"]\s*[:=]\s*['"]([^'"]+)['"]""", raw)
-    if match:
-        return match.group(1)
-    return None
-
-
-def _with_debug_suffix(
-    message: str, *, debug: bool, codes: list[str], correlation_id: str | None
-) -> str:
-    """Append debug context to a single error string without changing payload shape."""
-    if not debug:
-        return message
-
-    parts: list[str] = []
-    if codes:
-        parts.append(f"codes={','.join(codes)}")
-    if correlation_id:
-        parts.append(f"correlation_id={correlation_id}")
-
-    if not parts:
-        return message
-    return f"{message} (debug: {'; '.join(parts)})"
-
-
 def map_delete_card_error_to_message(
-    *, card_id: int, card_title: str, codes: list[str]
+    *, card_id: str | int, card_title: str, codes: list[str]
 ) -> str:
-    """Map GraphQL error codes to PRD-compliant friendly messages for delete_card."""
+    """Map GraphQL error codes to short, actionable messages for delete_card."""
     for code in codes:
         if code == "RESOURCE_NOT_FOUND":
             return (
@@ -395,3 +428,34 @@ def map_delete_card_error_to_message(
         f"Failed to delete card '{card_title}' (ID: {card_id}). "
         "Please try again or contact support."
     )
+
+
+__all__ = [
+    "AddCardCommentErrorPayload",
+    "AddCardCommentPayload",
+    "DeleteCardErrorPayload",
+    "DeleteCardPayload",
+    "DeleteCommentErrorPayload",
+    "DeleteCommentPayload",
+    "FIND_CARDS_EMPTY_MESSAGE",
+    "LegacyAddCardCommentSuccessPayload",
+    "LegacyDeleteCardSuccessPayload",
+    "LegacyDeleteCommentSuccessPayload",
+    "LegacyUpdateCommentSuccessPayload",
+    "find_label_dependents",
+    "UpdateCommentErrorPayload",
+    "UpdateCommentPayload",
+    "UserCancelledError",
+    "build_add_card_comment_error_payload",
+    "build_add_card_comment_success_payload",
+    "build_delete_card_error_payload",
+    "build_delete_card_success_payload",
+    "build_delete_comment_error_payload",
+    "build_delete_comment_success_payload",
+    "build_update_comment_error_payload",
+    "build_update_comment_success_payload",
+    "map_add_card_comment_error_to_message",
+    "map_delete_card_error_to_message",
+    "map_delete_comment_error_to_message",
+    "map_update_comment_error_to_message",
+]

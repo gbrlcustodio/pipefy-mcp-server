@@ -4,25 +4,31 @@ Tests validate payload builders, error message mappers, and field filters
 without invoking the MCP server or Pipefy client.
 """
 
+import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_error_strings,
+    extract_graphql_correlation_id,
+    extract_graphql_error_codes,
+    with_debug_suffix,
+)
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     UserCancelledError,
-    _extract_error_strings,
-    _extract_graphql_correlation_id,
-    _extract_graphql_error_codes,
     _filter_editable_field_definitions,
     _filter_fields_by_definitions,
-    _with_debug_suffix,
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
-    build_delete_card_preview_payload,
     build_delete_card_success_payload,
+    find_label_dependents,
     map_add_card_comment_error_to_message,
     map_delete_card_error_to_message,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 # =============================================================================
 # UserCancelledError
@@ -48,21 +54,35 @@ def test_user_cancelled_error_can_be_raised_and_caught():
 
 
 @pytest.mark.unit
-def test_build_add_card_comment_success_payload_converts_comment_id_to_str():
-    """Success payload uses string comment_id."""
+def test_build_add_card_comment_success_payload_converts_comment_id_to_str(
+    legacy_envelope,
+):
+    """Legacy shape — success payload uses flat string comment_id."""
     out = build_add_card_comment_success_payload(comment_id=12345)
     assert out == {"success": True, "comment_id": "12345"}
 
 
 @pytest.mark.unit
-def test_build_add_card_comment_success_payload_accepts_str_comment_id():
-    """Success payload accepts string comment_id as-is."""
+def test_build_add_card_comment_success_payload_accepts_str_comment_id(
+    legacy_envelope,
+):
+    """Legacy shape — success payload accepts string comment_id as-is."""
     out = build_add_card_comment_success_payload(comment_id="c_abc")
     assert out == {"success": True, "comment_id": "c_abc"}
 
 
+@pytest.mark.unit
+def test_build_add_card_comment_success_payload_parametrized_flag(envelope_flag):
+    """Both flag states — flag-on wraps comment_id under ``data``; flag-off is flat."""
+    out = build_add_card_comment_success_payload(comment_id=42)
+    if envelope_flag:
+        assert out == {"success": True, "data": {"comment_id": "42"}}
+    else:
+        assert out == {"success": True, "comment_id": "42"}
+
+
 # =============================================================================
-# _extract_error_strings
+# extract_error_strings
 # =============================================================================
 
 
@@ -70,35 +90,32 @@ def test_build_add_card_comment_success_payload_accepts_str_comment_id():
 def test_extract_error_strings_empty_exception():
     """Empty exception string yields no messages."""
     exc = Exception("")
-    assert _extract_error_strings(exc) == []
+    assert extract_error_strings(exc) == []
 
 
 @pytest.mark.unit
 def test_extract_error_strings_uses_str_exc():
     """Raw str(exc) is included when non-empty."""
     exc = Exception("something went wrong")
-    assert _extract_error_strings(exc) == ["something went wrong"]
+    assert extract_error_strings(exc) == ["something went wrong"]
 
 
 @pytest.mark.unit
 def test_extract_error_strings_from_errors_list_dict_message():
-    """Errors list with dict items extracts 'message'."""
+    """Structured errors list preferred over raw str(exc)."""
     exc = Exception("outer")
     exc.errors = [{"message": "GraphQL error"}]
-    result = _extract_error_strings(exc)
-    assert "outer" in result
-    assert "GraphQL error" in result
+    result = extract_error_strings(exc)
+    assert result == ["GraphQL error"]
 
 
 @pytest.mark.unit
 def test_extract_error_strings_from_errors_list_string_items():
-    """Errors list with string items includes them."""
+    """Structured string items preferred over raw str(exc)."""
     exc = Exception("outer")
     exc.errors = ["first", "second"]
-    result = _extract_error_strings(exc)
-    assert "outer" in result
-    assert "first" in result
-    assert "second" in result
+    result = extract_error_strings(exc)
+    assert result == ["first", "second"]
 
 
 @pytest.mark.unit
@@ -106,8 +123,145 @@ def test_extract_error_strings_skips_empty_message_and_blank_strings():
     """Dict with empty message or blank string items are skipped."""
     exc = Exception("")
     exc.errors = [{"message": ""}, {"message": "ok"}, ""]
-    result = _extract_error_strings(exc)
+    result = extract_error_strings(exc)
     assert result == ["ok"]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_dict_repr_fallback_extracts_message():
+    """Single-error Python dict repr yields inner message only."""
+
+    class FakeExc(Exception):
+        def __str__(self):
+            return (
+                "{'message': 'Invalid inputs: Field X is required', "
+                "'locations': [{'line': 2, 'column': 3}], "
+                "'path': ['createCard'], "
+                "'extensions': {'code': 'MULTIPLE_INVALID_INPUT'}}"
+            )
+
+    exc = FakeExc()
+    exc.errors = None
+    assert extract_error_strings(exc) == ["Invalid inputs: Field X is required"]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_dict_repr_with_double_quotes_inside_message():
+    """Message containing double-quoted field names parses correctly."""
+
+    class FakeExc(Exception):
+        def __str__(self):
+            return (
+                "{'message': 'Field \"Objetivo da demanda\" is required', "
+                "'extensions': {'code': 'MULTIPLE_INVALID_INPUT'}}"
+            )
+
+    exc = FakeExc()
+    assert extract_error_strings(exc) == ['Field "Objetivo da demanda" is required']
+
+
+@pytest.mark.unit
+def test_extract_error_strings_plain_string_exc_preserved():
+    """Non-dict-repr str(exc) flows through unchanged."""
+    exc = RuntimeError("network timeout")
+    assert extract_error_strings(exc) == ["network timeout"]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_malformed_dict_repr_falls_back():
+    """Broken dict repr does not crash; returns raw string."""
+
+    class FakeExc(Exception):
+        def __str__(self):
+            return "{'message': 'unterminated..."
+
+    exc = FakeExc()
+    assert extract_error_strings(exc) == ["{'message': 'unterminated..."]
+
+
+@pytest.mark.unit
+def test_extract_error_strings_structured_errors_list_still_wins():
+    """When exc.errors is populated, the raw fallback is not consulted."""
+
+    class FakeExc(Exception):
+        errors = [{"message": "from structured list"}]
+
+        def __str__(self):
+            return "{'message': 'from dict repr'}"
+
+    assert extract_error_strings(FakeExc()) == ["from structured list"]
+
+
+# =============================================================================
+# find_label_dependents
+# =============================================================================
+
+
+@pytest.mark.unit
+async def test_find_label_dependents_retries_when_first_query_empty(monkeypatch):
+    """Empty first get_cards then cards on second call returns dependents."""
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr(asyncio, "sleep", sleep_mock)
+
+    client = MagicMock()
+    client.get_cards = AsyncMock(
+        side_effect=[
+            {"cards": {"edges": []}},
+            {
+                "cards": {
+                    "edges": [{"node": {"id": "card_1"}}, {"node": {"id": "card_2"}}]
+                }
+            },
+        ]
+    )
+
+    result = await find_label_dependents(
+        client,
+        pipe_id="pipe_1",
+        label_id="lab_1",
+        sample_size=5,
+    )
+    assert result is not None
+    assert result["sample_card_ids"] == ["card_1", "card_2"]
+    assert result["sample_size"] == 2
+    assert result["has_more"] is False
+    assert client.get_cards.call_count == 2
+    sleep_mock.assert_awaited_once_with(1.5)
+
+
+@pytest.mark.unit
+async def test_find_label_dependents_retry_on_empty_false_skips_second_query():
+    """retry_on_empty=False avoids second get_cards when first is empty."""
+    client = MagicMock()
+    client.get_cards = AsyncMock(return_value={"cards": {"edges": []}})
+
+    result = await find_label_dependents(
+        client,
+        pipe_id="pipe_1",
+        label_id="lab_1",
+        retry_on_empty=False,
+    )
+    assert result is None
+    assert client.get_cards.call_count == 1
+
+
+@pytest.mark.unit
+async def test_find_label_dependents_none_after_two_empty_queries(monkeypatch):
+    """Two empty responses yield None; sleep runs once between attempts."""
+    sleep_mock = AsyncMock()
+    monkeypatch.setattr(asyncio, "sleep", sleep_mock)
+
+    client = MagicMock()
+    client.get_cards = AsyncMock(return_value={"cards": {"edges": []}})
+
+    result = await find_label_dependents(
+        client,
+        pipe_id="pipe_1",
+        label_id="lab_1",
+    )
+    assert result is None
+    assert client.get_cards.call_count == 2
+    sleep_mock.assert_awaited_once_with(1.5)
 
 
 # =============================================================================
@@ -164,27 +318,7 @@ def test_map_add_card_comment_error_uses_errors_attribute():
 def test_build_add_card_comment_error_payload():
     """Error payload has success False and given message."""
     out = build_add_card_comment_error_payload(message="Something failed")
-    assert out == {"success": False, "error": "Something failed"}
-
-
-# =============================================================================
-# build_delete_card_preview_payload
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_build_delete_card_preview_payload():
-    """Preview payload includes requires_confirmation and card/pipe info."""
-    out = build_delete_card_preview_payload(
-        card_id=99, card_title="My Card", pipe_name="My Pipe"
-    )
-    assert out["success"] is False
-    assert out["requires_confirmation"] is True
-    assert out["card_id"] == 99
-    assert out["card_title"] == "My Card"
-    assert out["pipe_name"] == "My Pipe"
-    assert "permanently delete" in out["message"]
-    assert "confirm=True" in out["message"]
+    assert out == tool_error("Something failed")
 
 
 # =============================================================================
@@ -193,8 +327,8 @@ def test_build_delete_card_preview_payload():
 
 
 @pytest.mark.unit
-def test_build_delete_card_success_payload():
-    """Success payload includes card and pipe info and confirmation message."""
+def test_build_delete_card_success_payload(legacy_envelope):
+    """Legacy shape — success payload includes flat card and pipe info."""
     out = build_delete_card_success_payload(
         card_id=99, card_title="My Card", pipe_name="My Pipe"
     )
@@ -202,6 +336,22 @@ def test_build_delete_card_success_payload():
     assert out["card_id"] == 99
     assert out["card_title"] == "My Card"
     assert out["pipe_name"] == "My Pipe"
+    assert "permanently deleted" in out["message"]
+
+
+@pytest.mark.unit
+def test_build_delete_card_success_payload_flag_on(unified_envelope):
+    """Unified shape — card fields move inside ``data``; message stays top-level."""
+    out = build_delete_card_success_payload(
+        card_id=99, card_title="My Card", pipe_name="My Pipe"
+    )
+    assert set(out.keys()) == {"success", "data", "message"}
+    assert out["success"] is True
+    assert out["data"] == {
+        "card_id": 99,
+        "card_title": "My Card",
+        "pipe_name": "My Pipe",
+    }
     assert "permanently deleted" in out["message"]
 
 
@@ -214,7 +364,7 @@ def test_build_delete_card_success_payload():
 def test_build_delete_card_error_payload():
     """Error payload has success False and given message."""
     out = build_delete_card_error_payload(message="Delete failed")
-    assert out == {"success": False, "error": "Delete failed"}
+    assert out == tool_error("Delete failed")
 
 
 # =============================================================================
@@ -290,7 +440,7 @@ def test_filter_fields_by_definitions_keeps_only_editable_ids():
 
 
 # =============================================================================
-# _extract_graphql_error_codes
+# extract_graphql_error_codes
 # =============================================================================
 
 
@@ -298,7 +448,7 @@ def test_filter_fields_by_definitions_keeps_only_editable_ids():
 def test_extract_graphql_error_codes_no_errors():
     """Exception without errors attribute returns empty list."""
     exc = Exception("foo")
-    assert _extract_graphql_error_codes(exc) == []
+    assert extract_graphql_error_codes(exc) == []
 
 
 @pytest.mark.unit
@@ -309,7 +459,7 @@ def test_extract_graphql_error_codes_from_extensions():
         {"extensions": {"code": "RESOURCE_NOT_FOUND"}},
         {"extensions": {"code": "PERMISSION_DENIED"}},
     ]
-    assert _extract_graphql_error_codes(exc) == [
+    assert extract_graphql_error_codes(exc) == [
         "RESOURCE_NOT_FOUND",
         "PERMISSION_DENIED",
     ]
@@ -325,14 +475,14 @@ def test_extract_graphql_error_codes_skips_invalid_items():
         {"extensions": None},
         {"extensions": {"code": ""}},
     ]
-    assert _extract_graphql_error_codes(exc) == ["OK"]
+    assert extract_graphql_error_codes(exc) == ["OK"]
 
 
 @pytest.mark.unit
 def test_extract_graphql_error_codes_from_string_regex():
     """Codes are parsed from exception string when extensions missing."""
     exc = Exception('{"code": "CUSTOM_CODE"}')
-    result = _extract_graphql_error_codes(exc)
+    result = extract_graphql_error_codes(exc)
     assert "CUSTOM_CODE" in result
 
 
@@ -345,11 +495,11 @@ def test_extract_graphql_error_codes_dedup_preserves_order():
         {"extensions": {"code": "B"}},
         {"extensions": {"code": "A"}},
     ]
-    assert _extract_graphql_error_codes(exc) == ["A", "B"]
+    assert extract_graphql_error_codes(exc) == ["A", "B"]
 
 
 # =============================================================================
-# _extract_graphql_correlation_id
+# extract_graphql_correlation_id
 # =============================================================================
 
 
@@ -357,25 +507,25 @@ def test_extract_graphql_error_codes_dedup_preserves_order():
 def test_extract_graphql_correlation_id_empty_string_returns_none():
     """Empty exception string returns None."""
     exc = Exception("")
-    assert _extract_graphql_correlation_id(exc) is None
+    assert extract_graphql_correlation_id(exc) is None
 
 
 @pytest.mark.unit
 def test_extract_graphql_correlation_id_no_match_returns_none():
     """String without correlation_id pattern returns None."""
     exc = Exception("some error")
-    assert _extract_graphql_correlation_id(exc) is None
+    assert extract_graphql_correlation_id(exc) is None
 
 
 @pytest.mark.unit
 def test_extract_graphql_correlation_id_extracts_value():
     """Correlation ID is extracted from string."""
     exc = Exception('{"correlation_id": "abc-123"}')
-    assert _extract_graphql_correlation_id(exc) == "abc-123"
+    assert extract_graphql_correlation_id(exc) == "abc-123"
 
 
 # =============================================================================
-# _with_debug_suffix
+# with_debug_suffix
 # =============================================================================
 
 
@@ -383,14 +533,14 @@ def test_extract_graphql_correlation_id_extracts_value():
 def test_with_debug_suffix_debug_false_returns_message_unchanged():
     """When debug=False, message is returned unchanged."""
     msg = "Something failed"
-    assert _with_debug_suffix(msg, debug=False, codes=[], correlation_id=None) == msg
+    assert with_debug_suffix(msg, debug=False, codes=[], correlation_id=None) == msg
 
 
 @pytest.mark.unit
 def test_with_debug_suffix_debug_true_with_codes_and_correlation_id():
     """When debug=True, codes and correlation_id are appended."""
     msg = "Error"
-    result = _with_debug_suffix(
+    result = with_debug_suffix(
         msg,
         debug=True,
         codes=["A", "B"],
@@ -405,7 +555,7 @@ def test_with_debug_suffix_debug_true_with_codes_and_correlation_id():
 def test_with_debug_suffix_debug_true_empty_parts_returns_message():
     """When debug=True but no codes or correlation_id, message unchanged."""
     msg = "Error"
-    result = _with_debug_suffix(msg, debug=True, codes=[], correlation_id=None)
+    result = with_debug_suffix(msg, debug=True, codes=[], correlation_id=None)
     assert result == msg
 
 

@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "gql[httpx]>=3.5.2",
+    "httpx>=0.27.0",
+    "openpyxl>=3.1.5",
     "httpx-auth>=0.23.1",
     "mcp[cli]>=1.25.0",
     "pydantic>=2.11.3",
@@ -46,18 +48,17 @@ lint.extend-select = ["I"]
 lint.exclude = ["src/pipefy_mcp/_version.py"]
 format.exclude = ["src/pipefy_mcp/_version.py"]
 
-[tool.pytest]
+[tool.pytest.ini_options]
 testpaths = ["tests"]
+# Root on pythonpath so tests can import shared helpers (e.g. tests.ai_agent_test_payloads)
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --no-header --tb=short"
-
-[tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "module"
-
 markers = [
     "unit: marks a test as a unit test",
-    "integration: marks a test as an integration test that requires database access"
+    "integration: marks a test as an integration test that requires database access",
 ]

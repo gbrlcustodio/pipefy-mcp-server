@@ -37,8 +37,16 @@ env.bak/
 venv.bak/
 .mise.toml
 
+# Local test scripts (scripts/ kept for ad-hoc testing)
+scripts/
+
 # IDEs and editors
 .cursor/
+.claude/
+CLAUDE.md
+# Cursor MCP workspace config (machine-specific paths or local server entries)
+.mcp.json
 
 # macOS
 .DS_Store
+**/.DS_Store

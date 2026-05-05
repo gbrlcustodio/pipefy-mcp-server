@@ -1,0 +1,496 @@
+"""MCP tools for sending inbox emails and managing webhooks."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.session import ServerSession
+from mcp.types import ToolAnnotations
+
+from pipefy_mcp.models.validators import PipefyId
+from pipefy_mcp.services.pipefy import PipefyClient
+from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.validation_helpers import (
+    mutation_error_if_not_optional_dict,
+    validate_tool_id,
+)
+from pipefy_mcp.tools.webhook_tool_helpers import (
+    build_webhook_error_payload,
+    build_webhook_success_payload,
+    handle_webhook_tool_graphql_error,
+)
+
+
+class WebhookTools:
+    """MCP tools for sending emails from card inboxes and managing webhooks."""
+
+    @staticmethod
+    def register(mcp: FastMCP, client: PipefyClient) -> None:
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
+        async def get_email_templates(
+            repo_id: PipefyId,
+            filter_by_name: str | None = None,
+            first: int = 50,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """List email templates for a pipe or table.
+
+            Use before send_email_with_template to discover template IDs.
+            Templates are created in the Pipefy UI; this query lists existing ones.
+
+            Args:
+                repo_id: Pipe or table ID.
+                filter_by_name: Optional case-insensitive partial match on template name.
+                first: Max templates to return (default 50).
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            rid, err = validate_tool_id(repo_id, "repo_id")
+            if err is not None:
+                return err
+            try:
+                raw = await client.get_email_templates(
+                    rid,
+                    filter_by_name=filter_by_name.strip() if filter_by_name else None,
+                    first=first,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return handle_webhook_tool_graphql_error(
+                    exc,
+                    "List email templates failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(rid),
+                )
+            return build_webhook_success_payload(
+                message="Email templates listed.",
+                data=raw,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
+        async def get_card_inbox_emails(
+            card_id: PipefyId,
+            email_type: str | None = None,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """List emails (sent and received) for a card's inbox.
+
+            When someone replies to an email sent from the card, the reply appears
+            with type 'received'. Use email_type='received' to get only replies.
+
+            Args:
+                card_id: ID of the card with inbox.
+                email_type: Optional filter: 'sent' or 'received' to get only that type.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            cid, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return err
+            trimmed_email_type = email_type.strip() if email_type else None
+            if trimmed_email_type is not None and trimmed_email_type.lower() not in (
+                "sent",
+                "received",
+            ):
+                return build_webhook_error_payload(
+                    message="Invalid 'email_type': must be 'sent' or 'received' when provided.",
+                )
+            try:
+                raw = await client.get_card_inbox_emails(
+                    cid,
+                    email_type=trimmed_email_type,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return handle_webhook_tool_graphql_error(
+                    exc,
+                    "Get card inbox emails failed.",
+                    debug=debug,
+                    resource_kind="card",
+                    resource_id=str(cid),
+                )
+            return build_webhook_success_payload(
+                message="Card inbox emails listed.",
+                data=raw,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def send_inbox_email(
+            card_id: PipefyId,
+            to: list[str],
+            subject: str,
+            body: str,
+            from_: str,
+            extra_input: dict[str, Any] | None = None,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Send an email from a card's inbox.
+
+            Requires the card to have an email inbox enabled.
+
+            Args:
+                card_id: ID of the card.
+                to: List of recipient email addresses.
+                subject: Email subject.
+                body: Email body (plain text or HTML).
+                from_: Sender email address (required by API).
+                extra_input: Optional extra CreateAndSendInboxEmailInput fields (html, cc, bcc).
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            cid, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return err
+            if not isinstance(to, list) or not to:
+                return build_webhook_error_payload(
+                    message="Invalid 'to': provide a non-empty list of email addresses.",
+                )
+            if not all(isinstance(e, str) and e.strip() for e in to):
+                return build_webhook_error_payload(
+                    message="Invalid 'to': each recipient must be a non-empty string.",
+                )
+            if not isinstance(subject, str) or not subject.strip():
+                return build_webhook_error_payload(
+                    message="Invalid 'subject': provide a non-empty string.",
+                )
+            if not isinstance(body, str):
+                return build_webhook_error_payload(
+                    message="Invalid 'body': provide a string.",
+                )
+            if not isinstance(from_, str) or not from_.strip():
+                return build_webhook_error_payload(
+                    message="Invalid 'from_': provide a non-empty sender email address.",
+                )
+            bad = mutation_error_if_not_optional_dict(
+                extra_input, arg_name="extra_input"
+            )
+            if bad is not None:
+                return bad
+            try:
+                raw = await client.send_inbox_email(
+                    cid,
+                    [e.strip() for e in to],
+                    subject.strip(),
+                    body,
+                    from_=from_.strip(),
+                    **(extra_input or {}),
+                )
+            except Exception as exc:  # noqa: BLE001
+                return handle_webhook_tool_graphql_error(
+                    exc,
+                    "Send inbox email failed.",
+                    debug=debug,
+                    resource_kind="card",
+                    resource_id=str(cid),
+                )
+            return build_webhook_success_payload(
+                message="Email sent.",
+                data=raw,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def send_email_with_template(
+            card_id: PipefyId,
+            email_template_id: PipefyId,
+            to: list[str] | None = None,
+            from_: str | None = None,
+            extra_input: dict[str, Any] | None = None,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Send an email from a card's inbox using an existing email template.
+
+            Fetches the template with placeholders (e.g. {{card.title}}) resolved
+            for the card, then sends via createAndSendInboxEmail. Template must
+            exist (created in Pipefy UI). Use get_email_templates to find template IDs.
+
+            Args:
+                card_id: ID of the card with inbox.
+                email_template_id: ID of the email template.
+                to: Optional override for recipients; if omitted, uses template's toEmail.
+                from_: Optional override for sender; if omitted, uses template's fromEmail.
+                extra_input: Optional extra CreateAndSendInboxEmailInput fields (cc, bcc).
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            cid, err = validate_tool_id(card_id, "card_id")
+            if err is not None:
+                return err
+            if not email_template_id.strip():
+                return build_webhook_error_payload(
+                    message="Invalid 'email_template_id': provide a non-empty string.",
+                )
+            if to is not None and (
+                not isinstance(to, list)
+                or not all(isinstance(e, str) and e.strip() for e in to)
+            ):
+                return build_webhook_error_payload(
+                    message="Invalid 'to': when provided, must be a non-empty list of email strings.",
+                )
+            bad = mutation_error_if_not_optional_dict(
+                extra_input, arg_name="extra_input"
+            )
+            if bad is not None:
+                return bad
+            try:
+                raw = await client.send_email_with_template(
+                    cid,
+                    email_template_id.strip(),
+                    to=to,
+                    from_=from_,
+                    **(extra_input or {}),
+                )
+            except ValueError as exc:
+                return build_webhook_error_payload(message=str(exc))
+            except Exception as exc:  # noqa: BLE001
+                return handle_webhook_tool_graphql_error(
+                    exc,
+                    "Send email with template failed.",
+                    debug=debug,
+                    resource_kind="email_template",
+                    resource_id=str(email_template_id),
+                )
+            return build_webhook_success_payload(
+                message="Email sent with template.",
+                data=raw,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
+        async def get_webhooks(
+            ctx: Context[ServerSession, None],
+            pipe_id: PipefyId,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """List webhooks configured on a pipe.
+
+            Returns each webhook's id, name, url, actions, headers, and email (if set).
+            Use before updating or deleting a webhook to obtain the webhook ID.
+
+            Args:
+                pipe_id: ID of the pipe.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            await ctx.debug(f"get_webhooks: pipe_id={pipe_id}")
+            pid, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
+            try:
+                raw = await client.get_webhooks(pid)
+            except Exception as exc:  # noqa: BLE001
+                return handle_webhook_tool_graphql_error(
+                    exc,
+                    "List webhooks failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pid),
+                )
+            return build_webhook_success_payload(
+                message="Webhooks listed.",
+                data=raw,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def create_webhook(
+            pipe_id: PipefyId,
+            url: str,
+            actions: list[str],
+            extra_input: dict[str, Any] | None = None,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Register a webhook for pipe events.
+
+            `url` must be HTTPS. `actions` is a list of event names (e.g. ['card.move', 'card.create']).
+            Use `introspect_type('WebhookActions')` to see valid actions.
+
+            Args:
+                pipe_id: ID of the pipe.
+                    Discover via: ``search_pipes`` or ``get_organization``.
+                url: HTTPS URL to receive events.
+                actions: List of event action strings.
+                extra_input: Optional extra CreateWebhookInput fields (name, filters, headers).
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            pid, err = validate_tool_id(pipe_id, "pipe_id")
+            if err is not None:
+                return err
+            if not isinstance(url, str) or not url.strip():
+                return build_webhook_error_payload(
+                    message="Invalid 'url': provide a non-empty string.",
+                )
+            if not isinstance(actions, list) or not actions:
+                return build_webhook_error_payload(
+                    message="Invalid 'actions': provide a non-empty list of event action strings.",
+                )
+            if not all(isinstance(a, str) and a.strip() for a in actions):
+                return build_webhook_error_payload(
+                    message="Invalid 'actions': each action must be a non-empty string.",
+                )
+            bad = mutation_error_if_not_optional_dict(
+                extra_input, arg_name="extra_input"
+            )
+            if bad is not None:
+                return bad
+            try:
+                raw = await client.create_webhook(
+                    pid,
+                    url.strip(),
+                    [a.strip() for a in actions],
+                    **(extra_input or {}),
+                )
+            except ValueError as exc:
+                return build_webhook_error_payload(message=str(exc))
+            except Exception as exc:  # noqa: BLE001
+                return handle_webhook_tool_graphql_error(
+                    exc,
+                    "Create webhook failed.",
+                    debug=debug,
+                    resource_kind="pipe",
+                    resource_id=str(pid),
+                )
+            return build_webhook_success_payload(
+                message="Webhook created.",
+                data=raw,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def update_webhook(
+            webhook_id: PipefyId,
+            name: str | None = None,
+            url: str | None = None,
+            actions: list[str] | None = None,
+            headers: dict[str, Any] | None = None,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Update an existing webhook by ID.
+
+            Provide at least one of ``name``, ``url``, ``actions``, or ``headers``.
+            When ``url`` is set, it must be HTTPS (same rule as ``create_webhook``).
+
+            Args:
+                webhook_id: ID of the webhook to update.
+                    Discover via: ``get_webhooks(pipe_id)[].id``.
+                name: Optional new display name.
+                url: Optional new HTTPS callback URL.
+                actions: Optional new list of event action strings (non-empty when provided).
+                headers: Optional JSON object of custom HTTP headers for the webhook request.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            wid, err = validate_tool_id(webhook_id, "webhook_id")
+            if err is not None:
+                return err
+
+            if all(x is None for x in (name, url, actions, headers)):
+                return build_webhook_error_payload(
+                    message="Provide at least one of: name, url, actions, headers.",
+                )
+
+            if name is not None:
+                if not isinstance(name, str) or not name.strip():
+                    return build_webhook_error_payload(
+                        message="Invalid 'name': when provided, must be a non-empty string.",
+                    )
+            if url is not None:
+                if not isinstance(url, str) or not url.strip():
+                    return build_webhook_error_payload(
+                        message="Invalid 'url': when provided, must be a non-empty string.",
+                    )
+            if actions is not None:
+                if not isinstance(actions, list) or not actions:
+                    return build_webhook_error_payload(
+                        message="Invalid 'actions': when provided, must be a non-empty list.",
+                    )
+                if not all(isinstance(a, str) and a.strip() for a in actions):
+                    return build_webhook_error_payload(
+                        message="Invalid 'actions': each action must be a non-empty string.",
+                    )
+            if headers is not None and not isinstance(headers, dict):
+                return build_webhook_error_payload(
+                    message="Invalid 'headers': when provided, must be a JSON object (dict).",
+                )
+
+            kwargs: dict[str, Any] = {}
+            if name is not None:
+                kwargs["name"] = name.strip()
+            if url is not None:
+                kwargs["url"] = url.strip()
+            if actions is not None:
+                kwargs["actions"] = [a.strip() for a in actions]
+            if headers is not None:
+                kwargs["headers"] = headers
+
+            try:
+                raw = await client.update_webhook(wid, **kwargs)
+            except ValueError as exc:
+                return build_webhook_error_payload(message=str(exc))
+            except Exception as exc:  # noqa: BLE001
+                return handle_webhook_tool_graphql_error(
+                    exc,
+                    "Update webhook failed.",
+                    debug=debug,
+                    resource_kind="webhook",
+                    resource_id=str(wid),
+                )
+            return build_webhook_success_payload(
+                message="Webhook updated.",
+                data=raw,
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=True,
+            ),
+        )
+        async def delete_webhook(
+            ctx: Context[ServerSession, None],
+            webhook_id: PipefyId,
+            confirm: bool = False,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Delete a webhook permanently.
+
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval. Elicitation does not authorize
+            deletion (only ``confirm=True`` does).
+
+            Args:
+                ctx: MCP context for debug logging.
+                webhook_id: ID of the webhook to delete.
+                confirm: Set to True to execute the deletion (step 2).
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            wid, err = validate_tool_id(webhook_id, "webhook_id")
+            if err is not None:
+                return err
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=f"webhook (ID: {webhook_id})",
+            )
+            if guard is not None:
+                return guard
+
+            try:
+                raw = await client.delete_webhook(wid)
+            except Exception as exc:  # noqa: BLE001
+                return handle_webhook_tool_graphql_error(
+                    exc,
+                    "Delete webhook failed.",
+                    debug=debug,
+                    resource_kind="webhook",
+                    resource_id=str(wid),
+                )
+            return build_webhook_success_payload(
+                message="Webhook deleted.",
+                data=raw,
+            )

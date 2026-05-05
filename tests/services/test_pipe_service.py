@@ -6,8 +6,15 @@ Tests validate the pipe-related operations without requiring real API credential
 from unittest.mock import AsyncMock
 
 import pytest
+from graphql import print_ast
 
 from pipefy_mcp.services.pipefy.pipe_service import PipeService
+from pipefy_mcp.services.pipefy.queries.pipe_queries import (
+    GET_PHASE_ALLOWED_MOVES_QUERY,
+    GET_PHASE_CARDS_COUNT_QUERY,
+    GET_PHASE_FIELDS_QUERY,
+    SEARCH_PIPES_QUERY,
+)
 from pipefy_mcp.settings import PipefySettings
 
 
@@ -21,7 +28,7 @@ def mock_settings() -> PipefySettings:
     )
 
 
-def _make_service(mock_settings: PipefySettings, return_value: dict) -> PipeService:
+def _make_service(mock_settings, return_value):
     service = PipeService(settings=mock_settings)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
@@ -38,8 +45,19 @@ async def test_get_pipe_passes_pipe_id_variable(mock_settings):
 
     service.execute_query.assert_called_once()
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"pipe_id": pipe_id}, "Expected pipe_id in variables"
+    assert variables == {"pipe_id": str(pipe_id)}, "Expected pipe_id in variables"
     assert result == {"pipe": {"id": str(pipe_id)}}, "Expected pipe response"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_pipe_accepts_alphanumeric_id(mock_settings):
+    """Test get_pipe passes an alphanumeric ID through to GraphQL variables unchanged."""
+    service = _make_service(mock_settings, {"pipe": {"id": "Yr5RUVCi"}})
+    await service.get_pipe("Yr5RUVCi")
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables == {"pipe_id": "Yr5RUVCi"}
 
 
 @pytest.mark.unit
@@ -67,7 +85,7 @@ async def test_get_pipe_members_returns_members(mock_settings):
 
     service.execute_query.assert_called_once()
     variables = service.execute_query.call_args[0][1]
-    assert variables == {"pipeId": pipe_id}, "Expected pipeId in variables"
+    assert variables == {"pipeId": str(pipe_id)}, "Expected pipeId in variables"
     assert result == {"pipe": {"members": mock_members}}, (
         "Expected pipe members response"
     )
@@ -176,8 +194,13 @@ async def test_search_pipes_without_name_returns_all(
     service = _make_service(mock_settings, {"organizations": mock_organizations})
     result = await service.search_pipes()
 
-    assert result == {"organizations": mock_organizations}, (
-        "Expected all organizations returned"
+    assert result["organizations"] == mock_organizations
+    assert result["search_limits"]["max_pipes_per_org"] == 500
+    assert result["search_limits"]["graphql_name_search"] is False
+    assert result["search_limits"]["pipes_truncated"] is False
+    service.execute_query.assert_awaited_once_with(
+        SEARCH_PIPES_QUERY,
+        {"nameSearch": None},
     )
 
 
@@ -189,43 +212,43 @@ async def test_search_pipes_without_name_returns_all(
         pytest.param(
             "Custaudio",
             ["1"],
-            [["Custaudio", "Custaudio pipe"]],
-            [[100.0, 90.0]],
+            [["Custaudio pipe", "Custaudio"]],
+            [[100.0, 100.0]],
             id="exact_match_ranked_first",
         ),
         pytest.param(
             "custaudio",
             ["1"],
-            [["Custaudio", "Custaudio pipe"]],
-            [[88.9, 80.0]],
+            [["Custaudio pipe", "Custaudio"]],
+            [[100.0, 100.0]],
             id="case_insensitive_match",
         ),
         pytest.param(
             "drico",
             ["1"],
             [["Drico pipe"]],
-            [[72.0]],
+            [[100.0]],
             id="single_match_in_org",
         ),
         pytest.param(
             "pipe",
             ["1"],
             [["Custaudio pipe", "Drico pipe"]],
-            [[90.0, 90.0]],
+            [[100.0, 100.0]],
             id="matches_across_multiple_pipes",
         ),
         pytest.param(
             "Vendas",
             ["2"],
             [["Vendas São Paulo"]],
-            [[90.0]],
+            [[100.0]],
             id="accented_substring_match",
         ),
         pytest.param(
             "São Paulo",
             ["2"],
             [["Vendas São Paulo"]],
-            [[90.0]],
+            [[100.0]],
             id="accented_exact_substring",
         ),
         pytest.param(
@@ -260,7 +283,7 @@ async def test_search_pipes_without_name_returns_all(
             "Bug Tracker",
             ["3"],
             [["Bug Tracker [v2.0]"]],
-            [[90.0]],
+            [[100.0]],
             id="special_chars_brackets",
         ),
         pytest.param(
@@ -274,7 +297,7 @@ async def test_search_pipes_without_name_returns_all(
             "R&D",
             ["3"],
             [["R&D / Innovation"]],
-            [[90.0]],
+            [[100.0]],
             id="special_chars_ampersand_slash",
         ),
     ],
@@ -291,6 +314,10 @@ async def test_search_pipes_fuzzy_matching(
     service = _make_service(mock_settings, {"organizations": mock_organizations})
     result = await service.search_pipes(pipe_name=search_term)
 
+    service.execute_query.assert_awaited_once_with(
+        SEARCH_PIPES_QUERY,
+        {"nameSearch": search_term},
+    )
     assert len(result["organizations"]) == len(expected_org_ids)
     for i, org in enumerate(result["organizations"]):
         assert org["id"] == expected_org_ids[i]
@@ -311,9 +338,8 @@ async def test_search_pipes_no_matches_returns_empty(
     service = _make_service(mock_settings, {"organizations": mock_organizations})
     result = await service.search_pipes(pipe_name="XyzNonExistent123")
 
-    assert result == {"organizations": []}, (
-        "Expected empty organizations when no matches"
-    )
+    assert result["organizations"] == []
+    assert "search_limits" in result
 
 
 @pytest.mark.unit
@@ -352,10 +378,116 @@ async def test_search_pipes_all_organizations_empty(mock_settings):
     service.execute_query = AsyncMock(return_value={"organizations": []})
 
     result = await service.search_pipes()
-    assert result == {"organizations": []}
+    assert result["organizations"] == []
 
     result = await service.search_pipes(pipe_name="anything")
-    assert result == {"organizations": []}
+    assert result["organizations"] == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_short_keyword_matches_substring(
+    mock_settings,
+    mock_organizations,
+):
+    """Substring match finds pipes even when fuzzy score is below threshold."""
+    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    result = await service.search_pipes(pipe_name="pipe")
+    pipe_names = [p["name"] for org in result["organizations"] for p in org["pipes"]]
+    assert "Custaudio pipe" in pipe_names
+    assert "Drico pipe" in pipe_names
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_case_insensitive_substring(
+    mock_settings,
+    mock_organizations,
+):
+    """Case-insensitive substring matches correctly."""
+    service = _make_service(mock_settings, {"organizations": mock_organizations})
+    result = await service.search_pipes(pipe_name="bug")
+    pipe_names = [p["name"] for org in result["organizations"] for p in org["pipes"]]
+    assert "Bug Tracker [v2.0]" in pipe_names
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_truncates_per_org_when_over_cap(mock_settings):
+    """When an org has more pipes than max_pipes_per_org, list is sliced."""
+    pipes = [{"id": str(i), "name": f"Pipe {i}"} for i in range(5)]
+    mock_orgs = [{"id": "1", "name": "Org", "pipes": pipes}]
+    service = _make_service(mock_settings, {"organizations": mock_orgs})
+    result = await service.search_pipes(max_pipes_per_org=2)
+
+    assert len(result["organizations"][0]["pipes"]) == 2
+    assert result["organizations"][0]["pipes_truncated"] is True
+    assert result["search_limits"]["pipes_truncated"] is True
+
+
+@pytest.mark.unit
+def test_get_phase_fields_query_selects_internal_id_and_uuid():
+    printed = print_ast(GET_PHASE_FIELDS_QUERY)
+    assert "internal_id" in printed
+    assert "uuid" in printed
+
+
+@pytest.mark.unit
+def test_get_phase_allowed_moves_query_requests_transition_field():
+    printed = print_ast(GET_PHASE_ALLOWED_MOVES_QUERY)
+    assert "cards_can_be_moved_to_phases" in printed
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_allowed_move_targets_sends_phase_id(mock_settings):
+    phase_id = 342182335
+    api_response = {
+        "phase": {
+            "id": str(phase_id),
+            "name": "Doing",
+            "cards_can_be_moved_to_phases": [{"id": "200", "name": "Done"}],
+        }
+    }
+    service = _make_service(mock_settings, api_response)
+    result = await service.get_phase_allowed_move_targets(phase_id)
+
+    service.execute_query.assert_called_once()
+    assert service.execute_query.call_args[0][0] is GET_PHASE_ALLOWED_MOVES_QUERY
+    assert service.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
+    assert result == api_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_cards_count_returns_native_scalar(mock_settings):
+    phase_id = 342182334
+    api_response = {"phase": {"id": str(phase_id), "cards_count": 42}}
+    service = _make_service(mock_settings, api_response)
+
+    result = await service.get_phase_cards_count(phase_id)
+
+    service.execute_query.assert_called_once()
+    assert service.execute_query.call_args[0][0] is GET_PHASE_CARDS_COUNT_QUERY
+    assert service.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
+    assert result == 42
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_cards_count_raises_when_missing(mock_settings):
+    service = _make_service(mock_settings, {"phase": None})
+
+    with pytest.raises(ValueError, match="cards_count"):
+        await service.get_phase_cards_count(1)
+
+
+def test_get_phase_cards_count_query_selects_native_scalar():
+    query_text = print_ast(GET_PHASE_CARDS_COUNT_QUERY)
+    assert "cards_count" in query_text
+    # No card enumeration — must not touch the CardConnection edges/nodes.
+    assert "edges" not in query_text
+    assert "nodes" not in query_text
 
 
 @pytest.mark.unit
@@ -379,8 +511,22 @@ class TestGetPhaseFields:
     async def test_returns_all_fields(self, mock_phase_service):
         """Test get_phase_fields returns all fields for a phase."""
         mock_fields = [
-            {"id": "status", "label": "Status", "type": "select", "required": True},
-            {"id": "notes", "label": "Notes", "type": "long_text", "required": False},
+            {
+                "id": "status",
+                "internal_id": "308111001",
+                "uuid": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+                "label": "Status",
+                "type": "select",
+                "required": True,
+            },
+            {
+                "id": "notes",
+                "internal_id": "308111002",
+                "uuid": "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22",
+                "label": "Notes",
+                "type": "long_text",
+                "required": False,
+            },
         ]
         service, mock_eq = mock_phase_service(
             {"id": str(self.PHASE_ID), "name": "In Progress", "fields": mock_fields}
@@ -389,8 +535,9 @@ class TestGetPhaseFields:
         result = await service.get_phase_fields(self.PHASE_ID)
 
         mock_eq.assert_called_once()
+        assert mock_eq.call_args[0][0] is GET_PHASE_FIELDS_QUERY
         variables = mock_eq.call_args[0][1]
-        assert variables == {"phase_id": self.PHASE_ID}, (
+        assert variables == {"phase_id": str(self.PHASE_ID)}, (
             "Expected phase_id in variables"
         )
         assert result == {
@@ -402,10 +549,26 @@ class TestGetPhaseFields:
     async def test_required_only_filters_correctly(self, mock_phase_service):
         """Test get_phase_fields with required_only=True filters correctly."""
         mock_fields = [
-            {"id": "status", "label": "Status", "type": "select", "required": True},
-            {"id": "notes", "label": "Notes", "type": "long_text", "required": False},
+            {
+                "id": "status",
+                "internal_id": "1",
+                "uuid": "u1",
+                "label": "Status",
+                "type": "select",
+                "required": True,
+            },
+            {
+                "id": "notes",
+                "internal_id": "2",
+                "uuid": "u2",
+                "label": "Notes",
+                "type": "long_text",
+                "required": False,
+            },
             {
                 "id": "resolution",
+                "internal_id": "3",
+                "uuid": "u3",
                 "label": "Resolution",
                 "type": "short_text",
                 "required": True,
@@ -418,9 +581,18 @@ class TestGetPhaseFields:
         result = await service.get_phase_fields(self.PHASE_ID, required_only=True)
 
         expected_fields = [
-            {"id": "status", "label": "Status", "type": "select", "required": True},
+            {
+                "id": "status",
+                "internal_id": "1",
+                "uuid": "u1",
+                "label": "Status",
+                "type": "select",
+                "required": True,
+            },
             {
                 "id": "resolution",
+                "internal_id": "3",
+                "uuid": "u3",
                 "label": "Resolution",
                 "type": "short_text",
                 "required": True,

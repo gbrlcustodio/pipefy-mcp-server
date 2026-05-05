@@ -41,10 +41,18 @@ class TestServicesContainer:
 
         assert container.pipefy_client is None
 
+    @patch("pipefy_mcp.core.container.AiAutomationService")
+    @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.PipefyClient")
-    def test_initialize_services_creates_pipefy_client(self, mock_pipefy_client_class):
+    def test_initialize_services_creates_pipefy_client(
+        self,
+        mock_pipefy_client_class,
+        mock_internal_api_client_class,
+        mock_ai_automation_service_class,
+    ):
         """Test that initialize_services creates and assigns PipefyClient"""
         mock_client = Mock(spec=PipefyClient)
+        mock_client.client = Mock()
         mock_pipefy_client_class.return_value = mock_client
 
         settings = Settings(
@@ -62,9 +70,33 @@ class TestServicesContainer:
         mock_pipefy_client_class.assert_called_once_with(settings=settings.pipefy)
         assert container.pipefy_client is mock_client
 
-    def test_shutdown_method_exists(self):
-        """Test that shutdown method exists (currently a no-op)"""
-        container = ServicesContainer()
+    @patch("pipefy_mcp.core.container.InternalApiClient")
+    @patch("pipefy_mcp.core.container.AiAutomationService")
+    @patch("pipefy_mcp.core.container.PipefyClient")
+    def test_initialize_services_creates_ai_services(
+        self,
+        mock_pipefy_client_class,
+        mock_ai_automation_service_class,
+        mock_internal_api_client_class,
+    ):
+        mock_client = Mock(spec=PipefyClient)
+        mock_client.client = Mock()
+        mock_pipefy_client_class.return_value = mock_client
 
-        # Should not raise any exception
-        container.shutdown()
+        settings = Settings(
+            pipefy=PipefySettings(
+                graphql_url="https://api.pipefy.com/graphql",
+                oauth_url="https://auth.pipefy.com/oauth/token",
+                oauth_client="client_id",
+                oauth_secret="client_secret",
+            )
+        )
+
+        container = ServicesContainer()
+        container.initialize_services(settings)
+
+        mock_internal_api_client_class.assert_called_once()
+        mock_ai_automation_service_class.assert_called_once()
+        mock_client.set_ai_automation_service.assert_called_once_with(
+            mock_ai_automation_service_class.return_value
+        )

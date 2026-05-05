@@ -1,6 +1,6 @@
-from gql import gql
+from __future__ import annotations
 
-# NOTE: Keep this module free of runtime logic. Only GraphQL operation constants.
+from gql import gql
 
 CREATE_CARD_MUTATION = gql(
     """
@@ -63,6 +63,7 @@ GET_CARD_QUERY = gql(
     query ($card_id: ID!, $includeFields: Boolean!) {
         card(id: $card_id) {
             id
+            uuid
             title
             pipe {
                 id
@@ -83,8 +84,8 @@ GET_CARD_QUERY = gql(
 
 GET_CARDS_QUERY = gql(
     """
-    query ($pipe_id: ID!, $search: CardSearch, $includeFields: Boolean!) {
-        cards(pipe_id: $pipe_id, search: $search) {
+    query ($pipe_id: ID!, $search: CardSearch, $first: Int, $after: String, $includeFields: Boolean!) {
+        cards(pipe_id: $pipe_id, search: $search, first: $first, after: $after) {
             edges {
                 node {
                     id
@@ -97,6 +98,41 @@ GET_CARDS_QUERY = gql(
                         name
                         value
                     }
+                }
+            }
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
+        }
+    }
+    """
+)
+
+GET_CARD_RELATIONS_QUERY = gql(
+    """
+    query ($cardId: ID!) {
+        card(id: $cardId) {
+            child_relations {
+                name
+                pipe {
+                    id
+                    name
+                }
+                cards {
+                    id
+                    title
+                }
+            }
+            parent_relations {
+                name
+                pipe {
+                    id
+                    name
+                }
+                cards {
+                    id
+                    title
                 }
             }
         }
@@ -106,8 +142,8 @@ GET_CARDS_QUERY = gql(
 
 FIND_CARDS_QUERY = gql(
     """
-    query ($pipeId: ID!, $search: FindCards!, $includeFields: Boolean!) {
-        findCards(pipeId: $pipeId, search: $search) {
+    query ($pipeId: ID!, $search: FindCards!, $includeFields: Boolean!, $first: Int, $after: String) {
+        findCards(pipeId: $pipeId, search: $search, first: $first, after: $after) {
             edges {
                 node {
                     id
@@ -122,6 +158,10 @@ FIND_CARDS_QUERY = gql(
                     }
                 }
             }
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
         }
     }
     """
@@ -130,7 +170,7 @@ FIND_CARDS_QUERY = gql(
 MOVE_CARD_TO_PHASE_MUTATION = gql(
     """
     mutation ($input: MoveCardToPhaseInput!) {
-        moveCardToPhase (input: $input) {
+        moveCardToPhase(input: $input) {
             clientMutationId
         }
     }
@@ -223,3 +263,45 @@ UPDATE_FIELDS_VALUES_MUTATION = gql(
     }
     """
 )
+
+# ---------------------------------------------------------------------------
+# Internal API mutations (plain strings, not gql())
+#
+# ``deleteCardRelation`` is only available on the internal GraphQL schema
+# (core_api / internal_v1), not the public API.  The InternalApiClient sends
+# raw GraphQL text via JSON POST, so these are plain strings — same pattern
+# as ``ai_automation_queries.py``.
+# ---------------------------------------------------------------------------
+
+INTERNAL_DELETE_CARD_RELATION_MUTATION = """
+mutation deleteCardRelation(
+  $childId: ID!,
+  $parentId: ID!,
+  $sourceId: ID!
+) {
+  deleteCardRelation(input: {
+    child_id: $childId,
+    parent_id: $parentId,
+    source_id: $sourceId
+  }) {
+    success
+  }
+}
+"""
+
+__all__ = [
+    "CREATE_CARD_MUTATION",
+    "CREATE_COMMENT_MUTATION",
+    "DELETE_CARD_MUTATION",
+    "DELETE_COMMENT_MUTATION",
+    "FIND_CARDS_QUERY",
+    "GET_CARD_QUERY",
+    "GET_CARD_RELATIONS_QUERY",
+    "GET_CARDS_QUERY",
+    "INTERNAL_DELETE_CARD_RELATION_MUTATION",
+    "MOVE_CARD_TO_PHASE_MUTATION",
+    "UPDATE_CARD_FIELD_MUTATION",
+    "UPDATE_CARD_MUTATION",
+    "UPDATE_COMMENT_MUTATION",
+    "UPDATE_FIELDS_VALUES_MUTATION",
+]

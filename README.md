@@ -1,93 +1,68 @@
-# MCP server for Pipefy
-
-<p align="center">
-  <strong>Pipefy MCP is an open-source MCP server that lets your IDE safely create cards, update field information, and use any Pipefy resource — all with built-in safety controls.</strong>
-</p>
-
-<p align="center">
-  🚧 <strong>Alpha Release:</strong> Building in public. <br>
-  📢 Share your feedback on GitHub issues or at dev@pipefy.com.
-</p>
+<div align="center">
+  <img
+    src="docs/images/pipefy-developers-banner.png"
+    alt="Pipefy Developers — Where developers orchestrate intelligence"
+    width="100%"
+  />
+</div>
 
 <p align="center">
   <a href="https://github.com/gbrlcustodio/pipefy-mcp-server/actions"><img src="https://github.com/gbrlcustodio/pipefy-mcp-server/workflows/CI/badge.svg" alt="CI Status" /></a>
-  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.12%2B-blue.svg" alt="Python 3.12+" /></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+" /></a>
   <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/uv-package%20manager-blueviolet" alt="uv package manager" /></a>
   <a href="https://modelcontextprotocol.io/introduction"><img src="https://img.shields.io/badge/MCP-Server-orange" alt="MCP Server" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
 </p>
 
-> **⚠️ Disclaimer:** This is a "Build in public" project primarily aimed at developer workflows. It is **not** the official, supported Pipefy integration for external enterprise clients, but rather a tool to facilitate the development experience for those who use Pipefy for task management.
+**Open-source MCP for Pipefy** — **128 tools** for pipes, cards, tables, relations, automations, AI, observability and more. Alpha · built in public — [feedback & issues](https://github.com/gbrlcustodio/pipefy-mcp-server/issues) or **dev@pipefy.com**
+
+
+> **Disclaimer:** Community project for developer workflows — not Pipefy’s official or supported integration for external enterprise use.
 
 ## Table of contents
 <p align="center">
-  <a href="#feature-overview">Feature overview</a> •
+  <a href="#mcp-tools">MCP tools</a> •
   <a href="#getting-started">Getting started</a> •
-  <a href="#usage-with-cursor">Usage with Cursor</a> •
+  <a href="#why-these-dependencies">Why these dependencies?</a> •
+  <a href="#mcp-clients">MCP clients</a> •
   <a href="#development--testing">Development & Testing</a> •
+  <a href="docs/tools/cross-cutting.md">Cross-cutting</a> •
   <a href="#contributing">Contributing</a>
 </p>
 
-## Feature Overview
+---
 
-This server exposes common Kanban actions as "tools" that LLMs (like Claude Sonnet 4.5 inside Cursor) can invoke. The codebase follows a clean architecture with a facade pattern delegating to domain-specific services (Pipe and Card operations), keeping GraphQL queries and utilities organized in separate modules.
+## MCP tools
 
-### Pipe Tools
+The server exposes **128 tools**, grouped below into **nine** surface areas. Canonical names live in `PIPEFY_TOOL_NAMES` (`src/pipefy_mcp/tools/registry.py`).
 
-* **`get_pipe`**: Get details about a pipe's structure, including phases, labels, and start form fields.
-* **`get_start_form_fields`**: Inspect the schema of a pipe's start form. Use this to let the Agent know which fields are required *before* it tries to create a card.
+**Documentation for agents:** each tool’s description and `Args:` come from its Python docstring—MCP clients show that text to LLMs for routing. Use the docstrings (and the per-area docs linked in the table) as the authority on parameters and edge cases.
 
-### Card Tools
+**Cross-cutting behavior**
 
-* **`get_cards`**: List and search for cards in a specific pipe (allows the Agent to understand your backlog). Set `include_fields=true` to include each card's custom fields (name and value) in the response.
-* **`find_cards`**: Find cards in a pipe where a specific field equals a given value (e.g. Status = In Progress). Use `pipe_id`, `field_id`, and `field_value`; set `include_fields=true` to include each card's custom fields. Get `field_id` from `get_start_form_fields` or `get_phase_fields`.
-* **`get_card`**: Retrieve full details of a specific card. Set `include_fields=true` to include the card's custom fields (name and value) in the response.
-* **`create_card`**: Create a new card (e.g., report a bug found while coding without leaving the IDE).
-    * **Elicitation**: Elicitation is an MCP feature that allows the server to request additional information from the user mid-tool-execution. This server uses MCP's elicitation feature to prompt the user for required field values before creating the card.
-* **`add_card_comment`**: Add a text comment to a card by its ID. Requires `card_id` and `text` (1–1000 characters).
-* **`update_comment`**: Update an existing comment by its ID. Requires `comment_id` and `text` (1–1000 characters).
-* **`delete_comment`**: Delete a comment by its ID. Requires `comment_id`.
-* **`delete_card`**: Permanently delete a card from Pipefy.
-    * **⚠️ Destructive Operation**: This action cannot be undone. Use with extreme caution.
-    * **Two-Step Process**: By default, returns a preview showing card details and pipe name. Set `confirm=true` to actually delete the card.
-    * **Safety Features**: Includes input validation and detailed error messages for permission issues.
+Rules that apply to many tools (pagination, IDs, `debug`, `extra_input`, two-step deletes, permissions, introspection, error shape, and more) live in **[`docs/tools/cross-cutting.md`](docs/tools/cross-cutting.md)**. That page also notes **dependents** on destructive previews when optional scope args (e.g. `pipe_id` / `phase_id`) are used. Per-tool parameters stay in docstrings and the category links below.
 
-    ```mermaid
-    sequenceDiagram
-        participant U as User
-        participant A as Agent
-        participant S as MCP Server
-        participant P as Pipefy API
+| Category | Tools | Description | Docs |
+|----------|:-----:|-------------|------|
+| **Pipes & cards** | 37 | Pipes, phases, fields, labels, cards, field conditions, and card-level attachments—read/write/delete as documented per tool (card-to-card relation list/delete live under **Relations**). | [Details](docs/tools/pipes-and-cards.md) |
+| **Database tables** | 17 | Tables, records (rows), schema columns (table fields), org-wide table discovery, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
+| **Relations** | 8 | Pipe relations, table relations by ID, card links, list/delete card-level relations. | [Details](docs/tools/relations.md) |
+| **Reports** | 17 | Pipe and organization reports: discovery, CRUD, single pipe report read, and async exports. | [Details](docs/tools/reports.md) |
+| **Automations & AI** | 22 | Traditional automations (rules engine), AI automations, and AI agents, with pre-flight validators for safer writes. | [Details](docs/tools/automations-and-ai.md) |
+| **Observability** | 10 | AI agent and automation logs, usage stats, credits, job exports, status polling, and CSV fetch for finished exports. | [Details](docs/tools/observability.md) |
+| **Members, email & webhooks** | 11 | Pipe membership, card inbox emails, webhooks (list/update/create/delete), and transactional email sends. | [Details](docs/tools/members-email-webhooks.md) |
+| **Organization** | 1 | Fetch organization details (plan, members, pipes count). | [Details](docs/tools/organization.md) |
+| **Introspection** | 5 | Schema discovery, depth-controlled type resolution, and raw GraphQL execution. | [Details](docs/tools/introspection.md) |
 
-        U->>A: "Create a new card in pipe 123"
-        A->>S: create_card(pipe_id=123)
-        S->>P: Get required fields for pipe 123
-        S-->>A: Elicit(fields=["title", "due_date"])
-        A-->>U: I need more information: Title, Due Date
-        U-->>A: "Fix bug in login", "2025-12-31"
-        A->>S: create_card(pipe_id=123, title="Fix bug in login", due_date="2025-12-31")
-        S->>P: mutation createCard(...)
-        P-->>S: {"data": {"createCard": ...}}
-        S-->>A: {"success": true, "card_id": 456}
-    ```
-
-* **`move_card_to_phase`**: Move a card to a different phase (e.g., move a task to "Code Review" after pushing a PR).
-* **`update_card_field`**: Update a single field of an existing card via `updateCardField` (simple, full replacement of that field's value).
-* **`update_card`**: Update card attributes (title, assignees, labels, due date) and/or multiple custom fields using `updateCard` and `updateFieldsValues`.
-
-### Card update tools: when to use each
-
-- **Use `update_card_field`** when you only need to change *one* field on a card (for example, updating a status, a text field, or a single label value) and you are fine replacing the entire value for that field in one shot.
-- **Use `update_card` with `field_updates`** when you want to update **one or more custom fields at once** by ID, replacing their values (the server converts this to `updateFieldsValues` with `REPLACE` under the hood).
-- **Use `update_card` with attribute parameters** (`title`, `assignee_ids`, `label_ids`, `due_date`) when you need to update card metadata. These can be combined with `field_updates` in a single call.
+---
 
 ## Getting Started
 
 ### Prerequisites
-Installing the server requires the following on your system:
-- Python 3.12+
+- Python 3.11+
 - A **Pipefy Service Account Token** (Generate in Admin Panel > Service Accounts).
-- Rembember to add the Service account to the pipe you want the AI to use.
+
+Remember to add the service account to the pipe you want the AI to use.
 
 ### Installation
 We recommend using `uv` for dependency management. Ensure it's [installed](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_1).
@@ -99,37 +74,32 @@ cd pipefy-mcp-server
 
 # Sync dependencies
 uv sync
-```
-## Usage with Cursor
-To use this with Cursor, you need to register it as an MCP server in your settings.
 
-1. Open Cursor.
-1. Navigate to Cursor Settings > Features > MCP Servers.
-1. Click + Add New MCP Server.
-1. Fill in the details as shown in the configuration block below.
-
-```json
-{
-    "mcpServers": {
-        "pipefy": {
-            "cwd": "/absolute/path/to/pipefy-mcp-server",
-            "command": "uv",
-            "args": [
-                "run",
-                "--directory",
-                ".",
-                "pipefy-mcp-server"
-            ],
-            "env": {
-                "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
-                "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
-                "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
-                "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
-            }
-        }
-    }
-}
+# Optional: copy template and edit (full guide: docs/setup.md)
+cp .env.example .env
 ```
+
+**Setup, env vars, and MCP client JSON:** use **[Setup](docs/setup.md)** — single doc for first-time install, Pydantic / `.env` precedence, and Cursor / Claude examples (keys in [`.env.example`](.env.example)). Optional: `./bootstrap.sh` runs `uv sync` and creates `.env` from `.env.example` if missing.
+
+### Why these dependencies?
+
+The runtime stack in [`pyproject.toml`](pyproject.toml) is small on purpose. For a longer rationale (code references and security notes), see **[Dependencies](docs/dependencies.md)**. Summary:
+
+| Package | Role in this server |
+|--------|---------------------|
+| **httpx** | Async HTTP client used by `gql` for GraphQL (`HTTPXAsyncTransport`), Pipefy’s internal GraphQL API, presigned S3 uploads/downloads for attachments, and downloading signed export URLs (automation job / observability flows). |
+| **httpx-auth** | `OAuth2ClientCredentials` for service-account token acquisition and refresh; shared across GraphQL clients and direct `httpx` calls that need the same Pipefy OAuth settings. |
+| **openpyxl** | Reads `.xlsx` export files (e.g. automation job exports) and converts the first worksheet to CSV text for MCP responses — see `observability_export_csv`. |
+
+## MCP clients
+
+Step-by-step JSON samples and CLI examples are in **[Setup → MCP client setup](docs/setup.md#mcp-client-setup)**.
+
+| Client | Section |
+|--------|---------|
+| **Cursor** | [Cursor](docs/setup.md#cursor) |
+| **Claude Desktop** | [Claude Desktop](docs/setup.md#claude-desktop) |
+| **Claude Code** | [Claude Code](docs/setup.md#claude-code) |
 
 ## Development & Testing
 
@@ -141,20 +111,18 @@ uv run pytest
 
 # Run with coverage report
 uv run pytest --cov=src/pipefy_mcp/services/pipefy --cov-report=term-missing
+
+# Integration tests (requires .env with PIPEFY_* OAuth settings)
+uv run pytest -m integration -v
+
+# Attachment upload live tests (optional IDs — see tests/tools/test_attachment_tools_live.py)
+# uv run pytest tests/tools/test_attachment_tools_live.py -m integration -v
 ```
 
-### Inspecting locally developed servers
-To inspect servers locally developed or downloaded as a repository, the most common way is using the MCP Inspector:
+### MCP Inspector
 
 ```bash
 npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server
-```
-
-### Updating GraphQL Schema
-If you are contributing and need to update the Pipefy GraphQL definitions:
-
-```bash
-uv run gql-cli https://app.pipefy.com/graphql --print-schema --schema-download --headers 'Authorization: Bearer <AUTH_TOKEN>' > tests/services/pipefy/schema.graphql
 ```
 
 ### Code Quality
@@ -166,6 +134,11 @@ uv run ruff check src/
 # Format code
 uv run ruff format src/
 ```
+
+### Adding or renaming an MCP tool
+
+1. Implement the tool in the appropriate module under `src/pipefy_mcp/tools/` and call its `*Tools.register(...)` from `ToolRegistry.register_tools()` in [`src/pipefy_mcp/tools/registry.py`](src/pipefy_mcp/tools/registry.py) if it is not already wired.
+2. Add the **exact tool name** (as exposed to MCP clients) to **`PIPEFY_TOOL_NAMES`** in the same file. The server uses that set for collision checks at startup and for cleanup after a failed registration; `tests/test_server.py` also asserts the live tool list matches this set.
 
 ## Contributing
 We are building this in public and we need your feedback!

@@ -11,7 +11,7 @@ members = [
     "pipefy-ai-sdk",
     "pipefy-cli",
     "pipefy-mcp-server",
-    "pipefy-mcp-server-stub",
+    "pipefy-workspace",
 ]
 
 [[package]]
@@ -748,7 +748,7 @@ source = { editable = "packages/cli" }
 [[package]]
 name = "pipefy-mcp-server"
 version = "0.1.0"
-source = { editable = "." }
+source = { editable = "packages/mcp" }
 dependencies = [
     { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
@@ -789,9 +789,37 @@ dev = [
 ]
 
 [[package]]
-name = "pipefy-mcp-server-stub"
+name = "pipefy-workspace"
 version = "0.1.0"
-source = { editable = "packages/mcp" }
+source = { virtual = "." }
+
+[package.dev-dependencies]
+dev = [
+    { name = "aiohttp" },
+    { name = "pipefy-ai-sdk" },
+    { name = "pipefy-mcp-server" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "respx" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "aiohttp", specifier = ">=3.11.16" },
+    { name = "pipefy-ai-sdk", editable = "packages/sdk" },
+    { name = "pipefy-mcp-server", editable = "packages/mcp" },
+    { name = "pytest", specifier = ">=8.3.5" },
+    { name = "pytest-asyncio", specifier = ">=0.26.0" },
+    { name = "pytest-cov", specifier = ">=6.1.1" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
+    { name = "respx", specifier = ">=0.22.0" },
+    { name = "ruff", specifier = ">=0.11.4" },
+]
 
 [[package]]
 name = "pluggy"

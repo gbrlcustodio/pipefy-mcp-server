@@ -10,6 +10,7 @@ Run:
 from datetime import timedelta
 
 import pytest
+from _shared.live_settings import live_pipefy_settings, pipefy_live_configured
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -17,7 +18,6 @@ from mcp.shared.memory import (
 from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
-from tests.integration_helpers import live_pipefy_settings, pipefy_live_configured
 
 
 @pytest.fixture

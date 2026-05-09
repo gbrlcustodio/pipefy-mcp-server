@@ -1,9 +1,10 @@
 """Tests for ``Settings`` / ``PipefySettings`` (env loading and coercion)."""
 
 import pytest
+from pipefy_sdk import PipefySettings
 from pydantic import ValidationError
 
-from pipefy_mcp.settings import PipefySettings, Settings
+from pipefy_mcp.settings import Settings
 
 
 @pytest.mark.unit

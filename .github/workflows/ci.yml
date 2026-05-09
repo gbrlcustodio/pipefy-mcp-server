@@ -58,10 +58,12 @@ jobs:
     - name: Install dependencies
       run: uv sync --locked --all-extras --dev
     - name: Lint (full tree)
-      run: uv run ruff check src packages/sdk/src packages/mcp/src packages/cli/src
+      run: uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src
     - name: Check formatting
-      run: uv run ruff format --check src packages/sdk/src packages/mcp/src packages/cli/src
+      run: uv run ruff format --check packages/sdk/src packages/mcp/src packages/cli/src
     - name: Lint SDK (banned upward imports)
       run: cd packages/sdk && uv run ruff check src
+    - name: Build MCP wheel (packaging smoke)
+      run: uv build packages/mcp -o packages/mcp/dist
     - name: Run tests
       run: uv run pytest -m "not integration"

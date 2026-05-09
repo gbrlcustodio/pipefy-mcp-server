@@ -1,13 +1,12 @@
-"""Root test configuration (shared fixtures for all test directories)."""
+"""Shared pytest configuration for the repo-root ``tests/`` tree.
+
+This directory holds unit and integration tests for packages that still live
+under ``tests/`` (for example SDK-adjacent suites). There are no ``test_*.py``
+files at the root of ``tests/`` itself—only subpackages such as ``tests/tools``
+and ``tests/services``. MCP-focused collections live under ``packages/mcp/tests``.
+"""
 
 import pytest
-
-from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
-
-# Mirror the production wiring in ``server.py``'s lifespan so every in-memory
-# FastMCP instance constructed in tests also goes through ``PipefyValidationTool``.
-# The patch is idempotent — calling it here is safe regardless of other imports.
-install_pipefy_validation_envelope()
 
 
 @pytest.fixture

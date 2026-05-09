@@ -13,7 +13,7 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tests.tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture

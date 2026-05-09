@@ -24,13 +24,13 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from _shared.live_settings import require_live_creds
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
 from pipefy_mcp.server import mcp as mcp_server
 from pipefy_mcp.settings import settings
-from tests.integration_helpers import require_live_creds
 
 
 @pytest.mark.integration

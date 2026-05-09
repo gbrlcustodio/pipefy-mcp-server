@@ -5,6 +5,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _shared.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
 from gql.transport.exceptions import TransportQueryError
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
@@ -15,8 +16,7 @@ from pipefy_sdk.models.ai_agent import UpdateAiAgentInput
 import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tests.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
-from tests.tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture(autouse=True)
@@ -849,7 +849,7 @@ class TestValidateAiAgentBehaviors:
         mock_pipefy_client,
         extract_payload,
     ):
-        from tests.ai_agent_test_payloads import behavior_with_action
+        from _shared.ai_agent_test_payloads import behavior_with_action
 
         mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field()
         mock_pipefy_client.get_pipe_relations.return_value = {
@@ -925,7 +925,7 @@ class TestGetAiAgent:
         legacy_envelope,
     ):
         """Behaviors from the API are included verbatim in the MCP tool response."""
-        from tests.ai_agent_test_payloads import mock_agent_with_behaviors
+        from _shared.ai_agent_test_payloads import mock_agent_with_behaviors
 
         agent = mock_agent_with_behaviors()
         mock_pipefy_client.get_ai_agent.return_value = agent

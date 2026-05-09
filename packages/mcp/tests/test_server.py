@@ -6,10 +6,11 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
+from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.server import mcp as mcp_server
 from pipefy_mcp.server import run_server
-from pipefy_mcp.settings import PipefySettings, Settings
+from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 
 

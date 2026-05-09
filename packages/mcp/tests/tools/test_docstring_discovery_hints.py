@@ -15,7 +15,7 @@ import pathlib
 import pytest
 
 AUDIT: list[tuple[str, str, list[str]]] = [
-    # (tool name, module file under src/pipefy_mcp/tools/, must-mention tools)
+    # (tool name, module file under packages/mcp/src/pipefy_mcp/tools/, must-mention tools)
     (
         "create_field_condition",
         "field_condition_tools.py",

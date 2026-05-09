@@ -1,14 +1,65 @@
 [project]
-# Stub distribution name avoids collision with the real ``pipefy-mcp-server`` project at repo root; rename in Phase 3 (FR-3.3).
-name = "pipefy-mcp-server-stub"
+name = "pipefy-mcp-server"
 version = "0.1.0"
-description = "Workspace placeholder; MCP implementation remains at repository root until Phase 3."
+description = "MCP server that exposes Pipefy's GraphQL API."
+readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "httpx>=0.27.0",
+    "mcp[cli]>=1.25.0",
+    # Workspace resolves version in dev; standalone PyPI install needs Phase 6 (bundle or co-publish SDK). PRD Non-Goals and FR-6.3.
+    "pipefy-ai-sdk",
+    "pydantic>=2.11.3",
+    "pydantic-settings>=2.8.1",
+]
+
+[tool.uv.sources]
+pipefy-ai-sdk = { workspace = true }
+
+[project.scripts]
+pipefy-mcp-server = "pipefy_mcp.main:main"
+
+[dependency-groups]
+dev = [
+    "aiohttp>=3.11.16",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.1.1",
+    "pytest-mock>=3.14.0",
+    "respx>=0.22.0",
+    "ruff>=0.11.4",
+]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pipefy_mcp_pkg_placeholder"]
+packages = ["src/pipefy_mcp"]
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = { version_scheme = "no-guess-dev" }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/pipefy_mcp/_version.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `src` is the package; `../../packages/sdk/tests` supplies the `_shared` test bundle (live creds, fixtures) without putting the whole repo on sys.path.
+pythonpath = ["src", "tests", "../../packages/sdk/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --no-header --tb=short"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+markers = [
+    "unit: marks a test as a unit test",
+    "integration: marks tests that call the live Pipefy GraphQL API (PIPEFY_* env)",
+]
+
+[tool.ruff]
+lint.extend-select = ["I"]
+lint.exclude = ["src/pipefy_mcp/_version.py"]
+format.exclude = ["src/pipefy_mcp/_version.py"]

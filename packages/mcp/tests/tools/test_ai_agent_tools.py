@@ -16,7 +16,7 @@ import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from tests.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
-from tests.tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture(autouse=True)

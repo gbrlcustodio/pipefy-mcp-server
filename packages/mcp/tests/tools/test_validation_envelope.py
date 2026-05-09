@@ -17,7 +17,7 @@ from pipefy_mcp.tools.validation_envelope import (
     _format_validation_errors,
     _serialize_errors,
 )
-from tests.tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture

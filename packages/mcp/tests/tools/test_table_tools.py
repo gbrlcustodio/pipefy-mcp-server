@@ -14,7 +14,7 @@ from pipefy_sdk import PipefyClient
 from pipefy_mcp.tools.table_tools import TableTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from tests.pagination_test_defaults import DEFAULT_FIRST
-from tests.tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope
 
 
 @pytest.fixture

@@ -1,10 +1,10 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefySettings
 
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.settings import PipefySettings, Settings
+from pipefy_mcp.settings import Settings
 
 
 class TestServicesContainer:

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
+from pipefy_sdk import PipefyClient, PipefyId
 
-from pipefy_mcp.models.validators import PipefyId
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,

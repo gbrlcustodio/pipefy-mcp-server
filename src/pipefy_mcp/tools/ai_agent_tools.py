@@ -6,11 +6,15 @@ import asyncio
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
+from pipefy_sdk import (
+    BehaviorInput,
+    CreateAiAgentInput,
+    PipefyClient,
+    PipefyId,
+    UpdateAiAgentInput,
+)
 from pydantic import ValidationError
 
-from pipefy_mcp.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
-from pipefy_mcp.models.validators import PipefyId
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
@@ -649,8 +653,6 @@ class AiAgentTools:
 
             # Pydantic structural validation
             try:
-                from pipefy_mcp.models.ai_agent import BehaviorInput
-
                 for b in behaviors_expanded:
                     BehaviorInput.model_validate(b)
             except ValidationError as exc:

@@ -8,14 +8,14 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pydantic import ValidationError
-
-from pipefy_mcp.models.ai_automation import (
+from pipefy_sdk import (
     CreateAiAutomationInput,
+    PipefyClient,
+    PipefyId,
     UpdateAiAutomationInput,
 )
-from pipefy_mcp.models.validators import PipefyId
-from pipefy_mcp.services.pipefy import PipefyClient
+from pydantic import ValidationError
+
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
     build_create_automation_success,

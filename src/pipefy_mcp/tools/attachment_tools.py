@@ -14,15 +14,15 @@ import httpx
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pydantic import ValidationError
-
-from pipefy_mcp.models.attachment import (
+from pipefy_sdk import (
+    PipefyClient,
+    PipefyId,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
     infer_content_type,
 )
-from pipefy_mcp.models.validators import PipefyId
-from pipefy_mcp.services.pipefy import PipefyClient
+from pydantic import ValidationError
+
 from pipefy_mcp.tools.attachment_tool_helpers import (
     build_upload_error_payload,
     build_upload_success_payload,

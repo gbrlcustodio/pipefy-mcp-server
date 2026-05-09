@@ -7,8 +7,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 import httpx
-from httpx import Timeout
-from httpx import Auth
+from httpx import Auth, Timeout
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.queries.attachment_queries import (

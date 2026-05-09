@@ -6,7 +6,7 @@ from typing import Any, ClassVar
 from gql import Client
 from gql.transport.httpx import HTTPXAsyncTransport
 from graphql import GraphQLSchema
-from httpx import Auth, Timeout
+from httpx import Auth, Request, Timeout
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_sdk.settings import PipefySettings
@@ -18,7 +18,7 @@ class StaticBearerAuth(Auth):
     def __init__(self, token: str) -> None:
         self._token = token
 
-    def auth_flow(self, request):  # noqa: ANN001
+    def auth_flow(self, request: Request):
         request.headers["Authorization"] = f"Bearer {self._token}"
         yield request
 

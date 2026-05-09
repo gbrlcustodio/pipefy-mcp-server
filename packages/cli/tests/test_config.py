@@ -239,3 +239,62 @@ def test_apply_toml_fills_only_missing_fields(
 
     assert merged.graphql_url == "https://toml-only.example.com/graphql"
     assert merged.oauth_client == "from-env"
+
+
+def test_graphql_url_flag_localhost_rejected_without_insecure(
+    clean_pipefy_env,
+    saved_cwd,
+):
+    with pytest.raises(ValueError, match="HTTPS|http"):
+        resolve_pipefy_settings(
+            graphql_url_flag="http://localhost/graphql",
+            allow_insecure_urls_flag=None,
+        )
+
+
+def test_graphql_url_flag_localhost_allowed_with_insecure_flag(
+    clean_pipefy_env,
+    saved_cwd,
+):
+    resolved = resolve_pipefy_settings(
+        graphql_url_flag="http://localhost/graphql",
+        allow_insecure_urls_flag=True,
+    )
+    assert resolved.graphql_url == "http://localhost/graphql"
+    assert resolved.allow_insecure_urls is True
+
+
+def test_toml_private_graphql_url_rejected(clean_pipefy_env, saved_cwd, monkeypatch):
+    cfg_path = saved_cwd / "config.toml"
+    cfg_path.write_text(
+        textwrap.dedent(
+            """\
+            [pipefy]
+            graphql_url = "http://10.0.0.1/graphql"
+            """
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(config_module, "USER_CONFIG_PATH", cfg_path)
+
+    with pytest.raises(ValueError):
+        resolve_pipefy_settings(
+            graphql_url_flag=None,
+            allow_insecure_urls_flag=None,
+        )
+
+
+def test_corrupt_user_config_toml_raises_actionable_error(
+    clean_pipefy_env,
+    saved_cwd,
+    monkeypatch,
+):
+    cfg_path = saved_cwd / "config.toml"
+    cfg_path.write_text("[pipefy\ngraphql_url = ", encoding="utf-8")
+    monkeypatch.setattr(config_module, "USER_CONFIG_PATH", cfg_path)
+
+    with pytest.raises(ValueError, match="docs/setup"):
+        resolve_pipefy_settings(
+            graphql_url_flag=None,
+            allow_insecure_urls_flag=None,
+        )

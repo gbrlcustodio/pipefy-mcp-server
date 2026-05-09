@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import typer
 
 from pipefy_cli.commands.card import card_app
@@ -25,13 +27,12 @@ def main(
     token: str | None = typer.Option(
         None,
         "--token",
-        help="Bearer token for GraphQL (skips OAuth client-credentials grant).",
+        help="Bearer token for GraphQL (skips OAuth). Overrides PIPEFY_TOKEN if both are set.",
     ),
     allow_insecure_urls: bool = typer.Option(
         False,
         "--allow-insecure-urls",
         help="Allow http:// and private hosts (overrides env for this process).",
-        is_flag=True,
     ),
 ) -> None:
     """Global options apply to all subcommands."""
@@ -45,7 +46,10 @@ def main(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
     ctx.obj["pipefy_settings"] = pipefy_settings
-    ctx.obj["token"] = token.strip() if token else None
+    from_env = os.environ.get("PIPEFY_TOKEN")
+    cli_token = token.strip() if token else None
+    env_token = from_env.strip() if from_env else None
+    ctx.obj["token"] = cli_token or env_token
 
 
 app.add_typer(card_app, name="card")

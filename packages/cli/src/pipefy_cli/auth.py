@@ -5,12 +5,11 @@ from __future__ import annotations
 import typer
 from pipefy_sdk import PipefyClient, PipefySettings
 
+from pipefy_cli._docs import DOCS_SETUP_REF
 from pipefy_cli.config import (
     describe_missing_oauth_vars,
     ensure_public_graphql_configured,
 )
-
-_DOCS_SETUP_REF = "docs/setup.md"
 
 _cached_signature: tuple[object, ...] | None = None
 _cached_client: PipefyClient | None = None
@@ -18,7 +17,6 @@ _cached_client: PipefyClient | None = None
 
 def clear_authenticated_client_cache() -> None:
     """Drop the in-process client cache (tests and rare reload scenarios)."""
-
     global _cached_signature, _cached_client
     _cached_signature = None
     _cached_client = None
@@ -28,8 +26,6 @@ def _cache_key(
     pipefy_settings: PipefySettings,
     bearer_token: str | None,
 ) -> tuple[object, ...]:
-    """Stable fingerprint for settings + bearer mode (in-memory only)."""
-
     return (
         (pipefy_settings.graphql_url or "").strip(),
         (pipefy_settings.internal_api_url or "").strip(),
@@ -86,7 +82,7 @@ def get_authenticated_client(
     if missing_msg:
         typer.echo(
             f"Missing OAuth configuration ({missing_msg}). "
-            f"Use --token with a bearer token or set credentials per {_DOCS_SETUP_REF}.",
+            f"Use --token or PIPEFY_TOKEN for a bearer token, or set OAuth per {DOCS_SETUP_REF}.",
             err=True,
         )
         raise typer.Exit(2)
@@ -97,18 +93,7 @@ def get_authenticated_client(
     return client
 
 
-def create_pipefy_client(
-    pipefy_settings: PipefySettings,
-    *,
-    bearer_token: str | None = None,
-) -> PipefyClient:
-    """Backward-compatible alias for :func:`get_authenticated_client`."""
-
-    return get_authenticated_client(pipefy_settings, bearer_token=bearer_token)
-
-
 __all__ = [
     "clear_authenticated_client_cache",
-    "create_pipefy_client",
     "get_authenticated_client",
 ]

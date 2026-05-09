@@ -45,5 +45,5 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "module"
 markers = [
     "unit: marks a test as a unit test",
-    "integration: marks a test as an integration test that requires database access",
+    "integration: marks tests that call the live Pipefy GraphQL API (PIPEFY_* env)",
 ]

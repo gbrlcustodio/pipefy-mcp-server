@@ -1,4 +1,4 @@
-"""Fixtures for tests under ``tests/`` (SDK-adjacent suites at repo root)."""
+"""Fixtures for repo-root ``tests/`` (not ``packages/mcp/tests``)."""
 
 import pytest
 

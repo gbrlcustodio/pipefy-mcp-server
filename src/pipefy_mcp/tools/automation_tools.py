@@ -7,11 +7,9 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
+from pipefy_sdk import CreateSendTaskAutomationInput, PipefyClient, PipefyId
 from pydantic import ValidationError
 
-from pipefy_mcp.models.send_task_automation import CreateSendTaskAutomationInput
-from pipefy_mcp.models.validators import PipefyId
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.automation_tool_helpers import (
     build_automation_error_payload,
     build_automation_mutation_success_payload,

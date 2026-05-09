@@ -56,6 +56,18 @@ Rules that apply to many tools (pagination, IDs, `debug`, `extra_input`, two-ste
 
 ---
 
+## Repository structure
+
+This repository is a **uv workspace** (see the root [`pyproject.toml`](pyproject.toml)). Members:
+
+| Directory | PyPI / distribution name | Purpose |
+|-----------|--------------------------|---------|
+| [`packages/sdk/`](packages/sdk/) | `pipefy-ai-sdk` | GraphQL client, services, queries, and shared Pydantic models consumed by the MCP server (and, later, the CLI). |
+| [`packages/mcp/`](packages/mcp/) | `pipefy-mcp-server-stub` (placeholder) | Reserved for Phase 3; the installable MCP server and `pipefy_mcp` package still live under [`src/pipefy_mcp/`](src/pipefy_mcp/) at the repo root. |
+| [`packages/cli/`](packages/cli/) | `pipefy-cli` (placeholder) | Reserved for the future Typer-based `pipefy` CLI. |
+
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -83,13 +95,13 @@ cp .env.example .env
 
 ### Why these dependencies?
 
-The runtime stack in [`pyproject.toml`](pyproject.toml) is small on purpose. For a longer rationale (code references and security notes), see **[Dependencies](docs/dependencies.md)**. Summary:
+The runtime stack in [`pyproject.toml`](pyproject.toml) is small on purpose. GraphQL, OAuth transport, and spreadsheet parsing for exports live in the **`pipefy-ai-sdk`** workspace dependency ([`packages/sdk/pyproject.toml`](packages/sdk/pyproject.toml)). For a longer rationale (code references and security notes), see **[Dependencies](docs/dependencies.md)**. Summary:
 
 | Package | Role in this server |
 |--------|---------------------|
-| **httpx** | Async HTTP client used by `gql` for GraphQL (`HTTPXAsyncTransport`), Pipefy’s internal GraphQL API, presigned S3 uploads/downloads for attachments, and downloading signed export URLs (automation job / observability flows). |
-| **httpx-auth** | `OAuth2ClientCredentials` for service-account token acquisition and refresh; shared across GraphQL clients and direct `httpx` calls that need the same Pipefy OAuth settings. |
-| **openpyxl** | Reads `.xlsx` export files (e.g. automation job exports) and converts the first worksheet to CSV text for MCP responses — see `observability_export_csv`. |
+| **pipefy-ai-sdk** | Shared GraphQL stack (`gql` + `httpx`), Pipefy OAuth (`httpx-auth`), models, and service layer used by MCP tools. |
+| **httpx** | Direct async HTTP used by MCP tools (e.g. attachment flows) alongside the SDK’s GraphQL transport. |
+| **mcp** | Model Context Protocol server runtime (`FastMCP`, tool registration). |
 
 ## MCP clients
 

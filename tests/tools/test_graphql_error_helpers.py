@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
+from pipefy_sdk import PipefyClient
 
 import pipefy_mcp.settings as settings_mod
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
 
 

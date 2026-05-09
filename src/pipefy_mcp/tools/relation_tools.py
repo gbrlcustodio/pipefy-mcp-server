@@ -7,9 +7,8 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
+from pipefy_sdk import PipefyClient, PipefyId
 
-from pipefy_mcp.models.validators import PipefyId
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.relation_tool_helpers import (
     build_relation_error_payload,

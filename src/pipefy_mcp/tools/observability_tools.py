@@ -6,9 +6,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
+from pipefy_sdk import PipefyClient, PipefyId
 
-from pipefy_mcp.models.validators import PipefyId
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 from pipefy_mcp.tools.observability_tool_helpers import (
     build_observability_error_payload,

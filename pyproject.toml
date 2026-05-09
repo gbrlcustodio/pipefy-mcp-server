@@ -5,15 +5,18 @@ description = "Pipefy MCP server that enables AI Agents to end-to-end manage you
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "gql[httpx]>=3.5.2",
     "httpx>=0.27.0",
-    "openpyxl>=3.1.5",
-    "httpx-auth>=0.23.1",
     "mcp[cli]>=1.25.0",
+    "pipefy-ai-sdk",
     "pydantic>=2.11.3",
     "pydantic-settings>=2.8.1",
-    "rapidfuzz>=3.14.3",
 ]
+
+[tool.uv.workspace]
+members = ["packages/sdk", "packages/mcp", "packages/cli"]
+
+[tool.uv.sources]
+pipefy-ai-sdk = { workspace = true }
 
 [project.scripts]
 pipefy-mcp-server = "pipefy_mcp.main:main"
@@ -49,9 +52,11 @@ lint.exclude = ["src/pipefy_mcp/_version.py"]
 format.exclude = ["src/pipefy_mcp/_version.py"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-# Root on pythonpath so tests can import shared helpers (e.g. tests.ai_agent_test_payloads)
-pythonpath = ["."]
+testpaths = ["tests", "packages/sdk/tests"]
+# Root on pythonpath so ``tests.*`` resolves to this repo's ``tests/`` package (MCP suite).
+# TODO: drop ``"."`` once Phase 3 moves MCP under ``packages/mcp`` and shims under ``tests/``
+# no longer need to shadow-import alongside ``packages/sdk/tests`` (see FR-3.x).
+pythonpath = [".", "packages/sdk/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

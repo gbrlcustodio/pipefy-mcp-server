@@ -7,17 +7,18 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pydantic import ValidationError
-
-from pipefy_mcp.models.comment import (
+from pipefy_sdk import (
+    CardSearch,
     CommentInput,
     DeleteCommentInput,
+    PipefyClient,
+    PipefyId,
     UpdateCommentInput,
+    copy_card_search,
+    create_form_model,
 )
-from pipefy_mcp.models.form import create_form_model
-from pipefy_mcp.models.validators import PipefyId
-from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.services.pipefy.types import CardSearch, copy_card_search
+from pydantic import ValidationError
+
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,

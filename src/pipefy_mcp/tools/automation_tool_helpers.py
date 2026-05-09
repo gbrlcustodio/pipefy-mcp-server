@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Any, Literal, cast
 
 from mcp.server.fastmcp import Context
-from typing_extensions import TypedDict
-
-from pipefy_mcp.services.pipefy.automation_graphql_types import (
+from pipefy_sdk import (
     AutomationActionRow,
     AutomationEventRow,
     AutomationRuleRecord,
     AutomationRuleSummary,
 )
+from typing_extensions import TypedDict
+
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     extract_graphql_correlation_id,

@@ -9,8 +9,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
+from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from tests.tools.conftest import assert_invalid_arguments_envelope
@@ -681,7 +681,7 @@ class TestCreateAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        from pipefy_mcp.models.ai_automation import DEFAULT_CONDITION
+        from pipefy_sdk.models.ai_automation import DEFAULT_CONDITION
 
         mock_pipefy_client.create_ai_automation.return_value = {
             "automation_id": "999",

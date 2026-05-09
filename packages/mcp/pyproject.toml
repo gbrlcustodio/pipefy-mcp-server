@@ -1,0 +1,14 @@
+[project]
+# Stub distribution name avoids collision with the real ``pipefy-mcp-server`` project at repo root; rename in Phase 3 (FR-3.3).
+name = "pipefy-mcp-server-stub"
+version = "0.1.0"
+description = "Workspace placeholder; MCP implementation remains at repository root until Phase 3."
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pipefy_mcp_pkg_placeholder"]

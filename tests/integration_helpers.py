@@ -1,26 +1,27 @@
-"""Shared helpers for integration tests that require live Pipefy credentials."""
+"""Re-export live Pipefy credential helpers from the canonical SDK test bundle."""
 
-import pytest
+from __future__ import annotations
 
-from pipefy_mcp.settings import settings
+import importlib.util
+from pathlib import Path
 
+_SHARED = (
+    Path(__file__).resolve().parent.parent
+    / "packages"
+    / "sdk"
+    / "tests"
+    / "_shared"
+    / "live_settings.py"
+)
 
-def pipefy_live_configured():
-    """Return True when all OAuth + GraphQL credentials are present."""
-    p = settings.pipefy
-    return bool(
-        p.graphql_url
-        and str(p.graphql_url).startswith(("http://", "https://"))
-        and p.oauth_url
-        and str(p.oauth_url).startswith(("http://", "https://"))
-        and p.oauth_client
-        and p.oauth_secret
-    )
+_spec = importlib.util.spec_from_file_location(
+    "_pipefy_sdk_tests_live_settings",
+    _SHARED,
+)
+_mod = importlib.util.module_from_spec(_spec)
+assert _spec.loader is not None
+_spec.loader.exec_module(_mod)
 
-
-def require_live_creds():
-    """Skip the current test if live credentials are not configured."""
-    if not pipefy_live_configured():
-        pytest.skip(
-            "Pipefy credentials not configured (PIPEFY_GRAPHQL_URL + OAuth in .env)"
-        )
+live_pipefy_settings = _mod.live_pipefy_settings
+pipefy_live_configured = _mod.pipefy_live_configured
+require_live_creds = _mod.require_live_creds

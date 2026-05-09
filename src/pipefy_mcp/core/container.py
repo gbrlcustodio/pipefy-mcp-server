@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Self
 
-from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.services.pipefy.ai_automation_service import AiAutomationService
-from pipefy_mcp.services.pipefy.internal_api_client import InternalApiClient
+from pipefy_sdk import AiAutomationService, InternalApiClient, PipefyClient
+
 from pipefy_mcp.settings import Settings
 
 

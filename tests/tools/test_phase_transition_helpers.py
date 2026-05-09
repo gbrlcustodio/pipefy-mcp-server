@@ -12,8 +12,8 @@ import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.phase_transition_helpers import (
     collect_ai_behavior_move_transition_problems,
     collect_automation_move_transition_error_message,

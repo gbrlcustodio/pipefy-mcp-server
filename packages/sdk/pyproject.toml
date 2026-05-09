@@ -1,0 +1,47 @@
+[project]
+name = "pipefy-ai-sdk"
+version = "0.1.0"
+description = "Pipefy GraphQL client, models, and services (shared by MCP and CLI)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "gql[httpx]>=3.5.2",
+    "httpx>=0.27.0",
+    "httpx-auth>=0.23.1",
+    "openpyxl>=3.1.5",
+    "pydantic>=2.11.3",
+    "pydantic-settings>=2.8.1",
+    "rapidfuzz>=3.14.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.1.1",
+    "pytest-mock>=3.14.0",
+    "respx>=0.22.0",
+    "ruff>=0.11.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pipefy_sdk"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+markers = [
+    "unit: marks a unit test",
+    "integration: marks a test requiring live Pipefy credentials",
+]
+
+[tool.ruff]
+lint.extend-select = ["I", "TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"pipefy_mcp".msg = "pipefy_sdk must not import the MCP package."
+"pipefy_cli".msg = "pipefy_sdk must not import the CLI package."

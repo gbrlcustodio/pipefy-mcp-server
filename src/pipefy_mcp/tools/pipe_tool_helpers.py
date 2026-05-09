@@ -3,10 +3,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Literal, cast
 
+from pipefy_sdk import CardSearch, PipefyClient
 from typing_extensions import TypedDict
 
-from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.services.pipefy.types import CardSearch
 from pipefy_mcp.tools.destructive_tool_guard import (
     DestructiveCancelledPayload,
     DestructivePreviewPayload,

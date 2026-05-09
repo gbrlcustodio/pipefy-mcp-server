@@ -5,9 +5,9 @@ import binascii
 import httpx
 import pytest
 from gql.transport.exceptions import TransportQueryError
+from pipefy_sdk.models.attachment import UploadAttachmentToCardInput
 from pydantic import ValidationError
 
-from pipefy_mcp.models.attachment import UploadAttachmentToCardInput
 from pipefy_mcp.tools.attachment_tool_helpers import (
     build_upload_error_payload,
     build_upload_success_payload,

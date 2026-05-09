@@ -32,7 +32,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from pipefy_mcp.services.pipefy import PipefyClient
+    from pipefy_sdk import PipefyClient
 
 import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.tools.tool_error_envelope import tool_error

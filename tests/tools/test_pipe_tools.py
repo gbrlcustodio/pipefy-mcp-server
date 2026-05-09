@@ -16,9 +16,9 @@ from mcp.types import (
     ElicitRequestParams,
     ElicitResult,
 )
+from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     DeleteCardErrorPayload,
@@ -741,7 +741,7 @@ class TestDirectToolCalls:
         extract_payload,
     ):
         """update_comment with text > 1000 chars returns error payload without calling API."""
-        from pipefy_mcp.models.comment import MAX_COMMENT_TEXT_LENGTH
+        from pipefy_sdk.models.comment import MAX_COMMENT_TEXT_LENGTH
 
         async with client_session as session:
             result = await session.call_tool(

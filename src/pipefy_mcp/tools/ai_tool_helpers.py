@@ -7,9 +7,9 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from pipefy_sdk import AiAgentGraphPayload
 from typing_extensions import TypedDict
 
-from pipefy_mcp.services.pipefy.types import AiAgentGraphPayload
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     strip_internal_api_diagnostic_markers,
@@ -22,7 +22,7 @@ from pipefy_mcp.tools.tool_error_envelope import (
 )
 
 if TYPE_CHECKING:
-    from pipefy_mcp.services.pipefy import PipefyClient
+    from pipefy_sdk import PipefyClient
 
 logger = logging.getLogger(__name__)
 

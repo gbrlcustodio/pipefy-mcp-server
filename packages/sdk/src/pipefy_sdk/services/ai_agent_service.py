@@ -6,7 +6,7 @@ import copy
 import uuid
 from typing import Any
 
-from httpx_auth import OAuth2ClientCredentials
+from httpx import Auth
 
 from pipefy_sdk.base_client import (
     BasePipefyClient,
@@ -65,7 +65,7 @@ class AiAgentService(BasePipefyClient):
     def __init__(
         self,
         settings: PipefySettings,
-        auth: OAuth2ClientCredentials | None = None,
+        auth: Auth | None = None,
     ) -> None:
         """Initialize the GraphQL client.
 

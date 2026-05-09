@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from httpx_auth import OAuth2ClientCredentials
+from httpx import Auth
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.queries.pipe_config_queries import (
@@ -36,7 +36,7 @@ class PipeConfigService(BasePipefyClient):
     def __init__(
         self,
         settings: PipefySettings,
-        auth: OAuth2ClientCredentials | None = None,
+        auth: Auth | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
 

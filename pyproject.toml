@@ -15,11 +15,13 @@ members = ["packages/sdk", "packages/mcp", "packages/cli"]
 [tool.uv.sources]
 pipefy-ai-sdk = { workspace = true }
 pipefy-mcp-server = { workspace = true }
+pipefy-cli = { workspace = true }
 
 [dependency-groups]
 dev = [
     "pipefy-ai-sdk",
     "pipefy-mcp-server",
+    "pipefy-cli",
     "aiohttp>=3.11.16",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
@@ -35,8 +37,13 @@ lint.exclude = ["packages/mcp/src/pipefy_mcp/_version.py"]
 format.exclude = ["packages/mcp/src/pipefy_mcp/_version.py"]
 
 [tool.pytest.ini_options]
-testpaths = ["packages/sdk/tests", "packages/mcp/tests"]
-pythonpath = ["packages/mcp/tests", "packages/sdk/tests"]
+testpaths = ["packages/sdk/tests", "packages/mcp/tests", "packages/cli/tests"]
+pythonpath = [
+    "packages/mcp/tests",
+    "packages/sdk/tests",
+    "packages/cli/src",
+    "packages/cli/tests",
+]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

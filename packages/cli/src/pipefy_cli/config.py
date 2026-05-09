@@ -1,0 +1,176 @@
+"""Resolve Pipefy settings for the CLI (aligned with MCP ``PIPEFY_*`` keys)."""
+
+from __future__ import annotations
+
+import os
+import tomllib
+from pathlib import Path
+from typing import Any
+
+from pipefy_sdk import PipefySettings
+from pydantic import Field, ValidationError
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from pipefy_cli._docs import DOCS_SETUP_REF
+
+_ALLOW_INSECURE_ENV_KEY = "PIPEFY_ALLOW_INSECURE_URLS"
+
+USER_CONFIG_PATH = Path.home() / ".config/pipefy/config.toml"
+
+
+class CliSettings(BaseSettings):
+    """Load ``PIPEFY_*`` from the environment and ``.env`` in the working directory."""
+
+    model_config = SettingsConfigDict(
+        env_nested_delimiter="_",
+        env_nested_max_split=1,
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
+
+    pipefy: PipefySettings = Field(default_factory=PipefySettings)
+
+
+def _revalidate(pipefy: PipefySettings, patch: dict[str, Any]) -> PipefySettings:
+    """Merge ``patch`` and re-validate (``model_copy`` would skip URL validators)."""
+    if not patch:
+        return pipefy
+    merged = {**pipefy.model_dump(), **patch}
+    return PipefySettings.model_validate(merged)
+
+
+def _read_toml_pipefy_dict() -> dict[str, Any]:
+    """Return the ``[pipefy]`` table (or top-level keys) from the user config file."""
+    if not USER_CONFIG_PATH.is_file():
+        return {}
+    try:
+        raw = USER_CONFIG_PATH.read_bytes()
+        data = tomllib.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        msg = (
+            f"Could not read Pipefy config file at {USER_CONFIG_PATH}: {exc}. "
+            f"See {DOCS_SETUP_REF} for the expected format."
+        )
+        raise ValueError(msg) from exc
+    section = data.get("pipefy")
+    if isinstance(section, dict):
+        return dict(section)
+    return dict(data)
+
+
+def _is_missing(value: object) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str) and not value.strip():
+        return True
+    return False
+
+
+def _fill_if_missing_str(
+    pipefy: PipefySettings,
+    blob: dict[str, Any],
+    field: str,
+    key: str,
+    patch: dict[str, Any],
+) -> None:
+    if _is_missing(getattr(pipefy, field)) and blob.get(key):
+        patch[field] = str(blob[key]).strip()
+
+
+def apply_toml_fallback(pipefy: PipefySettings) -> PipefySettings:
+    """Fill only attributes still unset after env / ``.env`` (lowest precedence)."""
+    blob = _read_toml_pipefy_dict()
+    if not blob:
+        return pipefy
+    patch: dict[str, Any] = {}
+    _fill_if_missing_str(pipefy, blob, "graphql_url", "graphql_url", patch)
+    _fill_if_missing_str(pipefy, blob, "internal_api_url", "internal_api_url", patch)
+    _fill_if_missing_str(pipefy, blob, "oauth_url", "oauth_url", patch)
+    _fill_if_missing_str(pipefy, blob, "oauth_client", "oauth_client", patch)
+    _fill_if_missing_str(pipefy, blob, "oauth_secret", "oauth_secret", patch)
+    if blob.get("service_account_ids") is not None and not pipefy.service_account_ids:
+        patch["service_account_ids"] = blob["service_account_ids"]
+    if blob.get("allow_insecure_urls") is not None and not pipefy.allow_insecure_urls:
+        patch["allow_insecure_urls"] = bool(blob["allow_insecure_urls"])
+    return _revalidate(pipefy, patch)
+
+
+def resolve_pipefy_settings(
+    *,
+    graphql_url_flag: str | None,
+    allow_insecure_urls_flag: bool | None,
+) -> PipefySettings:
+    """Merge env, ``.env``, optional user TOML, then CLI flags (flags win).
+
+    Args:
+        graphql_url_flag: When set, overrides ``PIPEFY_GRAPHQL_URL`` / file values.
+        allow_insecure_urls_flag: When not ``None``, overrides insecure URL policy.
+
+    Returns:
+        Validated :class:`PipefySettings` (same shape as MCP ``settings.pipefy``).
+
+    Raises:
+        ValueError: When validation fails (e.g. SSRF guard); message is user-facing.
+    """
+    prev_allow = os.environ.get(_ALLOW_INSECURE_ENV_KEY)
+    if allow_insecure_urls_flag is True:
+        os.environ[_ALLOW_INSECURE_ENV_KEY] = "true"
+    try:
+        pipefy = CliSettings().pipefy
+    except ValidationError as exc:
+        raise ValueError(str(exc)) from exc
+    finally:
+        if allow_insecure_urls_flag is True:
+            if prev_allow is None:
+                os.environ.pop(_ALLOW_INSECURE_ENV_KEY, None)
+            else:
+                os.environ[_ALLOW_INSECURE_ENV_KEY] = prev_allow
+
+    try:
+        pipefy = apply_toml_fallback(pipefy)
+
+        patch: dict[str, Any] = {}
+        if graphql_url_flag:
+            patch["graphql_url"] = graphql_url_flag.strip()
+        if allow_insecure_urls_flag is not None:
+            patch["allow_insecure_urls"] = allow_insecure_urls_flag
+
+        return _revalidate(pipefy, patch)
+    except ValidationError as exc:
+        raise ValueError(str(exc)) from exc
+
+
+def ensure_public_graphql_configured(pipefy: PipefySettings) -> None:
+    """Ensure GraphQL URL is present before building a client.
+
+    Raises:
+        ValueError: With pointer to ``docs/setup.md``.
+    """
+    if _is_missing(pipefy.graphql_url):
+        msg = (
+            "PIPEFY_GRAPHQL_URL is required (or pass --graphql-url). "
+            f"See {DOCS_SETUP_REF} for environment variables."
+        )
+        raise ValueError(msg)
+
+
+def describe_missing_oauth_vars(pipefy: PipefySettings) -> str:
+    """Return a short message listing missing OAuth-related variables."""
+    missing: list[str] = []
+    if _is_missing(pipefy.oauth_url):
+        missing.append("PIPEFY_OAUTH_URL")
+    if _is_missing(pipefy.oauth_client):
+        missing.append("PIPEFY_OAUTH_CLIENT")
+    if _is_missing(pipefy.oauth_secret):
+        missing.append("PIPEFY_OAUTH_SECRET")
+    return ", ".join(missing)
+
+
+__all__ = [
+    "CliSettings",
+    "USER_CONFIG_PATH",
+    "apply_toml_fallback",
+    "describe_missing_oauth_vars",
+    "ensure_public_graphql_configured",
+    "resolve_pipefy_settings",
+]

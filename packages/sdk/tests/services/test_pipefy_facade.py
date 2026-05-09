@@ -1,7 +1,9 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from httpx_auth import OAuth2ClientCredentials
 
+from pipefy_sdk.base_client import StaticBearerAuth
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
@@ -27,6 +29,15 @@ def mock_settings():
         oauth_client="client_id",
         oauth_secret="client_secret",
     )
+
+
+@pytest.mark.unit
+def test_pipefy_client_bearer_token_uses_static_bearer_auth(mock_settings):
+    oauth_client = PipefyClient(mock_settings)
+    assert isinstance(oauth_client._card_service._auth, OAuth2ClientCredentials)
+
+    bearer_client = PipefyClient(mock_settings, bearer_token="unit-token")
+    assert isinstance(bearer_client._card_service._auth, StaticBearerAuth)
 
 
 @pytest.mark.unit

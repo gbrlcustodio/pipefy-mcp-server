@@ -9,7 +9,7 @@ from typing import Any
 from gql import gql
 from gql.transport.exceptions import TransportQueryError
 from graphql import GraphQLError, GraphQLSyntaxError
-from httpx_auth import OAuth2ClientCredentials
+from httpx import Auth
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.queries.introspection_queries import (
@@ -29,7 +29,7 @@ class SchemaIntrospectionService(BasePipefyClient):
     def __init__(
         self,
         settings: PipefySettings,
-        auth: OAuth2ClientCredentials | None = None,
+        auth: Auth | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
 

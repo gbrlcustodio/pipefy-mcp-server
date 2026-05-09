@@ -1,9 +1,28 @@
 [project]
 name = "pipefy-cli"
 version = "0.1.0"
-description = "Workspace placeholder for the future Typer-based CLI."
+description = "Typer CLI for Pipefy (pipefy-ai-sdk)."
+readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pipefy-ai-sdk",
+    "typer[all]>=0.12",
+    "rich>=13",
+    "pydantic-settings>=2.8.1",
+]
+
+[project.scripts]
+pipefy = "pipefy_cli.main:app"
+
+[tool.uv.sources]
+pipefy-ai-sdk = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "ruff>=0.11.4",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -11,3 +30,17 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pipefy_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests", "../sdk/tests"]
+markers = [
+    "unit: marks a test as a unit test",
+    "integration: marks tests that call the live Pipefy API",
+]
+
+[tool.ruff]
+lint.extend-select = ["I", "TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"pipefy_mcp".msg = "pipefy_cli must not import the MCP package; use pipefy_sdk instead."

@@ -8,7 +8,7 @@ from urllib.parse import unquote, urlparse
 
 import httpx
 from httpx import Timeout
-from httpx_auth import OAuth2ClientCredentials
+from httpx import Auth
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.queries.attachment_queries import (
@@ -28,7 +28,7 @@ class AttachmentService(BasePipefyClient):
     def __init__(
         self,
         settings: PipefySettings,
-        auth: OAuth2ClientCredentials | None = None,
+        auth: Auth | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
 

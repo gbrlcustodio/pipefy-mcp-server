@@ -6,10 +6,21 @@ from typing import Any, ClassVar
 from gql import Client
 from gql.transport.httpx import HTTPXAsyncTransport
 from graphql import GraphQLSchema
-from httpx import Timeout
+from httpx import Auth, Timeout
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_sdk.settings import PipefySettings
+
+
+class StaticBearerAuth(Auth):
+    """Attach a fixed ``Authorization: Bearer …`` header (CLI ``--token``, tests)."""
+
+    def __init__(self, token: str) -> None:
+        self._token = token
+
+    def auth_flow(self, request):  # noqa: ANN001
+        request.headers["Authorization"] = f"Bearer {self._token}"
+        yield request
 
 
 def unwrap_relay_connection_nodes(connection: Any) -> list[dict[str, Any]]:
@@ -44,10 +55,19 @@ class BasePipefyClient:
     def __init__(
         self,
         settings: PipefySettings,
-        auth: OAuth2ClientCredentials | None = None,
+        auth: OAuth2ClientCredentials | Auth | None = None,
     ) -> None:
         if settings.graphql_url is None:
             raise ValueError("GraphQL URL must be provided in settings.")
+
+        self.settings = settings
+
+        if auth is not None and not isinstance(auth, OAuth2ClientCredentials):
+            self._auth = auth
+            self._fetched_gql_schema = None
+            self._fetched_gql_schema_lock = asyncio.Lock()
+            return
+
         if settings.oauth_url is None:
             raise ValueError("OAuth URL must be provided in settings.")
         if settings.oauth_client is None:
@@ -55,7 +75,6 @@ class BasePipefyClient:
         if settings.oauth_secret is None:
             raise ValueError("OAuth client secret must be provided in settings.")
 
-        self.settings = settings
         self._auth = auth or OAuth2ClientCredentials(
             token_url=settings.oauth_url,
             client_id=settings.oauth_client,

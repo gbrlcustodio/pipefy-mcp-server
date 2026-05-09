@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from httpx import Auth
 from httpx_auth import OAuth2ClientCredentials
 
+from pipefy_sdk.base_client import StaticBearerAuth
 from pipefy_sdk.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_sdk.models.ai_automation import (
     CreateAiAutomationInput,
@@ -61,12 +63,28 @@ from pipefy_sdk.settings import PipefySettings
 class PipefyClient:
     """Facade client for Pipefy API operations (pure delegation)."""
 
-    def __init__(self, settings: PipefySettings):
-        auth = OAuth2ClientCredentials(
-            token_url=settings.oauth_url,
-            client_id=settings.oauth_client,
-            client_secret=settings.oauth_secret,
-        )
+    def __init__(
+        self,
+        settings: PipefySettings,
+        *,
+        bearer_token: str | None = None,
+    ) -> None:
+        """Build a facade wired for OAuth client-credentials or a static bearer token.
+
+        Args:
+            settings: Pipefy endpoints and credentials (OAuth fields may be omitted when
+                ``bearer_token`` is set).
+            bearer_token: When set, GraphQL requests use this bearer and OAuth credentials
+                from ``settings`` are not required for the public GraphQL transport.
+        """
+        if bearer_token is not None:
+            auth: Auth = StaticBearerAuth(bearer_token)
+        else:
+            auth = OAuth2ClientCredentials(
+                token_url=settings.oauth_url,
+                client_id=settings.oauth_client,
+                client_secret=settings.oauth_secret,
+            )
         self._pipe_service = PipeService(settings=settings, auth=auth)
         self._card_service = CardService(settings=settings, auth=auth)
         self._pipe_config_service = PipeConfigService(settings=settings, auth=auth)

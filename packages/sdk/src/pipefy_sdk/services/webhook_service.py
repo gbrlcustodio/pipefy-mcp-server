@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 from gql.transport.exceptions import TransportQueryError
-from httpx_auth import OAuth2ClientCredentials
+from httpx import Auth
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.queries.webhook_queries import (
@@ -34,7 +34,7 @@ class WebhookService(BasePipefyClient):
     def __init__(
         self,
         settings: PipefySettings,
-        auth: OAuth2ClientCredentials | None = None,
+        auth: Auth | None = None,
         *,
         card_service: CardService | None = None,
     ) -> None:

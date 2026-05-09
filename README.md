@@ -34,7 +34,7 @@
 
 ## MCP tools
 
-The server exposes **128 tools**, grouped below into **nine** surface areas. Canonical names live in `PIPEFY_TOOL_NAMES` (`src/pipefy_mcp/tools/registry.py`).
+The server exposes **128 tools**, grouped below into **nine** surface areas. Canonical names live in `PIPEFY_TOOL_NAMES` (`packages/mcp/src/pipefy_mcp/tools/registry.py`).
 
 **Documentation for agents:** each tool’s description and `Args:` come from its Python docstring—MCP clients show that text to LLMs for routing. Use the docstrings (and the per-area docs linked in the table) as the authority on parameters and edge cases.
 
@@ -63,7 +63,7 @@ This repository is a **uv workspace** (see the root [`pyproject.toml`](pyproject
 | Directory | PyPI / distribution name | Purpose |
 |-----------|--------------------------|---------|
 | [`packages/sdk/`](packages/sdk/) | `pipefy-ai-sdk` | GraphQL client, services, queries, and shared Pydantic models consumed by the MCP server (and, later, the CLI). |
-| [`packages/mcp/`](packages/mcp/) | `pipefy-mcp-server-stub` (placeholder) | Reserved for Phase 3; the installable MCP server and `pipefy_mcp` package still live under [`src/pipefy_mcp/`](src/pipefy_mcp/) at the repo root. |
+| [`packages/mcp/`](packages/mcp/) | `pipefy-mcp-server` | The installable MCP server and `pipefy_mcp` package. |
 | [`packages/cli/`](packages/cli/) | `pipefy-cli` (placeholder) | Reserved for the future Typer-based `pipefy` CLI. |
 
 ---
@@ -122,13 +122,13 @@ Step-by-step JSON samples and CLI examples are in **[Setup → MCP client setup]
 uv run pytest
 
 # Run with coverage report
-uv run pytest --cov=src/pipefy_mcp/services/pipefy --cov-report=term-missing
+uv run pytest --cov=packages/sdk/src/pipefy_sdk --cov-report=term-missing
 
 # Integration tests (requires .env with PIPEFY_* OAuth settings)
 uv run pytest -m integration -v
 
-# Attachment upload live tests (optional IDs — see tests/tools/test_attachment_tools_live.py)
-# uv run pytest tests/tools/test_attachment_tools_live.py -m integration -v
+# Attachment upload live tests (optional IDs — see packages/mcp/tests/tools/test_attachment_tools_live.py)
+# uv run pytest packages/mcp/tests/tools/test_attachment_tools_live.py -m integration -v
 ```
 
 ### MCP Inspector
@@ -141,16 +141,16 @@ npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server
 
 ```bash
 # Lint code
-uv run ruff check src/
+uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src
 
 # Format code
-uv run ruff format src/
+uv run ruff format packages/sdk/src packages/mcp/src packages/cli/src
 ```
 
 ### Adding or renaming an MCP tool
 
-1. Implement the tool in the appropriate module under `src/pipefy_mcp/tools/` and call its `*Tools.register(...)` from `ToolRegistry.register_tools()` in [`src/pipefy_mcp/tools/registry.py`](src/pipefy_mcp/tools/registry.py) if it is not already wired.
-2. Add the **exact tool name** (as exposed to MCP clients) to **`PIPEFY_TOOL_NAMES`** in the same file. The server uses that set for collision checks at startup and for cleanup after a failed registration; `tests/test_server.py` also asserts the live tool list matches this set.
+1. Implement the tool in the appropriate module under `packages/mcp/src/pipefy_mcp/tools/` and call its `*Tools.register(...)` from `ToolRegistry.register_tools()` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py) if it is not already wired.
+2. Add the **exact tool name** (as exposed to MCP clients) to **`PIPEFY_TOOL_NAMES`** in the same file. The server uses that set for collision checks at startup and for cleanup after a failed registration; `packages/mcp/tests/test_server.py` also asserts the live tool list matches this set.
 
 ## Contributing
 We are building this in public and we need your feedback!

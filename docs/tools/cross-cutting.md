@@ -28,7 +28,7 @@ Some destructive tools can attach extra **dependents** context in the preview wh
 
 ## `PERMISSION_DENIED` enrichment
 
-On cross-pipe operations (relations, AI agents), errors carrying `extensions.code = PERMISSION_DENIED` are enriched with a membership hint pointing to `invite_members` when the service account is missing from the target pipe. Runs automatically (no `debug=true` required); implementation in [`enrich_permission_denied_error`](../../src/pipefy_mcp/tools/graphql_error_helpers.py).
+On cross-pipe operations (relations, AI agents), errors carrying `extensions.code = PERMISSION_DENIED` are enriched with a membership hint pointing to `invite_members` when the service account is missing from the target pipe. Runs automatically (no `debug=true` required); implementation in [`enrich_permission_denied_error`](../../packages/mcp/src/pipefy_mcp/tools/graphql_error_helpers.py).
 
 ## Service account protection
 

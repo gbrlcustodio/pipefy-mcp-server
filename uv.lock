@@ -6,6 +6,14 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 
+[manifest]
+members = [
+    "pipefy-ai-sdk",
+    "pipefy-cli",
+    "pipefy-mcp-server",
+    "pipefy-mcp-server-stub",
+]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.6.1"
@@ -688,18 +696,65 @@ wheels = [
 ]
 
 [[package]]
-name = "pipefy-mcp-server"
+name = "pipefy-ai-sdk"
 version = "0.1.0"
-source = { editable = "." }
+source = { editable = "packages/sdk" }
 dependencies = [
     { name = "gql", extra = ["httpx"] },
     { name = "httpx" },
     { name = "httpx-auth" },
-    { name = "mcp", extra = ["cli"] },
     { name = "openpyxl" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "rapidfuzz" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-mock" },
+    { name = "respx" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "gql", extras = ["httpx"], specifier = ">=3.5.2" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "httpx-auth", specifier = ">=0.23.1" },
+    { name = "openpyxl", specifier = ">=3.1.5" },
+    { name = "pydantic", specifier = ">=2.11.3" },
+    { name = "pydantic-settings", specifier = ">=2.8.1" },
+    { name = "rapidfuzz", specifier = ">=3.14.3" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.3.5" },
+    { name = "pytest-asyncio", specifier = ">=0.26.0" },
+    { name = "pytest-cov", specifier = ">=6.1.1" },
+    { name = "pytest-mock", specifier = ">=3.14.0" },
+    { name = "respx", specifier = ">=0.22.0" },
+    { name = "ruff", specifier = ">=0.11.4" },
+]
+
+[[package]]
+name = "pipefy-cli"
+version = "0.1.0"
+source = { editable = "packages/cli" }
+
+[[package]]
+name = "pipefy-mcp-server"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "httpx" },
+    { name = "mcp", extra = ["cli"] },
+    { name = "pipefy-ai-sdk" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
 ]
 
 [package.dev-dependencies]
@@ -715,14 +770,11 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "gql", extras = ["httpx"], specifier = ">=3.5.2" },
     { name = "httpx", specifier = ">=0.27.0" },
-    { name = "httpx-auth", specifier = ">=0.23.1" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.25.0" },
-    { name = "openpyxl", specifier = ">=3.1.5" },
+    { name = "pipefy-ai-sdk", editable = "packages/sdk" },
     { name = "pydantic", specifier = ">=2.11.3" },
     { name = "pydantic-settings", specifier = ">=2.8.1" },
-    { name = "rapidfuzz", specifier = ">=3.14.3" },
 ]
 
 [package.metadata.requires-dev]
@@ -735,6 +787,11 @@ dev = [
     { name = "respx", specifier = ">=0.22.0" },
     { name = "ruff", specifier = ">=0.11.4" },
 ]
+
+[[package]]
+name = "pipefy-mcp-server-stub"
+version = "0.1.0"
+source = { editable = "packages/mcp" }
 
 [[package]]
 name = "pluggy"

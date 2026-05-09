@@ -1,28 +1,25 @@
 [project]
-name = "pipefy-mcp-server"
+name = "pipefy-workspace"
 version = "0.1.0"
-description = "Pipefy MCP server that enables AI Agents to end-to-end manage your Pipefy pipes, create cards, and more."
+description = "Development workspace for Pipefy MCP server, SDK, and CLI (not published as a single distribution)."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "httpx>=0.27.0",
-    "mcp[cli]>=1.25.0",
-    "pipefy-ai-sdk",
-    "pydantic>=2.11.3",
-    "pydantic-settings>=2.8.1",
-]
+dependencies = []
+
+[tool.uv]
+package = false
 
 [tool.uv.workspace]
 members = ["packages/sdk", "packages/mcp", "packages/cli"]
 
 [tool.uv.sources]
 pipefy-ai-sdk = { workspace = true }
-
-[project.scripts]
-pipefy-mcp-server = "pipefy_mcp.main:main"
+pipefy-mcp-server = { workspace = true }
 
 [dependency-groups]
 dev = [
+    "pipefy-ai-sdk",
+    "pipefy-mcp-server",
     "aiohttp>=3.11.16",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
@@ -32,31 +29,14 @@ dev = [
     "ruff>=0.11.4",
 ]
 
-[build-system]
-requires = ["hatchling", "hatch-vcs"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/pipefy_mcp"]
-
-[tool.hatch.version]
-source = "vcs"
-raw-options = { version_scheme = "no-guess-dev" }
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/pipefy_mcp/_version.py"
-
 [tool.ruff]
 lint.extend-select = ["I"]
-lint.exclude = ["src/pipefy_mcp/_version.py"]
-format.exclude = ["src/pipefy_mcp/_version.py"]
+lint.exclude = ["packages/mcp/src/pipefy_mcp/_version.py"]
+format.exclude = ["packages/mcp/src/pipefy_mcp/_version.py"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages/sdk/tests"]
-# Root on pythonpath so ``tests.*`` resolves to this repo's ``tests/`` package (MCP suite).
-# TODO: drop ``"."`` once Phase 3 moves MCP under ``packages/mcp`` and shims under ``tests/``
-# no longer need to shadow-import alongside ``packages/sdk/tests`` (see FR-3.x).
-pythonpath = [".", "packages/sdk/tests"]
+testpaths = ["tests", "packages/sdk/tests", "packages/mcp/tests"]
+pythonpath = ["packages/mcp/tests", ".", "packages/mcp/src", "packages/sdk/src", "packages/sdk/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27.0",
     "mcp[cli]>=1.25.0",
+    # Workspace resolves version in dev; standalone PyPI install needs Phase 6 (bundle or co-publish SDK). PRD Non-Goals and FR-6.3.
     "pipefy-ai-sdk",
     "pydantic>=2.11.3",
     "pydantic-settings>=2.8.1",
@@ -45,7 +46,8 @@ version-file = "src/pipefy_mcp/_version.py"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "tests", "../.."]
+# `src` is the package; `../../packages/sdk/tests` supplies the `_shared` test bundle (live creds, fixtures) without putting the whole repo on sys.path.
+pythonpath = ["src", "tests", "../../packages/sdk/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

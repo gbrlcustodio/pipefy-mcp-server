@@ -4,6 +4,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _shared.pagination_test_defaults import DEFAULT_FIRST
 from gql.transport.exceptions import TransportQueryError
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
@@ -13,7 +14,6 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.table_tools import TableTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tests.pagination_test_defaults import DEFAULT_FIRST
 from tools.conftest import assert_invalid_arguments_envelope
 
 

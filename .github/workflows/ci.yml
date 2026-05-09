@@ -63,5 +63,7 @@ jobs:
       run: uv run ruff format --check packages/sdk/src packages/mcp/src packages/cli/src
     - name: Lint SDK (banned upward imports)
       run: cd packages/sdk && uv run ruff check src
+    - name: Build MCP wheel (packaging smoke)
+      run: uv build packages/mcp -o packages/mcp/dist
     - name: Run tests
       run: uv run pytest -m "not integration"

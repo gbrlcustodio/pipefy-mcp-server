@@ -8,9 +8,9 @@ import typer
 from pipefy_sdk.exceptions import PipefyError
 
 from pipefy_cli.auth import get_authenticated_client
-from pipefy_cli.output import json_renderer, rich_renderer
+from pipefy_cli.output import render_json, render_rich
 
-card_app = typer.Typer(help="Card operations.")
+card_app = typer.Typer(help="Card operations.", no_args_is_help=True)
 
 
 @card_app.command("get")
@@ -41,6 +41,6 @@ def card_get(
         raise typer.Exit(1) from exc
 
     if json_out:
-        json_renderer.render(data)
+        render_json(data)
     else:
-        rich_renderer.render(data)
+        render_rich(data)

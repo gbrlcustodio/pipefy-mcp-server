@@ -42,8 +42,12 @@ def _render_list(console: Console, data: list[Any]) -> None:
     _render_json_syntax(console, data)
 
 
+def _column_keys(rows: list[dict[str, Any]]) -> list[str]:
+    return list(dict.fromkeys(k for row in rows for k in row))
+
+
 def _render_list_of_dicts(console: Console, rows: list[dict[str, Any]]) -> None:
-    keys: list[str] = sorted({k for row in rows for k in row})
+    keys = _column_keys(rows)
     if not keys:
         _render_json_syntax(console, rows)
         return

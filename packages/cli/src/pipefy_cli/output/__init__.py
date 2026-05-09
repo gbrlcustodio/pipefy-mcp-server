@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
-from . import json_renderer, rich_renderer
+from .json_renderer import render as render_json
+from .rich_renderer import render as render_rich
 
-__all__ = ["json_renderer", "rich_renderer"]
+__all__ = ["render_json", "render_rich"]

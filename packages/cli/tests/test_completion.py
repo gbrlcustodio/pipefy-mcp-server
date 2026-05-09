@@ -33,8 +33,10 @@ def _uv_run_pipefy(
     )
 
 
-def test_show_completion_bash_prints_snippet():
-    env = {**os.environ, **_COMPLETION_OFF}
+def test_show_completion_bash_prints_snippet(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    env = {**os.environ, "HOME": str(home), **_COMPLETION_OFF}
     result = _uv_run_pipefy("--show-completion", "bash", cwd=_REPO_ROOT, env=env)
     assert result.returncode == 0, result.stderr
     out = result.stdout

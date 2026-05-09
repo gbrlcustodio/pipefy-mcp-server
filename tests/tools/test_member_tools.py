@@ -9,9 +9,9 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
+from pipefy_sdk import PipefyClient
 
 import pipefy_mcp.settings as _settings_mod
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.member_tools import MemberTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 

@@ -14,11 +14,10 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
+from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.services.pipefy import PipefyClient
-from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
-from tests.integration_helpers import pipefy_live_configured
+from tests.integration_helpers import live_pipefy_settings, pipefy_live_configured
 
 
 @pytest.fixture
@@ -27,7 +26,7 @@ def live_pipefy_client():
         pytest.skip(
             "Pipefy credentials not configured (PIPEFY_GRAPHQL_URL + OAuth in .env)"
         )
-    return PipefyClient(settings=settings.pipefy)
+    return PipefyClient(settings=live_pipefy_settings())
 
 
 @pytest.fixture

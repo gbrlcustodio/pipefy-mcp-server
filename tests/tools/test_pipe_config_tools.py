@@ -12,8 +12,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
+from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
     DeletePipeErrorPayload,

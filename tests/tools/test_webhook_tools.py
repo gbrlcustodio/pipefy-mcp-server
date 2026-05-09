@@ -9,8 +9,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
+from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 from tests.pagination_test_defaults import DEFAULT_FIRST

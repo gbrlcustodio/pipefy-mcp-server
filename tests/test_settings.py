@@ -7,6 +7,15 @@ from pipefy_mcp.settings import PipefySettings, Settings
 
 
 @pytest.mark.unit
+def test_internal_api_url_overridden_via_env(monkeypatch):
+    """Test that internal_api_url can be overridden via PIPEFY_INTERNAL_API_URL."""
+    custom_url = "https://custom.pipefy.com/internal_api"
+    monkeypatch.setenv("PIPEFY_INTERNAL_API_URL", custom_url)
+    settings = Settings()
+    assert settings.pipefy.internal_api_url == custom_url
+
+
+@pytest.mark.unit
 def test_service_account_ids_defaults_to_empty_list():
     assert PipefySettings().service_account_ids == []
 

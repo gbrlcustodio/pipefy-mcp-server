@@ -1,9 +1,9 @@
 from unittest.mock import Mock, patch
 
 import pytest
+from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.services.pipefy import PipefyClient
 from pipefy_mcp.settings import PipefySettings, Settings
 
 

@@ -1,4 +1,4 @@
-"""Re-export live Pipefy credential helpers from the canonical SDK test bundle."""
+"""Re-export pagination defaults from the canonical SDK test bundle."""
 
 from __future__ import annotations
 
@@ -11,17 +11,15 @@ _SHARED = (
     / "sdk"
     / "tests"
     / "_shared"
-    / "live_settings.py"
+    / "pagination_test_defaults.py"
 )
 
 _spec = importlib.util.spec_from_file_location(
-    "_pipefy_sdk_tests_live_settings",
+    "_pipefy_sdk_tests_pagination_defaults",
     _SHARED,
 )
 _mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 _spec.loader.exec_module(_mod)
 
-live_pipefy_settings = _mod.live_pipefy_settings
-pipefy_live_configured = _mod.pipefy_live_configured
-require_live_creds = _mod.require_live_creds
+DEFAULT_FIRST = _mod.DEFAULT_FIRST

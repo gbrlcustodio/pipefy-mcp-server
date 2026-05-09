@@ -10,7 +10,7 @@ wheels/
 .ruff_cache/
 
 # Generated version file
-src/pipefy_mcp/_version.py
+packages/mcp/src/pipefy_mcp/_version.py
 
 # Unit test / coverage reports
 htmlcov/

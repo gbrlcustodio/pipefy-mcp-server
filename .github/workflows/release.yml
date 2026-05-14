@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - name: Verify tag matches package version
+        run: |
+          python <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          expected = tag.removeprefix("v")
+          path = Path("packages/sdk/src/pipefy_sdk/__init__.py")
+          m = re.search(
+              r'^__version__\s*=\s*["\']([^"\']+)["\']',
+              path.read_text(encoding="utf-8"),
+              re.M,
+          )
+          if not m or m.group(1) != expected:
+              got = m.group(1) if m else "MISSING"
+              print(f"Tag {tag!r} does not match SDK __version__ {got!r}", file=sys.stderr)
+              sys.exit(1)
+          PY
+      - name: Build release notes body for this tag
+        run: |
+          python <<'PY'
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          ver = tag.removeprefix("v")
+          text = Path("CHANGELOG.md").read_text(encoding="utf-8")
+          pat = rf"(?ms)^## \[{re.escape(ver)}\][^\n]*\n.*?(?=^## |\Z)"
+          m = re.search(pat, text)
+          if not m:
+              print(
+                  f"No CHANGELOG section found for version {ver!r} "
+                  f"(expected a heading like ## [{ver}] ...).",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          Path("CHANGELOG_RELEASE_BODY.md").write_text(
+              m.group(0).rstrip() + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Build wheels and sdist (all workspace packages)
+        run: uv build --all-packages -o dist --wheel --sdist
+      - name: Verify expected wheels in dist/
+        run: |
+          python <<'PY'
+          import sys
+          from pathlib import Path
+
+          dist = Path("dist")
+          for prefix in ("pipefy_sdk", "pipefy_mcp_server", "pipefy_cli"):
+              wheels = list(dist.glob(f"{prefix}-*.whl"))
+              if len(wheels) != 1:
+                  print(
+                      f"expected exactly one wheel matching {prefix}-*.whl, got {wheels!r}",
+                      file=sys.stderr,
+                  )
+                  sys.exit(1)
+          PY
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.whl
+          body_path: CHANGELOG_RELEASE_BODY.md
+      - name: Stage PyPI wheels (CLI + MCP only)
+        if: startsWith(github.ref_name, 'v1.')
+        run: |
+          mkdir -p dist-pypi
+          shopt -s nullglob
+          cli=(dist/pipefy_cli-*.whl)
+          mcp=(dist/pipefy_mcp_server-*.whl)
+          if [ "${#cli[@]}" -ne 1 ] || [ "${#mcp[@]}" -ne 1 ]; then
+            echo "Expected exactly one CLI wheel and one MCP wheel in dist/, got cli=${#cli[@]} mcp=${#mcp[@]}"
+            ls -la dist || true
+            exit 1
+          fi
+          cp "${cli[0]}" "${mcp[0]}" dist-pypi/
+      - name: Upload to PyPI
+        if: startsWith(github.ref_name, 'v1.')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist-pypi/

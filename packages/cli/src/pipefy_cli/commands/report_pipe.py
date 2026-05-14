@@ -7,13 +7,14 @@ import sys
 from typing import Any
 
 import typer
-from pipefy_sdk import PipefyClient
-from pipefy_sdk.services.observability_export_csv import download_bytes
+from pipefy_sdk import PipefyClient, stream_bytes
 
 from pipefy_cli.commands._common import (
     confirm_destructive,
+    export_poll_max_rounds,
     parse_json_object,
     parse_json_value,
+    poll_export_until_done,
     run_cli_command,
     settings_and_token,
 )
@@ -30,40 +31,18 @@ def _parse_order(raw: str | None) -> dict[str, Any] | None:
     return parsed
 
 
-async def _await_pipe_report_csv_url(
-    client: PipefyClient,
-    export_id: str,
-    *,
-    max_rounds: int = 45,
-    delay_seconds: float = 2.0,
-) -> str:
-    for _ in range(max_rounds):
-        raw = await client.get_pipe_report_export(export_id)
-        node = (raw or {}).get("pipeReportExport") or {}
-        state = str(node.get("state") or "")
-        if state in ("failed", "error"):
-            raise ValueError(f"Export failed (state={state!r}).")
-        if state == "done":
-            url = node.get("fileURL") or node.get("fileUrl")
-            if isinstance(url, str) and url.strip():
-                return url.strip()
-            raise ValueError("Export is done but fileURL is missing.")
-        await asyncio.sleep(delay_seconds)
-    raise ValueError(
-        f"Timed out waiting for export {export_id} after {max_rounds * delay_seconds:.0f}s."
-    )
-
-
 @report_pipe_app.command("list")
 def report_pipe_list(
     ctx: typer.Context,
     pipe: str = typer.Option(..., "--pipe", help="Pipe UUID."),
     first: int = typer.Option(30, "--first", help="Page size."),
-    after: str | None = typer.Option(None, "--after"),
+    after: str | None = typer.Option(None, "--after", help="Pagination cursor."),
     search: str | None = typer.Option(None, "--search"),
     report_id: str | None = typer.Option(None, "--report-id"),
     order: str | None = typer.Option(None, "--order", help="JSON sort object."),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """List pipe reports (``get_pipe_reports``)."""
     order_obj = _parse_order(order)
@@ -86,7 +65,9 @@ def report_pipe_get(
     ctx: typer.Context,
     pipe: str = typer.Option(..., "--pipe", help="Pipe UUID."),
     report_id: str = typer.Option(..., "--report-id", help="Pipe report id."),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Fetch one pipe report (``get_pipe_report``)."""
 
@@ -108,7 +89,9 @@ def report_pipe_get(
 def report_pipe_columns(
     ctx: typer.Context,
     pipe: str = typer.Option(..., "--pipe", help="Pipe UUID."),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """List report column definitions (``get_pipe_report_columns``)."""
 
@@ -122,7 +105,9 @@ def report_pipe_columns(
 def report_pipe_filterable_fields(
     ctx: typer.Context,
     pipe: str = typer.Option(..., "--pipe", help="Pipe UUID."),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """List filterable fields for pipe reports (``get_pipe_report_filterable_fields``)."""
 
@@ -146,7 +131,9 @@ def report_pipe_create(
     formulas: str | None = typer.Option(
         None, "--formulas", help="Optional JSON array of arrays."
     ),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Create a pipe report (``create_pipe_report``)."""
     fields_list = parse_json_value(fields, "--fields") if fields else None
@@ -179,7 +166,9 @@ def report_pipe_update(
     filter_json: str | None = typer.Option(None, "--filter"),
     formulas: str | None = typer.Option(None, "--formulas"),
     featured_field: str | None = typer.Option(None, "--featured-field"),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Update a pipe report (``update_pipe_report``)."""
     fields_list = parse_json_value(fields, "--fields") if fields else None
@@ -209,7 +198,9 @@ def report_pipe_delete(
     ctx: typer.Context,
     report_id: str = typer.Argument(..., help="Pipe report id."),
     yes: bool = typer.Option(False, "--yes"),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Delete a pipe report (``delete_pipe_report``)."""
     confirm_destructive(yes=yes, description=f"pipe report {report_id}", verb="delete")
@@ -237,12 +228,23 @@ def report_pipe_export(
     columns: str | None = typer.Option(
         None, "--columns", help="JSON array of column ids."
     ),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    poll_timeout: float = typer.Option(
+        90.0,
+        "--poll-timeout",
+        help="Seconds to poll export status before failing (CSV only).",
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Start a pipe report export (``export_pipe_report``); csv waits and streams the file."""
     fmt = format_.strip().lower()
     if fmt not in ("json", "csv"):
         raise typer.BadParameter("--format must be json or csv")
+    if fmt == "csv" and json_out:
+        raise typer.BadParameter(
+            "--json is mutually exclusive with --format csv (CSV is written as raw bytes to stdout)."
+        )
     sort_obj = parse_json_object(sort_by, "--sort-by")
     filt = parse_json_object(filter_json, "--filter")
     cols = parse_json_value(columns, "--columns") if columns else None
@@ -283,11 +285,15 @@ def report_pipe_export(
                 "Could not read export id from exportPipeReport response.", err=True
             )
             raise typer.Exit(1)
-        url = await _await_pipe_report_csv_url(client, str(export_id))
-        body = await download_bytes(url, max_bytes=50 * 1024 * 1024)
-        chunk = 64 * 1024
-        for i in range(0, len(body), chunk):
-            sys.stdout.buffer.write(body[i : i + chunk])
+        max_rounds = export_poll_max_rounds(poll_timeout)
+        url = await poll_export_until_done(
+            client.get_pipe_report_export,
+            str(export_id),
+            lambda raw: (raw or {}).get("pipeReportExport") or {},
+            max_rounds=max_rounds,
+        )
+        async for chunk in stream_bytes(url, max_bytes=50 * 1024 * 1024):
+            sys.stdout.buffer.write(chunk)
         sys.stdout.buffer.flush()
 
     asyncio.run(_csv_run())

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, TypeVar
 
 import typer
 from pipefy_sdk import PipefyClient, PipefySettings
@@ -13,6 +14,86 @@ from pipefy_sdk.exceptions import PipefyError
 
 from pipefy_cli.auth import get_authenticated_client
 from pipefy_cli.output import render_json, render_rich
+
+_T = TypeVar("_T")
+
+
+def export_poll_max_rounds(
+    poll_timeout_seconds: float, *, delay_seconds: float = 2.0
+) -> int:
+    """Map a wall-clock export poll budget to loop iterations (``delay_seconds`` per round).
+
+    Args:
+        poll_timeout_seconds: Maximum time to wait for export state ``done``.
+        delay_seconds: Sleep between status polls.
+    """
+    if poll_timeout_seconds <= 0:
+        raise ValueError("poll_timeout_seconds must be positive")
+    return max(1, math.ceil(poll_timeout_seconds / delay_seconds))
+
+
+async def poll_export_until_done(
+    fetch: Callable[[str], Awaitable[dict[str, Any] | None]],
+    export_id: str,
+    unwrap: Callable[[dict[str, Any]], dict[str, Any]],
+    *,
+    max_rounds: int,
+    delay_seconds: float = 2.0,
+) -> str:
+    """Poll an export job until ``state == done`` and return ``fileURL``.
+
+    Args:
+        fetch: Async callable taking export id and returning the raw GraphQL payload dict.
+        export_id: Export job id from the start mutation.
+        unwrap: Extract the export status node dict from ``fetch``'s return value.
+        max_rounds: Maximum poll iterations before timing out.
+        delay_seconds: Delay between polls.
+    """
+    eid = str(export_id)
+    for _ in range(max_rounds):
+        raw = await fetch(eid)
+        node = unwrap(raw or {}) or {}
+        state = str(node.get("state") or "")
+        if state in ("failed", "error"):
+            raise ValueError(f"Export failed (state={state!r}).")
+        if state == "done":
+            url = node.get("fileURL") or node.get("fileUrl")
+            if isinstance(url, str) and url.strip():
+                return url.strip()
+            raise ValueError("Export is done but fileURL is missing.")
+        await asyncio.sleep(delay_seconds)
+    raise ValueError(
+        f"Timed out waiting for export {eid} after {max_rounds * delay_seconds:.0f}s."
+    )
+
+
+def run_pipefy_client_coroutine(
+    ctx: typer.Context,
+    coro_factory: Callable[[PipefyClient], Awaitable[_T]],
+) -> _T:
+    """Run ``asyncio.run`` on a coroutine built with a configured :class:`PipefyClient`.
+
+    Args:
+        ctx: Typer context (resolves settings/token from the root app).
+        coro_factory: Async callable receiving an authenticated client.
+
+    Returns:
+        The coroutine result.
+
+    Raises:
+        typer.Exit: On :class:`PipefyError` (exit code 1).
+    """
+    pipefy_settings, token = settings_and_token(ctx)
+
+    async def _run() -> _T:
+        client = get_authenticated_client(pipefy_settings, bearer_token=token)
+        return await coro_factory(client)
+
+    try:
+        return asyncio.run(_run())
+    except PipefyError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
 
 
 def settings_and_token(ctx: typer.Context) -> tuple[PipefySettings, str | None]:

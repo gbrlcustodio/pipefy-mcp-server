@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
-from typing import Any, TextIO
+from typing import TextIO
 
 import typer
-from pipefy_sdk.exceptions import PipefyError
 
-from pipefy_cli.auth import get_authenticated_client
-from pipefy_cli.commands._common import settings_and_token
+from pipefy_cli.commands._common import run_pipefy_client_coroutine
 from pipefy_cli.output import render_json, render_rich
 
 audit_app = typer.Typer(help="Pipe audit log exports.", no_args_is_help=True)
@@ -50,17 +47,10 @@ def audit_export(
     The GraphQL API returns only ``success``; Pipefy delivers the export outside this mutation
     (no CSV stream in the SDK response).
     """
-    pipefy_settings, token = settings_and_token(ctx)
-
-    async def _run() -> dict[str, Any]:
-        client = get_authenticated_client(pipefy_settings, bearer_token=token)
-        return await client.export_pipe_audit_logs(pipe, search_term=search)
-
-    try:
-        payload = asyncio.run(_run())
-    except PipefyError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(1) from exc
+    payload = run_pipefy_client_coroutine(
+        ctx,
+        lambda c: c.export_pipe_audit_logs(pipe, search_term=search),
+    )
 
     if output is not None:
         with _open_output(output) as fh:

@@ -6,13 +6,14 @@ import asyncio
 import sys
 
 import typer
-from pipefy_sdk import PipefyClient
-from pipefy_sdk.services.observability_export_csv import download_bytes
+from pipefy_sdk import PipefyClient, stream_bytes
 
 from pipefy_cli.commands._common import (
     confirm_destructive,
+    export_poll_max_rounds,
     parse_json_object,
     parse_json_value,
+    poll_export_until_done,
     run_cli_command,
     settings_and_token,
 )
@@ -20,37 +21,15 @@ from pipefy_cli.commands._common import (
 report_org_app = typer.Typer(help="Organization reports.", no_args_is_help=True)
 
 
-async def _await_org_report_csv_url(
-    client: PipefyClient,
-    export_id: str,
-    *,
-    max_rounds: int = 45,
-    delay_seconds: float = 2.0,
-) -> str:
-    for _ in range(max_rounds):
-        raw = await client.get_organization_report_export(export_id)
-        node = (raw or {}).get("organizationReportExport") or {}
-        state = str(node.get("state") or "")
-        if state in ("failed", "error"):
-            raise ValueError(f"Export failed (state={state!r}).")
-        if state == "done":
-            url = node.get("fileURL") or node.get("fileUrl")
-            if isinstance(url, str) and url.strip():
-                return url.strip()
-            raise ValueError("Export is done but fileURL is missing.")
-        await asyncio.sleep(delay_seconds)
-    raise ValueError(
-        f"Timed out waiting for export {export_id} after {max_rounds * delay_seconds:.0f}s."
-    )
-
-
 @report_org_app.command("list")
 def report_org_list(
     ctx: typer.Context,
     organization: str = typer.Option(..., "--organization", "--org"),
-    first: int = typer.Option(30, "--first"),
-    after: str | None = typer.Option(None, "--after"),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    first: int = typer.Option(30, "--first", help="Page size."),
+    after: str | None = typer.Option(None, "--after", help="Pagination cursor."),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """List organization reports (``get_organization_reports``)."""
 
@@ -66,7 +45,9 @@ def report_org_list(
 def report_org_get(
     ctx: typer.Context,
     report_id: str = typer.Argument(..., help="Organization report id."),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Fetch one organization report (``get_organization_report``)."""
 
@@ -86,7 +67,9 @@ def report_org_create(
     ),
     fields: str | None = typer.Option(None, "--fields"),
     filter_json: str | None = typer.Option(None, "--filter"),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Create an organization report (``create_organization_report``)."""
     pids = parse_json_value(pipe_ids, "--pipe-ids")
@@ -121,7 +104,9 @@ def report_org_update(
     pipe_ids: str | None = typer.Option(
         None, "--pipe-ids", help="JSON array of pipe ids."
     ),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Update an organization report (``update_organization_report``)."""
     fields_list = parse_json_value(fields, "--fields") if fields else None
@@ -152,7 +137,9 @@ def report_org_delete(
     ctx: typer.Context,
     report_id: str = typer.Argument(..., help="Organization report id."),
     yes: bool = typer.Option(False, "--yes"),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Delete an organization report (``delete_organization_report``)."""
     confirm_destructive(
@@ -183,12 +170,23 @@ def report_org_export(
     sort_by: str | None = typer.Option(None, "--sort-by"),
     filter_json: str | None = typer.Option(None, "--filter"),
     columns: str | None = typer.Option(None, "--columns"),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    poll_timeout: float = typer.Option(
+        90.0,
+        "--poll-timeout",
+        help="Seconds to poll export status before failing (CSV only).",
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Export an organization report (``export_organization_report``)."""
     fmt = format_.strip().lower()
     if fmt not in ("json", "csv"):
         raise typer.BadParameter("--format must be json or csv")
+    if fmt == "csv" and json_out:
+        raise typer.BadParameter(
+            "--json is mutually exclusive with --format csv (CSV is written as raw bytes to stdout)."
+        )
     sort_obj = parse_json_object(sort_by, "--sort-by")
     filt = parse_json_object(filter_json, "--filter")
     cols = parse_json_value(columns, "--columns") if columns else None
@@ -239,11 +237,15 @@ def report_org_export(
                 err=True,
             )
             raise typer.Exit(1)
-        url = await _await_org_report_csv_url(client, str(export_id))
-        body = await download_bytes(url, max_bytes=50 * 1024 * 1024)
-        chunk = 64 * 1024
-        for i in range(0, len(body), chunk):
-            sys.stdout.buffer.write(body[i : i + chunk])
+        max_rounds = export_poll_max_rounds(poll_timeout)
+        url = await poll_export_until_done(
+            client.get_organization_report_export,
+            str(export_id),
+            lambda raw: (raw or {}).get("organizationReportExport") or {},
+            max_rounds=max_rounds,
+        )
+        async for chunk in stream_bytes(url, max_bytes=50 * 1024 * 1024):
+            sys.stdout.buffer.write(chunk)
         sys.stdout.buffer.flush()
 
     asyncio.run(_csv_run())

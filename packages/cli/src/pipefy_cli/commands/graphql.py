@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -11,10 +10,8 @@ import typer
 from graphql import GraphQLSyntaxError, parse
 from graphql.language.ast import OperationDefinitionNode, OperationType
 from pipefy_sdk import PipefyClient
-from pipefy_sdk.exceptions import PipefyError
 
-from pipefy_cli.auth import get_authenticated_client
-from pipefy_cli.commands._common import settings_and_token
+from pipefy_cli.commands._common import run_pipefy_client_coroutine
 from pipefy_cli.output import render_json, render_rich
 
 graphql_app = typer.Typer(
@@ -58,17 +55,7 @@ def _run_graphql(
     factory: Callable[[PipefyClient], Awaitable[Any]],
 ) -> Any:
     """Run an async GraphQL call with shared auth."""
-    pipefy_settings, token = settings_and_token(ctx)
-
-    async def _run() -> Any:
-        client = get_authenticated_client(pipefy_settings, bearer_token=token)
-        return await factory(client)
-
-    try:
-        return asyncio.run(_run())
-    except PipefyError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(1) from exc
+    return run_pipefy_client_coroutine(ctx, factory)
 
 
 @graphql_app.command("exec")

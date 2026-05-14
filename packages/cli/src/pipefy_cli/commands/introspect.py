@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 import typer
 from pipefy_sdk import PipefyClient
-from pipefy_sdk.exceptions import PipefyError
 
-from pipefy_cli.auth import get_authenticated_client
-from pipefy_cli.commands._common import settings_and_token
+from pipefy_cli.commands._common import run_pipefy_client_coroutine
 from pipefy_cli.output import render_json, render_rich
 
 introspect_app = typer.Typer(
@@ -34,21 +31,11 @@ def _run_introspect(
     factory: Callable[[PipefyClient], Awaitable[Any]],
 ) -> Any:
     """Execute an async introspection call with shared auth and error mapping."""
-    pipefy_settings, token = settings_and_token(ctx)
-
-    async def _run() -> object:
-        client = get_authenticated_client(pipefy_settings, bearer_token=token)
-        return await factory(client)
-
-    try:
-        return asyncio.run(_run())
-    except PipefyError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(1) from exc
+    return run_pipefy_client_coroutine(ctx, factory)
 
 
 @introspect_app.command("type")
-def introspect_type_cmd(
+def introspect_type(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="GraphQL type name (e.g. Card)."),
     max_depth: int = typer.Option(

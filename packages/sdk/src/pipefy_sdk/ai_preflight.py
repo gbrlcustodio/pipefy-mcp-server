@@ -205,12 +205,30 @@ async def validate_ai_automation_prompt_sdk(
 
 
 def _behavior_input_validation_problems(exc: ValidationError) -> list[str]:
+    """Turn ``BehaviorInput`` validation errors into short, actionable strings."""
+
+    def _targets_name_field(err: dict[str, Any]) -> bool:
+        loc = err.get("loc") or ()
+        return bool(loc) and loc[-1] == "name"
+
+    raw_errors = exc.errors()
     problems: list[str] = []
-    for err in exc.errors():
-        loc = " -> ".join(str(x) for x in err.get("loc", ()))
-        msg = err.get("msg", "invalid")
-        problems.append(f"{loc}: {msg}")
-    return problems
+
+    if any(_targets_name_field(e) for e in raw_errors):
+        problems.append(
+            "Each behavior must include `name` (non-blank display name). "
+            "Match create_ai_agent: `event_id` or `eventId`, plus `actionParams` with "
+            "`aiBehaviorParams.instruction` and at least one entry in `actionsAttributes`."
+        )
+
+    for e in raw_errors:
+        if _targets_name_field(e):
+            continue
+        loc = e.get("loc") or ()
+        path = " -> ".join(str(p) for p in loc) if loc else "behavior"
+        problems.append(f"{path}: {e.get('msg', 'validation error')}")
+
+    return problems if problems else [str(exc)]
 
 
 async def validate_ai_agent_behaviors_sdk(

@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from typing import Any
-
 import typer
 from pipefy_sdk import PipefyClient
 
@@ -26,14 +23,6 @@ def _emit_introspection(data: object, *, rich: bool) -> None:
         render_json(data)
 
 
-def _run_introspect(
-    ctx: typer.Context,
-    factory: Callable[[PipefyClient], Awaitable[Any]],
-) -> Any:
-    """Execute an async introspection call with shared auth and error mapping."""
-    return run_pipefy_client_coroutine(ctx, factory)
-
-
 @introspect_app.command("type")
 def introspect_type(
     ctx: typer.Context,
@@ -52,12 +41,12 @@ def introspect_type(
     async def factory(client: PipefyClient):
         return await client.introspect_type(name, max_depth=max_depth)
 
-    payload = _run_introspect(ctx, factory)
+    payload = run_pipefy_client_coroutine(ctx, factory)
     _emit_introspection(payload, rich=rich)
 
 
 @introspect_app.command("query")
-def introspect_query_cmd(
+def introspect_query(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Root query field name."),
     max_depth: int = typer.Option(
@@ -72,12 +61,12 @@ def introspect_query_cmd(
     async def factory(client: PipefyClient):
         return await client.introspect_query(name, max_depth=max_depth)
 
-    payload = _run_introspect(ctx, factory)
+    payload = run_pipefy_client_coroutine(ctx, factory)
     _emit_introspection(payload, rich=rich)
 
 
 @introspect_app.command("mutation")
-def introspect_mutation_cmd(
+def introspect_mutation(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Root mutation field name."),
     max_depth: int = typer.Option(
@@ -92,7 +81,7 @@ def introspect_mutation_cmd(
     async def factory(client: PipefyClient):
         return await client.introspect_mutation(name, max_depth=max_depth)
 
-    payload = _run_introspect(ctx, factory)
+    payload = run_pipefy_client_coroutine(ctx, factory)
     _emit_introspection(payload, rich=rich)
 
 
@@ -114,7 +103,7 @@ def introspect_schema_search(
     async def factory(client: PipefyClient):
         return await client.search_schema(keyword, kind=kind)
 
-    payload = _run_introspect(ctx, factory)
+    payload = run_pipefy_client_coroutine(ctx, factory)
     _emit_introspection(payload, rich=rich)
 
 

@@ -93,17 +93,17 @@ def agent_create(
     instruction: str = typer.Option(
         ...,
         "--instruction",
-        help="Agent-level instruction (normalized like MCP create_ai_agent).",
+        help="Agent-level instruction (token-normalized).",
     ),
     behaviors: str = typer.Option(
         ...,
         "--behaviors",
-        help="JSON array of behavior objects (same shape as MCP).",
+        help="JSON array of behavior objects.",
     ),
     pipe: str = typer.Option(
         ...,
         "--pipe",
-        help="Numeric pipe id for validate-behaviors pre-flight (same pipe as --repo-uuid).",
+        help="Numeric pipe id for validate-behaviors pre-flight.",
     ),
     data_sources: str | None = typer.Option(
         None,
@@ -112,8 +112,11 @@ def agent_create(
     ),
     strict_unknown: bool = typer.Option(
         True,
-        "--strict-unknown-action-types/--no-strict-unknown-action-types",
-        help="Unknown actionType values block pre-flight when strict (default).",
+        "--strict/--no-strict",
+        help=(
+            "Pre-flight strictness: when --strict (default), unknown actionType values "
+            "block; with --no-strict they become warnings only."
+        ),
     ),
     json_out: bool = typer.Option(
         False, "--json", "-j", help="Print machine-readable JSON to stdout."
@@ -171,7 +174,7 @@ def agent_create(
         out: dict[str, Any] = {
             "success": True,
             "agent_uuid": agent_uuid,
-            "message": f"AI Agent created and configured successfully. UUID: {agent_uuid}",
+            "message": f"Created agent {agent_uuid}",
         }
         if pre.get("warnings"):
             out["preflight"] = pre
@@ -204,7 +207,11 @@ def agent_update(
     ),
     strict_unknown: bool = typer.Option(
         True,
-        "--strict-unknown-action-types/--no-strict-unknown-action-types",
+        "--strict/--no-strict",
+        help=(
+            "Pre-flight strictness: --strict (default) blocks on unknown actionType "
+            "values; --no-strict converts them to warnings."
+        ),
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
@@ -330,7 +337,11 @@ def agent_validate_behaviors(
     ),
     strict_unknown: bool = typer.Option(
         True,
-        "--strict-unknown-action-types/--no-strict-unknown-action-types",
+        "--strict/--no-strict",
+        help=(
+            "Pre-flight strictness: --strict (default) reports unknown actionType "
+            "values as problems; --no-strict reports them as warnings only."
+        ),
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:

@@ -281,3 +281,84 @@ def test_graphql_exec_invalid_vars_exit_2(
         )
     assert r.exit_code == 2
     mock_client.execute_graphql.assert_not_called()
+
+
+def test_report_pipe_export_csv_streams_bytes_to_stdout(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``report-pipe export --format csv`` runs start → poll → stream end-to-end."""
+    oauth_env("rpcsv-stream")
+    mock_client = MagicMock()
+    mock_client.export_pipe_report = AsyncMock(
+        return_value={"exportPipeReport": {"pipeReportExport": {"id": "exp-77"}}}
+    )
+    mock_client.get_pipe_report_export = AsyncMock(
+        return_value={
+            "pipeReportExport": {"state": "done", "fileURL": "https://example/r.csv"}
+        }
+    )
+
+    async def fake_stream(url, *, max_bytes):
+        for chunk in (b"id,name\n", b"1,foo\n", b"2,bar\n"):
+            yield chunk
+
+    with (
+        patch(
+            "pipefy_cli.commands._common.get_authenticated_client",
+            return_value=mock_client,
+        ),
+        patch("pipefy_cli.commands._common.stream_bytes", new=fake_stream),
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "report-pipe",
+                "export",
+                "--pipe",
+                "p1",
+                "--report-id",
+                "r1",
+                "--format",
+                "csv",
+                "--poll-timeout",
+                "2.0",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    # stdout in Typer's CliRunner is captured as text; the CSV bytes are decodable as utf-8.
+    assert r.stdout == "id,name\n1,foo\n2,bar\n"
+    mock_client.export_pipe_report.assert_awaited_once()
+    mock_client.get_pipe_report_export.assert_awaited_once_with("exp-77")
+
+
+def test_report_pipe_export_csv_exits_1_when_export_id_missing(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """When the start mutation returns no export id, the CLI exits with code 1."""
+    oauth_env("rpcsv-noid")
+    mock_client = MagicMock()
+    mock_client.export_pipe_report = AsyncMock(
+        return_value={"exportPipeReport": {"pipeReportExport": {}}}
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "report-pipe",
+                "export",
+                "--pipe",
+                "p1",
+                "--report-id",
+                "r1",
+                "--format",
+                "csv",
+            ],
+        )
+
+    assert r.exit_code == 1
+    assert "export id" in r.stderr.lower()

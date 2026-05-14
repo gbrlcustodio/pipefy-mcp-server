@@ -13,7 +13,7 @@ Traditional automations (if/then rules), AI automations (prompt-driven), task au
 
 For AI agents (conversational agents with behaviors), see `skills/ai-agents/pipefy-ai-agents/SKILL.md`.
 
-**CLI status (v0.1):** automation and AI-automation Typer commands are not shipped yet; use MCP tools below. CLI parity is planned for v0.3+.
+**CLI status:** traditional automation commands ship as `pipefy automation …` (task **9.1**). AI automation tools remain MCP-first until task **10.2** (CLI `ai-automation`).
 
 ---
 
@@ -21,15 +21,21 @@ For AI agents (conversational agents with behaviors), see `skills/ai-agents/pipe
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `get_automations` | — (CLI v0.3+) | Yes | List all automations for a pipe. |
-| `get_automation` | — (CLI v0.3+) | Yes | Single automation with full rule config. |
-| `create_automation` | — (CLI v0.3+) | No | Create an if/then rule. |
-| `update_automation` | — (CLI v0.3+) | No | Change trigger, conditions, or actions. |
-| `delete_automation` | — (CLI v0.3+) | No | **Two-step destructive.** |
-| `simulate_automation` | — (CLI v0.3+) | No | Dry-run against a specific card. |
-| `get_automation_logs` | — (CLI v0.3+) | Yes | Execution history and errors. |
-| `get_automation_events` | — (CLI v0.3+) | Yes | Available trigger events. |
-| `get_automation_actions` | — (CLI v0.3+) | Yes | Available action types. |
+| `get_automations` | `pipefy automation list` | Yes | List all automations for a pipe. |
+| `get_automation` | `pipefy automation get <id>` | Yes | Single automation with full rule config. |
+| `create_automation` | `pipefy automation create` | No | Create an if/then rule. |
+| `update_automation` | `pipefy automation update <id>` | No | Change trigger, conditions, or actions. |
+| `delete_automation` | `pipefy automation delete <id>` | No | **Destructive:** `--yes` or confirm. |
+| `simulate_automation` | `pipefy automation simulate` | No | Dry-run against a specific card. |
+| `get_automation_logs` | `pipefy automation logs --automation <id>` | Yes | Execution history and errors. |
+| `get_automation_logs_by_repo` | `pipefy automation logs --repo <pipe_id>` | Yes | Logs across automations in a pipe. |
+| `get_automation_events` | `pipefy automation events list --pipe <id>` | Yes | Available trigger events. |
+| `get_automation_actions` | `pipefy automation actions list --pipe <id>` | Yes | Available action types. |
+| `create_send_task_automation` | `pipefy automation send-task create` | No | Shortcut for send-a-task rules. |
+| `get_automations_usage` | `pipefy automation usage` | Yes | Org usage stats (date range + org id). |
+| `export_automation_jobs` | `pipefy automation export jobs` | No | Start async jobs export. |
+| `get_automation_jobs_export` | `pipefy automation export status <export_id>` | Yes | Poll export status / URL. |
+| `get_automation_jobs_export_csv` | `pipefy automation export csv <export_id>` | Yes | Fetch CSV text when export is finished. |
 
 ---
 
@@ -66,7 +72,9 @@ For AI agents (conversational agents with behaviors), see `skills/ai-agents/pipe
 
 2. **Simulate against a card:**
 
-   MCP: `simulate_automation automation_id=123 card_id=456`
+   MCP: `simulate_automation pipe_id=67890 action_id=generate_with_ai sample_card_id=456`
+
+   CLI: `pipefy automation simulate --pipe 67890 --action-id generate_with_ai --sample-card 456`
 
 3. **Check logs for result:**
 

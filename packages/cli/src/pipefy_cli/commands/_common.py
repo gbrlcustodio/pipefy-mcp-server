@@ -5,17 +5,21 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import sys
 from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
 import typer
-from pipefy_sdk import PipefyClient, PipefySettings
+from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
 from pipefy_sdk.exceptions import PipefyError
 
 from pipefy_cli.auth import get_authenticated_client
 from pipefy_cli.output import render_json, render_rich
 
 _T = TypeVar("_T")
+_R = TypeVar("_R")
+
+DEFAULT_EXPORT_MAX_BYTES = 50 * 1024 * 1024
 
 
 def export_poll_max_rounds(
@@ -65,6 +69,35 @@ async def poll_export_until_done(
     raise ValueError(
         f"Timed out waiting for export {eid} after {max_rounds * delay_seconds:.0f}s."
     )
+
+
+async def write_export_csv_to_stdout(
+    *,
+    export_id: str,
+    poll_fetch: Callable[[str], Awaitable[dict[str, Any] | None]],
+    unwrap_status: Callable[[dict[str, Any]], dict[str, Any]],
+    poll_timeout_seconds: float,
+    max_bytes: int = DEFAULT_EXPORT_MAX_BYTES,
+) -> None:
+    """Poll an export job until ``done`` and stream the CSV body to stdout.
+
+    Args:
+        export_id: Export job id (from the start mutation).
+        poll_fetch: Async callable that fetches the export status payload by id.
+        unwrap_status: Extract the export status node dict from the raw payload.
+        poll_timeout_seconds: Wall-clock budget for polling before raising ``ValueError``.
+        max_bytes: Hard cap on the download size enforced by :func:`stream_bytes`.
+    """
+    max_rounds = export_poll_max_rounds(poll_timeout_seconds)
+    url = await poll_export_until_done(
+        poll_fetch,
+        export_id,
+        unwrap_status,
+        max_rounds=max_rounds,
+    )
+    async for chunk in stream_bytes(url, max_bytes=max_bytes):
+        sys.stdout.buffer.write(chunk)
+    sys.stdout.buffer.flush()
 
 
 def run_pipefy_client_coroutine(
@@ -140,7 +173,7 @@ def confirm_destructive(*, yes: bool, description: str, verb: str = "delete") ->
 def run_cli_command(
     ctx: typer.Context,
     json_out: bool,
-    coro_factory: Callable[[PipefyClient], Awaitable[Any]],
+    coro_factory: Callable[[PipefyClient], Awaitable[_R]],
     *,
     exit_code_2_on_value_error: bool = False,
 ) -> None:
@@ -149,12 +182,12 @@ def run_cli_command(
     Args:
         ctx: Typer context (resolves settings/token from the root app).
         json_out: When True, print JSON; otherwise Rich rendering.
-        coro_factory: Async callable receiving ``PipefyClient``.
+        coro_factory: Async callable receiving ``PipefyClient`` and returning renderable data.
         exit_code_2_on_value_error: Map ``ValueError`` to process exit code 2 (stderr).
     """
     pipefy_settings, token = settings_and_token(ctx)
 
-    async def _run() -> Any:
+    async def _run() -> _R:
         client = get_authenticated_client(pipefy_settings, bearer_token=token)
         return await coro_factory(client)
 

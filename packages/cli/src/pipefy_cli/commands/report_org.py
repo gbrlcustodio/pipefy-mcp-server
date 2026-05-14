@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-import asyncio
-import sys
-
 import typer
-from pipefy_sdk import PipefyClient, stream_bytes
+from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
     confirm_destructive,
-    export_poll_max_rounds,
     parse_json_object,
     parse_json_value,
-    poll_export_until_done,
     run_cli_command,
-    settings_and_token,
+    run_pipefy_client_coroutine,
+    write_export_csv_to_stdout,
 )
 
 report_org_app = typer.Typer(help="Organization reports.", no_args_is_help=True)
@@ -199,7 +195,6 @@ def report_org_export(
         pids = [str(x) for x in pids]
 
     if fmt == "json":
-
         async def factory(client: PipefyClient):
             return await client.export_organization_report(
                 organization,
@@ -213,12 +208,7 @@ def report_org_export(
         run_cli_command(ctx, json_out, factory)
         return
 
-    pipefy_settings, token = settings_and_token(ctx)
-
-    async def _csv_run() -> None:
-        from pipefy_cli.auth import get_authenticated_client
-
-        client = get_authenticated_client(pipefy_settings, bearer_token=token)
+    async def csv_factory(client: PipefyClient) -> None:
         start = await client.export_organization_report(
             organization,
             organization_report_id=organization_report_id,
@@ -237,15 +227,11 @@ def report_org_export(
                 err=True,
             )
             raise typer.Exit(1)
-        max_rounds = export_poll_max_rounds(poll_timeout)
-        url = await poll_export_until_done(
-            client.get_organization_report_export,
-            str(export_id),
-            lambda raw: (raw or {}).get("organizationReportExport") or {},
-            max_rounds=max_rounds,
+        await write_export_csv_to_stdout(
+            export_id=str(export_id),
+            poll_fetch=client.get_organization_report_export,
+            unwrap_status=lambda raw: (raw or {}).get("organizationReportExport") or {},
+            poll_timeout_seconds=poll_timeout,
         )
-        async for chunk in stream_bytes(url, max_bytes=50 * 1024 * 1024):
-            sys.stdout.buffer.write(chunk)
-        sys.stdout.buffer.flush()
 
-    asyncio.run(_csv_run())
+    run_pipefy_client_coroutine(ctx, csv_factory)

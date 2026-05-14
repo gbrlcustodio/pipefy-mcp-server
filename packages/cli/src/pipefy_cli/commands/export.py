@@ -1,4 +1,4 @@
-"""Automation job exports (MCP parity names)."""
+"""Automation job exports."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ export_app = typer.Typer(
 
 
 @export_app.command("automation-jobs")
-def export_automation_jobs_cmd(
+def export_automation_jobs(
     ctx: typer.Context,
     organization: str = typer.Option(
         ..., "--organization", "--org", help="Organization id."
@@ -37,7 +37,7 @@ def export_automation_jobs_cmd(
 
 
 @export_app.command("automation-jobs-csv")
-def export_automation_jobs_csv_cmd(
+def export_automation_jobs_csv(
     ctx: typer.Context,
     export_id: str = typer.Argument(..., help="Export id after status is finished."),
     json_out: bool = typer.Option(

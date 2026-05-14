@@ -221,3 +221,171 @@ def test_export_poll_max_rounds_maps_timeout():
     assert export_poll_max_rounds(2.0) == 1
     with pytest.raises(ValueError):
         export_poll_max_rounds(0.0)
+
+
+_AGENT_BEHAVIOR = {
+    "name": "move on create",
+    "event_id": "card_created",
+    "actionParams": {
+        "aiBehaviorParams": {
+            "instruction": "Summarize the card.",
+            "actionsAttributes": [
+                {
+                    "name": "Move",
+                    "actionType": "move_card",
+                    "metadata": {"destinationPhaseId": "2"},
+                }
+            ],
+        }
+    },
+}
+
+
+def test_agent_create_happy_path_chains_create_then_update(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``agent create`` runs preflight, then ``create_ai_agent`` + ``update_ai_agent``."""
+    oauth_env("ag-create-ok")
+    mock_client = MagicMock()
+    mock_client.create_ai_agent = AsyncMock(return_value={"agent_uuid": "uuid-1"})
+    mock_client.update_ai_agent = AsyncMock(return_value={})
+
+    preflight_ok = {
+        "success": True,
+        "valid": True,
+        "problems": [],
+        "warnings": [],
+        "message": "All behaviors passed validation.",
+    }
+
+    with (
+        patch(
+            "pipefy_cli.commands._common.get_authenticated_client",
+            return_value=mock_client,
+        ),
+        patch(
+            "pipefy_cli.commands.agent.validate_ai_agent_behaviors_sdk",
+            new=AsyncMock(return_value=preflight_ok),
+        ),
+        patch(
+            "pipefy_cli.commands.agent.resolve_and_populate_field_refs",
+            new=AsyncMock(side_effect=lambda _c, behaviors: behaviors),
+        ),
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "agent",
+                "create",
+                "--repo-uuid",
+                "repo-uuid-1",
+                "--pipe",
+                "1",
+                "--name",
+                "Acme",
+                "--instruction",
+                "Be helpful.",
+                "--behaviors",
+                json.dumps([_AGENT_BEHAVIOR]),
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    body = json.loads(r.stdout)
+    assert body == {
+        "success": True,
+        "agent_uuid": "uuid-1",
+        "message": "Created agent uuid-1",
+    }
+    mock_client.create_ai_agent.assert_awaited_once()
+    mock_client.update_ai_agent.assert_awaited_once()
+
+
+def test_agent_create_blocks_when_preflight_invalid(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``agent create`` exits with a usage error (code 2) when the preflight reports problems."""
+    oauth_env("ag-create-blocked")
+    mock_client = MagicMock()
+    mock_client.create_ai_agent = AsyncMock()
+    mock_client.update_ai_agent = AsyncMock()
+
+    preflight_block = {
+        "success": True,
+        "valid": False,
+        "problems": ["destinationPhaseId 999 not found in pipe phases."],
+        "warnings": [],
+        "message": "Found 1 problem(s) in behaviors.",
+    }
+
+    with (
+        patch(
+            "pipefy_cli.commands._common.get_authenticated_client",
+            return_value=mock_client,
+        ),
+        patch(
+            "pipefy_cli.commands.agent.validate_ai_agent_behaviors_sdk",
+            new=AsyncMock(return_value=preflight_block),
+        ),
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "agent",
+                "create",
+                "--repo-uuid",
+                "repo-uuid-2",
+                "--pipe",
+                "1",
+                "--name",
+                "Acme",
+                "--instruction",
+                "Be helpful.",
+                "--behaviors",
+                json.dumps([_AGENT_BEHAVIOR]),
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 2
+    assert "validate-behaviors failed" in r.stderr
+    assert "destinationPhaseId 999" in r.stderr
+    mock_client.create_ai_agent.assert_not_called()
+    mock_client.update_ai_agent.assert_not_called()
+
+
+def test_ai_automation_create_requires_oauth(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``ai-automation create`` exits 2 with a clear message when OAuth is not configured."""
+    oauth_env("ai-no-oauth")
+    mock_client = MagicMock()
+    mock_client.ai_automation_available = False
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "ai-automation",
+                "create",
+                "--pipe",
+                "1",
+                "--name",
+                "Email summary",
+                "--event-id",
+                "card_created",
+                "--prompt",
+                "Summarize: %{9}",
+                "--field-ids",
+                '["9"]',
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 2
+    assert "OAuth" in r.stderr
+    mock_client.create_ai_automation.assert_not_called()

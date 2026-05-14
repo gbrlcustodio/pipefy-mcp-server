@@ -11,6 +11,8 @@ tags: [pipefy, observability, logs, usage, credits, exports]
 
 Monitor AI agent and automation execution, usage stats, credit consumption, and export job history. **10 MCP tools.**
 
+**CLI status (v0.1):** use MCP tools below. Observability Typer commands are planned for v0.3+.
+
 ---
 
 ## Identifiers reference
@@ -27,16 +29,16 @@ Monitor AI agent and automation execution, usage stats, credit consumption, and 
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `get_ai_agent_logs` | `pipefy agent logs list` | Yes | Execution history for a specific AI agent. |
-| `get_automation_logs` | `pipefy automation logs <id>` | Yes | Execution history for an automation (by automation ID or pipe). |
-| `get_agents_usage` | `pipefy usage agents` | Yes | Org-level AI agent execution count and trends. |
-| `get_automations_usage` | `pipefy usage automations` | Yes | Org-level automation execution stats. |
-| `get_ai_credit_usage` | `pipefy usage credits` | Yes | AI credit consumption and remaining balance. |
-| `export_automation_jobs` | — | Yes | Trigger async export of automation job history. |
-| `export_automation_jobs_csv` | — | Yes | Trigger async CSV export of automation job history. |
-| `get_export_status` | — | Yes | Poll export job status. |
-| `get_export_result` | — | Yes | Download the finished export. |
-| `get_automation_logs_by_repo` | — | Yes | Get automation logs filtered by pipe UUID. |
+| `get_ai_agent_logs` | — (CLI v0.3+) | Yes | Execution history for a specific AI agent. |
+| `get_ai_agent_log_details` | — (CLI v0.3+) | Yes | Single execution detail for an AI agent log entry. |
+| `get_automation_logs` | — (CLI v0.3+) | Yes | Execution history for an automation (by automation ID or pipe). |
+| `get_automation_logs_by_repo` | — (CLI v0.3+) | Yes | Automation logs filtered by pipe UUID. |
+| `get_agents_usage` | — (CLI v0.3+) | Yes | Org-level AI agent execution count and trends. |
+| `get_automations_usage` | — (CLI v0.3+) | Yes | Org-level automation execution stats. |
+| `get_ai_credit_usage` | — (CLI v0.3+) | Yes | AI credit consumption and remaining balance. |
+| `export_automation_jobs` | — (CLI v0.3+) | Yes | Trigger async export of automation job history. |
+| `get_automation_jobs_export` | — (CLI v0.3+) | Yes | Poll export job status (after `export_automation_jobs`). |
+| `get_automation_jobs_export_csv` | — (CLI v0.3+) | Yes | Download finished automation-jobs export as CSV text. |
 
 ---
 
@@ -52,15 +54,11 @@ Monitor AI agent and automation execution, usage stats, credit consumption, and 
 
    MCP: `get_ai_agent_logs repo_uuid=<UUID> page=1`
 
-   CLI: `pipefy agent logs list --pipe-uuid <UUID>`
-
 3. **Identify the failed execution** — look for `status: failed` entries.
 
 4. **Check credit usage** if the agent stopped unexpectedly:
 
    MCP: `get_ai_credit_usage organization_id=123`
-
-   CLI: `pipefy usage credits`
 
 5. **Fix and re-enable** — update the agent config (see `skills/ai-agents/`) and toggle status:
 
@@ -72,17 +70,17 @@ Monitor AI agent and automation execution, usage stats, credit consumption, and 
 
 1. **Trigger the export:**
 
-   MCP: `export_automation_jobs_csv pipe_id=67890`
+   MCP: `export_automation_jobs organization_id=123 period="current_month"`
 
 2. **Poll for completion:**
 
-   MCP: `get_export_status export_id=<EXPORT_ID>`
+   MCP: `get_automation_jobs_export export_id=<EXPORT_ID>`
 
-   Repeat until `status == "done"`.
+   Repeat until `status` is `finished` or `failed`.
 
-3. **Fetch the result:**
+3. **Fetch CSV text** (when finished):
 
-   MCP: `get_export_result export_id=<EXPORT_ID>`
+   MCP: `get_automation_jobs_export_csv export_id=<EXPORT_ID>`
 
 ---
 
@@ -95,7 +93,7 @@ Monitor AI agent and automation execution, usage stats, credit consumption, and 
 ## Failure modes
 
 - **`get_ai_agent_logs` returns empty:** use the pipe **UUID** (e.g., `abc123-...`), not the numeric pipe ID. Get UUID from `get_pipe`.
-- **`get_export_status` stays "pending" indefinitely:** large exports take time. Wait at least 60 seconds between polls. If still pending after 5 minutes, retry the export trigger.
+- **`get_automation_jobs_export` stays in `processing`:** large exports take time. Wait at least 60 seconds between polls. If still `processing` after several minutes, retry the export trigger.
 - **Credit usage shows 0 remaining:** alert the user — AI features will stop working until credits are replenished. Escalate to the Pipefy admin.
 
 ## See also

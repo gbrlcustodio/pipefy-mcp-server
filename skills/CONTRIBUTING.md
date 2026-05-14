@@ -7,13 +7,14 @@ Skills are Markdown-only — no Python, no `uv`, no test infrastructure required
 1. Fork and clone the repo.
 2. Choose or create a domain folder under `skills/`.
 3. Create `skills/<domain>/<skill-name>/SKILL.md` using the template in [`AGENTS.md`](AGENTS.md).
-4. Run the local lint check (optional, CI will catch it too):
+4. Run the reference linter locally (optional; CI runs the same check):
 
    ```bash
-   python scripts/lint_skills.py   # if available; otherwise rely on CI
+   uv run python .github/workflows/scripts/lint_skill_refs.py
    ```
 
-5. Open a PR. CI will validate frontmatter and tool references.
+5. Open a PR. CI validates frontmatter, starter-pack bundle drift, MCP tool names, and
+   `pipefy` CLI subcommands referenced in each `SKILL.md`.
 
 ## Frontmatter requirements
 
@@ -39,18 +40,22 @@ Missing or mismatched `name` fails CI.
 ## Style guide
 
 - Action-first headlines: "Create a card" not "Card creation process".
-- Show both MCP tool name and CLI equivalent in every example.
+- Show MCP tool names in tables; add the CLI equivalent when it exists in v0.1, or mark future CLI as `— (CLI v0.3+)` (see existing starter-pack skills).
 - Prefer explicit IDs over names (Pipefy IDs are stable; labels change).
 - Keep the skill under 500 lines. Split by sub-domain if it grows larger.
 - Link to related skills with `See also:` rather than copying content.
 
 ## Tool references
 
-Every tool/command reference in a skill is validated by CI:
-- MCP tool names (e.g., `create_card`) are checked against `PIPEFY_TOOL_NAMES`.
-- CLI commands (e.g., `pipefy card create`) are checked against `pipefy --help`.
+Every MCP tool name and top-level `pipefy` CLI token referenced in a `SKILL.md` table
+or example is checked in CI (`skills-lint.yml` runs `.github/workflows/scripts/lint_skill_refs.py`):
 
-If you reference a tool that doesn't exist yet, CI will fail. Either wait for the tool to ship, or open the PR as a draft and link the tool PR.
+- MCP tool names in the first column of tool tables must exist in `PIPEFY_TOOL_NAMES`.
+- Invocations of the form `pipefy <subcommand>` must use a subcommand registered on the
+  root CLI (see `packages/cli/src/pipefy_cli/main.py`).
+
+If you reference a tool or CLI surface that does not exist yet, CI will fail. Either wait
+for the capability to ship, or open the PR as a draft and link the implementation PR.
 
 ## Intra-repo coupling rule
 

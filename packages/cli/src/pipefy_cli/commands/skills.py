@@ -6,16 +6,28 @@ import re
 import sys
 from importlib import resources
 from pathlib import Path
+from typing import TypedDict
 
 import typer
+import yaml
 
 skills_app = typer.Typer(
     help="Browse bundled agent skill playbooks.",
     no_args_is_help=True,
 )
 
-_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?\n)---\s*\n", re.DOTALL)
-_FIELD_RE = re.compile(r"^(\w+)\s*:\s*(.+)$", re.MULTILINE)
+_FRONTMATTER_RE = re.compile(
+    r"^---\s*\r?\n(.*?)\r?\n---\s*\r?\n",
+    re.DOTALL,
+)
+
+
+class BundledSkillMeta(TypedDict):
+    """One bundled skill entry for list/show."""
+
+    name: str
+    description: str
+    path: str
 
 
 def _bundled_skills_dir() -> Path:
@@ -36,56 +48,103 @@ def _bundled_skills_dir() -> Path:
 
 
 def _parse_frontmatter(content: str) -> dict[str, str]:
-    """Extract name and description from YAML frontmatter.
+    """Extract YAML frontmatter keys as single-line string values.
 
-    Returns an empty dict when frontmatter is missing or malformed.
+    Args:
+        content: Full Markdown file contents.
+
+    Returns:
+        Mapping of frontmatter keys to normalized string values, or empty dict
+        when frontmatter is missing.
+
+    Raises:
+        yaml.YAMLError: When the frontmatter block is present but not valid YAML.
     """
     match = _FRONTMATTER_RE.match(content)
     if not match:
         return {}
-    fm_text = match.group(1)
-    result: dict[str, str] = {}
-    for field_match in _FIELD_RE.finditer(fm_text):
-        key = field_match.group(1).strip()
-        val = field_match.group(2).strip().strip(">").strip()
-        result[key] = val
-    return result
+    data = yaml.safe_load(match.group(1))
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        msg = "frontmatter root must be a mapping"
+        raise yaml.YAMLError(msg)
+    out: dict[str, str] = {}
+    for key, value in data.items():
+        if not isinstance(key, str):
+            continue
+        if value is None:
+            out[key] = ""
+        elif isinstance(value, str):
+            out[key] = " ".join(value.split())
+        else:
+            out[key] = " ".join(str(value).split())
+    return out
 
 
-def _load_skills() -> list[tuple[str, str, str]]:
+def _load_skills() -> tuple[list[BundledSkillMeta], list[str]]:
     """Load all bundled skills.
 
-    Returns a list of (name, description, filepath) tuples sorted by name.
+    Returns:
+        Tuple of (skills sorted by name, YAML parse error messages with paths).
     """
     skills_dir = _bundled_skills_dir()
     if not skills_dir.is_dir():
-        return []
+        return [], []
 
-    results: list[tuple[str, str, str]] = []
+    results: list[BundledSkillMeta] = []
+    errors: list[str] = []
     for md_file in sorted(skills_dir.glob("*.md")):
         content = md_file.read_text(encoding="utf-8")
-        fm = _parse_frontmatter(content)
+        try:
+            fm = _parse_frontmatter(content)
+        except yaml.YAMLError as exc:
+            errors.append(f"{md_file}: invalid YAML frontmatter ({exc})")
+            continue
         name = fm.get("name", md_file.stem)
         description = fm.get("description", "")
-        # Collapse multiline description to a single line for display
-        description = " ".join(description.split())
-        results.append((name, description, str(md_file)))
+        results.append(
+            BundledSkillMeta(name=name, description=description, path=str(md_file))
+        )
 
-    return results
+    results.sort(key=lambda s: s["name"])
+    return results, errors
+
+
+def _skill_matches_query(skill: BundledSkillMeta, query: str) -> bool:
+    """Return True if ``query`` selects this bundled skill.
+
+    Args:
+        skill: Loaded bundled skill metadata.
+        query: User argument (``name`` field, filename stem, or unprefixed slug).
+    """
+    stem = Path(skill["path"]).stem
+    skill_name = skill["name"]
+    if skill_name == query or stem == query:
+        return True
+    if skill_name == f"pipefy-{query}":
+        return True
+    if stem == f"pipefy-{query}":
+        return True
+    return False
 
 
 @skills_app.command("list")
 def skills_list() -> None:
     """List all bundled skills with their one-line descriptions."""
-    skills = _load_skills()
+    skills, yaml_errors = _load_skills()
+    if yaml_errors:
+        for line in yaml_errors:
+            typer.echo(line, err=True)
+        raise typer.Exit(2)
     if not skills:
         typer.echo("No bundled skills found.", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(2)
 
-    for name, description, _ in skills:
-        typer.echo(f"{name}")
-        if description:
-            typer.echo(f"  {description}")
+    for skill in skills:
+        typer.echo(skill["name"])
+        if skill["description"]:
+            typer.echo(f"  {skill['description']}")
         typer.echo()
 
 
@@ -96,21 +155,26 @@ def skills_show(
     """Print the full content of a bundled skill to stdout.
 
     Args:
-        name: Skill name matching the 'name' frontmatter field or the filename stem.
+        name: Skill name matching the 'name' frontmatter field, the filename stem,
+            or the slug without the ``pipefy-`` prefix (e.g. ``pipes-and-cards``).
     """
-    skills = _load_skills()
+    skills, yaml_errors = _load_skills()
+    if yaml_errors:
+        for line in yaml_errors:
+            typer.echo(line, err=True)
+        raise typer.Exit(2)
     if not skills:
         typer.echo("No bundled skills found.", err=True)
         raise typer.Exit(2)
 
     matched_path: str | None = None
-    for skill_name, _, filepath in skills:
-        if skill_name == name or Path(filepath).stem == name:
-            matched_path = filepath
+    for skill in skills:
+        if _skill_matches_query(skill, name):
+            matched_path = skill["path"]
             break
 
     if matched_path is None:
-        available = ", ".join(n for n, _, _ in skills)
+        available = ", ".join(s["name"] for s in skills)
         typer.echo(
             f"Skill '{name}' not found in bundled skills. Available: {available}",
             err=True,

@@ -19,7 +19,7 @@ Manage pipe membership, send emails from card inboxes, read inbox replies, and m
 | `get_pipe_members` | `pipefy member list --pipe <id>` | Yes | List all members of a pipe. |
 | `invite_members` | `pipefy member invite` | No | Invite one or more users by email + role. |
 | `remove_member_from_pipe` | `pipefy member remove` | No | **Two-step destructive.** Warns on external emails. |
-| `set_member_role` | `pipefy member set-role` | No | Change a member's pipe role. |
+| `set_role` | `pipefy member set-role` | No | Change a member's pipe role. |
 
 ### Steps — invite members
 

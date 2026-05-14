@@ -50,7 +50,7 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, att
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `get_phase` | `pipefy phase get <id>` | Yes | Phase details and fields. |
+| `get_pipe` | `pipefy phase get <id>` | Yes | Phase metadata: use `get_pipe` (phases in the response) via MCP, or `pipefy phase get` on the CLI for a single phase. |
 | `create_phase` | `pipefy phase create` | No | Add a phase to a pipe. |
 | `update_phase` | `pipefy phase update <id>` | No | Rename, reorder, set done flag. |
 | `delete_phase` | `pipefy phase delete <id>` | No | **Two-step destructive.** |
@@ -86,7 +86,7 @@ This returns valid `type` enum values and their descriptions.
 | `update_card` | `pipefy card update <id>` | No | Update title, assignee, due date, fields. |
 | `move_card_to_phase` | `pipefy card move <id>` | No | Move a card to a different phase. |
 | `delete_card` | `pipefy card delete <id>` | No | **Two-step destructive.** |
-| `post_comment` | `pipefy card comment <id>` | No | Add a comment to a card. |
+| `add_card_comment` | `pipefy card comment add <id>` | No | Add a text comment to a card. |
 
 ### Steps — create a card
 

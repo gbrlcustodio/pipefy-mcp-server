@@ -18,18 +18,20 @@ This is **Tier 2** in the resolution strategy: when a dedicated MCP tool fails o
 **Tier 2:** use introspection + `execute_graphql` (this skill).
 **Tier 3:** direct curl/httpx fallback — see `skills/api-troubleshoot/`.
 
+**CLI status (v0.1):** use the MCP tools in this skill. Dedicated introspect, GraphQL exec, and organization Typer commands are planned for v0.3+.
+
 ---
 
 ## Tools
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `introspect_type` | `pipefy introspect type <name>` | Yes | Discover fields, input types, and enums. |
-| `introspect_query` | `pipefy introspect query <name>` | Yes | Get a query's argument types and return shape. |
-| `introspect_mutation` | `pipefy introspect mutation <name>` | Yes | Get a mutation's argument types and return shape. |
-| `search_schema` | `pipefy introspect schema search <kw>` | Yes | Find types/queries/mutations by keyword. |
-| `execute_graphql` | `pipefy graphql exec` | No | Execute arbitrary GraphQL query or mutation. |
-| `get_organization` | `pipefy org get` | Yes | Fetch org metadata (plan, members, pipes). |
+| `introspect_type` | — (CLI v0.3+) | Yes | Discover fields, input types, and enums. |
+| `introspect_query` | — (CLI v0.3+) | Yes | Get a query's argument types and return shape. |
+| `introspect_mutation` | — (CLI v0.3+) | Yes | Get a mutation's argument types and return shape. |
+| `search_schema` | — (CLI v0.3+) | Yes | Find types/queries/mutations by keyword. |
+| `execute_graphql` | — (CLI v0.3+) | No | Execute arbitrary GraphQL query or mutation. |
+| `get_organization` | — (CLI v0.3+) | Yes | Fetch org metadata (plan, members, pipes). |
 
 ---
 
@@ -39,19 +41,13 @@ This is **Tier 2** in the resolution strategy: when a dedicated MCP tool fails o
 
    MCP: `search_schema keyword="label"`
 
-   CLI: `pipefy introspect schema search label`
-
 2. **Get the full mutation signature:**
 
    MCP: `introspect_mutation mutation_name="createLabel"`
 
-   CLI: `pipefy introspect mutation createLabel`
-
 3. **Discover input type fields:**
 
    MCP: `introspect_type type_name="CreateLabelInput"`
-
-   CLI: `pipefy introspect type CreateLabelInput`
 
 4. **Execute the mutation:**
 
@@ -60,15 +56,7 @@ This is **Tier 2** in the resolution strategy: when a dedicated MCP tool fails o
    execute_graphql query="mutation CreateLabel($input: CreateLabelInput!) { createLabel(input: $input) { label { id name } } }" variables='{"input": {"pipe_id": 67890, "name": "Urgent", "color": "#FF0000"}}'
    ```
 
-   CLI:
-   ```bash
-   pipefy graphql exec \
-     --query 'mutation CreateLabel($input: CreateLabelInput!) { createLabel(input: $input) { label { id name } } }' \
-     --vars '{"input":{"pipe_id":67890,"name":"Urgent","color":"#FF0000"}}' \
-     --yes
-   ```
-
-   > **Mutations require `--yes`** on the CLI to prevent accidental execution.
+   > **v0.1:** use MCP `execute_graphql` for mutations. A dedicated GraphQL exec CLI wrapper is planned for v0.3+.
 
 ---
 

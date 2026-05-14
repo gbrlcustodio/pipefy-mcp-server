@@ -23,6 +23,12 @@ PyPI publishing is **disabled** for tags that do not start with `v1.`. Pre-relea
 
    This copies the 8 canonical starter-pack skills from `skills/<domain>/<name>/SKILL.md` into `packages/cli/src/pipefy_cli/skills/`. Commit the updated `.md` files alongside the version bump.
 
+   To verify the bundle already matches canonical files (for example on CI or before tagging):
+
+   ```bash
+   uv run python scripts/sync_starter_pack.py --check
+   ```
+
 4. In `CHANGELOG.md`, replace the `## [Unreleased]` heading with `## [X.Y.Z] - YYYY-MM-DD` matching the new version and date (the Release workflow uses this section as the GitHub Release notes body).
 5. Commit:
 

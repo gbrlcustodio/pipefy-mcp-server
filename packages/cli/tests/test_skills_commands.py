@@ -36,6 +36,19 @@ FAKE_SKILL_B = textwrap.dedent("""\
     # Second Skill
 """)
 
+FAKE_SKILL_FOLDED = textwrap.dedent("""\
+    ---
+    name: pipefy-folded-skill
+    description: >
+      Use this skill when testing folded YAML scalars in the CLI parser.
+    tags: [test]
+    ---
+
+    # Folded
+
+    Body.
+""")
+
 
 def _make_skill_files(tmp_path: Path) -> Path:
     """Write two fake skill .md files to a temp directory."""
@@ -64,11 +77,41 @@ def test_skills_list_shows_description(runner, tmp_path):
     assert "A fake skill for testing" in result.output
 
 
+def test_skills_list_folded_description(runner, tmp_path):
+    """Folded YAML description must not collapse to empty (regression for bundled skills)."""
+    (tmp_path / "pipefy-folded-skill.md").write_text(
+        FAKE_SKILL_FOLDED, encoding="utf-8"
+    )
+    with patch("pipefy_cli.commands.skills._bundled_skills_dir", return_value=tmp_path):
+        result = runner.invoke(app, ["skills", "list"])
+    assert result.exit_code == 0, result.output
+    assert "Use this skill when testing folded YAML" in result.output
+
+
 def test_skills_list_nonempty_when_bundled(runner):
-    """Bundled skills directory (real package) must have at least one skill."""
+    """Bundled starter pack must expose multiple skills with descriptions."""
     result = runner.invoke(app, ["skills", "list"])
     assert result.exit_code == 0, result.output
-    assert "pipefy-" in result.output
+    lines = [ln for ln in result.output.splitlines() if ln.startswith("pipefy-")]
+    assert len(lines) >= 5, result.output
+    assert "Use this skill" in result.output
+
+
+def test_skills_list_invalid_frontmatter_exits_2(runner, tmp_path):
+    (tmp_path / "broken.md").write_text(
+        "---\nname: x\ndescription: y\n[\n---\n",
+        encoding="utf-8",
+    )
+    with patch("pipefy_cli.commands.skills._bundled_skills_dir", return_value=tmp_path):
+        result = runner.invoke(app, ["skills", "list"])
+    assert result.exit_code == 2
+    assert "invalid YAML frontmatter" in result.stderr
+
+
+def test_skills_list_empty_bundle_exits_2(runner, tmp_path):
+    with patch("pipefy_cli.commands.skills._bundled_skills_dir", return_value=tmp_path):
+        result = runner.invoke(app, ["skills", "list"])
+    assert result.exit_code == 2
 
 
 def test_skills_show_prints_body(runner, tmp_path):
@@ -77,6 +120,16 @@ def test_skills_show_prints_body(runner, tmp_path):
         "pipefy_cli.commands.skills._bundled_skills_dir", return_value=skills_dir
     ):
         result = runner.invoke(app, ["skills", "show", "pipefy-fake-skill"])
+    assert result.exit_code == 0, result.output
+    assert "Body content here" in result.output
+
+
+def test_skills_show_unprefixed_slug(runner, tmp_path):
+    skills_dir = _make_skill_files(tmp_path)
+    with patch(
+        "pipefy_cli.commands.skills._bundled_skills_dir", return_value=skills_dir
+    ):
+        result = runner.invoke(app, ["skills", "show", "fake-skill"])
     assert result.exit_code == 0, result.output
     assert "Body content here" in result.output
 
@@ -91,7 +144,8 @@ def test_skills_show_missing_name_exits_2(runner, tmp_path):
 
 
 def test_skills_show_real_bundled_skill(runner):
-    """Bundled `pipefy-pipes-and-cards` must be showable and contain frontmatter."""
-    result = runner.invoke(app, ["skills", "show", "pipefy-pipes-and-cards"])
-    assert result.exit_code == 0, result.output
-    assert "name: pipefy-pipes-and-cards" in result.output
+    """Bundled starter pack must be readable by full name or short slug."""
+    for arg in ("pipefy-pipes-and-cards", "pipes-and-cards"):
+        result = runner.invoke(app, ["skills", "show", arg])
+        assert result.exit_code == 0, result.output
+        assert "name: pipefy-pipes-and-cards" in result.output

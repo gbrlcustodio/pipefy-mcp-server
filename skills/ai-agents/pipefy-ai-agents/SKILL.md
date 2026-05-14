@@ -14,19 +14,21 @@ Conversational AI agents attached to pipes. Each agent has an agent-level instru
 
 For traditional automations and AI automations (prompt-driven), see `skills/automations/pipefy-automations/SKILL.md`.
 
+**CLI status (v0.1):** use MCP tools below. Agent-related Typer commands are planned for v0.3+.
+
 ---
 
 ## Tools
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `get_pipe_ai_agents` | `pipefy agent list --pipe <id>` | Yes | List all AI agents for a pipe. |
-| `get_ai_agent` | `pipefy agent get <id>` | Yes | Full agent config including behaviors. |
-| `create_ai_agent` | `pipefy agent create` | No | Create a new conversational agent. |
-| `update_ai_agent` | `pipefy agent update <id>` | No | Update instruction or name. |
-| `delete_ai_agent` | `pipefy agent delete <id>` | No | **Two-step destructive.** |
-| `toggle_ai_agent_status` | `pipefy agent toggle <id>` | No | Enable or disable the agent. |
-| `validate_ai_agent_behaviors` | `pipefy agent validate-behaviors` | Yes | **Pre-flight check before create/update.** |
+| `get_ai_agents` | — (CLI v0.3+) | Yes | List all AI agents for a pipe (pass pipe `repo_uuid`). |
+| `get_ai_agent` | — (CLI v0.3+) | Yes | Full agent config including behaviors. |
+| `create_ai_agent` | — (CLI v0.3+) | No | Create a new conversational agent. |
+| `update_ai_agent` | — (CLI v0.3+) | No | Update instruction or name. |
+| `delete_ai_agent` | — (CLI v0.3+) | No | **Two-step destructive.** |
+| `toggle_ai_agent_status` | — (CLI v0.3+) | No | Enable or disable the agent. |
+| `validate_ai_agent_behaviors` | — (CLI v0.3+) | Yes | **Pre-flight check before create/update.** |
 
 ---
 
@@ -36,17 +38,13 @@ For traditional automations and AI automations (prompt-driven), see `skills/auto
 
    MCP: `validate_ai_agent_behaviors pipe_id=67890 behaviors='[{"trigger_event":"card_created","prompt":"Welcome the customer by name."}]'`
 
-   CLI: `pipefy agent validate-behaviors --pipe 67890 --behaviors '[{"trigger_event":"card_created","prompt":"Welcome..."}]'`
-
 2. **Create the agent** (only if validation succeeds):
 
    MCP: `create_ai_agent pipe_id=67890 name="Customer Support Agent" instruction="You are a helpful Pipefy assistant." behaviors='[{"trigger_event":"card_created","prompt":"Welcome the customer."}]'`
 
-   CLI: `pipefy agent create --pipe 67890 --name "Customer Support Agent" --instruction "..." --behaviors '[...]'`
-
 3. **Verify the agent is active:**
 
-   MCP: `get_pipe_ai_agents pipe_id=67890`
+   MCP: `get_ai_agents repo_uuid=<PIPE_UUID>`
 
 ---
 

@@ -37,7 +37,7 @@ Example Cursor config (still valid):
 
 ## Tool names and parameters — unchanged
 
-All 128 MCP tools have the same names, parameters, and behavior. No renames, no removed tools. If you have agent prompts or workflows referencing specific tool names, they continue to work.
+All MCP tools keep the same names, parameters, and behavior as in the pre-monorepo server. No renames, no removed tools. If you have agent prompts or workflows referencing specific tool names, they continue to work.
 
 ---
 

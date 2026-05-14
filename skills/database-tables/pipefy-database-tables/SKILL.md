@@ -11,6 +11,8 @@ tags: [pipefy, database, tables, records, fields]
 
 Tables, records (rows), schema columns (table fields), and attachments for Pipefy Database Tables. **17 MCP tools.**
 
+**CLI status (v0.1):** table, record, and field commands ship today; table-record attachment upload on the CLI is planned for v0.3+.
+
 ---
 
 ## Cross-cutting patterns
@@ -83,7 +85,7 @@ Tables, records (rows), schema columns (table fields), and attachments for Pipef
 
 | Tool (MCP) | CLI | Purpose |
 |------------|-----|---------|
-| `upload_attachment_to_table_record` | `pipefy attachment upload --record <id>` | Attach a file to a table record. |
+| `upload_attachment_to_table_record` | — (CLI v0.3+) | Attach a file to a table record. |
 
 ---
 

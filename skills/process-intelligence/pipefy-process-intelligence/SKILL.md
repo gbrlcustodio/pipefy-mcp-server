@@ -56,7 +56,7 @@ The user asks to analyze or improve an existing process:
 
 4. **Check AI configuration:**
 
-   MCP: `get_pipe_ai_agents pipe_id=<id>`
+   MCP: `get_ai_agents repo_uuid=<PIPE_UUID>`
 
    Look for: no AI agents despite manual categorization or triage patterns.
 

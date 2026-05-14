@@ -22,6 +22,25 @@ _PIPEFY_ENV_KEYS = (
 
 
 @pytest.fixture
+def oauth_env(monkeypatch: pytest.MonkeyPatch):
+    """Set minimal OAuth + GraphQL URLs for CLI commands that require OAuth mode."""
+
+    def _set(host: str) -> None:
+        monkeypatch.setenv("PIPEFY_GRAPHQL_URL", f"https://{host}.example.com/graphql")
+        monkeypatch.setenv(
+            "PIPEFY_INTERNAL_API_URL",
+            f"https://{host}.example.com/internal_api",
+        )
+        monkeypatch.setenv(
+            "PIPEFY_OAUTH_URL", f"https://{host}.example.com/oauth/token"
+        )
+        monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
+        monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "sec")
+
+    return _set
+
+
+@pytest.fixture
 def clean_pipefy_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove canonical ``PIPEFY_*`` keys so each test controls env explicitly."""
 

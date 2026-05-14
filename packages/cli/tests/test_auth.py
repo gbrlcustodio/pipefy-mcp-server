@@ -76,7 +76,7 @@ def test_cli_uses_pipefy_token_env_when_no_flag(
     mock_client = MagicMock()
     mock_client.get_card = AsyncMock(return_value={"id": "77"})
     with patch(
-        "pipefy_cli.commands.card.get_authenticated_client",
+        "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
     ) as mock_gc:
         result = runner.invoke(app, ["card", "get", "77"])

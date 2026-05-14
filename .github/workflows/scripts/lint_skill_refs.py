@@ -13,16 +13,30 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 # Typer sub-apps registered on the root CLI (see packages/cli/src/pipefy_cli/main.py).
 PIPEFY_CLI_ROOT_COMMANDS = frozenset(
     {
+        "agent",
+        "ai-automation",
+        "attachment",
+        "audit",
+        "automation",
         "card",
+        "email",
+        "export",
         "field",
+        "field-condition",
+        "graphql",
+        "introspect",
         "label",
         "member",
+        "org",
         "phase",
         "pipe",
         "record",
         "relation",
+        "report-org",
+        "report-pipe",
         "skills",
         "table",
+        "usage",
         "webhook",
     }
 )

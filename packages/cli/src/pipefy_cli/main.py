@@ -7,6 +7,15 @@ import os
 import typer
 
 from pipefy_cli.commands.card import card_app
+from pipefy_cli.commands.field import field_app
+from pipefy_cli.commands.label import label_app
+from pipefy_cli.commands.member import member_app
+from pipefy_cli.commands.phase import phase_app
+from pipefy_cli.commands.pipe import pipe_app
+from pipefy_cli.commands.record import record_app
+from pipefy_cli.commands.relation import relation_app
+from pipefy_cli.commands.table import table_app
+from pipefy_cli.commands.webhook import webhook_app
 from pipefy_cli.config import resolve_pipefy_settings
 
 app = typer.Typer(
@@ -53,3 +62,12 @@ def main(
 
 
 app.add_typer(card_app, name="card")
+app.add_typer(pipe_app, name="pipe")
+app.add_typer(phase_app, name="phase")
+app.add_typer(field_app, name="field")
+app.add_typer(table_app, name="table")
+app.add_typer(record_app, name="record")
+app.add_typer(label_app, name="label")
+app.add_typer(webhook_app, name="webhook")
+app.add_typer(relation_app, name="relation")
+app.add_typer(member_app, name="member")

@@ -14,6 +14,7 @@ from pipefy_cli.commands.phase import phase_app
 from pipefy_cli.commands.pipe import pipe_app
 from pipefy_cli.commands.record import record_app
 from pipefy_cli.commands.relation import relation_app
+from pipefy_cli.commands.skills import skills_app
 from pipefy_cli.commands.table import table_app
 from pipefy_cli.commands.webhook import webhook_app
 from pipefy_cli.config import resolve_pipefy_settings
@@ -71,3 +72,4 @@ app.add_typer(label_app, name="label")
 app.add_typer(webhook_app, name="webhook")
 app.add_typer(relation_app, name="relation")
 app.add_typer(member_app, name="member")
+app.add_typer(skills_app, name="skills")

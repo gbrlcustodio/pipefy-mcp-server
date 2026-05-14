@@ -87,11 +87,11 @@ cd pipefy-mcp-server
 # Sync dependencies
 uv sync
 
-# Optional: copy template and edit (full guide: docs/setup.md)
+# Optional: copy template and edit (full guide: docs/quickstart.md)
 cp .env.example .env
 ```
 
-**Setup, env vars, and MCP client JSON:** use **[Setup](docs/setup.md)** — single doc for first-time install, Pydantic / `.env` precedence, and Cursor / Claude examples (keys in [`.env.example`](.env.example)). Optional: `./bootstrap.sh` runs `uv sync` and creates `.env` from `.env.example` if missing.
+**Setup, env vars, and MCP client JSON:** use **[Setup](docs/quickstart.md)** — single doc for first-time install, Pydantic / `.env` precedence, and Cursor / Claude examples (keys in [`.env.example`](.env.example)). Optional: `./bootstrap.sh` runs `uv sync` and creates `.env` from `.env.example` if missing.
 
 ### Why these dependencies?
 
@@ -105,13 +105,13 @@ The runtime stack in [`pyproject.toml`](pyproject.toml) is small on purpose. Gra
 
 ## MCP clients
 
-Step-by-step JSON samples and CLI examples are in **[Setup → MCP client setup](docs/setup.md#mcp-client-setup)**.
+Step-by-step JSON samples and CLI examples are in **[Setup → MCP client setup](docs/quickstart.md#mcp-client-setup)**.
 
 | Client | Section |
 |--------|---------|
-| **Cursor** | [Cursor](docs/setup.md#cursor) |
-| **Claude Desktop** | [Claude Desktop](docs/setup.md#claude-desktop) |
-| **Claude Code** | [Claude Code](docs/setup.md#claude-code) |
+| **Cursor** | [Cursor](docs/quickstart.md#cursor) |
+| **Claude Desktop** | [Claude Desktop](docs/quickstart.md#claude-desktop) |
+| **Claude Code** | [Claude Code](docs/quickstart.md#claude-code) |
 
 ## Development & Testing
 

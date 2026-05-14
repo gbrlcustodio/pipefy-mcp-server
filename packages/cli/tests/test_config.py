@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import re
 import textwrap
 
 import pytest
 
 from pipefy_cli import config as config_module
+from pipefy_cli._docs import DOCS_QUICKSTART_REF
 from pipefy_cli.config import (
     CliSettings,
     apply_toml_fallback,
@@ -113,7 +115,7 @@ def test_graphql_url_flag_overrides_env(
     assert resolved.graphql_url == "https://from-flag.example.com/graphql"
 
 
-def test_missing_graphql_url_error_points_to_setup_docs(
+def test_missing_graphql_url_error_points_to_quickstart_docs(
     clean_pipefy_env,
     saved_cwd,
 ):
@@ -122,7 +124,7 @@ def test_missing_graphql_url_error_points_to_setup_docs(
         allow_insecure_urls_flag=None,
     )
 
-    with pytest.raises(ValueError, match="docs/setup\\.md"):
+    with pytest.raises(ValueError, match=re.escape(DOCS_QUICKSTART_REF)):
         ensure_public_graphql_configured(resolved)
 
 
@@ -293,7 +295,7 @@ def test_corrupt_user_config_toml_raises_actionable_error(
     cfg_path.write_text("[pipefy\ngraphql_url = ", encoding="utf-8")
     monkeypatch.setattr(config_module, "USER_CONFIG_PATH", cfg_path)
 
-    with pytest.raises(ValueError, match="docs/setup"):
+    with pytest.raises(ValueError, match=re.escape(DOCS_QUICKSTART_REF)):
         resolve_pipefy_settings(
             graphql_url_flag=None,
             allow_insecure_urls_flag=None,

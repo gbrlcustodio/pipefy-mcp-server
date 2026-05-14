@@ -11,7 +11,7 @@ from pipefy_sdk import PipefySettings
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from pipefy_cli._docs import DOCS_SETUP_REF
+from pipefy_cli._docs import DOCS_QUICKSTART_REF
 
 _ALLOW_INSECURE_ENV_KEY = "PIPEFY_ALLOW_INSECURE_URLS"
 
@@ -49,7 +49,7 @@ def _read_toml_pipefy_dict() -> dict[str, Any]:
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         msg = (
             f"Could not read Pipefy config file at {USER_CONFIG_PATH}: {exc}. "
-            f"See {DOCS_SETUP_REF} for the expected format."
+            f"See {DOCS_QUICKSTART_REF} for the expected format."
         )
         raise ValueError(msg) from exc
     section = data.get("pipefy")
@@ -144,12 +144,12 @@ def ensure_public_graphql_configured(pipefy: PipefySettings) -> None:
     """Ensure GraphQL URL is present before building a client.
 
     Raises:
-        ValueError: With pointer to ``docs/setup.md``.
+        ValueError: With pointer to ``docs/quickstart.md``.
     """
     if _is_missing(pipefy.graphql_url):
         msg = (
             "PIPEFY_GRAPHQL_URL is required (or pass --graphql-url). "
-            f"See {DOCS_SETUP_REF} for environment variables."
+            f"See {DOCS_QUICKSTART_REF} for environment variables."
         )
         raise ValueError(msg)
 

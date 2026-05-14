@@ -1,6 +1,6 @@
 # Contributing
 
-Development setup for people working on the Pipefy MCP server itself. If you only want to **use** the server in your MCP client, see [Setup](setup.md) — you do not need to clone this repo.
+Development setup for people working on the Pipefy MCP server itself. If you only want to **use** the server in your MCP client, see [Quickstart](quickstart.md) — you do not need to clone this repo.
 
 | Section | What it covers |
 |---------|------------------|
@@ -11,7 +11,7 @@ Development setup for people working on the Pipefy MCP server itself. If you onl
 | [Unit tests](#unit-tests) | `uv run pytest -m "not integration"` |
 | [Manual MCP testing](#manual-mcp-testing) | Cursor MCP, MCP Inspector |
 | [Bootstrap script](#bootstrap-script) | One-shot `./bootstrap.sh` |
-| [Release process](#release-process) | Tag bumps and `docs/setup.md` |
+| [Release process](#release-process) | Tag bumps and `docs/quickstart.md` |
 
 ---
 
@@ -49,7 +49,13 @@ Runtime settings come from **`pipefy_mcp.settings.Settings`** ([Pydantic Setting
 
 - **`.env`** is read from the **current working directory** when you run `uv run pipefy-mcp-server` from the clone root (or when your MCP client sets `cwd` to the clone).
 - Values already in the **process environment** override entries from `.env`.
-- The same keys work in `.env` and in an MCP client's `env` block — see [Environment variables](setup.md#environment-variables).
+- The same keys work in `.env` and in an MCP client's `env` block — see [Environment variables](quickstart.md#environment-variables).
+
+### Dev-only env overrides
+
+User-facing keys (required and optional) live in [`docs/quickstart.md` → Environment variables](quickstart.md#environment-variables). The only key meant strictly for local development is:
+
+- **`PIPEFY_ALLOW_INSECURE_URLS=true`** — allow `http://` and internal hosts for GraphQL / OAuth / internal API / webhooks. **Never enable in production**; credentials must not leave HTTPS. Off by default.
 
 ---
 
@@ -77,7 +83,7 @@ Integration tests (`-m integration`) call the live Pipefy GraphQL API and need a
 
 ## Manual MCP testing
 
-Point your MCP client at the local clone instead of the published flow in [Setup](setup.md). Use this config (replace the absolute path with your clone path):
+Point your MCP client at the local clone instead of the published flow in [Quickstart](quickstart.md). Use this config (replace the absolute path with your clone path):
 
 ```json
 {
@@ -126,4 +132,4 @@ On Windows without Git Bash, run the [Clone and install](#clone-and-install) and
 
 ## Release process
 
-When cutting a new tag, **bump the `@vX.Y.Z` references in [`docs/setup.md`](setup.md)** so end-user examples pin to the latest release. The doc currently pins to `v0.1.0`; grep for `@v` under `docs/setup.md` to find every occurrence.
+When cutting a new tag, **bump the `@vX.Y.Z` references in [`docs/quickstart.md`](quickstart.md)** so end-user examples pin to the latest release. The doc currently pins to `v0.1.0`; grep for `@v` under `docs/quickstart.md` to find every occurrence.

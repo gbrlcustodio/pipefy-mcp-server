@@ -19,7 +19,7 @@ When the optional environment variable **`PIPEFY_SERVICE_ACCOUNT_IDS`** is set t
 - **`remove_member_from_pipe`** — Removal is **blocked** if any requested `user_id` is in that list. The tool returns an error explaining that removing the service account would break write operations for the pipe; use the Pipefy UI if removal is intentional. If the env var is unset or empty, this check is skipped.
 - **`set_role`** — If `member_id` is a listed service account ID, the mutation still runs (role changes are reversible), but the success payload may include a **warning** reminding you to keep a role that preserves write permissions.
 
-Configure IDs in the MCP client's `env:` block (see [Environment variables](../setup.md#environment-variables); full key reference in [`.env.example`](../../.env.example)). Omit the variable when you do not need this guard.
+Configure IDs in the MCP client's `env:` block (see [Environment variables](../quickstart.md#environment-variables)). Omit the variable when you do not need this guard.
 
 ## Email tools
 

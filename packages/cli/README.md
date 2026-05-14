@@ -4,7 +4,7 @@ Typer-based CLI for Pipefy. Consumes **`pipefy-ai-sdk`** for GraphQL calls.
 
 Install via the workspace root (`uv sync`) or build this package's wheel from the repo.
 
-See the repository **`README.md`** and **`docs/setup.md`** for `PIPEFY_*` environment variables (same as `pipefy-mcp-server`).
+See the repository **`README.md`** and **`docs/quickstart.md`** for `PIPEFY_*` environment variables (same as `pipefy-mcp-server`).
 
 Example:
 

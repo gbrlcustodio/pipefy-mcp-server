@@ -10,7 +10,7 @@ from pipefy_sdk import (
     PipefySettings,
 )
 
-from pipefy_cli._docs import DOCS_SETUP_REF
+from pipefy_cli._docs import DOCS_QUICKSTART_REF
 from pipefy_cli.config import (
     describe_missing_oauth_vars,
     ensure_public_graphql_configured,
@@ -89,7 +89,7 @@ def get_authenticated_client(
     if missing_msg:
         typer.echo(
             f"Missing OAuth configuration ({missing_msg}). "
-            f"Use --token or PIPEFY_TOKEN for a bearer token, or set OAuth per {DOCS_SETUP_REF}.",
+            f"Use --token or PIPEFY_TOKEN for a bearer token, or set OAuth per {DOCS_QUICKSTART_REF}.",
             err=True,
         )
         raise typer.Exit(2)

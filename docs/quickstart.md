@@ -1,10 +1,9 @@
-# Setup
+# Quickstart
 
-Single entry point for **end-user install** of the Pipefy MCP server in your editor or AI client. Three steps: install `uv`, create a Pipefy service account, and paste a JSON block into your MCP client. No clone required.
+End-user install of the Pipefy MCP server in your editor or AI client. Three steps: install `uv`, create a Pipefy service account, and paste a JSON block into your MCP client. No clone required.
 
 | Section | What it covers |
 |--------|------------------|
-| [Quick start](#quick-start) | The three steps end-to-end |
 | [Create a Pipefy service account](#create-a-pipefy-service-account) | Admin panel walkthrough, Client ID / Secret / Token URL |
 | [MCP client setup](#mcp-client-setup) | Cursor, Claude Desktop, Claude Code; upgrading the pinned tag |
 | [Environment variables](#environment-variables) | Required and optional `PIPEFY_*` keys |
@@ -14,13 +13,15 @@ Single entry point for **end-user install** of the Pipefy MCP server in your edi
 
 ---
 
-## Quick start
-
-1. **Install [`uv`](https://docs.astral.sh/uv/getting-started/installation/)** — Astral's installer detects your OS and drops `uv` (and `uvx`) on `PATH`.
+1. **Install `uv`** — drops `uv` (and `uvx`) on `PATH`:
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+   For other install methods (Homebrew, winget, pipx, Windows PowerShell), see [Astral's installation guide](https://docs.astral.sh/uv/getting-started/installation/).
 2. **[Create a Pipefy service account](#create-a-pipefy-service-account)** and copy the **Client ID**, **Client Secret**, and **Token endpoint URL**.
 3. **[Configure your MCP client](#mcp-client-setup)** — paste the JSON block for your client, fill in the three values from step 2, restart the client, and confirm the `pipefy` server shows healthy.
 
-On Windows, the same flow works in **PowerShell** or **Git Bash** (anywhere `uv` is on `PATH`).
+On Windows, run the same flow in **PowerShell** or **Git Bash** (anywhere `uv` is on `PATH`).
 
 ---
 
@@ -183,15 +184,16 @@ Set these in the MCP client's `env:` block (see [MCP client setup](#mcp-client-s
 | `PIPEFY_OAUTH_CLIENT` | Service account **Client ID**. |
 | `PIPEFY_OAUTH_SECRET` | Service account **Client Secret**. |
 
-The three URL values default to Pipefy's public host (see **[`.env.example`](../.env.example)** for the canonical defaults) and are the same for every customer on the public cloud. Only the two `PIPEFY_OAUTH_*` secrets vary per service account. URLs are **validated at startup** — `localhost` and private hosts are rejected to avoid SSRF unless you set the insecure-dev flags documented in [`.env.example`](../.env.example).
+The three URL values default to Pipefy's public host and are the same for every customer on the public cloud — paste them as shown above. Only the two `PIPEFY_OAUTH_*` secrets vary per service account. URLs are **validated at startup** to reject `localhost` and private hosts (SSRF guard); for development overrides, see [Contributing → Dev-only env overrides](contributing.md#dev-only-env-overrides).
 
 ### Optional
 
 | Key | Default | Effect |
 |-----|---------|--------|
 | `PIPEFY_SERVICE_ACCOUNT_IDS` | _unset_ | Comma-separated Pipefy user IDs treated as service accounts. Enables [Service Account Protection](tools/members-email-webhooks.md#service-account-protection) on `remove_member_from_pipe` / `set_role`, and proactive membership checks in [`validate_ai_agent_behaviors`](tools/automations-and-ai.md#ai-agent-read--delete) for cross-pipe targets. Leave unset to skip the guards. |
-
-All other optional flags (insecure dev URLs, webhooks, introspection cache, etc.) are documented in **[`.env.example`](../.env.example)** as the canonical reference manifest.
+| `PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS` | `5` | Max seconds spent enriching `PERMISSION_DENIED` errors with a membership hint. Lower to skip enrichment faster. |
+| `PIPEFY_GQL_REUSE_FETCHED_GRAPHQL_SCHEMA` | `false` | Cache the introspected GraphQL schema after the first request — trades one-shot freshness for faster subsequent calls. |
+| `PIPEFY_DEFAULT_WEBHOOK_NAME` | `Pipefy Webhook` | Name applied to new webhooks when the tool call omits one. |
 
 ---
 

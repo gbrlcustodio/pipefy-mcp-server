@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from pipefy_sdk import PipefySettings
 
+from pipefy_cli._docs import DOCS_QUICKSTART_REF
 from pipefy_cli.auth import get_authenticated_client
 from pipefy_cli.main import app
 
@@ -51,7 +52,7 @@ def test_missing_graphql_exits_2_cli(clean_pipefy_env, saved_cwd, runner):
     result = runner.invoke(app, ["card", "get", "123"])
     assert result.exit_code == 2
     combined = (result.stderr or "") + (result.stdout or "")
-    assert "docs/setup.md" in combined
+    assert DOCS_QUICKSTART_REF in combined
 
 
 def test_missing_oauth_exits_2_cli(clean_pipefy_env, saved_cwd, monkeypatch, runner):
@@ -62,7 +63,7 @@ def test_missing_oauth_exits_2_cli(clean_pipefy_env, saved_cwd, monkeypatch, run
     result = runner.invoke(app, ["card", "get", "123"])
     assert result.exit_code == 2
     combined = (result.stderr or "") + (result.stdout or "")
-    assert "docs/setup.md" in combined
+    assert DOCS_QUICKSTART_REF in combined
 
 
 def test_cli_uses_pipefy_token_env_when_no_flag(

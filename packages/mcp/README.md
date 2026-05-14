@@ -1,7 +1,45 @@
 # pipefy-mcp-server
 
-MCP server package for Pipefy. See the [repository README](../../README.md) for installation, configuration, and tool documentation.
+MCP server for Pipefy — **128 tools** for AI agents (Cursor, Claude Desktop, Claude Code, and any MCP-compatible client). Depends on [`pipefy-sdk`](../sdk/README.md) for all GraphQL and API logic.
+
+## Install (pre-launch, v0.1 → v0.5)
+
+```sh
+uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-mcp-server
+```
+
+> At v1.0 this moves to `uvx pipefy-mcp-server` from PyPI.
+
+## Configuration
+
+Set the following environment variables (or add to a `.env` file in your working directory):
+
+```env
+PIPEFY_OAUTH_CLIENT=your_client_id
+PIPEFY_OAUTH_SECRET=your_client_secret
+PIPEFY_GRAPHQL_URL=https://api.pipefy.com/graphql
+PIPEFY_OAUTH_URL=https://auth.pipefy.com/...
+PIPEFY_INTERNAL_API_URL=https://app.pipefy.com/graphql
+```
+
+Full guide: [`docs/setup.md`](../../docs/setup.md).
+
+## MCP client setup (Cursor, Claude Desktop)
+
+Step-by-step JSON samples live in [`docs/setup.md#mcp-client-setup`](../../docs/setup.md#mcp-client-setup).
+
+## Tools
+
+128 tools across nine domains — see the root [`README.md`](../../README.md#mcp-tools) for the full table with per-area links.
 
 ## Development
 
-From the **repository root**, run `uv sync --all-packages --dev` (or `uv sync`) so workspace members (`pipefy-sdk`, this package) resolve correctly. Then run tests with `uv run pytest packages/mcp/tests` from the root, or `cd packages/mcp && uv run pytest tests/` after sync—the MCP package’s pytest config adds `packages/sdk/tests` on `pythonpath` so `_shared` live-credential helpers resolve without installing a separate test bundle.
+From the **repository root**:
+
+```bash
+uv sync
+uv run pytest packages/mcp/tests     # MCP tests in isolation
+uv run ruff check packages/mcp/src   # lint
+```
+
+See the root [`README.md`](../../README.md) and [`AGENTS.md`](../../AGENTS.md) for contributor guidance.

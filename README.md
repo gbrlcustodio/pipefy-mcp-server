@@ -7,128 +7,135 @@
 </div>
 
 <p align="center">
-  <a href="https://github.com/gbrlcustodio/pipefy-mcp-server/actions"><img src="https://github.com/gbrlcustodio/pipefy-mcp-server/workflows/CI/badge.svg" alt="CI Status" /></a>
+  <a href="https://github.com/<owner>/pipefy-labs/actions"><img src="https://github.com/<owner>/pipefy-labs/workflows/CI/badge.svg" alt="CI Status" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11%2B-blue.svg" alt="Python 3.11+" /></a>
   <a href="https://github.com/astral-sh/uv"><img src="https://img.shields.io/badge/uv-package%20manager-blueviolet" alt="uv package manager" /></a>
   <a href="https://modelcontextprotocol.io/introduction"><img src="https://img.shields.io/badge/MCP-Server-orange" alt="MCP Server" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
 </p>
 
-**Open-source MCP for Pipefy** — **128 tools** for pipes, cards, tables, relations, automations, AI, observability and more. Alpha · built in public — [feedback & issues](https://github.com/gbrlcustodio/pipefy-mcp-server/issues) or **dev@pipefy.com**
+**pipefy-labs** — open-source tools for Pipefy developers: an **MCP server** (128 tools for AI agents), a **CLI** (`pipefy` command for humans and scripts), and an **agent skills catalog** (`skills/`). Built in public — [feedback & issues](https://github.com/<owner>/pipefy-labs/issues) or **dev@pipefy.com**
 
-
-> **Disclaimer:** Community project for developer workflows — not Pipefy’s official or supported integration for external enterprise use.
+> **Disclaimer:** Community project for developer workflows — not Pipefy's official or supported integration for external enterprise use.
 
 ## Table of contents
 <p align="center">
+  <a href="#install">Install</a> •
+  <a href="#whats-in-this-repo">What's in this repo</a> •
   <a href="#mcp-tools">MCP tools</a> •
-  <a href="#getting-started">Getting started</a> •
-  <a href="#why-these-dependencies">Why these dependencies?</a> •
-  <a href="#mcp-clients">MCP clients</a> •
+  <a href="#skills">Skills</a> •
   <a href="#development--testing">Development & Testing</a> •
-  <a href="docs/tools/cross-cutting.md">Cross-cutting</a> •
   <a href="#contributing">Contributing</a>
 </p>
 
 ---
 
+## Install
+
+### Pre-launch (v0.1 → v0.5) — install from git
+
+> **These commands are temporary.** At v1.0 the canonical install moves to PyPI.
+
+**MCP server** (for Cursor, Claude Desktop, etc.):
+
+```sh
+uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-mcp-server
+```
+
+**CLI** (for scripts, shell automation, agent workflows):
+
+```sh
+uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-cli
+```
+
+Or install both permanently with `uv tool install`:
+
+```sh
+uv tool install "pipefy-mcp-server @ git+https://github.com/<owner>/pipefy-labs"
+uv tool install "pipefy-cli @ git+https://github.com/<owner>/pipefy-labs"
+```
+
+### Post-v1.0 — install from PyPI
+
+```sh
+# MCP server
+uvx pipefy-mcp-server
+
+# CLI (install once and use anywhere)
+uv tool install pipefy-cli
+```
+
+**Setup, env vars, and MCP client config:** see **[docs/setup.md](docs/setup.md)** for first-time install, Pydantic / `.env` precedence, and Cursor / Claude Desktop examples.
+
+---
+
+## What's in this repo
+
+A **uv workspace** with three packages and a skills catalog. See [ADR 0003](.cursor/dev-planning/specs/pipefy-labs/decisions/0003-monorepo-package-taxonomy.md) for the vocabulary behind this layout.
+
+| Path | Distribution name | Role |
+|------|-------------------|------|
+| [`packages/sdk/`](packages/sdk/) | `pipefy-sdk` | **Vendor API SDK** — GraphQL transport, services, queries, Pydantic models. Required by MCP and CLI. [README](packages/sdk/README.md) |
+| [`packages/mcp/`](packages/mcp/) | `pipefy-mcp-server` | **MCP adapter** — 128 tools for AI agents (Cursor, Claude, etc.). Depends on `pipefy-sdk`. [README](packages/mcp/README.md) |
+| [`packages/cli/`](packages/cli/) | `pipefy-cli` | **CLI** — `pipefy` command for humans and scripts. Depends on `pipefy-sdk`. [README](packages/cli/README.md) |
+| [`skills/`](skills/) | — | **Agent skills catalog** — Anthropic Skills-format playbooks for common Pipefy workflows. [Browse skills](skills/README.md) |
+
+---
+
 ## MCP tools
 
-The server exposes **128 tools**, grouped below into **nine** surface areas. Canonical names live in `PIPEFY_TOOL_NAMES` (`packages/mcp/src/pipefy_mcp/tools/registry.py`).
+The server exposes **128 tools**, grouped by domain. Canonical names live in `PIPEFY_TOOL_NAMES` (`packages/mcp/src/pipefy_mcp/tools/registry.py`).
 
-**Documentation for agents:** each tool’s description and `Args:` come from its Python docstring—MCP clients show that text to LLMs for routing. Use the docstrings (and the per-area docs linked in the table) as the authority on parameters and edge cases.
+**Documentation for agents:** each tool's description and `Args:` come from its Python docstring — MCP clients show that text to LLMs for routing. Per-area docs below are the authority on parameters and edge cases.
 
-**Cross-cutting behavior**
-
-Rules that apply to many tools (pagination, IDs, `debug`, `extra_input`, two-step deletes, permissions, introspection, error shape, and more) live in **[`docs/tools/cross-cutting.md`](docs/tools/cross-cutting.md)**. That page also notes **dependents** on destructive previews when optional scope args (e.g. `pipe_id` / `phase_id`) are used. Per-tool parameters stay in docstrings and the category links below.
+**Cross-cutting behavior** (pagination, IDs, `debug`, `extra_input`, two-step deletes, permissions, error shape) lives in **[`docs/tools/cross-cutting.md`](docs/tools/cross-cutting.md)**.
 
 | Category | Tools | Description | Docs |
 |----------|:-----:|-------------|------|
-| **Pipes & cards** | 37 | Pipes, phases, fields, labels, cards, field conditions, and card-level attachments—read/write/delete as documented per tool (card-to-card relation list/delete live under **Relations**). | [Details](docs/tools/pipes-and-cards.md) |
-| **Database tables** | 17 | Tables, records (rows), schema columns (table fields), org-wide table discovery, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
-| **Relations** | 8 | Pipe relations, table relations by ID, card links, list/delete card-level relations. | [Details](docs/tools/relations.md) |
-| **Reports** | 17 | Pipe and organization reports: discovery, CRUD, single pipe report read, and async exports. | [Details](docs/tools/reports.md) |
-| **Automations & AI** | 22 | Traditional automations (rules engine), AI automations, and AI agents, with pre-flight validators for safer writes. | [Details](docs/tools/automations-and-ai.md) |
-| **Observability** | 10 | AI agent and automation logs, usage stats, credits, job exports, status polling, and CSV fetch for finished exports. | [Details](docs/tools/observability.md) |
-| **Members, email & webhooks** | 11 | Pipe membership, card inbox emails, webhooks (list/update/create/delete), and transactional email sends. | [Details](docs/tools/members-email-webhooks.md) |
+| **Pipes & cards** | 37 | Pipes, phases, fields, labels, cards, field conditions, and card-level attachments. | [Details](docs/tools/pipes-and-cards.md) |
+| **Database tables** | 17 | Tables, records, schema columns, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
+| **Relations** | 8 | Pipe relations, table relations, card links, list/delete card-level relations. | [Details](docs/tools/relations.md) |
+| **Reports** | 17 | Pipe and organization reports: discovery, CRUD, single read, and async exports. | [Details](docs/tools/reports.md) |
+| **Automations & AI** | 22 | Traditional automations, AI automations, AI agents, and pre-flight validators. | [Details](docs/tools/automations-and-ai.md) |
+| **Observability** | 10 | Agent and automation logs, usage stats, credits, job exports, status polling. | [Details](docs/tools/observability.md) |
+| **Members, email & webhooks** | 11 | Pipe membership, card inbox emails, webhooks (list/update/create/delete). | [Details](docs/tools/members-email-webhooks.md) |
 | **Organization** | 1 | Fetch organization details (plan, members, pipes count). | [Details](docs/tools/organization.md) |
 | **Introspection** | 5 | Schema discovery, depth-controlled type resolution, and raw GraphQL execution. | [Details](docs/tools/introspection.md) |
 
 ---
 
-## Repository structure
+## Skills
 
-This repository is a **uv workspace** (see the root [`pyproject.toml`](pyproject.toml)). Members:
+`skills/` contains **Anthropic Skills-format** playbooks: one Markdown file per workflow describing tools needed, sequence, and success criteria. Any agent that reads files (Claude Code, Cursor, Codex) can use them.
 
-| Directory | PyPI / distribution name | Purpose |
-|-----------|--------------------------|---------|
-| [`packages/sdk/`](packages/sdk/) | `pipefy-sdk` | GraphQL client, services, queries, and shared Pydantic models consumed by the MCP server (and, later, the CLI). |
-| [`packages/mcp/`](packages/mcp/) | `pipefy-mcp-server` | The installable MCP server and `pipefy_mcp` package. |
-| [`packages/cli/`](packages/cli/) | `pipefy-cli` (placeholder) | Reserved for the future Typer-based `pipefy` CLI. |
+```sh
+# Show all bundled skills
+pipefy skills list
+
+# Print a skill to stdout (pipe to clipboard, less, or agent context)
+pipefy skills show pipes-and-cards
+```
+
+Browse the full catalog in [`skills/README.md`](skills/README.md). Contribution guide: [`skills/CONTRIBUTING.md`](skills/CONTRIBUTING.md).
 
 ---
 
-## Getting Started
-
-### Prerequisites
-- Python 3.11+
-- A **Pipefy Service Account Token** (Generate in Admin Panel > Service Accounts).
-
-Remember to add the service account to the pipe you want the AI to use.
-
-### Installation
-We recommend using `uv` for dependency management. Ensure it's [installed](https://docs.astral.sh/uv/getting-started/installation/#__tabbed_1_1).
-
-```sh
-# Clone the repository
-git clone https://github.com/gbrlcustodio/pipefy-mcp-server.git
-cd pipefy-mcp-server
-
-# Sync dependencies
-uv sync
-
-# Optional: copy template and edit (full guide: docs/setup.md)
-cp .env.example .env
-```
-
-**Setup, env vars, and MCP client JSON:** use **[Setup](docs/setup.md)** — single doc for first-time install, Pydantic / `.env` precedence, and Cursor / Claude examples (keys in [`.env.example`](.env.example)). Optional: `./bootstrap.sh` runs `uv sync` and creates `.env` from `.env.example` if missing.
-
-### Why these dependencies?
-
-The runtime stack in [`pyproject.toml`](pyproject.toml) is small on purpose. GraphQL, OAuth transport, and spreadsheet parsing for exports live in the **`pipefy-sdk`** workspace dependency ([`packages/sdk/pyproject.toml`](packages/sdk/pyproject.toml)). For a longer rationale (code references and security notes), see **[Dependencies](docs/dependencies.md)**. Summary:
-
-| Package | Role in this server |
-|--------|---------------------|
-| **pipefy-sdk** | Shared GraphQL stack (`gql` + `httpx`), Pipefy OAuth (`httpx-auth`), models, and service layer used by MCP tools. |
-| **httpx** | Direct async HTTP used by MCP tools (e.g. attachment flows) alongside the SDK’s GraphQL transport. |
-| **mcp** | Model Context Protocol server runtime (`FastMCP`, tool registration). |
-
-## MCP clients
-
-Step-by-step JSON samples and CLI examples are in **[Setup → MCP client setup](docs/setup.md#mcp-client-setup)**.
-
-| Client | Section |
-|--------|---------|
-| **Cursor** | [Cursor](docs/setup.md#cursor) |
-| **Claude Desktop** | [Claude Desktop](docs/setup.md#claude-desktop) |
-| **Claude Code** | [Claude Code](docs/setup.md#claude-code) |
-
 ## Development & Testing
 
-### Running Tests
+### Running tests
 
 ```bash
-# Run all tests
-uv run pytest
-
-# Run with coverage report
+uv run pytest                                                   # all tests
+uv run pytest -m "not integration"                              # unit tests only
+uv run pytest -m integration -v                                 # live API tests
 uv run pytest --cov=packages/sdk/src/pipefy_sdk --cov-report=term-missing
+```
 
-# Integration tests (requires .env with PIPEFY_* OAuth settings)
-uv run pytest -m integration -v
+### Code quality
 
-# Attachment upload live tests (optional IDs — see packages/mcp/tests/tools/test_attachment_tools_live.py)
-# uv run pytest packages/mcp/tests/tools/test_attachment_tools_live.py -m integration -v
+```bash
+uv run ruff check .      # lint all packages
+uv run ruff format .     # format all packages
 ```
 
 ### MCP Inspector
@@ -137,23 +144,19 @@ uv run pytest -m integration -v
 npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server
 ```
 
-### Code Quality
+### Adding a new MCP tool
 
-```bash
-# Lint code
-uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src
+1. Implement in `packages/mcp/src/pipefy_mcp/tools/` and call its `*Tools.register(...)` from `ToolRegistry.register_tools()`.
+2. Add the **exact tool name** to `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py`.
+3. Following the parity rule, also expose a matching CLI command in `packages/cli/src/pipefy_cli/commands/` (or record a deferral in `docs/parity.md`).
 
-# Format code
-uv run ruff format packages/sdk/src packages/mcp/src packages/cli/src
-```
-
-### Adding or renaming an MCP tool
-
-1. Implement the tool in the appropriate module under `packages/mcp/src/pipefy_mcp/tools/` and call its `*Tools.register(...)` from `ToolRegistry.register_tools()` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py) if it is not already wired.
-2. Add the **exact tool name** (as exposed to MCP clients) to **`PIPEFY_TOOL_NAMES`** in the same file. The server uses that set for collision checks at startup and for cleanup after a failed registration; `packages/mcp/tests/test_server.py` also asserts the live tool list matches this set.
+---
 
 ## Contributing
+
 We are building this in public and we need your feedback!
 
-- **Field mapping:** If you encounter a complex field type that the Agent doesn't fill correctly, please open an issue.
-- **New tools:** What other Pipefy actions would improve your workflow? Feel free to open an issue or a PR explaining what it is and how you would use it.
+- **Field mapping:** If you encounter a complex field type that the agent doesn't fill correctly, please open an issue.
+- **New tools:** What other Pipefy actions would improve your workflow? Open an issue or a PR.
+- **New skills:** Markdown-only — no Python or test infrastructure required. See [`skills/CONTRIBUTING.md`](skills/CONTRIBUTING.md).
+- **Existing MCP users:** see [`docs/MIGRATION.md`](docs/MIGRATION.md) — your config keeps working.

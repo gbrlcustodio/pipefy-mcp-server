@@ -1,25 +1,72 @@
 # pipefy-cli
 
-Typer-based CLI for Pipefy. Consumes **`pipefy-sdk`** for GraphQL calls.
+Typer-based CLI for Pipefy. Exposes all MCP tool capabilities as terminal commands and scripts. Depends on [`pipefy-sdk`](../sdk/README.md) for GraphQL calls.
 
-Install via the workspace root (`uv sync`) or build this package's wheel from the repo.
+## Install (pre-launch, v0.1 → v0.5)
 
-See the repository **`README.md`** and **`docs/setup.md`** for `PIPEFY_*` environment variables (same as `pipefy-mcp-server`).
-
-Example:
-
-```bash
-PIPEFY_GRAPHQL_URL=https://api.pipefy.com/graphql \\
-PIPEFY_OAUTH_URL=… PIPEFY_OAUTH_CLIENT=… PIPEFY_OAUTH_SECRET=… \\
-pipefy card get 12345 --json
+```sh
+uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-cli
 ```
 
-Bearer tokens: prefer `PIPEFY_TOKEN` over `--token` so secrets do not appear in shell history or process listings.
+> At v1.0 this moves to `uv tool install pipefy-cli` from PyPI.
 
-## Development
+## Quick start
 
-Dependencies use `typer>=0.12` (no `typer[all]` extra): Rich, shellingham, and click are pulled in by Typer itself, so do not re-add `[all]` hoping to "fix" completion.
+```bash
+# Show all commands
+pipefy --help
+
+# Card operations
+pipefy card get 12345 --json
+pipefy card list --pipe 67890
+pipefy card create --pipe 67890 --title "New card"
+
+# Skills catalog
+pipefy skills list
+pipefy skills show pipes-and-cards | pbcopy
+```
+
+## Configuration
+
+Same `PIPEFY_*` environment variables as `pipefy-mcp-server` (`.env` in CWD is loaded automatically):
+
+```env
+PIPEFY_OAUTH_CLIENT=your_client_id
+PIPEFY_OAUTH_SECRET=your_client_secret
+PIPEFY_GRAPHQL_URL=https://api.pipefy.com/graphql
+PIPEFY_OAUTH_URL=https://auth.pipefy.com/...
+```
+
+Full guide: [`docs/setup.md`](../../docs/setup.md).
+
+Use `PIPEFY_TOKEN` (or `--token`) for a direct bearer token instead of OAuth.
+
+## Output modes
+
+Every command defaults to **Rich-formatted** human output. Add `--json` for machine-readable JSON to stdout.
+
+```bash
+pipefy card get 12345 --json | jq '.title'
+```
+
+## Parity with MCP
+
+Every MCP tool has a CLI counterpart (or a tracked deferral). See [`docs/parity.md`](../../docs/parity.md) for the full matrix.
 
 ## Shell completion
 
-Typer adds `--install-completion` and `--show-completion`. With a normal TTY, `pipefy --install-completion` detects your shell (via shellingham). For a **named shell** (CI, scripts, or when you want no process-tree scan), set `_TYPER_COMPLETE_TEST_DISABLE_SHELL_DETECTION=1` so the CLI accepts `--install-completion bash` or `zsh` and writes the usual Typer paths (`~/.bash_completions/pipefy.sh` + `~/.bashrc` for bash; `~/.zfunc/_pipefy` + `~/.zshrc` for zsh). Automated checks live in `packages/cli/tests/test_completion.py`.
+```bash
+pipefy --install-completion bash    # or zsh, fish, etc.
+```
+
+## Development
+
+From the **repository root**:
+
+```bash
+uv sync
+uv run pytest packages/cli/tests     # CLI tests
+uv run ruff check packages/cli/src   # lint
+```
+
+See [`AGENTS.md`](../../AGENTS.md) and [`CLAUDE.md`](../../CLAUDE.md) for contributor guidance.

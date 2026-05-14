@@ -20,7 +20,7 @@ from pipefy_cli.config import resolve_pipefy_settings
 
 app = typer.Typer(
     name="pipefy",
-    help="Pipefy CLI (GraphQL via pipefy-ai-sdk).",
+    help="Pipefy CLI (GraphQL via pipefy-sdk).",
     no_args_is_help=True,
 )
 

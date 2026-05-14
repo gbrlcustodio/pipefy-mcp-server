@@ -1,6 +1,6 @@
 # pipefy-cli
 
-Typer-based CLI for Pipefy. Consumes **`pipefy-ai-sdk`** for GraphQL calls.
+Typer-based CLI for Pipefy. Consumes **`pipefy-sdk`** for GraphQL calls.
 
 Install via the workspace root (`uv sync`) or build this package's wheel from the repo.
 
@@ -15,6 +15,10 @@ pipefy card get 12345 --json
 ```
 
 Bearer tokens: prefer `PIPEFY_TOKEN` over `--token` so secrets do not appear in shell history or process listings.
+
+## Development
+
+Dependencies use `typer>=0.12` (no `typer[all]` extra): Rich, shellingham, and click are pulled in by Typer itself, so do not re-add `[all]` hoping to "fix" completion.
 
 ## Shell completion
 

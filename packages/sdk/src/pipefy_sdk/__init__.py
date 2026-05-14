@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+__version__ = "0.1.0"
+
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
 from pipefy_sdk.models import (
@@ -43,6 +45,7 @@ from pipefy_sdk.services.types import AiAgentGraphPayload, CardSearch, copy_card
 from pipefy_sdk.settings import PipefySettings
 
 __all__ = [
+    "__version__",
     "AiAgentGraphPayload",
     "AiAutomationService",
     "UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS",

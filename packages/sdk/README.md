@@ -1,4 +1,4 @@
-# pipefy-ai-sdk
+# pipefy-sdk
 
 GraphQL client, Pydantic models, and service layer shared by the Pipefy MCP server and CLI.
 

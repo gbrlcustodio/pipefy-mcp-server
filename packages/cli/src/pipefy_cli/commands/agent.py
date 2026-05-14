@@ -168,12 +168,14 @@ def agent_create(
             data_source_ids=validated.data_source_ids,
         )
         await client.update_ai_agent(update_input)
-        return {
+        out: dict[str, Any] = {
             "success": True,
             "agent_uuid": agent_uuid,
             "message": f"AI Agent created and configured successfully. UUID: {agent_uuid}",
-            "preflight": pre,
         }
+        if pre.get("warnings"):
+            out["preflight"] = pre
+        return out
 
     run_cli_command(ctx, json_out, factory)
 
@@ -241,7 +243,9 @@ def agent_update(
         )
         _raise_if_preflight_blocks(pre)
         result = await client.update_ai_agent(validated)
-        return {**result, "preflight": pre}
+        if pre.get("warnings"):
+            return {**result, "preflight": pre}
+        return result
 
     run_cli_command(ctx, json_out, factory)
 
@@ -254,7 +258,7 @@ def agent_delete(
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Delete an AI agent (``delete_ai_agent``)."""
-    confirm_destructive(yes=yes, description=f"AI agent {uuid}", verb="delete")
+    confirm_destructive(yes=yes, description=f"AI agent (UUID: {uuid})", verb="delete")
 
     async def factory(client: PipefyClient):
         return await client.delete_ai_agent(uuid)

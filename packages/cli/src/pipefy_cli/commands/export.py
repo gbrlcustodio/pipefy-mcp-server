@@ -24,7 +24,9 @@ def export_automation_jobs_cmd(
         "--period",
         help="current_month | last_month | last_3_months",
     ),
-    json_out: bool = typer.Option(False, "--json", "-j"),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
 ) -> None:
     """Queue automation jobs export (``export_automation_jobs``)."""
 
@@ -42,7 +44,7 @@ def export_automation_jobs_csv_cmd(
         False,
         "--json",
         "-j",
-        help="When set, print JSON envelope with csv text; default is Rich/JSON of payload.",
+        help="Print JSON envelope with CSV text; default is Rich table output.",
     ),
 ) -> None:
     """Download finished export as CSV text (``get_automation_jobs_export_csv``)."""

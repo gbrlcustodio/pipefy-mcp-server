@@ -211,10 +211,10 @@ def ai_automation_update(
         help="JSON array of output field ids (for pre-flight + patch).",
     ),
     name: str | None = typer.Option(None, "--name", "-n"),
-    patch_active: str | None = typer.Option(
+    patch_active: bool | None = typer.Option(
         None,
-        "--patch-active",
-        help="Set to 'true' or 'false' to change the enabled flag; omit to leave unchanged.",
+        "--patch-active/--no-patch-active",
+        help="Toggle the enabled flag; omit both flags to leave unchanged.",
     ),
     skills_ids: str | None = typer.Option(None, "--skills-ids"),
     event_params: str | None = typer.Option(None, "--event-params"),
@@ -239,13 +239,6 @@ def ai_automation_update(
             raise typer.BadParameter("--skills-ids must be a JSON array of strings")
         skills = list(skills_raw)
 
-    active_val: bool | None = None
-    if patch_active is not None:
-        low = patch_active.strip().lower()
-        if low not in ("true", "false"):
-            raise typer.BadParameter("--patch-active must be 'true' or 'false'")
-        active_val = low == "true"
-
     async def factory(client: PipefyClient):
         _require_ai_automation(client)
         row = await client.get_automation(automation_id)
@@ -264,7 +257,7 @@ def ai_automation_update(
             kwargs_u: dict[str, Any] = {
                 "automation_id": str(automation_id).strip(),
                 "name": name.strip() if name else None,
-                "active": active_val,
+                "active": patch_active,
                 "prompt": prompt,
                 "field_ids": fids,
                 "skills_ids": skills,

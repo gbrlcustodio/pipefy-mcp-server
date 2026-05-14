@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import typer
-from pipefy_sdk import PipefyClient, PipefySettings
+from pipefy_sdk import (
+    AiAutomationService,
+    InternalApiClient,
+    PipefyClient,
+    PipefySettings,
+)
 
 from pipefy_cli._docs import DOCS_SETUP_REF
 from pipefy_cli.config import (
@@ -12,6 +17,8 @@ from pipefy_cli.config import (
 )
 
 _cached_signature: tuple[object, ...] | None = None
+# One-shot CLIs reuse this; long-lived programmatic use should call
+# ``clear_authenticated_client_cache`` between logical sessions (tests reset via fixture).
 _cached_client: PipefyClient | None = None
 
 
@@ -88,6 +95,15 @@ def get_authenticated_client(
         raise typer.Exit(2)
 
     client = PipefyClient(pipefy_settings)
+    internal_client = InternalApiClient(
+        url=pipefy_settings.internal_api_url,
+        oauth_url=pipefy_settings.oauth_url,
+        oauth_client=pipefy_settings.oauth_client,
+        oauth_secret=pipefy_settings.oauth_secret,
+        allow_insecure_urls=pipefy_settings.allow_insecure_urls,
+    )
+    client.set_internal_api_client(internal_client)
+    client.set_ai_automation_service(AiAutomationService(client=internal_client))
     _cached_signature = key
     _cached_client = client
     return client

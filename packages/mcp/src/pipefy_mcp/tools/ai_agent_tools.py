@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
-    BehaviorInput,
     CreateAiAgentInput,
     PipefyClient,
     PipefyId,
@@ -16,6 +13,7 @@ from pipefy_sdk import (
 from pipefy_sdk.ai_phase_transition_validation import (
     collect_ai_behavior_move_transition_problems,
 )
+from pipefy_sdk.ai_preflight import validate_ai_agent_behaviors_sdk
 from pydantic import ValidationError
 
 from pipefy_mcp.settings import settings
@@ -45,12 +43,6 @@ from pipefy_mcp.tools.graphql_error_helpers import (
 )
 
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30
-MEMBERSHIP_CHECK_TIMEOUT_SECONDS = 5
-# Defense in depth: cross-pipe field validation is N targets × one GraphQL get_pipe;
-# a caller could otherwise submit huge behavior lists referencing many distinct pipes.
-MAX_CROSS_PIPE_FIELD_FETCH = 100
-# Caller-derived; cap avoids pathological payloads and unbounded gather width.
-_MAX_CROSS_PIPE_FETCH_TARGETS = 100
 
 
 _RECORD_NOT_SAVED_PATTERN = "RECORD_NOT_SAVED"
@@ -87,33 +79,6 @@ def _extract_pipe_id_from_behaviors(behaviors: list[dict]) -> str | None:
             if pid:
                 return str(pid)
     return None
-
-
-def _behavior_input_validation_problems(exc: ValidationError) -> list[str]:
-    """Turn ``BehaviorInput`` validation errors into short, actionable strings."""
-
-    def _targets_name_field(err: dict) -> bool:
-        loc = err.get("loc") or ()
-        return bool(loc) and loc[-1] == "name"
-
-    raw_errors = exc.errors()
-    problems: list[str] = []
-
-    if any(_targets_name_field(e) for e in raw_errors):
-        problems.append(
-            "Each behavior must include `name` (non-blank display name). "
-            "Match create_ai_agent: `event_id` or `eventId`, plus `actionParams` with "
-            "`aiBehaviorParams.instruction` and at least one entry in `actionsAttributes`."
-        )
-
-    for e in raw_errors:
-        if _targets_name_field(e):
-            continue
-        loc = e.get("loc") or ()
-        path = " -> ".join(str(p) for p in loc) if loc else "behavior"
-        problems.append(f"{path}: {e.get('msg', 'validation error')}")
-
-    return problems if problems else [str(exc)]
 
 
 class AiAgentTools:
@@ -637,188 +602,29 @@ class AiAgentTools:
                     are reported in ``problems``. When ``False``, they appear in ``warnings`` only.
             """
             pid = str(pipe_id).strip()
+            await ctx.debug(
+                f"validate_ai_agent_behaviors: pipe_id={pid}, "
+                f"behaviors_count={len(behaviors)}"
+            )
             if not pid:
                 return build_ai_tool_error("pipe_id must not be blank")
 
-            try:
-                behaviors_expanded = expand_behaviors_placeholders(behaviors)
-            except ValueError as exc:
-                return {
-                    "success": True,
-                    "valid": False,
-                    "problems": [str(exc)],
-                    "warnings": [],
-                    "message": "Behavior placeholder expansion failed.",
-                }
-
-            # Pydantic structural validation
-            try:
-                for b in behaviors_expanded:
-                    BehaviorInput.model_validate(b)
-            except ValidationError as exc:
-                return {
-                    "success": True,
-                    "valid": False,
-                    "problems": _behavior_input_validation_problems(exc),
-                    "warnings": [],
-                    "message": "Behavior dicts failed structural validation (BehaviorInput).",
-                }
-
-            behaviors = behaviors_expanded
-
-            try:
-                (
-                    field_ids,
-                    phase_ids,
-                    related_pipe_ids,
-                ) = await fetch_pipe_validation_context(
-                    client, pid, timeout=VALIDATE_FETCH_TIMEOUT_SECONDS
-                )
-            except asyncio.TimeoutError:
-                return build_ai_tool_error(
-                    f"Timed out fetching pipe {pid} after {VALIDATE_FETCH_TIMEOUT_SECONDS}s"
-                )
-            except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(f"Failed to fetch pipe {pid}: {exc}")
-
-            tool_warnings: list[str] = []
-            if related_pipe_ids is None:
-                await ctx.debug(
-                    "Could not fetch pipe relations; skipping relation checks"
-                )
-                tool_warnings.append(
-                    "Could not load pipe relations; create_connected_card pipeId targets "
-                    "were not verified against relations."
-                )
-
-            # Collect target pipe IDs from cross-pipe actions and fetch their fields.
-            # Skip when relations failed to load — without relation data, cross-pipe
-            # field checks produce unreliable results.
-            cross_pipe_field_ids: dict[str, set[str]] = {}
-            target_pipe_ids: set[str] = set()
-            if related_pipe_ids is not None:
-                for b in behaviors:
-                    ap = b.get("actionParams") or b.get("action_params") or {}
-                    abp = (
-                        ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-                    )
-                    for a in (
-                        abp.get("actionsAttributes")
-                        or abp.get("actions_attributes")
-                        or []
-                    ):
-                        if not isinstance(a, dict):
-                            continue
-                        meta_pipe = str((a.get("metadata") or {}).get("pipeId", ""))
-                        if meta_pipe and meta_pipe != pid:
-                            target_pipe_ids.add(meta_pipe)
-
-            target_pipe_list = sorted(target_pipe_ids)
-            if len(target_pipe_list) > MAX_CROSS_PIPE_FIELD_FETCH:
-                return build_ai_tool_error(
-                    f"Too many distinct cross-pipe target pipes ({len(target_pipe_list)}). "
-                    f"Maximum is {MAX_CROSS_PIPE_FIELD_FETCH}. Reduce the number of distinct "
-                    "create_connected_card metadata.pipeId values (or split validation)."
-                )
-            if target_pipe_list:
-                fetch_results = await asyncio.gather(
-                    *(
-                        asyncio.wait_for(
-                            client.get_pipe(tpid),
-                            timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
-                        )
-                        for tpid in target_pipe_list
-                    ),
-                    return_exceptions=True,
-                )
-                for tpid, result in zip(target_pipe_list, fetch_results, strict=True):
-                    if isinstance(result, BaseException):
-                        await ctx.debug(f"Could not fetch target pipe {tpid}: {result}")
-                        tool_warnings.append(
-                            f"Could not load fields for target pipe {tpid}; "
-                            f"fieldIds targeting it were not verified."
-                        )
-                        continue
-                    target_data = result
-                    target_info = target_data.get("pipe", {})
-                    target_fields: set[str] = set()
-                    for phase in target_info.get("phases") or []:
-                        for field in phase.get("fields") or []:
-                            fid = field.get("id") or field.get("internal_id")
-                            if fid:
-                                target_fields.add(str(fid))
-                    for field in target_info.get("start_form_fields") or []:
-                        fid = field.get("id") or field.get("internal_id")
-                        if fid:
-                            target_fields.add(str(fid))
-                    cross_pipe_field_ids[tpid] = target_fields
-
-            # Optional: verify service account membership on cross-pipe targets.
-            membership_problems: list[str] = []
-            sa_ids = settings.pipefy.service_account_ids
-            if sa_ids and target_pipe_list:
-                sa_set = set(sa_ids)
-                try:
-                    member_results = await asyncio.wait_for(
-                        asyncio.gather(
-                            *(
-                                client.get_pipe_members(tpid)
-                                for tpid in target_pipe_list
-                            ),
-                            return_exceptions=True,
-                        ),
-                        timeout=MEMBERSHIP_CHECK_TIMEOUT_SECONDS,
-                    )
-                    for tpid, mresult in zip(target_pipe_list, member_results):
-                        if isinstance(mresult, BaseException):
-                            await ctx.debug(
-                                f"Could not check membership for pipe {tpid}: {mresult}"
-                            )
-                            continue
-                        members = mresult.get("pipe", {}).get("members") or []
-                        member_ids = {
-                            str(m.get("user", {}).get("id", ""))
-                            for m in members
-                            if isinstance(m, dict)
-                        }
-                        if not sa_set & member_ids:
-                            membership_problems.append(
-                                f"Service account is not a member of target pipe "
-                                f"{tpid}. Use invite_members to add it before "
-                                f"creating the agent."
-                            )
-                except (TimeoutError, asyncio.TimeoutError):
-                    await ctx.debug(
-                        "Membership check timed out; skipping SA verification"
-                    )
-
-            unknown_action_types = "error" if strict_unknown_action_types else "warning"
-            problems, helper_warnings = validate_behaviors_against_pipe(
+            result = await validate_ai_agent_behaviors_sdk(
+                client,
+                pid,
                 behaviors,
-                pipe_id=pid,
-                pipe_field_ids=field_ids,
-                pipe_phase_ids=phase_ids,
-                related_pipe_ids=related_pipe_ids,
-                cross_pipe_field_ids=cross_pipe_field_ids or None,
-                unknown_action_types=unknown_action_types,
+                service_account_ids=settings.pipefy.service_account_ids,
+                strict_unknown_action_types=strict_unknown_action_types,
             )
-            transition_problems = await collect_ai_behavior_move_transition_problems(
-                client, behaviors
+            if not result.get("success"):
+                probs = result.get("problems") or []
+                detail = str(probs[0]) if probs else result.get("message")
+                return build_ai_tool_error(
+                    str(detail or result.get("error") or "validation failed")
+                )
+            await ctx.debug(
+                f"validate_ai_agent_behaviors: valid={result.get('valid')}, "
+                f"problems={len(result.get('problems') or [])}, "
+                f"warnings={len(result.get('warnings') or [])}"
             )
-            problems = [*problems, *transition_problems, *membership_problems]
-            warnings = [*tool_warnings, *helper_warnings]
-
-            if problems:
-                msg = f"Found {len(problems)} problem(s) in behaviors."
-            elif warnings:
-                msg = f"Validation passed with {len(warnings)} warning(s)."
-            else:
-                msg = "All behaviors passed validation."
-
-            return {
-                "success": True,
-                "valid": len(problems) == 0,
-                "problems": problems,
-                "warnings": warnings,
-                "message": msg,
-            }
+            return result

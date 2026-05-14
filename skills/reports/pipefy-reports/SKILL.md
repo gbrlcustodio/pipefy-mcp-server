@@ -1,0 +1,106 @@
+---
+name: pipefy-reports
+description: >
+  Use this skill when the user wants to create, read, update, delete, or
+  export pipe reports or organization reports. Covers the async export
+  workflow (trigger, poll, download). 17 MCP tools.
+tags: [pipefy, reports, exports, pipe-reports, organization-reports]
+---
+
+# Reports
+
+Pipe reports and organization reports: discovery, CRUD, and async exports. **17 MCP tools.**
+
+**CLI status (v0.1):** use MCP tools below. Report-specific Typer commands are planned for v0.3+.
+
+---
+
+## Cross-cutting patterns
+
+- Build `ReportCardsFilter` using `get_pipe_report_columns` and `get_pipe_report_filterable_fields`; use `introspect_type` for uncommon inputs.
+- `get_pipe_reports` omits `cardCount` in the query (Pipefy can error when resolving it).
+- `debug=true` on writes like other mutation tools.
+
+---
+
+## Pipe report tools
+
+| Tool (MCP) | CLI | Read-only | Purpose |
+|------------|-----|-----------|---------|
+| `get_pipe_reports` | — (CLI v0.3+) | Yes | List all reports for a pipe. |
+| `get_pipe_report` | — (CLI v0.3+) | Yes | Single report data. |
+| `get_pipe_report_columns` | — (CLI v0.3+) | Yes | Discover available columns for a report filter. |
+| `get_pipe_report_filterable_fields` | — (CLI v0.3+) | Yes | Discover filterable fields for a report. |
+| `create_pipe_report` | — (CLI v0.3+) | No | Create a new pipe report. |
+| `update_pipe_report` | — (CLI v0.3+) | No | Update report name or filters. |
+| `delete_pipe_report` | — (CLI v0.3+) | No | **Two-step destructive.** |
+| `export_pipe_report` | — (CLI v0.3+) | No | Trigger async export. |
+
+## Organization report tools
+
+| Tool (MCP) | CLI | Read-only | Purpose |
+|------------|-----|-----------|---------|
+| `get_organization_reports` | — (CLI v0.3+) | Yes | List all org-level reports. |
+| `get_organization_report` | — (CLI v0.3+) | Yes | Single org report data. |
+| `create_organization_report` | — (CLI v0.3+) | No | Create an org-wide report. |
+| `update_organization_report` | — (CLI v0.3+) | No | Update report config. |
+| `delete_organization_report` | — (CLI v0.3+) | No | **Two-step destructive.** |
+| `export_organization_report` | — (CLI v0.3+) | No | Trigger async export. |
+
+## Export status & download
+
+| Tool (MCP) | CLI | Purpose |
+|------------|-----|---------|
+| `get_pipe_report_export` | — (CLI v0.3+) | Poll pipe report export status (after `export_pipe_report`). |
+| `get_organization_report_export` | — (CLI v0.3+) | Poll org report export status (after `export_organization_report`). |
+| `export_pipe_audit_logs` | — (CLI v0.3+) | Export pipe audit logs (separate from card report exports). |
+
+---
+
+## Steps — export a pipe report
+
+1. **List available reports:**
+
+   MCP: `get_pipe_reports pipe_id=67890`
+
+2. **Trigger the export:**
+
+   MCP: `export_pipe_report report_id=123`
+
+3. **Poll until finished:**
+
+   MCP: `get_pipe_report_export export_id=<EXPORT_ID>`
+
+   Repeat every 5–10 seconds until the response indicates `finished` (or `failed`).
+
+4. **Download:** use the signed `fileUrl` from the finished export response over HTTPS (the MCP tool surfaces it in the payload).
+
+---
+
+## Steps — create a filtered pipe report
+
+1. **Discover filterable fields:**
+
+   MCP: `get_pipe_report_filterable_fields pipe_id=67890`
+
+2. **Create the report with a filter:**
+
+   MCP: `create_pipe_report pipe_id=67890 name="Overdue Cards" filter='{"status":["overdue"]}'`
+
+---
+
+## Success criteria
+
+- `get_pipe_report_export` (or `get_organization_report_export`) reaches a terminal `finished` or `failed` state.
+- Downloaded export contains the expected card/report data.
+
+## Failure modes
+
+- **Export stuck in `processing`:** large pipes with many cards can take minutes. Wait at least 60 seconds per poll. Retry the export trigger if still `processing` after several minutes.
+- **`get_pipe_reports` returns `null` for `cardCount`:** known Pipefy API behavior; the tool omits that field automatically.
+- **Filter not working:** use `get_pipe_report_filterable_fields` to confirm the exact filter key and value format.
+
+## See also
+
+- `skills/observability/` — export automation job history (different from pipe reports).
+- `skills/introspection/` — discover `ReportCardsFilter` input shape for complex filters.

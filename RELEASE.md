@@ -15,25 +15,61 @@ PyPI publishing is **disabled** for tags that do not start with `v1.`. Pre-relea
 
    Supported arguments: `major`, `minor`, `patch`, `prerelease`, or `version=X.Y.Z` (optional `v` prefix on `X.Y.Z`).
 
-3. In `CHANGELOG.md`, replace the `## [Unreleased]` heading with `## [X.Y.Z] - YYYY-MM-DD` matching the new version and date (the Release workflow uses this section as the GitHub Release notes body).
-4. Commit:
+3. If any skills in `skills/` changed since the last release, sync the bundled starter pack into the CLI package:
+
+   ```bash
+   uv run python scripts/sync_starter_pack.py
+   ```
+
+   This copies the 8 canonical starter-pack skills from `skills/<domain>/<name>/SKILL.md` into `packages/cli/src/pipefy_cli/skills/`. Commit the updated `.md` files alongside the version bump.
+
+   To verify the bundle already matches canonical files (for example on CI or before tagging):
+
+   ```bash
+   uv run python scripts/sync_starter_pack.py --check
+   ```
+
+4. In `CHANGELOG.md`, replace the `## [Unreleased]` heading with `## [X.Y.Z] - YYYY-MM-DD` matching the new version and date (the Release workflow uses this section as the GitHub Release notes body).
+5. Commit:
 
    ```bash
    git add -A && git commit -m "chore: release vX.Y.Z"
    ```
 
-5. Tag and push:
+6. Tag and push:
 
    ```bash
    git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z
    ```
 
-6. Wait for the **Release** workflow (`.github/workflows/release.yml`) to finish.
-7. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, and `pipefy_sdk-*.whl` when produced). Optionally verify install from the tag, for example:
+7. Wait for the **Release** workflow (`.github/workflows/release.yml`) to finish.
+8. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, and `pipefy_sdk-*.whl` when produced). Optionally verify install from the tag, for example:
 
    ```bash
    uvx --from git+https://github.com/<owner>/<repo>.git@vX.Y.Z --refresh pipefy-cli --version
    ```
+
+## Verification (cross-platform smoke test)
+
+After tagging a release, run the following on macOS and a Linux machine (or CI runner) to confirm the wheels install correctly:
+
+```bash
+# Install CLI from the tagged release
+uvx --from "git+https://github.com/<owner>/pipefy-labs.git@vX.Y.Z" --refresh pipefy-cli --version
+# Expected: X.Y.Z
+
+# Verify skills bundle ships correctly
+uvx --from "git+https://github.com/<owner>/pipefy-labs.git@vX.Y.Z" --refresh pipefy-cli skills list
+# Expected: list of ≥5 skill names
+
+# Verify a skill can be printed
+uvx --from "git+https://github.com/<owner>/pipefy-labs.git@vX.Y.Z" --refresh pipefy-cli skills show pipefy-pipes-and-cards | head -5
+# Expected: frontmatter header
+
+# Verify MCP server starts
+uvx --from "git+https://github.com/<owner>/pipefy-labs.git@vX.Y.Z" --refresh pipefy-mcp-server --help
+# Expected: help text (server may block in stdio mode — Ctrl-C after banner)
+```
 
 ## v1.0 and later: GitHub Release + PyPI
 

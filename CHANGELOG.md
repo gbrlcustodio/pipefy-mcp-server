@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **CLI**: `pipefy skills list` and `pipefy skills show <name>` for browsing the bundled
+  starter pack (8 high-impact Pipefy workflows), with YAML frontmatter parsing for
+  descriptions.
+- **Skills**: `skills/` catalog with authoring guide, contributing rules, and
+  `skills-lint.yml` CI (frontmatter, starter-pack bundle drift, MCP/CLI reference lint,
+  and `pipefy skills list` smoke).
+- **Docs**: `docs/MIGRATION.md` cutover guide for existing `pipefy-mcp-server` users.
+- **Tooling**: `scripts/sync_starter_pack.py` copies canonical starter-pack `SKILL.md`
+  files into `packages/cli/src/pipefy_cli/skills/`; use `--check` in CI or before release.
 - **CLI**: introduce `pipefy-cli` workspace package with `pipefy` entry point.
 - **CLI**: `pipefy card get <id>` (mirrors MCP `get_card`) with `--json` / Rich rendering.
 - **CLI**: OAuth client-credentials auth (`PIPEFY_OAUTH_*`) and `--token` / `PIPEFY_TOKEN` static bearer override; auth precedence flag > env > `~/.config/pipefy/config.toml`.

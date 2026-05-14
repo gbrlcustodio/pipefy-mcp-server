@@ -1,89 +1,51 @@
 # Setup
 
-Single entry point for **first-time install**, **environment variables**, and **MCP client** wiring. Prerequisites: a [Pipefy Service Account](https://app.pipefy.com/) (Admin → Service Accounts), and add that account to every pipe the tools should use.
+Single entry point for **end-user install** of the Pipefy MCP server in your editor or AI client. Three steps: install `uv`, create a Pipefy service account, and paste a JSON block into your MCP client. No clone required.
 
 | Section | What it covers |
 |--------|------------------|
-| [Quick start](#quick-start) | Clone, `uv`, `.env`, smoke test, unit tests |
-| [How configuration is loaded](#how-configuration-is-loaded) | Pydantic Settings, CWD, precedence |
-| [Environment variables](#environment-variables) | Required vs optional `PIPEFY_*` keys |
-| [MCP client setup](#mcp-client-setup) | Cursor, Claude Desktop, Claude Code |
-| [Bootstrap script](#optional-bootstrap-script) | One-shot `uv sync` + `.env` template |
+| [Quick start](#quick-start) | The three steps end-to-end |
+| [Create a Pipefy service account](#create-a-pipefy-service-account) | Admin panel walkthrough, Client ID / Secret / Token URL |
+| [MCP client setup](#mcp-client-setup) | Cursor, Claude Desktop, Claude Code; upgrading the pinned tag |
+| [Environment variables](#environment-variables) | Required and optional `PIPEFY_*` keys |
+| [How configuration is loaded](#how-configuration-is-loaded) | Pydantic Settings and process env |
+
+> Setting up a development environment to **edit** the server? See [Contributing](contributing.md).
 
 ---
 
 ## Quick start
 
-1. **Install [uv](https://docs.astral.sh/uv/getting-started/installation/)** (it manages Python 3.11+ for this project).
+1. **Install [`uv`](https://docs.astral.sh/uv/getting-started/installation/)** — Astral's installer detects your OS and drops `uv` (and `uvx`) on `PATH`.
+2. **[Create a Pipefy service account](#create-a-pipefy-service-account)** and copy the **Client ID**, **Client Secret**, and **Token endpoint URL**.
+3. **[Configure your MCP client](#mcp-client-setup)** — paste the JSON block for your client, fill in the three values from step 2, restart the client, and confirm the `pipefy` server shows healthy.
 
-2. **Clone and install dependencies**
-   ```bash
-   git clone https://github.com/gbrlcustodio/pipefy-mcp-server.git
-   cd pipefy-mcp-server
-   uv sync
-   ```
-
-3. **Environment file** — from the repo root:
-   ```bash
-   cp .env.example .env
-   ```
-   Edit **`.env`** and set at least the OAuth client and secret from your service account. Canonical names and placeholders: **[`../.env.example`](../.env.example)**.
-
-4. **Smoke test (optional)** — confirms the process starts (stop with Ctrl+C when satisfied):
-   ```bash
-   uv run pipefy-mcp-server
-   ```
-
-5. **Tests without calling Pipefy (optional)** — no `PIPEFY_*` credentials required:
-   ```bash
-   uv run pytest -m "not integration"
-   ```
-
-6. **Register the server in your IDE** — [MCP client setup](#mcp-client-setup) below. Prefer pointing the client’s `cwd` at this repo and keeping secrets in **`.env`** so you do not duplicate them in JSON.
-
-On Windows, use the same commands in **PowerShell** or **Git Bash** (where `uv` is on `PATH`).
+On Windows, the same flow works in **PowerShell** or **Git Bash** (anywhere `uv` is on `PATH`).
 
 ---
 
-## How configuration is loaded
+## Create a Pipefy service account
 
-Runtime settings come from **`pipefy_mcp.settings.Settings`** ([Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/)).
+A **service account** is a non-human Pipefy identity that issues OAuth credentials for API access. Full reference: **[Service Accounts on developers.pipefy.com](https://developers.pipefy.com/reference/service-accounts)**.
 
-- **`.env`**: read from the **current working directory** (usually the repo root when you run `uv run pipefy-mcp-server` from there, or when the MCP client sets `cwd` to the clone).
-- **Precedence**: values already in the **process environment** (including the MCP client `env` block) **override** entries from `.env`.
-- **Same keys everywhere** — use the names from **[`.env.example`](../.env.example)** in `.env` or in the client JSON; the server does not care which source won, as long as the process sees the variables.
+**Prerequisite:** you need an **Admin** role on your Pipefy organization.
 
----
+1. Open the Pipefy **Admin Panel**.
+2. Go to **Members and Permissions** → **Service Accounts**.
+3. Click **[Create Service Account](https://developers.pipefy.com/reference/service-accounts)** and set the name, description, role, and expiration window (between 5 minutes and 30 days — **immutable after creation**).
+4. Copy the three values Pipefy returns:
+   - **Client ID** → `PIPEFY_OAUTH_CLIENT`
+   - **Client Secret** → `PIPEFY_OAUTH_SECRET`
+   - **Token endpoint URL** → `PIPEFY_OAUTH_URL`
+5. **Add the service account to every pipe** the MCP tools should operate on. Without this, calls return permission errors even when credentials are valid.
 
-## Environment variables
-
-### Required for API access
-
-| Key | Role |
-|-----|------|
-| `PIPEFY_GRAPHQL_URL` | Public GraphQL endpoint (default in `.env.example`). |
-| `PIPEFY_INTERNAL_API_URL` | Internal GraphQL (AI automations, some relation flows). Use the value from [`.env.example`](../.env.example). |
-| `PIPEFY_OAUTH_URL` | OAuth token URL for the service account. |
-| `PIPEFY_OAUTH_CLIENT` | Service account client ID. |
-| `PIPEFY_OAUTH_SECRET` | Service account client secret. |
-
-`PIPEFY_INTERNAL_API_URL` points at Pipefy’s internal GraphQL; it is required for tools that use that path (e.g. AI automations, some relations). Values are **validated at startup** — public Pipefy hosts are the normal case; `localhost` / private hosts are rejected to avoid SSRF unless you use the insecure-dev flags in [`.env.example`](../.env.example).
-
-### Optional
-
-| Key | Default | Effect |
-|-----|---------|--------|
-| `PIPEFY_SERVICE_ACCOUNT_IDS` | _unset_ | Comma-separated Pipefy user IDs treated as service accounts. Enables [Service Account Protection](tools/members-email-webhooks.md#service-account-protection) on `remove_member_from_pipe` / `set_role`, and proactive membership checks in [`validate_ai_agent_behaviors`](tools/automations-and-ai.md#ai-agent-read--delete) for cross-pipe targets. Leave unset to skip the guards. |
-
-All other optional flags (insecure dev URLs, webhooks, introspection cache, etc.) are documented in **[`.env.example`](../.env.example)** only.
+Next, paste the three values into your MCP client config — see [MCP client setup](#mcp-client-setup) below.
 
 ---
 
 ## MCP client setup
 
-**Recommended:** set the client’s working directory to your **clone root** and use **`.env`** for `PIPEFY_*` values. Then the JSON `env` block can be minimal or empty for local dev. If you put secrets only in JSON, use the same keys as [`.env.example`](../.env.example).
-
-Use this **`env` shape** when you need to inline values (e.g. CI or machines without a `.env` file). Include **`PIPEFY_INTERNAL_API_URL`** for parity with full tool coverage (same as [`.env.example`](../.env.example)).
+All three clients use the same JSON shape. The `command` is `uvx`, which fetches the server from GitHub on first run and caches it locally — no clone, no `cwd`. Pin to a release tag (`@v0.1.0` below); see [Upgrading](#upgrading) for tag bumps.
 
 ```json
 "env": {
@@ -95,22 +57,22 @@ Use this **`env` shape** when you need to inline values (e.g. CI or machines wit
 }
 ```
 
+The three URL values are the same for every Pipefy organization on the public host — only the two `PIPEFY_OAUTH_*` secrets vary per service account.
+
 ### Cursor
 
 1. Open **Cursor Settings → Features → MCP Servers**.
 2. Click **+ Add New MCP Server**.
-3. Use a config like the one below (replace the path and placeholders).
+3. Paste the config below (replace the two `PIPEFY_OAUTH_*` placeholders).
 
 ```json
 {
     "mcpServers": {
         "pipefy": {
-            "cwd": "/absolute/path/to/pipefy-mcp-server",
-            "command": "uv",
+            "command": "uvx",
             "args": [
-                "run",
-                "--directory",
-                ".",
+                "--from",
+                "git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0",
                 "pipefy-mcp-server"
             ],
             "env": {
@@ -125,13 +87,9 @@ Use this **`env` shape** when you need to inline values (e.g. CI or machines wit
 }
 ```
 
-Set `cwd` to your clone root so the server can read **`.env`** there; you may omit keys from `env` that are already set in `.env`.
-
 ### Claude Desktop
 
-MCP servers load from a JSON config file. You can keep credentials in **`.env`** at the repo root (see [How configuration is loaded](#how-configuration-is-loaded)) and use a minimal `env` in JSON if `cwd` points at the clone.
-
-**Config paths**
+MCP servers load from a JSON config file at:
 
 | OS | File |
 |----|------|
@@ -142,11 +100,10 @@ MCP servers load from a JSON config file. You can keep credentials in **`.env`**
 {
     "mcpServers": {
         "pipefy": {
-            "command": "uv",
+            "command": "uvx",
             "args": [
-                "run",
-                "--directory",
-                "/absolute/path/to/pipefy-mcp-server",
+                "--from",
+                "git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0",
                 "pipefy-mcp-server"
             ],
             "env": {
@@ -161,27 +118,23 @@ MCP servers load from a JSON config file. You can keep credentials in **`.env`**
 }
 ```
 
-Replace `/absolute/path/to/pipefy-mcp-server` with your clone path.
-
 ### Claude Code
-
-Either rely on [`.env.example`](../.env.example) → **`.env`** at the repo root, or set vars with `claude mcp add-env`.
 
 **CLI (per project)**
 
 ```bash
 claude mcp add --scope project pipefy \
-  -- uv run --directory /absolute/path/to/pipefy-mcp-server pipefy-mcp-server
+  -- uvx --from git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0 pipefy-mcp-server
 ```
 
-Then (repeat for each key you need, matching [`.env.example`](../.env.example)):
+Then set each env var (repeat per key):
 
 ```bash
-claude mcp add-env pipefy PIPEFY_OAUTH_CLIENT <YOUR_CLIENT_ID>
-claude mcp add-env pipefy PIPEFY_OAUTH_SECRET <YOUR_CLIENT_SECRET>
 claude mcp add-env pipefy PIPEFY_GRAPHQL_URL https://app.pipefy.com/graphql
 claude mcp add-env pipefy PIPEFY_INTERNAL_API_URL https://app.pipefy.com/internal_api
 claude mcp add-env pipefy PIPEFY_OAUTH_URL https://app.pipefy.com/oauth/token
+claude mcp add-env pipefy PIPEFY_OAUTH_CLIENT <SERVICE_ACCOUNT_CLIENT_ID>
+claude mcp add-env pipefy PIPEFY_OAUTH_SECRET <SERVICE_ACCOUNT_CLIENT_SECRET>
 ```
 
 **`.mcp.json` (project root)**
@@ -190,11 +143,10 @@ claude mcp add-env pipefy PIPEFY_OAUTH_URL https://app.pipefy.com/oauth/token
 {
     "mcpServers": {
         "pipefy": {
-            "command": "uv",
+            "command": "uvx",
             "args": [
-                "run",
-                "--directory",
-                "/absolute/path/to/pipefy-mcp-server",
+                "--from",
+                "git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0",
                 "pipefy-mcp-server"
             ],
             "env": {
@@ -209,19 +161,42 @@ claude mcp add-env pipefy PIPEFY_OAUTH_URL https://app.pipefy.com/oauth/token
 }
 ```
 
-The CLI flow is quick for local tests. Committing **`.mcp.json`** without secrets (placeholders or env injection) can help teams share the same shape.
+Commit `.mcp.json` with placeholders (or env injection) to share the same shape across the team without leaking secrets.
+
+### Upgrading
+
+To pull a newer release, change `@v0.1.0` in `args` to the new tag and **restart your MCP client**. `uvx` caches the resolved git ref, so a fresh process is required to pick up the new revision. If a stale cache is suspected, run `uv cache clean` and restart the client again.
 
 ---
 
-## Optional bootstrap script
+## Environment variables
 
-From the **repository root**, after installing `uv`, you can run:
+Set these in the MCP client's `env:` block (see [MCP client setup](#mcp-client-setup)). The server reads them from process environment on startup.
 
-`./bootstrap.sh`
+### Required for API access
 
-Purpose:
+| Key | Role |
+|-----|------|
+| `PIPEFY_GRAPHQL_URL` | Public GraphQL endpoint. |
+| `PIPEFY_INTERNAL_API_URL` | Internal GraphQL (AI automations, some relation flows). |
+| `PIPEFY_OAUTH_URL` | OAuth token URL for the service account. |
+| `PIPEFY_OAUTH_CLIENT` | Service account **Client ID**. |
+| `PIPEFY_OAUTH_SECRET` | Service account **Client Secret**. |
 
-- Run **`uv sync`**
-- If **`.env`** is missing, copy **`.env.example`** → **`.env`** (does not overwrite an existing `.env`)
+The three URL values default to Pipefy's public host (see **[`.env.example`](../.env.example)** for the canonical defaults) and are the same for every customer on the public cloud. Only the two `PIPEFY_OAUTH_*` secrets vary per service account. URLs are **validated at startup** — `localhost` and private hosts are rejected to avoid SSRF unless you set the insecure-dev flags documented in [`.env.example`](../.env.example).
 
-On Windows, run the [Quick start](#quick-start) steps manually if you do not use Git Bash.
+### Optional
+
+| Key | Default | Effect |
+|-----|---------|--------|
+| `PIPEFY_SERVICE_ACCOUNT_IDS` | _unset_ | Comma-separated Pipefy user IDs treated as service accounts. Enables [Service Account Protection](tools/members-email-webhooks.md#service-account-protection) on `remove_member_from_pipe` / `set_role`, and proactive membership checks in [`validate_ai_agent_behaviors`](tools/automations-and-ai.md#ai-agent-read--delete) for cross-pipe targets. Leave unset to skip the guards. |
+
+All other optional flags (insecure dev URLs, webhooks, introspection cache, etc.) are documented in **[`.env.example`](../.env.example)** as the canonical reference manifest.
+
+---
+
+## How configuration is loaded
+
+- The server reads from **process environment** via **`pipefy_mcp.settings.Settings`** ([Pydantic Settings](https://docs.pydantic.dev/latest/concepts/pydantic_settings/)).
+- The MCP client injects its `env:` block into the spawned subprocess — that block is the only source in the `uvx` install flow. **`.env` files are not read** from the user's machine. For dev from a clone, see [Contributing](contributing.md).
+- URL validation runs at startup; a startup failure means a malformed URL, while a runtime 401 means the service account credentials are wrong or the account is missing from a pipe.

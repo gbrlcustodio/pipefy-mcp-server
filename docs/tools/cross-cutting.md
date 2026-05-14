@@ -32,7 +32,7 @@ On cross-pipe operations (relations, AI agents), errors carrying `extensions.cod
 
 ## Service account protection
 
-When the optional `PIPEFY_SERVICE_ACCOUNT_IDS` env var is set (see [`.env.example`](../../.env.example)), the server guards `remove_member_from_pipe` and `set_role` against locking the service account out of its own pipes. Full contract: [Service account protection](members-email-webhooks.md#service-account-protection).
+When the optional `PIPEFY_SERVICE_ACCOUNT_IDS` env var is set in the MCP client's `env:` block (see [Environment variables](../setup.md#environment-variables); full key reference in [`.env.example`](../../.env.example)), the server guards `remove_member_from_pipe` and `set_role` against locking the service account out of its own pipes. Full contract: [Service account protection](members-email-webhooks.md#service-account-protection).
 
 ## Pre-flight validation for AI features
 

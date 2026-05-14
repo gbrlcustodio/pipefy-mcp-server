@@ -2,7 +2,8 @@
 
 ## Documentation map
 - **`README.md`** — Overview for users and contributors: getting started, MCP tools summary, development, testing, and schema hygiene.
-- **`docs/setup.md`** — First-time install, environment variables, MCP client config (optional `bootstrap.sh`).
+- **`docs/setup.md`** — End-user install via `uvx`, service-account creation, environment variables, MCP client config.
+- **`docs/contributing.md`** — Development setup (clone, `uv sync`, `.env`, tests, `bootstrap.sh`, release process).
 - **`docs/dependencies.md`** — Rationale for main dependencies.
 - **`docs/tools/`** — Per-area reference (parameters, edge cases, cross-cutting behavior). Start from the filenames that match the domain you touch (e.g. `pipes-and-cards.md`, `automations-and-ai.md`, `introspection.md`).
 

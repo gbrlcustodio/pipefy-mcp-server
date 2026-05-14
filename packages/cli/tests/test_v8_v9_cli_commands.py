@@ -125,7 +125,7 @@ def test_audit_export_writes_file(
         return_value={"exportPipeAuditLogsReport": {"success": True}}
     )
     with patch(
-        "pipefy_cli.commands.audit.get_authenticated_client",
+        "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
     ):
         r = runner.invoke(
@@ -176,7 +176,7 @@ def test_introspect_type_json_default(
     mock_client = MagicMock()
     mock_client.introspect_type = AsyncMock(return_value={"name": "Card"})
     with patch(
-        "pipefy_cli.commands.introspect.get_authenticated_client",
+        "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
     ):
         r = runner.invoke(app, ["introspect", "type", "Card"])
@@ -191,7 +191,7 @@ def test_graphql_exec_query_json(
     mock_client = MagicMock()
     mock_client.execute_graphql = AsyncMock(return_value={"pipe": {"id": "1"}})
     with patch(
-        "pipefy_cli.commands.graphql.get_authenticated_client",
+        "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
     ):
         r = runner.invoke(
@@ -216,7 +216,7 @@ def test_graphql_exec_mutation_without_yes_exit_2(
     oauth_env("gql2")
     mock_client = MagicMock()
     with patch(
-        "pipefy_cli.commands.graphql.get_authenticated_client",
+        "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
     ):
         r = runner.invoke(
@@ -240,7 +240,7 @@ def test_graphql_exec_mutation_with_yes_calls_sdk(
     mock_client = MagicMock()
     mock_client.execute_graphql = AsyncMock(return_value={"ok": True})
     with patch(
-        "pipefy_cli.commands.graphql.get_authenticated_client",
+        "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
     ):
         r = runner.invoke(
@@ -264,7 +264,7 @@ def test_graphql_exec_invalid_vars_exit_2(
     oauth_env("gql4")
     mock_client = MagicMock()
     with patch(
-        "pipefy_cli.commands.graphql.get_authenticated_client",
+        "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
     ):
         r = runner.invoke(

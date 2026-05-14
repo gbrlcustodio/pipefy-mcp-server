@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from typer.testing import CliRunner
 
 from pipefy_cli.main import app
@@ -169,3 +170,54 @@ def test_export_automation_jobs_json(
             ],
         )
     assert r.exit_code == 0
+
+
+def test_report_pipe_export_rejects_json_with_csv(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("rpcsv")
+    r = runner.invoke(
+        app,
+        [
+            "report-pipe",
+            "export",
+            "--pipe",
+            "p1",
+            "--report-id",
+            "r1",
+            "--format",
+            "csv",
+            "--json",
+        ],
+    )
+    assert r.exit_code != 0
+    assert "mutually" in r.stderr.lower() or "cannot" in r.stderr.lower()
+
+
+def test_report_org_export_rejects_json_with_csv(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("rocsv")
+    r = runner.invoke(
+        app,
+        [
+            "report-org",
+            "export",
+            "--organization",
+            "o1",
+            "--format",
+            "csv",
+            "--json",
+        ],
+    )
+    assert r.exit_code != 0
+    assert "mutually" in r.stderr.lower() or "cannot" in r.stderr.lower()
+
+
+def test_export_poll_max_rounds_maps_timeout():
+    from pipefy_cli.commands._common import export_poll_max_rounds
+
+    assert export_poll_max_rounds(90.0) == 45
+    assert export_poll_max_rounds(2.0) == 1
+    with pytest.raises(ValueError):
+        export_poll_max_rounds(0.0)

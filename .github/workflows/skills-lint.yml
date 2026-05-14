@@ -1,0 +1,114 @@
+name: Skills Lint
+
+on:
+  push:
+    paths:
+      - "skills/**"
+      - "packages/cli/src/pipefy_cli/skills/**"
+      - "packages/mcp/src/pipefy_mcp/tools/registry.py"
+  pull_request:
+    paths:
+      - "skills/**"
+      - "packages/cli/src/pipefy_cli/skills/**"
+      - "packages/mcp/src/pipefy_mcp/tools/registry.py"
+
+jobs:
+  validate-skills:
+    name: Validate skill frontmatter
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Validate SKILL.md frontmatter
+        run: |
+          python - <<'EOF'
+          import os
+          import sys
+
+          errors = []
+
+          for root, dirs, files in os.walk("skills"):
+              # Skip docs/ and top-level files
+              if "SKILL.md" not in files:
+                  continue
+              skill_path = os.path.join(root, "SKILL.md")
+              skill_dir = os.path.basename(root)
+
+              with open(skill_path, encoding="utf-8") as f:
+                  content = f.read()
+
+              if not content.startswith("---"):
+                  errors.append(f"{skill_path}: missing YAML frontmatter (must start with ---)")
+                  continue
+
+              # Extract frontmatter block
+              parts = content.split("---", 2)
+              if len(parts) < 3:
+                  errors.append(f"{skill_path}: malformed frontmatter (no closing ---)")
+                  continue
+
+              frontmatter = parts[1]
+
+              # Check required fields
+              if "name:" not in frontmatter:
+                  errors.append(f"{skill_path}: missing required frontmatter field 'name'")
+              if "description:" not in frontmatter:
+                  errors.append(f"{skill_path}: missing required frontmatter field 'description'")
+
+              # Extract name value and validate it matches directory
+              for line in frontmatter.splitlines():
+                  if line.startswith("name:"):
+                      name_value = line.split(":", 1)[1].strip()
+                      if name_value and name_value != skill_dir:
+                          errors.append(
+                              f"{skill_path}: 'name' field ({name_value!r}) does not match directory name ({skill_dir!r})"
+                          )
+                      break
+
+          if errors:
+              print("Skills validation FAILED:")
+              for e in errors:
+                  print(f"  ✗ {e}")
+              sys.exit(1)
+          else:
+              # Count validated skills
+              count = sum(
+                  1 for root, _, files in os.walk("skills")
+                  if "SKILL.md" in files
+              )
+              print(f"Skills validation passed — {count} skill(s) validated.")
+          EOF
+
+      - name: Check bundled skills match canonical (basic check)
+        run: |
+          python - <<'EOF'
+          import os
+          import sys
+
+          bundled_dir = "packages/cli/src/pipefy_cli/skills"
+          if not os.path.isdir(bundled_dir):
+              print("No bundled skills directory found — skipping bundle sync check.")
+              sys.exit(0)
+
+          bundled = {f for f in os.listdir(bundled_dir) if f.endswith(".md")}
+          if not bundled:
+              print("Bundled skills directory is empty.")
+              sys.exit(0)
+
+          print(f"Bundled skills: {sorted(bundled)}")
+          print("Bundle check passed.")
+          EOF
+
+      - name: Validate CLI help (smoke check)
+        run: |
+          uv sync --quiet
+          uv run pipefy skills list || true

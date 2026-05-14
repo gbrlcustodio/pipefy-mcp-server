@@ -57,6 +57,29 @@ jobs:
         enable-cache: true
     - name: Install dependencies
       run: uv sync --locked --all-extras --dev
+    - name: Verify package versions are in lockstep
+      run: |
+        uv run python <<'PY'
+        import re
+        from pathlib import Path
+
+        paths = {
+            "sdk": Path("packages/sdk/src/pipefy_sdk/__init__.py"),
+            "mcp": Path("packages/mcp/src/pipefy_mcp/__init__.py"),
+            "cli": Path("packages/cli/src/pipefy_cli/__init__.py"),
+        }
+        rx = re.compile(r'^__version__\s*=\s*["\']([^"\']+)["\']', re.M)
+        found = {}
+        for name, path in paths.items():
+            text = path.read_text(encoding="utf-8")
+            m = rx.search(text)
+            if not m:
+                raise SystemExit(f"missing __version__ in {path}")
+            found[name] = m.group(1)
+        versions = list(found.values())
+        if len(set(versions)) != 1:
+            raise SystemExit(f"version mismatch across packages: {found}")
+        PY
     - name: Lint (full tree)
       run: uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src
     - name: Check formatting

@@ -62,7 +62,7 @@ This repository is a **uv workspace** (see the root [`pyproject.toml`](pyproject
 
 | Directory | PyPI / distribution name | Purpose |
 |-----------|--------------------------|---------|
-| [`packages/sdk/`](packages/sdk/) | `pipefy-ai-sdk` | GraphQL client, services, queries, and shared Pydantic models consumed by the MCP server (and, later, the CLI). |
+| [`packages/sdk/`](packages/sdk/) | `pipefy-sdk` | GraphQL client, services, queries, and shared Pydantic models consumed by the MCP server (and, later, the CLI). |
 | [`packages/mcp/`](packages/mcp/) | `pipefy-mcp-server` | The installable MCP server and `pipefy_mcp` package. |
 | [`packages/cli/`](packages/cli/) | `pipefy-cli` (placeholder) | Reserved for the future Typer-based `pipefy` CLI. |
 
@@ -95,11 +95,11 @@ cp .env.example .env
 
 ### Why these dependencies?
 
-The runtime stack in [`pyproject.toml`](pyproject.toml) is small on purpose. GraphQL, OAuth transport, and spreadsheet parsing for exports live in the **`pipefy-ai-sdk`** workspace dependency ([`packages/sdk/pyproject.toml`](packages/sdk/pyproject.toml)). For a longer rationale (code references and security notes), see **[Dependencies](docs/dependencies.md)**. Summary:
+The runtime stack in [`pyproject.toml`](pyproject.toml) is small on purpose. GraphQL, OAuth transport, and spreadsheet parsing for exports live in the **`pipefy-sdk`** workspace dependency ([`packages/sdk/pyproject.toml`](packages/sdk/pyproject.toml)). For a longer rationale (code references and security notes), see **[Dependencies](docs/dependencies.md)**. Summary:
 
 | Package | Role in this server |
 |--------|---------------------|
-| **pipefy-ai-sdk** | Shared GraphQL stack (`gql` + `httpx`), Pipefy OAuth (`httpx-auth`), models, and service layer used by MCP tools. |
+| **pipefy-sdk** | Shared GraphQL stack (`gql` + `httpx`), Pipefy OAuth (`httpx-auth`), models, and service layer used by MCP tools. |
 | **httpx** | Direct async HTTP used by MCP tools (e.g. attachment flows) alongside the SDK’s GraphQL transport. |
 | **mcp** | Model Context Protocol server runtime (`FastMCP`, tool registration). |
 

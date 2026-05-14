@@ -7,7 +7,12 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk import (
+    PipefyClient,
+    PipefyId,
+    format_service_account_removal_block_message,
+    service_account_removal_blocked_user_ids,
+)
 
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
@@ -114,23 +119,13 @@ class MemberTools:
                 )
 
             protected_ids = settings.pipefy.service_account_ids
-            if protected_ids:
-                protected_set = set(protected_ids)
-                blocked = [uid for uid in user_ids if uid in protected_set]
-                if blocked:
-                    if len(blocked) == 1:
-                        msg = (
-                            f"Cannot remove service account {blocked[0]} - "
-                            "this would break all write operations for this pipe. "
-                            "Remove it via the Pipefy UI if intentional."
-                        )
-                    else:
-                        msg = (
-                            f"Cannot remove service accounts {', '.join(blocked)} - "
-                            "this would break all write operations for this pipe. "
-                            "Remove it via the Pipefy UI if intentional."
-                        )
-                    return build_member_error_payload(message=msg)
+            blocked = service_account_removal_blocked_user_ids(
+                list(user_ids), list(protected_ids)
+            )
+            if blocked:
+                return build_member_error_payload(
+                    message=format_service_account_removal_block_message(blocked),
+                )
 
             guard = await check_destructive_confirmation(
                 ctx,

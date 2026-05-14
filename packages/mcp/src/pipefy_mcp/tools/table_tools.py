@@ -7,10 +7,11 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyClient, PipefyId
-from pipefy_sdk.services.table_service import (
+from pipefy_sdk import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
+    PipefyClient,
+    PipefyId,
 )
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation

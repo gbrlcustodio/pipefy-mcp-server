@@ -19,7 +19,7 @@ def _patch_get_client(card_payload: dict):
     mock_client.get_card = AsyncMock(return_value=card_payload)
     return (
         patch(
-            "pipefy_cli.commands.card.get_authenticated_client",
+            "pipefy_cli.commands._common.get_authenticated_client",
             return_value=mock_client,
         ),
         mock_client,
@@ -52,7 +52,7 @@ def test_card_get_json_stdout(runner, clean_pipefy_env, saved_cwd, monkeypatch):
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
     out = json.loads(result.stdout)
     assert out == payload
-    mock_client.get_card.assert_awaited_once_with("501")
+    mock_client.get_card.assert_awaited_once_with("501", include_fields=False)
 
 
 def test_card_get_rich_stdout(runner, clean_pipefy_env, saved_cwd, monkeypatch):
@@ -101,7 +101,7 @@ def test_card_get_sdk_error_stderr_exit_1(
     mock_client = MagicMock()
     mock_client.get_card = AsyncMock(side_effect=PipefyAPIError("GraphQL failure"))
     with patch(
-        "pipefy_cli.commands.card.get_authenticated_client",
+        "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
     ):
         result = runner.invoke(app, ["card", "get", "999", "--json"])

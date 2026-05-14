@@ -1,5 +1,7 @@
 # CLI self-healing: introspect then execute
 
+See also the **[CLI docs index](README.md)** for other CLI-oriented guides.
+
 This flow is the canonical **Tier 2** fallback when no dedicated MCP tool or Typer command exists for an operation: discover the GraphQL shape from the schema, then run the operation with explicit confirmation for mutations.
 
 ## 1. Search the schema

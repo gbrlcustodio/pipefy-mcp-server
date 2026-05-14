@@ -1,6 +1,6 @@
 # Cross-cutting tool behavior
 
-Conventions shared across many MCP tools. Per-area details (parameters, edge cases) stay in the guides linked from the [main README](../../README.md#mcp-tools).
+Conventions shared across many MCP tools. Per-area details (parameters, edge cases) stay in the guides linked from the [main README](../../../README.md#mcp-tools).
 
 ## Pagination
 
@@ -28,11 +28,11 @@ Some destructive tools can attach extra **dependents** context in the preview wh
 
 ## `PERMISSION_DENIED` enrichment
 
-On cross-pipe operations (relations, AI agents), errors carrying `extensions.code = PERMISSION_DENIED` are enriched with a membership hint pointing to `invite_members` when the service account is missing from the target pipe. Runs automatically (no `debug=true` required); implementation in [`enrich_permission_denied_error`](../../packages/mcp/src/pipefy_mcp/tools/graphql_error_helpers.py).
+On cross-pipe operations (relations, AI agents), errors carrying `extensions.code = PERMISSION_DENIED` are enriched with a membership hint pointing to `invite_members` when the service account is missing from the target pipe. Runs automatically (no `debug=true` required); implementation in [`enrich_permission_denied_error`](../../../packages/mcp/src/pipefy_mcp/tools/graphql_error_helpers.py).
 
 ## Service account protection
 
-When the optional `PIPEFY_SERVICE_ACCOUNT_IDS` env var is set (see [`.env.example`](../../.env.example)), the server guards `remove_member_from_pipe` and `set_role` against locking the service account out of its own pipes. Full contract: [Service account protection](members-email-webhooks.md#service-account-protection).
+When the optional `PIPEFY_SERVICE_ACCOUNT_IDS` env var is set (see [`.env.example`](../../../.env.example)), the server guards `remove_member_from_pipe` and `set_role` against locking the service account out of its own pipes. Full contract: [Service account protection](members-email-webhooks.md#service-account-protection).
 
 ## Pre-flight validation for AI features
 

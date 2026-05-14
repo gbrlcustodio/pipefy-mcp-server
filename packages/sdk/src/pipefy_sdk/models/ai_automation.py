@@ -103,7 +103,7 @@ class CreateAiAutomationInput(BaseModel):
 
     When ``condition`` is omitted, it defaults to a deep copy of
     :data:`DEFAULT_CONDITION` so the internal API always receives an explicit
-    condition object (see ``docs/tools/automations-and-ai.md``).
+    condition object (see ``docs/mcp/tools/automations-and-ai.md``).
     """
 
     name: NonBlankStr

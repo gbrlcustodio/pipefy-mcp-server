@@ -67,6 +67,8 @@ uv tool install pipefy-cli
 
 **Setup, env vars, and MCP client config:** see **[docs/setup.md](docs/setup.md)** for first-time install, Pydantic / `.env` precedence, and Cursor / Claude Desktop examples.
 
+**Documentation index** (MCP vs CLI vs SDK): **[docs/README.md](docs/README.md)**.
+
 ---
 
 ## What's in this repo
@@ -88,19 +90,19 @@ The server exposes **128 tools**, grouped by domain. Canonical names live in `PI
 
 **Documentation for agents:** each tool's description and `Args:` come from its Python docstring — MCP clients show that text to LLMs for routing. Per-area docs below are the authority on parameters and edge cases.
 
-**Cross-cutting behavior** (pagination, IDs, `debug`, `extra_input`, two-step deletes, permissions, error shape) lives in **[`docs/tools/cross-cutting.md`](docs/tools/cross-cutting.md)**.
+**Cross-cutting behavior** (pagination, IDs, `debug`, `extra_input`, two-step deletes, permissions, error shape) lives in **[`docs/mcp/tools/cross-cutting.md`](docs/mcp/tools/cross-cutting.md)**.
 
 | Category | Tools | Description | Docs |
 |----------|:-----:|-------------|------|
-| **Pipes & cards** | 37 | Pipes, phases, fields, labels, cards, field conditions, and card-level attachments. | [Details](docs/tools/pipes-and-cards.md) |
-| **Database tables** | 17 | Tables, records, schema columns, and table-record attachment uploads. | [Details](docs/tools/database-tables.md) |
-| **Relations** | 8 | Pipe relations, table relations, card links, list/delete card-level relations. | [Details](docs/tools/relations.md) |
-| **Reports** | 17 | Pipe and organization reports: discovery, CRUD, single read, and async exports. | [Details](docs/tools/reports.md) |
-| **Automations & AI** | 22 | Traditional automations, AI automations, AI agents, and pre-flight validators. | [Details](docs/tools/automations-and-ai.md) |
-| **Observability** | 10 | Agent and automation logs, usage stats, credits, job exports, status polling. | [Details](docs/tools/observability.md) |
-| **Members, email & webhooks** | 11 | Pipe membership, card inbox emails, webhooks (list/update/create/delete). | [Details](docs/tools/members-email-webhooks.md) |
-| **Organization** | 1 | Fetch organization details (plan, members, pipes count). | [Details](docs/tools/organization.md) |
-| **Introspection** | 5 | Schema discovery, depth-controlled type resolution, and raw GraphQL execution. | [Details](docs/tools/introspection.md) |
+| **Pipes & cards** | 37 | Pipes, phases, fields, labels, cards, field conditions, and card-level attachments. | [Details](docs/mcp/tools/pipes-and-cards.md) |
+| **Database tables** | 17 | Tables, records, schema columns, and table-record attachment uploads. | [Details](docs/mcp/tools/database-tables.md) |
+| **Relations** | 8 | Pipe relations, table relations, card links, list/delete card-level relations. | [Details](docs/mcp/tools/relations.md) |
+| **Reports** | 17 | Pipe and organization reports: discovery, CRUD, single read, and async exports. | [Details](docs/mcp/tools/reports.md) |
+| **Automations & AI** | 22 | Traditional automations, AI automations, AI agents, and pre-flight validators. | [Details](docs/mcp/tools/automations-and-ai.md) |
+| **Observability** | 10 | Agent and automation logs, usage stats, credits, job exports, status polling. | [Details](docs/mcp/tools/observability.md) |
+| **Members, email & webhooks** | 11 | Pipe membership, card inbox emails, webhooks (list/update/create/delete). | [Details](docs/mcp/tools/members-email-webhooks.md) |
+| **Organization** | 1 | Fetch organization details (plan, members, pipes count). | [Details](docs/mcp/tools/organization.md) |
+| **Introspection** | 5 | Schema discovery, depth-controlled type resolution, and raw GraphQL execution. | [Details](docs/mcp/tools/introspection.md) |
 
 ---
 

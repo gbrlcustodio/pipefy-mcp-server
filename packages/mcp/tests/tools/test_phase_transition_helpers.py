@@ -409,7 +409,7 @@ async def test_ai_behavior_validation_ignores_non_move_actions(mock_client):
 async def test_ai_behavior_validation_logs_debug_on_phase_query_error(
     mock_client, caplog
 ):
-    caplog.set_level(logging.DEBUG, logger="pipefy_mcp.tools.phase_transition_helpers")
+    caplog.set_level(logging.DEBUG, logger="pipefy_sdk.ai_phase_transition_validation")
     mock_client.get_phase_allowed_move_targets.side_effect = Exception("gql fail")
     behaviors = [
         {

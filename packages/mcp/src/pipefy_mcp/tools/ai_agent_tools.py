@@ -13,6 +13,9 @@ from pipefy_sdk import (
     PipefyId,
     UpdateAiAgentInput,
 )
+from pipefy_sdk.ai_phase_transition_validation import (
+    collect_ai_behavior_move_transition_problems,
+)
 from pydantic import ValidationError
 
 from pipefy_mcp.settings import settings
@@ -39,9 +42,6 @@ from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmati
 from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
     extract_error_strings,
-)
-from pipefy_mcp.tools.phase_transition_helpers import (
-    collect_ai_behavior_move_transition_problems,
 )
 
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30

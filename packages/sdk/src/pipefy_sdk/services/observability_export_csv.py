@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+from collections.abc import AsyncIterator
 from typing import Final
 from urllib.parse import urljoin, urlparse
 
@@ -95,11 +96,11 @@ def xlsx_first_sheet_to_csv_limited(
         wb.close()
 
 
-async def download_bytes(url: str, *, max_bytes: int) -> bytes:
-    """GET a URL and return the body, enforcing a size limit.
+async def stream_bytes(url: str, *, max_bytes: int) -> AsyncIterator[bytes]:
+    """GET a URL and yield body chunks, enforcing a size limit.
 
-    Redirects are followed manually so each hop is checked for host allowlisting
-    and private-IP DNS results (mitigates open-redirect SSRF).
+    Same redirect, host allowlist, and DNS checks as :func:`download_bytes`, but does not
+    buffer the full body in memory.
 
     Args:
         url: HTTPS URL to fetch.
@@ -137,7 +138,6 @@ async def download_bytes(url: str, *, max_bytes: int) -> bytes:
                             raise ValueError(
                                 f"Export file exceeds max_download_bytes ({max_bytes} bytes)."
                             )
-                chunks: list[bytes] = []
                 total = 0
                 async for chunk in response.aiter_bytes():
                     total += len(chunk)
@@ -145,14 +145,32 @@ async def download_bytes(url: str, *, max_bytes: int) -> bytes:
                         raise ValueError(
                             f"Export file exceeds max_download_bytes ({max_bytes} bytes)."
                         )
-                    chunks.append(chunk)
-                return b"".join(chunks)
+                    yield chunk
+                return
 
         raise ValueError(f"Too many redirects (max {_MAX_REDIRECTS}).")
+
+
+async def download_bytes(url: str, *, max_bytes: int) -> bytes:
+    """GET a URL and return the full body, enforcing a size limit.
+
+    Redirects are followed manually so each hop is checked for host allowlisting
+    and private-IP DNS results (mitigates open-redirect SSRF).
+
+    Args:
+        url: HTTPS URL to fetch.
+        max_bytes: Abort with ``ValueError`` if Content-Length or streamed size exceeds this.
+
+    Raises:
+        ValueError: On disallowed URL, oversize body, or non-success status.
+        httpx.HTTPError: On transport errors.
+    """
+    return b"".join([c async for c in stream_bytes(url, max_bytes=max_bytes)])
 
 
 __all__ = [
     "download_bytes",
     "is_allowed_pipefy_export_download_url",
+    "stream_bytes",
     "xlsx_first_sheet_to_csv_limited",
 ]

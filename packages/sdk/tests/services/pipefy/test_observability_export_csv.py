@@ -11,6 +11,7 @@ from openpyxl import Workbook
 from pipefy_sdk.services.observability_export_csv import (
     download_bytes,
     is_allowed_pipefy_export_download_url,
+    stream_bytes,
     xlsx_first_sheet_to_csv_limited,
 )
 
@@ -240,7 +241,33 @@ async def test_download_bytes_follows_safe_relative_redirect():
 
 
 @pytest.mark.asyncio
-async def test_download_bytes_propagates_httpx_errors():
+async def test_stream_bytes_joins_chunks_like_download():
+    async def fake_aiter_bytes():
+        yield b"aa"
+        yield b"bb"
+
+    mock_response = AsyncMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.headers = {}
+    mock_response.aiter_bytes = fake_aiter_bytes
+    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_response.__aexit__ = AsyncMock(return_value=False)
+
+    mock_client = AsyncMock()
+    mock_client.stream = MagicMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch(
+        "pipefy_sdk.services.observability_export_csv.httpx.AsyncClient",
+        return_value=mock_client,
+    ):
+        parts = [
+            c
+            async for c in stream_bytes("https://app.pipefy.com/x.csv", max_bytes=1024)
+        ]
+        joined = await download_bytes("https://app.pipefy.com/x.csv", max_bytes=1024)
+    assert b"".join(parts) == joined == b"aabb"
     mock_response = AsyncMock()
     mock_response.raise_for_status = MagicMock(
         side_effect=httpx.HTTPStatusError(

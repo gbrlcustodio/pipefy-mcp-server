@@ -37,6 +37,7 @@ from pipefy_sdk.services.member_service import (
     format_service_account_removal_block_message,
     service_account_removal_blocked_user_ids,
 )
+from pipefy_sdk.services.observability_export_csv import download_bytes, stream_bytes
 from pipefy_sdk.services.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
@@ -63,6 +64,7 @@ __all__ = [
     "CreateAiAutomationInput",
     "CreateSendTaskAutomationInput",
     "DeleteCommentInput",
+    "download_bytes",
     "InternalApiClient",
     "NonBlankStr",
     "PipefyAPIError",
@@ -80,4 +82,5 @@ __all__ = [
     "format_service_account_removal_block_message",
     "infer_content_type",
     "service_account_removal_blocked_user_ids",
+    "stream_bytes",
 ]

@@ -46,7 +46,7 @@ Next, paste the three values into your MCP client config — see [MCP client set
 
 ## MCP client setup
 
-All three clients use the same JSON shape. The `command` is `uvx`, which fetches the server from GitHub on first run and caches it locally — no clone, no `cwd`. Pin to a release tag (`@v0.1.0` below); see [Upgrading](#upgrading) for tag bumps.
+All three clients use the same JSON shape. The `command` is `uvx`, which fetches the server from GitHub on first run and caches it locally — no clone, no `cwd`. Pin to a release tag (`@v0.1.0-beta.1` below); see [Upgrading](#upgrading) for tag bumps.
 
 ```json
 "env": {
@@ -73,7 +73,7 @@ The three URL values are the same for every Pipefy organization on the public ho
             "command": "uvx",
             "args": [
                 "--from",
-                "git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0",
+                "git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0-beta.1",
                 "pipefy-mcp-server"
             ],
             "env": {
@@ -104,7 +104,7 @@ MCP servers load from a JSON config file at:
             "command": "uvx",
             "args": [
                 "--from",
-                "git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0",
+                "git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0-beta.1",
                 "pipefy-mcp-server"
             ],
             "env": {
@@ -125,7 +125,7 @@ MCP servers load from a JSON config file at:
 
 ```bash
 claude mcp add --scope project pipefy \
-  -- uvx --from git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0 pipefy-mcp-server
+  -- uvx --from git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0-beta.1 pipefy-mcp-server
 ```
 
 Then set each env var (repeat per key):
@@ -147,7 +147,7 @@ claude mcp add-env pipefy PIPEFY_OAUTH_SECRET <SERVICE_ACCOUNT_CLIENT_SECRET>
             "command": "uvx",
             "args": [
                 "--from",
-                "git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0",
+                "git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.1.0-beta.1",
                 "pipefy-mcp-server"
             ],
             "env": {
@@ -166,7 +166,7 @@ Commit `.mcp.json` with placeholders (or env injection) to share the same shape 
 
 ### Upgrading
 
-To pull a newer release, change `@v0.1.0` in `args` to the new tag and **restart your MCP client**. `uvx` caches the resolved git ref, so a fresh process is required to pick up the new revision. If a stale cache is suspected, run `uv cache clean` and restart the client again.
+To pull a newer release, change `@v0.1.0-beta.1` in `args` to the new tag and **restart your MCP client**. `uvx` caches the resolved git ref, so a fresh process is required to pick up the new revision. If a stale cache is suspected, run `uv cache clean` and restart the client again.
 
 ---
 

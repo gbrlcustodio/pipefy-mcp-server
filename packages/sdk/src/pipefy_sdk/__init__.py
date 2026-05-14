@@ -31,12 +31,22 @@ from pipefy_sdk.services.automation_graphql_types import (
     AutomationRuleSummary,
 )
 from pipefy_sdk.services.internal_api_client import InternalApiClient
+from pipefy_sdk.services.member_service import (
+    format_service_account_removal_block_message,
+    service_account_removal_blocked_user_ids,
+)
+from pipefy_sdk.services.table_service import (
+    UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
+    UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
+)
 from pipefy_sdk.services.types import AiAgentGraphPayload, CardSearch, copy_card_search
 from pipefy_sdk.settings import PipefySettings
 
 __all__ = [
     "AiAgentGraphPayload",
     "AiAutomationService",
+    "UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS",
+    "UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE",
     "AutomationActionRow",
     "AutomationConditionInput",
     "AutomationEventParamsInput",
@@ -64,5 +74,7 @@ __all__ = [
     "UploadAttachmentToTableRecordInput",
     "copy_card_search",
     "create_form_model",
+    "format_service_account_removal_block_message",
     "infer_content_type",
+    "service_account_removal_blocked_user_ids",
 ]

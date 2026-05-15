@@ -117,6 +117,30 @@ async def test_invite_members_success(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("member_session", [None], indirect=True)
+async def test_invite_members_maps_sdk_value_error_to_invalid_arguments(
+    member_session, mock_member_client, extract_payload
+):
+    """MCP maps ``ValueError`` from ``invite_members`` (e.g. email validation) to INVALID_ARGUMENTS."""
+    mock_member_client.invite_members.side_effect = ValueError(
+        "Invalid members[0]: expected valid email and non-empty role_name (x)."
+    )
+    async with member_session as session:
+        result = await session.call_tool(
+            "invite_members",
+            {
+                "pipe_id": "p1",
+                "members": [{"email": "not-an-email", "role_name": "member"}],
+            },
+        )
+    mock_member_client.invite_members.assert_awaited_once()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "email" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("member_session", [None], indirect=True)
 async def test_invite_members_graphql_error(
     member_session, mock_member_client, extract_payload
 ):
@@ -129,7 +153,7 @@ async def test_invite_members_graphql_error(
             "invite_members",
             {
                 "pipe_id": "p1",
-                "members": [{"email": "bad", "role_name": "member"}],
+                "members": [{"email": "valid@example.com", "role_name": "member"}],
             },
         )
 

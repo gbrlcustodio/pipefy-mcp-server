@@ -7,10 +7,14 @@ the error path only, so regressions are invisible in happy-path tests.
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 import pytest
+from pipefy_sdk.client import PipefyClient
 
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
     field_condition_phase_field_id_looks_like_slug,
+    find_phase_field_dependents,
     map_delete_pipe_error_to_message,
 )
 
@@ -95,3 +99,73 @@ class TestFieldConditionPhaseFieldIdLooksLikeSlug:
     def test_rejects_non_string_non_int(self):
         assert field_condition_phase_field_id_looks_like_slug(None) is False
         assert field_condition_phase_field_id_looks_like_slug([]) is False
+
+
+def _nested_condition(wrap_levels: int) -> dict:
+    leaf: dict = {
+        "expressions": [
+            {
+                "field_address": "429358624",
+                "operation": "equals",
+                "value": "v",
+            },
+        ],
+    }
+    out: dict = leaf
+    for _ in range(wrap_levels):
+        out = {"nest": out}
+    return out
+
+
+@pytest.mark.anyio
+async def test_find_phase_field_dependents_respects_condition_tree_depth_cap():
+    """Very deep ``condition`` trees stop walking at a fixed depth (defensive)."""
+    client = AsyncMock(spec=PipefyClient)
+    shallow = _nested_condition(5)
+    client.get_field_conditions = AsyncMock(
+        return_value={
+            "phase": {
+                "fieldConditions": [
+                    {
+                        "id": "c-shallow",
+                        "name": "S",
+                        "condition": shallow,
+                        "actions": [],
+                    },
+                ],
+            },
+        },
+    )
+    out_shallow = await find_phase_field_dependents(
+        client,
+        phase_id="50",
+        field_internal_id="429358624",
+        field_uuid=None,
+        field_slug=None,
+    )
+    assert len(out_shallow) == 1
+    assert out_shallow[0]["id"] == "c-shallow"
+
+    deep = _nested_condition(25)
+    client.get_field_conditions = AsyncMock(
+        return_value={
+            "phase": {
+                "fieldConditions": [
+                    {
+                        "id": "c-deep",
+                        "name": "D",
+                        "condition": deep,
+                        "actions": [],
+                    },
+                ],
+            },
+        },
+    )
+    out_deep = await find_phase_field_dependents(
+        client,
+        phase_id="50",
+        field_internal_id="429358624",
+        field_uuid=None,
+        field_slug=None,
+    )
+    assert out_deep == []

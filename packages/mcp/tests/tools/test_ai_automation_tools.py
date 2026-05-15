@@ -1146,7 +1146,7 @@ class TestValidateAiAutomationPrompt:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                 },
             )
         assert result.isError is False
@@ -1236,7 +1236,7 @@ class TestValidateAiAutomationPrompt:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                 },
             )
         payload = extract_payload(result)
@@ -1257,7 +1257,7 @@ class TestValidateAiAutomationPrompt:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                     "event_id": "card_created",
                 },
             )
@@ -1279,7 +1279,7 @@ class TestValidateAiAutomationPrompt:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                     "event_id": "nonexistent_event",
                 },
             )
@@ -1322,7 +1322,7 @@ class TestValidateAiAutomationPrompt:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                 },
             )
         payload = extract_payload(result)
@@ -1340,7 +1340,7 @@ class TestValidateAiAutomationPrompt:
                 {
                     "pipe_id": "",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                 },
             )
         mock_pipefy_client.get_pipe_with_preferences.assert_not_called()
@@ -1360,7 +1360,7 @@ class TestValidateAiAutomationPrompt:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                     "event_id": "card_created",
                 },
             )
@@ -1436,7 +1436,7 @@ class TestValidateAiAutomationPromptCreditCheck:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                 },
             )
         payload = extract_payload(result)
@@ -1468,7 +1468,7 @@ class TestValidateAiAutomationPromptCreditCheck:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                 },
             )
         payload = extract_payload(result)
@@ -1499,7 +1499,7 @@ class TestValidateAiAutomationPromptCreditCheck:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                 },
             )
         payload = extract_payload(result)
@@ -1530,7 +1530,7 @@ class TestValidateAiAutomationPromptCreditCheck:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                 },
             )
         payload = extract_payload(result)
@@ -1551,7 +1551,7 @@ class TestValidateAiAutomationPromptCreditCheck:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                 },
             )
         payload = extract_payload(result)
@@ -1572,7 +1572,7 @@ class TestValidateAiAutomationPromptCreditCheck:
                 {
                     "pipe_id": "303",
                     "prompt": "Summarize: %{100}",
-                    "field_ids": ["100"],
+                    "field_ids": ["200"],
                 },
             )
         payload = extract_payload(result)

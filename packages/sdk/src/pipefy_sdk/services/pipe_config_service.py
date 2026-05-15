@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from httpx import Auth
@@ -27,14 +28,22 @@ from pipefy_sdk.queries.pipe_config_queries import (
     UPDATE_PHASE_MUTATION,
     UPDATE_PIPE_MUTATION,
 )
+from pipefy_sdk.services.pipe_service import PipeService
 from pipefy_sdk.settings import PipefySettings
 from pipefy_sdk.utils import (
     normalize_field_condition_actions,
     normalize_field_condition_payload,
+    slug_like_field_token,
 )
 
 _CREATE_FIELD_CONDITION_RESERVED_ATTRS = frozenset({"phaseId"})
 _UPDATE_FIELD_CONDITION_RESERVED_ATTRS = frozenset({"id"})
+
+_PHASE_FIELD_SLUG_RESOLVE_FETCH_FAILED = (
+    "Could not load fields for one or more phases while resolving this slug; "
+    "pass `uuid` from get_phase_fields or `phase_id` so the lookup does not "
+    "depend on every phase."
+)
 
 
 class PipeConfigService(BasePipefyClient):
@@ -44,8 +53,11 @@ class PipeConfigService(BasePipefyClient):
         self,
         settings: PipefySettings,
         auth: Auth | None = None,
+        *,
+        pipe_service: PipeService | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
+        self._pipe_service = pipe_service
 
     async def create_pipe(self, name: str, organization_id: str | int) -> dict:
         """Create a pipe in the organization."""
@@ -142,17 +154,130 @@ class PipeConfigService(BasePipefyClient):
         )
 
     async def update_phase_field(self, field_id: str | int, **attrs: Any) -> dict:
-        """Update a phase field by ID.
+        """Update a phase field by slug (or numeric/uuid field id) on Pipefy.
+
+        Pipefy's ``UpdatePhaseFieldInput`` takes the field **slug** as ``id`` and
+        accepts an optional ``uuid`` to disambiguate when the same slug repeats
+        across phases. The numeric ``internal_id`` from ``get_phase_fields`` is
+        **not** a valid ``id`` here — use the slug.
 
         Args:
-            field_id: Phase field ID (Pipefy may return string slugs from create; integers still supported).
-            **attrs: `UpdatePhaseFieldInput` fields to set (omit or pass None to skip).
+            field_id: Phase field slug (preferred), uuid, or numeric ``id``.
+            **attrs: ``UpdatePhaseFieldInput`` fields. Optional ``phase_id`` /
+                ``pipe_id`` (stripped before the mutation) trigger a slug-only
+                disambiguation: the SDK looks up the field's ``uuid`` and injects
+                it into ``attrs["uuid"]`` when the match is unique. ``phase_id``
+                scans one phase; ``pipe_id`` scans the start form and every phase.
         """
-        payload: dict[str, Any] = {"id": str(field_id)}
+        attrs = dict(attrs)
+        phase_id = attrs.pop("phase_id", None)
+        pipe_id = attrs.pop("pipe_id", None)
+        uuid_val = attrs.get("uuid")
+        raw_token = str(field_id).strip()
+
+        if (
+            uuid_val is None
+            and self._pipe_service is not None
+            and slug_like_field_token(raw_token)
+        ):
+            resolved_uuid: str | None = None
+            if phase_id is not None:
+                resolved_uuid = await self._resolve_phase_field_uuid_with_phase(
+                    raw_token, str(phase_id).strip()
+                )
+            elif pipe_id is not None:
+                resolved_uuid = await self._resolve_phase_field_uuid_with_pipe(
+                    raw_token, str(pipe_id).strip()
+                )
+            if resolved_uuid is not None:
+                attrs["uuid"] = resolved_uuid
+
+        payload: dict[str, Any] = {"id": raw_token}
         for key, value in attrs.items():
             if value is not None:
                 payload[key] = value
         return await self.execute_query(UPDATE_PHASE_FIELD_MUTATION, {"input": payload})
+
+    @staticmethod
+    def _field_rows_matching_token(
+        fields: list[Any], token: str
+    ) -> list[dict[str, Any]]:
+        """Return field dicts whose ``id`` (slug), ``internal_id``, or ``uuid`` matches ``token``."""
+        out: list[dict[str, Any]] = []
+        tok = str(token).strip()
+        for field in fields:
+            if not isinstance(field, dict):
+                continue
+            fid = str(field.get("id", "")).strip()
+            iid = field.get("internal_id")
+            iid_str = str(iid).strip() if iid is not None else ""
+            uuid_str = str(field.get("uuid") or "").strip()
+            if (
+                tok == fid
+                or (iid_str and tok == iid_str)
+                or (uuid_str and tok == uuid_str)
+            ):
+                out.append(field)
+        return out
+
+    async def _resolve_phase_field_uuid_with_phase(
+        self, token: str, phase_id: str
+    ) -> str | None:
+        """Return the unique field ``uuid`` for ``token`` within ``phase_id`` or ``None``."""
+        data = await self._pipe_service.get_phase_fields(phase_id)
+        matches = self._field_rows_matching_token(list(data.get("fields") or []), token)
+        uuids = {str(f["uuid"]) for f in matches if f.get("uuid")}
+        if len(uuids) == 1:
+            return next(iter(uuids))
+        return None
+
+    async def _resolve_phase_field_uuid_with_pipe(
+        self, token: str, pipe_id: str
+    ) -> str | None:
+        """Return the unique field ``uuid`` for ``token`` across the pipe or ``None``."""
+        pipe_row = await self._pipe_service.get_pipe(pipe_id)
+        pipe = (pipe_row or {}).get("pipe") or {}
+        uuids: set[str] = set()
+        for field in pipe.get("start_form_fields") or []:
+            if not isinstance(field, dict):
+                continue
+            if (
+                self._field_rows_matching_token([field], token)
+                and field.get("uuid") is not None
+            ):
+                uuids.add(str(field["uuid"]))
+        phase_ids = [
+            str(p["id"])
+            for p in (pipe.get("phases") or [])
+            if isinstance(p, dict) and p.get("id") is not None
+        ]
+        phase_results = await asyncio.gather(
+            *(self._pipe_service.get_phase_fields(pid) for pid in phase_ids),
+            return_exceptions=True,
+        )
+        failed_phase_fetches = 0
+        for result in phase_results:
+            if isinstance(result, BaseException):
+                failed_phase_fetches += 1
+                continue
+            pdata = result or {}
+            for field in self._field_rows_matching_token(
+                list(pdata.get("fields") or []), token
+            ):
+                if field.get("uuid") is not None:
+                    uuids.add(str(field["uuid"]))
+        if failed_phase_fetches and len(uuids) <= 1:
+            raise ValueError(_PHASE_FIELD_SLUG_RESOLVE_FETCH_FAILED)
+        if len(uuids) == 1:
+            return next(iter(uuids))
+        if len(uuids) > 1:
+            msg = (
+                "Multiple phase fields match this slug on the pipe. Pass `uuid` from "
+                "get_phase_fields for the specific field, or pass `phase_id` to narrow "
+                "the lookup to one phase."
+            )
+            raise ValueError(msg)
+        return None
 
     async def delete_phase_field(
         self,

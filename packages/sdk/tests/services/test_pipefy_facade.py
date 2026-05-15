@@ -798,3 +798,19 @@ async def test_pipefy_client_upload_attachment_methods_delegate_to_sdk_helpers()
         assert out_rec == sample
         rec_m.assert_awaited_once()
         assert rec_m.await_args.kwargs["table_record_id"] == "t1"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_pipefy_client_invite_members_propagates_value_error(mock_settings):
+    member_service = AsyncMock()
+    member_service.invite_members = AsyncMock(
+        side_effect=ValueError("Invalid members[0]: expected valid email")
+    )
+    client = PipefyClient.__new__(PipefyClient)
+    client._member_service = member_service
+    with pytest.raises(ValueError, match="email"):
+        await client.invite_members(
+            "1",
+            [{"email": "x", "role_name": "m"}],
+        )

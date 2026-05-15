@@ -112,6 +112,11 @@ class PipeTools:
             pipe has no start-form fields, which would otherwise leave the card
             titled "Draft".
 
+            When the pipe uses Pipefy's default of deriving the card title from the
+            first text-like start-form field, a later ``update_card_field`` on that
+            field can still change the displayed title; do not assume ``title`` stays
+            fixed if fields are edited afterwards.
+
             Args:
                 pipe_id: The ID of the pipe where the card will be created.
                 title: Optional card title. Applied via updateCard after creation.

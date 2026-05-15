@@ -306,6 +306,9 @@ class PipeConfigTools:
             """Clone a pipe from a template pipe ID.
 
             Returns cloned pipe objects (including new IDs) from the API payload.
+            The ``phases`` array in that response may be empty because cloning is
+            asynchronous; call ``get_pipe`` again with the new pipe id after a short
+            wait to see phases once Pipefy materializes them.
 
             Args:
                 pipe_template_id: Source pipe ID to use as template.
@@ -648,6 +651,8 @@ class PipeConfigTools:
             required: bool | None = None,
             options: list[Any] | dict[str, Any] | None = None,
             uuid: str | None = None,
+            phase_id: PipefyId | None = None,
+            pipe_id: PipefyId | None = None,
             extra_input: dict[str, Any] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -660,6 +665,10 @@ class PipeConfigTools:
             multiple phases, pass ``uuid`` to disambiguate (available from
             ``create_phase_field`` and ``get_phase_fields``).
 
+            When ``uuid`` is omitted and ``field_id`` looks like a slug, pass ``phase_id`` or
+            ``pipe_id`` so the SDK can resolve the field's ``internal_id`` before calling the API
+            (avoids misleading ``PERMISSION_DENIED`` responses from Pipefy for valid slugs).
+
             Args:
                 field_id: Field slug (from create_phase_field or get_phase_fields).
                     Discover via: ``get_phase_fields(phase_id)[].id`` (or ``uuid`` for disambiguation).
@@ -669,12 +678,30 @@ class PipeConfigTools:
                 options: Field options list (e.g. ["Alta", "Média", "Baixa"] for select fields).
                 uuid: Field UUID for disambiguation when the slug exists on multiple phases.
                     Discover via: ``get_phase_fields(phase_id)[].uuid``.
+                phase_id: When set (without ``uuid``), narrows slug resolution to that phase's fields.
+                pipe_id: When set (without ``uuid``), resolves a slug across the whole pipe (start form + phases).
                 extra_input: Additional UpdatePhaseFieldInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
                 return err
+            ok_ph, phase_id_norm, ph_err = validate_optional_tool_id(
+                phase_id, "phase_id"
+            )
+            if not ok_ph:
+                return build_pipe_tool_error_payload(
+                    message=tool_error_message(ph_err),
+                    code="INVALID_ARGUMENTS",
+                )
+            ok_pipe, pipe_id_norm, pipe_err = validate_optional_tool_id(
+                pipe_id, "pipe_id"
+            )
+            if not ok_pipe:
+                return build_pipe_tool_error_payload(
+                    message=tool_error_message(pipe_err),
+                    code="INVALID_ARGUMENTS",
+                )
             if not isinstance(label, str) or not label.strip():
                 return build_pipe_tool_error_payload(
                     message=(
@@ -697,9 +724,18 @@ class PipeConfigTools:
                 update_attrs["options"] = options
             if uuid is not None:
                 update_attrs["uuid"] = uuid
+            if phase_id_norm is not None:
+                update_attrs["phase_id"] = phase_id_norm
+            if pipe_id_norm is not None:
+                update_attrs["pipe_id"] = pipe_id_norm
             fid = field_id.strip() if isinstance(field_id, str) else field_id
             try:
                 raw = await client.update_phase_field(fid, **update_attrs)
+            except ValueError as exc:
+                return build_pipe_tool_error_payload(
+                    message=str(exc),
+                    code="INVALID_ARGUMENTS",
+                )
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc,
@@ -801,8 +837,8 @@ class PipeConfigTools:
                     "field_conditions": conditions,
                     "hint": (
                         f"{len(conditions)} field condition(s) reference this phase field. "
-                        "Delete them first with `delete_field_condition`, or proceed if "
-                        "orphans are acceptable."
+                        "Remove or update them with delete_field_condition (or the Pipefy UI) "
+                        "before deleting the field, or proceed if orphaned rules are acceptable."
                     ),
                 }
 

@@ -708,3 +708,28 @@ async def test_simulate_automation_transport_error(mock_settings):
             action_id="generate_with_ai",
             sample_card_id="1",
         )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_logs_by_repo_skips_graphql_when_pipe_has_no_automations(
+    mock_settings,
+):
+    """Facade short-circuits before automationLogsByRepo when ``get_automations`` is empty."""
+    from pipefy_sdk.client import PipefyClient
+
+    client = PipefyClient.__new__(PipefyClient)
+    client.get_automations = AsyncMock(return_value=[])
+    obs = AsyncMock()
+    obs.get_automation_logs_by_repo = AsyncMock(
+        return_value={"automationLogsByRepo": {"should_not": "call"}}
+    )
+    client._observability_service = obs
+
+    out = await PipefyClient.get_automation_logs_by_repo(
+        client, "repo-77", first=10, after="c0"
+    )
+    obs.get_automation_logs_by_repo.assert_not_called()
+    assert out["automationLogsByRepo"]["nodes"] == []
+    assert out["automationLogsByRepo"]["totalCount"] == 0
+    assert out["automationLogsByRepo"]["pageInfo"]["hasNextPage"] is False

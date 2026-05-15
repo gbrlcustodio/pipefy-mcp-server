@@ -212,10 +212,11 @@ class FieldConditionTools:
                     objects with ``structure_id``, ``field_address``, ``operation``, ``value``) and
                     ``expressions_structure`` (array of arrays of string indices).
                     Discover via: ``get_phase_fields(phase_id)[].internal_id`` for ``field_address``.
-                actions: List of ``FieldConditionActionInput`` dicts; use ``phaseFieldId`` (often the
-                    field's ``internal_id`` from ``get_phase_fields``). Each action must include
-                    ``actionId`` (``hide`` or ``show``); legacy ``hidden`` is mapped to ``hide``.
-                    Discover via: ``get_phase_fields(phase_id)[].internal_id`` for ``phaseFieldId``.
+                actions: List of ``FieldConditionActionInput`` dicts; each needs ``phaseFieldId``.
+                    ``phaseFieldId`` is usually the field's ``internal_id`` from ``get_phase_fields``,
+                    same pattern as ``fill_card_phase_fields`` and ``create_card_relation``.
+                    Each action must include ``actionId`` (``hide`` or ``show``); legacy ``hidden`` is
+                    mapped to ``hide``.
                 name: Rule display name. Required by the API; may also be provided via
                     ``extra_input={"name": ...}`` for back-compat.
                 extra_input: Optional extra keys for ``createFieldConditionInput`` (e.g. ``index``).

@@ -23,6 +23,7 @@ from pipefy_sdk.models.comment import (
     DeleteCommentInput,
     UpdateCommentInput,
 )
+from pipefy_sdk.models.member_invite import MemberInvite
 from pipefy_sdk.models.send_task_automation import CreateSendTaskAutomationInput
 from pipefy_sdk.models.validators import NonBlankStr, PipefyId
 
@@ -34,6 +35,7 @@ __all__ = [
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
     "CreateSendTaskAutomationInput",
+    "MemberInvite",
     "DeleteCommentInput",
     "NonBlankStr",
     "PipefyId",

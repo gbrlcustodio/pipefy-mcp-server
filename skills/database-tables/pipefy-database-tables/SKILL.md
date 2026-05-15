@@ -18,7 +18,7 @@ Tables, records (rows), schema columns (table fields), and attachments for Pipef
 ## Cross-cutting patterns
 
 - Same conventions as pipe building: `introspect_type` on inputs such as `CreateTableFieldInput` / `UpdateTableFieldInput`, `debug=true` on mutations.
-- **Pagination:** `get_table_records` and `find_records` support `first` / `after`. Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response and pass `after=endCursor` for the next page (default page size is 50).
+- **Pagination:** `get_table_records` and `find_records` support `first` / `after`. With the unified MCP envelope, read top-level `pagination.has_more` and `pagination.end_cursor` (and `pagination.page_size`) and pass `after=end_cursor` for the next page (default page size is 50).
 - **Destructive deletes** (`delete_table`, `delete_table_record`, `delete_table_field`) use a **mandatory two-step flow**: call without `confirm=true` first (preview), then with `confirm=true` after user approves.
 
 ---

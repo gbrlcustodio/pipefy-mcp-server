@@ -904,6 +904,79 @@ async def test_delete_phase_field_preview_lists_dependent_conditions(
     assert "delete_field_condition" in deps["hint"]
 
 
+# Smoke 2026-05-15 (probe 8: expression-only refs in field conditions)
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_delete_phase_field_preview_includes_conditions_with_expression_only_refs(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    """Rule references ``priority`` in condition expressions.
+
+    ``find_phase_field_dependents`` must treat expression ``field_address`` as a
+    dependency, not only ``actions[].phaseFieldId``. Until 1.3, this stays red:
+    preview omits ``dependents.field_conditions`` when the field is only used in
+    the ``when`` side of the rule (actions may target a different field).
+    """
+    pipe_uuid = "bddc2aff-9c0b-4ef8-bb6d-6bb9bd380a11"
+    phase_id = 343162749
+    mock_pipe_config_client.get_phase_fields.return_value = {
+        "fields": [
+            {
+                "id": "priority",
+                "internal_id": "429358624",
+                "uuid": pipe_uuid,
+            },
+            {
+                "id": "detail",
+                "internal_id": "429358625",
+                "uuid": "c0ffee00-9c0b-4ef8-bb6d-6bb9bd380a11",
+            },
+        ]
+    }
+    mock_pipe_config_client.get_field_conditions.return_value = {
+        "phase": {
+            "fieldConditions": [
+                {
+                    "id": "306743895",
+                    "name": "When priority is Alta hide detail",
+                    "condition": {
+                        "expressions": [
+                            {
+                                "field_address": "429358624",
+                                "operation": "equals",
+                                "value": "Alta",
+                            }
+                        ]
+                    },
+                    "actions": [{"phaseFieldId": "429358625"}],
+                }
+            ]
+        }
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "delete_phase_field",
+            {
+                "field_id": "priority",
+                "phase_id": phase_id,
+                "pipe_uuid": pipe_uuid,
+                "confirm": False,
+            },
+        )
+
+    mock_pipe_config_client.delete_phase_field.assert_not_called()
+    mock_pipe_config_client.get_phase_fields.assert_awaited_once_with(str(phase_id))
+    mock_pipe_config_client.get_field_conditions.assert_awaited_once_with(str(phase_id))
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    deps = payload.get("dependents")
+    assert deps is not None
+    fcs = deps.get("field_conditions") or []
+    assert len(fcs) >= 1
+    assert any(c.get("id") == "306743895" for c in fcs)
+
+
 @pytest.mark.anyio
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_preview_no_deps_unchanged(

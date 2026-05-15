@@ -68,6 +68,82 @@ async def test_invite_members_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_invite_members_rejects_invalid_email(mock_settings):
+    service = MemberService(settings=mock_settings)
+    service.execute_query = AsyncMock()
+    with pytest.raises(ValueError) as excinfo:
+        await service.invite_members(
+            "602",
+            [{"email": "invalid-email-format", "role_name": "member"}],
+        )
+    message = str(excinfo.value)
+    assert "members[0].email" in message
+    assert "\n" not in message
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_invite_members_rejects_unknown_keys(mock_settings):
+    """``MemberInvite.model_config`` forbids extras; surfaced as one-line ``ValueError``."""
+    service = MemberService(settings=mock_settings)
+    service.execute_query = AsyncMock()
+    with pytest.raises(ValueError) as excinfo:
+        await service.invite_members(
+            "602",
+            [
+                {
+                    "email": "ok@example.com",
+                    "role_name": "member",
+                    "foo": "bar",
+                },
+            ],
+        )
+    message = str(excinfo.value)
+    assert "members[0].foo" in message
+    assert "\n" not in message
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_invite_members_rejects_blank_role_name(mock_settings):
+    """Blank ``role_name`` surfaces a single-line error pointing at the right field."""
+    service = MemberService(settings=mock_settings)
+    service.execute_query = AsyncMock()
+    with pytest.raises(ValueError) as excinfo:
+        await service.invite_members(
+            "602",
+            [{"email": "ok@example.com", "role_name": ""}],
+        )
+    message = str(excinfo.value)
+    assert "members[0].role_name" in message
+    assert "\n" not in message
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_invite_members_lowercases_email(mock_settings):
+    payload = {
+        "inviteMembers": {
+            "users": [{"id": "u1", "email": "user@example.com"}],
+            "errors": [],
+        }
+    }
+    service = _make_service(mock_settings, payload)
+    await service.invite_members(
+        "601",
+        [{"email": "User@Example.COM", "role_name": "member"}],
+    )
+    _q, variables = service.execute_query.call_args[0]
+    assert variables["input"]["emails"] == [
+        {"email": "user@example.com", "role_name": "member"},
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_remove_members_from_pipe_success(mock_settings):
     payload = {"removeMembersFromPipe": {"success": True}}
     pipe_service = AsyncMock(spec=PipeService)

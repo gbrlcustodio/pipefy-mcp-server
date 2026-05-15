@@ -228,7 +228,9 @@ async def test_get_table_record_graphql_error(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("table_session", [None], indirect=True)
-async def test_find_records_success(table_session, mock_table_client, extract_payload):
+async def test_find_records_success(
+    table_session, mock_table_client, extract_payload, unified_envelope
+):
     mock_table_client.find_records.return_value = {
         "findRecords": {
             "edges": [],
@@ -247,7 +249,37 @@ async def test_find_records_success(table_session, mock_table_client, extract_pa
     )
     payload = extract_payload(result)
     assert payload["success"] is True
-    assert payload["pagination"]["hasNextPage"] is False
+    assert payload["pagination"] == {
+        "has_more": False,
+        "end_cursor": None,
+        "page_size": 50,
+    }
+    assert "findRecords" in payload["data"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("table_session", [None], indirect=True)
+async def test_find_records_unified_pagination_with_first(
+    table_session, mock_table_client, extract_payload, unified_envelope
+):
+    mock_table_client.find_records.return_value = {
+        "findRecords": {
+            "edges": [{"node": {"id": "1"}}],
+            "pageInfo": {"hasNextPage": True, "endCursor": "cur99"},
+        }
+    }
+    async with table_session as session:
+        result = await session.call_tool(
+            "find_records",
+            {"table_id": 10, "field_id": "fid", "field_value": "acme", "first": 5},
+        )
+    mock_table_client.find_records.assert_awaited_once_with(
+        "10", "fid", "acme", first=5, after=None
+    )
+    payload = extract_payload(result)
+    assert payload["pagination"]["has_more"] is True
+    assert payload["pagination"]["end_cursor"] == "cur99"
+    assert payload["pagination"]["page_size"] == 5
 
 
 @pytest.mark.anyio
@@ -1142,7 +1174,7 @@ async def test_find_records_blank_field_id(
 @pytest.mark.anyio
 @pytest.mark.parametrize("table_session", [None], indirect=True)
 async def test_find_records_blank_field_value(
-    table_session, mock_table_client, extract_payload
+    table_session, mock_table_client, extract_payload, unified_envelope
 ):
     """field_value is typed as str — empty string is valid per the tool (not blank-checked)."""
     mock_table_client.find_records.return_value = {

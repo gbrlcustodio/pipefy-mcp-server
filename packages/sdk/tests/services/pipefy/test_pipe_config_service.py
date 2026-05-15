@@ -45,6 +45,12 @@ def _make_service(mock_settings, return_value: dict):
     return service
 
 
+def _make_service_with_pipe(mock_settings, return_value: dict, pipe_service: AsyncMock):
+    service = PipeConfigService(settings=mock_settings, pipe_service=pipe_service)
+    service.execute_query = AsyncMock(return_value=return_value)
+    return service
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_pipe_sends_input_and_returns_payload(mock_settings):
@@ -309,6 +315,279 @@ async def test_update_phase_field_accepts_string_slug(mock_settings):
             },
         },
     }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_phase_field_resolves_slug_via_phase_id(mock_settings):
+    """Narrow resolver: ``phase_id`` injects the field's ``uuid`` for slug disambiguation."""
+    pipe_svc = AsyncMock()
+    pipe_svc.get_phase_fields = AsyncMock(
+        return_value={
+            "fields": [
+                {
+                    "id": "priority",
+                    "internal_id": "429358624",
+                    "uuid": "08c3f133-6dae-4a35-9276-b6d0d63a7c24",
+                    "label": "Priority",
+                    "type": "select",
+                },
+            ],
+        },
+    )
+    service = _make_service_with_pipe(
+        mock_settings,
+        {
+            "updatePhaseField": {
+                "phase_field": {
+                    "id": "priority",
+                    "label": "Priority",
+                    "type": "select",
+                },
+            },
+        },
+        pipe_svc,
+    )
+    result = await service.update_phase_field(
+        "priority",
+        label="Priority",
+        description="x",
+        phase_id="343162749",
+    )
+    pipe_svc.get_phase_fields.assert_awaited_once_with("343162749")
+    pipe_svc.get_pipe.assert_not_called()
+    _q, variables = service.execute_query.call_args[0]
+    assert variables == {
+        "input": {
+            "id": "priority",
+            "uuid": "08c3f133-6dae-4a35-9276-b6d0d63a7c24",
+            "label": "Priority",
+            "description": "x",
+        }
+    }
+    assert result["updatePhaseField"]["phase_field"]["id"] == "priority"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_phase_field_resolves_slug_via_pipe_id(mock_settings):
+    """Pipe-wide resolver: unique slug across pipe injects the field's ``uuid``."""
+    pipe_svc = AsyncMock()
+    pipe_svc.get_pipe = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [
+                    {
+                        "id": "ph1",
+                    },
+                ],
+                "start_form_fields": [],
+            },
+        },
+    )
+    pipe_svc.get_phase_fields = AsyncMock(
+        return_value={
+            "fields": [
+                {
+                    "id": "priority",
+                    "internal_id": "429358624",
+                    "uuid": "08c3f133-6dae-4a35-9276-b6d0d63a7c24",
+                    "label": "Priority",
+                    "type": "select",
+                },
+            ],
+        },
+    )
+    service = _make_service_with_pipe(
+        mock_settings,
+        {
+            "updatePhaseField": {
+                "phase_field": {
+                    "id": "priority",
+                    "label": "Priority",
+                    "type": "select",
+                },
+            },
+        },
+        pipe_svc,
+    )
+    result = await service.update_phase_field(
+        "priority",
+        label="Priority",
+        description="x",
+        pipe_id="501",
+    )
+    _q, variables = service.execute_query.call_args[0]
+    assert variables == {
+        "input": {
+            "id": "priority",
+            "uuid": "08c3f133-6dae-4a35-9276-b6d0d63a7c24",
+            "label": "Priority",
+            "description": "x",
+        }
+    }
+    assert result["updatePhaseField"]["phase_field"]["id"] == "priority"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_phase_field_ambiguous_slug_raises(mock_settings):
+    pipe_svc = AsyncMock()
+    pipe_svc.get_pipe = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [{"id": "p1"}, {"id": "p2"}],
+                "start_form_fields": [],
+            },
+        },
+    )
+    dup_field = {
+        "id": "status",
+        "internal_id": "111",
+        "uuid": "aaaaaaaa-1111-1111-1111-111111111111",
+        "label": "S",
+        "type": "select",
+    }
+    dup_field_b = {
+        "id": "status",
+        "internal_id": "222",
+        "uuid": "bbbbbbbb-2222-2222-2222-222222222222",
+        "label": "S2",
+        "type": "select",
+    }
+
+    async def _gf(phase_id, required_only=False):
+        _ = required_only
+        if str(phase_id) == "p1":
+            return {"fields": [dup_field]}
+        return {"fields": [dup_field_b]}
+
+    pipe_svc.get_phase_fields = AsyncMock(side_effect=_gf)
+    service = _make_service_with_pipe(mock_settings, {}, pipe_svc)
+    service.execute_query = AsyncMock()
+    with pytest.raises(ValueError, match="uuid"):
+        await service.update_phase_field("status", label="L", pipe_id="9")
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_phase_field_parallel_phase_fetches_resolve_slug(mock_settings):
+    """``get_phase_fields`` runs concurrently for each phase (``asyncio.gather``)."""
+    pipe_svc = AsyncMock()
+    pipe_svc.get_pipe = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [{"id": "a"}, {"id": "b"}, {"id": "c"}],
+                "start_form_fields": [],
+            },
+        },
+    )
+
+    async def _gf(phase_id, required_only=False):
+        _ = required_only
+        if str(phase_id) == "b":
+            return {
+                "fields": [
+                    {
+                        "id": "priority",
+                        "internal_id": "777",
+                        "uuid": "fffffff7-7777-7777-7777-777777777777",
+                        "label": "P",
+                        "type": "select",
+                    },
+                ],
+            }
+        return {"fields": []}
+
+    pipe_svc.get_phase_fields = AsyncMock(side_effect=_gf)
+    service = _make_service_with_pipe(
+        mock_settings,
+        {
+            "updatePhaseField": {
+                "phase_field": {"id": "priority", "label": "P", "type": "select"},
+            },
+        },
+        pipe_svc,
+    )
+    await service.update_phase_field("priority", label="P", pipe_id="1")
+    assert pipe_svc.get_phase_fields.await_count == 3
+    _q, variables = service.execute_query.call_args[0]
+    assert variables == {
+        "input": {
+            "id": "priority",
+            "uuid": "fffffff7-7777-7777-7777-777777777777",
+            "label": "P",
+        }
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_phase_field_slug_raises_when_any_phase_fetch_fails(mock_settings):
+    """Do not inject a single uuid if another phase's fields could not be loaded."""
+    pipe_svc = AsyncMock()
+    pipe_svc.get_pipe = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [{"id": "p1"}, {"id": "p2"}],
+                "start_form_fields": [],
+            },
+        },
+    )
+
+    async def _gf(phase_id, required_only=False):
+        _ = required_only
+        if str(phase_id) == "p1":
+            return {
+                "fields": [
+                    {
+                        "id": "priority",
+                        "internal_id": "111",
+                        "uuid": "aaaaaaaa-1111-1111-1111-111111111111",
+                        "label": "P",
+                        "type": "select",
+                    },
+                ],
+            }
+        raise RuntimeError("network")
+
+    pipe_svc.get_phase_fields = AsyncMock(side_effect=_gf)
+    service = _make_service_with_pipe(mock_settings, {}, pipe_svc)
+    service.execute_query = AsyncMock()
+    with pytest.raises(ValueError, match="Could not load fields"):
+        await service.update_phase_field("priority", label="L", pipe_id="9")
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_phase_field_slug_raises_when_zero_matches_and_partial_failure(
+    mock_settings,
+):
+    """Zero matches + at least one failed phase fetch is still ambiguous, not "not found"."""
+    pipe_svc = AsyncMock()
+    pipe_svc.get_pipe = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [{"id": "p1"}, {"id": "p2"}],
+                "start_form_fields": [],
+            },
+        },
+    )
+
+    async def _gf(phase_id, required_only=False):
+        _ = required_only
+        if str(phase_id) == "p1":
+            return {"fields": [{"id": "other", "internal_id": "111"}]}
+        raise RuntimeError("network")
+
+    pipe_svc.get_phase_fields = AsyncMock(side_effect=_gf)
+    service = _make_service_with_pipe(mock_settings, {}, pipe_svc)
+    service.execute_query = AsyncMock()
+    with pytest.raises(ValueError, match="Could not load fields"):
+        await service.update_phase_field("missing_slug", label="L", pipe_id="9")
+    service.execute_query.assert_not_called()
 
 
 @pytest.mark.unit

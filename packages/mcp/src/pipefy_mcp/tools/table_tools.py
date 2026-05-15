@@ -21,6 +21,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     with_debug_suffix,
 )
 from pipefy_mcp.tools.pagination_helpers import (
+    DEFAULT_PAGE_SIZE,
     build_pagination_info,
     validate_page_size,
 )
@@ -204,8 +205,11 @@ class TableTools:
         ) -> dict[str, Any]:
             """List records in a database table using cursor pagination.
 
-            Use `pagination.hasNextPage` and `pagination.endCursor` from the response;
-            pass `after=endCursor` on the next call to fetch the following page.
+            With the unified envelope, use top-level ``pagination.has_more``,
+            ``pagination.end_cursor``, and ``pagination.page_size``; pass ``after``
+            equal to ``end_cursor`` on the next call. Without the unified envelope,
+            the same cursor values appear under ``data.table_records.pageInfo`` as
+            ``hasNextPage`` and ``endCursor``.
             Default page size is 50; maximum is 200.
 
             **Note:** The Pipefy API omits ``record_fields`` entries whose value is
@@ -308,14 +312,16 @@ class TableTools:
             """Search records in a database table where a field matches a value.
 
             Uses Pipefy `findRecords` (returns card-shaped nodes with `fields`).
-            Optional `first` / `after` follow the same cursor pattern as listing.
+            Optional ``first`` / ``after`` mirror ``get_table_records``. With the unified
+            envelope, read ``pagination.has_more``, ``pagination.end_cursor``, and
+            ``pagination.page_size``; pass ``after`` equal to ``end_cursor`` for the next page.
 
             Args:
                 table_id: Database table ID.
                 field_id: Field ID to filter on (from table metadata).
                 field_value: Value to match (string; format depends on field type).
-                first: Optional page size for pagination.
-                after: Optional cursor from a previous response.
+                first: Optional page size for pagination (1-200 when set).
+                after: Optional cursor from ``pagination.end_cursor`` of a prior response.
             """
             table_id, err = validate_tool_id(table_id, "table_id")
             if err is not None:
@@ -328,17 +334,17 @@ class TableTools:
                 return build_table_read_error_payload(
                     message="Invalid 'field_value': provide a string.",
                 )
-            if first is not None and (
-                not isinstance(first, int)
-                or first < _TABLE_RECORDS_FIRST_MIN
-                or first > _TABLE_RECORDS_FIRST_MAX
-            ):
-                return build_table_read_error_payload(
-                    message=(
-                        "Invalid 'first': omit or use an integer between "
-                        f"{_TABLE_RECORDS_FIRST_MIN} and {_TABLE_RECORDS_FIRST_MAX}."
-                    ),
+            if first is None:
+                api_first = None
+                page_size_for_info = DEFAULT_PAGE_SIZE
+            else:
+                nfirst, page_err = validate_page_size(
+                    first, max_size=_TABLE_RECORDS_FIRST_MAX
                 )
+                if page_err is not None:
+                    return page_err
+                api_first = nfirst
+                page_size_for_info = nfirst
             if after is not None and (not isinstance(after, str) or not after.strip()):
                 return build_table_read_error_payload(
                     message="Invalid 'after': omit or pass a non-empty cursor string.",
@@ -348,7 +354,7 @@ class TableTools:
                     table_id,
                     field_id.strip(),
                     field_value,
-                    first=first,
+                    first=api_first,
                     after=after.strip() if isinstance(after, str) else after,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -357,6 +363,16 @@ class TableTools:
                     "Find records failed.",
                     resource_kind="table",
                     resource_id=str(table_id),
+                )
+            if is_unified_envelope_enabled():
+                page_info = (raw.get("findRecords") or {}).get("pageInfo")
+                return tool_success(
+                    data=raw,
+                    message="Record search completed.",
+                    pagination=build_pagination_info(
+                        page_info=page_info if isinstance(page_info, dict) else None,
+                        page_size=page_size_for_info,
+                    ),
                 )
             return build_table_read_success_payload(
                 raw,
@@ -575,7 +591,9 @@ class TableTools:
                     Discover via: ``search_tables`` or ``get_tables(table_ids)``.
                 fields: Map of field_id -> value, or list of objects with field_id / field_value.
                     Discover via: ``get_table(table_id).table_fields[].id``.
-                title: Optional record title.
+                title: Optional record title. Pipefy may derive or override the stored title
+                    from the first table field (for example a select/status column), so the
+                    returned ``title`` can differ from the value you pass here.
                 extra_input: Other `CreateTableRecordInput` keys (e.g. label_ids).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """

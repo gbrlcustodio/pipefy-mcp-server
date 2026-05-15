@@ -45,13 +45,16 @@ def build_member_success_payload(
     return cast(MemberMutationSuccessPayload, payload)
 
 
-def build_member_error_payload(*, message: str) -> dict[str, Any]:
+def build_member_error_payload(
+    *, message: str, code: str | None = None
+) -> dict[str, Any]:
     """``success: False`` with ``error`` text.
 
     Args:
         message: User-visible failure reason.
+        code: Optional machine-readable error code (e.g. ``INVALID_ARGUMENTS``).
     """
-    return tool_error(message)
+    return tool_error(message, code=code)
 
 
 def handle_member_tool_graphql_error(

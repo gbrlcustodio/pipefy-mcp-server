@@ -100,7 +100,9 @@ class PipefyClient:
             )
         self._pipe_service = PipeService(settings=settings, auth=auth)
         self._card_service = CardService(settings=settings, auth=auth)
-        self._pipe_config_service = PipeConfigService(settings=settings, auth=auth)
+        self._pipe_config_service = PipeConfigService(
+            settings=settings, auth=auth, pipe_service=self._pipe_service
+        )
         self._table_service = TableService(settings=settings, auth=auth)
         self._relation_service = RelationService(settings=settings, auth=auth)
         self._member_service = MemberService(
@@ -1402,6 +1404,15 @@ class PipefyClient:
             status: AutomationLogStatus filter (processing, failed, success).
             search_term: Free-text search.
         """
+        rules = await self.get_automations(pipe_id=str(repo_id))
+        if not rules:
+            return {
+                "automationLogsByRepo": {
+                    "nodes": [],
+                    "pageInfo": {"hasNextPage": False, "endCursor": None},
+                    "totalCount": 0,
+                }
+            }
         return await self._observability_service.get_automation_logs_by_repo(
             repo_id, first=first, after=after, status=status, search_term=search_term
         )

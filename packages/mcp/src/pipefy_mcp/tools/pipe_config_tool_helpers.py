@@ -282,6 +282,32 @@ def field_condition_actions_error_message(
     return None
 
 
+_MAX_CONDITION_TREE_DEPTH = 16
+
+
+def _condition_tree_references_targets(
+    obj: Any, targets: set[str], depth: int = 0
+) -> bool:
+    """Return True if any node in the condition subtree references one of the targets."""
+    if not targets:
+        return False
+    if depth > _MAX_CONDITION_TREE_DEPTH:
+        return False
+    if isinstance(obj, dict):
+        for key, val in obj.items():
+            if key in ("field_address", "phaseFieldId") and val is not None:
+                if str(val).strip() in targets:
+                    return True
+            if _condition_tree_references_targets(val, targets, depth + 1):
+                return True
+        return False
+    if isinstance(obj, list):
+        return any(
+            _condition_tree_references_targets(item, targets, depth + 1) for item in obj
+        )
+    return False
+
+
 async def find_phase_field_dependents(
     client: PipefyClient,
     *,
@@ -290,7 +316,7 @@ async def find_phase_field_dependents(
     field_uuid: str | None,
     field_slug: str | None,
 ) -> list[dict[str, Any]]:
-    """Return field conditions on ``phase_id`` whose actions reference the field."""
+    """Return field conditions on ``phase_id`` that reference the field in actions or conditions."""
     try:
         payload = await client.get_field_conditions(phase_id)
     except Exception:  # noqa: BLE001
@@ -303,19 +329,26 @@ async def find_phase_field_dependents(
         if not isinstance(cond, dict):
             continue
         actions = cond.get("actions") or []
+        matched = False
         for action in actions:
             if not isinstance(action, dict):
                 continue
             raw_pf = action.get("phaseFieldId")
             if raw_pf is not None and str(raw_pf) in targets:
-                out.append(
-                    {
-                        "id": cond.get("id"),
-                        "name": cond.get("name"),
-                        "action_count": len(actions),
-                    }
-                )
+                matched = True
                 break
+        if not matched and _condition_tree_references_targets(
+            cond.get("condition"), targets
+        ):
+            matched = True
+        if matched:
+            out.append(
+                {
+                    "id": cond.get("id"),
+                    "name": cond.get("name"),
+                    "action_count": len(actions) if isinstance(actions, list) else 0,
+                }
+            )
     return out
 
 

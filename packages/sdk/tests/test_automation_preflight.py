@@ -192,6 +192,51 @@ async def test_validate_raises_when_transition_not_allowed(mock_client):
     assert "Other (other)" in str(excinfo.value)
 
 
+# ---------------------------------------------------------------------------
+# validate_ai_automation_prompt_sdk (overlap input/output field_ids)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_validate_ai_automation_prompt_overlap_prompt_and_output(mock_client):
+    from pipefy_sdk.ai_preflight import validate_ai_automation_prompt_sdk
+
+    fid = "429358623"
+    mock_client.get_pipe_with_preferences = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [
+                    {
+                        "fields": [
+                            {
+                                "internal_id": fid,
+                                "id": "fslug",
+                                "label": "F",
+                                "editable": True,
+                            },
+                        ],
+                    },
+                ],
+                "start_form_fields": [],
+                "preferences": {"aiAgentsEnabled": True},
+            },
+        },
+    )
+    mock_client.get_automation_events = AsyncMock(return_value=[])
+    mock_client.get_ai_credit_usage = AsyncMock(
+        return_value={"aiCreditUsageStats": {"active": True}}
+    )
+    out = await validate_ai_automation_prompt_sdk(
+        mock_client,
+        pipe_id="1",
+        prompt=f"Summarize %{{{fid}}}",
+        field_ids=[fid],
+    )
+    assert out["success"] is True
+    assert out["valid"] is False
+    assert any("pick a different" in p.lower() for p in out["problems"])
+
+
 @pytest.mark.anyio
 async def test_validate_resolves_dest_from_nested_phase_id(mock_client):
     """Agents often pass ``action_params.phase.id`` instead of ``to_phase_id`` — both must work."""

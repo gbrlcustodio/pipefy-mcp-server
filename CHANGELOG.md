@@ -37,5 +37,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **CLI**: `pipefy agent update` resolves slug-style `fieldId` values in behaviors for error-path enrichment the same way as the happy path (via `PipefyClient.update_ai_agent`), so `RECORD_NOT_SAVED` diagnostics do not falsely blame slug tokens as unknown pipe fields.
 - **CLI / MCP**: `field-condition create` / `update` accept legacy `actionId: "hidden"` on condition actions; the SDK normalizes to `hide` before mutations.
+- **SDK**: `PipeConfigService.update_phase_field` accepts optional `phase_id` / `pipe_id` and resolves a slug-like `field_id` to the field's `uuid` (injected as `input.uuid` while the slug stays as `input.id`, matching Pipefy's `UpdatePhaseFieldInput` contract). The pipe-wide lookup runs phase fetches concurrently via `asyncio.gather`; partial phase-fetch failures raise an actionable `ValueError` instead of returning an ambiguous match. Surfaced through MCP `update_phase_field(phase_id=…, pipe_id=…)` and CLI `pipefy field update --extra '{"phase_id":"…"}'`.
+- **MCP**: `delete_phase_field` preview now enumerates `dependents.field_conditions` even when the rule only references the field in expression `field_address` (not just `actions[].phaseFieldId`); the condition tree walker has a defensive depth cap of 16.
+- **SDK / MCP**: `PipefyClient.get_automation_logs_by_repo` short-circuits to an empty page when the pipe has no automations (was returning `MULTIPLE_INVALID_INPUT: Automation_ids can't be blank` from the API).
+- **SDK / MCP**: `invite_members` validates each row with a new `MemberInvite` Pydantic model (`EmailStr` + non-blank `role_name`, lowercase normalization, `extra="forbid"`) and raises a single-line `ValueError` pointing at the offending field. MCP surfaces it as `INVALID_ARGUMENTS`.
+- **SDK**: `ai_preflight.validate_ai_automation_prompt_sdk` flags overlap when the same `%{internal_id}` appears both in the prompt and in `field_ids`, in English, citing the API rejection message.
+- **MCP**: `find_records` returns the unified envelope `pagination={has_more, end_cursor, page_size}` (snake_case) when the unified envelope flag is on, matching `get_table_records`.
+- **MCP / CLI docs**: `create_card`, `create_table_record`, `clone_pipe`, and `create_field_condition` docstrings clarify title-derivation quirks, async clone phases, and the `phaseFieldId` discovery path.
+- **SDK**: `MemberInvite` lives at `pipefy_sdk.MemberInvite` (re-exported in the top-level `__all__`); `slug_like_field_token` / `looks_like_uuid_token` extracted to `pipefy_sdk.utils.field_tokens` for reuse across services.
 
 ### Removed

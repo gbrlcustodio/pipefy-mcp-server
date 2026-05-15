@@ -87,6 +87,13 @@ async def validate_ai_automation_prompt_sdk(
     field_map: dict[str, str] = {}
 
     prompt_tokens = _PROMPT_FIELD_TOKEN_RE.findall(prompt)
+    input_output_overlap = set(prompt_tokens) & {str(f) for f in field_ids}
+    for oid in sorted(input_output_overlap):
+        problems.append(
+            f"Field %{{{oid}}} is used both as a prompt input and as an output field in "
+            "`field_ids`. Pick a different output field; the API rejects the overlap with "
+            "'The same parameter cannot be present in both input and output'."
+        )
     if not prompt_tokens:
         problems.append(
             "Prompt must reference at least one pipe field using "

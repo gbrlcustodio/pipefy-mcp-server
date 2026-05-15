@@ -64,6 +64,11 @@ class MemberTools:
                     )
             try:
                 raw = await client.invite_members(pipe_id, members)
+            except ValueError as exc:
+                return build_member_error_payload(
+                    message=str(exc),
+                    code="INVALID_ARGUMENTS",
+                )
             except Exception as exc:  # noqa: BLE001
                 return handle_member_tool_graphql_error(
                     exc,

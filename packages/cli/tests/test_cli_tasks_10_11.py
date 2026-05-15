@@ -73,7 +73,14 @@ def test_ai_automation_validate_prompt_json(
     mock_client.get_pipe_with_preferences = AsyncMock(
         return_value={
             "pipe": {
-                "phases": [{"fields": [{"internal_id": "9", "id": "f", "label": "L"}]}],
+                "phases": [
+                    {
+                        "fields": [
+                            {"internal_id": "9", "id": "f", "label": "L"},
+                            {"internal_id": "42", "id": "o", "label": "Out"},
+                        ]
+                    }
+                ],
                 "start_form_fields": [],
                 "preferences": {"aiAgentsEnabled": True},
                 "organizationId": "300",
@@ -98,7 +105,7 @@ def test_ai_automation_validate_prompt_json(
                 "--prompt",
                 "Hello %{9}",
                 "--field-ids",
-                '["9"]',
+                '["42"]',
                 "--event-id",
                 "card_created",
                 "--json",
@@ -521,7 +528,8 @@ def test_ai_automation_update_auto_fetches_prompt_when_omitted(
 ):
     """When ``--prompt``/``--field-ids`` are omitted, the CLI re-uses current values for pre-flight only."""
     oauth_env("ai-up-auto")
-    existing = _ai_automation_row("Summarize: %{9}", ["9"])
+    # Prompt references field 9 as input; output field 88 is distinct so overlap preflight passes.
+    existing = _ai_automation_row("Summarize: %{9}", ["88"])
     mock_client = MagicMock()
     mock_client.ai_automation_available = True
     mock_client.get_automation = AsyncMock(return_value=existing)
@@ -529,7 +537,12 @@ def test_ai_automation_update_auto_fetches_prompt_when_omitted(
         return_value={
             "pipe": {
                 "phases": [
-                    {"fields": [{"internal_id": "9", "id": "f9", "label": "L"}]}
+                    {
+                        "fields": [
+                            {"internal_id": "9", "id": "f9", "label": "L"},
+                            {"internal_id": "88", "id": "f88", "label": "Out"},
+                        ]
+                    }
                 ],
                 "start_form_fields": [],
                 "preferences": {"aiAgentsEnabled": True},

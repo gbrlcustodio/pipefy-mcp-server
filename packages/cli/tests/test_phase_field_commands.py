@@ -118,6 +118,41 @@ def test_field_create_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     )
 
 
+def test_field_update_forwards_extra_phase_id_for_slug_resolution(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``--extra '{"phase_id": ...}'`` reaches ``client.update_phase_field`` verbatim.
+
+    Locks the CLI side of the smoke-2026-05-15 slug-resolution fix: the SDK can only
+    map ``"priority"`` to its ``internal_id`` if the CLI forwards ``phase_id`` as a
+    keyword argument.
+    """
+    oauth_env("fld-upd")
+    mock_client = MagicMock()
+    mock_client.update_phase_field = AsyncMock(
+        return_value={"updatePhaseField": {"phase_field": {"id": "429358624"}}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "field",
+                "update",
+                "priority",
+                "--extra",
+                '{"label": "Priority", "phase_id": "343162749"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout
+    mock_client.update_phase_field.assert_awaited_once_with(
+        "priority", label="Priority", phase_id="343162749"
+    )
+
+
 def test_field_delete_yes(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("fld-del")
     mock_client = MagicMock()

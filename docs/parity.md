@@ -64,7 +64,7 @@ This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. I
 | `export_pipe_report` | `pipefy report-pipe export` | shipped | Exports + reports. |
 | `fill_card_phase_fields` | — | deferred | Card bulk fill; not in FR-5.2 launch command list (may follow **5.2**). |
 | `find_cards` | `pipefy card find` | shipped | Task **5.2** (`--pipe`, `--field`, `--value`). |
-| `find_records` | `pipefy record find` | shipped | Task **5.7** (`--filter` JSON with `field_id` + `field_value`). |
+| `find_records` | `pipefy record find` | shipped | Task **5.7** (`--filter` JSON with `field_id` + `field_value`). Unified MCP envelope: top-level `pagination` uses `has_more` / `end_cursor` / `page_size` (same as `get_table_records`). |
 | `get_agents_usage` | `pipefy usage agents` | shipped | Task **10.3** (`--organization`, `--from`, `--to`, optional `--filters` / `--search` / `--sort` JSON). |
 | `get_ai_agent` | `pipefy agent get` | shipped | AI Agents domain. |
 | `get_ai_agent_log_details` | `pipefy agent logs get` | shipped | AI Agents domain. |
@@ -135,7 +135,7 @@ This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. I
 | `update_label` | `pipefy label update` | shipped | Task **5.8**. |
 | `update_organization_report` | `pipefy report-org update` | shipped | Organization reports. |
 | `update_phase` | `pipefy phase update` | shipped | Task **5.4**. |
-| `update_phase_field` | `pipefy field update` | shipped | Task **5.5** (``--extra`` JSON). |
+| `update_phase_field` | `pipefy field update` | shipped | Task **5.5** (``--extra`` JSON). Optional ``phase_id`` / ``pipe_id`` in ``--extra`` resolve slug ``field_id`` to ``internal_id`` when ``uuid`` is omitted. |
 | `update_pipe` | `pipefy pipe update` | shipped | Task **5.3** (`--name`, `--icon`, `--color`, `--preferences` JSON). |
 | `update_pipe_relation` | `pipefy relation pipe update` | shipped | Task **5.10**. |
 | `update_pipe_report` | `pipefy report-pipe update` | shipped | Reports domain. |

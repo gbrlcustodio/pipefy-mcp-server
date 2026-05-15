@@ -6,8 +6,10 @@ import re
 from typing import Any
 
 from httpx import Auth
+from pydantic import ValidationError
 
 from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.models.member_invite import MemberInvite
 from pipefy_sdk.queries.member_queries import (
     INVITE_MEMBERS_MUTATION,
     REMOVE_MEMBERS_FROM_PIPE_MUTATION,
@@ -20,6 +22,16 @@ _PIPE_UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
+
+
+def _format_member_invite_error(index: int, exc: ValidationError) -> str:
+    """Compact one-line message for a single ``MemberInvite`` row failure."""
+    first = next(iter(exc.errors()), None)
+    if first is None:
+        return f"Invalid members[{index}]: validation error."
+    loc = ".".join(str(p) for p in first.get("loc", ())) or "row"
+    detail = first.get("msg", "validation error")
+    return f"Invalid members[{index}].{loc}: {detail}"
 
 
 class MemberService(BasePipefyClient):
@@ -46,10 +58,18 @@ class MemberService(BasePipefyClient):
             pipe_id: ID of the pipe.
             members: List of dicts with at least `email` and `role_name`.
         """
-        emails = [{"email": m["email"], "role_name": m["role_name"]} for m in members]
+        validated: list[dict[str, str]] = []
+        for i, row in enumerate(members):
+            try:
+                inv = MemberInvite.model_validate(row)
+            except ValidationError as exc:
+                raise ValueError(_format_member_invite_error(i, exc)) from exc
+            validated.append(
+                {"email": str(inv.email), "role_name": inv.role_name.strip()}
+            )
         return await self.execute_query(
             INVITE_MEMBERS_MUTATION,
-            {"input": {"pipe_id": str(pipe_id), "emails": emails}},
+            {"input": {"pipe_id": str(pipe_id), "emails": validated}},
         )
 
     async def remove_members_from_pipe(

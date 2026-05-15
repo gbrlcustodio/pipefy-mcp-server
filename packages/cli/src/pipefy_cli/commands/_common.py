@@ -26,9 +26,23 @@ DEFAULT_EXPORT_MAX_BYTES = 50 * 1024 * 1024
 # Click parses tokens starting with "-" as short options by default, which breaks
 # every `<sub> get/update/delete <ID>` command. Setting ignore_unknown_options on
 # the command relaxes the parser so the dashed token is consumed as the positional
-# id; unknown LONG options (typos like ``--yez``) still surface as errors because
-# Click attempts to bind them to the (single) positional slot.
+# id. Tokens starting with ``--`` must still be rejected (they look like long
+# options); use :func:`validate_positional_id` on those arguments.
 ID_POSITIONAL_CONTEXT_SETTINGS = {"ignore_unknown_options": True}
+
+
+def validate_positional_id(value: str) -> str:
+    """Reject typoed long-option tokens mistakenly captured as a resource id."""
+    if value.startswith("--"):
+        raise typer.BadParameter(
+            f"unknown option-like value {value!r}; if an id starts with '-', pass it after '--'"
+        )
+    return value
+
+
+def resource_id_argument(*, help: str) -> Any:
+    """Typer ``Argument`` for resource ids when ``ignore_unknown_options`` is enabled."""
+    return typer.Argument(..., help=help, callback=validate_positional_id)
 
 
 def export_poll_max_rounds(
@@ -112,18 +126,21 @@ async def write_export_csv_to_stdout(
 def run_pipefy_client_coroutine(
     ctx: typer.Context,
     coro_factory: Callable[[PipefyClient], Awaitable[_T]],
+    *,
+    value_error_exit_code: int | None = None,
 ) -> _T:
     """Run ``asyncio.run`` on a coroutine built with a configured :class:`PipefyClient`.
 
     Args:
         ctx: Typer context (resolves settings/token from the root app).
         coro_factory: Async callable receiving an authenticated client.
+        value_error_exit_code: When set, map ``ValueError`` from the factory to this exit code (stderr message).
 
     Returns:
         The coroutine result.
 
     Raises:
-        typer.Exit: On :class:`PipefyError` (exit code 1).
+        typer.Exit: On :class:`PipefyError` (exit code 1), optional ``ValueError`` mapping, or ``BrokenPipeError`` (exit 0).
     """
     pipefy_settings, token = settings_and_token(ctx)
 
@@ -136,6 +153,13 @@ def run_pipefy_client_coroutine(
     except PipefyError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
+    except ValueError as exc:
+        if value_error_exit_code is None:
+            raise
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(value_error_exit_code) from exc
+    except BrokenPipeError:
+        raise typer.Exit(0) from None
     except TransportQueryError as exc:
         typer.echo(_format_transport_query_error(exc), err=True)
         raise typer.Exit(1) from exc

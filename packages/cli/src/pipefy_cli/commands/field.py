@@ -9,6 +9,7 @@ from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -70,7 +71,7 @@ def field_create(
 @field_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def field_update(
     ctx: typer.Context,
-    field_id: str,
+    field_id: str = resource_id_argument(help="Phase field id."),
     extra_json: str | None = typer.Option(
         None,
         "--extra",
@@ -93,7 +94,7 @@ def field_update(
 @field_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def field_delete(
     ctx: typer.Context,
-    field_id: str,
+    field_id: str = resource_id_argument(help="Phase field id."),
     pipe_uuid: str | None = typer.Option(
         None,
         "--pipe-uuid",

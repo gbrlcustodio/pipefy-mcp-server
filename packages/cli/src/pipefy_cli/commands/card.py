@@ -19,6 +19,7 @@ from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_value,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -86,7 +87,7 @@ def _split_csv_ids(raw: str | None) -> list[str | int] | None:
 @card_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_get(
     ctx: typer.Context,
-    card_id: str,
+    card_id: str = resource_id_argument(help="Card id."),
     json_out: bool = typer.Option(
         False,
         "--json",
@@ -222,7 +223,7 @@ def card_find(
 @card_app.command("create", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_create(
     ctx: typer.Context,
-    pipe_id: str,
+    pipe_id: str = resource_id_argument(help="Pipe id."),
     title: str | None = typer.Option(
         None,
         "--title",
@@ -261,7 +262,7 @@ def card_create(
 @card_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_update(
     ctx: typer.Context,
-    card_id: str,
+    card_id: str = resource_id_argument(help="Card id."),
     title: str | None = typer.Option(None, "--title", "-t"),
     due_date: str | None = typer.Option(None, "--due-date"),
     assignee_ids: str | None = typer.Option(
@@ -304,7 +305,7 @@ def card_update(
 @card_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_delete(
     ctx: typer.Context,
-    card_id: str,
+    card_id: str = resource_id_argument(help="Card id."),
     yes: bool = typer.Option(
         False,
         "--yes",
@@ -326,7 +327,7 @@ def card_delete(
 @card_app.command("move", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_move(
     ctx: typer.Context,
-    card_id: str,
+    card_id: str = resource_id_argument(help="Card id."),
     phase_id: str = typer.Option(
         ...,
         "--phase",
@@ -345,7 +346,7 @@ def card_move(
 @comment_app.command("add", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_comment_add(
     ctx: typer.Context,
-    card_id: str,
+    card_id: str = resource_id_argument(help="Card id."),
     text: str = typer.Argument(..., help="Comment body (1-1000 characters)."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
@@ -366,7 +367,7 @@ def card_comment_add(
 @comment_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_comment_update(
     ctx: typer.Context,
-    comment_id: str,
+    comment_id: str = resource_id_argument(help="Comment id."),
     text: str = typer.Argument(..., help="New comment text."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
@@ -387,7 +388,7 @@ def card_comment_update(
 @comment_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_comment_delete(
     ctx: typer.Context,
-    comment_id: str,
+    comment_id: str = resource_id_argument(help="Comment id."),
     yes: bool = typer.Option(
         False,
         "--yes",

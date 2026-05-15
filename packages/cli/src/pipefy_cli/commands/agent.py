@@ -21,6 +21,7 @@ from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_value,
+    resource_id_argument,
     run_cli_command,
     settings_and_token,
 )
@@ -70,7 +71,7 @@ def agent_list(
 @agent_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def agent_get(
     ctx: typer.Context,
-    uuid: str = typer.Argument(..., help="Agent UUID."),
+    uuid: str = resource_id_argument(help="Agent UUID."),
     json_out: bool = typer.Option(
         False, "--json", "-j", help="Print machine-readable JSON to stdout."
     ),
@@ -254,8 +255,10 @@ def agent_update(
 @agent_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def agent_delete(
     ctx: typer.Context,
-    uuid: str = typer.Argument(..., help="Agent UUID."),
-    yes: bool = typer.Option(False, "--yes", help="Skip interactive confirmation."),
+    uuid: str = resource_id_argument(help="Agent UUID."),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip interactive confirmation."
+    ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Delete an AI agent (``delete_ai_agent``)."""
@@ -270,15 +273,24 @@ def agent_delete(
 @agent_app.command("toggle", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def agent_toggle(
     ctx: typer.Context,
-    uuid: str = typer.Argument(..., help="Agent UUID."),
+    uuid: str = resource_id_argument(help="Agent UUID."),
     active: bool = typer.Option(
         True,
         "--active/--inactive",
         help="Enable or disable the agent.",
     ),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip confirmation when disabling."
+    ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Enable or disable an AI agent (``toggle_ai_agent_status``)."""
+    if not active:
+        confirm_destructive(
+            yes=yes,
+            description=f"AI agent (UUID: {uuid})",
+            verb="disable",
+        )
 
     async def factory(client: PipefyClient):
         return await client.toggle_ai_agent_status(uuid, active=active)
@@ -311,7 +323,7 @@ def agent_logs_list(
 @logs_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def agent_logs_get(
     ctx: typer.Context,
-    log_id: str = typer.Argument(..., help="Log UUID."),
+    log_id: str = resource_id_argument(help="Log UUID."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Fetch one AI agent log entry (``get_ai_agent_log_details``)."""

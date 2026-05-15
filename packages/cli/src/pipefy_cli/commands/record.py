@@ -16,6 +16,7 @@ from pipefy_cli.commands._common import (
     confirm_destructive,
     parse_json_object,
     parse_json_value,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -102,7 +103,7 @@ def record_find(
 @record_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def record_get(
     ctx: typer.Context,
-    record_id: str,
+    record_id: str = resource_id_argument(help="Table record id."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Load one table record by id."""
@@ -148,7 +149,7 @@ def record_create(
 @record_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def record_update(
     ctx: typer.Context,
-    record_id: str,
+    record_id: str = resource_id_argument(help="Table record id."),
     fields_json: str | None = typer.Option(
         None,
         "--fields",
@@ -204,7 +205,7 @@ def record_update(
 @record_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def record_delete(
     ctx: typer.Context,
-    record_id: str,
+    record_id: str = resource_id_argument(help="Table record id."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:

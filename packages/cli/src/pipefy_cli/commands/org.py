@@ -7,6 +7,7 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -16,7 +17,7 @@ org_app = typer.Typer(help="Organization operations.", no_args_is_help=True)
 @org_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def org_get(
     ctx: typer.Context,
-    organization_id: str = typer.Argument(..., help="Numeric organization id."),
+    organization_id: str = resource_id_argument(help="Numeric organization id."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Fetch organization details (``get_organization``)."""

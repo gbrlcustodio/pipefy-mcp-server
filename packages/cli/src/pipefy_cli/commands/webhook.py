@@ -12,6 +12,7 @@ from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -82,7 +83,7 @@ def webhook_create(
 @webhook_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def webhook_update(
     ctx: typer.Context,
-    webhook_id: str,
+    webhook_id: str = resource_id_argument(help="Webhook id."),
     name: str | None = typer.Option(None, "--name"),
     url: str | None = typer.Option(None, "--url"),
     actions_json: str | None = typer.Option(
@@ -126,7 +127,7 @@ def webhook_update(
 @webhook_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def webhook_delete(
     ctx: typer.Context,
-    webhook_id: str,
+    webhook_id: str = resource_id_argument(help="Webhook id."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:

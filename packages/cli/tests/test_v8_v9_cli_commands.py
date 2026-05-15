@@ -371,3 +371,79 @@ def test_report_pipe_export_csv_exits_1_when_export_id_missing(
 
     assert r.exit_code == 1
     assert "export id" in r.stderr.lower()
+
+
+def test_report_pipe_export_csv_exits_1_when_poll_reports_failed(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """Failed export state surfaces as exit 1 with a stderr message (no traceback)."""
+    oauth_env("rpcsv-fail")
+    mock_client = MagicMock()
+    mock_client.export_pipe_report = AsyncMock(
+        return_value={"exportPipeReport": {"pipeReportExport": {"id": "exp-f"}}}
+    )
+    mock_client.get_pipe_report_export = AsyncMock(
+        return_value={"pipeReportExport": {"state": "failed"}}
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "report-pipe",
+                "export",
+                "--pipe",
+                "p1",
+                "--report-id",
+                "r1",
+                "--format",
+                "csv",
+                "--poll-timeout",
+                "2.0",
+            ],
+        )
+
+    assert r.exit_code == 1
+    assert "failed" in r.stderr.lower()
+    mock_client.export_pipe_report.assert_awaited_once()
+
+
+def test_report_org_export_csv_exits_1_when_poll_reports_failed(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("rocsv-fail")
+    mock_client = MagicMock()
+    mock_client.export_organization_report = AsyncMock(
+        return_value={
+            "exportOrganizationReport": {"organizationReportExport": {"id": "exp-o"}}
+        }
+    )
+    mock_client.get_organization_report_export = AsyncMock(
+        return_value={"organizationReportExport": {"state": "failed"}}
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "report-org",
+                "export",
+                "--organization",
+                "org1",
+                "--organization-report-id",
+                "rep1",
+                "--format",
+                "csv",
+                "--poll-timeout",
+                "2.0",
+            ],
+        )
+
+    assert r.exit_code == 1
+    assert "failed" in r.stderr.lower()

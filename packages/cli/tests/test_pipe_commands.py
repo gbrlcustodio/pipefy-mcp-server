@@ -8,6 +8,40 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pipefy_cli.main import app
 
 
+def test_pipe_get_rejects_option_like_positional_exit_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("pipe-get-bad-opt")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(app, ["pipe", "get", "--bad", "--json"])
+    assert result.exit_code == 2
+    mock_client.get_pipe.assert_not_called()
+
+
+def test_table_delete_accepts_leading_hyphen_table_id(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("table-del-hyphen")
+    mock_client = MagicMock()
+    mock_client.delete_table = AsyncMock(
+        return_value={"deleteTable": {"success": True}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["table", "delete", "-ZocGcM0", "--yes", "--json"],
+        )
+    assert result.exit_code == 0, result.stderr
+    mock_client.delete_table.assert_awaited_once_with("-ZocGcM0")
+
+
 def test_pipe_get_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("pipe-get")
     payload = {"pipe": {"id": "10", "name": "P"}}

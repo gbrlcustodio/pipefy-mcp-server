@@ -5,9 +5,10 @@ from __future__ import annotations
 import sys
 from collections.abc import AsyncIterator
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
 from pipefy_cli.commands._common import (
     export_poll_max_rounds,
@@ -205,3 +206,41 @@ def test_run_pipefy_client_coroutine_maps_pipefy_error_to_exit_1(monkeypatch):
         run_pipefy_client_coroutine(MagicMock(), factory)
 
     assert excinfo.value.exit_code == 1
+
+
+def test_run_pipefy_client_coroutine_maps_value_error_when_configured(monkeypatch):
+    """Optional ``value_error_exit_code`` maps export failures to stderr + exit."""
+    from pipefy_cli.commands import _common
+    from pipefy_cli.commands._common import run_pipefy_client_coroutine
+
+    monkeypatch.setattr(
+        _common, "get_authenticated_client", lambda settings, *, bearer_token: object()
+    )
+    monkeypatch.setattr(_common, "settings_and_token", lambda ctx: (object(), None))
+
+    async def factory(client: object) -> None:
+        raise ValueError("Export failed (state='failed').")
+
+    with pytest.raises(typer.Exit) as excinfo:
+        run_pipefy_client_coroutine(MagicMock(), factory, value_error_exit_code=1)
+
+    assert excinfo.value.exit_code == 1
+
+
+def test_run_pipefy_client_coroutine_broken_pipe_exits_0(monkeypatch):
+    """``BrokenPipeError`` (e.g. ``| head``) exits 0 without a traceback."""
+    from pipefy_cli.commands import _common
+    from pipefy_cli.commands._common import run_pipefy_client_coroutine
+
+    monkeypatch.setattr(
+        _common, "get_authenticated_client", lambda settings, *, bearer_token: object()
+    )
+    monkeypatch.setattr(_common, "settings_and_token", lambda ctx: (object(), None))
+
+    async def factory(client: object) -> None:
+        raise BrokenPipeError()
+
+    with pytest.raises(typer.Exit) as excinfo:
+        run_pipefy_client_coroutine(MagicMock(), factory, value_error_exit_code=1)
+
+    assert excinfo.value.exit_code == 0

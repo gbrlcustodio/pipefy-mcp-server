@@ -11,6 +11,7 @@ from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -59,7 +60,7 @@ def table_list(
 @table_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def table_get(
     ctx: typer.Context,
-    table_id: str,
+    table_id: str = resource_id_argument(help="Table id."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Load one table by id."""
@@ -103,7 +104,7 @@ def table_create(
 @table_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def table_update(
     ctx: typer.Context,
-    table_id: str,
+    table_id: str = resource_id_argument(help="Table id."),
     name: str | None = typer.Option(None, "--name"),
     description: str | None = typer.Option(None, "--description", "-d"),
     extra_json: str | None = typer.Option(
@@ -136,7 +137,7 @@ def table_update(
 @table_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def table_delete(
     ctx: typer.Context,
-    table_id: str,
+    table_id: str = resource_id_argument(help="Table id."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:

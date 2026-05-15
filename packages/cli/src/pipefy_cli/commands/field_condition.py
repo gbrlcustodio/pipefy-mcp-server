@@ -89,12 +89,21 @@ def field_condition_create(
     condition: str = typer.Option(
         ...,
         "--condition",
-        help="JSON object: condition payload (expressions, expressions_structure).",
+        help=(
+            "JSON object: ConditionInput. Example: "
+            '\'{"expressions":[{"structure_id":0,"field_address":"<internal_id>",'
+            '"operation":"equals","value":"X"}],"expressions_structure":[[0]]}\'. '
+            "structure_id / expressions_structure entries are coerced to int by the SDK."
+        ),
     ),
     actions: str = typer.Option(
         ...,
         "--actions",
-        help="JSON array: action objects (e.g. phaseFieldId + actionId).",
+        help=(
+            "JSON array: action objects. Each item needs phaseFieldId (use the field's "
+            "internal_id from get_phase_fields) + actionId (hide|show). Example: "
+            '\'[{"phaseFieldId":"<internal_id>","actionId":"hide"}]\'.'
+        ),
     ),
     extra: str | None = typer.Option(
         None,

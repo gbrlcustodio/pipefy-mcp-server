@@ -389,3 +389,148 @@ def test_ai_automation_create_requires_oauth(
     assert r.exit_code == 2
     assert "OAuth" in r.stderr
     mock_client.create_ai_automation.assert_not_called()
+
+
+@pytest.mark.parametrize("flag", ["--event-id", "--trigger-id"])
+def test_automation_create_accepts_event_id_alias(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env, flag: str
+):
+    """``automation create`` accepts ``--event-id`` (preferred) and ``--trigger-id`` (alias)."""
+    oauth_env("aut-alias")
+    mock_client = MagicMock()
+    mock_client.create_automation = AsyncMock(
+        return_value={"createAutomation": {"automation": {"id": "55"}}}
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation",
+                "create",
+                "--pipe",
+                "1",
+                "--name",
+                "Rule",
+                flag,
+                "card_created",
+                "--action-id",
+                "move_single_card",
+                "--no-active",
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    mock_client.create_automation.assert_awaited_once()
+    args, kwargs = mock_client.create_automation.call_args
+    assert args[2] == "card_created"
+    assert kwargs.get("active") is False
+
+
+def _ai_automation_row(prompt: str, field_ids: list[str]) -> dict:
+    return {
+        "id": "auto-1",
+        "event_id": "card_created",
+        "action_id": "generate_with_ai",
+        "action_params": {
+            "aiParams": {"value": prompt, "fieldIds": list(field_ids)},
+        },
+    }
+
+
+def test_ai_automation_update_auto_fetches_prompt_when_omitted(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """When ``--prompt``/``--field-ids`` are omitted, the CLI re-uses current values for pre-flight only."""
+    oauth_env("ai-up-auto")
+    existing = _ai_automation_row("Summarize: %{9}", ["9"])
+    mock_client = MagicMock()
+    mock_client.ai_automation_available = True
+    mock_client.get_automation = AsyncMock(return_value=existing)
+    mock_client.get_pipe_with_preferences = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [
+                    {"fields": [{"internal_id": "9", "id": "f9", "label": "L"}]}
+                ],
+                "start_form_fields": [],
+                "preferences": {"aiAgentsEnabled": True},
+                "organizationId": "300",
+            }
+        }
+    )
+    mock_client.get_automation_events = AsyncMock(return_value=[{"id": "card_created"}])
+    mock_client.get_ai_credit_usage = AsyncMock(
+        return_value={"aiCreditUsageStats": {"active": True, "usage": 0, "limit": 0}}
+    )
+    mock_client.update_ai_automation = AsyncMock(
+        return_value={"updateAutomation": {"automation": {"id": "auto-1"}}}
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "ai-automation",
+                "update",
+                "auto-1",
+                "--pipe",
+                "1",
+                "--name",
+                "Renamed",
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    mock_client.update_ai_automation.assert_awaited_once()
+    sent_input = mock_client.update_ai_automation.call_args.args[0]
+    # When omitted, prompt/field_ids must NOT be patched on the server.
+    assert sent_input.prompt is None
+    assert sent_input.field_ids is None
+    assert sent_input.name == "Renamed"
+
+
+def test_ai_automation_update_errors_when_existing_row_missing_ai_params(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """Non-AI automation row → clear error (cannot infer fallback prompt/field_ids)."""
+    oauth_env("ai-up-missing")
+    mock_client = MagicMock()
+    mock_client.ai_automation_available = True
+    mock_client.get_automation = AsyncMock(
+        return_value={
+            "id": "auto-1",
+            "event_id": "card_created",
+            "action_id": "move_single_card",
+            "action_params": {},
+        }
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "ai-automation",
+                "update",
+                "auto-1",
+                "--pipe",
+                "1",
+                "--name",
+                "Renamed",
+                "--json",
+            ],
+        )
+
+    assert r.exit_code != 0
+    assert "infer" in r.stderr.lower() or "prompt" in r.stderr.lower()

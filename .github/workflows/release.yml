@@ -87,21 +87,31 @@ jobs:
         with:
           files: dist/*.whl
           body_path: CHANGELOG_RELEASE_BODY.md
-      - name: Stage PyPI wheels (CLI + MCP only)
-        if: startsWith(github.ref_name, 'v1.')
+      - name: Stage PyPI wheels (SDK + CLI + MCP)
+        if: startsWith(github.ref_name, 'v1.') && !contains(github.ref_name, '-')
         run: |
           mkdir -p dist-pypi
           shopt -s nullglob
+          sdk=(dist/pipefy_sdk-*.whl)
           cli=(dist/pipefy_cli-*.whl)
           mcp=(dist/pipefy_mcp_server-*.whl)
-          if [ "${#cli[@]}" -ne 1 ] || [ "${#mcp[@]}" -ne 1 ]; then
-            echo "Expected exactly one CLI wheel and one MCP wheel in dist/, got cli=${#cli[@]} mcp=${#mcp[@]}"
+          if [ "${#sdk[@]}" -ne 1 ] || [ "${#cli[@]}" -ne 1 ] || [ "${#mcp[@]}" -ne 1 ]; then
+            echo "Expected one SDK, one CLI, and one MCP wheel in dist/"
+            echo "sdk=${#sdk[@]} cli=${#cli[@]} mcp=${#mcp[@]}"
             ls -la dist || true
             exit 1
           fi
-          cp "${cli[0]}" "${mcp[0]}" dist-pypi/
+          cp "${sdk[0]}" "${cli[0]}" "${mcp[0]}" dist-pypi/
+      - name: Smoke install staged wheels (clean venv)
+        if: startsWith(github.ref_name, 'v1.') && !contains(github.ref_name, '-')
+        run: |
+          python -m venv .venv-pypi-smoke
+          .venv-pypi-smoke/bin/python -m pip install --upgrade pip
+          .venv-pypi-smoke/bin/pip install dist-pypi/*.whl
+          .venv-pypi-smoke/bin/pipefy --help
+          .venv-pypi-smoke/bin/pipefy-mcp-server --help
       - name: Upload to PyPI
-        if: startsWith(github.ref_name, 'v1.')
+        if: startsWith(github.ref_name, 'v1.') && !contains(github.ref_name, '-')
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist-pypi/

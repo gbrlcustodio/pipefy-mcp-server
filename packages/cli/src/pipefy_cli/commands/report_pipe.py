@@ -12,6 +12,7 @@ from pipefy_cli.commands._common import (
     confirm_destructive,
     parse_json_object,
     parse_json_value,
+    resource_id_argument,
     run_cli_command,
     run_pipefy_client_coroutine,
     write_export_csv_to_stdout,
@@ -157,7 +158,7 @@ def report_pipe_create(
 @report_pipe_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def report_pipe_update(
     ctx: typer.Context,
-    report_id: str = typer.Argument(..., help="Pipe report id."),
+    report_id: str = resource_id_argument(help="Pipe report id."),
     name: str | None = typer.Option(None, "--name", "-n"),
     color: str | None = typer.Option(None, "--color"),
     fields: str | None = typer.Option(None, "--fields"),
@@ -194,8 +195,8 @@ def report_pipe_update(
 @report_pipe_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def report_pipe_delete(
     ctx: typer.Context,
-    report_id: str = typer.Argument(..., help="Pipe report id."),
-    yes: bool = typer.Option(False, "--yes"),
+    report_id: str = resource_id_argument(help="Pipe report id."),
+    yes: bool = typer.Option(False, "--yes", "-y"),
     json_out: bool = typer.Option(
         False, "--json", "-j", help="Print machine-readable JSON to stdout."
     ),
@@ -285,4 +286,4 @@ def report_pipe_export(
             poll_timeout_seconds=poll_timeout,
         )
 
-    run_pipefy_client_coroutine(ctx, csv_factory)
+    run_pipefy_client_coroutine(ctx, csv_factory, value_error_exit_code=1)

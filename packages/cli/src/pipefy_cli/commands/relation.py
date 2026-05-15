@@ -10,6 +10,7 @@ from pipefy_cli.commands._common import (
     authenticated_client_from_ctx,
     confirm_destructive,
     parse_json_object,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -21,7 +22,7 @@ relation_card_app = typer.Typer(help="Card-to-card relations.", no_args_is_help=
 @relation_pipe_app.command("list", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def relation_pipe_list(
     ctx: typer.Context,
-    pipe_id: str,
+    pipe_id: str = resource_id_argument(help="Pipe id."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """List pipe relations for a pipe."""
@@ -64,7 +65,7 @@ def relation_pipe_create(
 @relation_pipe_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def relation_pipe_update(
     ctx: typer.Context,
-    relation_id: str,
+    relation_id: str = resource_id_argument(help="Pipe relation id."),
     name: str = typer.Option(..., "--name", "-n", help="New relation name."),
     extra_json: str | None = typer.Option(
         None,
@@ -90,7 +91,7 @@ def relation_pipe_update(
 @relation_pipe_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def relation_pipe_delete(
     ctx: typer.Context,
-    relation_id: str,
+    relation_id: str = resource_id_argument(help="Pipe relation id."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
@@ -107,7 +108,7 @@ def relation_pipe_delete(
 @relation_card_app.command("list", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def relation_card_list(
     ctx: typer.Context,
-    card_id: str,
+    card_id: str = resource_id_argument(help="Card id."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """List parent and child relations for a card (raw ``get_card_relations`` payload)."""

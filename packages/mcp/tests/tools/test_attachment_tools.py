@@ -245,6 +245,23 @@ async def test_download_follows_safe_redirect_chain():
 
 
 @pytest.mark.anyio
+async def test_download_follows_relative_redirect_resolving_against_current_url():
+    """Relative ``Location`` headers are resolved with ``urljoin`` before SSRF validation."""
+    r1 = _make_response(status_code=302, headers={"location": "/files/a.pdf"})
+    r2 = _make_response(status_code=200, headers={}, body=b"relative-ok")
+    mock_cm = _httpx_multi_response_cm_mock(r1, r2)
+    with (
+        patch(
+            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
+        ),
+        patch(_VALIDATE_PATCH) as mock_validate,
+    ):
+        result = await _download_file_bytes("https://example.com/start/here")
+    assert result == b"relative-ok"
+    assert mock_validate.await_count == 2
+
+
+@pytest.mark.anyio
 async def test_download_rejects_too_many_redirects():
     """Redirect loop / chain longer than _MAX_REDIRECTS is rejected."""
     # 5 redirects, all pointing forward — exceeds _MAX_REDIRECTS = 3.

@@ -11,6 +11,7 @@ from pipefy_cli.commands._common import (
     confirm_destructive,
     parse_json_object,
     parse_json_value,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -54,7 +55,7 @@ def automation_list(
 @automation_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def automation_get(
     ctx: typer.Context,
-    automation_id: str = typer.Argument(..., help="Automation rule id."),
+    automation_id: str = resource_id_argument(help="Automation rule id."),
     json_out: bool = typer.Option(
         False,
         "--json",
@@ -132,7 +133,7 @@ def automation_create(
 @automation_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def automation_update(
     ctx: typer.Context,
-    automation_id: str = typer.Argument(..., help="Automation rule id."),
+    automation_id: str = resource_id_argument(help="Automation rule id."),
     extra: str = typer.Option(
         ...,
         "--extra",
@@ -159,8 +160,10 @@ def automation_update(
 @automation_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def automation_delete(
     ctx: typer.Context,
-    automation_id: str = typer.Argument(..., help="Automation rule id."),
-    yes: bool = typer.Option(False, "--yes", help="Skip interactive confirmation."),
+    automation_id: str = resource_id_argument(help="Automation rule id."),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip interactive confirmation."
+    ),
     json_out: bool = typer.Option(
         False,
         "--json",
@@ -467,7 +470,7 @@ def automation_export_jobs(
 @export_app.command("status", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def automation_export_status(
     ctx: typer.Context,
-    export_id: str = typer.Argument(..., help="Export id from ``export jobs``."),
+    export_id: str = resource_id_argument(help="Export id from ``export jobs``."),
     json_out: bool = typer.Option(
         False,
         "--json",
@@ -486,7 +489,7 @@ def automation_export_status(
 @export_app.command("csv", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def automation_export_csv(
     ctx: typer.Context,
-    export_id: str = typer.Argument(..., help="Finished export id."),
+    export_id: str = resource_id_argument(help="Finished export id."),
     json_out: bool = typer.Option(
         False,
         "--json",

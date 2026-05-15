@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **CLI**: added MCP-parity commands for core workflow domains: `pipe`, `phase`,
+  `field`, `table`, `record`, `label`, `webhook`, `relation`, and `member`.
+- **CLI**: added post-v0.1 parity domains: `attachment`, `field-condition`,
+  `email`, `audit`, `automation`, `introspect`, `graphql`, `agent`,
+  `ai-automation`, `usage`, `report-pipe`, `report-org`, `export`, and `org`.
+- **MCP / CLI**: shared SDK facade covers attachment upload, automation
+  preflight, field-condition normalization, AI prompt and behavior validation,
+  report export streaming, and service-account guard helpers.
 - **CLI**: `pipefy skills list` and `pipefy skills show <name>` for browsing the bundled
   starter pack (8 high-impact Pipefy workflows), with YAML frontmatter parsing for
   descriptions.

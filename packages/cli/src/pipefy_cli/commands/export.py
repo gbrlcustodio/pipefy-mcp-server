@@ -7,6 +7,7 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -44,7 +45,7 @@ def export_automation_jobs(
 )
 def export_automation_jobs_csv(
     ctx: typer.Context,
-    export_id: str = typer.Argument(..., help="Export id after status is finished."),
+    export_id: str = resource_id_argument(help="Export id after status is finished."),
     json_out: bool = typer.Option(
         False,
         "--json",

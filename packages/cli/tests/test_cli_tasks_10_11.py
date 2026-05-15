@@ -436,6 +436,63 @@ def test_agent_create_blocks_when_preflight_invalid(
     mock_client.update_ai_agent.assert_not_called()
 
 
+def test_agent_toggle_inactive_aborts_when_user_denies_confirm(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("ag-toggle-deny")
+    mock_client = MagicMock()
+    mock_client.toggle_ai_agent_status = AsyncMock(return_value={"success": True})
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "agent",
+                "toggle",
+                "00000000-0000-0000-0000-000000000099",
+                "--inactive",
+                "--json",
+            ],
+            input="n\n",
+        )
+
+    assert r.exit_code != 0
+    mock_client.toggle_ai_agent_status.assert_not_called()
+
+
+def test_agent_toggle_inactive_yes_skips_confirm(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("ag-toggle-yes")
+    mock_client = MagicMock()
+    mock_client.toggle_ai_agent_status = AsyncMock(return_value={"success": True})
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "agent",
+                "toggle",
+                "00000000-0000-0000-0000-000000000099",
+                "--inactive",
+                "--yes",
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    mock_client.toggle_ai_agent_status.assert_awaited_once_with(
+        "00000000-0000-0000-0000-000000000099",
+        active=False,
+    )
+
+
 def test_ai_automation_create_requires_oauth(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
 ):

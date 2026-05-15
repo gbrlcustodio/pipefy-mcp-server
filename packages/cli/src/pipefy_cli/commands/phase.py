@@ -11,6 +11,7 @@ from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -20,7 +21,7 @@ phase_app = typer.Typer(help="Pipe phase operations.", no_args_is_help=True)
 @phase_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def phase_get(
     ctx: typer.Context,
-    phase_id: str,
+    phase_id: str = resource_id_argument(help="Phase id."),
     json_out: bool = typer.Option(
         False,
         "--json",
@@ -79,7 +80,7 @@ def phase_create(
 @phase_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def phase_update(
     ctx: typer.Context,
-    phase_id: str,
+    phase_id: str = resource_id_argument(help="Phase id."),
     name: str | None = typer.Option(None, "--name", "-n"),
     description: str | None = typer.Option(None, "--description", "-d"),
     done: bool | None = typer.Option(
@@ -143,7 +144,7 @@ def phase_update(
 @phase_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def phase_delete(
     ctx: typer.Context,
-    phase_id: str,
+    phase_id: str = resource_id_argument(help="Phase id."),
     yes: bool = typer.Option(
         False,
         "--yes",

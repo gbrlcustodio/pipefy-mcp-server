@@ -12,6 +12,7 @@ from pipefy_cli.commands._common import (
     confirm_destructive,
     parse_json_object,
     parse_json_value,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -54,7 +55,7 @@ def field_condition_list(
 @field_condition_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def field_condition_get(
     ctx: typer.Context,
-    condition_id: str = typer.Argument(..., help="Field condition id."),
+    condition_id: str = resource_id_argument(help="Field condition id."),
     json_out: bool = typer.Option(
         False,
         "--json",
@@ -146,7 +147,7 @@ def field_condition_create(
 @field_condition_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def field_condition_update(
     ctx: typer.Context,
-    condition_id: str = typer.Argument(..., help="Field condition id."),
+    condition_id: str = resource_id_argument(help="Field condition id."),
     extra: str = typer.Option(
         ...,
         "--extra",
@@ -173,10 +174,11 @@ def field_condition_update(
 @field_condition_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def field_condition_delete(
     ctx: typer.Context,
-    condition_id: str = typer.Argument(..., help="Field condition id."),
+    condition_id: str = resource_id_argument(help="Field condition id."),
     yes: bool = typer.Option(
         False,
         "--yes",
+        "-y",
         help="Skip interactive confirmation.",
     ),
     json_out: bool = typer.Option(

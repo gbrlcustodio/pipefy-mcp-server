@@ -10,6 +10,7 @@ from pipefy_cli.commands._common import (
     confirm_destructive,
     parse_json_object,
     parse_json_value,
+    resource_id_argument,
     run_cli_command,
     run_pipefy_client_coroutine,
     write_export_csv_to_stdout,
@@ -41,7 +42,7 @@ def report_org_list(
 @report_org_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def report_org_get(
     ctx: typer.Context,
-    report_id: str = typer.Argument(..., help="Organization report id."),
+    report_id: str = resource_id_argument(help="Organization report id."),
     json_out: bool = typer.Option(
         False, "--json", "-j", help="Print machine-readable JSON to stdout."
     ),
@@ -93,7 +94,7 @@ def report_org_create(
 @report_org_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def report_org_update(
     ctx: typer.Context,
-    report_id: str = typer.Argument(..., help="Organization report id."),
+    report_id: str = resource_id_argument(help="Organization report id."),
     name: str | None = typer.Option(None, "--name", "-n"),
     color: str | None = typer.Option(None, "--color"),
     fields: str | None = typer.Option(None, "--fields"),
@@ -132,8 +133,8 @@ def report_org_update(
 @report_org_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def report_org_delete(
     ctx: typer.Context,
-    report_id: str = typer.Argument(..., help="Organization report id."),
-    yes: bool = typer.Option(False, "--yes"),
+    report_id: str = resource_id_argument(help="Organization report id."),
+    yes: bool = typer.Option(False, "--yes", "-y"),
     json_out: bool = typer.Option(
         False, "--json", "-j", help="Print machine-readable JSON to stdout."
     ),
@@ -236,4 +237,4 @@ def report_org_export(
             poll_timeout_seconds=poll_timeout,
         )
 
-    run_pipefy_client_coroutine(ctx, csv_factory)
+    run_pipefy_client_coroutine(ctx, csv_factory, value_error_exit_code=1)

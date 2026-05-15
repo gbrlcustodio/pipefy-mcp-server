@@ -17,9 +17,9 @@ Set the following environment variables (or add to a `.env` file in your working
 ```env
 PIPEFY_OAUTH_CLIENT=your_client_id
 PIPEFY_OAUTH_SECRET=your_client_secret
-PIPEFY_GRAPHQL_URL=https://api.pipefy.com/graphql
-PIPEFY_OAUTH_URL=https://auth.pipefy.com/...
-PIPEFY_INTERNAL_API_URL=https://app.pipefy.com/graphql
+PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql
+PIPEFY_OAUTH_URL=https://app.pipefy.com/oauth/token
+PIPEFY_INTERNAL_API_URL=https://app.pipefy.com/internal_api
 ```
 
 Full guide: [`docs/setup.md`](../../docs/setup.md).

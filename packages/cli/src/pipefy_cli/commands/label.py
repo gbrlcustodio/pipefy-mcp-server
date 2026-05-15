@@ -8,6 +8,7 @@ from pipefy_sdk import PipefyClient
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -66,7 +67,7 @@ def label_create(
 @label_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def label_update(
     ctx: typer.Context,
-    label_id: str,
+    label_id: str = resource_id_argument(help="Label id."),
     name: str = typer.Option(
         ..., "--name", "-n", help="New label name (required by API)."
     ),
@@ -92,7 +93,7 @@ def label_update(
 @label_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def label_delete(
     ctx: typer.Context,
-    label_id: str,
+    label_id: str = resource_id_argument(help="Label id."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:

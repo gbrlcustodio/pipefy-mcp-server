@@ -9,6 +9,7 @@ from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -18,7 +19,7 @@ pipe_app = typer.Typer(help="Pipe operations.", no_args_is_help=True)
 @pipe_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def pipe_get(
     ctx: typer.Context,
-    pipe_id: str,
+    pipe_id: str = resource_id_argument(help="Pipe id."),
     json_out: bool = typer.Option(
         False,
         "--json",
@@ -87,7 +88,7 @@ def pipe_create(
 @pipe_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def pipe_update(
     ctx: typer.Context,
-    pipe_id: str,
+    pipe_id: str = resource_id_argument(help="Pipe id."),
     name: str | None = typer.Option(None, "--name"),
     icon: str | None = typer.Option(None, "--icon"),
     color: str | None = typer.Option(None, "--color"),
@@ -123,7 +124,7 @@ def pipe_update(
 @pipe_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def pipe_delete(
     ctx: typer.Context,
-    pipe_id: str,
+    pipe_id: str = resource_id_argument(help="Pipe id."),
     yes: bool = typer.Option(
         False,
         "--yes",
@@ -145,8 +146,7 @@ def pipe_delete(
 @pipe_app.command("clone", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def pipe_clone(
     ctx: typer.Context,
-    template_pipe_id: str = typer.Argument(
-        ...,
+    template_pipe_id: str = resource_id_argument(
         help="Source pipe id to use as template.",
     ),
     org_id: str | None = typer.Option(

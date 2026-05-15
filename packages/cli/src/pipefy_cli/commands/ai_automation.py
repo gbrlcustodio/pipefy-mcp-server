@@ -21,6 +21,7 @@ from pipefy_cli.commands._common import (
     confirm_destructive,
     parse_json_object,
     parse_json_value,
+    resource_id_argument,
     run_cli_command,
 )
 
@@ -101,7 +102,7 @@ def ai_automation_list(
 @ai_automation_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def ai_automation_get(
     ctx: typer.Context,
-    automation_id: str = typer.Argument(..., help="Automation rule id."),
+    automation_id: str = resource_id_argument(help="Automation rule id."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Load one automation row (``get_ai_automation`` / ``get_automation``)."""
@@ -216,7 +217,7 @@ def ai_automation_create(
 @ai_automation_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def ai_automation_update(
     ctx: typer.Context,
-    automation_id: str = typer.Argument(..., help="Automation rule id."),
+    automation_id: str = resource_id_argument(help="Automation rule id."),
     pipe: str = typer.Option(
         ...,
         "--pipe",
@@ -313,8 +314,10 @@ def ai_automation_update(
 @ai_automation_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def ai_automation_delete(
     ctx: typer.Context,
-    automation_id: str = typer.Argument(..., help="Automation rule id."),
-    yes: bool = typer.Option(False, "--yes", help="Skip interactive confirmation."),
+    automation_id: str = resource_id_argument(help="Automation rule id."),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip interactive confirmation."
+    ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Delete an AI automation (``delete_ai_automation`` / ``delete_automation``)."""

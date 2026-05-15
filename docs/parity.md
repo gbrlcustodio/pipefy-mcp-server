@@ -1,6 +1,6 @@
 # MCP tools and CLI parity
 
-This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. It is maintained alongside the rollout in `.cursor/dev-planning/specs/pipefy-ai-sdk/tasks/tasks-pipefy-ai-sdk.md` (parent task **5.0**).
+This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. It is maintained alongside the rollout in `.cursor/dev-planning/specs/pipefy-labs/tasks/tasks-pipefy-labs.md` (parent task **5.0**).
 
 **Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **128** tools).
 

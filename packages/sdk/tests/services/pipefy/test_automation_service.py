@@ -444,6 +444,71 @@ async def test_create_automation_active_false_via_attrs(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_send_task_automation_builds_task_params(mock_settings):
+    """Service builds ``action_params.taskParams`` and delegates to ``create_automation``."""
+    created = {
+        "createAutomation": {
+            "automation": {"id": "st-1", "name": "Notify", "active": True},
+        },
+    }
+    service = _make_service(mock_settings, created)
+
+    result = await service.create_send_task_automation(
+        "pipe-1",
+        "Notify owners",
+        "card_created",
+        "Review card",
+        "a@b.com, c@d.com",
+    )
+
+    inp = service.execute_query.call_args[0][1]["input"]
+    assert inp["action_id"] == "send_a_task"
+    assert inp["event_id"] == "card_created"
+    assert inp["event_repo_id"] == "pipe-1"
+    assert inp["action_repo_id"] == "pipe-1"
+    assert inp["action_params"] == {
+        "taskParams": {
+            "title": "Review card",
+            "recipients": "a@b.com, c@d.com",
+        },
+    }
+    assert "event_params" not in inp
+    assert "condition" not in inp
+    assert result == created
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_send_task_automation_includes_event_params_and_condition(
+    mock_settings,
+):
+    """Optional ``event_params`` and ``condition`` are merged when provided."""
+    service = _make_service(
+        mock_settings,
+        {"createAutomation": {"automation": {"id": "st-2", "active": True}}},
+    )
+    event_params = {"to_phase_id": "ph-1"}
+    condition = {"expressions": [{"field_address": "f", "value": "v"}]}
+
+    await service.create_send_task_automation(
+        "pipe-1",
+        "R",
+        "card_moved",
+        "T",
+        "x@y.com",
+        active=False,
+        event_params=event_params,
+        condition=condition,
+    )
+
+    inp = service.execute_query.call_args[0][1]["input"]
+    assert inp["event_params"] == event_params
+    assert inp["condition"] == condition
+    assert inp["active"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_create_automation_transport_error(mock_settings):
     service = AutomationService(settings=mock_settings)
     service.execute_query = AsyncMock(

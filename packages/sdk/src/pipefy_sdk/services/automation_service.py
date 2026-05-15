@@ -235,6 +235,57 @@ class AutomationService(BasePipefyClient):
         _raise_if_automation_mutation_has_errors("createAutomation", raw)
         return cast(CreateAutomationMutationResult, raw)
 
+    async def create_send_task_automation(
+        self,
+        pipe_id: str,
+        name: str,
+        event_id: str,
+        task_title: str,
+        recipients: str,
+        *,
+        active: bool = True,
+        event_params: dict[str, Any] | None = None,
+        condition: dict[str, Any] | None = None,
+    ) -> CreateAutomationMutationResult:
+        """Create a ``send_a_task`` traditional automation.
+
+        Builds the ``action_params.taskParams`` envelope expected by Pipefy and
+        delegates to :meth:`create_automation`. Both MCP and CLI surfaces use
+        this method so the payload shape stays in one place.
+
+        Args:
+            pipe_id: Pipe ID where the trigger event is evaluated.
+            name: Rule display name.
+            event_id: Trigger event ID (e.g. ``card_created``).
+            task_title: Title of the task sent to recipients.
+            recipients: Comma-separated recipient e-mails.
+            active: When True (default), the rule is created enabled.
+            event_params: Optional trigger filter payload (passed through verbatim).
+            condition: Optional condition expressions payload (passed through verbatim).
+        """
+        extra_input: dict[str, Any] = {
+            "action_params": {
+                "taskParams": {
+                    "title": task_title,
+                    "recipients": recipients,
+                },
+            },
+        }
+        if event_params is not None:
+            extra_input["event_params"] = event_params
+        if condition is not None:
+            extra_input["condition"] = condition
+
+        return await self.create_automation(
+            pipe_id,
+            name,
+            event_id,
+            "send_a_task",
+            active=active,
+            action_repo_id=None,
+            **extra_input,
+        )
+
     async def update_automation(
         self,
         automation_id: str,

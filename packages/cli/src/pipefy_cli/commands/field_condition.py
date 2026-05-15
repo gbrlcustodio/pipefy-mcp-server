@@ -8,6 +8,7 @@ import typer
 from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
     parse_json_value,
@@ -50,7 +51,7 @@ def field_condition_list(
     run_cli_command(ctx, json_out, factory)
 
 
-@field_condition_app.command("get")
+@field_condition_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def field_condition_get(
     ctx: typer.Context,
     condition_id: str = typer.Argument(..., help="Field condition id."),
@@ -133,7 +134,7 @@ def field_condition_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@field_condition_app.command("update")
+@field_condition_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def field_condition_update(
     ctx: typer.Context,
     condition_id: str = typer.Argument(..., help="Field condition id."),
@@ -160,7 +161,7 @@ def field_condition_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@field_condition_app.command("delete")
+@field_condition_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def field_condition_delete(
     ctx: typer.Context,
     condition_id: str = typer.Argument(..., help="Field condition id."),

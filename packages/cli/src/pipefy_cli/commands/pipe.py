@@ -6,6 +6,7 @@ import typer
 from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
     run_cli_command,
@@ -14,7 +15,7 @@ from pipefy_cli.commands._common import (
 pipe_app = typer.Typer(help="Pipe operations.", no_args_is_help=True)
 
 
-@pipe_app.command("get")
+@pipe_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def pipe_get(
     ctx: typer.Context,
     pipe_id: str,
@@ -83,7 +84,7 @@ def pipe_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@pipe_app.command("update")
+@pipe_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def pipe_update(
     ctx: typer.Context,
     pipe_id: str,
@@ -119,7 +120,7 @@ def pipe_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@pipe_app.command("delete")
+@pipe_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def pipe_delete(
     ctx: typer.Context,
     pipe_id: str,
@@ -141,7 +142,7 @@ def pipe_delete(
     run_cli_command(ctx, json_out, factory)
 
 
-@pipe_app.command("clone")
+@pipe_app.command("clone", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def pipe_clone(
     ctx: typer.Context,
     template_pipe_id: str = typer.Argument(

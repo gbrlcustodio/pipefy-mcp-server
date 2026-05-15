@@ -8,6 +8,7 @@ import typer
 from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
     parse_json_value,
@@ -153,7 +154,7 @@ def report_pipe_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@report_pipe_app.command("update")
+@report_pipe_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def report_pipe_update(
     ctx: typer.Context,
     report_id: str = typer.Argument(..., help="Pipe report id."),
@@ -190,7 +191,7 @@ def report_pipe_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@report_pipe_app.command("delete")
+@report_pipe_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def report_pipe_delete(
     ctx: typer.Context,
     report_id: str = typer.Argument(..., help="Pipe report id."),
@@ -249,6 +250,7 @@ def report_pipe_export(
         raise typer.BadParameter("--columns must be a JSON array")
 
     if fmt == "json":
+
         async def factory(client: PipefyClient):
             return await client.export_pipe_report(
                 pipe,

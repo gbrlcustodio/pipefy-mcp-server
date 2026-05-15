@@ -12,6 +12,7 @@ from pipefy_sdk import (
 )
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
     parse_json_value,
@@ -98,7 +99,7 @@ def record_find(
     run_cli_command(ctx, json_out, factory)
 
 
-@record_app.command("get")
+@record_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def record_get(
     ctx: typer.Context,
     record_id: str,
@@ -144,7 +145,7 @@ def record_create(
     run_cli_command(ctx, json_out, factory, exit_code_2_on_value_error=True)
 
 
-@record_app.command("update")
+@record_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def record_update(
     ctx: typer.Context,
     record_id: str,
@@ -200,7 +201,7 @@ def record_update(
     run_cli_command(ctx, json_out, factory, exit_code_2_on_value_error=True)
 
 
-@record_app.command("delete")
+@record_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def record_delete(
     ctx: typer.Context,
     record_id: str,

@@ -9,6 +9,7 @@ import typer
 from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
     run_cli_command,
@@ -78,7 +79,7 @@ def webhook_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@webhook_app.command("update")
+@webhook_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def webhook_update(
     ctx: typer.Context,
     webhook_id: str,
@@ -122,7 +123,7 @@ def webhook_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@webhook_app.command("delete")
+@webhook_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def webhook_delete(
     ctx: typer.Context,
     webhook_id: str,

@@ -5,7 +5,10 @@ from __future__ import annotations
 import typer
 from pipefy_sdk import PipefyClient
 
-from pipefy_cli.commands._common import run_cli_command
+from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
+    run_cli_command,
+)
 
 export_app = typer.Typer(
     help="Bulk exports (automation jobs).",
@@ -36,7 +39,9 @@ def export_automation_jobs(
     run_cli_command(ctx, json_out, factory)
 
 
-@export_app.command("automation-jobs-csv")
+@export_app.command(
+    "automation-jobs-csv", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS
+)
 def export_automation_jobs_csv(
     ctx: typer.Context,
     export_id: str = typer.Argument(..., help="Export id after status is finished."),

@@ -5,7 +5,11 @@ from __future__ import annotations
 import typer
 from pipefy_sdk import PipefyClient
 
-from pipefy_cli.commands._common import confirm_destructive, run_cli_command
+from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
+    confirm_destructive,
+    run_cli_command,
+)
 
 label_app = typer.Typer(help="Pipe label operations.", no_args_is_help=True)
 
@@ -59,7 +63,7 @@ def label_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@label_app.command("update")
+@label_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def label_update(
     ctx: typer.Context,
     label_id: str,
@@ -85,7 +89,7 @@ def label_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@label_app.command("delete")
+@label_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def label_delete(
     ctx: typer.Context,
     label_id: str,

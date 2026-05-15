@@ -5,12 +5,15 @@ from __future__ import annotations
 import typer
 from pipefy_sdk import PipefyClient
 
-from pipefy_cli.commands._common import run_cli_command
+from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
+    run_cli_command,
+)
 
 org_app = typer.Typer(help="Organization operations.", no_args_is_help=True)
 
 
-@org_app.command("get")
+@org_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def org_get(
     ctx: typer.Context,
     organization_id: str = typer.Argument(..., help="Numeric organization id."),

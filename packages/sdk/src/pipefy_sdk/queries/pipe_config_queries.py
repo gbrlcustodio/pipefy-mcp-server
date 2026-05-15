@@ -221,6 +221,7 @@ GET_FIELD_CONDITIONS_QUERY = gql(
                     }
                 }
                 actions {
+                    actionId
                     phaseFieldId
                 }
             }
@@ -247,6 +248,7 @@ GET_FIELD_CONDITION_QUERY = gql(
                 }
             }
             actions {
+                actionId
                 phaseFieldId
             }
         }

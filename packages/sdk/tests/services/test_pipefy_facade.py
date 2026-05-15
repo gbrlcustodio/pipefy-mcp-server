@@ -166,6 +166,9 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     automation_service.create_automation = AsyncMock(
         return_value={"ok": "create_automation"}
     )
+    automation_service.create_send_task_automation = AsyncMock(
+        return_value={"ok": "create_send_task_automation"}
+    )
     automation_service.update_automation = AsyncMock(
         return_value={"ok": "update_automation"}
     )
@@ -491,6 +494,20 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
         "p1", "Rule", "ev", "act", action_repo_id="child-pipe", active=True
     )
 
+    assert await client.create_send_task_automation(
+        "p1", "Rule", "card_created", "T", "x@y.com"
+    ) == {"ok": "create_send_task_automation"}
+    automation_service.create_send_task_automation.assert_awaited_once_with(
+        "p1",
+        "Rule",
+        "card_created",
+        "T",
+        "x@y.com",
+        active=True,
+        event_params=None,
+        condition=None,
+    )
+
     assert await client.update_automation("a1", extra_input={"name": "N"}) == {
         "ok": "update_automation"
     }
@@ -677,7 +694,18 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
         "agent_uuid": "new-1",
         "message": "updated",
     }
-    ai_agent_service.update_agent.assert_awaited_once_with(uin)
+    # Facade now runs ``resolve_and_populate_field_refs`` before delegating, which
+    # populates ``referencedFieldIds`` from the instruction (empty list for the
+    # minimal behavior here). The service receives the prepared input, not the
+    # raw one.
+    ai_agent_service.update_agent.assert_awaited_once()
+    forwarded = ai_agent_service.update_agent.await_args.args[0]
+    assert isinstance(forwarded, UpdateAiAgentInput)
+    assert forwarded.uuid == uin.uuid
+    assert (
+        forwarded.behaviors[0].action_params["aiBehaviorParams"]["referencedFieldIds"]
+        == []
+    )
 
     assert await client.toggle_ai_agent_status(agent_uuid="a", active=True) == {
         "success": True,

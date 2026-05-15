@@ -260,66 +260,6 @@ def field_condition_phase_field_id_looks_like_slug(value: object) -> bool:
     return any(c.isalpha() for c in s)
 
 
-def normalize_field_condition_actions(
-    actions: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Shallow-copy each action and map legacy ``hidden`` → ``hide``."""
-    normalized: list[dict[str, Any]] = []
-    for item in actions:
-        row = dict(item)
-        aid = row.get("actionId")
-        if isinstance(aid, str) and aid.strip().lower() == "hidden":
-            row["actionId"] = "hide"
-        normalized.append(row)
-    return normalized
-
-
-def strip_expression_ids_for_create(condition: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of ``condition`` with ``id`` removed and nested ints coerced.
-
-    Output keys mirror the input ``condition`` (typically ``expressions``,
-    ``expressions_structure``, plus any other ``ConditionInput`` fields present).
-
-    ``ConditionExpressionInput.id`` is a persisted primary key — sending arbitrary
-    client tokens on create causes ``RECORD_NOT_FOUND``. ``structure_id`` is coerced
-    to ``int`` for consistency (GraphQL ``ID`` scalar).
-    """
-    expressions = condition.get("expressions")
-
-    def _coerce_int(value: Any) -> Any:
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            return value
-
-    if not isinstance(expressions, list):
-        return condition
-    cleaned: list[dict[str, Any]] = []
-    for expr in expressions:
-        row = {k: v for k, v in expr.items() if k != "id"}
-        sid = row.get("structure_id")
-        if sid is not None:
-            try:
-                row["structure_id"] = int(sid)
-            except (ValueError, TypeError):
-                pass
-        cleaned.append(row)
-    es = condition.get("expressions_structure")
-    if isinstance(es, list):
-        coerced_ints: list[list[Any]] = []
-        for group in es:
-            if isinstance(group, list):
-                coerced_ints.append([_coerce_int(v) for v in group])
-            else:
-                coerced_ints.append([_coerce_int(group)])
-        return {
-            **condition,
-            "expressions": cleaned,
-            "expressions_structure": coerced_ints,
-        }
-    return {**condition, "expressions": cleaned}
-
-
 def field_condition_actions_error_message(
     actions: list[dict[str, Any]],
 ) -> str | None:
@@ -611,8 +551,6 @@ __all__ = [
     "find_phase_field_dependents",
     "handle_pipe_config_tool_graphql_error",
     "map_delete_pipe_error_to_message",
-    "normalize_field_condition_actions",
     "resolve_phase_dependents",
     "resolve_phase_field_identifiers",
-    "strip_expression_ids_for_create",
 ]

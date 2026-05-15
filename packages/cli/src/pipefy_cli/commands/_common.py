@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, TypeVar
 
 import typer
+from gql.transport.exceptions import TransportError, TransportQueryError
 from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
 from pipefy_sdk.exceptions import PipefyError
 
@@ -20,6 +21,14 @@ _T = TypeVar("_T")
 _R = TypeVar("_R")
 
 DEFAULT_EXPORT_MAX_BYTES = 50 * 1024 * 1024
+
+# Pipefy occasionally encodes ids with a leading hyphen (e.g. table id "-ZocGcM0").
+# Click parses tokens starting with "-" as short options by default, which breaks
+# every `<sub> get/update/delete <ID>` command. Setting ignore_unknown_options on
+# the command relaxes the parser so the dashed token is consumed as the positional
+# id; unknown LONG options (typos like ``--yez``) still surface as errors because
+# Click attempts to bind them to the (single) positional slot.
+ID_POSITIONAL_CONTEXT_SETTINGS = {"ignore_unknown_options": True}
 
 
 def export_poll_max_rounds(
@@ -127,6 +136,26 @@ def run_pipefy_client_coroutine(
     except PipefyError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
+    except TransportQueryError as exc:
+        typer.echo(_format_transport_query_error(exc), err=True)
+        raise typer.Exit(1) from exc
+    except TransportError as exc:
+        typer.echo(f"Pipefy transport error: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+
+def _format_transport_query_error(exc: TransportQueryError) -> str:
+    """Render a GraphQL transport error as a clean single-line message for the CLI.
+
+    Falls back to ``str(exc)`` when the structured ``errors`` payload is missing or empty.
+    """
+    errors = getattr(exc, "errors", None) or []
+    if not errors:
+        return str(exc)
+    first = errors[0] if isinstance(errors[0], dict) else {"message": str(errors[0])}
+    message = first.get("message") or str(exc)
+    code = (first.get("extensions") or {}).get("code")
+    return f"{message} ({code})" if code else message
 
 
 def settings_and_token(ctx: typer.Context) -> tuple[PipefySettings, str | None]:
@@ -175,7 +204,7 @@ def run_cli_command(
     json_out: bool,
     coro_factory: Callable[[PipefyClient], Awaitable[_R]],
     *,
-    exit_code_2_on_value_error: bool = False,
+    exit_code_2_on_value_error: bool = True,
 ) -> None:
     """Run an async coroutine factory with a configured client and render the result.
 
@@ -195,6 +224,12 @@ def run_cli_command(
         data = asyncio.run(_run())
     except PipefyError as exc:
         typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    except TransportQueryError as exc:
+        typer.echo(_format_transport_query_error(exc), err=True)
+        raise typer.Exit(1) from exc
+    except TransportError as exc:
+        typer.echo(f"Pipefy transport error: {exc}", err=True)
         raise typer.Exit(1) from exc
     except ValueError as exc:
         if exit_code_2_on_value_error:

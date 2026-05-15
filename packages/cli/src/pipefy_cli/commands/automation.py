@@ -9,6 +9,7 @@ from pipefy_sdk import CreateSendTaskAutomationInput, PipefyClient
 from pydantic import ValidationError
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
     parse_json_value,
@@ -52,7 +53,7 @@ def automation_list(
     run_cli_command(ctx, json_out, factory)
 
 
-@automation_app.command("get")
+@automation_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def automation_get(
     ctx: typer.Context,
     automation_id: str = typer.Argument(..., help="Automation rule id."),
@@ -84,8 +85,9 @@ def automation_create(
     name: str = typer.Option(..., "--name", "-n", help="Rule name."),
     trigger_id: str = typer.Option(
         ...,
+        "--event-id",
         "--trigger-id",
-        help="Trigger id from ``automation events list``.",
+        help="Trigger event id from ``automation events list`` (``--trigger-id`` retained as alias).",
     ),
     action_id: str = typer.Option(
         ...,
@@ -129,7 +131,7 @@ def automation_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@automation_app.command("update")
+@automation_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def automation_update(
     ctx: typer.Context,
     automation_id: str = typer.Argument(..., help="Automation rule id."),
@@ -156,7 +158,7 @@ def automation_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@automation_app.command("delete")
+@automation_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def automation_delete(
     ctx: typer.Context,
     automation_id: str = typer.Argument(..., help="Automation rule id."),
@@ -476,7 +478,7 @@ def automation_export_jobs(
     run_cli_command(ctx, json_out, factory)
 
 
-@export_app.command("status")
+@export_app.command("status", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def automation_export_status(
     ctx: typer.Context,
     export_id: str = typer.Argument(..., help="Export id from ``export jobs``."),
@@ -495,7 +497,7 @@ def automation_export_status(
     run_cli_command(ctx, json_out, factory)
 
 
-@export_app.command("csv")
+@export_app.command("csv", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def automation_export_csv(
     ctx: typer.Context,
     export_id: str = typer.Argument(..., help="Finished export id."),

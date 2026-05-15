@@ -28,7 +28,13 @@ from pipefy_sdk.queries.pipe_config_queries import (
     UPDATE_PIPE_MUTATION,
 )
 from pipefy_sdk.settings import PipefySettings
-from pipefy_sdk.utils import normalize_field_condition_payload
+from pipefy_sdk.utils import (
+    normalize_field_condition_actions,
+    normalize_field_condition_payload,
+)
+
+_CREATE_FIELD_CONDITION_RESERVED_ATTRS = frozenset({"phaseId"})
+_UPDATE_FIELD_CONDITION_RESERVED_ATTRS = frozenset({"id"})
 
 
 class PipeConfigService(BasePipefyClient):
@@ -225,14 +231,27 @@ class PipeConfigService(BasePipefyClient):
             condition: ``ConditionInput`` (e.g. ``expressions``, ``expressions_structure``).
             actions: Non-empty list of ``FieldConditionActionInput`` dicts (use ``phaseFieldId``).
             **attrs: Optional fields such as ``name``, ``index``, ``clientMutationId``;
-                keys with value ``None`` are omitted.
+                keys with value ``None`` are omitted. The camelCase ``phaseId`` is
+                rejected here to prevent callers from silently overriding the
+                positional ``phase_id`` (the snake_case forms ``phase_id``,
+                ``condition``, ``actions`` are auto-rejected by Python because they
+                collide with the explicit positional parameters).
         """
+        reserved = sorted(
+            k for k in attrs if k in _CREATE_FIELD_CONDITION_RESERVED_ATTRS
+        )
+        if reserved:
+            raise ValueError(
+                "create_field_condition received reserved key(s) via **attrs: "
+                f"{', '.join(reserved)}. Pass them as positional arguments instead."
+            )
         phase_key = phase_id.strip() if isinstance(phase_id, str) else str(phase_id)
         normalized_condition = normalize_field_condition_payload(condition)
+        normalized_actions = normalize_field_condition_actions(actions)
         input_obj: dict[str, Any] = {
             "phaseId": phase_key,
             "condition": normalized_condition,
-            "actions": actions,
+            "actions": normalized_actions,
         }
         for key, value in attrs.items():
             if value is not None:
@@ -250,14 +269,29 @@ class PipeConfigService(BasePipefyClient):
 
         Args:
             condition_id: Field condition ID.
-            **attrs: Fields to set; keys with value ``None`` are omitted.
+            **attrs: Fields to set; keys with value ``None`` are omitted. ``id``
+                is reserved and must be passed positionally via ``condition_id``.
+                When ``condition`` is a dict, the SDK normalizes it
+                (drops persisted ``expression.id``, coerces ``structure_id`` /
+                ``expressions_structure`` entries to ``int``). When ``actions``
+                is a list, ``actionId: "hidden"`` is canonicalized to ``"hide"``.
         """
+        reserved = sorted(
+            k for k in attrs if k in _UPDATE_FIELD_CONDITION_RESERVED_ATTRS
+        )
+        if reserved:
+            raise ValueError(
+                "update_field_condition received reserved key(s) via **attrs: "
+                f"{', '.join(reserved)}. 'id' must be passed as condition_id."
+            )
         payload: dict[str, Any] = {"id": condition_id}
         for key, value in attrs.items():
             if value is None:
                 continue
             if key == "condition" and isinstance(value, dict):
                 payload[key] = normalize_field_condition_payload(value)
+            elif key == "actions" and isinstance(value, list):
+                payload[key] = normalize_field_condition_actions(value)
             else:
                 payload[key] = value
         return await self.execute_query(

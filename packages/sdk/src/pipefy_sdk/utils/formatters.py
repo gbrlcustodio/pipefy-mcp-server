@@ -103,6 +103,35 @@ def normalize_field_condition_payload(
     return {**condition, "expressions": cleaned_expressions}
 
 
+def normalize_field_condition_actions(
+    actions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Normalize ``FieldConditionActionInput`` items for create/update mutations.
+
+    Maps the legacy ``actionId: "hidden"`` alias to the canonical ``"hide"`` value
+    so callers that copied values from older payloads do not silently produce
+    rules without a visible action. Each item is shallow-copied so caller dicts
+    are not mutated.
+
+    Args:
+        actions: Iterable of ``FieldConditionActionInput`` dicts.
+
+    Returns:
+        A new list of shallow copies with ``actionId`` canonicalized.
+    """
+    normalized: list[dict[str, Any]] = []
+    for item in actions:
+        if not isinstance(item, dict):
+            normalized.append(item)
+            continue
+        row = dict(item)
+        aid = row.get("actionId")
+        if isinstance(aid, str) and aid.strip().lower() == "hidden":
+            row["actionId"] = "hide"
+        normalized.append(row)
+    return normalized
+
+
 def convert_values_to_camel_case(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert values to camelCase format for `updateFieldsValues` mutation.
 

@@ -426,6 +426,29 @@ async def test_search_pipes_truncates_per_org_when_over_cap(mock_settings):
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_truncates_per_org_when_api_returns_fewer_than_pipes_count(
+    mock_settings,
+):
+    """When API returns fewer pipes than Organization.pipesCount, flag as truncated."""
+    pipes = [{"id": str(i), "name": f"P{i}"} for i in range(10)]
+    mock_orgs = [{"id": "1", "name": "Org", "pipesCount": 271, "pipes": pipes}]
+    service = _make_service(mock_settings, {"organizations": mock_orgs})
+    result = await service.search_pipes(max_pipes_per_org=500)
+
+    assert len(result["organizations"][0]["pipes"]) == 10
+    assert result["organizations"][0]["pipes_truncated"] is True
+    assert result["organizations"][0]["pipesCount"] == 271
+    assert result["search_limits"]["pipes_truncated"] is True
+
+
+@pytest.mark.unit
+def test_search_pipes_query_selects_pipes_count():
+    printed = print_ast(SEARCH_PIPES_QUERY)
+    assert "pipesCount" in printed
+
+
+@pytest.mark.unit
 def test_get_phase_fields_query_selects_internal_id_and_uuid():
     printed = print_ast(GET_PHASE_FIELDS_QUERY)
     assert "internal_id" in printed

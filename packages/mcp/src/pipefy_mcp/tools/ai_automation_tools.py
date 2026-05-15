@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import re
-from typing import Any
-
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
@@ -14,13 +11,16 @@ from pipefy_sdk import (
     PipefyId,
     UpdateAiAutomationInput,
 )
+from pipefy_sdk.ai_preflight import (
+    filter_ai_automation_summaries,
+    validate_ai_automation_prompt_sdk,
+)
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
     build_create_automation_success,
     build_update_automation_success,
-    build_validate_prompt_payload,
 )
 from pipefy_mcp.tools.automation_tool_helpers import (
     build_automation_error_payload,
@@ -54,33 +54,6 @@ AI_AUTOMATION_NOT_CONFIGURED = (
     "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL). "
     "Check .env.example for the required variables."
 )
-
-GENERATE_WITH_AI_ACTION_ID = "generate_with_ai"
-
-# Regex to extract numeric IDs from %{<id>} tokens in AI automation prompts.
-_PROMPT_FIELD_TOKEN_RE = re.compile(r"%\{(\d+)\}")
-
-
-def _is_ai_automation_summary_row(row: Any) -> bool:
-    """True when the listing row is an AI (prompt) automation."""
-    if not isinstance(row, dict):
-        return False
-    action_id = row.get("action_id") or row.get("actionId")
-    if action_id == GENERATE_WITH_AI_ACTION_ID:
-        return True
-    # Fallback: some API responses omit action_id but include aiParams in the
-    # action payload.  This heuristic avoids missing those rows; if a future
-    # non-AI action type also carries aiParams, revisit this check.
-    ap = row.get("action_params") or row.get("actionParams")
-    if isinstance(ap, dict) and (
-        ap.get("aiParams") is not None or ap.get("ai_params") is not None
-    ):
-        return True
-    return False
-
-
-def _filter_ai_automation_summaries(rows: list[Any]) -> list[Any]:
-    return [r for r in rows if _is_ai_automation_summary_row(r)]
 
 
 def _ai_automation_api_failure_payload(
@@ -160,139 +133,36 @@ class AiAutomationTools:
             if pid_err is not None:
                 return build_ai_tool_error(tool_error_message(pid_err))
 
-            problems: list[str] = []
-            warnings: list[str] = []
-            field_map: dict[str, str] = {}
-
-            # 1. Check prompt contains at least one %{numeric_id} token
-            prompt_tokens = _PROMPT_FIELD_TOKEN_RE.findall(prompt)
-            if not prompt_tokens:
-                problems.append(
-                    "Prompt must reference at least one pipe field using "
-                    "%{internal_id} syntax (e.g. 'Summarize: %{425829426}')."
-                )
-
-            # 2. Fetch pipe with preferences and fields
-            try:
-                pipe_data = await client.get_pipe_with_preferences(pid)
-            except Exception as exc:  # noqa: BLE001
-                return build_ai_tool_error(f"Failed to fetch pipe {pid}: {exc}")
-
-            pipe_info = pipe_data.get("pipe", {})
-
-            # Build a map of internal_id → label for all pipe fields
-            all_field_ids: set[str] = set()
-            readonly_field_ids: set[str] = set()
-            for phase in pipe_info.get("phases") or []:
-                for field in phase.get("fields") or []:
-                    fid = str(field.get("internal_id") or field.get("id", ""))
-                    label = field.get("label", "")
-                    if fid:
-                        all_field_ids.add(fid)
-                        field_map[fid] = label
-                    if fid and field.get("editable") is False:
-                        readonly_field_ids.add(fid)
-            for field in pipe_info.get("start_form_fields") or []:
-                fid = str(field.get("internal_id") or field.get("id", ""))
-                label = field.get("label", "")
-                if fid:
-                    all_field_ids.add(fid)
-                    field_map[fid] = label
-                if fid and field.get("editable") is False:
-                    readonly_field_ids.add(fid)
-
-            # 3. Validate prompt token IDs exist in the pipe
-            for token_id in prompt_tokens:
-                if token_id not in all_field_ids:
-                    problems.append(
-                        f"Prompt references field %{{{token_id}}} but it does not "
-                        f"exist in pipe {pid}."
-                    )
-
-            # 4. Validate output field_ids exist in the pipe
-            for fid in field_ids:
-                if str(fid) not in all_field_ids:
-                    problems.append(
-                        f"Output field_id '{fid}' does not exist in pipe {pid}."
-                    )
-
-            # 5. Validate event_id if provided
+            eid: str | None = None
             if event_id is not None:
-                ok_e, eid, eid_err = validate_optional_tool_id(event_id, "event_id")
-                if not ok_e:
-                    problems.append(tool_error_message(eid_err))
-                elif eid:
-                    try:
-                        events = await client.get_automation_events(pid)
-                        valid_event_ids = {
-                            str(e.get("id", "")) for e in events if isinstance(e, dict)
-                        }
-                        if eid not in valid_event_ids:
-                            problems.append(
-                                f"event_id '{eid}' is not a valid automation event "
-                                f"for pipe {pid}. Valid events: "
-                                f"{sorted(valid_event_ids)}."
-                            )
-                    except Exception as exc:  # noqa: BLE001
-                        await ctx.debug(f"Could not fetch automation events: {exc}")
-                        warnings.append(
-                            "Could not verify event_id: automation events "
-                            "endpoint returned an error."
-                        )
-
-            # 6. Check pipe.preferences.aiAgentsEnabled
-            preferences = pipe_info.get("preferences") or {}
-            ai_enabled = preferences.get("aiAgentsEnabled")
-            if ai_enabled is False:
-                problems.append(
-                    "AI is not enabled for this pipe. Enable it in "
-                    "Pipefy UI > Pipe Settings > AI."
+                ok_e, eid_validated, eid_err = validate_optional_tool_id(
+                    event_id, "event_id"
                 )
+                if not ok_e:
+                    # Mirror SDK shape: surface as a non-blocking problem rather
+                    # than a hard tool error so callers can keep the structured
+                    # ``problems`` list contract.
+                    return {
+                        "success": True,
+                        "valid": False,
+                        "problems": [tool_error_message(eid_err)],
+                        "warnings": [],
+                        "field_map": {},
+                    }
+                eid = eid_validated or None
 
-            # 7. Check org-level AI credit budget. Informational only when the
-            # org is active and either under limit or has unlimited billing
-            # (limit=0, common in sandbox/custom plans). Blocking only when AI
-            # Automations are disabled at the org level.
-            org_id = pipe_info.get("organizationId")
-            if org_id:
-                try:
-                    usage_data = await client.get_ai_credit_usage(
-                        str(org_id), "current_month"
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    await ctx.debug(f"Could not check AI credit usage: {exc}")
-                else:
-                    stats = (usage_data or {}).get("aiCreditUsageStats") or {}
-                    active = stats.get("active")
-                    usage = stats.get("usage") or 0
-                    limit = stats.get("limit") or 0
-                    has_addon = bool(stats.get("hasAddon"))
-                    ai_auto = stats.get("aiAutomation") or {}
-                    ai_auto_enabled = ai_auto.get("enabled")
-                    if active is False or ai_auto_enabled is False:
-                        problems.append(
-                            "AI Automations are disabled on this organization. "
-                            "Created rules will not execute. Contact your "
-                            "Pipefy admin to enable AI Automations for the org."
-                        )
-                    elif limit > 0 and usage >= limit and not has_addon:
-                        warnings.append(
-                            f"AI credit budget exhausted ({usage}/{limit}). "
-                            "Rules will be created but may not execute until "
-                            "credits reset or an addon is enabled."
-                        )
-
-            # Only include referenced fields in the returned field_map and warnings
-            referenced_ids = set(prompt_tokens) | set(str(f) for f in field_ids)
-            for fid in referenced_ids & readonly_field_ids:
-                warnings.append(f"Field {fid} ({field_map.get(fid, '')}) is read-only.")
-            filtered_map = {k: v for k, v in field_map.items() if k in referenced_ids}
-
-            return build_validate_prompt_payload(
-                problems=problems,
-                warnings=warnings,
-                field_map=filtered_map,
+            result = await validate_ai_automation_prompt_sdk(
+                client,
+                pid,
+                prompt,
+                [str(f) for f in field_ids],
+                eid,
             )
+            if not result.get("success"):
+                return build_ai_tool_error(
+                    str(result.get("error") or "Validation failed.")
+                )
+            return result
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
@@ -397,7 +267,7 @@ class AiAutomationTools:
                     resource_kind="pipe",
                     resource_id=pid,
                 )
-            filtered = _filter_ai_automation_summaries(rows)
+            filtered = filter_ai_automation_summaries(rows)
             return build_automation_read_success_payload(
                 filtered,
                 "AI automations listed.",

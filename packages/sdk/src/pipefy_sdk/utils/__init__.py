@@ -7,6 +7,7 @@ service layer.
 from .formatters import (
     convert_fields_to_array,
     convert_values_to_camel_case,
+    normalize_field_condition_actions,
     normalize_field_condition_payload,
 )
 from .url_ssrf import (
@@ -20,6 +21,7 @@ __all__ = [
     "assert_hostname_resolves_to_public_ips",
     "convert_fields_to_array",
     "convert_values_to_camel_case",
+    "normalize_field_condition_actions",
     "normalize_field_condition_payload",
     "validate_https_service_endpoint_url",
 ]

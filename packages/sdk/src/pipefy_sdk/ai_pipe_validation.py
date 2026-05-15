@@ -6,10 +6,12 @@ import asyncio
 import copy
 import logging
 import re
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pipefy_sdk.behavior_placeholders import populate_referenced_field_ids
-from pipefy_sdk.client import PipefyClient
+
+if TYPE_CHECKING:
+    from pipefy_sdk.client import PipefyClient
 
 logger = logging.getLogger(__name__)
 

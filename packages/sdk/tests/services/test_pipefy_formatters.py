@@ -3,6 +3,7 @@ import pytest
 from pipefy_sdk.utils.formatters import (
     convert_fields_to_array,
     convert_values_to_camel_case,
+    normalize_field_condition_actions,
     normalize_field_condition_payload,
 )
 
@@ -246,3 +247,39 @@ def test_normalize_field_condition_returns_copy_without_expressions():
 
     assert result == {"only_index": 1}
     assert result is not condition
+
+
+@pytest.mark.unit
+def test_normalize_field_condition_actions_maps_hidden_to_hide():
+    """Legacy ``actionId: "hidden"`` is canonicalized to ``"hide"`` (case/whitespace insensitive)."""
+    actions = [
+        {"phaseFieldId": "1", "actionId": "hidden"},
+        {"phaseFieldId": "2", "actionId": "  HIDDEN "},
+        {"phaseFieldId": "3", "actionId": "show"},
+    ]
+
+    result = normalize_field_condition_actions(actions)
+
+    assert [a["actionId"] for a in result] == ["hide", "hide", "show"]
+
+
+@pytest.mark.unit
+def test_normalize_field_condition_actions_does_not_mutate_input():
+    """Caller-supplied dicts must remain untouched."""
+    actions = [{"phaseFieldId": "1", "actionId": "hidden"}]
+
+    result = normalize_field_condition_actions(actions)
+
+    assert actions[0]["actionId"] == "hidden"
+    assert result[0] is not actions[0]
+
+
+@pytest.mark.unit
+def test_normalize_field_condition_actions_passes_through_non_dict():
+    """Non-dict items survive (forward-compatible with hypothetical scalar tokens)."""
+    actions = ["raw-token", {"phaseFieldId": "1", "actionId": "hide"}]
+
+    result = normalize_field_condition_actions(actions)
+
+    assert result[0] == "raw-token"
+    assert result[1]["actionId"] == "hide"

@@ -458,6 +458,66 @@ async def test_create_field_condition_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_field_condition_normalizes_actions_and_condition(mock_settings):
+    """Service normalizes both legacy ``actionId: hidden`` and structural ids before sending."""
+    expr = {
+        "expressions": [
+            {
+                "id": "client-token",
+                "field_address": "a",
+                "operation": "equals",
+                "value": "yes",
+                "structure_id": "0",
+            },
+        ],
+        "expressions_structure": [["0"]],
+    }
+    actions = [{"phaseFieldId": "1", "actionId": "hidden"}]
+    service = _make_service(
+        mock_settings,
+        {"createFieldCondition": {"fieldCondition": {"id": "cond-norm"}}},
+    )
+
+    await service.create_field_condition(99, expr, actions, name="R")
+
+    _, variables = service.execute_query.call_args[0]
+    payload = variables["input"]
+    assert payload["condition"]["expressions"][0].get("id") is None
+    assert payload["condition"]["expressions"][0]["structure_id"] == 0
+    assert payload["condition"]["expressions_structure"] == [[0]]
+    assert payload["actions"][0]["actionId"] == "hide"
+    assert payload["actions"] is not actions
+    assert payload["actions"][0] is not actions[0]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_field_condition_rejects_reserved_phaseId_attr(mock_settings):
+    """``phaseId`` via ``**attrs`` raises instead of silently overriding the positional phase_id.
+
+    Snake-case ``phase_id``, ``condition``, and ``actions`` cannot reach ``**attrs``
+    at all — Python's call binding raises :class:`TypeError` first because those
+    names collide with the explicit positional parameters.
+    """
+    service = _make_service(
+        mock_settings,
+        {"createFieldCondition": {"fieldCondition": {"id": "x"}}},
+    )
+
+    with pytest.raises(ValueError, match="phaseId"):
+        await service.create_field_condition(
+            "99",
+            {"expressions": []},
+            [{"phaseFieldId": "1"}],
+            name="R",
+            phaseId="override",
+        )
+
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_create_field_condition_transport_error(mock_settings):
     service = PipeConfigService(settings=mock_settings)
     service.execute_query = AsyncMock(
@@ -496,6 +556,39 @@ async def test_update_field_condition_success(mock_settings):
     assert result == {
         "updateFieldCondition": {"fieldCondition": {"id": "cond-2"}},
     }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_field_condition_normalizes_actions(mock_settings):
+    """Update normalizes ``actions`` (``hidden`` → ``hide``) when provided."""
+    service = _make_service(
+        mock_settings,
+        {"updateFieldCondition": {"fieldCondition": {"id": "c"}}},
+    )
+
+    await service.update_field_condition(
+        "c",
+        actions=[{"phaseFieldId": "1", "actionId": "hidden"}],
+    )
+
+    _, variables = service.execute_query.call_args[0]
+    assert variables["input"]["actions"][0]["actionId"] == "hide"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_field_condition_rejects_reserved_id_attr(mock_settings):
+    """The ``id`` key must come via the positional ``condition_id`` argument."""
+    service = _make_service(
+        mock_settings,
+        {"updateFieldCondition": {"fieldCondition": {"id": "c"}}},
+    )
+
+    with pytest.raises(ValueError, match="id"):
+        await service.update_field_condition("c", id="other-id")
+
+    service.execute_query.assert_not_called()
 
 
 @pytest.mark.unit

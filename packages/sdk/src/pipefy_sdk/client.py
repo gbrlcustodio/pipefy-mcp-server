@@ -7,8 +7,21 @@ from typing import Any
 from httpx import Auth
 from httpx_auth import OAuth2ClientCredentials
 
+from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
+from pipefy_sdk.attachment_upload import (
+    AttachmentUploadResult,
+    upload_attachment_to_card_field,
+    upload_attachment_to_table_record_field,
+)
+from pipefy_sdk.automation_preflight import (
+    validate_traditional_automation_move_transition,
+)
 from pipefy_sdk.base_client import StaticBearerAuth
-from pipefy_sdk.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
+from pipefy_sdk.models.ai_agent import (
+    BehaviorInput,
+    CreateAiAgentInput,
+    UpdateAiAgentInput,
+)
 from pipefy_sdk.models.ai_automation import (
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
@@ -626,6 +639,11 @@ class PipefyClient:
     ) -> CreateAutomationMutationResult:
         """Create a traditional automation rule (optional ``extra_input`` uses CreateAutomationInput field names).
 
+        Runs :func:`pipefy_sdk.automation_preflight.validate_traditional_automation_move_transition`
+        before the API call so callers receive a clear message when a ``card_moved → move_single_card``
+        rule references an unreachable destination phase. The check is a no-op for other
+        trigger/action combinations.
+
         Args:
             pipe_id: Pipe ID (event source).
             name: Rule name.
@@ -636,7 +654,13 @@ class PipefyClient:
                 For cross-pipe actions (``create_connected_card``, ``move_card_to_pipe``),
                 pass the **destination** pipe ID.
             extra_input: Extra ``CreateAutomationInput`` keys; ``active`` here overrides the ``active`` argument.
+
+        Raises:
+            AutomationPreflightError: When the move-card transition is invalid.
         """
+        await validate_traditional_automation_move_transition(
+            self, trigger_id, action_id, extra_input
+        )
         return await self._automation_service.create_automation(
             pipe_id,
             name,
@@ -645,6 +669,30 @@ class PipefyClient:
             action_repo_id=action_repo_id,
             active=active,
             **(extra_input or {}),
+        )
+
+    async def create_send_task_automation(
+        self,
+        pipe_id: str,
+        name: str,
+        event_id: str,
+        task_title: str,
+        recipients: str,
+        *,
+        active: bool = True,
+        event_params: dict[str, Any] | None = None,
+        condition: dict[str, Any] | None = None,
+    ) -> CreateAutomationMutationResult:
+        """Create a ``send_a_task`` traditional automation (delegates to AutomationService)."""
+        return await self._automation_service.create_send_task_automation(
+            pipe_id,
+            name,
+            event_id,
+            task_title,
+            recipients,
+            active=active,
+            event_params=event_params,
+            condition=condition,
         )
 
     async def update_automation(
@@ -704,14 +752,31 @@ class PipefyClient:
     async def create_ai_agent(
         self, agent_input: CreateAiAgentInput
     ) -> AgentServiceResult:
-        """Create an AI Agent (empty, no behaviors)."""
+        """Create an AI Agent (empty, no behaviors).
+
+        Callers are still responsible for pre-Pydantic prep (``normalize_pipefy_ai_instruction_tokens``
+        / ``expand_behaviors_placeholders``) where applicable because those run before
+        :class:`CreateAiAgentInput` validation at the tool/CLI boundary.
+        """
         return await self._ai_agent_service.create_agent(agent_input)
 
     async def update_ai_agent(
         self, agent_input: UpdateAiAgentInput
     ) -> AgentServiceResult:
-        """Replace an AI Agent configuration (instruction and behaviors)."""
-        return await self._ai_agent_service.update_agent(agent_input)
+        """Replace an AI Agent configuration (instruction and behaviors).
+
+        Resolves field-slug references inside behaviors to numeric IDs and
+        populates ``referencedFieldIds`` before calling the service, so
+        callers do not need to remember the prep step. Callers are still
+        responsible for pre-Pydantic prep (``normalize_pipefy_ai_instruction_tokens``
+        / ``expand_behaviors_placeholders``) because those run before
+        :class:`UpdateAiAgentInput` validation.
+        """
+        raw_behaviors = [b.model_dump(by_alias=True) for b in agent_input.behaviors]
+        resolved_dicts = await resolve_and_populate_field_refs(self, raw_behaviors)
+        resolved_behaviors = [BehaviorInput.model_validate(d) for d in resolved_dicts]
+        prepared = agent_input.model_copy(update={"behaviors": resolved_behaviors})
+        return await self._ai_agent_service.update_agent(prepared)
 
     async def toggle_ai_agent_status(
         self, agent_uuid: str, *, active: bool
@@ -1145,6 +1210,53 @@ class PipefyClient:
         """
         return await self._attachment_service.upload_file_to_s3(
             presigned_url, file_bytes, content_type=content_type
+        )
+
+    async def upload_attachment_to_card_field(
+        self,
+        *,
+        organization_id: str,
+        card_id: str,
+        field_id: str,
+        file_name: str,
+        file_bytes: bytes,
+        content_type: str | None = None,
+    ) -> AttachmentUploadResult:
+        """Upload ``file_bytes`` to a card attachment field via the standard pipeline.
+
+        Wraps presigned URL → S3 PUT → ``update_card_field`` in one call so MCP
+        and CLI surfaces do not duplicate the orchestration. Raises
+        :class:`AttachmentUploadError` on any step failure (with ``step`` attribute).
+        """
+        return await upload_attachment_to_card_field(
+            self,
+            organization_id=organization_id,
+            card_id=card_id,
+            field_id=field_id,
+            file_name=file_name,
+            file_bytes=file_bytes,
+            content_type=content_type,
+        )
+
+    async def upload_attachment_to_table_record_field(
+        self,
+        *,
+        organization_id: str,
+        table_record_id: str,
+        field_id: str,
+        file_name: str,
+        file_bytes: bytes,
+        content_type: str | None = None,
+    ) -> AttachmentUploadResult:
+        """Upload ``file_bytes`` to a table record attachment field via the standard pipeline."""
+        return await upload_attachment_to_table_record_field(
+            self,
+            organization_id=organization_id,
+            table_record_id=table_record_id,
+            field_id=field_id,
+            file_name=file_name,
+            file_bytes=file_bytes,
+            content_type=content_type,
         )
 
     def extract_storage_path(self, presigned_url: str) -> str:

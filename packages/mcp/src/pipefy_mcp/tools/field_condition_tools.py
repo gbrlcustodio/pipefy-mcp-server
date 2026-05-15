@@ -16,8 +16,6 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     build_pipe_tool_error_payload,
     field_condition_actions_error_message,
     handle_pipe_config_tool_graphql_error,
-    normalize_field_condition_actions,
-    strip_expression_ids_for_create,
 )
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.validation_helpers import (
@@ -278,13 +276,11 @@ class FieldConditionTools:
                     ),
                     code="INVALID_ARGUMENTS",
                 )
-            condition_for_api = strip_expression_ids_for_create(condition)
-            actions_for_api = normalize_field_condition_actions(actions)
             try:
                 raw = await client.create_field_condition(
                     pid,
-                    condition_for_api,
-                    actions_for_api,
+                    condition,
+                    actions,
                     **merged,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -390,9 +386,9 @@ class FieldConditionTools:
                     )
                 update_attrs["name"] = name
             if condition is not None:
-                update_attrs["condition"] = strip_expression_ids_for_create(condition)
+                update_attrs["condition"] = condition
             if actions is not None:
-                update_attrs["actions"] = normalize_field_condition_actions(actions)
+                update_attrs["actions"] = actions
             if not update_attrs:
                 return build_pipe_tool_error_payload(
                     message=(

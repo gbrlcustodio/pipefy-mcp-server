@@ -1808,17 +1808,6 @@ async def test_create_field_condition_success(
         ],
         "expressions_structure": [["42"]],
     }
-    expected_condition = {
-        "expressions": [
-            {
-                "field_address": "a",
-                "operation": "equals",
-                "value": "1",
-                "structure_id": 42,
-            }
-        ],
-        "expressions_structure": [[42]],
-    }
     actions = [{"phaseFieldId": "308821043", "whenEvaluator": True, "actionId": "hide"}]
     mock_pipe_config_client.create_field_condition.return_value = {
         "createFieldCondition": {"fieldCondition": {"id": "cond-new"}},
@@ -1839,7 +1828,7 @@ async def test_create_field_condition_success(
     assert result.isError is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "pf-99",
-        expected_condition,
+        expr_input,
         actions,
         name="R1",
     )
@@ -2095,9 +2084,10 @@ async def test_create_field_condition_accepts_uuid_phase_field_id__no_integratio
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
-async def test_create_field_condition_maps_hidden_action_id_to_hide__no_integration(
+async def test_create_field_condition_passes_raw_actions_to_sdk__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
+    """MCP forwards actions verbatim; SDK service normalizes ``hidden`` → ``hide``."""
     expr = {
         "expressions": [{"field_address": "a", "operation": "equals", "value": "1"}]
     }
@@ -2116,7 +2106,7 @@ async def test_create_field_condition_maps_hidden_action_id_to_hide__no_integrat
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "1",
         expr,
-        [{"phaseFieldId": "308821043", "whenEvaluator": True, "actionId": "hide"}],
+        actions_in,
         name="R",
     )
     assert extract_payload(result)["success"] is True
@@ -2124,9 +2114,10 @@ async def test_create_field_condition_maps_hidden_action_id_to_hide__no_integrat
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
-async def test_create_field_condition_strips_expression_ids__no_integration(
+async def test_create_field_condition_forwards_condition_to_sdk__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
+    """MCP forwards condition verbatim; SDK service strips persisted expression ids."""
     expr_with_id = {
         "expressions": [
             {
@@ -2138,17 +2129,6 @@ async def test_create_field_condition_strips_expression_ids__no_integration(
             }
         ],
         "expressions_structure": [["99"]],
-    }
-    expected_condition = {
-        "expressions": [
-            {
-                "field_address": "a",
-                "operation": "equals",
-                "value": "1",
-                "structure_id": 99,
-            }
-        ],
-        "expressions_structure": [[99]],
     }
     actions = [{"phaseFieldId": "308821043", "whenEvaluator": True, "actionId": "hide"}]
     mock_pipe_config_client.create_field_condition.return_value = {
@@ -2167,7 +2147,7 @@ async def test_create_field_condition_strips_expression_ids__no_integration(
     assert result.isError is False
     mock_pipe_config_client.create_field_condition.assert_awaited_once_with(
         "1",
-        expected_condition,
+        expr_with_id,
         actions,
         name="R",
     )
@@ -2251,11 +2231,7 @@ async def test_update_field_condition_success_with_explicit_condition_and_action
     condition_in = {
         "expressions": [{"field_address": "f1", "operation": "equals", "value": "x"}],
     }
-    condition_for_api = {
-        "expressions": [{"field_address": "f1", "operation": "equals", "value": "x"}],
-    }
     actions_in = [{"phaseFieldId": "308821043", "actionId": "hidden"}]
-    actions_for_api = [{"phaseFieldId": "308821043", "actionId": "hide"}]
 
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -2273,8 +2249,8 @@ async def test_update_field_condition_success_with_explicit_condition_and_action
     mock_pipe_config_client.update_field_condition.assert_awaited_once_with(
         "cond-7",
         name="N7",
-        condition=condition_for_api,
-        actions=actions_for_api,
+        condition=condition_in,
+        actions=actions_in,
     )
     assert extract_payload(result)["success"] is True
 

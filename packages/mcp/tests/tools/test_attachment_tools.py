@@ -12,6 +12,7 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.attachment_upload import AttachmentUploadError
 
 from pipefy_mcp.tools.attachment_tools import (
     AttachmentTools,
@@ -20,28 +21,46 @@ from pipefy_mcp.tools.attachment_tools import (
 )
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
-PRESIGNED_PUT_URL = (
-    "https://s3.example.com/orgs/o/u/f/report.pdf"
-    "?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc"
-)
-
 # Patch target for SSRF validation (bypassed in tool-level tests that use mocked httpx)
 _VALIDATE_PATCH = "pipefy_mcp.tools.attachment_tools._validate_url_safe"
 
 
 @pytest.fixture
 def mock_attachment_client():
+    from pipefy_sdk.models.attachment import infer_content_type
+
     client = MagicMock(PipefyClient)
-    client.create_presigned_url = AsyncMock(
-        return_value={
-            "url": PRESIGNED_PUT_URL,
+
+    async def _upload_card(**kwargs):
+        fb = kwargs["file_bytes"]
+        fn = kwargs["file_name"]
+        ct = kwargs.get("content_type") or infer_content_type(fn)
+        return {
+            "file_name": fn,
+            "content_type": ct,
+            "file_size": len(fb),
+            "field_id": kwargs["field_id"],
+            "storage_path": "orgs/o/u/f/report.pdf",
             "download_url": "https://app.pipefy.com/storage/v1/signed/z",
         }
+
+    async def _upload_record(**kwargs):
+        fb = kwargs["file_bytes"]
+        fn = kwargs["file_name"]
+        ct = kwargs.get("content_type") or infer_content_type(fn)
+        return {
+            "file_name": fn,
+            "content_type": ct,
+            "file_size": len(fb),
+            "field_id": kwargs["field_id"],
+            "storage_path": "orgs/o/u/f/report.pdf",
+            "download_url": "https://app.pipefy.com/storage/v1/signed/z",
+        }
+
+    client.upload_attachment_to_card_field = AsyncMock(side_effect=_upload_card)
+    client.upload_attachment_to_table_record_field = AsyncMock(
+        side_effect=_upload_record
     )
-    client.upload_file_to_s3 = AsyncMock(return_value={"status_code": 200})
-    client.extract_storage_path = MagicMock(return_value="orgs/o/u/f/report.pdf")
-    client.update_card_field = AsyncMock(return_value={"ok": True})
-    client.set_table_record_field_value = AsyncMock(return_value={"ok": True})
     return client
 
 
@@ -306,18 +325,13 @@ async def test_upload_attachment_to_card_file_url_success(
     assert payload["file_size"] == len(b"hello-bytes")
     assert "download_url" in payload
 
-    mock_attachment_client.create_presigned_url.assert_awaited_once_with(
-        "42",
-        "report.pdf",
-        "application/pdf",
-        len(b"hello-bytes"),
-    )
-    mock_attachment_client.upload_file_to_s3.assert_awaited_once()
-    mock_attachment_client.update_card_field.assert_awaited_once_with(
-        "7",
-        "field-uuid",
-        ["orgs/o/u/f/report.pdf"],
-    )
+    mock_attachment_client.upload_attachment_to_card_field.assert_awaited_once()
+    call_kw = mock_attachment_client.upload_attachment_to_card_field.await_args.kwargs
+    assert call_kw["organization_id"] == "42"
+    assert call_kw["card_id"] == "7"
+    assert call_kw["field_id"] == "field-uuid"
+    assert call_kw["file_name"] == "report.pdf"
+    assert call_kw["file_bytes"] == b"hello-bytes"
 
 
 @pytest.mark.anyio
@@ -345,12 +359,11 @@ async def test_upload_attachment_to_card_base64_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["file_size"] == 5
-    mock_attachment_client.create_presigned_url.assert_awaited_once_with(
-        "42",
-        "note.txt",
-        "text/plain",
-        5,
-    )
+    mock_attachment_client.upload_attachment_to_card_field.assert_awaited_once()
+    call_kw = mock_attachment_client.upload_attachment_to_card_field.await_args.kwargs
+    assert call_kw["organization_id"] == "42"
+    assert call_kw["file_name"] == "note.txt"
+    assert call_kw["file_bytes"] == raw
 
 
 @pytest.mark.anyio
@@ -359,8 +372,11 @@ async def test_upload_attachment_to_card_presigned_url_missing(
     mock_attachment_client,
     extract_payload,
 ):
-    mock_attachment_client.create_presigned_url = AsyncMock(
-        return_value={"url": None, "download_url": None}
+    mock_attachment_client.upload_attachment_to_card_field = AsyncMock(
+        side_effect=AttachmentUploadError(
+            "Pipefy did not return a presigned upload URL.",
+            step="presigned_url",
+        )
     )
     async with attachment_session as session:
         result = await session.call_tool(
@@ -376,7 +392,7 @@ async def test_upload_attachment_to_card_presigned_url_missing(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload["step"] == "presigned_url"
-    mock_attachment_client.upload_file_to_s3.assert_not_called()
+    mock_attachment_client.upload_attachment_to_card_field.assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -385,8 +401,15 @@ async def test_upload_attachment_to_card_presigned_graphql_error(
     mock_attachment_client,
     extract_payload,
 ):
-    mock_attachment_client.create_presigned_url = AsyncMock(
-        side_effect=TransportQueryError("x", errors=[{"message": "org denied"}])
+    def _raise_upload(*_a, **_k):
+        gql_exc = TransportQueryError("x", errors=[{"message": "org denied"}])
+        raise AttachmentUploadError(
+            f"Presigned URL request failed: {gql_exc}",
+            step="presigned_url",
+        ) from gql_exc
+
+    mock_attachment_client.upload_attachment_to_card_field = AsyncMock(
+        side_effect=_raise_upload
     )
     async with attachment_session as session:
         result = await session.call_tool(
@@ -411,8 +434,13 @@ async def test_upload_attachment_to_card_s3_failure(
     mock_attachment_client,
     extract_payload,
 ):
-    mock_attachment_client.upload_file_to_s3 = AsyncMock(
-        return_value={"status_code": 403, "body_snippet": "<Error/>"}
+    mock_attachment_client.upload_attachment_to_card_field = AsyncMock(
+        side_effect=AttachmentUploadError(
+            "S3 upload failed with HTTP 403.",
+            step="s3_upload",
+            body_snippet="<Error/>",
+            status_code=403,
+        )
     )
     async with attachment_session as session:
         result = await session.call_tool(
@@ -428,7 +456,6 @@ async def test_upload_attachment_to_card_s3_failure(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload["step"] == "s3_upload"
-    mock_attachment_client.update_card_field.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -437,10 +464,17 @@ async def test_upload_attachment_to_card_field_update_failure(
     mock_attachment_client,
     extract_payload,
 ):
-    mock_attachment_client.update_card_field = AsyncMock(
-        side_effect=TransportQueryError(
+    def _raise_field(*_a, **_k):
+        inner = TransportQueryError(
             "x", errors=[{"message": "field must be attachment"}]
         )
+        raise AttachmentUploadError(
+            f"Field update failed: {inner}",
+            step="field_update",
+        ) from inner
+
+    mock_attachment_client.upload_attachment_to_card_field = AsyncMock(
+        side_effect=_raise_field
     )
     async with attachment_session as session:
         result = await session.call_tool(
@@ -480,7 +514,7 @@ async def test_upload_attachment_to_card_validation_both_sources(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload["step"] == "validation"
-    mock_attachment_client.create_presigned_url.assert_not_called()
+    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -512,11 +546,13 @@ async def test_upload_attachment_to_table_record_file_url_success(
     assert payload["success"] is True
     assert payload["table_record_id"] == "999"
     assert payload["content_type"] == "text/csv"
-    mock_attachment_client.set_table_record_field_value.assert_awaited_once_with(
-        "999",
-        "tf",
-        ["orgs/o/u/f/report.pdf"],
+    mock_attachment_client.upload_attachment_to_table_record_field.assert_awaited_once()
+    call_kw = (
+        mock_attachment_client.upload_attachment_to_table_record_field.await_args.kwargs
     )
+    assert call_kw["table_record_id"] == "999"
+    assert call_kw["field_id"] == "tf"
+    assert call_kw["file_bytes"] == b"tbl"
 
 
 @pytest.mark.anyio
@@ -525,8 +561,11 @@ async def test_upload_attachment_to_table_record_base64_and_presigned_error(
     mock_attachment_client,
     extract_payload,
 ):
-    mock_attachment_client.create_presigned_url = AsyncMock(
-        return_value={"url": "", "download_url": None}
+    mock_attachment_client.upload_attachment_to_table_record_field = AsyncMock(
+        side_effect=AttachmentUploadError(
+            "Pipefy did not return a presigned upload URL.",
+            step="presigned_url",
+        )
     )
     async with attachment_session as session:
         result = await session.call_tool(
@@ -549,8 +588,12 @@ async def test_upload_attachment_to_table_record_s3_failure(
     mock_attachment_client,
     extract_payload,
 ):
-    mock_attachment_client.upload_file_to_s3 = AsyncMock(
-        return_value={"status_code": 500}
+    mock_attachment_client.upload_attachment_to_table_record_field = AsyncMock(
+        side_effect=AttachmentUploadError(
+            "S3 upload failed with HTTP 500.",
+            step="s3_upload",
+            status_code=500,
+        )
     )
     async with attachment_session as session:
         result = await session.call_tool(
@@ -573,8 +616,15 @@ async def test_upload_attachment_to_table_field_update_failure(
     mock_attachment_client,
     extract_payload,
 ):
-    mock_attachment_client.set_table_record_field_value = AsyncMock(
-        side_effect=TransportQueryError("e", errors=[{"message": "invalid field"}])
+    def _raise_field(*_a, **_k):
+        inner = TransportQueryError("e", errors=[{"message": "invalid field"}])
+        raise AttachmentUploadError(
+            f"Field update failed: {inner}",
+            step="field_update",
+        ) from inner
+
+    mock_attachment_client.upload_attachment_to_table_record_field = AsyncMock(
+        side_effect=_raise_field
     )
     async with attachment_session as session:
         result = await session.call_tool(
@@ -625,7 +675,7 @@ async def test_upload_attachment_to_card_rejects_ssrf_url(
         "private" in tool_error_message(payload).lower()
         or "internal" in tool_error_message(payload).lower()
     )
-    mock_attachment_client.create_presigned_url.assert_not_called()
+    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -649,7 +699,7 @@ async def test_upload_attachment_to_card_rejects_file_scheme(
     assert payload["success"] is False
     assert payload["step"] == "file_download"
     assert "http" in tool_error_message(payload).lower()
-    mock_attachment_client.create_presigned_url.assert_not_called()
+    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -693,7 +743,7 @@ async def test_upload_attachment_to_card_rejects_oversized_content_length(
         "too large" in tool_error_message(payload).lower()
         or "limit" in tool_error_message(payload).lower()
     )
-    mock_attachment_client.create_presigned_url.assert_not_called()
+    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
 
 
 ## ---------------------------------------------------------------------------
@@ -725,12 +775,12 @@ async def test_upload_attachment_to_card_coerces_int_ids(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is True
-    mock_attachment_client.create_presigned_url.assert_awaited_once_with(
-        "42", "note.txt", "text/plain", 5
-    )
-    mock_attachment_client.update_card_field.assert_awaited_once_with(
-        "7", "999", ["orgs/o/u/f/report.pdf"]
-    )
+    mock_attachment_client.upload_attachment_to_card_field.assert_awaited_once()
+    call_kw = mock_attachment_client.upload_attachment_to_card_field.await_args.kwargs
+    assert call_kw["organization_id"] == "42"
+    assert call_kw["card_id"] == "7"
+    assert call_kw["field_id"] == "999"
+    assert call_kw["file_bytes"] == raw
 
 
 @pytest.mark.anyio
@@ -757,9 +807,11 @@ async def test_upload_attachment_to_table_record_coerces_int_ids(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload["success"] is True
-    mock_attachment_client.create_presigned_url.assert_awaited_once_with(
-        "42", "data.csv", "text/csv", 5
+    mock_attachment_client.upload_attachment_to_table_record_field.assert_awaited_once()
+    call_kw = (
+        mock_attachment_client.upload_attachment_to_table_record_field.await_args.kwargs
     )
-    mock_attachment_client.set_table_record_field_value.assert_awaited_once_with(
-        "200", "300", ["orgs/o/u/f/report.pdf"]
-    )
+    assert call_kw["organization_id"] == "42"
+    assert call_kw["table_record_id"] == "200"
+    assert call_kw["field_id"] == "300"
+    assert call_kw["file_bytes"] == raw

@@ -7,6 +7,7 @@ import base64
 import binascii
 import ipaddress
 import socket
+from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import urlparse
 
@@ -19,7 +20,10 @@ from pipefy_sdk import (
     PipefyId,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
-    infer_content_type,
+)
+from pipefy_sdk.attachment_upload import (
+    AttachmentUploadError,
+    AttachmentUploadResult,
 )
 from pydantic import ValidationError
 
@@ -32,6 +36,7 @@ from pipefy_mcp.tools.attachment_tool_helpers import (
 
 _FILE_DOWNLOAD_TIMEOUT_SEC = 60.0
 _MAX_DOWNLOAD_SIZE_BYTES = 100 * 1024 * 1024  # 100 MiB
+
 
 _PRIVATE_NETWORKS = (
     ipaddress.ip_network("10.0.0.0/8"),
@@ -162,7 +167,32 @@ class AttachmentTools:
 
     @staticmethod
     def register(mcp: FastMCP, client: PipefyClient) -> None:
-        async def _upload_flow(
+        async def _resolve_file_bytes(
+            ctx: Context[ServerSession, None],
+            *,
+            file_url: str | None,
+            file_content_base64: str | None,
+            debug_prefix: str,
+        ) -> tuple[bytes, dict[str, Any] | None]:
+            """Resolve bytes from URL (with SSRF guard) or base64.
+
+            Returns ``(file_bytes, None)`` on success, or ``(b"", error_payload)`` on
+            file-source failure so the caller can short-circuit with the envelope.
+            """
+            try:
+                if file_url:
+                    await ctx.debug(f"{debug_prefix}: downloading file_url")
+                    return await _download_file_bytes(file_url.strip()), None
+                await ctx.debug(f"{debug_prefix}: decoding base64 payload")
+                return _decode_base64_file(file_content_base64 or ""), None
+            except (httpx.HTTPError, binascii.Error, ValueError) as exc:
+                await ctx.debug(f"{debug_prefix}: file source error {exc!r}")
+                return b"", build_upload_error_payload(
+                    message=map_upload_error_to_message(exc, "file_download"),
+                    step="file_download",
+                )
+
+        async def _upload_via_facade(
             ctx: Context[ServerSession, None],
             *,
             organization_id: str,
@@ -171,94 +201,59 @@ class AttachmentTools:
             file_url: str | None,
             file_content_base64: str | None,
             content_type: str | None,
-            update_field_fn: Any,
+            upload_call: Callable[[bytes], Awaitable[AttachmentUploadResult]],
             debug_prefix: str,
             success_extra: dict[str, Any],
         ) -> dict[str, Any]:
-            """Shared orchestration: download/decode → presigned URL → S3 PUT → field update."""
-            effective_type = content_type or infer_content_type(file_name)
+            """Source-aware MCP wrapper around the SDK upload pipeline.
+
+            MCP needs to resolve bytes from a URL (with SSRF guard) or base64 before
+            handing off to the SDK facade method that runs presigned → S3 → field update.
+            """
             await ctx.debug(
-                f"{debug_prefix}: field_id={field_id!r} "
-                f"file_name={file_name!r} content_type={effective_type!r}"
+                f"{debug_prefix}: field_id={field_id!r} file_name={file_name!r}"
             )
+            file_bytes, error_payload = await _resolve_file_bytes(
+                ctx,
+                file_url=file_url,
+                file_content_base64=file_content_base64,
+                debug_prefix=debug_prefix,
+            )
+            if error_payload is not None:
+                return error_payload
+
             try:
-                if file_url:
-                    await ctx.debug(f"{debug_prefix}: downloading file_url")
-                    file_bytes = await _download_file_bytes(file_url.strip())
+                result = await upload_call(file_bytes)
+            except AttachmentUploadError as exc:
+                await ctx.debug(
+                    f"{debug_prefix}: pipeline failed at step={exc.step} {exc!r}"
+                )
+                # Surface the richer GraphQL/transport error message when the
+                # SDK exception was raised from an underlying transport error
+                # (the SDK preserves it via ``raise ... from``). The s3_upload
+                # step gets body-snippet-aware formatting via the local helper.
+                if exc.step in ("presigned_url", "field_update") and exc.__cause__:
+                    rich_message = map_upload_error_to_message(exc.__cause__, exc.step)
+                elif exc.step == "s3_upload" and exc.body_snippet:
+                    rich_message = format_s3_upload_failure(
+                        {
+                            "status_code": exc.status_code,
+                            "body_snippet": exc.body_snippet,
+                        }
+                    )
                 else:
-                    await ctx.debug(f"{debug_prefix}: decoding base64 payload")
-                    file_bytes = _decode_base64_file(file_content_base64 or "")
-            except (httpx.HTTPError, binascii.Error, ValueError) as exc:
-                await ctx.debug(f"{debug_prefix}: file source error {exc!r}")
+                    rich_message = str(exc)
                 return build_upload_error_payload(
-                    message=map_upload_error_to_message(exc, "file_download"),
-                    step="file_download",
-                )
-
-            content_length = len(file_bytes)
-            try:
-                await ctx.debug(f"{debug_prefix}: createPresignedUrl")
-                presigned = await client.create_presigned_url(
-                    organization_id,
-                    file_name,
-                    effective_type,
-                    content_length,
-                )
-            except Exception as exc:  # noqa: BLE001
-                await ctx.debug(f"{debug_prefix}: presigned URL failed {exc!r}")
-                return build_upload_error_payload(
-                    message=map_upload_error_to_message(exc, "presigned_url"),
-                    step="presigned_url",
-                )
-
-            upload_url = presigned.get("url")
-            download_url = presigned.get("download_url")
-            if not isinstance(upload_url, str) or not upload_url.strip():
-                return build_upload_error_payload(
-                    message=(
-                        "Pipefy did not return a presigned upload URL. "
-                        "Check organization_id and file_name, then retry."
-                    ),
-                    step="presigned_url",
-                )
-
-            await ctx.debug(f"{debug_prefix}: S3 PUT")
-            put_result = await client.upload_file_to_s3(
-                upload_url.strip(),
-                file_bytes,
-                effective_type,
-            )
-            status = put_result.get("status_code", 0)
-            if not isinstance(status, int) or status >= 400:
-                return build_upload_error_payload(
-                    message=format_s3_upload_failure(put_result),
-                    step="s3_upload",
-                )
-
-            try:
-                storage_path = client.extract_storage_path(upload_url)
-            except ValueError as exc:
-                return build_upload_error_payload(
-                    message=str(exc),
-                    step="s3_upload",
-                )
-
-            try:
-                await ctx.debug(f"{debug_prefix}: field update")
-                await update_field_fn(storage_path)
-            except Exception as exc:  # noqa: BLE001
-                await ctx.debug(f"{debug_prefix}: field update failed {exc!r}")
-                return build_upload_error_payload(
-                    message=map_upload_error_to_message(exc, "field_update"),
-                    step="field_update",
+                    message=rich_message,
+                    step=exc.step,
                 )
 
             return build_upload_success_payload(
-                download_url=download_url if isinstance(download_url, str) else None,
-                file_name=file_name,
-                content_type=effective_type,
-                file_size=content_length,
-                field_id=field_id,
+                download_url=result["download_url"],
+                file_name=result["file_name"],
+                content_type=result["content_type"],
+                file_size=result["file_size"],
+                field_id=result["field_id"],
                 **success_extra,
             )
 
@@ -307,12 +302,17 @@ class AttachmentTools:
                     step="validation",
                 )
 
-            async def _update_card(path: str) -> Any:
-                return await client.update_card_field(
-                    data.card_id, data.field_id, [path]
+            async def _upload(file_bytes: bytes) -> Any:
+                return await client.upload_attachment_to_card_field(
+                    organization_id=data.organization_id,
+                    card_id=data.card_id,
+                    field_id=data.field_id,
+                    file_name=data.file_name,
+                    file_bytes=file_bytes,
+                    content_type=data.content_type,
                 )
 
-            return await _upload_flow(
+            return await _upload_via_facade(
                 ctx,
                 organization_id=data.organization_id,
                 field_id=data.field_id,
@@ -320,7 +320,7 @@ class AttachmentTools:
                 file_url=data.file_url,
                 file_content_base64=data.file_content_base64,
                 content_type=data.content_type,
-                update_field_fn=_update_card,
+                upload_call=_upload,
                 debug_prefix="upload_attachment_to_card",
                 success_extra={"card_id": data.card_id},
             )
@@ -370,12 +370,17 @@ class AttachmentTools:
                     step="validation",
                 )
 
-            async def _update_record(path: str) -> Any:
-                return await client.set_table_record_field_value(
-                    data.table_record_id, data.field_id, [path]
+            async def _upload(file_bytes: bytes) -> Any:
+                return await client.upload_attachment_to_table_record_field(
+                    organization_id=data.organization_id,
+                    table_record_id=data.table_record_id,
+                    field_id=data.field_id,
+                    file_name=data.file_name,
+                    file_bytes=file_bytes,
+                    content_type=data.content_type,
                 )
 
-            return await _upload_flow(
+            return await _upload_via_facade(
                 ctx,
                 organization_id=data.organization_id,
                 field_id=data.field_id,
@@ -383,7 +388,7 @@ class AttachmentTools:
                 file_url=data.file_url,
                 file_content_base64=data.file_content_base64,
                 content_type=data.content_type,
-                update_field_fn=_update_record,
+                upload_call=_upload,
                 debug_prefix="upload_attachment_to_table_record",
                 success_extra={"table_record_id": data.table_record_id},
             )

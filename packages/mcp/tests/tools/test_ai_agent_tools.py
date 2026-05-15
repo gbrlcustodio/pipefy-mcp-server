@@ -1,8 +1,9 @@
 """Tests for AI Agent MCP tools."""
 
 import asyncio
+import copy
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from _shared.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
@@ -527,6 +528,61 @@ class TestUpdateAiAgent:
         assert "RECORD_NOT_SAVED" in tool_error_message(payload)
         assert "Validation found problems" in tool_error_message(payload)
         assert '"999"' in tool_error_message(payload)
+
+    async def test_record_not_saved_resolves_field_refs_for_enrichment(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Error-path enrichment uses resolved field ids (not raw slug tokens)."""
+
+        async def fake_resolve(_client, behaviors):
+            out = copy.deepcopy(behaviors)
+            for b in out:
+                ap = b.get("actionParams") or {}
+                abp = ap.get("aiBehaviorParams") or {}
+                for aa in abp.get("actionsAttributes") or []:
+                    meta = aa.get("metadata") or {}
+                    for fa in meta.get("fieldsAttributes") or []:
+                        if fa.get("fieldId") == "email_slug":
+                            fa["fieldId"] = "425829426"
+            return out
+
+        mock_pipefy_client.update_ai_agent.side_effect = TransportQueryError(
+            "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
+        )
+        mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field(
+            field_id="425829426", phase_id="ph-1"
+        )
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [],
+            "parents": [],
+        }
+        behavior = _behavior_update_card_on_pipe(
+            pipe_id="306996636", field_id="email_slug"
+        )
+        with patch(
+            "pipefy_mcp.tools.ai_agent_tools.resolve_and_populate_field_refs",
+            new=AsyncMock(side_effect=fake_resolve),
+        ) as resolve_m:
+            async with client_session as session:
+                result = await session.call_tool(
+                    "update_ai_agent",
+                    {
+                        "uuid": "agent-uuid",
+                        "name": "Agent",
+                        "repo_uuid": "repo-456",
+                        "instruction": "Do things",
+                        "behaviors": [behavior],
+                    },
+                )
+
+        resolve_m.assert_awaited_once()
+        msg = tool_error_message(extract_payload(result))
+        assert "RECORD_NOT_SAVED" in msg
+        assert "pipe-specific restriction" in msg
+        assert "email_slug" not in msg
 
     async def test_non_record_not_saved_error_uses_standard_enrichment(
         self,

@@ -24,6 +24,7 @@ def mock_automation_client():
     client.get_automation_actions = AsyncMock()
     client.get_automation_events = AsyncMock()
     client.create_automation = AsyncMock()
+    client.create_send_task_automation = AsyncMock()
     client.update_automation = AsyncMock()
     client.simulate_automation = AsyncMock()
     client.delete_automation = AsyncMock()
@@ -388,16 +389,21 @@ async def test_create_automation_success(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("automation_session", [None], indirect=True)
-async def test_create_automation_rejects_move_when_transition_not_allowed(
+async def test_create_automation_surfaces_preflight_error_as_envelope(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.get_phase_allowed_move_targets.return_value = {
-        "phase": {
-            "id": "10",
-            "name": "Doing",
-            "cards_can_be_moved_to_phases": [{"id": "11", "name": "Done"}],
-        }
-    }
+    """MCP catches :class:`AutomationPreflightError` and renders the error envelope.
+
+    The actual preflight logic lives in the SDK facade (see
+    ``packages/sdk/tests/test_automation_preflight.py``); here we only verify the
+    catch path on the MCP tool.
+    """
+    from pipefy_sdk.automation_preflight import AutomationPreflightError
+
+    mock_automation_client.create_automation.side_effect = AutomationPreflightError(
+        "This automation would move a card from phase id 10 to phase id 99, which is "
+        "not an allowed transition."
+    )
 
     async with automation_session as session:
         result = await session.call_tool(
@@ -418,11 +424,10 @@ async def test_create_automation_rejects_move_when_transition_not_allowed(
         )
 
     assert result.isError is False
-    mock_automation_client.create_automation.assert_not_called()
+    mock_automation_client.create_automation.assert_awaited_once()
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "99" in tool_error_message(payload)
-    mock_automation_client.get_phase_allowed_move_targets.assert_awaited_once_with("10")
 
 
 @pytest.mark.anyio
@@ -711,7 +716,7 @@ async def test_simulate_automation_rejects_invalid_pipe_id(
 async def test_create_send_task_automation_success(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.create_automation.return_value = {
+    mock_automation_client.create_send_task_automation.return_value = {
         "createAutomation": {
             "automation": {"id": "st-1", "name": "Notify owners", "active": True},
         },
@@ -730,21 +735,15 @@ async def test_create_send_task_automation_success(
         )
 
     assert result.isError is False
-    mock_automation_client.create_automation.assert_awaited_once_with(
+    mock_automation_client.create_send_task_automation.assert_awaited_once_with(
         "p1",
         "Notify owners",
         "card_created",
-        "send_a_task",
+        "Review card",
+        "a@b.com, c@d.com",
         active=True,
-        action_repo_id=None,
-        extra_input={
-            "action_params": {
-                "taskParams": {
-                    "title": "Review card",
-                    "recipients": "a@b.com, c@d.com",
-                },
-            },
-        },
+        event_params=None,
+        condition=None,
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -760,7 +759,7 @@ async def test_create_send_task_automation_success(
 async def test_create_send_task_automation_passes_event_params_and_condition(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.create_automation.return_value = {
+    mock_automation_client.create_send_task_automation.return_value = {
         "createAutomation": {
             "automation": {"id": "st-2", "name": "R", "active": True},
         },
@@ -783,20 +782,15 @@ async def test_create_send_task_automation_passes_event_params_and_condition(
         )
 
     assert result.isError is False
-    mock_automation_client.create_automation.assert_awaited_once_with(
+    mock_automation_client.create_send_task_automation.assert_awaited_once_with(
         "p1",
         "R",
         "card_moved",
-        "send_a_task",
+        "T",
+        "x@y.com",
         active=True,
-        action_repo_id=None,
-        extra_input={
-            "action_params": {
-                "taskParams": {"title": "T", "recipients": "x@y.com"},
-            },
-            "event_params": event_params,
-            "condition": condition,
-        },
+        event_params=event_params,
+        condition=condition,
     )
     assert extract_payload(result)["success"] is True
 
@@ -818,7 +812,7 @@ async def test_create_send_task_automation_validation_blank_task_title(
             },
         )
 
-    mock_automation_client.create_automation.assert_not_called()
+    mock_automation_client.create_send_task_automation.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
 
@@ -840,7 +834,7 @@ async def test_create_send_task_automation_validation_scheduler(
             },
         )
 
-    mock_automation_client.create_automation.assert_not_called()
+    mock_automation_client.create_send_task_automation.assert_not_called()
     p = extract_payload(result)
     assert p["success"] is False
     assert "send_a_task" in tool_error_message(p)
@@ -851,8 +845,8 @@ async def test_create_send_task_automation_validation_scheduler(
 async def test_create_send_task_automation_graphql_error(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.create_automation.side_effect = TransportQueryError(
-        "failed", errors=[{"message": "mutation blocked"}]
+    mock_automation_client.create_send_task_automation.side_effect = (
+        TransportQueryError("failed", errors=[{"message": "mutation blocked"}])
     )
 
     async with automation_session as session:
@@ -927,13 +921,13 @@ async def test_create_automation_cross_pipe_permission_denied_enriches_error(
 
 @pytest.mark.anyio
 class TestCreateSendTaskAutomationActiveFlag:
-    """Verify the ``active`` flag is forwarded to AutomationService.create_automation."""
+    """Verify the ``active`` flag is forwarded to AutomationService.create_send_task_automation."""
 
     @pytest.mark.parametrize("automation_session", [None], indirect=True)
     async def test_active_false_is_forwarded(
         self, automation_session, mock_automation_client, extract_payload
     ):
-        mock_automation_client.create_automation.return_value = {
+        mock_automation_client.create_send_task_automation.return_value = {
             "createAutomation": {
                 "automation": {"id": "st-d", "name": "Disabled", "active": False},
             },
@@ -951,14 +945,14 @@ class TestCreateSendTaskAutomationActiveFlag:
                 },
             )
         assert result.isError is False
-        kwargs = mock_automation_client.create_automation.await_args.kwargs
+        kwargs = mock_automation_client.create_send_task_automation.await_args.kwargs
         assert kwargs["active"] is False
 
     @pytest.mark.parametrize("automation_session", [None], indirect=True)
     async def test_default_active_true(
         self, automation_session, mock_automation_client, extract_payload
     ):
-        mock_automation_client.create_automation.return_value = {
+        mock_automation_client.create_send_task_automation.return_value = {
             "createAutomation": {
                 "automation": {"id": "st-a", "name": "Active", "active": True},
             },
@@ -975,7 +969,7 @@ class TestCreateSendTaskAutomationActiveFlag:
                 },
             )
         assert result.isError is False
-        kwargs = mock_automation_client.create_automation.await_args.kwargs
+        kwargs = mock_automation_client.create_send_task_automation.await_args.kwargs
         assert kwargs["active"] is True
 
 

@@ -42,6 +42,10 @@ def test_attachment_upload_requires_card_xor_record(
 def test_attachment_upload_card_happy_path_json(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env, tmp_path: Path
 ):
+    from pipefy_sdk.attachment_upload import (
+        upload_attachment_to_card_field as _real_upload_card,
+    )
+
     oauth_env("att-up")
     p = tmp_path / "a.txt"
     p.write_text("hi", encoding="utf-8")
@@ -55,6 +59,11 @@ def test_attachment_upload_card_happy_path_json(
     mock_client.upload_file_to_s3 = AsyncMock(return_value={"status_code": 200})
     mock_client.extract_storage_path = MagicMock(return_value="org/x/key")
     mock_client.update_card_field = AsyncMock(return_value={})
+
+    async def _facade_proxy(**kwargs):
+        return await _real_upload_card(mock_client, **kwargs)
+
+    mock_client.upload_attachment_to_card_field = AsyncMock(side_effect=_facade_proxy)
 
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",

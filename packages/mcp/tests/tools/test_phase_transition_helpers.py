@@ -13,12 +13,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.ai_phase_transition_validation import (
+    collect_ai_behavior_move_transition_problems,
+)
 
 from pipefy_mcp.tools.phase_transition_helpers import (
-    collect_ai_behavior_move_transition_problems,
-    collect_automation_move_transition_error_message,
     try_enrich_move_card_to_phase_failure,
-    validate_traditional_automation_move_transition_or_none,
 )
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
@@ -150,177 +150,6 @@ async def test_enrich_falls_back_to_id_label_when_phase_has_no_name(mock_client)
     assert "id src-phase" in em
     assert "(none configured)" in em
     assert result["current_phase"] == {"id": "src-phase", "name": None}
-
-
-# ---------------------------------------------------------------------------
-# collect_automation_move_transition_error_message
-# ---------------------------------------------------------------------------
-
-
-def test_collect_automation_move_message_includes_names_and_ids():
-    msg = collect_automation_move_transition_error_message(
-        allowed_phases=[{"id": "p1", "name": "A"}, {"id": "p2", "name": "B"}],
-        source_phase_name="Source",
-        source_phase_id="src",
-        dest_phase_id="dest",
-    )
-    assert "'Source'" in msg
-    assert "id src" in msg
-    assert "id dest" in msg
-    assert "A (p1), B (p2)" in msg
-
-
-def test_collect_automation_move_message_handles_anonymous_source():
-    msg = collect_automation_move_transition_error_message(
-        allowed_phases=[],
-        source_phase_name="",
-        source_phase_id="src",
-        dest_phase_id="dest",
-    )
-    assert "id src" in msg
-    # falls back to "(none configured)" for empty allowed list
-    assert "(none configured)" in msg
-
-
-# ---------------------------------------------------------------------------
-# validate_traditional_automation_move_transition_or_none
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.anyio
-async def test_validate_trad_move_returns_none_when_trigger_is_not_card_moved(
-    mock_client,
-):
-    out = await validate_traditional_automation_move_transition_or_none(
-        mock_client,
-        trigger_id="card_created",
-        action_id="move_single_card",
-        extra_input={"event_params": {"to_phase_id": "src"}},
-    )
-    assert out is None
-    mock_client.get_phase_allowed_move_targets.assert_not_called()
-
-
-@pytest.mark.anyio
-async def test_validate_trad_move_returns_none_when_action_is_not_move_card(
-    mock_client,
-):
-    out = await validate_traditional_automation_move_transition_or_none(
-        mock_client,
-        trigger_id="card_moved",
-        action_id="send_email_template",
-        extra_input={"event_params": {"to_phase_id": "src"}},
-    )
-    assert out is None
-
-
-@pytest.mark.anyio
-async def test_validate_trad_move_returns_none_when_extra_input_not_dict(mock_client):
-    out = await validate_traditional_automation_move_transition_or_none(
-        mock_client,
-        trigger_id="card_moved",
-        action_id="move_single_card",
-        extra_input="not a dict",
-    )
-    assert out is None
-
-
-@pytest.mark.anyio
-async def test_validate_trad_move_returns_none_without_src_phase(mock_client):
-    out = await validate_traditional_automation_move_transition_or_none(
-        mock_client,
-        trigger_id="card_moved",
-        action_id="move_single_card",
-        extra_input={"event_params": {}},
-    )
-    assert out is None
-
-
-@pytest.mark.anyio
-async def test_validate_trad_move_resolves_dest_from_nested_phase_id(mock_client):
-    """Agents often pass ``action_params.phase.id`` instead of ``to_phase_id`` — both must work."""
-    mock_client.get_phase_allowed_move_targets.return_value = {
-        "phase": {"name": "Src", "cards_can_be_moved_to_phases": []},
-    }
-    out = await validate_traditional_automation_move_transition_or_none(
-        mock_client,
-        trigger_id="card_moved",
-        action_id="move_single_card",
-        extra_input={
-            "event_params": {"to_phase_id": "src"},
-            "action_params": {"phase": {"id": "dest"}},
-        },
-    )
-    assert out is not None
-    assert "id src" in out
-    assert "id dest" in out
-
-
-@pytest.mark.anyio
-async def test_validate_trad_move_returns_none_when_dest_missing(mock_client):
-    out = await validate_traditional_automation_move_transition_or_none(
-        mock_client,
-        trigger_id="card_moved",
-        action_id="move_single_card",
-        extra_input={
-            "event_params": {"to_phase_id": "src"},
-            "action_params": {},
-        },
-    )
-    assert out is None
-    mock_client.get_phase_allowed_move_targets.assert_not_called()
-
-
-@pytest.mark.anyio
-async def test_validate_trad_move_returns_none_on_phase_query_error(mock_client):
-    mock_client.get_phase_allowed_move_targets.side_effect = Exception("gql fail")
-    out = await validate_traditional_automation_move_transition_or_none(
-        mock_client,
-        trigger_id="card_moved",
-        action_id="move_single_card",
-        extra_input={
-            "event_params": {"to_phase_id": "src"},
-            "action_params": {"to_phase_id": "dest"},
-        },
-    )
-    assert out is None
-
-
-@pytest.mark.anyio
-async def test_validate_trad_move_logs_debug_on_phase_query_error(mock_client, caplog):
-    caplog.set_level(logging.DEBUG, logger="pipefy_mcp.tools.phase_transition_helpers")
-    mock_client.get_phase_allowed_move_targets.side_effect = Exception("gql fail")
-    await validate_traditional_automation_move_transition_or_none(
-        mock_client,
-        trigger_id="card_moved",
-        action_id="move_single_card",
-        extra_input={
-            "event_params": {"to_phase_id": "src"},
-            "action_params": {"to_phase_id": "dest"},
-        },
-    )
-    assert "get_phase_allowed_move_targets failed" in caplog.text
-    assert "src" in caplog.text
-
-
-@pytest.mark.anyio
-async def test_validate_trad_move_returns_none_when_transition_is_allowed(mock_client):
-    mock_client.get_phase_allowed_move_targets.return_value = {
-        "phase": {
-            "name": "Src",
-            "cards_can_be_moved_to_phases": [{"id": "dest", "name": "Dest"}],
-        },
-    }
-    out = await validate_traditional_automation_move_transition_or_none(
-        mock_client,
-        trigger_id="card_moved",
-        action_id="move_single_card",
-        extra_input={
-            "event_params": {"to_phase_id": "src"},
-            "action_params": {"to_phase_id": "dest"},
-        },
-    )
-    assert out is None
 
 
 # ---------------------------------------------------------------------------

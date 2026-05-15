@@ -29,7 +29,6 @@ from pipefy_mcp.tools.ai_tool_helpers import (
     collect_pipe_ids_from_behaviors,
     enrich_behavior_error,
     fetch_pipe_validation_context,
-    resolve_and_populate_field_refs,
     validate_behaviors_against_pipe,
 )
 from pipefy_mcp.tools.behavior_placeholder_interpolation import (
@@ -289,16 +288,12 @@ class AiAgentTools:
 
             agent_uuid = create_result["agent_uuid"]
 
-            resolved_behaviors = await resolve_and_populate_field_refs(
-                client,
-                [b.model_dump(by_alias=True) for b in validated.behaviors],
-            )
             update_input = UpdateAiAgentInput(
                 uuid=agent_uuid,
                 name=validated.name,
                 repo_uuid=validated.repo_uuid,
                 instruction=validated.instruction,
-                behaviors=resolved_behaviors,
+                behaviors=validated.behaviors,
                 data_source_ids=validated.data_source_ids,
             )
             try:
@@ -389,16 +384,13 @@ class AiAgentTools:
                 behaviors_expanded = expand_behaviors_placeholders(behaviors)
             except ValueError as exc:
                 return build_ai_tool_error(str(exc))
-            resolved_behaviors = await resolve_and_populate_field_refs(
-                client, behaviors_expanded
-            )
             try:
                 validated = UpdateAiAgentInput(
                     uuid=uuid,
                     name=name,
                     repo_uuid=repo_uuid,
                     instruction=instruction,
-                    behaviors=resolved_behaviors,
+                    behaviors=behaviors_expanded,
                     data_source_ids=data_source_ids or [],
                 )
             except ValidationError as exc:
@@ -407,9 +399,9 @@ class AiAgentTools:
             try:
                 result = await client.update_ai_agent(validated)
             except Exception as exc:  # noqa: BLE001
-                pipe_ids = collect_pipe_ids_from_behaviors(resolved_behaviors)
+                pipe_ids = collect_pipe_ids_from_behaviors(behaviors_expanded)
                 perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
-                error_text = await _enrich_with_validation(exc, resolved_behaviors)
+                error_text = await _enrich_with_validation(exc, behaviors_expanded)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
                 return build_ai_tool_error(error_text)

@@ -137,6 +137,28 @@ def test_record_update_set_field_json(runner, clean_pipefy_env, saved_cwd, oauth
     )
 
 
+def test_table_delete_accepts_leading_dash_id(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """Pipefy can encode table ids with a leading ``-`` (e.g. ``-ZocGcM0``).
+
+    ``context_settings={"ignore_unknown_options": True}`` keeps Click from
+    treating that token as a short option so the positional id parses cleanly.
+    """
+    oauth_env("tbl-dash-id")
+    mock_client = MagicMock()
+    mock_client.delete_table = AsyncMock(
+        return_value={"deleteTable": {"success": True}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(app, ["table", "delete", "-ZocGcM0", "--yes", "--json"])
+    assert result.exit_code == 0, result.stderr
+    mock_client.delete_table.assert_awaited_once_with("-ZocGcM0")
+
+
 def test_record_update_unknown_field_key_exit_2(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):

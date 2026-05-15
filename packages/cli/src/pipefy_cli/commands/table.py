@@ -8,6 +8,7 @@ import typer
 from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
     run_cli_command,
@@ -55,7 +56,7 @@ def table_list(
     run_cli_command(ctx, json_out, factory)
 
 
-@table_app.command("get")
+@table_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def table_get(
     ctx: typer.Context,
     table_id: str,
@@ -99,7 +100,7 @@ def table_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@table_app.command("update")
+@table_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def table_update(
     ctx: typer.Context,
     table_id: str,
@@ -132,7 +133,7 @@ def table_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@table_app.command("delete")
+@table_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def table_delete(
     ctx: typer.Context,
     table_id: str,

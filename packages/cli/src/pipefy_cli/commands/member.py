@@ -128,14 +128,31 @@ def member_set_role(
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Set a member's role on a pipe."""
+    """Set a member's role on a pipe.
+
+    When ``PIPEFY_SERVICE_ACCOUNT_IDS`` includes ``--member``, the response gains
+    a ``warning`` field reminding callers to preserve write permissions on that
+    account (parity with the MCP ``set_role`` tool).
+    """
 
     rn = role_name.strip()
     if not rn:
         typer.echo("--role must be non-empty.", err=True)
         raise typer.Exit(2)
 
+    pipefy_settings, _ = settings_and_token(ctx)
+    protected_ids = pipefy_settings.service_account_ids
+
     async def factory(client: PipefyClient):
-        return await client.set_role(pipe_id, member_id, rn)
+        raw = await client.set_role(pipe_id, member_id, rn)
+        if protected_ids and member_id in protected_ids:
+            return {
+                "setRole": raw.get("setRole", raw) if isinstance(raw, dict) else raw,
+                "warning": (
+                    "Warning: you changed the role of a service account. "
+                    "Ensure the new role retains write permissions."
+                ),
+            }
+        return raw
 
     run_cli_command(ctx, json_out, factory)

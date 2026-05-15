@@ -20,6 +20,7 @@ from pipefy_sdk.behavior_placeholders import (
 from pydantic import ValidationError
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_value,
     run_cli_command,
@@ -68,7 +69,7 @@ def agent_list(
     run_cli_command(ctx, json_out, factory)
 
 
-@agent_app.command("get")
+@agent_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def agent_get(
     ctx: typer.Context,
     uuid: str = typer.Argument(..., help="Agent UUID."),
@@ -257,7 +258,7 @@ def agent_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@agent_app.command("delete")
+@agent_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def agent_delete(
     ctx: typer.Context,
     uuid: str = typer.Argument(..., help="Agent UUID."),
@@ -273,7 +274,7 @@ def agent_delete(
     run_cli_command(ctx, json_out, factory)
 
 
-@agent_app.command("toggle")
+@agent_app.command("toggle", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def agent_toggle(
     ctx: typer.Context,
     uuid: str = typer.Argument(..., help="Agent UUID."),
@@ -314,7 +315,7 @@ def agent_logs_list(
     run_cli_command(ctx, json_out, factory)
 
 
-@logs_app.command("get")
+@logs_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def agent_logs_get(
     ctx: typer.Context,
     log_id: str = typer.Argument(..., help="Log UUID."),

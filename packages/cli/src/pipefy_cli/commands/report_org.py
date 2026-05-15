@@ -6,6 +6,7 @@ import typer
 from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
     parse_json_value,
@@ -37,7 +38,7 @@ def report_org_list(
     run_cli_command(ctx, json_out, factory)
 
 
-@report_org_app.command("get")
+@report_org_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def report_org_get(
     ctx: typer.Context,
     report_id: str = typer.Argument(..., help="Organization report id."),
@@ -89,7 +90,7 @@ def report_org_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@report_org_app.command("update")
+@report_org_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def report_org_update(
     ctx: typer.Context,
     report_id: str = typer.Argument(..., help="Organization report id."),
@@ -128,7 +129,7 @@ def report_org_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@report_org_app.command("delete")
+@report_org_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def report_org_delete(
     ctx: typer.Context,
     report_id: str = typer.Argument(..., help="Organization report id."),
@@ -195,6 +196,7 @@ def report_org_export(
         pids = [str(x) for x in pids]
 
     if fmt == "json":
+
         async def factory(client: PipefyClient):
             return await client.export_organization_report(
                 organization,

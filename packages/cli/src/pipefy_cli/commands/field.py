@@ -6,6 +6,7 @@ import typer
 from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
     run_cli_command,
@@ -66,7 +67,7 @@ def field_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@field_app.command("update")
+@field_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def field_update(
     ctx: typer.Context,
     field_id: str,
@@ -89,7 +90,7 @@ def field_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@field_app.command("delete")
+@field_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def field_delete(
     ctx: typer.Context,
     field_id: str,

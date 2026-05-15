@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# Typed SDK errors for future service-layer raises (Task 2.5 placeholder); unused until callers adopt them.
+# Typed SDK errors for gradual service-layer migration; not all call sites raise these yet.
 
 
 class PipefyError(Exception):

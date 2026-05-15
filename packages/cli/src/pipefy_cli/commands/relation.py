@@ -6,6 +6,7 @@ import typer
 from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     authenticated_client_from_ctx,
     confirm_destructive,
     parse_json_object,
@@ -17,7 +18,7 @@ relation_pipe_app = typer.Typer(help="Pipe-to-pipe relations.", no_args_is_help=
 relation_card_app = typer.Typer(help="Card-to-card relations.", no_args_is_help=True)
 
 
-@relation_pipe_app.command("list")
+@relation_pipe_app.command("list", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def relation_pipe_list(
     ctx: typer.Context,
     pipe_id: str,
@@ -60,7 +61,7 @@ def relation_pipe_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@relation_pipe_app.command("update")
+@relation_pipe_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def relation_pipe_update(
     ctx: typer.Context,
     relation_id: str,
@@ -86,7 +87,7 @@ def relation_pipe_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@relation_pipe_app.command("delete")
+@relation_pipe_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def relation_pipe_delete(
     ctx: typer.Context,
     relation_id: str,
@@ -103,7 +104,7 @@ def relation_pipe_delete(
     run_cli_command(ctx, json_out, factory)
 
 
-@relation_card_app.command("list")
+@relation_card_app.command("list", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def relation_card_list(
     ctx: typer.Context,
     card_id: str,

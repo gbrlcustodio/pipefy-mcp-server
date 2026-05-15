@@ -17,6 +17,7 @@ from pipefy_sdk.ai_preflight import (
 from pydantic import ValidationError
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_object,
     parse_json_value,
@@ -56,6 +57,25 @@ def _parse_field_ids(raw: str) -> list[str]:
     return list(parsed)
 
 
+def _extract_existing_prompt_and_field_ids(
+    row: dict[str, Any],
+) -> tuple[str | None, list[str] | None]:
+    """Return ``(prompt, field_ids)`` from a ``generate_with_ai`` automation row.
+
+    Returns ``(None, None)`` for non-AI rows or rows missing the ``aiParams`` block;
+    callers must surface that as a clear user error.
+    """
+    action_params = row.get("action_params") or row.get("actionParams") or {}
+    ai_params = action_params.get("aiParams") or action_params.get("ai_params") or {}
+    prompt = ai_params.get("value")
+    field_ids = ai_params.get("fieldIds") or ai_params.get("field_ids")
+    if not isinstance(prompt, str):
+        prompt = None
+    if isinstance(field_ids, list) and all(isinstance(x, str) for x in field_ids):
+        return prompt, list(field_ids)
+    return prompt, None
+
+
 @ai_automation_app.command("list")
 def ai_automation_list(
     ctx: typer.Context,
@@ -78,7 +98,7 @@ def ai_automation_list(
     run_cli_command(ctx, json_out, factory)
 
 
-@ai_automation_app.command("get")
+@ai_automation_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def ai_automation_get(
     ctx: typer.Context,
     automation_id: str = typer.Argument(..., help="Automation rule id."),
@@ -193,7 +213,7 @@ def ai_automation_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@ai_automation_app.command("update")
+@ai_automation_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def ai_automation_update(
     ctx: typer.Context,
     automation_id: str = typer.Argument(..., help="Automation rule id."),
@@ -203,12 +223,17 @@ def ai_automation_update(
         help="Pipe id for validate-prompt pre-flight.",
     ),
     prompt: str | None = typer.Option(
-        None, "--prompt", help="New prompt (for pre-flight + patch)."
+        None,
+        "--prompt",
+        help="New prompt; omit to keep the current value (re-used in pre-flight).",
     ),
     field_ids: str | None = typer.Option(
         None,
         "--field-ids",
-        help="JSON array of output field ids (for pre-flight + patch).",
+        help=(
+            "JSON array of output field ids; omit to keep the current values "
+            "(re-used in pre-flight)."
+        ),
     ),
     name: str | None = typer.Option(None, "--name", "-n"),
     patch_active: bool | None = typer.Option(
@@ -221,13 +246,14 @@ def ai_automation_update(
     condition: str | None = typer.Option(None, "--condition"),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Update an AI automation (``update_ai_automation``)."""
-    if prompt is None or field_ids is None:
-        raise typer.BadParameter(
-            "update requires --prompt and --field-ids for validate-prompt pre-flight "
-            "(pass current values if unchanged)."
-        )
-    fids = _parse_field_ids(field_ids)
+    """Update an AI automation (``update_ai_automation``).
+
+    ``--prompt`` and ``--field-ids`` are optional: when omitted the CLI reads
+    the current values from the existing automation and re-uses them for the
+    ``validate_ai_automation_prompt`` pre-flight. Only fields you pass
+    explicitly are sent in the patch.
+    """
+    fids: list[str] | None = _parse_field_ids(field_ids) if field_ids else None
     ep = parse_json_object(event_params, "--event-params")
     cond = parse_json_object(condition, "--condition")
     skills_raw = parse_json_value(skills_ids, "--skills-ids") if skills_ids else None
@@ -244,12 +270,20 @@ def ai_automation_update(
         row = await client.get_automation(automation_id)
         if row is None:
             return {"success": False, "message": "Automation not found."}
+        existing_prompt, existing_fids = _extract_existing_prompt_and_field_ids(row)
+        effective_prompt = prompt if prompt is not None else existing_prompt
+        effective_fids = fids if fids is not None else existing_fids
+        if not effective_prompt or not effective_fids:
+            raise typer.BadParameter(
+                "Could not infer current prompt / field_ids from the existing automation. "
+                "Pass --prompt and --field-ids explicitly."
+            )
         ev = str(row.get("event_id") or row.get("eventId") or "")
         pre = await validate_ai_automation_prompt_sdk(
             client,
             pipe.strip(),
-            prompt,
-            fids,
+            effective_prompt,
+            effective_fids,
             ev or None,
         )
         _raise_if_prompt_preflight_blocks(pre)
@@ -258,10 +292,12 @@ def ai_automation_update(
                 "automation_id": str(automation_id).strip(),
                 "name": name.strip() if name else None,
                 "active": patch_active,
-                "prompt": prompt,
-                "field_ids": fids,
                 "skills_ids": skills,
             }
+            if prompt is not None:
+                kwargs_u["prompt"] = prompt
+            if fids is not None:
+                kwargs_u["field_ids"] = fids
             if ep is not None:
                 kwargs_u["event_params"] = ep
             if cond is not None:
@@ -274,7 +310,7 @@ def ai_automation_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@ai_automation_app.command("delete")
+@ai_automation_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def ai_automation_delete(
     ctx: typer.Context,
     automation_id: str = typer.Argument(..., help="Automation rule id."),

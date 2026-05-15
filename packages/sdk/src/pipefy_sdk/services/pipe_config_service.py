@@ -28,6 +28,7 @@ from pipefy_sdk.queries.pipe_config_queries import (
     UPDATE_PIPE_MUTATION,
 )
 from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.utils import normalize_field_condition_payload
 
 
 class PipeConfigService(BasePipefyClient):
@@ -227,9 +228,10 @@ class PipeConfigService(BasePipefyClient):
                 keys with value ``None`` are omitted.
         """
         phase_key = phase_id.strip() if isinstance(phase_id, str) else str(phase_id)
+        normalized_condition = normalize_field_condition_payload(condition)
         input_obj: dict[str, Any] = {
             "phaseId": phase_key,
-            "condition": condition,
+            "condition": normalized_condition,
             "actions": actions,
         }
         for key, value in attrs.items():
@@ -252,7 +254,11 @@ class PipeConfigService(BasePipefyClient):
         """
         payload: dict[str, Any] = {"id": condition_id}
         for key, value in attrs.items():
-            if value is not None:
+            if value is None:
+                continue
+            if key == "condition" and isinstance(value, dict):
+                payload[key] = normalize_field_condition_payload(value)
+            else:
                 payload[key] = value
         return await self.execute_query(
             UPDATE_FIELD_CONDITION_MUTATION, {"input": payload}

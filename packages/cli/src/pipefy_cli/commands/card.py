@@ -16,6 +16,7 @@ from pipefy_sdk import (
 from pydantic import ValidationError
 
 from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     parse_json_value,
     run_cli_command,
@@ -82,7 +83,7 @@ def _split_csv_ids(raw: str | None) -> list[str | int] | None:
     return out
 
 
-@card_app.command("get")
+@card_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_get(
     ctx: typer.Context,
     card_id: str,
@@ -218,7 +219,7 @@ def card_find(
     run_cli_command(ctx, json_out, factory)
 
 
-@card_app.command("create")
+@card_app.command("create", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_create(
     ctx: typer.Context,
     pipe_id: str,
@@ -257,7 +258,7 @@ def card_create(
     run_cli_command(ctx, json_out, factory)
 
 
-@card_app.command("update")
+@card_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_update(
     ctx: typer.Context,
     card_id: str,
@@ -276,7 +277,10 @@ def card_update(
     field_updates_json: str | None = typer.Option(
         None,
         "--field-updates",
-        help="JSON array of field update objects for updateCard.",
+        help=(
+            "JSON array of field update objects for updateFieldsValues. "
+            'Each object: {"field_id" (or "fieldId"): "<slug>", "value": <v>}.'
+        ),
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
@@ -297,7 +301,7 @@ def card_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@card_app.command("delete")
+@card_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_delete(
     ctx: typer.Context,
     card_id: str,
@@ -319,7 +323,7 @@ def card_delete(
     run_cli_command(ctx, json_out, factory)
 
 
-@card_app.command("move")
+@card_app.command("move", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_move(
     ctx: typer.Context,
     card_id: str,
@@ -338,7 +342,7 @@ def card_move(
     run_cli_command(ctx, json_out, factory)
 
 
-@comment_app.command("add")
+@comment_app.command("add", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_comment_add(
     ctx: typer.Context,
     card_id: str,
@@ -359,7 +363,7 @@ def card_comment_add(
     run_cli_command(ctx, json_out, factory)
 
 
-@comment_app.command("update")
+@comment_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_comment_update(
     ctx: typer.Context,
     comment_id: str,
@@ -380,7 +384,7 @@ def card_comment_update(
     run_cli_command(ctx, json_out, factory)
 
 
-@comment_app.command("delete")
+@comment_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def card_comment_delete(
     ctx: typer.Context,
     comment_id: str,

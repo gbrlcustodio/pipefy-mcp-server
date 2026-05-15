@@ -178,13 +178,13 @@ class FieldConditionTools:
                     condition={
                         "expressions": [
                             {
-                                "structure_id": "0",
+                                "structure_id": 0,
                                 "field_address": "425848636",
                                 "operation": "equals",
                                 "value": "Option A"
                             }
                         ],
-                        "expressions_structure": [["0"]]
+                        "expressions_structure": [[0]]
                     },
                     actions=[
                         {
@@ -194,11 +194,17 @@ class FieldConditionTools:
                     ]
                 )
 
-            ``expressions_structure`` is an array of arrays of **string** indices
-            (e.g. ``[["0"]]`` for one expression, ``[["0", "1"]]`` for AND). Each
-            expression must carry a ``structure_id`` (string) referencing its
-            position in the structure. Omitting either causes
-            ``"Structure can't be blank"``.
+            ``expressions_structure`` is an array of arrays of indices (e.g.
+            ``[[0]]`` for one expression, ``[[0, 1]]`` for AND). Each expression
+            must carry a ``structure_id`` referencing its position in the
+            structure. Omitting either causes ``"Structure can't be blank"``.
+
+            The SDK normalizes the payload before calling the API
+            (``pipefy_sdk.utils.normalize_field_condition_payload``): it drops any
+            ``id`` keys (persisted PKs cause ``RECORD_NOT_FOUND`` on create) and
+            coerces ``structure_id`` / ``expressions_structure`` entries to ``int``
+            so callers can pass either strings or integers without triggering
+            opaque ``INTERNAL_SERVER_ERROR`` responses from Pipefy.
 
             Args:
                 ctx: MCP context for debug logging.

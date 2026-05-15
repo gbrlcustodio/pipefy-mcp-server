@@ -116,3 +116,30 @@ def test_convert_values_to_camel_case_missing_value_raises_value_error():
         ValueError, match="Value at index 0 is missing required 'value' key"
     ):
         convert_values_to_camel_case(values)
+
+
+@pytest.mark.unit
+def test_convert_values_to_camel_case_accepts_camelcase_field_id():
+    """Pipefy API responses use ``fieldId`` (camelCase); accept it as a synonym."""
+    values = [{"fieldId": "field_1", "value": "New Value"}]
+
+    result = convert_values_to_camel_case(values)
+
+    assert result == [
+        {
+            "fieldId": "field_1",
+            "value": "New Value",
+            "operation": "REPLACE",
+            "generatedByAi": True,
+        }
+    ]
+
+
+@pytest.mark.unit
+def test_convert_values_to_camel_case_snake_case_wins_over_camel_case():
+    """If both ``field_id`` and ``fieldId`` are present, snake_case takes precedence."""
+    values = [{"field_id": "snake_id", "fieldId": "camel_id", "value": "v"}]
+
+    result = convert_values_to_camel_case(values)
+
+    assert result[0]["fieldId"] == "snake_id"

@@ -6,9 +6,6 @@ import logging
 from typing import Any
 
 from pipefy_sdk import PipefyClient
-from pipefy_sdk.ai_phase_transition_validation import (
-    collect_ai_behavior_move_transition_problems,
-)
 from pipefy_sdk.transition_hints import (
     TRANSITION_RULES_HINT,
     format_allowed_destinations_phrase,
@@ -83,6 +80,5 @@ async def try_enrich_move_card_to_phase_failure(
 
 
 __all__ = [
-    "collect_ai_behavior_move_transition_problems",
     "try_enrich_move_card_to_phase_failure",
 ]

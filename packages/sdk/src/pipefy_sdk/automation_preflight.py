@@ -29,7 +29,9 @@ class AutomationPreflightError(ValueError):
     """Raised when a traditional automation fails pre-flight validation.
 
     Surfaces should catch this and convert it to their native error envelope
-    (MCP: ``build_automation_error_payload``; CLI: ``typer.BadParameter``).
+    (MCP: ``build_automation_error_payload``; CLI: map the message to the CLI's
+    usual error path). Subclasses ``ValueError`` so callers that already treat
+    domain guard failures as value errors keep working.
     """
 
 
@@ -64,7 +66,7 @@ async def validate_traditional_automation_move_transition(
     client: PipefyClient,
     trigger_id: str,
     action_id: str,
-    extra_input: Any,
+    extra_input: dict[str, Any] | None,
 ) -> None:
     """Raise :class:`AutomationPreflightError` if a move-card automation has an impossible transition.
 
@@ -78,7 +80,9 @@ async def validate_traditional_automation_move_transition(
         client: Pipefy facade.
         trigger_id: Rule trigger (e.g. ``card_moved``).
         action_id: Rule action id from the catalog (e.g. ``move_single_card``).
-        extra_input: Optional ``CreateAutomationInput``-style dict (event_params, action_params).
+        extra_input: Optional ``CreateAutomationInput``-style dict (``event_params`` /
+            ``action_params`` keys in snake_case or camelCase). Non-dict values are
+            treated as empty (no-op preflight).
     """
     if str(trigger_id) != "card_moved":
         return

@@ -7,6 +7,15 @@ from typing import Any
 from httpx import Auth
 from httpx_auth import OAuth2ClientCredentials
 
+from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
+from pipefy_sdk.attachment_upload import (
+    AttachmentUploadResult,
+    upload_attachment_to_card_field,
+    upload_attachment_to_table_record_field,
+)
+from pipefy_sdk.automation_preflight import (
+    validate_traditional_automation_move_transition,
+)
 from pipefy_sdk.base_client import StaticBearerAuth
 from pipefy_sdk.models.ai_agent import (
     BehaviorInput,
@@ -649,10 +658,6 @@ class PipefyClient:
         Raises:
             AutomationPreflightError: When the move-card transition is invalid.
         """
-        from pipefy_sdk.automation_preflight import (
-            validate_traditional_automation_move_transition,
-        )
-
         await validate_traditional_automation_move_transition(
             self, trigger_id, action_id, extra_input
         )
@@ -747,7 +752,12 @@ class PipefyClient:
     async def create_ai_agent(
         self, agent_input: CreateAiAgentInput
     ) -> AgentServiceResult:
-        """Create an AI Agent (empty, no behaviors)."""
+        """Create an AI Agent (empty, no behaviors).
+
+        Callers are still responsible for pre-Pydantic prep (``normalize_pipefy_ai_instruction_tokens``
+        / ``expand_behaviors_placeholders``) where applicable because those run before
+        :class:`CreateAiAgentInput` validation at the tool/CLI boundary.
+        """
         return await self._ai_agent_service.create_agent(agent_input)
 
     async def update_ai_agent(
@@ -762,8 +772,6 @@ class PipefyClient:
         / ``expand_behaviors_placeholders``) because those run before
         :class:`UpdateAiAgentInput` validation.
         """
-        from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
-
         raw_behaviors = [b.model_dump(by_alias=True) for b in agent_input.behaviors]
         resolved_dicts = await resolve_and_populate_field_refs(self, raw_behaviors)
         resolved_behaviors = [BehaviorInput.model_validate(d) for d in resolved_dicts]
@@ -1213,15 +1221,13 @@ class PipefyClient:
         file_name: str,
         file_bytes: bytes,
         content_type: str | None = None,
-    ) -> Any:
+    ) -> AttachmentUploadResult:
         """Upload ``file_bytes`` to a card attachment field via the standard pipeline.
 
         Wraps presigned URL → S3 PUT → ``update_card_field`` in one call so MCP
         and CLI surfaces do not duplicate the orchestration. Raises
         :class:`AttachmentUploadError` on any step failure (with ``step`` attribute).
         """
-        from pipefy_sdk.attachment_upload import upload_attachment_to_card_field
-
         return await upload_attachment_to_card_field(
             self,
             organization_id=organization_id,
@@ -1241,12 +1247,8 @@ class PipefyClient:
         file_name: str,
         file_bytes: bytes,
         content_type: str | None = None,
-    ) -> Any:
+    ) -> AttachmentUploadResult:
         """Upload ``file_bytes`` to a table record attachment field via the standard pipeline."""
-        from pipefy_sdk.attachment_upload import (
-            upload_attachment_to_table_record_field,
-        )
-
         return await upload_attachment_to_table_record_field(
             self,
             organization_id=organization_id,

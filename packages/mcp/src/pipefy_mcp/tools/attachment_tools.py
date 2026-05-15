@@ -7,6 +7,7 @@ import base64
 import binascii
 import ipaddress
 import socket
+from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import urlparse
 
@@ -20,7 +21,10 @@ from pipefy_sdk import (
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
 )
-from pipefy_sdk.attachment_upload import AttachmentUploadError
+from pipefy_sdk.attachment_upload import (
+    AttachmentUploadError,
+    AttachmentUploadResult,
+)
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.attachment_tool_helpers import (
@@ -32,19 +36,6 @@ from pipefy_mcp.tools.attachment_tool_helpers import (
 
 _FILE_DOWNLOAD_TIMEOUT_SEC = 60.0
 _MAX_DOWNLOAD_SIZE_BYTES = 100 * 1024 * 1024  # 100 MiB
-
-
-def _parse_s3_status_from_message(message: str) -> int | None:
-    """Extract HTTP status code from ``AttachmentUploadError`` s3 message."""
-    import re
-
-    m = re.search(r"HTTP (\d+)", message)
-    if m:
-        try:
-            return int(m.group(1))
-        except ValueError:
-            return None
-    return None
 
 
 _PRIVATE_NETWORKS = (
@@ -210,7 +201,7 @@ class AttachmentTools:
             file_url: str | None,
             file_content_base64: str | None,
             content_type: str | None,
-            upload_call,
+            upload_call: Callable[[bytes], Awaitable[AttachmentUploadResult]],
             debug_prefix: str,
             success_extra: dict[str, Any],
         ) -> dict[str, Any]:
@@ -246,7 +237,7 @@ class AttachmentTools:
                 elif exc.step == "s3_upload" and exc.body_snippet:
                     rich_message = format_s3_upload_failure(
                         {
-                            "status_code": _parse_s3_status_from_message(str(exc)),
+                            "status_code": exc.status_code,
                             "body_snippet": exc.body_snippet,
                         }
                     )

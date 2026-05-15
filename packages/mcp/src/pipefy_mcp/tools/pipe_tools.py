@@ -56,6 +56,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     map_delete_card_error_to_message,
     map_delete_comment_error_to_message,
     map_update_comment_error_to_message,
+    message_for_add_card_comment_validation_error,
 )
 from pipefy_mcp.tools.relation_tool_helpers import (
     build_relation_error_payload,
@@ -302,9 +303,11 @@ class PipeTools:
             # Privacy: never log the full comment text (it may contain sensitive data).
             try:
                 comment_input = CommentInput(card_id=card_id, text=text)
-            except ValidationError:
+            except ValidationError as exc:
                 return build_add_card_comment_error_payload(
-                    message="Invalid input. Please provide a valid 'card_id' and non-empty 'text'."
+                    message=message_for_add_card_comment_validation_error(
+                        exc, raw_text=text
+                    )
                 )
 
             try:
@@ -1054,7 +1057,9 @@ class PipeTools:
             Without a name filter, each organization returns at most ``max_pipes_per_org``
             pipes (capped 1--500) to avoid huge responses. With a name filter, the API
             receives a server-side ``name_search`` hint; results are still capped per org
-            after scoring. Check ``search_limits`` and per-org ``pipes_truncated`` when present.
+            after scoring. Check ``search_limits`` and per-org ``pipes_truncated`` when
+            present; when unfiltered, ``pipes_truncated`` is True if the API returned fewer
+            pipes than ``pipesCount`` for that org (incomplete visible list vs org total).
 
             Args:
                 pipe_name: Optional pipe name to search for (case-insensitive partial match).

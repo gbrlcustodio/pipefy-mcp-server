@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import CreateSendTaskAutomationInput, PipefyClient, PipefyId
+from pipefy_sdk.automation_preflight import AutomationPreflightError
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.automation_tool_helpers import (
@@ -19,9 +20,6 @@ from pipefy_mcp.tools.automation_tool_helpers import (
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
-from pipefy_mcp.tools.phase_transition_helpers import (
-    validate_traditional_automation_move_transition_or_none,
-)
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
@@ -376,13 +374,6 @@ class AutomationTools:
             )
             if bad is not None:
                 return bad
-            transition_msg = (
-                await validate_traditional_automation_move_transition_or_none(
-                    client, tid, aid, extra_input
-                )
-            )
-            if transition_msg is not None:
-                return build_automation_error_payload(transition_msg)
             try:
                 raw = await client.create_automation(
                     pid,
@@ -393,6 +384,8 @@ class AutomationTools:
                     action_repo_id=arid,
                     extra_input=extra_input,
                 )
+            except AutomationPreflightError as preflight_exc:
+                return build_automation_error_payload(str(preflight_exc))
             except Exception as exc:  # noqa: BLE001
                 if arid and arid != pid:
                     perm_msg = await enrich_permission_denied_error(
@@ -480,28 +473,16 @@ class AutomationTools:
             except ValidationError as exc:
                 return build_automation_error_payload(str(exc))
 
-            extra_input: dict[str, Any] = {
-                "action_params": {
-                    "taskParams": {
-                        "title": validated.task_title,
-                        "recipients": validated.recipients,
-                    },
-                },
-            }
-            if validated.event_params is not None:
-                extra_input["event_params"] = validated.event_params
-            if validated.condition is not None:
-                extra_input["condition"] = validated.condition
-
             try:
-                raw = await client.create_automation(
+                raw = await client.create_send_task_automation(
                     validated.pipe_id,
                     validated.name,
                     validated.event_id,
-                    "send_a_task",
+                    validated.task_title,
+                    validated.recipients,
                     active=active,
-                    action_repo_id=None,
-                    extra_input=extra_input,
+                    event_params=validated.event_params,
+                    condition=validated.condition,
                 )
             except Exception as exc:  # noqa: BLE001
                 return await handle_automation_tool_graphql_error(

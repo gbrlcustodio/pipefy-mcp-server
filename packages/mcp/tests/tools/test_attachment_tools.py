@@ -31,6 +31,13 @@ _VALIDATE_PATCH = "pipefy_mcp.tools.attachment_tools._validate_url_safe"
 
 @pytest.fixture
 def mock_attachment_client():
+    from pipefy_sdk.attachment_upload import (
+        upload_attachment_to_card_field as _real_upload_card,
+    )
+    from pipefy_sdk.attachment_upload import (
+        upload_attachment_to_table_record_field as _real_upload_record,
+    )
+
     client = MagicMock(PipefyClient)
     client.create_presigned_url = AsyncMock(
         return_value={
@@ -42,6 +49,21 @@ def mock_attachment_client():
     client.extract_storage_path = MagicMock(return_value="orgs/o/u/f/report.pdf")
     client.update_card_field = AsyncMock(return_value={"ok": True})
     client.set_table_record_field_value = AsyncMock(return_value={"ok": True})
+
+    # High-level facade methods delegate to the real SDK helper so the per-step
+    # mocks above continue to drive the pipeline. Tests can override the per-step
+    # mocks (e.g. to simulate S3 failures) and the helper will surface
+    # ``AttachmentUploadError`` exactly like in production.
+    async def _card_proxy(**kwargs):
+        return await _real_upload_card(client, **kwargs)
+
+    async def _record_proxy(**kwargs):
+        return await _real_upload_record(client, **kwargs)
+
+    client.upload_attachment_to_card_field = AsyncMock(side_effect=_card_proxy)
+    client.upload_attachment_to_table_record_field = AsyncMock(
+        side_effect=_record_proxy
+    )
     return client
 
 

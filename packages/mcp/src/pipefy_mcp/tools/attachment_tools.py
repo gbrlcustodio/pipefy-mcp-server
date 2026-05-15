@@ -9,7 +9,7 @@ import ipaddress
 import socket
 from collections.abc import Awaitable, Callable
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from mcp.server.fastmcp import Context, FastMCP
@@ -119,8 +119,9 @@ async def _download_file_bytes(url: str) -> bytes:
                     location = response.headers.get("location")
                     if not location:
                         raise ValueError("Redirect without Location header")
-                    await _validate_url_safe(location)
-                    current_url = location
+                    resolved = urljoin(current_url, location.strip())
+                    await _validate_url_safe(resolved)
+                    current_url = resolved
                     continue
 
                 response.raise_for_status()

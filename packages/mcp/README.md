@@ -30,7 +30,7 @@ Step-by-step JSON samples live in [`docs/setup.md#mcp-client-setup`](../../docs/
 
 ## Tools
 
-128 tools across nine domains — see the root [`README.md`](../../README.md#mcp-tools) for the full table with per-area links.
+128 tools across nine domains — see the root [`README.md`](../../README.md#mcp-tools) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)).
 
 ## Development
 

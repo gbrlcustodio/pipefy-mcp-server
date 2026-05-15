@@ -37,7 +37,7 @@ PIPEFY_GRAPHQL_URL=https://api.pipefy.com/graphql
 PIPEFY_OAUTH_URL=https://auth.pipefy.com/...
 ```
 
-Full guide: [`docs/setup.md`](../../docs/setup.md).
+Full guide: [`docs/setup.md`](../../docs/setup.md). CLI-focused docs: [`docs/cli/`](../../docs/cli/README.md).
 
 Use `PIPEFY_TOKEN` (or `--token`) for a direct bearer token instead of OAuth.
 

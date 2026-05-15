@@ -2,11 +2,14 @@
 
 ## Documentation map
 - **`README.md`** — Project pitch, install commands (pre-launch git + post-v1.0 PyPI), repo layout, MCP tools table, skills section, contributing.
+- **`docs/README.md`** — Index of docs by surface (MCP, CLI, SDK) and shared guides.
 - **`docs/setup.md`** — First-time install, env vars, MCP client config.
 - **`docs/parity.md`** — MCP tool ↔ CLI command parity matrix. Source of truth for coverage and deferrals.
 - **`docs/MIGRATION.md`** — What existing MCP users need to know about v0.1.
 - **`docs/dependencies.md`** — Rationale for runtime dependencies.
-- **`docs/tools/`** — Per-area reference (parameters, edge cases, cross-cutting behavior).
+- **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior).
+- **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
+- **`docs/sdk/README.md`** — Using `pipefy-sdk` as a library.
 - **`skills/AGENTS.md`** — Skill-authoring guide (frontmatter, naming, style). Start here before adding a skill.
 
 ## Project structure

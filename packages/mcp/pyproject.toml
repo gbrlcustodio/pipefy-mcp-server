@@ -60,3 +60,5 @@ lint.extend-select = ["I", "TID251"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "pipefy_cli".msg = "pipefy_mcp must not import the CLI package; keep MCP independent of pipefy-cli."
+"pipefy_sdk.services".msg = "Import from pipefy_sdk or pipefy_sdk.ai_* helpers only; pipefy_sdk.services is private to the SDK."
+"pipefy_sdk.queries".msg = "Import from pipefy_sdk only; pipefy_sdk.queries is private to the SDK."

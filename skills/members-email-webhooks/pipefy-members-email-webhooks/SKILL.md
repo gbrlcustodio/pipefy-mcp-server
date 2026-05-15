@@ -45,10 +45,10 @@ Manage pipe membership, send emails from card inboxes, read inbox replies, and m
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `get_card_inbox_emails` | — | Yes | Read emails in a card's inbox. |
-| `send_inbox_email` | — | No | Send an email from a card inbox. |
-| `get_email_templates` | — | Yes | List org-level email templates. |
-| `send_email_with_template` | — | No | Send using a template (substitutes variables). |
+| `get_card_inbox_emails` | `pipefy email inbox list --card <id>` | Yes | Read emails in a card's inbox. |
+| `send_inbox_email` | `pipefy email inbox send` | No | Send an email from a card inbox. |
+| `get_email_templates` | `pipefy email template list --repo <id>` | Yes | List org-level email templates. |
+| `send_email_with_template` | `pipefy email template send` | No | Send using a template (substitutes variables). |
 
 ### Steps — send a card inbox email
 
@@ -59,6 +59,8 @@ Manage pipe membership, send emails from card inboxes, read inbox replies, and m
 2. **Send a reply:**
 
    MCP: `send_inbox_email card_id=12345 to="customer@example.com" subject="Your request is in progress" body="Hi, we are processing your request."`
+
+   CLI: `pipefy email inbox send --card 12345 --to customer@example.com --subject "Your request is in progress" --body "Hi, we are processing your request." --from-email you@example.com`
 
 ---
 

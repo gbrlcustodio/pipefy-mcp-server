@@ -1738,9 +1738,11 @@ class TestValidateAiAgentBehaviorsErrorPaths:
         monkeypatch,
     ):
         """Enforces MAX_CROSS_PIPE_FIELD_FETCH on distinct create_connected_card targets."""
-        from pipefy_mcp.tools import ai_agent_tools
-
-        monkeypatch.setattr(ai_agent_tools, "MAX_CROSS_PIPE_FIELD_FETCH", 1)
+        monkeypatch.setattr(
+            "pipefy_sdk.ai_preflight.MAX_CROSS_PIPE_FIELD_FETCH",
+            1,
+            raising=False,
+        )
         mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field()
         mock_pipefy_client.get_pipe_relations.return_value = {
             "children": [

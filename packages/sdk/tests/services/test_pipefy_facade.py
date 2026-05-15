@@ -745,3 +745,56 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
         {"childId": "c1", "parentId": "p2", "sourceId": "src-3"},
     )
     assert result == {"deleteCardRelation": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_pipefy_client_upload_attachment_methods_delegate_to_sdk_helpers():
+    """Facade forwards upload helpers to ``attachment_upload`` module functions."""
+    from unittest.mock import patch
+
+    sample = {
+        "file_name": "x.txt",
+        "content_type": "text/plain",
+        "file_size": 3,
+        "field_id": "f1",
+        "storage_path": "p",
+        "download_url": None,
+    }
+
+    with (
+        patch(
+            "pipefy_sdk.client.upload_attachment_to_card_field",
+            new_callable=AsyncMock,
+            return_value=sample,
+        ) as card_m,
+        patch(
+            "pipefy_sdk.client.upload_attachment_to_table_record_field",
+            new_callable=AsyncMock,
+            return_value=sample,
+        ) as rec_m,
+    ):
+        client = PipefyClient.__new__(PipefyClient)
+        out_card = await client.upload_attachment_to_card_field(
+            organization_id="o",
+            card_id="c",
+            field_id="f1",
+            file_name="x.txt",
+            file_bytes=b"abc",
+        )
+        assert out_card == sample
+        card_m.assert_awaited_once()
+        assert card_m.await_args.kwargs["organization_id"] == "o"
+        assert card_m.await_args.kwargs["card_id"] == "c"
+        assert card_m.await_args.kwargs["file_bytes"] == b"abc"
+
+        out_rec = await client.upload_attachment_to_table_record_field(
+            organization_id="o",
+            table_record_id="t1",
+            field_id="f1",
+            file_name="x.txt",
+            file_bytes=b"abc",
+        )
+        assert out_rec == sample
+        rec_m.assert_awaited_once()
+        assert rec_m.await_args.kwargs["table_record_id"] == "t1"

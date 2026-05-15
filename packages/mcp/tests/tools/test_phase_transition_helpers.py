@@ -13,9 +13,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.ai_phase_transition_validation import (
+    collect_ai_behavior_move_transition_problems,
+)
 
 from pipefy_mcp.tools.phase_transition_helpers import (
-    collect_ai_behavior_move_transition_problems,
     try_enrich_move_card_to_phase_failure,
 )
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message

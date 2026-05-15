@@ -268,7 +268,7 @@ def test_agent_create_happy_path_chains_create_then_update(
             new=AsyncMock(return_value=preflight_ok),
         ),
         patch(
-            "pipefy_sdk.ai_pipe_validation.resolve_and_populate_field_refs",
+            "pipefy_sdk.client.resolve_and_populate_field_refs",
             new=AsyncMock(side_effect=lambda _c, behaviors: behaviors),
         ),
     ):
@@ -346,7 +346,7 @@ def test_agent_update_invokes_field_ref_resolution_via_facade(
             new=AsyncMock(return_value=preflight_ok),
         ),
         patch(
-            "pipefy_sdk.ai_pipe_validation.resolve_and_populate_field_refs",
+            "pipefy_sdk.client.resolve_and_populate_field_refs",
             new=resolve_mock,
         ),
     ):

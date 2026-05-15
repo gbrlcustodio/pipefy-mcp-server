@@ -40,6 +40,69 @@ def convert_fields_to_array(fields: Any) -> list[dict[str, Any]]:
     return [fields] if fields else []
 
 
+def normalize_field_condition_payload(
+    condition: dict[str, Any],
+) -> dict[str, Any]:
+    """Return a copy of ``ConditionInput`` ready for ``createFieldCondition``.
+
+    Pipefy's ``createFieldCondition`` mutation rejects payloads in two subtle ways
+    that show up as ``Something went wrong (INTERNAL_SERVER_ERROR)``:
+
+    1. ``ConditionExpressionInput.id`` is a persisted primary key. Sending an
+       arbitrary client-side token causes ``RECORD_NOT_FOUND``. Drop it on create.
+    2. ``structure_id`` and the inner values of ``expressions_structure`` must be
+       integers; sending strings or mixed types triggers an opaque 500 instead of
+       a clean validation error. Coerce both to ``int`` when possible.
+
+    Unknown top-level keys on the condition (e.g. ``index``) are preserved so the
+    helper stays forward-compatible.
+
+    Args:
+        condition: Caller-provided ``ConditionInput`` dict (typically with
+          ``expressions`` and ``expressions_structure``).
+
+    Returns:
+        A new dict safe to send as ``input.condition`` on ``createFieldCondition``
+        / ``updateFieldCondition``.
+    """
+
+    def _coerce_int(value: Any) -> Any:
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return value
+
+    expressions = condition.get("expressions")
+    if not isinstance(expressions, list):
+        return dict(condition)
+
+    cleaned_expressions: list[dict[str, Any]] = []
+    for expr in expressions:
+        if not isinstance(expr, dict):
+            cleaned_expressions.append(expr)
+            continue
+        row = {k: v for k, v in expr.items() if k != "id"}
+        if "structure_id" in row and row["structure_id"] is not None:
+            row["structure_id"] = _coerce_int(row["structure_id"])
+        cleaned_expressions.append(row)
+
+    es = condition.get("expressions_structure")
+    if isinstance(es, list):
+        coerced_es: list[list[Any]] = []
+        for group in es:
+            if isinstance(group, list):
+                coerced_es.append([_coerce_int(v) for v in group])
+            else:
+                coerced_es.append([_coerce_int(group)])
+        return {
+            **condition,
+            "expressions": cleaned_expressions,
+            "expressions_structure": coerced_es,
+        }
+
+    return {**condition, "expressions": cleaned_expressions}
+
+
 def convert_values_to_camel_case(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert values to camelCase format for `updateFieldsValues` mutation.
 

@@ -3,6 +3,7 @@ import pytest
 from pipefy_sdk.utils.formatters import (
     convert_fields_to_array,
     convert_values_to_camel_case,
+    normalize_field_condition_payload,
 )
 
 
@@ -143,3 +144,105 @@ def test_convert_values_to_camel_case_snake_case_wins_over_camel_case():
     result = convert_values_to_camel_case(values)
 
     assert result[0]["fieldId"] == "snake_id"
+
+
+@pytest.mark.unit
+def test_normalize_field_condition_drops_expression_id_on_create():
+    """``ConditionExpressionInput.id`` is a persisted PK; sending tokens errors RECORD_NOT_FOUND."""
+    condition = {
+        "expressions": [
+            {
+                "id": "client-token-xyz",
+                "field_address": "f",
+                "operation": "equals",
+                "value": "v",
+                "structure_id": "1",
+            }
+        ],
+        "expressions_structure": [["1"]],
+    }
+
+    result = normalize_field_condition_payload(condition)
+
+    assert "id" not in result["expressions"][0]
+    assert result["expressions"][0]["field_address"] == "f"
+
+
+@pytest.mark.unit
+def test_normalize_field_condition_coerces_string_indices_to_int():
+    """String indices come from the MCP docstring; Pipefy's API rejects them in 5xx form."""
+    condition = {
+        "expressions": [{"structure_id": "42", "field_address": "f", "value": "v"}],
+        "expressions_structure": [["42"]],
+    }
+
+    result = normalize_field_condition_payload(condition)
+
+    assert result["expressions"][0]["structure_id"] == 42
+    assert result["expressions_structure"] == [[42]]
+
+
+@pytest.mark.unit
+def test_normalize_field_condition_passes_through_non_coercible_values():
+    """Non-numeric strings are preserved (e.g. legacy UUID-style structure ids)."""
+    condition = {
+        "expressions": [{"structure_id": "not-a-number"}],
+        "expressions_structure": [["not-a-number"]],
+    }
+
+    result = normalize_field_condition_payload(condition)
+
+    assert result["expressions"][0]["structure_id"] == "not-a-number"
+    assert result["expressions_structure"] == [["not-a-number"]]
+
+
+@pytest.mark.unit
+def test_normalize_field_condition_handles_flat_structure_group():
+    """Bare scalars in ``expressions_structure`` are wrapped in a list (legacy callers)."""
+    condition = {
+        "expressions": [{"structure_id": "0"}],
+        "expressions_structure": ["0"],
+    }
+
+    result = normalize_field_condition_payload(condition)
+
+    assert result["expressions_structure"] == [[0]]
+
+
+@pytest.mark.unit
+def test_normalize_field_condition_preserves_top_level_extras():
+    """Unknown top-level keys (e.g. ``index``) are forwarded — schema may evolve."""
+    condition = {
+        "expressions": [{"structure_id": 1}],
+        "expressions_structure": [[1]],
+        "index": 5,
+    }
+
+    result = normalize_field_condition_payload(condition)
+
+    assert result["index"] == 5
+
+
+@pytest.mark.unit
+def test_normalize_field_condition_idempotent_on_already_int_values():
+    """Re-applying the helper (e.g. MCP layer + SDK layer) must be a no-op."""
+    condition = {
+        "expressions": [{"structure_id": 7, "value": "v"}],
+        "expressions_structure": [[7]],
+    }
+
+    once = normalize_field_condition_payload(condition)
+    twice = normalize_field_condition_payload(once)
+
+    assert once == twice
+
+
+@pytest.mark.unit
+def test_normalize_field_condition_returns_copy_without_expressions():
+    """Conditions missing ``expressions`` round-trip as a shallow copy (no crash)."""
+    condition = {"only_index": 1}
+
+    result = normalize_field_condition_payload(condition)
+
+    assert result == {"only_index": 1}
+    assert result is not condition

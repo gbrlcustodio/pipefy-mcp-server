@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from pipefy_sdk import PipefyClient, infer_content_type
+from pipefy_sdk import PipefyClient
+from pipefy_sdk.attachment_upload import AttachmentUploadError
 
 from pipefy_cli.commands._common import run_cli_command
 
@@ -85,7 +86,6 @@ def attachment_upload(
         raise typer.BadParameter("Provide exactly one of --card or --record.")
     file_name = file.name
     file_bytes = _read_local_file_bytes(file)
-    effective_type = content_type or infer_content_type(file_name)
     org_str = str(organization).strip()
     field_str = str(field).strip()
     if not org_str or not field_str:
@@ -95,59 +95,45 @@ def attachment_upload(
     record_id = str(record).strip() if record is not None else None
 
     async def factory(client: PipefyClient) -> dict[str, object]:
-        presigned = await client.create_presigned_url(
-            org_str,
-            file_name,
-            effective_type,
-            len(file_bytes),
-        )
-        upload_url = presigned.get("url")
-        download_url = presigned.get("download_url")
-        if not isinstance(upload_url, str) or not upload_url.strip():
-            return {
-                "success": False,
-                "step": "presigned_url",
-                "message": "Pipefy did not return a presigned upload URL.",
-            }
-        put_result = await client.upload_file_to_s3(
-            upload_url.strip(),
-            file_bytes,
-            effective_type,
-        )
-        status = put_result.get("status_code", 0)
-        if not isinstance(status, int) or status >= 400:
-            snippet = put_result.get("body_snippet", "")
-            return {
-                "success": False,
-                "step": "s3_upload",
-                "message": f"S3 upload failed with HTTP {status}.",
-                "body_snippet": snippet,
-            }
-        try:
-            storage_path = client.extract_storage_path(upload_url)
-        except ValueError as exc:
-            return {"success": False, "step": "s3_upload", "message": str(exc)}
-
         try:
             if card_id is not None:
-                await client.update_card_field(card_id, field_str, [storage_path])
+                result = await client.upload_attachment_to_card_field(
+                    organization_id=org_str,
+                    card_id=card_id,
+                    field_id=field_str,
+                    file_name=file_name,
+                    file_bytes=file_bytes,
+                    content_type=content_type,
+                )
                 target: dict[str, object] = {"card_id": card_id}
             else:
-                await client.set_table_record_field_value(
-                    record_id or "", field_str, [storage_path]
+                result = await client.upload_attachment_to_table_record_field(
+                    organization_id=org_str,
+                    table_record_id=record_id or "",
+                    field_id=field_str,
+                    file_name=file_name,
+                    file_bytes=file_bytes,
+                    content_type=content_type,
                 )
                 target = {"table_record_id": record_id}
-        except Exception as exc:  # noqa: BLE001
-            return {"success": False, "step": "field_update", "message": str(exc)}
+        except AttachmentUploadError as exc:
+            out: dict[str, object] = {
+                "success": False,
+                "step": exc.step,
+                "message": str(exc),
+            }
+            if exc.body_snippet is not None:
+                out["body_snippet"] = exc.body_snippet
+            return out
 
         return {
             "success": True,
             "message": "Attachment uploaded.",
-            "file_name": file_name,
-            "content_type": effective_type,
-            "file_size": len(file_bytes),
-            "field_id": field_str,
-            "download_url": download_url if isinstance(download_url, str) else None,
+            "file_name": result["file_name"],
+            "content_type": result["content_type"],
+            "file_size": result["file_size"],
+            "field_id": result["field_id"],
+            "download_url": result["download_url"],
             **target,
         }
 

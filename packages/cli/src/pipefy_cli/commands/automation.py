@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import typer
 from pipefy_sdk import CreateSendTaskAutomationInput, PipefyClient
 from pydantic import ValidationError
@@ -284,28 +282,16 @@ def automation_send_task_create(
     except ValidationError as exc:
         raise typer.BadParameter(str(exc)) from exc
 
-    extra_input: dict[str, Any] = {
-        "action_params": {
-            "taskParams": {
-                "title": validated.task_title,
-                "recipients": validated.recipients,
-            },
-        },
-    }
-    if validated.event_params is not None:
-        extra_input["event_params"] = validated.event_params
-    if validated.condition is not None:
-        extra_input["condition"] = validated.condition
-
     async def factory(client: PipefyClient):
-        return await client.create_automation(
+        return await client.create_send_task_automation(
             validated.pipe_id,
             validated.name,
             validated.event_id,
-            "send_a_task",
+            validated.task_title,
+            validated.recipients,
             active=active,
-            action_repo_id=None,
-            extra_input=extra_input,
+            event_params=validated.event_params,
+            condition=validated.condition,
         )
 
     run_cli_command(ctx, json_out, factory)

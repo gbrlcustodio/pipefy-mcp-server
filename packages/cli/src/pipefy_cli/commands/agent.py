@@ -6,12 +6,10 @@ from typing import Any
 
 import typer
 from pipefy_sdk import (
-    BehaviorInput,
     CreateAiAgentInput,
     PipefyClient,
     UpdateAiAgentInput,
 )
-from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
 from pipefy_sdk.ai_preflight import validate_ai_agent_behaviors_sdk
 from pipefy_sdk.behavior_placeholders import (
     expand_behaviors_placeholders,
@@ -158,17 +156,12 @@ def agent_create(
         _raise_if_preflight_blocks(pre)
         create_result = await client.create_ai_agent(validated)
         agent_uuid = create_result["agent_uuid"]
-        resolved = await resolve_and_populate_field_refs(
-            client,
-            [b.model_dump(by_alias=True) for b in validated.behaviors],
-        )
-        behaviors_models = [BehaviorInput.model_validate(d) for d in resolved]
         update_input = UpdateAiAgentInput(
             uuid=agent_uuid,
             name=validated.name,
             repo_uuid=validated.repo_uuid,
             instruction=validated.instruction,
-            behaviors=behaviors_models,
+            behaviors=validated.behaviors,
             data_source_ids=validated.data_source_ids,
         )
         await client.update_ai_agent(update_input)

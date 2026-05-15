@@ -268,7 +268,7 @@ def test_agent_create_happy_path_chains_create_then_update(
             new=AsyncMock(return_value=preflight_ok),
         ),
         patch(
-            "pipefy_cli.commands.agent.resolve_and_populate_field_refs",
+            "pipefy_sdk.ai_pipe_validation.resolve_and_populate_field_refs",
             new=AsyncMock(side_effect=lambda _c, behaviors: behaviors),
         ),
     ):
@@ -300,6 +300,80 @@ def test_agent_create_happy_path_chains_create_then_update(
     }
     mock_client.create_ai_agent.assert_awaited_once()
     mock_client.update_ai_agent.assert_awaited_once()
+
+
+def test_agent_update_invokes_field_ref_resolution_via_facade(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``agent update`` must run ``resolve_and_populate_field_refs`` via the SDK facade.
+
+    Regression for catalog finding #3: CLI ``agent update`` previously called
+    ``client.update_ai_agent`` directly, skipping field-slug resolution. The fix
+    moved the prep into ``PipefyClient.update_ai_agent``, so ANY caller — including
+    this CLI — picks it up automatically.
+
+    To exercise the real facade method, we build a bare ``PipefyClient`` (no HTTP
+    setup) and only stub ``_ai_agent_service.update_agent`` plus the resolve helper.
+    The CLI calls ``client.update_ai_agent`` which is the real method; that method
+    in turn invokes ``resolve_and_populate_field_refs``.
+    """
+    oauth_env("ag-update-fields-resolved")
+
+    from pipefy_sdk.client import PipefyClient
+
+    client = PipefyClient.__new__(PipefyClient)
+    client._ai_agent_service = MagicMock()
+    client._ai_agent_service.update_agent = AsyncMock(
+        return_value={"agent_uuid": "u", "message": "updated"}
+    )
+
+    preflight_ok = {
+        "success": True,
+        "valid": True,
+        "problems": [],
+        "warnings": [],
+        "message": "ok",
+    }
+
+    resolve_mock = AsyncMock(side_effect=lambda _c, behaviors: behaviors)
+    with (
+        patch(
+            "pipefy_cli.commands._common.get_authenticated_client",
+            return_value=client,
+        ),
+        patch(
+            "pipefy_cli.commands.agent.validate_ai_agent_behaviors_sdk",
+            new=AsyncMock(return_value=preflight_ok),
+        ),
+        patch(
+            "pipefy_sdk.ai_pipe_validation.resolve_and_populate_field_refs",
+            new=resolve_mock,
+        ),
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "agent",
+                "update",
+                "--uuid",
+                "00000000-0000-0000-0000-000000000002",
+                "--repo-uuid",
+                "00000000-0000-0000-0000-000000000001",
+                "--pipe",
+                "1",
+                "--name",
+                "Acme",
+                "--instruction",
+                "Be helpful.",
+                "--behaviors",
+                json.dumps([_AGENT_BEHAVIOR]),
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    resolve_mock.assert_awaited_once()
+    client._ai_agent_service.update_agent.assert_awaited_once()
 
 
 def test_agent_create_blocks_when_preflight_invalid(

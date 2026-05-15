@@ -4,6 +4,8 @@ import asyncio
 from typing import Any, Literal, cast
 
 from pipefy_sdk import CardSearch, PipefyClient
+from pipefy_sdk.models.comment import MAX_COMMENT_TEXT_LENGTH
+from pydantic import ValidationError
 from typing_extensions import TypedDict
 
 from pipefy_mcp.tools.destructive_tool_guard import (
@@ -22,6 +24,37 @@ from pipefy_mcp.tools.tool_error_envelope import (
 
 class UserCancelledError(Exception):
     """Raised when a user cancels an interactive flow."""
+
+
+ADD_CARD_COMMENT_VALIDATION_FALLBACK_MSG = (
+    "Invalid input. Please provide a valid 'card_id' and non-empty 'text'."
+)
+
+
+def message_for_add_card_comment_validation_error(
+    exc: ValidationError,
+    *,
+    raw_text: str,
+) -> str:
+    """Map Pydantic errors from ``CommentInput`` to a user-visible MCP message.
+
+    Args:
+        exc: Validation failure from constructing ``CommentInput``.
+        raw_text: Original ``text`` argument (length hint if the error omits input).
+
+    Returns:
+        Actionable English message; long-text failures cite the 1000-character cap.
+    """
+    for err in exc.errors():
+        if err.get("type") not in ("string_too_long", "too_long"):
+            continue
+        loc = err.get("loc") or ()
+        if "text" not in loc:
+            continue
+        inp = err.get("input")
+        got = len(inp) if isinstance(inp, str) else len(raw_text)
+        return f"text exceeds {MAX_COMMENT_TEXT_LENGTH}-character limit (got {got})."
+    return ADD_CARD_COMMENT_VALIDATION_FALLBACK_MSG
 
 
 # The ``Legacy*SuccessPayload`` TypedDicts below describe the flag=false shape

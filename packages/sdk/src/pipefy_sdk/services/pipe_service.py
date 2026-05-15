@@ -24,6 +24,16 @@ def _clamp_max_pipes_per_org(value: int) -> int:
     return max(SEARCH_PIPES_MAX_PER_ORG_MIN, min(SEARCH_PIPES_MAX_PER_ORG_CAP, value))
 
 
+def _coerce_org_pipes_count(raw: object) -> int | None:
+    """Parse GraphQL ``Organization.pipesCount`` for truncation checks."""
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 class PipeService(BasePipefyClient):
     """Service for Pipe-related operations."""
 
@@ -112,6 +122,11 @@ class PipeService(BasePipefyClient):
                   If pipe_name is provided, only pipes matching the name are included,
                   sorted by match score (best matches first).
                   May include ``search_limits`` describing caps applied.
+
+                  When ``pipe_name`` is omitted, per-org ``pipes_truncated`` and
+                  ``search_limits.pipes_truncated`` are True if the client sliced the list
+                  to ``max_pipes_per_org`` **or** the API returned fewer ``pipes`` than
+                  ``pipesCount`` (user-visible subset vs org total).
         """
         stripped = pipe_name.strip() if pipe_name else None
         name_search = stripped if stripped else None
@@ -132,17 +147,22 @@ class PipeService(BasePipefyClient):
             organizations: list[dict] = []
             for org in raw_orgs:
                 pipes = list(org.get("pipes") or [])
-                truncated = len(pipes) > per_org_cap
-                if truncated:
+                pipes_count = _coerce_org_pipes_count(org.get("pipesCount"))
+                truncated = len(pipes) > per_org_cap or (
+                    pipes_count is not None and len(pipes) < pipes_count
+                )
+                if len(pipes) > per_org_cap:
                     pipes = pipes[:per_org_cap]
-                    limits["pipes_truncated"] = True
                 row: dict = {
                     "id": org.get("id"),
                     "name": org.get("name"),
                     "pipes": pipes,
                 }
+                if pipes_count is not None:
+                    row["pipesCount"] = pipes_count
                 if truncated:
                     row["pipes_truncated"] = True
+                    limits["pipes_truncated"] = True
                 organizations.append(row)
             return {"organizations": organizations, "search_limits": limits}
 

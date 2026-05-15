@@ -57,6 +57,7 @@ SEARCH_PIPES_QUERY = gql(
         organizations {
             id
             name
+            pipesCount
             pipes(name_search: $nameSearch) {
                 id
                 name

@@ -8,6 +8,8 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pipefy_sdk import CommentInput
+from pydantic import ValidationError
 
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
@@ -16,6 +18,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     with_debug_suffix,
 )
 from pipefy_mcp.tools.pipe_tool_helpers import (
+    ADD_CARD_COMMENT_VALIDATION_FALLBACK_MSG,
     FIND_CARDS_EMPTY_MESSAGE,
     UserCancelledError,
     _filter_editable_field_definitions,
@@ -27,6 +30,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     find_label_dependents,
     map_add_card_comment_error_to_message,
     map_delete_card_error_to_message,
+    message_for_add_card_comment_validation_error,
 )
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 
@@ -79,6 +83,31 @@ def test_build_add_card_comment_success_payload_parametrized_flag(envelope_flag)
         assert out == {"success": True, "data": {"comment_id": "42"}}
     else:
         assert out == {"success": True, "comment_id": "42"}
+
+
+# =============================================================================
+# message_for_add_card_comment_validation_error
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_message_for_add_card_comment_validation_error_string_too_long():
+    long_text = "x" * 1001
+    with pytest.raises(ValidationError) as exc_info:
+        CommentInput(card_id=1, text=long_text)
+    msg = message_for_add_card_comment_validation_error(
+        exc_info.value, raw_text=long_text
+    )
+    assert "1000" in msg
+    assert "got 1001" in msg
+
+
+@pytest.mark.unit
+def test_message_for_add_card_comment_validation_error_fallback_for_blank_text():
+    with pytest.raises(ValidationError) as exc_info:
+        CommentInput(card_id=1, text="   ")
+    msg = message_for_add_card_comment_validation_error(exc_info.value, raw_text="   ")
+    assert msg == ADD_CARD_COMMENT_VALIDATION_FALLBACK_MSG
 
 
 # =============================================================================

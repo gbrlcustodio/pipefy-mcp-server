@@ -1302,6 +1302,28 @@ class TestAddCardCommentTool:
             payload
         ) or "card_id" in tool_error_message(payload)
 
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_validation_error_text_over_limit_returns_explicit_length_message(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Comment text over max length surfaces cap and length, not generic card_id hint."""
+        long_text = "a" * 1001
+        async with client_session as session:
+            result = await session.call_tool(
+                "add_card_comment",
+                {"card_id": 123, "text": long_text},
+            )
+        assert result.isError is False
+        mock_pipefy_client.add_card_comment.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        msg = tool_error_message(payload)
+        assert "1000" in msg
+        assert "got 1001" in msg
+
 
 @pytest.mark.anyio
 class TestGetPhaseFieldsTool:

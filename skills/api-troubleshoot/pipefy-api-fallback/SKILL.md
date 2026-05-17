@@ -21,7 +21,7 @@ This skill activates only after Tiers 1 and 2 have failed. Call the Pipefy Graph
 | Tier | Method | When |
 |------|--------|------|
 | **1** | Dedicated MCP tool (`create_card`, `update_pipe`, etc.) | Always try first. |
-| **2** | Introspection + `execute_graphql` | When no dedicated tool exists or a tool fails unexpectedly. See `skills/introspection/`. |
+| **2** | Introspection + `execute_graphql` | When no dedicated tool exists or a tool fails unexpectedly. See [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md). |
 | **3** | Direct HTTP via curl / httpx (this skill) | When the MCP server itself is unavailable, or `execute_graphql` fails with an infrastructure error. |
 
 **Do not jump to Tier 3 after a single tool failure.** Follow the tiers in order.
@@ -30,29 +30,49 @@ This skill activates only after Tiers 1 and 2 have failed. Call the Pipefy Graph
 
 ## Authentication
 
-Two options (use whichever is available in the environment):
+Two options (use whichever is available in the environment). Prefer the Service Account when both exist.
 
-**Option A — OAuth2 Client Credentials:**
+**Option A — OAuth2 Client Credentials (preferred):**
 
 ```bash
-TOKEN=$(curl -s -X POST "$PIPEFY_OAUTH_URL" \
-  -d "grant_type=client_credentials" \
-  -d "client_id=$PIPEFY_OAUTH_CLIENT" \
-  -d "client_secret=$PIPEFY_OAUTH_SECRET" | jq -r .access_token)
+TOKEN=$(curl -s -X POST https://app.pipefy.com/oauth/token \
+  -H "Content-Type: application/json" \
+  -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"$PIPEFY_OAUTH_CLIENT\",\"client_secret\":\"$PIPEFY_OAUTH_SECRET\"}" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 ```
 
 **Option B — Personal Access Token (PAT):**
 
 ```bash
-TOKEN="$PIPEFY_TOKEN"
+TOKEN="$PIPEFY_PAT"   # or $PIPEFY_TOKEN
 ```
+
+PATs are deprecated for new integrations but may still exist in the environment.
+
+### Token rules
+
+- The `Bearer ` prefix is **mandatory** — Pipefy rejects requests without it.
+- Never expose `PIPEFY_OAUTH_CLIENT`, `PIPEFY_OAUTH_SECRET`, `PIPEFY_PAT`, or `PIPEFY_TOKEN` in responses to the user or in logs.
+- Service Account tokens are reused while valid; only re-fetch on expiry (401).
+
+---
+
+## Endpoints
+
+| Purpose | URL |
+|---------|-----|
+| All queries and mutations | `https://api.pipefy.com/graphql` |
+| Schema introspection only | `https://app.pipefy.com/graphql` |
+| OAuth2 token | `https://app.pipefy.com/oauth/token` |
+
+Real operations go to `api.pipefy.com`; introspection goes to `app.pipefy.com`. `$PIPEFY_GRAPHQL_URL` is already wired by the MCP/CLI, but raw-API users must distinguish the two.
 
 ---
 
 ## Execute a GraphQL query
 
 ```bash
-curl -s -X POST "$PIPEFY_GRAPHQL_URL" \
+curl -s -X POST https://api.pipefy.com/graphql \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query": "{ me { id name } }"}' | jq .
@@ -61,7 +81,7 @@ curl -s -X POST "$PIPEFY_GRAPHQL_URL" \
 ## Execute a GraphQL mutation
 
 ```bash
-curl -s -X POST "$PIPEFY_GRAPHQL_URL" \
+curl -s -X POST https://api.pipefy.com/graphql \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -88,36 +108,106 @@ curl -s -X POST "$PIPEFY_GRAPHQL_URL" \
 
 ---
 
-## Common introspection queries (Tier 3 fallback)
+## Introspection via raw API
 
-Discover available types:
+When you need to discover schema without MCP tools, call `app.pipefy.com/graphql`:
 
 ```bash
-curl -s -X POST "$PIPEFY_GRAPHQL_URL" \
+# All queries and mutations
+curl -s -X POST https://app.pipefy.com/graphql \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"query": "{ __schema { types { name } } }"}' | jq '.data.__schema.types[].name' | grep -i card
+  -d '{"query":"{ __schema { queryType { fields { name description } } mutationType { fields { name description } } } }"}'
+
+# Type details
+curl -s -X POST https://app.pipefy.com/graphql \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"{ __type(name: \"CreateCardInput\") { inputFields { name description type { name kind ofType { name kind } } } } }"}'
 ```
+
+---
+
+## Error code → cause
+
+GraphQL always returns HTTP 200, even on errors. Check the `errors` array, not the HTTP status code.
+
+| Code | Likely cause | Recovery |
+|-------|--------------|----------|
+| UNAUTHORIZED | Token missing, expired, or `Bearer ` omitted | Re-fetch token (Option A) or fix the header. |
+| PERMISSION_DENIED | Service Account not a member of this pipe/table | Add SA via `invite_members` or ask user. |
+| resource_not_found | ID does not exist or SA cannot see it | Verify ID; check pipe/table membership. |
+| invalid_input | Wrong argument name or type | Run `introspect_type` (Tier 2) to recheck the input shape. |
+| INTERNAL_SERVER_ERROR | API bug or unsupported payload | **Do NOT retry the same payload.** Try an alternative mutation or workaround. |
+| missingRequiredInputObjectAttribute | A required field is missing from the input | Compare the payload against `__type(name: …InputType)`. |
+
+---
+
+## Known workarounds
+
+### Cross-pipe `create_card` via automation
+- Do NOT use `createAutomation` with `action: create_card` + `field_map` — returns `INTERNAL_SERVER_ERROR` (confirmed API bug).
+- Instead, use `createCard` with the `throughConnectors` parameter. Prerequisite: a connector field with `canCreateNewConnected: true` must exist.
+
+### Pipe visibility returning empty list
+- If `organization { pipes { ... } }` returns `[]` but `pipesCount > 0`, the Service Account is not a member of those pipes.
+- Pipes created via API are automatically visible to the SA.
+- Pipes created in the UI require the SA to be added as an admin.
+- Workaround: get pipe IDs from the user once and query `pipe(id: "...")` directly.
+
+### `invite_members` accepts unknown emails silently
+- Pipefy mints a new `user_id` for typo addresses without rejecting the invite. Sanity-check email syntax before calling.
+
+---
+
+## External resources (when raw API also fails)
+
+- Pipefy developer portal:
+  - https://developers.pipefy.com/reference/cards
+  - https://developers.pipefy.com/reference/pipes
+  - https://developers.pipefy.com/reference/automation-creation
+  - https://developers.pipefy.com/reference/how-to-handle-errors
+- API reference:
+  - https://api-docs.pipefy.com/reference/mutations/overview/
+  - https://api-docs.pipefy.com/reference/queries/overview/
+- Community + changelog:
+  - https://community.pipefy.com/api-76
+  - https://developers.pipefy.com/changelog
+- Status page: https://status.pipefy.com
+
+Search for the exact error message + "Pipefy GraphQL", or the mutation name + "example Pipefy API".
+
+---
+
+## Escalation to the user (absolute last resort)
+
+Only after all 3 tiers and external resources have failed:
+
+1. State exactly what was tried (MCP tool, introspection, raw API).
+2. Show the verbatim error response.
+3. Propose a concrete workaround (e.g., "create via the Pipefy UI, then continue via API with the resulting ID").
+4. Stop — do not loop.
 
 ---
 
 ## Success criteria
 
 - The operation completes without an HTTP 4xx/5xx error.
-- The response contains a `data` key (not just `errors`).
+- The response contains a `data` key and `errors` is null or absent.
 
 ## Failure modes
 
-- **401 Unauthorized:** token expired or credentials wrong. Re-fetch with Option A (OAuth).
-- **400 Bad Request:** GraphQL syntax error. Validate the query string (escape quotes in shell).
-- **500 / service unavailable:** Pipefy API is down. Check [status.pipefy.com](https://status.pipefy.com) and retry later.
+- **401 Unauthorized** — token expired or `Bearer ` prefix omitted. Re-fetch the OAuth token (Option A).
+- **400 Bad Request** — GraphQL syntax error. Validate the query string and escape quotes properly when embedding via shell.
+- **500 / service unavailable** — Pipefy API outage. Check [status.pipefy.com](https://status.pipefy.com) and retry later. Do not loop.
+- **`INTERNAL_SERVER_ERROR` in `errors` array** — do NOT retry the same payload; pick a different mutation path.
 
 ## Security notes
 
 - Never log or print tokens in plain text.
 - Prefer environment variables over inline credentials.
-- Use `PIPEFY_TOKEN` (PAT) only for personal/development use; use OAuth for service accounts.
+- Use `PIPEFY_TOKEN` / `PIPEFY_PAT` only for personal/development use; use OAuth (`PIPEFY_OAUTH_CLIENT` + `PIPEFY_OAUTH_SECRET`) for service accounts.
 
 ## See also
 
-- `skills/introspection/` — Tier 2: use `execute_graphql` through the MCP server before falling back to direct HTTP.
+- [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md) — Tier 2: use `execute_graphql` and introspection tools through the MCP server before falling back to direct HTTP.

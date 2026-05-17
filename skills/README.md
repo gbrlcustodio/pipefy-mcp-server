@@ -20,7 +20,7 @@ git clone https://github.com/<owner>/pipefy-labs && cd pipefy-labs
 
 # Point your agent at the skills directory
 # In Claude Code: /skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md
-# In Cursor: add to .cursor/rules or reference in system prompt
+# In Cursor: add a project rule or reference these paths in the agent context you use for Pipefy
 ```
 
 ---

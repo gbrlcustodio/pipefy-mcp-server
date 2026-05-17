@@ -1,10 +1,16 @@
 # MCP tools and CLI parity
 
-This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. It is maintained alongside the rollout in `.cursor/dev-planning/specs/pipefy-labs/tasks/tasks-pipefy-labs.md` (parent task **5.0**).
+This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
 **Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **128** tools).
 
-**v0.2 / v0.3 CLI:** Tasks **8.0** (attachments, field conditions, email, audit export) and **9.0** (traditional automations + exports/usage, introspection, raw GraphQL exec) are reflected as **shipped** below where Typer commands exist in `packages/cli`.
+**Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
+
+## Response shape (MCP envelope vs CLI JSON)
+
+Many read-only MCP tools return a unified envelope (`success`, `data`, optional `message` / `pagination`) when `PIPEFY_MCP_UNIFIED_ENVELOPE` is true (default). The CLI prints the **underlying SDK/GraphQL payload** with `--json` — there is no `success` wrapper. When comparing the same capability on both surfaces, diff the **core fields** (`pipe`, `card`, `organizations`, …); on MCP they usually live under **`data`**.
+
+For **database records**, `find_records` result nodes may use **`fields`** while list/get table record responses may use **`record_fields`** — that follows Pipefy’s GraphQL shape per operation, not an MCP vs CLI inconsistency.
 
 ## Status legend
 

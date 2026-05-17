@@ -88,7 +88,4 @@ Before populating `skills/`, every pipeclaw file was classified as (a) direct po
 
 ## Related
 
-- `prd-pipefy-skills.md` §5 — study task specification.
-- Task 7.6 in `tasks-pipefy-labs.md` — produces this ADR.
-- Task 7.7 — consumes this ADR to populate `skills/`.
-- Task 7.8 — uses starter pack list from this ADR.
+- After this mapping is accepted, populate `skills/` from the classification table, then keep the CLI starter pack in sync via `scripts/sync_starter_pack.py` and CI (`skills-lint.yml`).

@@ -13,7 +13,7 @@ Run (``.env`` with ``PIPEFY_*`` and a disposable test pipe):
 ``PIPE_FIELD_CONDITION_LIVE_PHASE_ID`` falls back to ``TASK6_SIGNOFF_PHASE_ID``.
 
 Also run field-condition create/delete coverage: ``tests/tools/test_field_conditions_tools_live.py``.
-See ``.cursor/dev-planning/specs/ai-agents-field-conditions/TASK_6_SIGNOFF.md`` for the full sign-off list.
+See ``docs/mcp/tools/cross-cutting.md`` and field-condition tool docs under ``docs/mcp/tools/`` for expected MCP behavior.
 """
 
 from __future__ import annotations

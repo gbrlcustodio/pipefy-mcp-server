@@ -73,7 +73,7 @@ uv tool install pipefy-cli
 
 ## What's in this repo
 
-A **uv workspace** with three packages and a skills catalog. See [ADR 0003](.cursor/dev-planning/specs/pipefy-labs/decisions/0003-monorepo-package-taxonomy.md) for the vocabulary behind this layout.
+A **uv workspace** with three packages and a skills catalog. **`pipefy-sdk`** is the vendor GraphQL client library shared by MCP and CLI (not a generic “shared utils” package).
 
 | Path | Distribution name | Role |
 |------|-------------------|------|

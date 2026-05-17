@@ -73,7 +73,7 @@ uvx --from "git+https://github.com/<owner>/pipefy-labs.git@vX.Y.Z" --refresh pip
 
 ## v1.0 and later: GitHub Release + PyPI
 
-Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.0.0` or `v1.0.0rc1`), the release workflow also runs **Trusted Publishing** to upload the **`pipefy-cli`** and **`pipefy-mcp-server`** wheels to PyPI via `pypa/gh-action-pypi-publish` (the `pipefy-sdk` wheel is built for the GitHub Release but is **not** uploaded to PyPI until task 12.3 / ADR decides otherwise).
+Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.0.0` or `v1.0.0rc1`), the release workflow also runs **Trusted Publishing** to upload the **`pipefy-cli`** and **`pipefy-mcp-server`** wheels to PyPI via `pypa/gh-action-pypi-publish` (the `pipefy-sdk` wheel is built for the GitHub Release but is **not** uploaded to PyPI until maintainers enable it in the workflow; see **Repository setup** below).
 
 **Repository setup (maintainers):**
 

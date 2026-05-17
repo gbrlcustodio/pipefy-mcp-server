@@ -182,6 +182,17 @@ def _format_transport_query_error(exc: TransportQueryError) -> str:
     return f"{message} ({code})" if code else message
 
 
+def format_card_get_transport_query_error(exc: TransportQueryError) -> str:
+    """Like :func:`_format_transport_query_error` with a hint for missing/deleted cards."""
+    base = _format_transport_query_error(exc)
+    errors = getattr(exc, "errors", None) or []
+    if errors and isinstance(errors[0], dict):
+        code = (errors[0].get("extensions") or {}).get("code")
+        if code == "PERMISSION_DENIED":
+            return f"{base} The card may have been deleted or is not visible to this token."
+    return base
+
+
 def settings_and_token(ctx: typer.Context) -> tuple[PipefySettings, str | None]:
     """Resolve root CLI context object into settings and optional bearer token."""
     root = ctx.find_root()
@@ -229,6 +240,7 @@ def run_cli_command(
     coro_factory: Callable[[PipefyClient], Awaitable[_R]],
     *,
     exit_code_2_on_value_error: bool = True,
+    format_transport_query_error: Callable[[TransportQueryError], str] | None = None,
 ) -> None:
     """Run an async coroutine factory with a configured client and render the result.
 
@@ -237,8 +249,11 @@ def run_cli_command(
         json_out: When True, print JSON; otherwise Rich rendering.
         coro_factory: Async callable receiving ``PipefyClient`` and returning renderable data.
         exit_code_2_on_value_error: Map ``ValueError`` to process exit code 2 (stderr).
+        format_transport_query_error: Optional override for GraphQL transport errors
+            (defaults to a single-line formatter).
     """
     pipefy_settings, token = settings_and_token(ctx)
+    transport_fmt = format_transport_query_error or _format_transport_query_error
 
     async def _run() -> _R:
         client = get_authenticated_client(pipefy_settings, bearer_token=token)
@@ -250,7 +265,7 @@ def run_cli_command(
         typer.echo(str(exc), err=True)
         raise typer.Exit(1) from exc
     except TransportQueryError as exc:
-        typer.echo(_format_transport_query_error(exc), err=True)
+        typer.echo(transport_fmt(exc), err=True)
         raise typer.Exit(1) from exc
     except TransportError as exc:
         typer.echo(f"Pipefy transport error: {exc}", err=True)

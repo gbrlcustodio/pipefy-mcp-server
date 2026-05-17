@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from _shared.live_settings import live_pipefy_settings, require_live_creds
+from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk import PipefySettings
 from pipefy_sdk.exceptions import PipefyAPIError
 
@@ -107,6 +108,41 @@ def test_card_get_sdk_error_stderr_exit_1(
         result = runner.invoke(app, ["card", "get", "999", "--json"])
     assert result.exit_code == 1
     assert "GraphQL failure" in (result.stderr or "")
+
+
+def test_card_get_permission_denied_hint_on_stderr(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    monkeypatch.setenv(
+        "PIPEFY_GRAPHQL_URL",
+        "https://cli-card-pd.example.com/graphql",
+    )
+    monkeypatch.setenv(
+        "PIPEFY_INTERNAL_API_URL",
+        "https://cli-card-pd.example.com/internal_api",
+    )
+    monkeypatch.setenv(
+        "PIPEFY_OAUTH_URL",
+        "https://cli-card-pd.example.com/oauth/token",
+    )
+    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
+    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "sec")
+
+    exc = TransportQueryError(
+        "unused",
+        errors=[{"message": "Forbidden", "extensions": {"code": "PERMISSION_DENIED"}}],
+    )
+    mock_client = MagicMock()
+    mock_client.get_card = AsyncMock(side_effect=exc)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(app, ["card", "get", "501", "--json"])
+    assert result.exit_code == 1
+    err = result.stderr or ""
+    assert "PERMISSION_DENIED" in err
+    assert "deleted or is not visible" in err
 
 
 def _apply_settings_to_env(monkeypatch: pytest.MonkeyPatch, s: PipefySettings) -> None:

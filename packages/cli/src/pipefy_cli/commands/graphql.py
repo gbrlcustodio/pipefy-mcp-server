@@ -86,6 +86,8 @@ def graphql_exec(
 ) -> None:
     """Execute GraphQL via the SDK (``execute_graphql``).
 
+    Pass variables as JSON with ``--vars '{"key":"value"}'`` (not ``--variables``).
+
     Mutations are rejected unless ``--yes`` is set (exit code 2). Pair with
     ``pipefy introspect`` to discover operation shapes (see docs/cli/self-healing.md).
     """

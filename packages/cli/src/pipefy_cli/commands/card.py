@@ -18,6 +18,7 @@ from pydantic import ValidationError
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
+    format_card_get_transport_query_error,
     parse_json_value,
     resource_id_argument,
     run_cli_command,
@@ -105,7 +106,12 @@ def card_get(
     async def factory(client: PipefyClient):
         return await client.get_card(card_id, include_fields=include_fields)
 
-    run_cli_command(ctx, json_out, factory)
+    run_cli_command(
+        ctx,
+        json_out,
+        factory,
+        format_transport_query_error=format_card_get_transport_query_error,
+    )
 
 
 @card_app.command("list")

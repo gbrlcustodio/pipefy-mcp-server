@@ -427,6 +427,38 @@ async def test_search_pipes_truncates_per_org_when_over_cap(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_search_pipes_truncates_when_at_cap_and_pipes_count_missing(
+    mock_settings,
+):
+    """When pipesCount is absent and the API fills the cap, flag as truncated (conservative)."""
+    pipes = [{"id": str(i), "name": f"P{i}"} for i in range(500)]
+    mock_orgs = [{"id": "1", "name": "Org", "pipes": pipes}]
+    service = _make_service(mock_settings, {"organizations": mock_orgs})
+    result = await service.search_pipes(max_pipes_per_org=500)
+
+    assert len(result["organizations"][0]["pipes"]) == 500
+    assert result["organizations"][0].get("pipes_truncated") is True
+    assert result["search_limits"]["pipes_truncated"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_search_pipes_not_truncated_short_list_without_pipes_count(
+    mock_settings,
+):
+    """Short list below the cap without pipesCount is treated as complete."""
+    pipes = [{"id": str(i), "name": f"P{i}"} for i in range(10)]
+    mock_orgs = [{"id": "1", "name": "Org", "pipes": pipes}]
+    service = _make_service(mock_settings, {"organizations": mock_orgs})
+    result = await service.search_pipes(max_pipes_per_org=500)
+
+    assert len(result["organizations"][0]["pipes"]) == 10
+    assert result["organizations"][0].get("pipes_truncated") is None
+    assert result["search_limits"]["pipes_truncated"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_search_pipes_truncates_per_org_when_api_returns_fewer_than_pipes_count(
     mock_settings,
 ):

@@ -124,9 +124,13 @@ class PipeService(BasePipefyClient):
                   May include ``search_limits`` describing caps applied.
 
                   When ``pipe_name`` is omitted, per-org ``pipes_truncated`` and
-                  ``search_limits.pipes_truncated`` are True if the client sliced the list
-                  to ``max_pipes_per_org`` **or** the API returned fewer ``pipes`` than
-                  ``pipesCount`` (user-visible subset vs org total).
+                  ``search_limits.pipes_truncated`` are True when:
+
+                  - the client sliced the list past ``max_pipes_per_org``;
+                  - ``pipesCount`` is present and the API returned fewer ``pipes`` than
+                    that total; or
+                  - ``pipesCount`` is **absent** and the API returned at least
+                    ``max_pipes_per_org`` pipes (subset may still be incomplete — conservative hint).
         """
         stripped = pipe_name.strip() if pipe_name else None
         name_search = stripped if stripped else None
@@ -148,10 +152,18 @@ class PipeService(BasePipefyClient):
             for org in raw_orgs:
                 pipes = list(org.get("pipes") or [])
                 pipes_count = _coerce_org_pipes_count(org.get("pipesCount"))
-                truncated = len(pipes) > per_org_cap or (
-                    pipes_count is not None and len(pipes) < pipes_count
+                len_p = len(pipes)
+                over_cap = len_p > per_org_cap
+                fewer_than_reported_total = (
+                    pipes_count is not None and len_p < pipes_count
                 )
-                if len(pipes) > per_org_cap:
+                at_cap_without_total = (
+                    pipes_count is None and len_p >= per_org_cap and len_p > 0
+                )
+                truncated = (
+                    over_cap or fewer_than_reported_total or at_cap_without_total
+                )
+                if over_cap:
                     pipes = pipes[:per_org_cap]
                 row: dict = {
                     "id": org.get("id"),

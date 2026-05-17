@@ -42,6 +42,15 @@ class PipefySettings(BaseModel):
         description="OAuth client secret for Pipefy",
     )
 
+    org_id: str | None = Field(
+        default=None,
+        description=(
+            "Optional default organization id (numeric string) for CLI commands that "
+            "allow an implicit org, e.g. ``pipefy org get`` when the id argument is "
+            "omitted (env: PIPEFY_ORG_ID)."
+        ),
+    )
+
     service_account_ids: Annotated[list[str], NoDecode] = Field(
         default_factory=list,
         description=(

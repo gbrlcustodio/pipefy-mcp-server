@@ -30,6 +30,10 @@ Some destructive tools can attach extra **dependents** context in the preview wh
 
 On cross-pipe operations (relations, AI agents), errors carrying `extensions.code = PERMISSION_DENIED` are enriched with a membership hint pointing to `invite_members` when the service account is missing from the target pipe. Runs automatically (no `debug=true` required); implementation in [`enrich_permission_denied_error`](../../../packages/mcp/src/pipefy_mcp/tools/graphql_error_helpers.py).
 
+### Card reads and `PERMISSION_DENIED`
+
+Pipefy often returns **`PERMISSION_DENIED`** for `card(id: …)` when the card was **deleted** or the token cannot see it — the API does not always distinguish those cases. After a successful `delete_card`, `pipefy card get` may still surface `PIPEFY_GRAPHQL_URL` errors with that code; treat it as “inaccessible or removed,” not necessarily a failed delete. The CLI adds a short hint on `pipefy card get` when this code appears.
+
 ## Service account protection
 
 When the optional `PIPEFY_SERVICE_ACCOUNT_IDS` env var is set (see [`.env.example`](../../../.env.example)), the server guards `remove_member_from_pipe` and `set_role` against locking the service account out of its own pipes. Full contract: [Service account protection](members-email-webhooks.md#service-account-protection).

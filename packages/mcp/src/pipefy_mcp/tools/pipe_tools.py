@@ -1058,8 +1058,10 @@ class PipeTools:
             pipes (capped 1--500) to avoid huge responses. With a name filter, the API
             receives a server-side ``name_search`` hint; results are still capped per org
             after scoring. Check ``search_limits`` and per-org ``pipes_truncated`` when
-            present; when unfiltered, ``pipes_truncated`` is True if the API returned fewer
-            pipes than ``pipesCount`` for that org (incomplete visible list vs org total).
+            present. When unfiltered, ``pipes_truncated`` is True if the list was sliced,
+            if ``pipesCount`` exceeds the number of pipes returned, or if ``pipesCount``
+            is missing and the org returned ``max_pipes_per_org`` pipes (conservative:
+            the full org list may be larger).
 
             Args:
                 pipe_name: Optional pipe name to search for (case-insensitive partial match).

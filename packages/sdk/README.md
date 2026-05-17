@@ -1,14 +1,10 @@
 # pipefy-sdk
 
-**Vendor API SDK** for Pipefy's GraphQL API. This is the shared library consumed by `pipefy-mcp-server` and `pipefy-cli` — neither package is useful without it.
-
-The SDK owns all Pipefy API semantics: HTTP/GraphQL transport, service classes, query constants, Pydantic models, shared settings, exceptions, and utilities.
-
-See [ADR 0003](.cursor/dev-planning/specs/pipefy-labs/decisions/0003-monorepo-package-taxonomy.md) for the full taxonomy rationale (why "Vendor API SDK" and not "shared" / "common" / "core").
+**Vendor API SDK** for Pipefy's GraphQL API: the shared library consumed by `pipefy-mcp-server` and `pipefy-cli` (not a generic “shared utils” layer). It owns HTTP/GraphQL transport, service classes, query constants, Pydantic models, shared settings, exceptions, and utilities.
 
 ## Status
 
-Workspace-internal in v0.1; not published to PyPI yet (tracked in task 12.3 / `0002-sdk-pypi-promotion.md`).
+Workspace-internal in v0.1; publishing **`pipefy-sdk`** to PyPI is gated separately from CLI/MCP (see **`RELEASE.md`** Trusted Publishing notes).
 
 ## Usage (within the monorepo)
 

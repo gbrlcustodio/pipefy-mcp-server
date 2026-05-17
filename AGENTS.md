@@ -21,7 +21,7 @@ packages/cli/   → pipefy-cli        (Typer CLI; depends on pipefy-sdk)
 skills/         → agent skills catalog (Markdown; no Python package)
 ```
 
-See [ADR 0003](.cursor/dev-planning/specs/pipefy-labs/decisions/0003-monorepo-package-taxonomy.md) for the canonical vocabulary (why "Vendor API SDK" and not "shared"/"core").
+**Vendor API SDK** means the GraphQL-facing library (`pipefy-sdk`) used by both MCP and CLI, distinct from app glue or generic shared helpers.
 
 ## Build, test, and development
 

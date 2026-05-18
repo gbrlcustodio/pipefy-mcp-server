@@ -27,6 +27,10 @@ VERSION_ASSIGN_RE = re.compile(
 )
 
 CORE_VER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)")
+PRERELEASE_SUFFIX_RE = re.compile(
+    r"^(a|alpha|b|beta|rc)\.?(\d+)$",
+    re.IGNORECASE,
+)
 
 
 def read_sdk_version() -> str:
@@ -101,8 +105,25 @@ def bump_patch(current: str) -> str:
     return f"{x}.{y}.{z + 1}"
 
 
+def _format_prerelease_suffix(kind: str, n: int, original_rest: str) -> str:
+    """Format the suffix after ``X.Y.Z``, preserving SemVer-style when present."""
+    kind_lower = kind.lower()
+    if kind_lower in ("alpha", "a"):
+        short, long = "a", "alpha"
+    elif kind_lower in ("beta", "b"):
+        short, long = "b", "beta"
+    else:
+        short, long = "rc", "rc"
+
+    if re.match(rf"^[-_.]({long}|{short})\.\d+$", original_rest, re.IGNORECASE):
+        separator = original_rest[0]
+        return f"{separator}{long}.{n}"
+
+    return f"{short}{n}"
+
+
 def bump_prerelease(current: str) -> str:
-    """Increment or introduce a PEP-440-style pre-release suffix (``aN`` / ``bN`` / ``rcN``).
+    """Increment or introduce a pre-release suffix (``aN`` / ``bN`` / ``rcN`` or ``-beta.N``).
 
     When the current version has no suffix (e.g. ``0.1.0``), the next value is the first alpha
     of the *next* patch (e.g. ``0.1.1a1``), not an alpha of the same patch.
@@ -112,18 +133,15 @@ def bump_prerelease(current: str) -> str:
     if not rest:
         return f"{x}.{y}.{z + 1}a1"
     rest_norm = rest.lstrip("._-")
-    m = re.match(r"^(a|b|rc)(\d+)$", rest_norm, re.IGNORECASE)
+    m = PRERELEASE_SUFFIX_RE.match(rest_norm)
     if not m:
         msg = (
             f"Cannot bump prerelease: unrecognized suffix {rest_norm!r} on {current!r}"
         )
         raise ValueError(msg)
     kind, num_s = m.groups()
-    kind = kind.lower()
-    n = int(num_s)
-    if kind == "rc":
-        return f"{x}.{y}.{z}rc{n + 1}"
-    return f"{x}.{y}.{z}{kind}{n + 1}"
+    n = int(num_s) + 1
+    return f"{x}.{y}.{z}{_format_prerelease_suffix(kind, n, rest)}"
 
 
 def parse_explicit_version(arg: str) -> str:

@@ -1,9 +1,8 @@
 """Shared pytest configuration for the repo-root ``tests/`` tree.
 
-This directory holds unit and integration tests for packages that still live
-under ``tests/`` (for example SDK-adjacent suites). There are no ``test_*.py``
-files at the root of ``tests/`` itself—only subpackages such as ``tests/tools``
-and ``tests/services``. MCP-focused collections live under ``packages/mcp/tests``.
+Cross-package checks live here (for example ``test_parity.py``). Keep this
+directory **without** ``__init__.py``: a root ``tests`` package would shadow
+``packages/sdk/tests`` when pytest imports modules as ``tests.test_*``.
 """
 
 import pytest

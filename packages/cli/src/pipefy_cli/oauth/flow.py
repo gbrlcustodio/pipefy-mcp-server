@@ -1,0 +1,188 @@
+"""Orchestrate the Authorization Code + PKCE login against a Pipefy OIDC issuer."""
+
+from __future__ import annotations
+
+import secrets
+import webbrowser
+from dataclasses import dataclass
+from typing import Callable
+from urllib.parse import urlencode
+
+import httpx
+
+from pipefy_cli.oauth.discovery import ProviderMetadata, fetch_provider_metadata
+from pipefy_cli.oauth.loopback import (
+    CallbackResult,
+    await_callback,
+    find_free_port,
+    redirect_uri_for,
+)
+from pipefy_cli.oauth.pkce import challenge_from_verifier, generate_verifier
+
+_DEFAULT_SCOPES = ("openid", "profile", "email", "offline_access")
+_TOKEN_EXCHANGE_TIMEOUT_S = 30.0
+
+
+class LoginError(RuntimeError):
+    """User-facing failure during the login flow (rendered verbatim by the CLI)."""
+
+
+@dataclass(frozen=True)
+class LoginResult:
+    """The token response, plus the resolved issuer (post-discovery)."""
+
+    issuer: str
+    token_response: dict[str, object]
+
+
+def build_authorization_url(
+    *,
+    metadata: ProviderMetadata,
+    client_id: str,
+    redirect_uri: str,
+    code_challenge: str,
+    state: str,
+    scopes: tuple[str, ...] = _DEFAULT_SCOPES,
+) -> str:
+    """Construct the URL the user's browser should open to begin login."""
+    params = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "scope": " ".join(scopes),
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    }
+    return f"{metadata.authorization_endpoint}?{urlencode(params)}"
+
+
+def exchange_code(
+    *,
+    metadata: ProviderMetadata,
+    client_id: str,
+    code: str,
+    redirect_uri: str,
+    code_verifier: str,
+    client: httpx.Client | None = None,
+    timeout: float = _TOKEN_EXCHANGE_TIMEOUT_S,
+) -> dict[str, object]:
+    """Exchange an authorization code for tokens at the issuer's token endpoint."""
+    owned = client is None
+    http = client or httpx.Client(timeout=timeout)
+    try:
+        response = http.post(
+            metadata.token_endpoint,
+            data={
+                "grant_type": "authorization_code",
+                "client_id": client_id,
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "code_verifier": code_verifier,
+            },
+        )
+    except httpx.HTTPError as exc:
+        raise LoginError(f"Token exchange request failed: {exc}") from exc
+    finally:
+        if owned:
+            http.close()
+
+    if response.status_code != 200:
+        raise LoginError(
+            f"Token exchange failed ({response.status_code}): {response.text[:300]}"
+        )
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise LoginError(f"Token endpoint returned non-JSON response: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise LoginError("Token endpoint returned a non-object JSON payload.")
+    return payload
+
+
+def run_login(
+    *,
+    issuer_url: str,
+    client_id: str,
+    scopes: tuple[str, ...] = _DEFAULT_SCOPES,
+    callback_timeout_s: float = 180.0,
+    open_browser: Callable[[str], bool] = webbrowser.open,
+    on_url: Callable[[str], None] | None = None,
+    http_client: httpx.Client | None = None,
+) -> LoginResult:
+    """Run the full PKCE loopback login. Returns tokens; does **not** persist them.
+
+    Args:
+        issuer_url: OIDC issuer URL (e.g. ``https://signin.pipefy.com/realms/pipefy``).
+        client_id: Public client id registered for the CLI.
+        scopes: Scopes to request. Must include ``offline_access`` for a refresh
+            token to be issued.
+        callback_timeout_s: Seconds to wait for the browser callback.
+        open_browser: Override for browser launch (testing).
+        on_url: Optional sink for the authorization URL (so callers can print it
+            for manual / headless use).
+        http_client: Optional pre-configured ``httpx.Client`` (testing).
+
+    Raises:
+        LoginError: For any user-visible failure (discovery, state mismatch,
+            token exchange).
+        TimeoutError: When no browser callback arrives in time.
+    """
+    try:
+        metadata = fetch_provider_metadata(issuer_url, client=http_client)
+    except ValueError as exc:
+        raise LoginError(str(exc)) from exc
+
+    port = find_free_port()
+    redirect_uri = redirect_uri_for(port)
+    verifier = generate_verifier()
+    challenge = challenge_from_verifier(verifier)
+    state = secrets.token_urlsafe(24)
+
+    auth_url = build_authorization_url(
+        metadata=metadata,
+        client_id=client_id,
+        redirect_uri=redirect_uri,
+        code_challenge=challenge,
+        state=state,
+        scopes=scopes,
+    )
+    if on_url is not None:
+        on_url(auth_url)
+    open_browser(auth_url)
+
+    callback = await_callback(port, timeout=callback_timeout_s)
+    _ensure_callback_ok(callback, expected_state=state)
+    assert callback.code is not None  # narrowed by _ensure_callback_ok
+
+    token_response = exchange_code(
+        metadata=metadata,
+        client_id=client_id,
+        code=callback.code,
+        redirect_uri=redirect_uri,
+        code_verifier=verifier,
+        client=http_client,
+    )
+    return LoginResult(issuer=metadata.issuer, token_response=token_response)
+
+
+def _ensure_callback_ok(callback: CallbackResult, *, expected_state: str) -> None:
+    if callback.error:
+        detail = callback.error_description or ""
+        suffix = f": {detail}" if detail else ""
+        raise LoginError(f"Authorization server returned {callback.error}{suffix}")
+    if callback.state != expected_state:
+        raise LoginError(
+            "State mismatch on OAuth callback (possible CSRF). Aborting login."
+        )
+    if not callback.code:
+        raise LoginError("OAuth callback did not include an authorization code.")
+
+
+__all__ = [
+    "LoginError",
+    "LoginResult",
+    "build_authorization_url",
+    "exchange_code",
+    "run_login",
+]

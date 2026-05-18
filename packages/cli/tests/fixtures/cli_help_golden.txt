@@ -9,6 +9,7 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │                                    Overrides PIPEFY_TOKEN if both are set.   │
 │ --allow-insecure-urls              Allow http:// and private hosts           │
 │                                    (overrides env for this process).         │
+│ --version                          Print the pipefy-cli version and exit.    │
 │ --install-completion               Install completion for the current shell. │
 │ --show-completion                  Show completion for the current shell, to │
 │                                    copy it or customize the installation.    │

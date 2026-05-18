@@ -6,6 +6,7 @@ import os
 
 import typer
 
+from pipefy_cli import __version__ as _cli_version
 from pipefy_cli.commands.agent import agent_app
 from pipefy_cli.commands.ai_automation import ai_automation_app
 from pipefy_cli.commands.attachment import attachment_app
@@ -40,6 +41,12 @@ app = typer.Typer(
 )
 
 
+def _print_version(value: bool) -> None:
+    if value:
+        typer.echo(_cli_version)
+        raise typer.Exit()
+
+
 @app.callback()
 def main(
     ctx: typer.Context,
@@ -57,6 +64,13 @@ def main(
         False,
         "--allow-insecure-urls",
         help="Allow http:// and private hosts (overrides env for this process).",
+    ),
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_print_version,
+        is_eager=True,
+        help="Print the pipefy-cli version and exit.",
     ),
 ) -> None:
     """Global options apply to all subcommands."""

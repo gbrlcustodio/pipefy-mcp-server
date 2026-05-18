@@ -307,7 +307,8 @@ class PipeTools:
                 return build_add_card_comment_error_payload(
                     message=message_for_add_card_comment_validation_error(
                         exc, raw_text=text
-                    )
+                    ),
+                    code="INVALID_ARGUMENTS",
                 )
 
             try:
@@ -340,7 +341,8 @@ class PipeTools:
                 update_input = UpdateCommentInput(comment_id=comment_id, text=text)
             except ValidationError:
                 return build_update_comment_error_payload(
-                    message="Invalid input. Please provide a valid 'comment_id' and non-empty 'text'."
+                    message="Invalid input. Please provide a valid 'comment_id' and non-empty 'text'.",
+                    code="INVALID_ARGUMENTS",
                 )
 
             try:
@@ -383,7 +385,8 @@ class PipeTools:
                 delete_input = DeleteCommentInput(comment_id=comment_id)
             except ValidationError:
                 return build_delete_comment_error_payload(
-                    message="Invalid input. Please provide a valid 'comment_id'."
+                    message="Invalid input. Please provide a valid 'comment_id'.",
+                    code="INVALID_ARGUMENTS",
                 )
 
             guard = await check_destructive_confirmation(

@@ -3,9 +3,16 @@
 from __future__ import annotations
 
 import json
+import re
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from pipefy_cli.main import app
+
+# Rich/Typer renders option names like ``--ids`` in bold by default, splitting
+# the two dashes with ``\x1b[1m`` ANSI codes on Linux CI runners under
+# ``FORCE_COLOR=1``. Strip those codes before the substring assert so the test
+# passes on both macOS and Linux without depending on env vars.
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def test_table_list_search_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
@@ -49,7 +56,7 @@ def test_table_list_ids_only_commas_bad_parameter(
     ):
         result = runner.invoke(app, ["table", "list", "--ids", ",", "--json"])
     assert result.exit_code == 2
-    assert "--ids must list" in (result.stdout + result.stderr)
+    assert "--ids must list" in _ANSI_ESCAPE_RE.sub("", result.stdout + result.stderr)
     mock_client.get_tables.assert_not_called()
 
 

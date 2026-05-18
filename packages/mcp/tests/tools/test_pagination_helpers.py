@@ -46,7 +46,7 @@ def test_validate_page_size_negative_returns_structured_error():
 
 
 def test_validate_page_size_non_integer_returns_structured_error():
-    value, err = validate_page_size("abc")  # type: ignore[arg-type]
+    value, err = validate_page_size("abc")
     assert value == 0
     assert err is not None
     assert err["error"]["code"] == "INVALID_ARGUMENTS"
@@ -56,7 +56,7 @@ def test_validate_page_size_non_integer_returns_structured_error():
 
 def test_validate_page_size_accepts_integer_string():
     # int("100") coerces successfully, so "100" is treated as 100.
-    value, err = validate_page_size("100")  # type: ignore[arg-type]
+    value, err = validate_page_size("100")
     assert value == 100
     assert err is None
 

@@ -204,7 +204,7 @@ def test_placeholders_overrides_template_params_same_key():
 @pytest.mark.unit
 def test_extract_referenced_field_ids_empty_instruction():
     assert extract_referenced_field_ids("") == []
-    assert extract_referenced_field_ids(None) == []  # type: ignore[arg-type]
+    assert extract_referenced_field_ids(None) == []
 
 
 @pytest.mark.unit

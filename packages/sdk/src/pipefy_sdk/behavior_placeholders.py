@@ -102,7 +102,7 @@ def normalize_pipefy_ai_instruction_tokens(text: str) -> str:
     return _PIPEFY_UNPREFIXED_NUMERIC_FIELD.sub(r"%{field:\1}", out)
 
 
-def extract_referenced_field_ids(instruction: str) -> list[str]:
+def extract_referenced_field_ids(instruction: str | None) -> list[str]:
     """Extract numeric field ids referenced in an instruction's ``%{field:<digits>}`` tokens.
 
     Only matches the canonical numeric form (post :func:`normalize_pipefy_ai_instruction_tokens`
@@ -117,7 +117,7 @@ def extract_referenced_field_ids(instruction: str) -> list[str]:
     change what arrives in ``BehaviorRequest.card.fields[]``.
 
     Args:
-        instruction: Behavior instruction text.
+        instruction: Behavior instruction text, or None / empty (returns no ids).
 
     Returns:
         Field ids in first-occurrence order, deduplicated, as strings.

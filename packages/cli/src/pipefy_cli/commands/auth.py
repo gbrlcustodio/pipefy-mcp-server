@@ -8,7 +8,6 @@ import webbrowser
 import typer
 
 from pipefy_cli._docs import DOCS_SETUP_REF
-from pipefy_cli.config import DEFAULT_AUTH_CLIENT_ID, CliSettings
 from pipefy_cli.oauth import (
     LoginError,
     keychain_backend_name,
@@ -24,17 +23,13 @@ auth_app = typer.Typer(
 _OAUTH_TRIPLE = ("PIPEFY_OAUTH_URL", "PIPEFY_OAUTH_CLIENT", "PIPEFY_OAUTH_SECRET")
 
 
-def _cli_settings_from_ctx(ctx: typer.Context) -> CliSettings:
-    settings = ctx.find_root().obj.get("cli_settings")
-    if not isinstance(settings, CliSettings):
-        # Root callback always populates this; defensive only.
-        return CliSettings()
-    return settings
+def _auth_config_from_ctx(ctx: typer.Context) -> tuple[str, str]:
+    """Return ``(auth_url, client_id)`` from the root callback's stash.
 
-
-def _resolve_auth_config(settings: CliSettings) -> tuple[str, str]:
-    """Return ``(auth_url, client_id)`` or raise ``typer.Exit(2)`` with guidance."""
-    auth_url = (settings.auth_url or "").strip()
+    Raises ``typer.Exit(2)`` when ``PIPEFY_AUTH_URL`` is unset.
+    """
+    obj = ctx.find_root().obj
+    auth_url = obj.get("auth_url") or ""
     if not auth_url:
         typer.echo(
             "PIPEFY_AUTH_URL is required for `pipefy auth login` (the OIDC issuer "
@@ -44,17 +39,16 @@ def _resolve_auth_config(settings: CliSettings) -> tuple[str, str]:
             err=True,
         )
         raise typer.Exit(2)
-    client_id = (settings.auth_client_id or DEFAULT_AUTH_CLIENT_ID).strip()
-    return auth_url, client_id
+    return auth_url, obj["auth_client_id"]
 
 
 def _active_masking_sources() -> list[str]:
     """Env vars that outrank a stored session in the credential precedence chain.
 
-    Shell env > stored session > `.env` defaults, so only ``os.environ`` is
-    consulted here. ``PIPEFY_OAUTH_*`` is only listed when the *complete*
-    triple is configured (otherwise the client-credentials path would not
-    activate at all and the warning would be misleading).
+    Only ``os.environ`` is consulted — by the precedence model, ``.env`` defaults
+    sit below the stored session. ``PIPEFY_OAUTH_*`` is listed only when the
+    *complete* triple is configured (otherwise the client-credentials path
+    wouldn't activate and the warning would be misleading).
     """
     sources: list[str] = []
     if os.environ.get("PIPEFY_TOKEN"):
@@ -69,8 +63,8 @@ def _warn_if_masked() -> None:
     if not sources:
         return
     typer.echo(
-        f"Note: {', '.join(sources)} is set in your environment; the CLI will "
-        "use it instead of this login session until you unset it.",
+        f"Note: {', '.join(sources)} is set in your environment; other `pipefy` "
+        "commands will continue to use it until you unset it.",
         err=True,
     )
 
@@ -94,7 +88,7 @@ def auth_login(
     # Lazy to keep keyring's ~30-80ms backend-discovery cost off every CLI startup.
     from keyring.errors import KeyringError
 
-    auth_url, client_id = _resolve_auth_config(_cli_settings_from_ctx(ctx))
+    auth_url, client_id = _auth_config_from_ctx(ctx)
     typer.echo(f"Signing in to Pipefy at {auth_url} ...")
 
     def _print_url(url: str) -> None:

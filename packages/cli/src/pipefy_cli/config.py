@@ -103,19 +103,16 @@ def apply_toml_fallback(pipefy: PipefySettings) -> PipefySettings:
     return _revalidate(pipefy, patch)
 
 
-def resolve_pipefy_settings(
+def resolve_cli_settings(
     *,
     graphql_url_flag: str | None,
     allow_insecure_urls_flag: bool | None,
-) -> PipefySettings:
-    """Merge env, ``.env``, optional user TOML, then CLI flags (flags win).
+) -> CliSettings:
+    """Resolve the full :class:`CliSettings`: env, ``.env``, TOML fallback, then flags.
 
-    Args:
-        graphql_url_flag: When set, overrides ``PIPEFY_GRAPHQL_URL`` / file values.
-        allow_insecure_urls_flag: When not ``None``, overrides insecure URL policy.
-
-    Returns:
-        Validated :class:`PipefySettings` (same shape as MCP ``settings.pipefy``).
+    Returns a single ``CliSettings`` instance with the nested ``.pipefy`` field
+    fully resolved (TOML + flag overrides applied) and the top-level auth fields
+    (``auth_url``, ``auth_client_id``) populated from env / ``.env``.
 
     Raises:
         ValueError: When validation fails (e.g. SSRF guard); message is user-facing.
@@ -124,7 +121,7 @@ def resolve_pipefy_settings(
     if allow_insecure_urls_flag is True:
         os.environ[_ALLOW_INSECURE_ENV_KEY] = "true"
     try:
-        pipefy = CliSettings().pipefy
+        cli = CliSettings()
     except ValidationError as exc:
         raise ValueError(str(exc)) from exc
     finally:
@@ -135,17 +132,37 @@ def resolve_pipefy_settings(
                 os.environ[_ALLOW_INSECURE_ENV_KEY] = prev_allow
 
     try:
-        pipefy = apply_toml_fallback(pipefy)
-
+        pipefy = apply_toml_fallback(cli.pipefy)
         patch: dict[str, Any] = {}
         if graphql_url_flag:
             patch["graphql_url"] = graphql_url_flag.strip()
         if allow_insecure_urls_flag is not None:
             patch["allow_insecure_urls"] = allow_insecure_urls_flag
-
-        return _revalidate(pipefy, patch)
+        pipefy = _revalidate(pipefy, patch)
     except ValidationError as exc:
         raise ValueError(str(exc)) from exc
+
+    return cli.model_copy(update={"pipefy": pipefy})
+
+
+def resolve_pipefy_settings(
+    *,
+    graphql_url_flag: str | None,
+    allow_insecure_urls_flag: bool | None,
+) -> PipefySettings:
+    """Merge env, ``.env``, optional user TOML, then CLI flags (flags win).
+
+    Thin wrapper around :func:`resolve_cli_settings` that returns only the
+    nested ``PipefySettings`` (same shape as MCP ``settings.pipefy``). Kept for
+    callers that don't need the auth fields.
+
+    Raises:
+        ValueError: When validation fails (e.g. SSRF guard); message is user-facing.
+    """
+    return resolve_cli_settings(
+        graphql_url_flag=graphql_url_flag,
+        allow_insecure_urls_flag=allow_insecure_urls_flag,
+    ).pipefy
 
 
 def ensure_public_graphql_configured(pipefy: PipefySettings) -> None:
@@ -176,8 +193,10 @@ def describe_missing_oauth_vars(pipefy: PipefySettings) -> str:
 
 __all__ = [
     "CliSettings",
+    "DEFAULT_AUTH_CLIENT_ID",
     "USER_CONFIG_PATH",
     "apply_toml_fallback",
+    "resolve_cli_settings",
     "describe_missing_oauth_vars",
     "ensure_public_graphql_configured",
     "resolve_pipefy_settings",

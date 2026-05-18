@@ -309,17 +309,22 @@ def map_delete_comment_error_to_message(exc: BaseException) -> str:
     )
 
 
-def _build_comment_error_payload(message: str) -> dict:
-    return tool_error(message)
+def _build_comment_error_payload(message: str, code: str | None = None) -> dict:
+    return tool_error(message, code=code)
 
 
-def build_add_card_comment_error_payload(*, message: str) -> AddCardCommentErrorPayload:
+def build_add_card_comment_error_payload(
+    *, message: str, code: str | None = None
+) -> AddCardCommentErrorPayload:
     """add_card_comment failure envelope.
 
     Args:
         message: User-visible failure reason.
+        code: Optional machine-friendly code (e.g. ``INVALID_ARGUMENTS``).
     """
-    return cast(AddCardCommentErrorPayload, _build_comment_error_payload(message))
+    return cast(
+        AddCardCommentErrorPayload, _build_comment_error_payload(message, code=code)
+    )
 
 
 def build_update_comment_success_payload(*, comment_id: object) -> dict[str, Any]:
@@ -334,13 +339,18 @@ def build_update_comment_success_payload(*, comment_id: object) -> dict[str, Any
     return {"success": True, "comment_id": cid}
 
 
-def build_update_comment_error_payload(*, message: str) -> UpdateCommentErrorPayload:
+def build_update_comment_error_payload(
+    *, message: str, code: str | None = None
+) -> UpdateCommentErrorPayload:
     """update_comment failure envelope.
 
     Args:
         message: User-visible failure reason.
+        code: Optional machine-friendly code (e.g. ``INVALID_ARGUMENTS``).
     """
-    return cast(UpdateCommentErrorPayload, _build_comment_error_payload(message))
+    return cast(
+        UpdateCommentErrorPayload, _build_comment_error_payload(message, code=code)
+    )
 
 
 def build_delete_comment_success_payload() -> dict[str, Any]:
@@ -350,13 +360,18 @@ def build_delete_comment_success_payload() -> dict[str, Any]:
     return {"success": True}
 
 
-def build_delete_comment_error_payload(*, message: str) -> DeleteCommentErrorPayload:
+def build_delete_comment_error_payload(
+    *, message: str, code: str | None = None
+) -> DeleteCommentErrorPayload:
     """delete_comment failure envelope.
 
     Args:
         message: User-visible failure reason.
+        code: Optional machine-friendly code (e.g. ``RESOURCE_NOT_FOUND``).
     """
-    return cast(DeleteCommentErrorPayload, _build_comment_error_payload(message))
+    return cast(
+        DeleteCommentErrorPayload, _build_comment_error_payload(message, code=code)
+    )
 
 
 def build_delete_card_success_payload(

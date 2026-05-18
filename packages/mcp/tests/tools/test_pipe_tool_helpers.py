@@ -350,6 +350,22 @@ def test_build_add_card_comment_error_payload():
     assert out == tool_error("Something failed")
 
 
+@pytest.mark.unit
+def test_build_add_card_comment_error_payload_with_code():
+    """``code`` flows through so validation errors carry ``INVALID_ARGUMENTS``.
+
+    Comment validation errors used to drop the ``code`` field, breaking parity
+    with every other ``error.code`` enriched response in the unified envelope.
+    """
+    out = build_add_card_comment_error_payload(
+        message="text exceeds 1000-character limit (got 1163).",
+        code="INVALID_ARGUMENTS",
+    )
+    assert out["success"] is False
+    assert out["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "1000-character" in out["error"]["message"]
+
+
 # =============================================================================
 # build_delete_card_success_payload
 # =============================================================================

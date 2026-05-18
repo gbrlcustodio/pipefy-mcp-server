@@ -95,7 +95,16 @@ def auth_login(
         typer.echo(f"\nAuthorization URL: {url}\n")
 
     def _open(url: str) -> bool:
-        return False if no_browser else webbrowser.open(url)
+        if no_browser:
+            return False
+        if webbrowser.open(url):
+            return True
+        typer.echo(
+            "Could not open a browser automatically. Open the URL below, or "
+            "re-run with --no-browser.",
+            err=True,
+        )
+        return False
 
     try:
         result = run_login(
@@ -103,7 +112,7 @@ def auth_login(
             client_id=client_id,
             callback_timeout_s=callback_timeout,
             open_browser=_open,
-            on_url=_print_url if no_browser else None,
+            on_url=_print_url,
         )
     except LoginError as exc:
         typer.echo(f"Login failed: {exc}", err=True)

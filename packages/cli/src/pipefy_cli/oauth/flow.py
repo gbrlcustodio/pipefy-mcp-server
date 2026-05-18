@@ -120,9 +120,13 @@ def run_login(
         scopes: Scopes to request. Must include ``offline_access`` for a refresh
             token to be issued.
         callback_timeout_s: Seconds to wait for the browser callback.
-        open_browser: Override for browser launch (testing).
-        on_url: Optional sink for the authorization URL (so callers can print it
-            for manual / headless use).
+        open_browser: Launch the browser at ``auth_url``. Returns ``True`` if a
+            browser was launched; ``False`` otherwise (``--no-browser`` mode or
+            the OS couldn't open one).
+        on_url: Called with ``auth_url`` only when ``open_browser`` returned
+            ``False`` — i.e., the user needs to open the URL by hand. Pass
+            ``None`` to skip the fallback (callers must then handle the
+            ``False`` return themselves).
         http_client: Optional pre-configured ``httpx.Client`` (testing). When
             omitted, one client is created and reused for discovery + token
             exchange so the same TLS connection can serve both requests.
@@ -153,9 +157,8 @@ def run_login(
                 state=state,
                 scopes=scopes,
             )
-            if on_url is not None:
+            if not open_browser(auth_url) and on_url is not None:
                 on_url(auth_url)
-            open_browser(auth_url)
 
             callback = capture.await_callback(timeout=callback_timeout_s)
             _ensure_callback_ok(callback, expected_state=state)

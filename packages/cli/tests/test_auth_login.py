@@ -480,9 +480,11 @@ class TestAuthLoginCommand:
         def _spy_run_login(**kwargs: object) -> flow.LoginResult:
             open_browser = kwargs["open_browser"]
             on_url = kwargs.get("on_url")
-            assert on_url is not None, "--no-browser must wire on_url"
-            on_url(fake_auth_url)
-            open_browser_returns.append(open_browser(fake_auth_url))
+            assert on_url is not None, "on_url must be wired"
+            opened = open_browser(fake_auth_url)
+            open_browser_returns.append(opened)
+            if not opened:
+                on_url(fake_auth_url)
             return flow.LoginResult(
                 issuer="https://x.test/realms/foo",
                 token_response={"access_token": "A", "refresh_token": "R"},
@@ -505,6 +507,45 @@ class TestAuthLoginCommand:
             "open_browser callback must return False under --no-browser"
         )
         assert webbrowser_calls == [], "webbrowser.open must not be invoked"
+
+    def test_browser_open_failure_falls_back_to_printing_url(
+        self,
+        cli_runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: _InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """When ``webbrowser.open`` returns ``False`` (no GUI session, locked
+        sandbox, etc.) the auth URL must still reach the user, with a hint
+        about ``--no-browser``."""
+        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+
+        from pipefy_cli.commands import auth as auth_module
+
+        monkeypatch.setattr(auth_module.webbrowser, "open", lambda _url: False)
+
+        fake_auth_url = "https://x.test/realms/foo/auth?fake=1"
+
+        def _spy_run_login(**kwargs: object) -> flow.LoginResult:
+            open_browser = kwargs["open_browser"]
+            on_url = kwargs.get("on_url")
+            assert on_url is not None
+            opened = open_browser(fake_auth_url)
+            assert opened is False, "open_browser must report failure"
+            on_url(fake_auth_url)
+            return flow.LoginResult(
+                issuer="https://x.test/realms/foo",
+                token_response={"access_token": "A", "refresh_token": "R"},
+            )
+
+        monkeypatch.setattr(auth_module, "run_login", _spy_run_login)
+
+        result = cli_runner.invoke(cli_app, ["auth", "login"])
+        assert result.exit_code == 0, result.stderr
+        assert "Could not open a browser automatically" in result.stderr
+        assert "--no-browser" in result.stderr
+        assert fake_auth_url in result.stdout
 
     def test_login_failure_exits_1(
         self,

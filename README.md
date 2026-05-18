@@ -32,9 +32,16 @@
 
 ## Install
 
-### Pre-launch (v0.1 → v0.5) — install from git
+### Pre-launch (v0.x, including public betas) — install from git
 
-> **These commands are temporary.** At v1.0 the canonical install moves to PyPI.
+> **These commands are temporary.** At **v1.0** the canonical install moves to PyPI.
+
+The next **public beta** on this monorepo follows the **`v0.2.0-beta.*`** tag line (first tag: **`v0.2.0-beta.1`**), after the standalone [`v0.1.0-beta.1`](https://github.com/gbrlcustodio/pipefy-mcp-server/releases/tag/v0.1.0-beta.1). Pin installs to that tag when you want the beta snapshot instead of floating `main`:
+
+```sh
+uvx --from git+https://github.com/<owner>/pipefy-labs@v0.2.0-beta.1 --refresh pipefy-mcp-server --help
+uvx --from git+https://github.com/<owner>/pipefy-labs@v0.2.0-beta.1 --refresh pipefy-cli --version
+```
 
 **MCP server** (for Cursor, Claude Desktop, etc.):
 
@@ -68,6 +75,8 @@ uv tool install pipefy-cli
 **Setup, env vars, and MCP client config:** see **[docs/setup.md](docs/setup.md)** for first-time install, Pydantic / `.env` precedence, and Cursor / Claude Desktop examples.
 
 **Documentation index** (MCP vs CLI vs SDK): **[docs/README.md](docs/README.md)**.
+
+**Post-1.0 deprecation and semver:** **[docs/DEPRECATION.md](docs/DEPRECATION.md)**.
 
 ---
 

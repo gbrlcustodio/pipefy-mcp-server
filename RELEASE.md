@@ -6,6 +6,12 @@ Workspace distributions (`pipefy-sdk`, `pipefy-mcp-server`, `pipefy-cli`) share 
 
 PyPI publishing is **disabled** for tags that do not start with `v1.`. Pre-release installs use git references (for example `uvx --from git+https://github.com/<owner>/<repo>.git@vX.Y.Z --refresh pipefy-cli`).
 
+### Public beta line (`v0.2.0-beta.*`)
+
+The next **GitHub pre-release** after the standalone repo’s [`v0.1.0-beta.1`](https://github.com/gbrlcustodio/pipefy-mcp-server/releases/tag/v0.1.0-beta.1) is the **`v0.2.0-beta.*`** series on this monorepo (first cut: **`v0.2.0-beta.1`** unless you intentionally reuse another suffix). Same mechanics as any other **v0.x** tag: attach wheels to the GitHub Release; **no PyPI** until **`v1.`**.
+
+The Release workflow requires the git tag (without leading `v`) to **exactly match** `__version__` in `packages/sdk/src/pipefy_sdk/__init__.py` (and the MCP/CLI copies). For example tag **`v0.2.0-beta.1`** implies **`__version__ = "0.2.0-beta.1"`** in all three packages before you push the tag (set via step 2 below using `version=0.2.0-beta.1`, or edit the three `__init__.py` files together).
+
 1. Merge work to `main` and ensure `CHANGELOG.md` has everything under `## [Unreleased]`.
 2. Bump the shared version (updates all three `__init__.py` files):
 
@@ -14,6 +20,8 @@ PyPI publishing is **disabled** for tags that do not start with `v1.`. Pre-relea
    ```
 
    Supported arguments: `major`, `minor`, `patch`, `prerelease`, or `version=X.Y.Z` (optional `v` prefix on `X.Y.Z`).
+
+   For a **`v0.2.0-beta.*`** Git tag, pass the exact PEP-440 string (for example `version=0.2.0-beta.1`) so it matches `GITHUB_REF_NAME` without the leading `v`.
 
 3. If any skills in `skills/` changed since the last release, sync the bundled starter pack into the CLI package:
 

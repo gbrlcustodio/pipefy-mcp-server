@@ -174,6 +174,6 @@ def install_pipefy_validation_envelope() -> None:
         self._tools[tool.name] = tool
         return tool
 
-    ToolManager.add_tool = _add_tool  # type: ignore[assignment]
+    setattr(ToolManager, "add_tool", _add_tool)
     setattr(ToolManager, _PATCH_SENTINEL, True)
     logger.debug("PipefyValidationTool wiring active (ToolManager.add_tool patched)")

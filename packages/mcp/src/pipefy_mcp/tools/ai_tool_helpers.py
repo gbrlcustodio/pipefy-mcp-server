@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import Any, Literal, cast
 
 from pipefy_sdk import AiAgentGraphPayload
 from pipefy_sdk.ai_pipe_validation import (
@@ -29,9 +29,6 @@ from pipefy_mcp.tools.tool_error_envelope import (
     tool_error,
     tool_success,
 )
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

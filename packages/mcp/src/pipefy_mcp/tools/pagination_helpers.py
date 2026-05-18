@@ -30,7 +30,7 @@ class PaginationInfo(TypedDict, total=False):
 
 
 def validate_page_size(
-    first: int | None,
+    first: int | str | None,
     *,
     arg_name: str = "first",
     max_size: int = MAX_PAGE_SIZE,
@@ -46,8 +46,8 @@ def validate_page_size(
     ``int(...)`` cannot parse yields an ``INVALID_ARGUMENTS`` error.
 
     Args:
-        first: The requested page size, or None to use the default. Accepts
-            ``int`` or a digit-string parseable by ``int(...)``.
+        first: The requested page size, or None to use the default. Accepts an
+            ``int`` or a string parseable by ``int(...)`` (e.g. digit strings from MCP clients).
         arg_name: Name of the tool argument (appears in the error message to
             help agents fix their call). Default "first".
         max_size: Upper bound. Defaults to ``MAX_PAGE_SIZE``; tools with an

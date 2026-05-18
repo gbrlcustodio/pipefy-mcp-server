@@ -1,0 +1,2525 @@
+### HELP _
+Usage: pipefy [OPTIONS] COMMAND [ARGS]...
+
+ Pipefy CLI (GraphQL via pipefy-sdk).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --graphql-url                TEXT  Override PIPEFY_GRAPHQL_URL.              │
+│ --token                      TEXT  Bearer token for GraphQL (skips OAuth).   │
+│                                    Overrides PIPEFY_TOKEN if both are set.   │
+│ --allow-insecure-urls              Allow http:// and private hosts           │
+│                                    (overrides env for this process).         │
+│ --install-completion               Install completion for the current shell. │
+│ --show-completion                  Show completion for the current shell, to │
+│                                    copy it or customize the installation.    │
+│ --help                             Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ agent             AI Agents (repo-scoped).                                   │
+│ ai-automation     AI Automations (generate_with_ai; requires OAuth).         │
+│ attachment        Attachment uploads (presigned URL + field update).         │
+│ audit             Pipe audit log exports.                                    │
+│ automation        Traditional automations and related exports.               │
+│ card              Card operations.                                           │
+│ email             Inbox emails and email templates.                          │
+│ field-condition   Field conditions (dynamic form rules on phases).           │
+│ pipe              Pipe operations.                                           │
+│ phase             Pipe phase operations.                                     │
+│ field             Phase field operations.                                    │
+│ table             Database table operations.                                 │
+│ record            Table record operations.                                   │
+│ label             Pipe label operations.                                     │
+│ webhook           Pipe webhook operations.                                   │
+│ relation          Pipe and card relations.                                   │
+│ member            Pipe member operations.                                    │
+│ skills            Browse bundled agent skill playbooks.                      │
+│ graphql           Execute arbitrary GraphQL (mutations require --yes). See   │
+│                   docs/cli/self-healing.md.                                  │
+│ introspect        Discover GraphQL types and operations (JSON default).      │
+│ export            Bulk exports (automation jobs).                            │
+│ org               Organization operations.                                   │
+│ report-org        Organization reports.                                      │
+│ report-pipe       Pipe reports.                                              │
+│ usage             AI and automation usage metrics.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent
+Usage: pipefy agent [OPTIONS] COMMAND [ARGS]...
+
+ AI Agents (repo-scoped).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list                 List AI agents for a pipe (``get_ai_agents``).          │
+│ get                  Fetch one AI agent (``get_ai_agent``).                  │
+│ create               Create and configure an AI agent (``create_ai_agent`` + │
+│                      ``update_ai_agent`` chain).                             │
+│ update               Replace AI agent configuration (``update_ai_agent``).   │
+│ delete               Delete an AI agent (``delete_ai_agent``).               │
+│ toggle               Enable or disable an AI agent                           │
+│                      (``toggle_ai_agent_status``).                           │
+│ validate-behaviors   Dry-run behavior validation                             │
+│                      (``validate_ai_agent_behaviors``).                      │
+│ logs                 AI Agent execution logs.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent/create
+Usage: pipefy agent create [OPTIONS]
+
+ Create and configure an AI agent (``create_ai_agent`` + ``update_ai_agent``
+ chain).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --repo-uuid                        TEXT  Pipe UUID. [required]            │
+│ *  --name          -n                 TEXT  Agent display name. [required]   │
+│ *  --instruction                      TEXT  Agent-level instruction          │
+│                                             (token-normalized).              │
+│                                             [required]                       │
+│ *  --behaviors                        TEXT  JSON array of behavior objects.  │
+│                                             [required]                       │
+│ *  --pipe                             TEXT  Numeric pipe id for              │
+│                                             validate-behaviors pre-flight.   │
+│                                             [required]                       │
+│    --data-sources                     TEXT  Optional JSON array of           │
+│                                             knowledge-source id strings.     │
+│    --strict            --no-strict          Pre-flight strictness: when      │
+│                                             --strict (default), unknown      │
+│                                             actionType values block; with    │
+│                                             --no-strict they become warnings │
+│                                             only.                            │
+│                                             [default: strict]                │
+│    --json          -j                       Print machine-readable JSON to   │
+│                                             stdout.                          │
+│    --help                                   Show this message and exit.      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent/delete
+Usage: pipefy agent delete [OPTIONS] UUID
+
+ Delete an AI agent (``delete_ai_agent``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    uuid      TEXT  Agent UUID. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent/get
+Usage: pipefy agent get [OPTIONS] UUID
+
+ Fetch one AI agent (``get_ai_agent``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    uuid      TEXT  Agent UUID. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent/list
+Usage: pipefy agent list [OPTIONS]
+
+ List AI agents for a pipe (``get_ai_agents``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --repo          TEXT  Pipe UUID (repoUuid). [required]                    │
+│    --json  -j            Print machine-readable JSON to stdout.              │
+│    --help                Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent/logs
+Usage: pipefy agent logs [OPTIONS] COMMAND [ARGS]...
+
+ AI Agent execution logs.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list   List AI agent execution logs (``get_ai_agent_logs``).                 │
+│ get    Fetch one AI agent log entry (``get_ai_agent_log_details``).          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent/logs/get
+Usage: pipefy agent logs get [OPTIONS] LOG_ID
+
+ Fetch one AI agent log entry (``get_ai_agent_log_details``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    log_id      TEXT  Log UUID. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent/logs/list
+Usage: pipefy agent logs list [OPTIONS]
+
+ List AI agent execution logs (``get_ai_agent_logs``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --repo            TEXT     Pipe UUID. [required]                          │
+│    --first           INTEGER  Page size. [default: 30]                       │
+│    --after           TEXT     Pagination cursor.                             │
+│    --status          TEXT     processing|failed|success                      │
+│    --search          TEXT     Free-text search.                              │
+│    --json    -j                                                              │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent/toggle
+Usage: pipefy agent toggle [OPTIONS] UUID
+
+ Enable or disable an AI agent (``toggle_ai_agent_status``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    uuid      TEXT  Agent UUID. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --active      --inactive      Enable or disable the agent. [default: active] │
+│ --yes     -y                  Skip confirmation when disabling.              │
+│ --json    -j                                                                 │
+│ --help                        Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent/update
+Usage: pipefy agent update [OPTIONS]
+
+ Replace AI agent configuration (``update_ai_agent``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --uuid                             TEXT  Agent UUID. [required]           │
+│ *  --name          -n                 TEXT  Agent display name. [required]   │
+│ *  --repo-uuid                        TEXT  Pipe UUID. [required]            │
+│ *  --instruction                      TEXT  Agent-level instruction.         │
+│                                             [required]                       │
+│ *  --behaviors                        TEXT  JSON array of behavior objects.  │
+│                                             [required]                       │
+│ *  --pipe                             TEXT  Numeric pipe id for              │
+│                                             validate-behaviors pre-flight.   │
+│                                             [required]                       │
+│    --data-sources                     TEXT  Optional JSON array of           │
+│                                             knowledge-source id strings.     │
+│    --strict            --no-strict          Pre-flight strictness: --strict  │
+│                                             (default) blocks on unknown      │
+│                                             actionType values; --no-strict   │
+│                                             converts them to warnings.       │
+│                                             [default: strict]                │
+│    --json          -j                                                        │
+│    --help                                   Show this message and exit.      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP agent/validate-behaviors
+Usage: pipefy agent validate-behaviors [OPTIONS]
+
+ Dry-run behavior validation (``validate_ai_agent_behaviors``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                          TEXT  Numeric pipe id. [required]         │
+│ *  --behaviors                     TEXT  JSON array of behavior objects.     │
+│                                          [required]                          │
+│    --strict         --no-strict          Pre-flight strictness: --strict     │
+│                                          (default) reports unknown           │
+│                                          actionType values as problems;      │
+│                                          --no-strict reports them as         │
+│                                          warnings only.                      │
+│                                          [default: strict]                   │
+│    --json       -j                                                           │
+│    --help                                Show this message and exit.         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-automation
+Usage: pipefy ai-automation [OPTIONS] COMMAND [ARGS]...
+
+ AI Automations (generate_with_ai; requires OAuth).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list              List AI automations for a pipe (``get_ai_automations`` /   │
+│                   filtered ``get_automations``).                             │
+│ get               Load one automation row (``get_ai_automation`` /           │
+│                   ``get_automation``).                                       │
+│ validate-prompt   Pre-flight prompt validation                               │
+│                   (``validate_ai_automation_prompt``).                       │
+│ create            Create an AI automation (``create_ai_automation``).        │
+│ update            Update an AI automation (``update_ai_automation``).        │
+│ delete            Delete an AI automation (``delete_ai_automation`` /        │
+│                   ``delete_automation``).                                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-automation/create
+Usage: pipefy ai-automation create [OPTIONS]
+
+ Create an AI automation (``create_ai_automation``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                  TEXT  Pipe id. [required]                         │
+│ *  --name          -n      TEXT  Automation name. [required]                 │
+│ *  --event-id              TEXT  Trigger event id. [required]                │
+│ *  --prompt                TEXT  AI prompt with %{internal_id} refs.         │
+│                                  [required]                                  │
+│ *  --field-ids             TEXT  JSON array of output field ids. [required]  │
+│    --action-repo           TEXT  Optional action repo id (defaults to        │
+│                                  --pipe).                                    │
+│    --skills-ids            TEXT  Optional JSON array of skill id strings.    │
+│    --event-params          TEXT  Optional JSON object.                       │
+│    --condition             TEXT  Optional JSON object (omit for default      │
+│                                  placeholder).                               │
+│    --json          -j                                                        │
+│    --help                        Show this message and exit.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-automation/delete
+Usage: pipefy ai-automation delete [OPTIONS] AUTOMATION_ID
+
+ Delete an AI automation (``delete_ai_automation`` / ``delete_automation``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    automation_id      TEXT  Automation rule id. [required]                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-automation/get
+Usage: pipefy ai-automation get [OPTIONS] AUTOMATION_ID
+
+ Load one automation row (``get_ai_automation`` / ``get_automation``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    automation_id      TEXT  Automation rule id. [required]                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-automation/list
+Usage: pipefy ai-automation list [OPTIONS]
+
+ List AI automations for a pipe (``get_ai_automations`` / filtered
+ ``get_automations``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                        TEXT  Pipe id. [required]                   │
+│    --organization,--org          TEXT  Optional organization id.             │
+│    --json                -j                                                  │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-automation/update
+Usage: pipefy ai-automation update [OPTIONS] AUTOMATION_ID
+
+ Update an AI automation (``update_ai_automation``).
+
+ ``--prompt`` and ``--field-ids`` are optional: when omitted the CLI reads the
+ current values from the existing automation and re-uses them for the
+ ``validate_ai_automation_prompt`` pre-flight. Only fields you pass explicitly
+ are sent in the patch.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    automation_id      TEXT  Automation rule id. [required]                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                                   TEXT  Pipe id for                │
+│                                                   validate-prompt            │
+│                                                   pre-flight.                │
+│                                                   [required]                 │
+│    --prompt                                 TEXT  New prompt; omit to keep   │
+│                                                   the current value (re-used │
+│                                                   in pre-flight).            │
+│    --field-ids                              TEXT  JSON array of output field │
+│                                                   ids; omit to keep the      │
+│                                                   current values (re-used in │
+│                                                   pre-flight).               │
+│    --name          -n                       TEXT                             │
+│    --patch-active      --no-patch-active          Toggle the enabled flag;   │
+│                                                   omit both flags to leave   │
+│                                                   unchanged.                 │
+│    --skills-ids                             TEXT                             │
+│    --event-params                           TEXT                             │
+│    --condition                              TEXT                             │
+│    --json          -j                                                        │
+│    --help                                         Show this message and      │
+│                                                   exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP ai-automation/validate-prompt
+Usage: pipefy ai-automation validate-prompt [OPTIONS]
+
+ Pre-flight prompt validation (``validate_ai_automation_prompt``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe               TEXT  Pipe id. [required]                            │
+│ *  --prompt             TEXT  Prompt with %{internal_id} tokens. [required]  │
+│ *  --field-ids          TEXT  JSON array of output field internal ids.       │
+│                               [required]                                     │
+│    --event-id           TEXT  Optional trigger id to validate against the    │
+│                               pipe catalog.                                  │
+│    --json       -j                                                           │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP attachment
+Usage: pipefy attachment [OPTIONS] COMMAND [ARGS]...
+
+ Attachment uploads (presigned URL + field update).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ upload   Upload a local file to a card or table record attachment field.     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP attachment/upload
+Usage: pipefy attachment upload [OPTIONS]
+
+ Upload a local file to a card or table record attachment field.
+
+ Uses the same SDK flow as MCP ``upload_attachment_to_card`` /
+ ``upload_attachment_to_table_record``: presigned URL, S3 PUT, then field
+ update.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --file                -f      FILE  Local file path to upload. [required] │
+│    --card                        TEXT  Target card id (mutually exclusive    │
+│                                        with --record).                       │
+│    --record                      TEXT  Target table record id (mutually      │
+│                                        exclusive with --card).               │
+│ *  --organization,--org          TEXT  Organization id (required for         │
+│                                        presigned URL).                       │
+│                                        [required]                            │
+│ *  --field                       TEXT  Attachment field slug on the card or  │
+│                                        table record.                         │
+│                                        [required]                            │
+│    --content-type                TEXT  Optional MIME type (defaults from     │
+│                                        file name).                           │
+│    --json                -j            Print machine-readable JSON to        │
+│                                        stdout.                               │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP audit
+Usage: pipefy audit [OPTIONS] COMMAND [ARGS]...
+
+ Pipe audit log exports.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ export   Queue a pipe audit log export (``export_pipe_audit_logs``).         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP audit/export
+Usage: pipefy audit export [OPTIONS]
+
+ Queue a pipe audit log export (``export_pipe_audit_logs``).
+
+ The GraphQL API returns only ``success``; Pipefy delivers the export outside
+ this mutation (no CSV stream in the SDK response).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe            TEXT  Pipe UUID for the audit export. [required]        │
+│    --search          TEXT  Optional search term filter passed to the API.    │
+│    --output  -o      PATH  Write JSON response to this path instead of       │
+│                            stdout.                                           │
+│    --json    -j            When using stdout, print JSON instead of Rich     │
+│                            (file output is always JSON).                     │
+│    --help                  Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation
+Usage: pipefy automation [OPTIONS] COMMAND [ARGS]...
+
+ Traditional automations and related exports.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list        List automation rules (``get_automations``).                     │
+│ get         Load one automation (``get_automation``).                        │
+│ create      Create an automation rule (``create_automation``).               │
+│ update      Update an automation (``update_automation``).                    │
+│ delete      Delete an automation rule (``delete_automation``).               │
+│ simulate    Dry-run an automation against a card (``simulate_automation``).  │
+│ logs        List automation execution logs (``get_automation_logs`` or       │
+│             ``get_automation_logs_by_repo``).                                │
+│ usage       Automation usage for an org in a date range                      │
+│             (``get_automations_usage``).                                     │
+│ send-task   Send-a-task automation helper.                                   │
+│ export      Automation jobs export (async).                                  │
+│ events      Automation trigger catalog.                                      │
+│ actions     Automation action catalog.                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/actions
+Usage: pipefy automation actions [OPTIONS] COMMAND [ARGS]...
+
+ Automation action catalog.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list   List action types for a pipe (``get_automation_actions``).            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/actions/list
+Usage: pipefy automation actions list [OPTIONS]
+
+ List action types for a pipe (``get_automation_actions``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe          TEXT  Pipe id. [required]                                 │
+│    --json  -j            Print machine-readable JSON to stdout.              │
+│    --help                Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/create
+Usage: pipefy automation create [OPTIONS]
+
+ Create an automation rule (``create_automation``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                                      TEXT  Source pipe id (trigger │
+│                                                      context).               │
+│                                                      [required]              │
+│ *  --name                   -n                 TEXT  Rule name. [required]   │
+│ *  --event-id,--trigger-id                     TEXT  Trigger event id from   │
+│                                                      ``automation events     │
+│                                                      list``                  │
+│                                                      (``--trigger-id``       │
+│                                                      retained as alias).     │
+│                                                      [required]              │
+│ *  --action-id                                 TEXT  Action id from          │
+│                                                      ``automation actions    │
+│                                                      list``.                 │
+│                                                      [required]              │
+│    --active                     --no-active          Create enabled or       │
+│                                                      disabled.               │
+│                                                      [default: active]       │
+│    --action-repo                               TEXT  Destination pipe id for │
+│                                                      cross-pipe actions      │
+│                                                      (defaults to --pipe).   │
+│    --extra                                     TEXT  Optional JSON object:   │
+│                                                      extra                   │
+│                                                      CreateAutomationInput   │
+│                                                      fields (camelCase).     │
+│    --json                   -j                       Print machine-readable  │
+│                                                      JSON to stdout.         │
+│    --help                                            Show this message and   │
+│                                                      exit.                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/delete
+Usage: pipefy automation delete [OPTIONS] AUTOMATION_ID
+
+ Delete an automation rule (``delete_automation``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    automation_id      TEXT  Automation rule id. [required]                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/events
+Usage: pipefy automation events [OPTIONS] COMMAND [ARGS]...
+
+ Automation trigger catalog.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list   List trigger events (``get_automation_events``).                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/events/list
+Usage: pipefy automation events list [OPTIONS]
+
+ List trigger events (``get_automation_events``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe          TEXT  Pipe id (context for catalog). [required]           │
+│    --json  -j            Print machine-readable JSON to stdout.              │
+│    --help                Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/export
+Usage: pipefy automation export [OPTIONS] COMMAND [ARGS]...
+
+ Automation jobs export (async).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ jobs     Start automation jobs export (``export_automation_jobs``).          │
+│ status   Poll export status / signed URL (``get_automation_jobs_export``).   │
+│ csv      Download finished export as CSV text                                │
+│          (``get_automation_jobs_export_csv``).                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/export/csv
+Usage: pipefy automation export csv [OPTIONS] EXPORT_ID
+
+ Download finished export as CSV text (``get_automation_jobs_export_csv``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    export_id      TEXT  Finished export id. [required]                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/export/jobs
+Usage: pipefy automation export jobs [OPTIONS]
+
+ Start automation jobs export (``export_automation_jobs``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org          TEXT  Organization id. [required]           │
+│ *  --period                      TEXT  Period filter: current_month,         │
+│                                        last_month, or last_3_months.         │
+│                                        [required]                            │
+│    --json                -j            Print machine-readable JSON to        │
+│                                        stdout.                               │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/export/status
+Usage: pipefy automation export status [OPTIONS] EXPORT_ID
+
+ Poll export status / signed URL (``get_automation_jobs_export``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    export_id      TEXT  Export id from ``export jobs``. [required]         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/get
+Usage: pipefy automation get [OPTIONS] AUTOMATION_ID
+
+ Load one automation (``get_automation``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    automation_id      TEXT  Automation rule id. [required]                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/list
+Usage: pipefy automation list [OPTIONS]
+
+ List automation rules (``get_automations``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --organization,--org          TEXT  Optional organization id filter.         │
+│ --pipe                        TEXT  Optional pipe id filter.                 │
+│ --json                -j            Print machine-readable JSON to stdout.   │
+│ --help                              Show this message and exit.              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/logs
+Usage: pipefy automation logs [OPTIONS]
+
+ List automation execution logs (``get_automation_logs`` or
+ ``get_automation_logs_by_repo``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --automation          TEXT     Automation id (use this or --repo, not both). │
+│ --repo                TEXT     Pipe id: list logs for all automations in the │
+│                                repo (``get_automation_logs_by_repo``).       │
+│ --first               INTEGER  Page size. [default: 30]                      │
+│ --after               TEXT     Pagination cursor.                            │
+│ --status              TEXT     Log status filter.                            │
+│ --search              TEXT     Free-text search.                             │
+│ --json        -j               Print machine-readable JSON to stdout.        │
+│ --help                         Show this message and exit.                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/send-task
+Usage: pipefy automation send-task [OPTIONS] COMMAND [ARGS]...
+
+ Send-a-task automation helper.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create   Create a send-a-task automation (``create_send_task_automation``).  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/send-task/create
+Usage: pipefy automation send-task create [OPTIONS]
+
+ Create a send-a-task automation (``create_send_task_automation``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                             TEXT  Pipe id. [required]              │
+│ *  --name          -n                 TEXT  Rule name. [required]            │
+│ *  --event-id                         TEXT  Trigger event id. [required]     │
+│ *  --task-title                       TEXT  Task title. [required]           │
+│ *  --recipients                       TEXT  Recipient emails                 │
+│                                             (comma-separated).               │
+│                                             [required]                       │
+│    --active            --no-active          Create enabled or disabled.      │
+│                                             [default: active]                │
+│    --event-params                     TEXT  Optional JSON object.            │
+│    --condition                        TEXT  Optional JSON object.            │
+│    --json          -j                       Print machine-readable JSON to   │
+│                                             stdout.                          │
+│    --help                                   Show this message and exit.      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/simulate
+Usage: pipefy automation simulate [OPTIONS]
+
+ Dry-run an automation against a card (``simulate_automation``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                   TEXT  Pipe id (event/action repo defaults).      │
+│                                   [required]                                 │
+│ *  --action-id              TEXT  Simulation action id (e.g.                 │
+│                                   generate_with_ai).                         │
+│                                   [required]                                 │
+│ *  --sample-card            TEXT  Card id for the dry-run. [required]        │
+│    --event-id               TEXT  Optional trigger event id.                 │
+│    --event-params           TEXT  Optional JSON object.                      │
+│    --action-params          TEXT  Optional JSON object.                      │
+│    --condition              TEXT  Optional JSON object.                      │
+│    --name                   TEXT  Optional simulation name.                  │
+│    --extra                  TEXT  Optional JSON object merged into           │
+│                                   simulation input.                          │
+│    --json           -j            Print machine-readable JSON to stdout.     │
+│    --help                         Show this message and exit.                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/update
+Usage: pipefy automation update [OPTIONS] AUTOMATION_ID
+
+ Update an automation (``update_automation``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    automation_id      TEXT  Automation rule id. [required]                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --extra          TEXT  JSON object: fields to patch                       │
+│                           (UpdateAutomationInput, camelCase).                │
+│                           [required]                                         │
+│    --json   -j            Print machine-readable JSON to stdout.             │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/usage
+Usage: pipefy automation usage [OPTIONS]
+
+ Automation usage for an org in a date range (``get_automations_usage``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org          TEXT  Organization UUID or numeric id       │
+│                                        (resolved like MCP).                  │
+│                                        [required]                            │
+│ *  --from                        TEXT  Range start (ISO8601), maps to        │
+│                                        filter_date.from.                     │
+│                                        [required]                            │
+│ *  --to                          TEXT  Range end (ISO8601), maps to          │
+│                                        filter_date.to.                       │
+│                                        [required]                            │
+│    --filters                     TEXT  Optional JSON object (FilterParams).  │
+│    --search                      TEXT  Optional free-text search.            │
+│    --sort                        TEXT  Optional JSON object (SortCriteria).  │
+│    --json                -j            Print machine-readable JSON to        │
+│                                        stdout.                               │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card
+Usage: pipefy card [OPTIONS] COMMAND [ARGS]...
+
+ Card operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get       Fetch a card by id.                                                │
+│ list      List cards in a pipe (get_cards): browse, filter, and paginate.    │
+│ find      Find cards in a pipe where a custom field equals a value.          │
+│ create    Create a card in a pipe (start-form fields via --fields JSON when  │
+│           required).                                                         │
+│ update    Update a card (title, assignees, labels, due date, and/or field    │
+│           updates).                                                          │
+│ delete    Delete a card permanently.                                         │
+│ move      Move a card to another phase.                                      │
+│ comment   Card comments.                                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/comment
+Usage: pipefy card comment [OPTIONS] COMMAND [ARGS]...
+
+ Card comments.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ add      Add a text comment to a card.                                       │
+│ update   Update an existing comment by id.                                   │
+│ delete   Delete a comment by id.                                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/comment/add
+Usage: pipefy card comment add [OPTIONS] CARD_ID TEXT
+
+ Add a text comment to a card.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    card_id      TEXT  Card id. [required]                                  │
+│ *    text         TEXT  Comment body (1-1000 characters). [required]         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/comment/delete
+Usage: pipefy card comment delete [OPTIONS] COMMENT_ID
+
+ Delete a comment by id.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    comment_id      TEXT  Comment id. [required]                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt.                                  │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/comment/update
+Usage: pipefy card comment update [OPTIONS] COMMENT_ID TEXT
+
+ Update an existing comment by id.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    comment_id      TEXT  Comment id. [required]                            │
+│ *    text            TEXT  New comment text. [required]                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/create
+Usage: pipefy card create [OPTIONS] PIPE_ID
+
+ Create a card in a pipe (start-form fields via --fields JSON when required).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    pipe_id      TEXT  Pipe id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --title   -t      TEXT  Optional title (applied via update after create).    │
+│ --fields          TEXT  JSON object or array: start-form field values for    │
+│                         createCard.                                          │
+│ --json    -j            Print machine-readable JSON to stdout.               │
+│ --help                  Show this message and exit.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/delete
+Usage: pipefy card delete [OPTIONS] CARD_ID
+
+ Delete a card permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    card_id      TEXT  Card id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt.                                  │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/find
+Usage: pipefy card find [OPTIONS]
+
+ Find cards in a pipe where a custom field equals a value.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                    TEXT     Pipe id to search in. [required]       │
+│ *  --field                   TEXT     Field id (slug) from start form or     │
+│                                       phase fields.                          │
+│                                       [required]                             │
+│ *  --value                   TEXT     Value to match for that field.         │
+│                                       [required]                             │
+│    --include-fields                   Include each card's custom fields.     │
+│    --first                   INTEGER  Max cards per page.                    │
+│    --after                   TEXT     Pagination cursor                      │
+│                                       (pageInfo.endCursor).                  │
+│    --json            -j               Print machine-readable JSON to stdout. │
+│    --help                             Show this message and exit.            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/get
+Usage: pipefy card get [OPTIONS] CARD_ID
+
+ Fetch a card by id.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    card_id      TEXT  Card id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json            -j        Print machine-readable JSON to stdout.           │
+│ --include-fields            Include custom field name/value pairs on the     │
+│                             card.                                            │
+│ --help                      Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/list
+Usage: pipefy card list [OPTIONS]
+
+ List cards in a pipe (get_cards): browse, filter, and paginate.
+
+ Use ``card find`` when matching a single custom field value (find_cards).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                    TEXT     Pipe id whose cards to load.           │
+│                                       [required]                             │
+│    --title           -t      TEXT     Filter by title substring (merged into │
+│                                       search; same shortcut as MCP           │
+│                                       get_cards).                            │
+│    --search                  TEXT     Optional JSON object: CardSearch keys  │
+│                                       (title, assignee_ids, label_ids,       │
+│                                       ignore_ids, include_done,              │
+│                                       inbox_emails_read). Unknown keys are   │
+│                                       ignored.                               │
+│    --include-fields                   Include each card's custom fields      │
+│                                       (name, value).                         │
+│    --first                   INTEGER  Max cards per page (1-500).            │
+│    --after                   TEXT     Pagination cursor (pageInfo.endCursor  │
+│                                       from a previous page).                 │
+│    --json            -j               Print machine-readable JSON to stdout. │
+│    --help                             Show this message and exit.            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/move
+Usage: pipefy card move [OPTIONS] CARD_ID
+
+ Move a card to another phase.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    card_id      TEXT  Card id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --phase          TEXT  Destination phase id. [required]                   │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/update
+Usage: pipefy card update [OPTIONS] CARD_ID
+
+ Update a card (title, assignees, labels, due date, and/or field updates).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    card_id      TEXT  Card id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --title          -t      TEXT                                                │
+│ --due-date               TEXT                                                │
+│ --assignee-ids           TEXT  Comma-separated assignee user ids.            │
+│ --label-ids              TEXT  Comma-separated label ids.                    │
+│ --field-updates          TEXT  JSON array of field update objects for        │
+│                                updateFieldsValues. Each object: {"field_id"  │
+│                                (or "fieldId"): "<slug>", "value": <v>}.      │
+│ --json           -j                                                          │
+│ --help                         Show this message and exit.                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP email
+Usage: pipefy email [OPTIONS] COMMAND [ARGS]...
+
+ Inbox emails and email templates.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ inbox      Card inbox (sent/received).                                       │
+│ template   Email templates bound to a pipe or table (repo).                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP email/inbox
+Usage: pipefy email inbox [OPTIONS] COMMAND [ARGS]...
+
+ Card inbox (sent/received).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list   List inbox emails for a card (``get_card_inbox_emails``).             │
+│ send   Send an inbox email from a card (``send_inbox_email``).               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP email/inbox/list
+Usage: pipefy email inbox list [OPTIONS]
+
+ List inbox emails for a card (``get_card_inbox_emails``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --card          TEXT  Card id with inbox enabled. [required]              │
+│    --type          TEXT  Optional filter: sent or received.                  │
+│    --json  -j            Print machine-readable JSON to stdout.              │
+│    --help                Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP email/inbox/send
+Usage: pipefy email inbox send [OPTIONS]
+
+ Send an inbox email from a card (``send_inbox_email``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --card                TEXT  Card id. [required]                           │
+│ *  --to                  TEXT  Recipient emails (comma-separated).           │
+│                                [required]                                    │
+│ *  --subject     -s      TEXT  Email subject. [required]                     │
+│ *  --body        -b      TEXT  Plain-text body. [required]                   │
+│ *  --from-email          TEXT  Sender email address (required by API).       │
+│                                [required]                                    │
+│    --extra               TEXT  Optional JSON object: extra                   │
+│                                CreateAndSendInboxEmailInput fields.          │
+│    --json        -j            Print machine-readable JSON to stdout.        │
+│    --help                      Show this message and exit.                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP email/template
+Usage: pipefy email template [OPTIONS] COMMAND [ARGS]...
+
+ Email templates bound to a pipe or table (repo).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list   List email templates for a repo (``get_email_templates``).            │
+│ send   Send using an email template (``send_email_with_template``).          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP email/template/list
+Usage: pipefy email template list [OPTIONS]
+
+ List email templates for a repo (``get_email_templates``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --repo           TEXT     Pipe or table id whose templates to list.       │
+│                              [required]                                      │
+│    --name           TEXT     Optional substring filter on template name.     │
+│    --first          INTEGER  Max templates to return. [default: 50]          │
+│    --json   -j               Print machine-readable JSON to stdout.          │
+│    --help                    Show this message and exit.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP email/template/send
+Usage: pipefy email template send [OPTIONS]
+
+ Send using an email template (``send_email_with_template``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --card                TEXT  Card id (inbox sender context). [required]    │
+│ *  --template            TEXT  Email template id. [required]                 │
+│    --to                  TEXT  Optional comma-separated override recipients. │
+│    --from-email          TEXT  Optional sender override.                     │
+│    --extra               TEXT  Optional JSON object: extra send fields (cc,  │
+│                                bcc, repoId, etc.).                           │
+│    --json        -j            Print machine-readable JSON to stdout.        │
+│    --help                      Show this message and exit.                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP export
+Usage: pipefy export [OPTIONS] COMMAND [ARGS]...
+
+ Bulk exports (automation jobs).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ automation-jobs       Queue automation jobs export                           │
+│                       (``export_automation_jobs``).                          │
+│ automation-jobs-csv   Download finished export as CSV text                   │
+│                       (``get_automation_jobs_export_csv``).                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP export/automation-jobs
+Usage: pipefy export automation-jobs [OPTIONS]
+
+ Queue automation jobs export (``export_automation_jobs``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org          TEXT  Organization id. [required]           │
+│ *  --period                      TEXT  current_month | last_month |          │
+│                                        last_3_months                         │
+│                                        [required]                            │
+│    --json                -j            Print machine-readable JSON to        │
+│                                        stdout.                               │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP export/automation-jobs-csv
+Usage: pipefy export automation-jobs-csv [OPTIONS] EXPORT_ID
+
+ Download finished export as CSV text (``get_automation_jobs_export_csv``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    export_id      TEXT  Export id after status is finished. [required]     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print JSON envelope with CSV text; default is Rich table   │
+│                   output.                                                    │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field
+Usage: pipefy field [OPTIONS] COMMAND [ARGS]...
+
+ Phase field operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list     List fields on a phase (``get_phase_fields``).                      │
+│ create   Create a field on a phase.                                          │
+│ update   Update a phase field (pass attributes via ``--extra`` JSON).        │
+│ delete   Delete a phase field permanently.                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field-condition
+Usage: pipefy field-condition [OPTIONS] COMMAND [ARGS]...
+
+ Field conditions (dynamic form rules on phases).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list     List field conditions on a phase (``get_field_conditions``).        │
+│ get      Load one field condition by id (``get_field_condition``).           │
+│ create   Create a field condition (``create_field_condition``).              │
+│ update   Update a field condition (``update_field_condition``).              │
+│ delete   Delete a field condition permanently (``delete_field_condition``).  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field-condition/create
+Usage: pipefy field-condition create [OPTIONS]
+
+ Create a field condition (``create_field_condition``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --phase              TEXT  Phase id. [required]                           │
+│ *  --name       -n      TEXT  Rule name (required by API). [required]        │
+│ *  --condition          TEXT  JSON object: ConditionInput. Example:          │
+│                               '{"expressions":[{"structure_id":0,"field_add… │
+│                               structure_id / expressions_structure entries   │
+│                               are coerced to int by the SDK.                 │
+│                               [required]                                     │
+│ *  --actions            TEXT  JSON array: action objects. Each item needs    │
+│                               phaseFieldId (use the field's internal_id from │
+│                               get_phase_fields) + actionId (hide|show).      │
+│                               Example:                                       │
+│                               '[{"phaseFieldId":"<internal_id>","actionId":… │
+│                               [required]                                     │
+│    --extra              TEXT  Optional JSON object merged into create input  │
+│                               (camelCase keys).                              │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field-condition/delete
+Usage: pipefy field-condition delete [OPTIONS] CONDITION_ID
+
+ Delete a field condition permanently (``delete_field_condition``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    condition_id      TEXT  Field condition id. [required]                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field-condition/get
+Usage: pipefy field-condition get [OPTIONS] CONDITION_ID
+
+ Load one field condition by id (``get_field_condition``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    condition_id      TEXT  Field condition id. [required]                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field-condition/list
+Usage: pipefy field-condition list [OPTIONS]
+
+ List field conditions on a phase (``get_field_conditions``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --phase          TEXT  Phase id that owns the conditions. [required]      │
+│    --json   -j            Print machine-readable JSON to stdout.             │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field-condition/update
+Usage: pipefy field-condition update [OPTIONS] CONDITION_ID
+
+ Update a field condition (``update_field_condition``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    condition_id      TEXT  Field condition id. [required]                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --extra          TEXT  JSON object: fields to patch (camelCase keys for   │
+│                           UpdateFieldConditionInput).                        │
+│                           [required]                                         │
+│    --json   -j            Print machine-readable JSON to stdout.             │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field/create
+Usage: pipefy field create [OPTIONS]
+
+ Create a field on a phase.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --phase          TEXT  Phase id. [required]                               │
+│ *  --label  -l      TEXT  Field label in the UI. [required]                  │
+│ *  --type   -t      TEXT  Pipefy field type (e.g. short_text, number).       │
+│                           [required]                                         │
+│    --extra          TEXT  JSON object of extra CreatePhaseFieldInput fields. │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field/delete
+Usage: pipefy field delete [OPTIONS] FIELD_ID
+
+ Delete a phase field permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    field_id      TEXT  Phase field id. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --pipe-uuid          TEXT  Optional pipe UUID (passed through to the API     │
+│                            when required).                                   │
+│ --yes        -y            Skip confirmation prompt.                         │
+│ --json       -j                                                              │
+│ --help                     Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field/list
+Usage: pipefy field list [OPTIONS]
+
+ List fields on a phase (``get_phase_fields``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --phase                  TEXT  Phase id. [required]                       │
+│    --required-only                Return only required fields.               │
+│    --json           -j                                                       │
+│    --help                         Show this message and exit.                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP field/update
+Usage: pipefy field update [OPTIONS] FIELD_ID
+
+ Update a phase field (pass attributes via ``--extra`` JSON).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    field_id      TEXT  Phase field id. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --extra          TEXT  JSON object of UpdatePhaseFieldInput fields           │
+│                        (snake_case / API keys).                              │
+│ --json   -j                                                                  │
+│ --help                 Show this message and exit.                           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP graphql
+Usage: pipefy graphql [OPTIONS] COMMAND [ARGS]...
+
+ Execute arbitrary GraphQL (mutations require --yes). See
+ docs/cli/self-healing.md.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ exec   Execute GraphQL via the SDK (``execute_graphql``).                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP graphql/exec
+Usage: pipefy graphql exec [OPTIONS]
+
+ Execute GraphQL via the SDK (``execute_graphql``).
+
+ Pass variables as JSON with ``--vars '{"key":"value"}'`` (not
+ ``--variables``).
+ Mutations are rejected unless ``--yes`` is set (exit code 2). Pair with
+ ``pipefy introspect`` to discover operation shapes (see
+ docs/cli/self-healing.md).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --query  -q      TEXT  GraphQL document string (query or mutation).       │
+│                           [required]                                         │
+│    --vars           TEXT  Variables JSON object (default "{}" ).             │
+│    --yes                  Acknowledge and run mutations (required when the   │
+│                           document includes mutation).                       │
+│    --json   -j            Emit JSON to stdout (default is Rich for objects). │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP introspect
+Usage: pipefy introspect [OPTIONS] COMMAND [ARGS]...
+
+ Discover GraphQL types and operations (JSON default).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ type       Introspect a schema type (``introspect_type``).                   │
+│ query      Introspect a root query field (``introspect_query``).             │
+│ mutation   Introspect a root mutation field (``introspect_mutation``).       │
+│ schema     Schema-wide search.                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP introspect/mutation
+Usage: pipefy introspect mutation [OPTIONS] NAME
+
+ Introspect a root mutation field (``introspect_mutation``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    name      TEXT  Root mutation field name. [required]                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --max-depth        INTEGER  Nested type resolution depth. [default: 1]       │
+│ --rich                      Pretty-print with Rich instead of JSON.          │
+│ --help                      Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP introspect/query
+Usage: pipefy introspect query [OPTIONS] NAME
+
+ Introspect a root query field (``introspect_query``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    name      TEXT  Root query field name. [required]                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --max-depth        INTEGER  Nested type resolution depth. [default: 1]       │
+│ --rich                      Pretty-print with Rich instead of JSON.          │
+│ --help                      Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP introspect/schema
+Usage: pipefy introspect schema [OPTIONS] COMMAND [ARGS]...
+
+ Schema-wide search.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ search   Search schema types (``search_schema``).                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP introspect/schema/search
+Usage: pipefy introspect schema search [OPTIONS] KEYWORD
+
+ Search schema types (``search_schema``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    keyword      TEXT  Case-insensitive substring. [required]               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --kind        TEXT  Optional GraphQL type kind (OBJECT, INPUT_OBJECT, ENUM,  │
+│                     ...).                                                    │
+│ --rich              Pretty-print with Rich instead of JSON.                  │
+│ --help              Show this message and exit.                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP introspect/type
+Usage: pipefy introspect type [OPTIONS] NAME
+
+ Introspect a schema type (``introspect_type``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    name      TEXT  GraphQL type name (e.g. Card). [required]               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --max-depth        INTEGER  Nested type resolution depth. [default: 1]       │
+│ --rich                      Pretty-print with Rich instead of JSON.          │
+│ --help                      Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP label
+Usage: pipefy label [OPTIONS] COMMAND [ARGS]...
+
+ Pipe label operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list     List labels on a pipe (from ``get_pipe``); JSON shape matches MCP   │
+│          ``get_labels``.                                                     │
+│ create   Create a label on a pipe.                                           │
+│ update   Update a label (name and color are both required by Pipefy).        │
+│ delete   Delete a label permanently.                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP label/create
+Usage: pipefy label create [OPTIONS]
+
+ Create a label on a pipe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe           TEXT  Pipe id. [required]                                │
+│ *  --name   -n      TEXT  Label name. [required]                             │
+│ *  --color  -c      TEXT  Label color (per Pipefy API). [required]           │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP label/delete
+Usage: pipefy label delete [OPTIONS] LABEL_ID
+
+ Delete a label permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    label_id      TEXT  Label id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt.                                  │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP label/list
+Usage: pipefy label list [OPTIONS]
+
+ List labels on a pipe (from ``get_pipe``); JSON shape matches MCP
+ ``get_labels``.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe          TEXT  Pipe id. [required]                                 │
+│    --json  -j                                                                │
+│    --help                Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP label/update
+Usage: pipefy label update [OPTIONS] LABEL_ID
+
+ Update a label (name and color are both required by Pipefy).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    label_id      TEXT  Label id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --name   -n      TEXT  New label name (required by API). [required]       │
+│ *  --color  -c      TEXT  New label color (required by API). [required]      │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP member
+Usage: pipefy member [OPTIONS] COMMAND [ARGS]...
+
+ Pipe member operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list       List members of a pipe.                                           │
+│ invite     Invite users to a pipe.                                           │
+│ remove     Remove users from a pipe (same service-account guard as MCP when  │
+│            env is set).                                                      │
+│ set-role   Set a member's role on a pipe.                                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP member/invite
+Usage: pipefy member invite [OPTIONS]
+
+ Invite users to a pipe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe             TEXT  Pipe id. [required]                              │
+│ *  --members          TEXT  JSON array:                                      │
+│                             [{"email":"a@b.com","role_name":"admin"}, ...].  │
+│                             [required]                                       │
+│    --json     -j                                                             │
+│    --help                   Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP member/list
+Usage: pipefy member list [OPTIONS]
+
+ List members of a pipe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe          TEXT  Pipe id. [required]                                 │
+│    --json  -j                                                                │
+│    --help                Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP member/remove
+Usage: pipefy member remove [OPTIONS]
+
+ Remove users from a pipe (same service-account guard as MCP when env is set).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe              TEXT  Pipe id. [required]                             │
+│ *  --user-ids          TEXT  Comma-separated Pipefy user ids or UUIDs to     │
+│                              remove from the pipe.                           │
+│                              [required]                                      │
+│    --yes       -y            Skip confirmation prompt.                       │
+│    --json      -j                                                            │
+│    --help                    Show this message and exit.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP member/set-role
+Usage: pipefy member set-role [OPTIONS]
+
+ Set a member's role on a pipe.
+
+ When ``PIPEFY_SERVICE_ACCOUNT_IDS`` includes ``--member``, the response gains
+ a ``warning`` field reminding callers to preserve write permissions on that
+ account (parity with the MCP ``set_role`` tool).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe            TEXT  Pipe id. [required]                               │
+│ *  --member          TEXT  Member user id. [required]                        │
+│ *  --role            TEXT  Role name (e.g. member, admin). [required]        │
+│    --json    -j                                                              │
+│    --help                  Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP org
+Usage: pipefy org [OPTIONS] COMMAND [ARGS]...
+
+ Organization operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get   Fetch organization details (``get_organization``).                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP org/get
+Usage: pipefy org get [OPTIONS] [ORGANIZATION_ID]
+
+ Fetch organization details (``get_organization``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│   organization_id      [ORGANIZATION_ID]  Numeric organization id. Omit when │
+│                                           PIPEFY_ORG_ID is set (see          │
+│                                           docs/setup.md).                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP phase
+Usage: pipefy phase [OPTIONS] COMMAND [ARGS]...
+
+ Pipe phase operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get      Load phase metadata and fields by id (via ``get_phase_fields``).    │
+│ create   Create a phase in a pipe.                                           │
+│ update   Update a phase (Pipefy ``UpdatePhaseInput``). Resolves current name │
+│          when omitted.                                                       │
+│ delete   Delete a phase permanently.                                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP phase/create
+Usage: pipefy phase create [OPTIONS]
+
+ Create a phase in a pipe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                 TEXT   Pipe id that will contain the phase.        │
+│                                  [required]                                  │
+│ *  --name         -n      TEXT   Phase display name. [required]              │
+│    --done                        Mark as a final/done phase.                 │
+│    --index                FLOAT  Optional position index within the pipe.    │
+│    --description  -d      TEXT                                               │
+│    --json         -j                                                         │
+│    --help                        Show this message and exit.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP phase/delete
+Usage: pipefy phase delete [OPTIONS] PHASE_ID
+
+ Delete a phase permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    phase_id      TEXT  Phase id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt.                                  │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP phase/get
+Usage: pipefy phase get [OPTIONS] PHASE_ID
+
+ Load phase metadata and fields by id (via ``get_phase_fields``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    phase_id      TEXT  Phase id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json           -j        Print machine-readable JSON to stdout.            │
+│ --required-only            Return only required fields (same query as MCP    │
+│                            get_phase_fields).                                │
+│ --help                     Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP phase/update
+Usage: pipefy phase update [OPTIONS] PHASE_ID
+
+ Update a phase (Pipefy ``UpdatePhaseInput``). Resolves current name when
+ omitted.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    phase_id      TEXT  Phase id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name               -n                         TEXT                         │
+│ --description        -d                         TEXT                         │
+│ --done                   --no-done                       Set or clear the    │
+│                                                          final-phase flag.   │
+│ --color                                         TEXT                         │
+│ --lateness-time                                 INTEGER                      │
+│ --can-receive-from…      --no-can-receive-f…                                 │
+│ --extra                                         TEXT     JSON object merged  │
+│                                                          into                │
+│                                                          UpdatePhaseInput    │
+│                                                          (snake_case keys).  │
+│ --json               -j                                                      │
+│ --help                                                   Show this message   │
+│                                                          and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP pipe
+Usage: pipefy pipe [OPTIONS] COMMAND [ARGS]...
+
+ Pipe operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get      Load a pipe by id (phases, labels, start form).                     │
+│ list     Search pipes across organizations (same as MCP ``search_pipes``).   │
+│ create   Create an empty pipe in an organization.                            │
+│ update   Update pipe settings (pass at least one attribute).                 │
+│ delete   Delete a pipe permanently.                                          │
+│ clone    Clone a pipe from a template pipe id.                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP pipe/clone
+Usage: pipefy pipe clone [OPTIONS] TEMPLATE_PIPE_ID
+
+ Clone a pipe from a template pipe id.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    template_pipe_id      TEXT  Source pipe id to use as template.          │
+│                                  [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --org           TEXT  Optional organization id for the cloned pipe.          │
+│ --json  -j                                                                   │
+│ --help                Show this message and exit.                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP pipe/create
+Usage: pipefy pipe create [OPTIONS] NAME
+
+ Create an empty pipe in an organization.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    name      TEXT  Display name for the new pipe. [required]               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org           TEXT  Organization id that will own the pipe. [required]  │
+│    --json  -j                                                                │
+│    --help                Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP pipe/delete
+Usage: pipefy pipe delete [OPTIONS] PIPE_ID
+
+ Delete a pipe permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    pipe_id      TEXT  Pipe id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt.                                  │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP pipe/get
+Usage: pipefy pipe get [OPTIONS] PIPE_ID
+
+ Load a pipe by id (phases, labels, start form).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    pipe_id      TEXT  Pipe id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP pipe/list
+Usage: pipefy pipe list [OPTIONS]
+
+ Search pipes across organizations (same as MCP ``search_pipes``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name         -n      TEXT                       Optional pipe name filter  │
+│                                                   (fuzzy match server-side). │
+│ --max-per-org          INTEGER RANGE [1<=x<=500]  Maximum pipes returned per │
+│                                                   organization (1-500).      │
+│                                                   [default: 500]             │
+│ --json         -j                                                            │
+│ --help                                            Show this message and      │
+│                                                   exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP pipe/update
+Usage: pipefy pipe update [OPTIONS] PIPE_ID
+
+ Update pipe settings (pass at least one attribute).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    pipe_id      TEXT  Pipe id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name                 TEXT                                                  │
+│ --icon                 TEXT                                                  │
+│ --color                TEXT                                                  │
+│ --preferences          TEXT  JSON object for pipe preferences                │
+│                              (UpdatePipeInput).                              │
+│ --json         -j                                                            │
+│ --help                       Show this message and exit.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP record
+Usage: pipefy record [OPTIONS] COMMAND [ARGS]...
+
+ Table record operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ find     Find records: field match (``find_records``) or list page           │
+│          (``get_table_records``).                                            │
+│ get      Load one table record by id.                                        │
+│ create   Create a table record.                                              │
+│ update   Update record core fields or one custom field.                      │
+│ delete   Delete a table record permanently.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP record/create
+Usage: pipefy record create [OPTIONS]
+
+ Create a table record.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --table           TEXT  Database table id. [required]                     │
+│    --fields          TEXT  JSON object or array of field values for the new  │
+│                            record.                                           │
+│    --title   -t      TEXT                                                    │
+│    --extra           TEXT  JSON object of extra CreateTableRecordInput keys. │
+│    --json    -j                                                              │
+│    --help                  Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP record/delete
+Usage: pipefy record delete [OPTIONS] RECORD_ID
+
+ Delete a table record permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    record_id      TEXT  Table record id. [required]                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt.                                  │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP record/find
+Usage: pipefy record find [OPTIONS]
+
+ Find records: field match (``find_records``) or list page
+ (``get_table_records``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --table           TEXT     Database table id. [required]                  │
+│    --filter          TEXT     JSON object: either                            │
+│                               {"field_id":"...","field_value":"..."} for     │
+│                               findRecords, or omit field_id/field_value to   │
+│                               page all records (get_table_records).          │
+│    --first           INTEGER  Page size (1-200 for listing; optional for     │
+│                               field search).                                 │
+│    --after           TEXT     Pagination cursor.                             │
+│    --json    -j                                                              │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP record/get
+Usage: pipefy record get [OPTIONS] RECORD_ID
+
+ Load one table record by id.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    record_id      TEXT  Table record id. [required]                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP record/update
+Usage: pipefy record update [OPTIONS] RECORD_ID
+
+ Update record core fields or one custom field.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    record_id      TEXT  Table record id. [required]                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --fields            TEXT  JSON object: title, due_date, status_id or         │
+│                           statusId (update_table_record).                    │
+│ --field-id          TEXT  When set with --value, calls                       │
+│                           set_table_record_field_value instead.              │
+│ --value             TEXT  JSON value for --field-id (string, number, array,  │
+│                           or object).                                        │
+│ --json      -j                                                               │
+│ --help                    Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation
+Usage: pipefy relation [OPTIONS] COMMAND [ARGS]...
+
+ Pipe and card relations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ pipe   Pipe-to-pipe relations.                                               │
+│ card   Card-to-card relations.                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/card
+Usage: pipefy relation card [OPTIONS] COMMAND [ARGS]...
+
+ Card-to-card relations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list     List parent and child relations for a card (raw                     │
+│          ``get_card_relations`` payload).                                    │
+│ create   Link two cards via an existing pipe relation.                       │
+│ delete   Remove a card relation (requires OAuth; internal API).              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/card/create
+Usage: pipefy relation card create [OPTIONS]
+
+ Link two cards via an existing pipe relation.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --parent          TEXT  Parent card id. [required]                        │
+│ *  --child           TEXT  Child card id. [required]                         │
+│ *  --source          TEXT  Pipe relation id from ``relation pipe list``.     │
+│                            [required]                                        │
+│    --extra           TEXT  JSON object merged into CreateCardRelationInput.  │
+│    --json    -j                                                              │
+│    --help                  Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/card/delete
+Usage: pipefy relation card delete [OPTIONS]
+
+ Remove a card relation (requires OAuth; internal API).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --child           TEXT  Child card id. [required]                         │
+│ *  --parent          TEXT  Parent card id. [required]                        │
+│ *  --source          TEXT  Pipe relation id. [required]                      │
+│    --yes     -y            Skip confirmation prompt.                         │
+│    --json    -j                                                              │
+│    --help                  Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/card/list
+Usage: pipefy relation card list [OPTIONS] CARD_ID
+
+ List parent and child relations for a card (raw ``get_card_relations``
+ payload).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    card_id      TEXT  Card id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/pipe
+Usage: pipefy relation pipe [OPTIONS] COMMAND [ARGS]...
+
+ Pipe-to-pipe relations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list     List pipe relations for a pipe.                                     │
+│ create   Create a pipe relation.                                             │
+│ update   Update a pipe relation.                                             │
+│ delete   Delete a pipe relation permanently.                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/pipe/create
+Usage: pipefy relation pipe create [OPTIONS]
+
+ Create a pipe relation.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --parent          TEXT  Parent pipe id. [required]                        │
+│ *  --child           TEXT  Child pipe id. [required]                         │
+│ *  --name    -n      TEXT  Relation name. [required]                         │
+│    --extra           TEXT  JSON object merged into CreatePipeRelationInput.  │
+│    --json    -j                                                              │
+│    --help                  Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/pipe/delete
+Usage: pipefy relation pipe delete [OPTIONS] RELATION_ID
+
+ Delete a pipe relation permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    relation_id      TEXT  Pipe relation id. [required]                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt.                                  │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/pipe/list
+Usage: pipefy relation pipe list [OPTIONS] PIPE_ID
+
+ List pipe relations for a pipe.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    pipe_id      TEXT  Pipe id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/pipe/update
+Usage: pipefy relation pipe update [OPTIONS] RELATION_ID
+
+ Update a pipe relation.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    relation_id      TEXT  Pipe relation id. [required]                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --name   -n      TEXT  New relation name. [required]                      │
+│    --extra          TEXT  JSON object merged into UpdatePipeRelationInput.   │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-org
+Usage: pipefy report-org [OPTIONS] COMMAND [ARGS]...
+
+ Organization reports.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list     List organization reports (``get_organization_reports``).           │
+│ get      Fetch one organization report (``get_organization_report``).        │
+│ create   Create an organization report (``create_organization_report``).     │
+│ update   Update an organization report (``update_organization_report``).     │
+│ delete   Delete an organization report (``delete_organization_report``).     │
+│ export   Export an organization report (``export_organization_report``).     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-org/create
+Usage: pipefy report-org create [OPTIONS]
+
+ Create an organization report (``create_organization_report``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org          TEXT  [required]                            │
+│ *  --name                -n      TEXT  [required]                            │
+│ *  --pipe-ids                    TEXT  JSON array of pipe id strings.        │
+│                                        [required]                            │
+│    --fields                      TEXT                                        │
+│    --filter                      TEXT                                        │
+│    --json                -j            Print machine-readable JSON to        │
+│                                        stdout.                               │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-org/delete
+Usage: pipefy report-org delete [OPTIONS] REPORT_ID
+
+ Delete an organization report (``delete_organization_report``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    report_id      TEXT  Organization report id. [required]                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y                                                                   │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-org/export
+Usage: pipefy report-org export [OPTIONS]
+
+ Export an organization report (``export_organization_report``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org              TEXT   [required]                       │
+│    --format                          TEXT   json: return export mutation     │
+│                                             payload; csv: poll and stream    │
+│                                             download.                        │
+│                                             [default: json]                  │
+│    --organization-report-id          TEXT   Optional report id to export.    │
+│    --pipe-ids                        TEXT   Optional JSON array of pipe ids. │
+│    --sort-by                         TEXT                                    │
+│    --filter                          TEXT                                    │
+│    --columns                         TEXT                                    │
+│    --poll-timeout                    FLOAT  Seconds to poll export status    │
+│                                             before failing (CSV only).       │
+│                                             [default: 90.0]                  │
+│    --json                    -j             Print machine-readable JSON to   │
+│                                             stdout.                          │
+│    --help                                   Show this message and exit.      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-org/get
+Usage: pipefy report-org get [OPTIONS] REPORT_ID
+
+ Fetch one organization report (``get_organization_report``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    report_id      TEXT  Organization report id. [required]                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-org/list
+Usage: pipefy report-org list [OPTIONS]
+
+ List organization reports (``get_organization_reports``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org          TEXT     [required]                         │
+│    --first                       INTEGER  Page size. [default: 30]           │
+│    --after                       TEXT     Pagination cursor.                 │
+│    --json                -j               Print machine-readable JSON to     │
+│                                           stdout.                            │
+│    --help                                 Show this message and exit.        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-org/update
+Usage: pipefy report-org update [OPTIONS] REPORT_ID
+
+ Update an organization report (``update_organization_report``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    report_id      TEXT  Organization report id. [required]                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name      -n      TEXT                                                     │
+│ --color             TEXT                                                     │
+│ --fields            TEXT                                                     │
+│ --filter            TEXT                                                     │
+│ --pipe-ids          TEXT  JSON array of pipe ids.                            │
+│ --json      -j            Print machine-readable JSON to stdout.             │
+│ --help                    Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-pipe
+Usage: pipefy report-pipe [OPTIONS] COMMAND [ARGS]...
+
+ Pipe reports.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list                List pipe reports (``get_pipe_reports``).                │
+│ get                 Fetch one pipe report (``get_pipe_report``).             │
+│ columns             List report column definitions                           │
+│                     (``get_pipe_report_columns``).                           │
+│ filterable-fields   List filterable fields for pipe reports                  │
+│                     (``get_pipe_report_filterable_fields``).                 │
+│ create              Create a pipe report (``create_pipe_report``).           │
+│ update              Update a pipe report (``update_pipe_report``).           │
+│ delete              Delete a pipe report (``delete_pipe_report``).           │
+│ export              Start a pipe report export (``export_pipe_report``); csv │
+│                     waits and streams the file.                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-pipe/columns
+Usage: pipefy report-pipe columns [OPTIONS]
+
+ List report column definitions (``get_pipe_report_columns``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe          TEXT  Pipe UUID. [required]                               │
+│    --json  -j            Print machine-readable JSON to stdout.              │
+│    --help                Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-pipe/create
+Usage: pipefy report-pipe create [OPTIONS]
+
+ Create a pipe report (``create_pipe_report``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe              TEXT  Pipe id. [required]                             │
+│ *  --name      -n      TEXT  [required]                                      │
+│    --fields            TEXT  Optional JSON array of column internal names.   │
+│    --filter            TEXT  Optional JSON filter object.                    │
+│    --formulas          TEXT  Optional JSON array of arrays.                  │
+│    --json      -j            Print machine-readable JSON to stdout.          │
+│    --help                    Show this message and exit.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-pipe/delete
+Usage: pipefy report-pipe delete [OPTIONS] REPORT_ID
+
+ Delete a pipe report (``delete_pipe_report``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    report_id      TEXT  Pipe report id. [required]                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y                                                                   │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-pipe/export
+Usage: pipefy report-pipe export [OPTIONS]
+
+ Start a pipe report export (``export_pipe_report``); csv waits and streams the
+ file.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe                  TEXT   Pipe id. [required]                        │
+│ *  --report-id             TEXT   Pipe report id. [required]                 │
+│    --format                TEXT   json: print mutation + poll metadata; csv: │
+│                                   wait for fileURL and stream bytes.         │
+│                                   [default: json]                            │
+│    --sort-by               TEXT   JSON ReportSortDirectionInput.             │
+│    --filter                TEXT                                              │
+│    --columns               TEXT   JSON array of column ids.                  │
+│    --poll-timeout          FLOAT  Seconds to poll export status before       │
+│                                   failing (CSV only).                        │
+│                                   [default: 90.0]                            │
+│    --json          -j             Print machine-readable JSON to stdout.     │
+│    --help                         Show this message and exit.                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-pipe/filterable-fields
+Usage: pipefy report-pipe filterable-fields [OPTIONS]
+
+ List filterable fields for pipe reports
+ (``get_pipe_report_filterable_fields``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe          TEXT  Pipe UUID. [required]                               │
+│    --json  -j            Print machine-readable JSON to stdout.              │
+│    --help                Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-pipe/get
+Usage: pipefy report-pipe get [OPTIONS]
+
+ Fetch one pipe report (``get_pipe_report``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe               TEXT  Pipe UUID. [required]                          │
+│ *  --report-id          TEXT  Pipe report id. [required]                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-pipe/list
+Usage: pipefy report-pipe list [OPTIONS]
+
+ List pipe reports (``get_pipe_reports``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe               TEXT     Pipe UUID. [required]                       │
+│    --first              INTEGER  Page size. [default: 30]                    │
+│    --after              TEXT     Pagination cursor.                          │
+│    --search             TEXT                                                 │
+│    --report-id          TEXT                                                 │
+│    --order              TEXT     JSON sort object.                           │
+│    --json       -j               Print machine-readable JSON to stdout.      │
+│    --help                        Show this message and exit.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP report-pipe/update
+Usage: pipefy report-pipe update [OPTIONS] REPORT_ID
+
+ Update a pipe report (``update_pipe_report``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    report_id      TEXT  Pipe report id. [required]                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name            -n      TEXT                                               │
+│ --color                   TEXT                                               │
+│ --fields                  TEXT                                               │
+│ --filter                  TEXT                                               │
+│ --formulas                TEXT                                               │
+│ --featured-field          TEXT                                               │
+│ --json            -j            Print machine-readable JSON to stdout.       │
+│ --help                          Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP skills
+Usage: pipefy skills [OPTIONS] COMMAND [ARGS]...
+
+ Browse bundled agent skill playbooks.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list   List all bundled skills with their one-line descriptions.             │
+│ show   Print the full content of a bundled skill to stdout.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP skills/list
+Usage: pipefy skills list [OPTIONS]
+
+ List all bundled skills with their one-line descriptions.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP skills/show
+Usage: pipefy skills show [OPTIONS] NAME
+
+ Print the full content of a bundled skill to stdout.
+
+ Args:     name: Skill name matching the 'name' frontmatter field, the filename
+ stem,         or the slug without the ``pipefy-`` prefix (e.g.
+ ``pipes-and-cards``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    name      TEXT  Skill name (e.g. pipefy-pipes-and-cards). [required]    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table
+Usage: pipefy table [OPTIONS] COMMAND [ARGS]...
+
+ Database table operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list     Search tables across organizations, or fetch specific tables by id. │
+│ get      Load one table by id.                                               │
+│ create   Create a database table.                                            │
+│ update   Update table attributes.                                            │
+│ delete   Delete a database table permanently.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/create
+Usage: pipefy table create [OPTIONS] NAME
+
+ Create a database table.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    name      TEXT  Table display name. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --org            TEXT  Organization id that will own the table.           │
+│                           [required]                                         │
+│    --extra          TEXT  JSON object of extra CreateTableInput fields.      │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/delete
+Usage: pipefy table delete [OPTIONS] TABLE_ID
+
+ Delete a database table permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    table_id      TEXT  Table id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt.                                  │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/get
+Usage: pipefy table get [OPTIONS] TABLE_ID
+
+ Load one table by id.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    table_id      TEXT  Table id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/list
+Usage: pipefy table list [OPTIONS]
+
+ Search tables across organizations, or fetch specific tables by id.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --ids            TEXT                       Comma-separated table ids; when  │
+│                                             set, loads those tables via      │
+│                                             get_tables.                      │
+│ --name   -n      TEXT                       Optional table name filter       │
+│                                             (ignored when --ids is set).     │
+│ --first          INTEGER RANGE [1<=x<=500]  Max tables per organization when │
+│                                             searching (1-500, default 100).  │
+│                                             [default: 100]                   │
+│ --json   -j                                                                  │
+│ --help                                      Show this message and exit.      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/update
+Usage: pipefy table update [OPTIONS] TABLE_ID
+
+ Update table attributes.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    table_id      TEXT  Table id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name                 TEXT                                                  │
+│ --description  -d      TEXT                                                  │
+│ --extra                TEXT  JSON object merged into UpdateTableInput.       │
+│ --json         -j                                                            │
+│ --help                       Show this message and exit.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP usage
+Usage: pipefy usage [OPTIONS] COMMAND [ARGS]...
+
+ AI and automation usage metrics.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ agents        AI agent usage for an org (``get_agents_usage``).              │
+│ automations   Automation usage for an org (``get_automations_usage``).       │
+│ credits       AI credit usage dashboard (``get_ai_credit_usage``).           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP usage/agents
+Usage: pipefy usage agents [OPTIONS]
+
+ AI agent usage for an org (``get_agents_usage``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org          TEXT  Organization UUID (or numeric id      │
+│                                        resolvable by SDK).                   │
+│                                        [required]                            │
+│ *  --from                        TEXT  ISO8601 start (filter_date.from).     │
+│                                        [required]                            │
+│ *  --to                          TEXT  ISO8601 end (filter_date.to).         │
+│                                        [required]                            │
+│    --filters                     TEXT  Optional JSON object (FilterParams    │
+│                                        shape).                               │
+│    --search                      TEXT  Optional free-text search.            │
+│    --sort                        TEXT  Optional JSON sort criteria object.   │
+│    --json                -j                                                  │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP usage/automations
+Usage: pipefy usage automations [OPTIONS]
+
+ Automation usage for an org (``get_automations_usage``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org          TEXT  [required]                            │
+│ *  --from                        TEXT  [required]                            │
+│ *  --to                          TEXT  [required]                            │
+│    --filters                     TEXT                                        │
+│    --search                      TEXT                                        │
+│    --sort                        TEXT                                        │
+│    --json                -j                                                  │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP usage/credits
+Usage: pipefy usage credits [OPTIONS]
+
+ AI credit usage dashboard (``get_ai_credit_usage``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org          TEXT  [required]                            │
+│    --period                      TEXT  current_month | last_month |          │
+│                                        last_3_months                         │
+│                                        [default: current_month]              │
+│    --json                -j                                                  │
+│    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP webhook
+Usage: pipefy webhook [OPTIONS] COMMAND [ARGS]...
+
+ Pipe webhook operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list     List webhooks on a pipe.                                            │
+│ create   Create a webhook.                                                   │
+│ update   Update a webhook (pass at least one attribute).                     │
+│ delete   Delete a webhook permanently.                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP webhook/create
+Usage: pipefy webhook create [OPTIONS]
+
+ Create a webhook.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe             TEXT  Pipe id. [required]                              │
+│ *  --url              TEXT  HTTPS callback URL. [required]                   │
+│ *  --actions          TEXT  JSON array of event action strings, e.g.         │
+│                             '["card.create","card.move"]'.                   │
+│                             [required]                                       │
+│    --extra            TEXT  JSON object of extra CreateWebhookInput fields.  │
+│    --json     -j                                                             │
+│    --help                   Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP webhook/delete
+Usage: pipefy webhook delete [OPTIONS] WEBHOOK_ID
+
+ Delete a webhook permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    webhook_id      TEXT  Webhook id. [required]                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip confirmation prompt.                                  │
+│ --json  -j                                                                   │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP webhook/list
+Usage: pipefy webhook list [OPTIONS]
+
+ List webhooks on a pipe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe          TEXT  Pipe id. [required]                                 │
+│    --json  -j                                                                │
+│    --help                Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP webhook/update
+Usage: pipefy webhook update [OPTIONS] WEBHOOK_ID
+
+ Update a webhook (pass at least one attribute).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    webhook_id      TEXT  Webhook id. [required]                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name             TEXT                                                      │
+│ --url              TEXT                                                      │
+│ --actions          TEXT  JSON array of event action strings (non-empty when  │
+│                          provided).                                          │
+│ --headers          TEXT  JSON object of custom HTTP headers.                 │
+│ --json     -j                                                                │
+│ --help                   Show this message and exit.                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+

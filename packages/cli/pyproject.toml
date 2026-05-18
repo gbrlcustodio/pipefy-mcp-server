@@ -10,6 +10,7 @@ dependencies = [
     "rich>=13",
     "pydantic-settings>=2.8.1",
     "pyyaml>=6",
+    "keyring>=24",
 ]
 
 [project.scripts]

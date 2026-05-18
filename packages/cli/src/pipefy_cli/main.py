@@ -11,6 +11,7 @@ from pipefy_cli.commands.agent import agent_app
 from pipefy_cli.commands.ai_automation import ai_automation_app
 from pipefy_cli.commands.attachment import attachment_app
 from pipefy_cli.commands.audit import audit_app
+from pipefy_cli.commands.auth import auth_app
 from pipefy_cli.commands.automation import automation_app
 from pipefy_cli.commands.card import card_app
 from pipefy_cli.commands.email import email_app
@@ -94,6 +95,7 @@ app.add_typer(agent_app, name="agent")
 app.add_typer(ai_automation_app, name="ai-automation")
 app.add_typer(attachment_app, name="attachment")
 app.add_typer(audit_app, name="audit")
+app.add_typer(auth_app, name="auth")
 app.add_typer(automation_app, name="automation")
 app.add_typer(card_app, name="card")
 app.add_typer(email_app, name="email")

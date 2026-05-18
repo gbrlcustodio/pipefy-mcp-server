@@ -18,6 +18,9 @@ _ALLOW_INSECURE_ENV_KEY = "PIPEFY_ALLOW_INSECURE_URLS"
 USER_CONFIG_PATH = Path.home() / ".config/pipefy/config.toml"
 
 
+DEFAULT_AUTH_CLIENT_ID = "pipefy-cli"
+
+
 class CliSettings(BaseSettings):
     """Load ``PIPEFY_*`` from the environment and ``.env`` in the working directory."""
 
@@ -26,9 +29,14 @@ class CliSettings(BaseSettings):
         env_nested_max_split=1,
         env_file=".env",
         env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     pipefy: PipefySettings = Field(default_factory=PipefySettings)
+    auth_url: str | None = Field(default=None, alias="PIPEFY_AUTH_URL")
+    auth_client_id: str = Field(
+        default=DEFAULT_AUTH_CLIENT_ID, alias="PIPEFY_AUTH_CLIENT_ID"
+    )
 
 
 def _revalidate(pipefy: PipefySettings, patch: dict[str, Any]) -> PipefySettings:

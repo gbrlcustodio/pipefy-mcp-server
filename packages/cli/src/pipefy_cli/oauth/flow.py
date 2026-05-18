@@ -4,19 +4,15 @@ from __future__ import annotations
 
 import secrets
 import webbrowser
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Iterator
 from urllib.parse import urlencode
 
 import httpx
 
 from pipefy_cli.oauth.discovery import ProviderMetadata, fetch_provider_metadata
-from pipefy_cli.oauth.loopback import (
-    CallbackResult,
-    await_callback,
-    find_free_port,
-    redirect_uri_for,
-)
+from pipefy_cli.oauth.loopback import CallbackResult, LoopbackCapture
 from pipefy_cli.oauth.pkce import challenge_from_verifier, generate_verifier
 
 _DEFAULT_SCOPES = ("openid", "profile", "email", "offline_access")
@@ -64,14 +60,11 @@ def exchange_code(
     code: str,
     redirect_uri: str,
     code_verifier: str,
-    client: httpx.Client | None = None,
-    timeout: float = _TOKEN_EXCHANGE_TIMEOUT_S,
+    client: httpx.Client,
 ) -> dict[str, object]:
     """Exchange an authorization code for tokens at the issuer's token endpoint."""
-    owned = client is None
-    http = client or httpx.Client(timeout=timeout)
     try:
-        response = http.post(
+        response = client.post(
             metadata.token_endpoint,
             data={
                 "grant_type": "authorization_code",
@@ -83,9 +76,6 @@ def exchange_code(
         )
     except httpx.HTTPError as exc:
         raise LoginError(f"Token exchange request failed: {exc}") from exc
-    finally:
-        if owned:
-            http.close()
 
     if response.status_code != 200:
         raise LoginError(
@@ -98,6 +88,18 @@ def exchange_code(
     if not isinstance(payload, dict):
         raise LoginError("Token endpoint returned a non-object JSON payload.")
     return payload
+
+
+@contextmanager
+def _http_client(
+    provided: httpx.Client | None, timeout: float
+) -> Iterator[httpx.Client]:
+    if provided is not None:
+        with nullcontext(provided) as client:
+            yield client
+        return
+    with httpx.Client(timeout=timeout) as client:
+        yield client
 
 
 def run_login(
@@ -121,48 +123,50 @@ def run_login(
         open_browser: Override for browser launch (testing).
         on_url: Optional sink for the authorization URL (so callers can print it
             for manual / headless use).
-        http_client: Optional pre-configured ``httpx.Client`` (testing).
+        http_client: Optional pre-configured ``httpx.Client`` (testing). When
+            omitted, one client is created and reused for discovery + token
+            exchange so the same TLS connection can serve both requests.
 
     Raises:
         LoginError: For any user-visible failure (discovery, state mismatch,
             token exchange).
         TimeoutError: When no browser callback arrives in time.
     """
-    try:
-        metadata = fetch_provider_metadata(issuer_url, client=http_client)
-    except ValueError as exc:
-        raise LoginError(str(exc)) from exc
+    with _http_client(http_client, timeout=_TOKEN_EXCHANGE_TIMEOUT_S) as http:
+        try:
+            metadata = fetch_provider_metadata(issuer_url, client=http)
+        except ValueError as exc:
+            raise LoginError(str(exc)) from exc
 
-    port = find_free_port()
-    redirect_uri = redirect_uri_for(port)
-    verifier = generate_verifier()
-    challenge = challenge_from_verifier(verifier)
-    state = secrets.token_urlsafe(24)
+        # Bind the loopback server *before* opening the browser so no other
+        # process can grab the ephemeral port in between.
+        capture = LoopbackCapture()
+        verifier = generate_verifier()
+        state = secrets.token_urlsafe(24)
+        auth_url = build_authorization_url(
+            metadata=metadata,
+            client_id=client_id,
+            redirect_uri=capture.redirect_uri,
+            code_challenge=challenge_from_verifier(verifier),
+            state=state,
+            scopes=scopes,
+        )
+        if on_url is not None:
+            on_url(auth_url)
+        open_browser(auth_url)
 
-    auth_url = build_authorization_url(
-        metadata=metadata,
-        client_id=client_id,
-        redirect_uri=redirect_uri,
-        code_challenge=challenge,
-        state=state,
-        scopes=scopes,
-    )
-    if on_url is not None:
-        on_url(auth_url)
-    open_browser(auth_url)
+        callback = capture.await_callback(timeout=callback_timeout_s)
+        _ensure_callback_ok(callback, expected_state=state)
+        assert callback.code is not None
 
-    callback = await_callback(port, timeout=callback_timeout_s)
-    _ensure_callback_ok(callback, expected_state=state)
-    assert callback.code is not None  # narrowed by _ensure_callback_ok
-
-    token_response = exchange_code(
-        metadata=metadata,
-        client_id=client_id,
-        code=callback.code,
-        redirect_uri=redirect_uri,
-        code_verifier=verifier,
-        client=http_client,
-    )
+        token_response = exchange_code(
+            metadata=metadata,
+            client_id=client_id,
+            code=callback.code,
+            redirect_uri=capture.redirect_uri,
+            code_verifier=verifier,
+            client=http,
+        )
     return LoginResult(issuer=metadata.issuer, token_response=token_response)
 
 

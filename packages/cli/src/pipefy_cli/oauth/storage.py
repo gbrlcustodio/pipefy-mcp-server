@@ -4,6 +4,10 @@ Single active session per ``(issuer_host, client_id)`` tuple. The keychain entry
 holds a small JSON blob (refresh + access token + minimal metadata). The
 short-lived access token is included so a single login is usable immediately;
 the long-lived refresh token is the durable credential.
+
+``keyring`` is imported lazily inside each function so that merely importing
+this module (which happens at CLI startup via the ``auth`` subcommand) does not
+pay the ~30-80ms backend-discovery cost on every ``pipefy`` invocation.
 """
 
 from __future__ import annotations
@@ -11,14 +15,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING
 from urllib.parse import urlparse
-
-import keyring
-from keyring.errors import KeyringError
-
-if TYPE_CHECKING:
-    from keyring.backend import KeyringBackend
 
 _SERVICE = "pipefy-cli"
 
@@ -40,8 +37,7 @@ class StoredSession:
 
 
 def _issuer_host(issuer_url: str) -> str:
-    parsed = urlparse(issuer_url)
-    host = parsed.netloc or parsed.path
+    host = urlparse(issuer_url).hostname
     if not host:
         raise ValueError(f"Cannot derive host from issuer URL: {issuer_url!r}")
     return host.lower()
@@ -66,6 +62,8 @@ def store_session(
             Service daemon).
         ValueError: When ``token_response`` is missing required fields.
     """
+    import keyring
+
     try:
         access_token = str(token_response["access_token"])
         refresh_token = str(token_response["refresh_token"])
@@ -94,6 +92,9 @@ def store_session(
 
 def load_session(*, issuer: str, client_id: str) -> StoredSession | None:
     """Return the stored session for this issuer + client, or ``None`` if absent."""
+    import keyring
+    from keyring.errors import KeyringError
+
     try:
         blob = keyring.get_password(_SERVICE, keychain_key(issuer, client_id))
     except KeyringError:
@@ -112,15 +113,13 @@ def load_session(*, issuer: str, client_id: str) -> StoredSession | None:
 
 def delete_session(*, issuer: str, client_id: str) -> bool:
     """Remove the stored session. Returns True if an entry was present."""
-    key = keychain_key(issuer, client_id)
+    import keyring
+    from keyring.errors import KeyringError, PasswordDeleteError
+
     try:
-        existing = keyring.get_password(_SERVICE, key)
-    except KeyringError:
+        keyring.delete_password(_SERVICE, keychain_key(issuer, client_id))
+    except PasswordDeleteError:
         return False
-    if not existing:
-        return False
-    try:
-        keyring.delete_password(_SERVICE, key)
     except KeyringError:
         return False
     return True
@@ -128,8 +127,11 @@ def delete_session(*, issuer: str, client_id: str) -> bool:
 
 def keychain_backend_name() -> str:
     """Short identifier for the active keyring backend (diagnostics)."""
+    import keyring
+    from keyring.errors import KeyringError
+
     try:
-        backend: KeyringBackend = keyring.get_keyring()
+        backend = keyring.get_keyring()
     except KeyringError as exc:
         return f"unavailable ({exc})"
     return backend.__class__.__name__

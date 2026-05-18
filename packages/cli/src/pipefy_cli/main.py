@@ -33,7 +33,7 @@ from pipefy_cli.commands.skills import skills_app
 from pipefy_cli.commands.table import table_app
 from pipefy_cli.commands.usage import usage_app
 from pipefy_cli.commands.webhook import webhook_app
-from pipefy_cli.config import resolve_pipefy_settings
+from pipefy_cli.config import CliSettings, resolve_pipefy_settings
 
 app = typer.Typer(
     name="pipefy",
@@ -85,6 +85,11 @@ def main(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
     ctx.obj["pipefy_settings"] = pipefy_settings
+    try:
+        ctx.obj["cli_settings"] = CliSettings()
+    except Exception:
+        # CliSettings validation failed; the auth subcommand surfaces a clearer error.
+        ctx.obj["cli_settings"] = None
     from_env = os.environ.get("PIPEFY_TOKEN")
     cli_token = token.strip() if token else None
     env_token = from_env.strip() if from_env else None

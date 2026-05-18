@@ -1,65 +1,77 @@
 # Repository Guidelines
 
 ## Documentation map
-- **`README.md`** — Overview for users and contributors: getting started, MCP tools summary, development, testing, and schema hygiene.
-- **`docs/setup.md`** — First-time install, environment variables, MCP client config (optional `bootstrap.sh`).
-- **`docs/dependencies.md`** — Rationale for main dependencies.
-- **`docs/tools/`** — Per-area reference (parameters, edge cases, cross-cutting behavior). Start from the filenames that match the domain you touch (e.g. `pipes-and-cards.md`, `automations-and-ai.md`, `introspection.md`).
+- **`README.md`** — Project pitch, install commands (pre-launch git + post-v1.0 PyPI), repo layout, MCP tools table, skills section, contributing.
+- **`docs/README.md`** — Index of docs by surface (MCP, CLI, SDK) and shared guides.
+- **`docs/setup.md`** — First-time install, env vars, MCP client config.
+- **`docs/parity.md`** — MCP tool ↔ CLI command parity matrix. Source of truth for coverage and deferrals.
+- **`docs/MIGRATION.md`** — What existing MCP users need to know about v0.1.
+- **`docs/dependencies.md`** — Rationale for runtime dependencies.
+- **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior).
+- **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
+- **`docs/sdk/README.md`** — Using `pipefy-sdk` as a library.
+- **`skills/AGENTS.md`** — Skill-authoring guide (frontmatter, naming, style). Start here before adding a skill.
 
-## Project Structure & Module Organization
-- `src/pipefy_mcp/` contains the MCP server implementation. Key areas include `tools/` (tool definitions), `services/pipefy/` (GraphQL clients, queries, services), `models/`, and `core/`.
-- `tests/` mirrors the source layout with unit tests for tools, services, models, and the server entrypoints.
-- `README.md` documents usage, tool behavior, and local development notes (see **Documentation map** above).
+## Project structure
 
-## Build, Test and Development Commands
-- `uv sync` installs dependencies using `uv` (recommended in this repo).
-- `uv run pipefy-mcp-server` runs the MCP server locally via the project script.
-- `uv run pytest` runs the full test suite.
-- `uv run pytest --cov=src/pipefy_mcp/services/pipefy --cov-report=term-missing` generates a coverage report for Pipefy services.
-- `uv run ruff check src/` runs linting.
-- `uv run ruff format src/` auto-formats code.
+```
+packages/sdk/   → pipefy-sdk        (Vendor API SDK — GraphQL, models, services)
+packages/mcp/   → pipefy-mcp-server (MCP tools, server lifecycle; depends on pipefy-sdk)
+packages/cli/   → pipefy-cli        (Typer CLI; depends on pipefy-sdk)
+skills/         → agent skills catalog (Markdown; no Python package)
+```
 
-### Manual tool testing (E2E)
-- **Preferred:** Use **Cursor’s MCP integration** (add this server in Cursor MCP settings, run `pipefy-mcp-server`, then invoke tools from the chat / MCP panel). This matches how maintainers and agents exercise the server in daily use.
-- **After `server.py`, lifespan, or registration changes:** Run a short **Cursor MCP smoke test** (list tools and/or call a read-only tool). See README **Development & Testing → Manual smoke test (Cursor MCP)**.
-- **Optional:** `npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server` — MCP Inspector is fine for protocol debugging or when Cursor is not in the loop; it is not the primary sign-off for “tools work for us.”
+**Vendor API SDK** means the GraphQL-facing library (`pipefy-sdk`) used by both MCP and CLI, distinct from app glue or generic shared helpers.
 
-## Coding Style & Naming Conventions
-- Python 3.11+ code lives under `src/` and follows standard module naming (`snake_case` files, `PascalCase` classes).
-- Formatting and import sorting are enforced by `ruff` (see `pyproject.toml`). Run format before committing.
-- Tests follow `pytest` conventions (`test_*.py`, `Test*`, `test_*`).
+## Build, test, and development
 
-## Testing Guidelines
-- Framework: `pytest` with `pytest-asyncio`, `pytest-cov`, and `pytest-mock`.
-- Keep new tests alongside existing suites in `tests/`, aligned with the module they cover.
-- Use markers `@pytest.mark.unit` or `@pytest.mark.integration` when appropriate.
-- **Integration (live Pipefy):** Tests marked `@pytest.mark.integration` call the real GraphQL API when `PIPEFY_*` credentials are set in `.env` (skips otherwise).
-  - Service layer: `tests/services/pipefy/test_schema_introspection_integration.py`
-  - MCP tools (`call_tool` + real `PipefyClient`): `tests/tools/test_introspection_tools_live.py`
-  - Full MCP app (`pipefy_mcp.server.mcp` + lifespan + ToolRegistry): `tests/tools/test_pipe_config_tools_live.py` (optional `PIPE_BUILDING_LIVE_PIPE_ID`, `PIPE_BUILDING_LIVE_ORG_ID` — see README); field conditions-only path: `tests/tools/test_field_conditions_tools_live.py` (optional `PIPE_FIELD_CONDITION_LIVE_PHASE_ID`).
-  - Run both: `uv run pytest tests/services/pipefy/test_schema_introspection_integration.py tests/tools/test_introspection_tools_live.py -m integration -v`. CI-style run without network: `uv run pytest -m "not integration"`.
-  - **Task 6 (release sign-off):** Automated slice `tests/tools/test_task6_mcp_signoff_live.py` + field-condition live test (see README); manual Cursor steps in `.cursor/dev-planning/specs/ai-agents-field-conditions/TASK_6_SIGNOFF.md`.
-- **Manual E2E:** After meaningful tool or server changes, smoke-test the affected tools via **Cursor MCP** (see “Manual tool testing” above). Document that in PRs when relevant.
-- Examples for targeted runs:
-  - Single file: `uv run pytest tests/tools/test_pipe_tools.py`
-  - Single test case: `uv run pytest tests/tools/test_pipe_tools.py -k "test_create_card"`
+- `uv sync` — install all workspace members.
+- `uv run pipefy-mcp-server` — run MCP server locally.
+- `uv run pipefy --help` — run CLI locally.
+- `uv run pytest` — full test suite.
+- `uv run ruff check .` / `uv run ruff format .` — lint and format.
+- Coverage: `uv run pytest --cov=packages/sdk/src/pipefy_sdk --cov-report=term-missing`.
 
-## Adding a New Tool
-When implementing a new tool, follow this checklist (TDD-first):
+### Manual E2E
+Use **Cursor's MCP integration** as the primary smoke test for tool changes. MCP Inspector (`npx @modelcontextprotocol/inspector uv --directory . run pipefy-mcp-server`) is fine for protocol debugging.
 
-1. **Write tests first** in `tests/tools/` mirroring the source structure (e.g., `test_pipe_tools.py`).
-2. **Run the tests and confirm they fail** for the new behavior.
-3. **Implement the tool logic** in `src/pipefy_mcp/tools/` (e.g., `pipe_tools.py` or create a new file if appropriate).
-4. **Register the tool** by calling the appropriate `*Tools.register(mcp, client)` from `ToolRegistry.register_tools()` in `src/pipefy_mcp/tools/registry.py` (only if not already wired for that domain).
-5. **Add the MCP tool name** to **`PIPEFY_TOOL_NAMES`** in `src/pipefy_mcp/tools/registry.py` (same string the client sees). Omitting this breaks startup preflight and `tests/test_server.py`.
-6. **Re-run tests and ensure they pass** (including `tests/test_server.py` if the tool list changed).
-7. **Update the README** if the tool introduces new user-facing functionality or configuration options.
+## Coding style
+- Python 3.11+ with `from __future__ import annotations` on every module.
+- Built-in generics (`list[str]`, `dict[str, Any]`), union syntax (`str | None`).
+- `ruff` enforces formatting and import sorting — run before committing.
 
-## Commit & Pull Request Guidelines
-- Commit messages follow a conventional style such as `feat:`, `fix:`, `refactor:`, `style:`, `test:`, `docs:` with optional scopes (e.g., `feat(tools): ...`).
-- PRs should include a short summary, testing performed (commands and results), and any relevant issue links. Add docs updates if tool behavior or configuration changes.
-- **GraphQL-heavy PRs (field conditions, AI Agent read/delete):** Follow the **Schema hygiene checklist** in `README.md` (refresh `tests/services/pipefy/schema.graphql` when needed, run `diff_context.py`, verify `gql()` with live introspection, integration tests). See `.cursor/dev-planning/specs/ai-agents-field-conditions/decisions/ADR-001-schema-hygiene-for-field-conditions-and-ai-agents.md`.
+## Testing
+- `pytest-asyncio`, `pytest-cov`, `pytest-mock`.
+- Unit tests: default (no marker needed). Integration tests: `@pytest.mark.integration` (needs `PIPEFY_*` credentials).
+- Tests live alongside their package: `packages/<pkg>/tests/`.
+- Run a single package: `uv run pytest packages/sdk/tests`.
+- CI-style (no network): `uv run pytest -m "not integration"`.
 
-## Security & Configuration Tips
-- Local runs require Pipefy service account credentials via env vars (`PIPEFY_OAUTH_CLIENT`, `PIPEFY_OAUTH_SECRET`, etc.). Avoid committing secrets; use local env files or your shell.
-- GraphQL schema updates use `uv run gql-cli ...` and should update `tests/services/pipefy/schema.graphql` when needed; see README **Schema hygiene checklist** for field-condition / AI-agent changes.
+## Adding a New Capability
+
+A capability means an SDK method + MCP tool + CLI command, all in parity:
+
+1. Add the GraphQL query in `packages/sdk/src/pipefy_sdk/queries/`.
+2. Add the service method in `packages/sdk/src/pipefy_sdk/services/`.
+3. Expose via `PipefyClient` in `packages/sdk/src/pipefy_sdk/client.py`.
+4. Register the MCP tool in `packages/mcp/src/pipefy_mcp/tools/` and add its name to `PIPEFY_TOOL_NAMES` in `registry.py`.
+5. Add the CLI command in `packages/cli/src/pipefy_cli/commands/` and register it in `main.py`.
+6. Update `docs/parity.md` — mark as shipped.
+7. Update affected skills in `skills/` in the same PR (or a paired PR in the same review window).
+
+TDD-first: write tests before each layer (red → green → refactor).
+
+## Skills coupling
+
+Skills (`skills/`) and tools (`packages/mcp/`, `packages/cli/`) live in the same monorepo. See **`skills/AGENTS.md`** for the skill-authoring guide.
+
+**Same-PR rule:** breaking command renames must update affected skills in the same PR (or a paired PR opened in the same review window). CI (`skills-lint.yml`) validates starter-pack bundle drift, MCP tool names, and `pipefy` CLI subcommands referenced in `skills/**/SKILL.md` — a rename without a skill update fails the build.
+
+## Commit & PR guidelines
+- Conventional Commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:` with optional scopes.
+- One functional change per commit (atomic). PRs touching more than 10 files or 300 changed lines should be split.
+- PRs must include: summary, testing performed (commands + results), docs updates if tool behavior or config changed.
+
+## Security
+- Credentials via env vars or `.env`; never commit secrets.
+- GraphQL schema updates: `uv run gql-cli ...` → update `packages/sdk/tests/services/pipefy/schema.graphql`; see README schema hygiene checklist.

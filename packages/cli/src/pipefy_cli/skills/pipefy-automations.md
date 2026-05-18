@@ -1,0 +1,169 @@
+---
+name: pipefy-automations
+description: >
+  Use this skill when the user wants to create, read, update, or delete
+  traditional automations (if/then rules) or AI automations (prompt-driven).
+  Covers 15 MCP tools. For AI agents (conversational), see skills/ai-agents/.
+tags: [pipefy, automations, ai-automations, rules]
+---
+
+# Automations
+
+Traditional automations (if/then rules), AI automations (prompt-driven), task automations, and simulation. **15 MCP tools.**
+
+For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipefy-ai-agents/SKILL.md](../../ai-agents/pipefy-ai-agents/SKILL.md).
+
+---
+
+## Traditional automations (rules engine)
+
+| Tool (MCP) | CLI | Purpose |
+|------------|-----|---------|
+| `get_automations` | `pipefy automation list` | List all automations for a pipe. |
+| `get_automation` | `pipefy automation get` | Single automation with full rule config — returns `event_params` and `action_params` (including `aiParams` for AI rules). |
+| `create_automation` | `pipefy automation create` | Create an if/then rule. `active` defaults to true. |
+| `update_automation` | `pipefy automation update` | Patch a rule via `extra_input` (`UpdateAutomationInput` fields). |
+| `delete_automation` | `pipefy automation delete` | **(Two-step destructive)** |
+| `simulate_automation` | `pipefy automation simulate` | **AI-only** dry-run (`generate_with_ai` action). |
+| `get_automation_logs` | `pipefy automation logs` | Execution history for one automation. |
+| `get_automation_logs_by_repo` | `pipefy automation logs --repo` | Logs across all automations in a pipe. |
+| `get_automation_events` | `pipefy automation events list` | Available trigger events. |
+| `get_automation_actions` | `pipefy automation actions list` | Available action types for a pipe. |
+| `create_send_task_automation` | `pipefy automation send-task create` | Shortcut for send-a-task rules. |
+| `get_automations_usage` | `pipefy automation usage` / `pipefy usage automations` | Org usage stats (execution counts). |
+| `export_automation_jobs` | `pipefy automation export jobs` / `pipefy export automation-jobs` | Start async jobs export. |
+| `get_automation_jobs_export` | `pipefy automation export status` | Poll export status / URL. |
+| `get_automation_jobs_export_csv` | `pipefy automation export csv` / `pipefy export automation-jobs-csv` | Fetch CSV text when export is finished. |
+
+---
+
+## AI automations (prompt-driven)
+
+| Tool (MCP) | CLI | Purpose |
+|------------|-----|---------|
+| `get_ai_automations` | `pipefy ai-automation list` | List AI automations for a pipe. |
+| `get_ai_automation` | `pipefy ai-automation get` | Full config including prompt, fields, condition. |
+| `create_ai_automation` | `pipefy ai-automation create` | Create a prompt-driven automation (requires AI enabled on the pipe). |
+| `update_ai_automation` | `pipefy ai-automation update` | Change name, `active`, prompt, `field_ids`, or `condition`. |
+| `delete_ai_automation` | `pipefy ai-automation delete` | **(Two-step destructive)** |
+| `validate_ai_automation_prompt` | `pipefy ai-automation validate-prompt` | **Pre-flight check.** Returns `{valid, problems, warnings, field_map}` — also detects prompt `%{id}` ∩ `field_ids` overlap. |
+
+---
+
+## Steps — create an AI automation
+
+1. **Discover field `internal_id`s** for any field referenced in the prompt:
+
+   ```
+   get_phase_fields phase_id="<phase_id>"
+   ```
+
+2. **Build the prompt** with `%{<internal_id>}` references. Pipefy silently rejects prompts with no field reference (returns `"Input parameters are required."`).
+
+3. **Validate the prompt:**
+
+   ```
+   validate_ai_automation_prompt pipe_id=67890 prompt="Summarize %{425829426} and comment." field_ids=["425829426"]
+   ```
+
+   Returns `valid:true|false`, `problems`, `warnings`, `field_map`. Catches mistakes in one read-only call vs 2–3 failed mutation roundtrips.
+
+4. **Create the automation** (only if `valid:true`):
+
+   ```
+   create_ai_automation pipe_id=67890 trigger_event="card_created" prompt="Summarize %{425829426} and comment." field_ids=["425829426"]
+   ```
+
+---
+
+## Steps — create a traditional automation
+
+1. **Discover events** for the pipe: `get_automation_events pipe_id=67890`.
+2. **Discover actions** for the pipe: `get_automation_actions pipe_id=67890`. (Always discover first; never guess `trigger_id` / `action_id`.)
+3. **Build the rule** with the discovered IDs and call `create_automation`.
+4. **Verify** by reading back with `get_automation`.
+
+---
+
+## Steps — simulate a traditional automation
+
+`simulate_automation` is **AI-only** today (only `generate_with_ai` `action_id` is accepted). For non-AI rules, watch `get_automation_logs` after the trigger fires.
+
+1. Read a working rule first: `get_automation automation_id=<id>` — copy `event_params` and `action_params` verbatim.
+2. Simulate with a real sample card:
+
+   ```
+   simulate_automation pipe_id=67890 action_id=generate_with_ai sample_card_id=456
+   ```
+
+3. Result is **async**: returns `simulation_id` + `status:"processing"` with null `simulationResult`. No polling tool exists in v0.1 — wait, then re-invoke `get_automation_logs` or `simulate_automation`.
+
+---
+
+## Phase transition preflight
+
+For `move_single_card` actions with trigger `card_moved`, `create_automation` / `update_automation` validate that the destination phase is reachable from the source via `cards_can_be_moved_to_phases`. If invalid, the tool returns an `AutomationPreflightError` with:
+
+- `valid_destinations` — the allowed phase IDs.
+- A hint that transition rules are configured in the Pipefy UI only (not editable via API).
+
+Re-issue the call with one of `valid_destinations` rather than retrying the same payload.
+
+---
+
+## Notification disambiguation
+
+Pick the right tool for "notification" intent:
+
+| User signal words | Tool | Why |
+|-------------------|------|-----|
+| "notificação", "tarefa", "lembrete para alguém validar" | `create_send_task_automation` | Built-in: handles `event_id`, `task_title`, `recipients`, optional `event_params` and `condition`. |
+| "enviar e-mail", "responder ao cliente" | `send_email_with_template` / `send_inbox_email` ([members-email-webhooks](../../members-email-webhooks/pipefy-members-email-webhooks/SKILL.md)) | Email surface, not automations. |
+| "webhook", "chamar serviço externo" | `create_webhook` ([members-email-webhooks](../../members-email-webhooks/pipefy-members-email-webhooks/SKILL.md)) | HTTP callback on card events. |
+| "automação", "regra if/then" | `create_automation` | Generic rules engine. |
+
+Do NOT hand-build `action_params.taskParams` via `create_automation` when `create_send_task_automation` is the right tool.
+
+---
+
+## Agentic + human-in-the-loop pattern
+
+Combine AI automations with task automations so AI handles routine work and humans validate high-impact decisions. The highest-leverage pattern in the catalog.
+
+Example flow:
+
+1. `create_ai_automation`: when card enters "Análise", AI fills classification and risk fields automatically.
+2. `create_send_task_automation`: when the AI-filled field is updated, send a task to the manager — "Validate the classification on card [title]".
+3. `create_automation` or `create_field_condition`: when the manager marks "Approved", move the card to the next phase.
+
+Use this pattern for approvals, financial decisions, content publication, and any step where errors have real-world consequences. See also: [skills/process-design/](../../process-design/pipefy-process-design/SKILL.md) Orchestration patterns.
+
+---
+
+## Success criteria
+
+- `get_automation` returns the new rule with correct trigger and actions.
+- `validate_ai_automation_prompt` returns `valid:true` before AI automation creation.
+- `simulate_automation` (AI rules) eventually returns a non-null `simulationResult`.
+
+## Failure modes
+
+- **`simulate_automation` is AI-only.** Only `generate_with_ai` `action_id` accepted. For traditional rules, use `get_automation_logs` after the rule fires.
+- **Async simulation result.** `simulate_automation` returns `simulation_id` + `status:"processing"` + null `simulationResult`; no polling tool in v0.1. Wait, then call `get_automation_logs` or re-invoke `simulate_automation`.
+- **`validate_ai_automation_prompt` returns `valid:false`.** Read `problems` (per-field) and `warnings`. Most common: prompt missing `%{internal_id}` reference, or `field_ids` overlap with prompt `%{id}` tokens.
+- **`create_automation` cycle detection.** Same-pipe `card_created` + `create_card` rejected with `"This automation can't be created! It would result in an endless card creation cycle."` Use a different trigger, target a different pipe, or use `update_card` instead.
+- **`create_automation` fails with unknown event/action.** Always run `get_automation_events` + `get_automation_actions` first; do not guess IDs.
+- **Phase transition error on `move_single_card`.** Re-issue with one of the `valid_destinations` returned in the error. UI is the only edit surface for transition rules.
+- **Cross-pipe `PERMISSION_DENIED`.** SA must be member of both source and destination pipes for `create_connected_card` / cross-pipe `create_card`. Recovery: `get_pipe_members` + `invite_members`.
+- **`get_automation_logs_by_repo` returns empty.** Pipe has no traditional automation executions; not an error. AI agent executions are separate (see `get_ai_agent_logs`).
+- **`create_send_task_automation` fires immediately when `active=true`.** Pass `active=false` first if you want to wire it up before the rule starts firing. The 2026-04-16 orphaned-task incident is the cautionary tale.
+- **`update_automation` API asymmetry.** `create_automation` takes a top-level `active` param; `update_automation` requires `extra_input={"active": false}`. Pass `active` through `extra_input` when toggling on an existing rule.
+- **`action_repo_id` semantics.** For cross-pipe actions (`create_connected_card`, `create_card` into another pipe), this is the **destination** pipe, not the source.
+- **Simulation reuses real rule params.** Before simulating, call `get_automation` to read `event_params` and `action_params` of a working rule and pass them verbatim. Don't hand-craft params.
+
+## See also
+
+- [skills/ai-agents/pipefy-ai-agents/SKILL.md](../../ai-agents/pipefy-ai-agents/SKILL.md) — conversational agents with behaviors (different from AI automations).
+- [skills/observability/pipefy-observability/SKILL.md](../../observability/pipefy-observability/SKILL.md) — execution logs and usage stats.
+- [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md) — discover trigger and action types via raw schema.
+- [skills/process-design/pipefy-process-design/SKILL.md](../../process-design/pipefy-process-design/SKILL.md) — Orchestration patterns (agentic + human validation).

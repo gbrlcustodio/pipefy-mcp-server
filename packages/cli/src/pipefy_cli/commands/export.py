@@ -1,0 +1,61 @@
+"""Automation job exports."""
+
+from __future__ import annotations
+
+import typer
+from pipefy_sdk import PipefyClient
+
+from pipefy_cli.commands._common import (
+    ID_POSITIONAL_CONTEXT_SETTINGS,
+    resource_id_argument,
+    run_cli_command,
+)
+
+export_app = typer.Typer(
+    help="Bulk exports (automation jobs).",
+    no_args_is_help=True,
+)
+
+
+@export_app.command("automation-jobs")
+def export_automation_jobs(
+    ctx: typer.Context,
+    organization: str = typer.Option(
+        ..., "--organization", "--org", help="Organization id."
+    ),
+    period: str = typer.Option(
+        ...,
+        "--period",
+        help="current_month | last_month | last_3_months",
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
+) -> None:
+    """Queue automation jobs export (``export_automation_jobs``)."""
+
+    async def factory(client: PipefyClient):
+        return await client.export_automation_jobs(organization, period)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@export_app.command(
+    "automation-jobs-csv", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS
+)
+def export_automation_jobs_csv(
+    ctx: typer.Context,
+    export_id: str = resource_id_argument(help="Export id after status is finished."),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print JSON envelope with CSV text; default is Rich table output.",
+    ),
+) -> None:
+    """Download finished export as CSV text (``get_automation_jobs_export_csv``)."""
+
+    async def factory(client: PipefyClient):
+        return await client.get_automation_jobs_export_csv(export_id)
+
+    run_cli_command(ctx, json_out, factory)

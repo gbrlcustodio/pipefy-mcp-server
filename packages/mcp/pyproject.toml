@@ -1,0 +1,64 @@
+[project]
+name = "pipefy-mcp-server"
+dynamic = ["version"]
+description = "MCP server that exposes Pipefy's GraphQL API."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27.0",
+    "mcp[cli]>=1.25.0",
+    # Workspace resolves version in dev; PyPI releases stage this wheel alongside CLI/MCP (see release workflow).
+    "pipefy-sdk",
+    "pydantic>=2.11.3",
+    "pydantic-settings>=2.8.1",
+]
+
+[tool.uv.sources]
+pipefy-sdk = { workspace = true }
+
+[project.scripts]
+pipefy-mcp-server = "pipefy_mcp.main:main"
+
+[dependency-groups]
+dev = [
+    "aiohttp>=3.11.16",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-cov>=6.1.1",
+    "pytest-mock>=3.14.0",
+    "respx>=0.22.0",
+    "ruff>=0.11.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pipefy_mcp"]
+
+[tool.hatch.version]
+path = "src/pipefy_mcp/__init__.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `src` is the package; `../../packages/sdk/tests` supplies the `_shared` test bundle (live creds, fixtures) without putting the whole repo on sys.path.
+pythonpath = ["src", "tests", "../../packages/sdk/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --no-header --tb=short"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+markers = [
+    "unit: marks a test as a unit test",
+    "integration: marks tests that call the live Pipefy GraphQL API (PIPEFY_* env)",
+]
+
+[tool.ruff]
+lint.extend-select = ["I", "TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"pipefy_cli".msg = "pipefy_mcp must not import the CLI package; keep MCP independent of pipefy-cli."
+"pipefy_sdk.services".msg = "Import from pipefy_sdk or pipefy_sdk.ai_* helpers only; pipefy_sdk.services is private to the SDK."
+"pipefy_sdk.queries".msg = "Import from pipefy_sdk only; pipefy_sdk.queries is private to the SDK."

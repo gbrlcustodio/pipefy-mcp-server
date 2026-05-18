@@ -1,25 +1,27 @@
 [project]
-name = "pipefy-mcp-server"
-version = "0.1.0"
-description = "Pipefy MCP server that enables AI Agents to end-to-end manage your Pipefy pipes, create cards, and more."
+name = "pipefy-workspace"
+version = "0.2.0-beta.1"
+description = "Development workspace for Pipefy MCP server, SDK, and CLI (not published as a single distribution)."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "gql[httpx]>=3.5.2",
-    "httpx>=0.27.0",
-    "openpyxl>=3.1.5",
-    "httpx-auth>=0.23.1",
-    "mcp[cli]>=1.25.0",
-    "pydantic>=2.11.3",
-    "pydantic-settings>=2.8.1",
-    "rapidfuzz>=3.14.3",
-]
+dependencies = []
 
-[project.scripts]
-pipefy-mcp-server = "pipefy_mcp.main:main"
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/sdk", "packages/mcp", "packages/cli"]
+
+[tool.uv.sources]
+pipefy-sdk = { workspace = true }
+pipefy-mcp-server = { workspace = true }
+pipefy-cli = { workspace = true }
 
 [dependency-groups]
 dev = [
+    "pipefy-sdk",
+    "pipefy-mcp-server",
+    "pipefy-cli",
     "aiohttp>=3.11.16",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
@@ -29,29 +31,17 @@ dev = [
     "ruff>=0.11.4",
 ]
 
-[build-system]
-requires = ["hatchling", "hatch-vcs"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/pipefy_mcp"]
-
-[tool.hatch.version]
-source = "vcs"
-raw-options = { version_scheme = "no-guess-dev" }
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/pipefy_mcp/_version.py"
-
 [tool.ruff]
 lint.extend-select = ["I"]
-lint.exclude = ["src/pipefy_mcp/_version.py"]
-format.exclude = ["src/pipefy_mcp/_version.py"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-# Root on pythonpath so tests can import shared helpers (e.g. tests.ai_agent_test_payloads)
-pythonpath = ["."]
+testpaths = ["tests", "packages/sdk/tests", "packages/mcp/tests", "packages/cli/tests"]
+pythonpath = [
+    "packages/mcp/tests",
+    "packages/sdk/tests",
+    "packages/cli/src",
+    "packages/cli/tests",
+]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -60,5 +50,5 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "module"
 markers = [
     "unit: marks a test as a unit test",
-    "integration: marks a test as an integration test that requires database access",
+    "integration: marks tests that call the live Pipefy GraphQL API (PIPEFY_* env)",
 ]

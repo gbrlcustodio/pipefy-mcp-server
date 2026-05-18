@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import mimetypes
+from pathlib import Path
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -15,12 +16,19 @@ APPLICATION_OCTET_STREAM = "application/octet-stream"
 # we treat that as unknown binary content.
 _MIME_FALSE_POSITIVES_FOR_UPLOAD = frozenset({"chemical/x-xyz"})
 
+# Suffixes where :mod:`mimetypes` is inconsistent across OS images (e.g. Linux slim
+# containers return ``application/octet-stream`` for ``.docx``).
+_STABLE_SUFFIX_CONTENT_TYPES: dict[str, str] = {
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
 
 def infer_content_type(file_name: str) -> str:
     """Infer a MIME type from ``file_name`` (typically the basename or path).
 
-    Uses :func:`mimetypes.guess_type`. Returns ``application/octet-stream`` when the type
-    is unknown or a known false positive for arbitrary ``.xyz`` files.
+    Uses :func:`mimetypes.guess_type`, with a small suffix map for types that differ
+    across platforms. Returns ``application/octet-stream`` when the type is unknown or
+    a known false positive for arbitrary ``.xyz`` files.
 
     Args:
         file_name: File name or path whose suffix is used for guessing.
@@ -28,6 +36,9 @@ def infer_content_type(file_name: str) -> str:
     Returns:
         A MIME type string suitable for ``Content-Type``-style headers.
     """
+    suffix = Path(file_name).suffix.lower()
+    if suffix in _STABLE_SUFFIX_CONTENT_TYPES:
+        return _STABLE_SUFFIX_CONTENT_TYPES[suffix]
     mime, _encoding = mimetypes.guess_type(file_name)
     if mime is None or mime in _MIME_FALSE_POSITIVES_FOR_UPLOAD:
         return APPLICATION_OCTET_STREAM

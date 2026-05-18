@@ -2,6 +2,7 @@
 
 ## Documentation map
 - **`README.md`** — Project pitch, install commands (pre-launch git + post-v1.0 PyPI), repo layout, MCP tools table, skills section, contributing.
+- **`CONTRIBUTING.md`** — Skills contribution guide (frontmatter, CI, style); entry point for GitHub contributors.
 - **`docs/README.md`** — Index of docs by surface (MCP, CLI, SDK) and shared guides.
 - **`docs/setup.md`** — First-time install, env vars, MCP client config.
 - **`docs/parity.md`** — MCP tool ↔ CLI command parity matrix. Source of truth for coverage and deferrals.

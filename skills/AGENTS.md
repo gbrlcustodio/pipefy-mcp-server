@@ -19,9 +19,6 @@ skills/
       SKILL.md          ← the skill file
   AGENTS.md             ← this file
   README.md             ← catalog index
-  CONTRIBUTING.md       ← contribution guide
-  docs/
-    pipeclaw-mapping.md ← provenance and port rationale
 ```
 
 **Domain folders** match the MCP tool surface:

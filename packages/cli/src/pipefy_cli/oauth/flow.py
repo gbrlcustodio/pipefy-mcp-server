@@ -139,34 +139,36 @@ def run_login(
             raise LoginError(str(exc)) from exc
 
         # Bind the loopback server *before* opening the browser so no other
-        # process can grab the ephemeral port in between.
-        capture = LoopbackCapture()
-        verifier = generate_verifier()
-        state = secrets.token_urlsafe(24)
-        auth_url = build_authorization_url(
-            metadata=metadata,
-            client_id=client_id,
-            redirect_uri=capture.redirect_uri,
-            code_challenge=challenge_from_verifier(verifier),
-            state=state,
-            scopes=scopes,
-        )
-        if on_url is not None:
-            on_url(auth_url)
-        open_browser(auth_url)
+        # process can grab the ephemeral port in between. The `with` block
+        # guarantees the socket is released even if a step before
+        # `await_callback` raises.
+        with LoopbackCapture() as capture:
+            verifier = generate_verifier()
+            state = secrets.token_urlsafe(24)
+            auth_url = build_authorization_url(
+                metadata=metadata,
+                client_id=client_id,
+                redirect_uri=capture.redirect_uri,
+                code_challenge=challenge_from_verifier(verifier),
+                state=state,
+                scopes=scopes,
+            )
+            if on_url is not None:
+                on_url(auth_url)
+            open_browser(auth_url)
 
-        callback = capture.await_callback(timeout=callback_timeout_s)
-        _ensure_callback_ok(callback, expected_state=state)
-        assert callback.code is not None
+            callback = capture.await_callback(timeout=callback_timeout_s)
+            _ensure_callback_ok(callback, expected_state=state)
+            assert callback.code is not None
 
-        token_response = exchange_code(
-            metadata=metadata,
-            client_id=client_id,
-            code=callback.code,
-            redirect_uri=capture.redirect_uri,
-            code_verifier=verifier,
-            client=http,
-        )
+            token_response = exchange_code(
+                metadata=metadata,
+                client_id=client_id,
+                code=callback.code,
+                redirect_uri=capture.redirect_uri,
+                code_verifier=verifier,
+                client=http,
+            )
     return LoginResult(issuer=metadata.issuer, token_response=token_response)
 
 

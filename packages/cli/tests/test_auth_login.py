@@ -139,10 +139,13 @@ class TestLoopback:
         assert loopback.redirect_uri_for(54321) == "http://127.0.0.1:54321/callback"
 
     def test_capture_redirect_uri_uses_bound_port(self) -> None:
+        with loopback.LoopbackCapture() as capture:
+            assert capture.redirect_uri == f"http://127.0.0.1:{capture.port}/callback"
+
+    def test_close_is_idempotent(self) -> None:
         capture = loopback.LoopbackCapture()
-        assert capture.redirect_uri == f"http://127.0.0.1:{capture.port}/callback"
-        # Tear down the bound socket so we don't leak it between tests.
-        capture._server.server_close()  # noqa: SLF001
+        capture.close()
+        capture.close()  # second call is a no-op
 
 
 # --------------------------------------------------------------------------- #
@@ -347,6 +350,12 @@ class TestFlow:
         class _FakeCapture:
             port = 12345
             redirect_uri = "http://127.0.0.1:12345/callback"
+
+            def __enter__(self) -> _FakeCapture:
+                return self
+
+            def __exit__(self, *_exc: object) -> None:
+                return None
 
             def await_callback(self, *, timeout: float) -> loopback.CallbackResult:
                 return loopback.CallbackResult(

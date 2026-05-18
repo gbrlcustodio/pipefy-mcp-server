@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from types import TracebackType
 from urllib.parse import parse_qs, urlparse
 
 _LOOPBACK_HOST = "127.0.0.1"
@@ -59,6 +60,8 @@ class LoopbackCapture:
         }
         self._done = threading.Event()
         self._server = HTTPServer((_LOOPBACK_HOST, 0), self._make_handler())
+        self._thread: threading.Thread | None = None
+        self._closed = False
 
     @property
     def port(self) -> int:
@@ -68,10 +71,33 @@ class LoopbackCapture:
     def redirect_uri(self) -> str:
         return redirect_uri_for(self.port)
 
+    def __enter__(self) -> LoopbackCapture:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Release the bound socket. Idempotent; safe to call multiple times."""
+        if self._closed:
+            return
+        self._closed = True
+        if self._thread is not None and self._thread.is_alive():
+            self._server.shutdown()
+            self._thread.join(timeout=1.0)
+        self._server.server_close()
+
     def await_callback(self, *, timeout: float = _DEFAULT_TIMEOUT_S) -> CallbackResult:
         """Run the server until one callback arrives (or ``timeout`` elapses)."""
-        thread = threading.Thread(target=self._server.serve_forever, daemon=True)
-        thread.start()
+        if self._closed:
+            raise RuntimeError("LoopbackCapture is already closed.")
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        self._thread.start()
         try:
             if not self._done.wait(timeout=timeout):
                 raise TimeoutError(
@@ -79,8 +105,7 @@ class LoopbackCapture:
                     f"{_LOOPBACK_HOST}:{self.port}."
                 )
         finally:
-            self._server.shutdown()
-            self._server.server_close()
+            self.close()
         return CallbackResult(**self._captured)
 
     def _make_handler(self) -> type[BaseHTTPRequestHandler]:

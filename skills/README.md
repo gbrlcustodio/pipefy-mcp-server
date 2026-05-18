@@ -1,26 +1,23 @@
-# Pipefy Skills Catalog
+# Pipefy skills catalog
 
-Anthropic Skills-format playbooks for common Pipefy workflows. Each skill is a single Markdown file consumable by any LLM agent (Claude Code, Cursor, Codex, or any assistant that reads Markdown files).
+Markdown playbooks in **Anthropic Skills** format: each file describes a Pipefy workflow (prerequisites, tools, steps, success criteria). Any agent that reads project files can use them (Cursor, Claude Code, Codex, and others).
 
-## Using skills
+## Using the catalog
 
-**With the CLI (starter pack):**
+**Starter pack** (shipped inside `pipefy-cli`):
 
 ```bash
-pipefy skills list                        # list bundled skills
-pipefy skills show pipes-and-cards        # print skill to stdout
-pipefy skills show pipes-and-cards | pbcopy  # copy to clipboard for agent context
+pipefy skills list
+pipefy skills show pipes-and-cards
+pipefy skills show pipes-and-cards | pbcopy   # copy into agent context
 ```
 
-**From source (full catalog):**
+**Full catalog from source:**
 
 ```bash
-# Clone once
-git clone https://github.com/<owner>/pipefy-labs && cd pipefy-labs
-
-# Point your agent at the skills directory
-# In Claude Code: /skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md
-# In Cursor: add a project rule or reference these paths in the agent context you use for Pipefy
+git clone https://github.com/gbrlcustodio/pipefy-mcp-server.git
+# Reference paths such as skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md
+# in your IDE rules or agent context.
 ```
 
 ---
@@ -29,25 +26,22 @@ git clone https://github.com/<owner>/pipefy-labs && cd pipefy-labs
 
 | Domain | Skill | Description |
 |--------|-------|-------------|
-| **Pipes & Cards** | [pipefy-pipes-and-cards](pipes-and-cards/pipefy-pipes-and-cards/SKILL.md) | Create, read, update, delete pipes, phases, fields, labels, cards, and field conditions. 37 MCP tools. |
-| **Database Tables** | [pipefy-database-tables](database-tables/pipefy-database-tables/SKILL.md) | Tables, records, schema columns, and attachments. 17 MCP tools. |
-| **Relations** | [pipefy-relations](relations/pipefy-relations/SKILL.md) | Link processes and cards across workflows. 8 MCP tools. |
-| **Reports** | [pipefy-reports](reports/pipefy-reports/SKILL.md) | Pipe and org reports: CRUD and async exports. 17 MCP tools. |
-| **Automations** | [pipefy-automations](automations/pipefy-automations/SKILL.md) | Traditional automations, AI automations, and simulation. 15 MCP tools. |
-| **AI Agents** | [pipefy-ai-agents](ai-agents/pipefy-ai-agents/SKILL.md) | Conversational AI agents with behaviors. 7 MCP tools. |
-| **Observability** | [pipefy-observability](observability/pipefy-observability/SKILL.md) | Logs, usage stats, credit consumption, job exports. 10 MCP tools. |
-| **Members, Email & Webhooks** | [pipefy-members-email-webhooks](members-email-webhooks/pipefy-members-email-webhooks/SKILL.md) | Membership, email, and webhook management. 11 MCP tools. |
-| **Introspection** | [pipefy-introspection](introspection/pipefy-introspection/SKILL.md) | Schema discovery and raw GraphQL fallback (Tier 2). 6 MCP tools. |
-| **Process Design** | [pipefy-process-design](process-design/pipefy-process-design/SKILL.md) | Consulting help for designing processes. Use only when asked to architect (not execute). |
-| **Process Intelligence** | [pipefy-process-intelligence](process-intelligence/pipefy-process-intelligence/SKILL.md) | Analyze existing pipes for improvement opportunities. |
-| **API Fallback** | [pipefy-api-fallback](api-troubleshoot/pipefy-api-fallback/SKILL.md) | Direct GraphQL API fallback (Tier 3 — last resort). |
+| **Pipes & Cards** | [pipefy-pipes-and-cards](pipes-and-cards/pipefy-pipes-and-cards/SKILL.md) | Pipes, phases, fields, labels, cards, field conditions. 37 MCP tools. |
+| **Database Tables** | [pipefy-database-tables](database-tables/pipefy-database-tables/SKILL.md) | Tables, records, schema, attachments. 17 MCP tools. |
+| **Relations** | [pipefy-relations](relations/pipefy-relations/SKILL.md) | Pipe and card relations. 8 MCP tools. |
+| **Reports** | [pipefy-reports](reports/pipefy-reports/SKILL.md) | Pipe and organization reports, async exports. 17 MCP tools. |
+| **Automations** | [pipefy-automations](automations/pipefy-automations/SKILL.md) | Traditional and AI automations, simulation. 15 MCP tools. |
+| **AI Agents** | [pipefy-ai-agents](ai-agents/pipefy-ai-agents/SKILL.md) | Conversational AI agents and behaviors. 7 MCP tools. |
+| **Observability** | [pipefy-observability](observability/pipefy-observability/SKILL.md) | Logs, usage, credits, job exports. 10 MCP tools. |
+| **Members, Email & Webhooks** | [pipefy-members-email-webhooks](members-email-webhooks/pipefy-members-email-webhooks/SKILL.md) | Membership, email, webhooks. 11 MCP tools. |
+| **Introspection** | [pipefy-introspection](introspection/pipefy-introspection/SKILL.md) | Schema discovery and GraphQL fallback. 6 MCP tools. |
+| **Process Design** | [pipefy-process-design](process-design/pipefy-process-design/SKILL.md) | Process architecture (consulting; not execution). |
+| **Process Intelligence** | [pipefy-process-intelligence](process-intelligence/pipefy-process-intelligence/SKILL.md) | Analyze pipes for improvement opportunities. |
+| **API Fallback** | [pipefy-api-fallback](api-troubleshoot/pipefy-api-fallback/SKILL.md) | Raw GraphQL fallback when higher-level tools are insufficient. |
 
 ---
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the style guide, frontmatter rules, and review rubric.
-
-See [`AGENTS.md`](AGENTS.md) for the full authoring guide and naming conventions.
-
-Provenance from pipeclaw bootstrap: [`docs/pipeclaw-mapping.md`](docs/pipeclaw-mapping.md).
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md) — frontmatter, CI checks, style, review rubric.
+- [`AGENTS.md`](AGENTS.md) — authoring guide and `SKILL.md` template.

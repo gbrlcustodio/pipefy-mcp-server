@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import socket
 import threading
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -39,82 +38,87 @@ class CallbackResult:
     error_description: str | None
 
 
-def find_free_port() -> int:
-    """Bind a transient socket to find an OS-assigned ephemeral port."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((_LOOPBACK_HOST, 0))
-        return s.getsockname()[1]
-
-
 def redirect_uri_for(port: int) -> str:
     """Construct the loopback redirect URI for ``port``."""
     return f"http://{_LOOPBACK_HOST}:{port}{_CALLBACK_PATH}"
 
 
-def await_callback(port: int, *, timeout: float = _DEFAULT_TIMEOUT_S) -> CallbackResult:
-    """Serve exactly one callback on ``127.0.0.1:port`` and return what we got.
+class LoopbackCapture:
+    """Bind a loopback HTTP server immediately, then serve exactly one callback.
 
-    Raises:
-        TimeoutError: When no callback arrives within ``timeout``.
+    The port is bound at construction so the caller can open the browser without
+    a race window where another process could grab the ephemeral port.
     """
-    captured: dict[str, str | None] = {
-        "code": None,
-        "state": None,
-        "error": None,
-        "error_description": None,
-    }
-    done = threading.Event()
 
-    class _Handler(BaseHTTPRequestHandler):
-        def do_GET(self) -> None:  # noqa: N802 (BaseHTTPRequestHandler API)
-            parsed = urlparse(self.path)
-            if parsed.path != _CALLBACK_PATH:
-                self.send_response(404)
+    def __init__(self) -> None:
+        self._captured: dict[str, str | None] = {
+            "code": None,
+            "state": None,
+            "error": None,
+            "error_description": None,
+        }
+        self._done = threading.Event()
+        self._server = HTTPServer((_LOOPBACK_HOST, 0), self._make_handler())
+
+    @property
+    def port(self) -> int:
+        return self._server.server_address[1]
+
+    @property
+    def redirect_uri(self) -> str:
+        return redirect_uri_for(self.port)
+
+    def await_callback(self, *, timeout: float = _DEFAULT_TIMEOUT_S) -> CallbackResult:
+        """Run the server until one callback arrives (or ``timeout`` elapses)."""
+        thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            if not self._done.wait(timeout=timeout):
+                raise TimeoutError(
+                    f"No browser callback received within {timeout:.0f}s on "
+                    f"{_LOOPBACK_HOST}:{self.port}."
+                )
+        finally:
+            self._server.shutdown()
+            self._server.server_close()
+        return CallbackResult(**self._captured)
+
+    def _make_handler(self) -> type[BaseHTTPRequestHandler]:
+        captured = self._captured
+        done = self._done
+
+        class _Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802 (BaseHTTPRequestHandler API)
+                parsed = urlparse(self.path)
+                if parsed.path != _CALLBACK_PATH:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+
+                params = parse_qs(parsed.query)
+                for key in captured:
+                    values = params.get(key) or [None]
+                    captured[key] = values[0]
+
+                body = _ERROR_HTML if captured["error"] else _SUCCESS_HTML
+                status = 400 if captured["error"] else 200
+                self.send_response(status)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
+                self.wfile.write(body)
+                done.set()
+
+            def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+                # Silence BaseHTTPRequestHandler's default stderr access log.
+                del format, args
                 return
 
-            params = parse_qs(parsed.query)
-            for key in captured:
-                values = params.get(key) or [None]
-                captured[key] = values[0]
-
-            body = _ERROR_HTML if captured["error"] else _SUCCESS_HTML
-            status = 400 if captured["error"] else 200
-            self.send_response(status)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            done.set()
-
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A002
-            # Silence BaseHTTPRequestHandler's default stderr access log.
-            del format, args
-            return
-
-    server = HTTPServer((_LOOPBACK_HOST, port), _Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        if not done.wait(timeout=timeout):
-            raise TimeoutError(
-                f"No browser callback received within {timeout:.0f}s on "
-                f"{_LOOPBACK_HOST}:{port}."
-            )
-    finally:
-        server.shutdown()
-        server.server_close()
-    return CallbackResult(
-        code=captured["code"],
-        state=captured["state"],
-        error=captured["error"],
-        error_description=captured["error_description"],
-    )
+        return _Handler
 
 
 __all__ = [
     "CallbackResult",
-    "await_callback",
-    "find_free_port",
+    "LoopbackCapture",
     "redirect_uri_for",
 ]

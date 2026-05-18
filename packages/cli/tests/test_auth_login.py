@@ -109,32 +109,40 @@ def _fire_callback(port: int, query: str) -> None:
 
 class TestLoopback:
     def test_await_callback_returns_code_and_state(self) -> None:
-        port = loopback.find_free_port()
-        threading.Timer(0.1, _fire_callback, args=(port, "code=abc&state=xyz")).start()
-        result = loopback.await_callback(port, timeout=5.0)
+        capture = loopback.LoopbackCapture()
+        threading.Timer(
+            0.1, _fire_callback, args=(capture.port, "code=abc&state=xyz")
+        ).start()
+        result = capture.await_callback(timeout=5.0)
         assert result.code == "abc"
         assert result.state == "xyz"
         assert result.error is None
 
     def test_await_callback_captures_error(self) -> None:
-        port = loopback.find_free_port()
+        capture = loopback.LoopbackCapture()
         threading.Timer(
             0.1,
             _fire_callback,
-            args=(port, "error=access_denied&error_description=user+aborted"),
+            args=(capture.port, "error=access_denied&error_description=user+aborted"),
         ).start()
-        result = loopback.await_callback(port, timeout=5.0)
+        result = capture.await_callback(timeout=5.0)
         assert result.error == "access_denied"
         assert result.error_description == "user aborted"
         assert result.code is None
 
     def test_await_callback_times_out(self) -> None:
-        port = loopback.find_free_port()
+        capture = loopback.LoopbackCapture()
         with pytest.raises(TimeoutError):
-            loopback.await_callback(port, timeout=0.2)
+            capture.await_callback(timeout=0.2)
 
-    def test_redirect_uri_is_loopback(self) -> None:
+    def test_redirect_uri_for_helper(self) -> None:
         assert loopback.redirect_uri_for(54321) == "http://127.0.0.1:54321/callback"
+
+    def test_capture_redirect_uri_uses_bound_port(self) -> None:
+        capture = loopback.LoopbackCapture()
+        assert capture.redirect_uri == f"http://127.0.0.1:{capture.port}/callback"
+        # Tear down the bound socket so we don't leak it between tests.
+        capture._server.server_close()  # noqa: SLF001
 
 
 # --------------------------------------------------------------------------- #
@@ -143,7 +151,8 @@ class TestLoopback:
 
 
 class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    """Trivial in-memory keyring backend for tests."""
+    """In-memory keyring backend that mirrors the real-world ``delete_password``
+    contract (raises ``PasswordDeleteError`` when the entry is missing)."""
 
     priority = 1  # type: ignore[assignment]
 
@@ -157,7 +166,11 @@ class _InMemoryKeyring(keyring.backend.KeyringBackend):
         self._store[(service, username)] = password
 
     def delete_password(self, service: str, username: str) -> None:
-        self._store.pop((service, username), None)
+        from keyring.errors import PasswordDeleteError
+
+        if (service, username) not in self._store:
+            raise PasswordDeleteError(f"no entry for {service}/{username}")
+        del self._store[(service, username)]
 
 
 @pytest.fixture
@@ -330,14 +343,17 @@ class TestFlow:
         monkeypatch.setattr(
             flow, "fetch_provider_metadata", lambda url, client=None: meta
         )
-        monkeypatch.setattr(flow, "find_free_port", lambda: 12345)
 
-        def _bad_callback(_port: int, *, timeout: float) -> loopback.CallbackResult:
-            return loopback.CallbackResult(
-                code="abc", state="WRONG", error=None, error_description=None
-            )
+        class _FakeCapture:
+            port = 12345
+            redirect_uri = "http://127.0.0.1:12345/callback"
 
-        monkeypatch.setattr(flow, "await_callback", _bad_callback)
+            def await_callback(self, *, timeout: float) -> loopback.CallbackResult:
+                return loopback.CallbackResult(
+                    code="abc", state="WRONG", error=None, error_description=None
+                )
+
+        monkeypatch.setattr(flow, "LoopbackCapture", _FakeCapture)
         with pytest.raises(flow.LoginError, match="State mismatch"):
             flow.run_login(
                 issuer_url="https://x.test/realms/y",

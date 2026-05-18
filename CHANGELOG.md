@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.2.0-beta.1] - 2026-05-18
+
+Monorepo **Pipefy Labs** public beta on the `v0.2.0-beta.*` line (GitHub Release + wheels only; no PyPI until `v1.*`). Tag **`v0.2.0-beta.1`** matches `__version__` in all workspace packages per `RELEASE.md`.
+
+### Added
+
 - **CLI**: added MCP-parity commands for core workflow domains: `pipe`, `phase`,
   `field`, `table`, `record`, `label`, `webhook`, `relation`, and `member`.
 - **CLI**: added post-v0.1 parity domains: `attachment`, `field-condition`,

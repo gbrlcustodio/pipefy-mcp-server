@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bump the lockstep workspace version across SDK, MCP, and CLI packages."""
+"""Bump the lockstep workspace version across SDK, MCP, CLI, and root workspace meta."""
 
 from __future__ import annotations
 
@@ -9,10 +9,16 @@ from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+ROOT_PYPROJECT = REPO_ROOT / "pyproject.toml"
 INIT_PATHS = (
     REPO_ROOT / "packages/sdk/src/pipefy_sdk/__init__.py",
     REPO_ROOT / "packages/mcp/src/pipefy_mcp/__init__.py",
     REPO_ROOT / "packages/cli/src/pipefy_cli/__init__.py",
+)
+
+ROOT_PROJECT_VERSION_RE = re.compile(
+    r"^(version\s*=\s*)[\"'][^\"']+[\"']",
+    re.MULTILINE,
 )
 
 VERSION_ASSIGN_RE = re.compile(
@@ -34,7 +40,7 @@ def read_sdk_version() -> str:
 
 
 def write_version_to_all_files(new_version: str) -> None:
-    """Replace ``__version__`` in each package ``__init__.py``."""
+    """Replace ``__version__`` in each package ``__init__.py`` and root workspace meta."""
     for path in INIT_PATHS:
         text = path.read_text(encoding="utf-8")
         new_text, count = VERSION_ASSIGN_RE.subn(
@@ -46,6 +52,20 @@ def write_version_to_all_files(new_version: str) -> None:
             msg = f"Expected one __version__ assignment in {path}, replaced {count}"
             raise ValueError(msg)
         path.write_text(new_text, encoding="utf-8")
+
+    root_text = ROOT_PYPROJECT.read_text(encoding="utf-8")
+    new_root, root_count = ROOT_PROJECT_VERSION_RE.subn(
+        rf'\1"{new_version}"',
+        root_text,
+        count=1,
+    )
+    if root_count != 1:
+        msg = (
+            f"Expected one [project] version assignment in {ROOT_PYPROJECT}, "
+            f"replaced {root_count}"
+        )
+        raise ValueError(msg)
+    ROOT_PYPROJECT.write_text(new_root, encoding="utf-8")
 
 
 def parse_core(version: str) -> tuple[int, int, int]:

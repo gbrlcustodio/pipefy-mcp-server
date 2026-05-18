@@ -14,6 +14,15 @@ _FIXTURE = Path(__file__).resolve().parent / "fixtures" / "cli_help_golden.txt"
 _UPDATE_ENV = "PIPEFY_UPDATE_CLI_HELP_GOLDEN"
 
 
+def _stable_help_env():
+    """Stable terminal size for Rich / Typer across Linux CI and local dev."""
+    env = os.environ.copy()
+    env["COLUMNS"] = "80"
+    env["LINES"] = "24"
+    env["TERM"] = "dumb"
+    return env
+
+
 def _normalize_help(text):
     lines = [ln.rstrip() for ln in text.splitlines()]
     body = "\n".join(lines).strip()
@@ -42,7 +51,9 @@ def _build_golden_digest(runner):
     blocks = []
     for path, _cmd in sorted(_walk_commands([], root), key=lambda pc: _path_key(pc[0])):
         argv = [*path, "--help"] if path else ["--help"]
-        result = runner.invoke(app, argv, catch_exceptions=False)
+        result = runner.invoke(
+            app, argv, catch_exceptions=False, env=_stable_help_env()
+        )
         assert result.exit_code == 0, (
             f"help failed for {argv!r}: stderr={result.stderr!r} stdout={result.stdout!r}"
         )
@@ -90,7 +101,9 @@ def test_destructive_commands_document_skip_confirm(
     missing = []
     for path in sorted(targets, key=_path_key):
         argv = [*path, "--help"]
-        result = runner.invoke(app, argv, catch_exceptions=False)
+        result = runner.invoke(
+            app, argv, catch_exceptions=False, env=_stable_help_env()
+        )
         assert result.exit_code == 0
         out = result.stdout.lower()
         if "--yes" not in out and " -y" not in out and "\n-y" not in out:

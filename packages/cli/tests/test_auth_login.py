@@ -449,7 +449,7 @@ class TestAuthLoginCommand:
         result = cli_runner.invoke(cli_app, ["auth", "login"])
         assert result.exit_code == 0
         assert "PIPEFY_TOKEN" in result.stderr
-        assert "instead of this login session" in result.stderr
+        assert "other `pipefy` commands will continue to use it" in result.stderr
 
     def test_login_failure_exits_1(
         self,

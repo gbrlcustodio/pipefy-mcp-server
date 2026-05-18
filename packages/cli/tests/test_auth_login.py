@@ -460,6 +460,52 @@ class TestAuthLoginCommand:
         assert "PIPEFY_TOKEN" in result.stderr
         assert "other `pipefy` commands will continue to use it" in result.stderr
 
+    def test_no_browser_prints_url_and_skips_webbrowser(
+        self,
+        cli_runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: _InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """``--no-browser`` wires ``on_url`` and short-circuits ``webbrowser.open``."""
+        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+
+        from pipefy_cli.commands import auth as auth_module
+
+        # Sentinel URL the stubbed run_login feeds back through the callbacks.
+        fake_auth_url = "https://x.test/realms/foo/auth?fake=1"
+        open_browser_returns: list[bool] = []
+
+        def _spy_run_login(**kwargs: object) -> flow.LoginResult:
+            open_browser = kwargs["open_browser"]
+            on_url = kwargs.get("on_url")
+            assert on_url is not None, "--no-browser must wire on_url"
+            on_url(fake_auth_url)
+            open_browser_returns.append(open_browser(fake_auth_url))
+            return flow.LoginResult(
+                issuer="https://x.test/realms/foo",
+                token_response={"access_token": "A", "refresh_token": "R"},
+            )
+
+        monkeypatch.setattr(auth_module, "run_login", _spy_run_login)
+
+        # Hard-stop guard: if anything ever calls webbrowser.open we want to see it.
+        webbrowser_calls: list[str] = []
+        monkeypatch.setattr(
+            auth_module.webbrowser,
+            "open",
+            lambda url: webbrowser_calls.append(url) or True,
+        )
+
+        result = cli_runner.invoke(cli_app, ["auth", "login", "--no-browser"])
+        assert result.exit_code == 0, result.stderr
+        assert fake_auth_url in result.stdout, "authorization URL must be printed"
+        assert open_browser_returns == [False], (
+            "open_browser callback must return False under --no-browser"
+        )
+        assert webbrowser_calls == [], "webbrowser.open must not be invoked"
+
     def test_login_failure_exits_1(
         self,
         cli_runner,

@@ -98,8 +98,19 @@ def ensure_fresh_session(
         refresh_token=session.refresh_token,
         http_client=http_client,
     )
-    # Some IdPs don't rotate the refresh token on every refresh.
+    # Carry forward fields the IdP may omit from a refresh response so the
+    # rotated session keeps its full shape — without ``expires_in`` the next
+    # freshness check treats the token as already expired and refreshes again
+    # on the very next call.
     token_response.setdefault("refresh_token", session.refresh_token)
+    if session.expires_in is not None:
+        token_response.setdefault("expires_in", session.expires_in)
+    if session.refresh_expires_in is not None:
+        token_response.setdefault("refresh_expires_in", session.refresh_expires_in)
+    if session.scope is not None:
+        token_response.setdefault("scope", session.scope)
+    if session.id_token is not None:
+        token_response.setdefault("id_token", session.id_token)
     return store_session(
         issuer=session.issuer,
         client_id=session.client_id,

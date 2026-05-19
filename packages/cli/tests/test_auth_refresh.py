@@ -162,6 +162,34 @@ class TestEnsureFreshSession:
         assert reloaded.access_token == "NEW_A"
         assert reloaded.refresh_token == "NEW_R"
 
+    def test_carries_forward_omitted_lifetime_fields(
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When the IdP omits ``expires_in`` from the refresh response, the
+        rotated session must inherit the previous value — otherwise the next
+        freshness check would treat the token as already expired and force a
+        refresh on the very next call."""
+        _seed_session(monkeypatch, obtained_at=int(time.time()) - 1, expires_in=300)
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                _build_handler(
+                    token_payload={
+                        "access_token": "NEW_A"
+                    }  # no expires_in / scope / id_token
+                )
+            )
+        )
+        result = refresh.ensure_fresh_session(
+            issuer=_ISSUER,
+            client_id=_CLIENT_ID,
+            http_client=client,
+        )
+        assert result is not None
+        assert result.expires_in == 300  # carried forward
+        assert result.scope == "openid offline_access"  # carried forward
+
     def test_falls_back_to_old_refresh_token_when_idp_does_not_rotate(
         self,
         fake_keyring: InMemoryKeyring,

@@ -12,10 +12,12 @@ _LOOPBACK_HOST = "127.0.0.1"
 _CALLBACK_PATH = "/callback"
 _DEFAULT_TIMEOUT_S = 180.0
 
+# Colors mirror Pipefy's design system (bricks: lumen-base ``feedback`` tokens):
+# success heading = positive.500 (#085C40), failure heading = negative.500 (#9D1A06).
 _SUCCESS_HTML = b"""<!doctype html>
 <html><head><title>Pipefy CLI \xe2\x80\x94 signed in</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:420px;margin:80px auto;text-align:center;">
-  <h1 style="color:#1a7f37;">You're signed in to Pipefy</h1>
+  <h1 style="color:#085C40;">You're signed in to Pipefy</h1>
   <p>You can close this tab and return to your terminal.</p>
 </body></html>
 """
@@ -23,7 +25,7 @@ _SUCCESS_HTML = b"""<!doctype html>
 _ERROR_HTML = b"""<!doctype html>
 <html><head><title>Pipefy CLI \xe2\x80\x94 login failed</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:420px;margin:80px auto;text-align:center;">
-  <h1 style="color:#cf222e;">Login failed</h1>
+  <h1 style="color:#9D1A06;">Login failed</h1>
   <p>Check your terminal for details.</p>
 </body></html>
 """

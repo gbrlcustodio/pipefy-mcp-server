@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import secrets
 import webbrowser
-from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
-from typing import Callable, Iterator
+from typing import Callable
 from urllib.parse import urlencode
 
 import httpx
 
+from pipefy_cli.oauth._http import http_client as _http_client
 from pipefy_cli.oauth.discovery import ProviderMetadata, fetch_provider_metadata
 from pipefy_cli.oauth.loopback import CallbackResult, LoopbackCapture
 from pipefy_cli.oauth.pkce import challenge_from_verifier, generate_verifier
@@ -90,18 +90,6 @@ def exchange_code(
     return payload
 
 
-@contextmanager
-def _http_client(
-    provided: httpx.Client | None, timeout: float
-) -> Iterator[httpx.Client]:
-    if provided is not None:
-        with nullcontext(provided) as client:
-            yield client
-        return
-    with httpx.Client(timeout=timeout) as client:
-        yield client
-
-
 def run_login(
     *,
     issuer_url: str,
@@ -136,7 +124,7 @@ def run_login(
             token exchange).
         TimeoutError: When no browser callback arrives in time.
     """
-    with _http_client(http_client, timeout=_TOKEN_EXCHANGE_TIMEOUT_S) as http:
+    with _http_client(http_client, timeout=_TOKEN_EXCHANGE_TIMEOUT_S) as http:  # type: ignore[operator]
         try:
             metadata = fetch_provider_metadata(issuer_url, client=http)
         except ValueError as exc:

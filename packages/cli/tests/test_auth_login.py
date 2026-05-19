@@ -9,9 +9,8 @@ import threading
 import time
 
 import httpx
-import keyring
-import keyring.backend
 import pytest
+from conftest import InMemoryKeyring
 
 from pipefy_cli.main import app as cli_app
 from pipefy_cli.oauth import discovery, flow, loopback, pkce, storage
@@ -153,40 +152,6 @@ class TestLoopback:
 # --------------------------------------------------------------------------- #
 
 
-class _InMemoryKeyring(keyring.backend.KeyringBackend):
-    """In-memory keyring backend that mirrors the real-world ``delete_password``
-    contract (raises ``PasswordDeleteError`` when the entry is missing)."""
-
-    priority = 1  # type: ignore[assignment]
-
-    def __init__(self) -> None:
-        self._store: dict[tuple[str, str], str] = {}
-
-    def get_password(self, service: str, username: str) -> str | None:
-        return self._store.get((service, username))
-
-    def set_password(self, service: str, username: str, password: str) -> None:
-        self._store[(service, username)] = password
-
-    def delete_password(self, service: str, username: str) -> None:
-        from keyring.errors import PasswordDeleteError
-
-        if (service, username) not in self._store:
-            raise PasswordDeleteError(f"no entry for {service}/{username}")
-        del self._store[(service, username)]
-
-
-@pytest.fixture
-def fake_keyring(monkeypatch: pytest.MonkeyPatch) -> _InMemoryKeyring:
-    fake = _InMemoryKeyring()
-    monkeypatch.setattr(keyring, "_keyring_backend", fake, raising=False)
-    monkeypatch.setattr(keyring, "get_keyring", lambda: fake)
-    monkeypatch.setattr(keyring, "set_password", fake.set_password)
-    monkeypatch.setattr(keyring, "get_password", fake.get_password)
-    monkeypatch.setattr(keyring, "delete_password", fake.delete_password)
-    return fake
-
-
 class TestStorage:
     def test_keychain_key_uses_host_and_client(self) -> None:
         key = storage.keychain_key(
@@ -194,7 +159,7 @@ class TestStorage:
         )
         assert key == "signin.pipefy.com|pipefy-cli"
 
-    def test_store_then_load_roundtrip(self, fake_keyring: _InMemoryKeyring) -> None:
+    def test_store_then_load_roundtrip(self, fake_keyring: InMemoryKeyring) -> None:
         token = {
             "access_token": "AAA",
             "refresh_token": "RRR",
@@ -220,15 +185,13 @@ class TestStorage:
         assert loaded.refresh_token == "RRR"
         assert loaded.scope == "openid email"
 
-    def test_load_returns_none_when_absent(
-        self, fake_keyring: _InMemoryKeyring
-    ) -> None:
+    def test_load_returns_none_when_absent(self, fake_keyring: InMemoryKeyring) -> None:
         assert (
             storage.load_session(issuer="https://x.test/realms/foo", client_id="cid")
             is None
         )
 
-    def test_delete_reports_presence(self, fake_keyring: _InMemoryKeyring) -> None:
+    def test_delete_reports_presence(self, fake_keyring: InMemoryKeyring) -> None:
         storage.store_session(
             issuer="https://x.test/realms/foo",
             client_id="cid",
@@ -242,7 +205,7 @@ class TestStorage:
         )
 
     def test_store_rejects_missing_required_field(
-        self, fake_keyring: _InMemoryKeyring
+        self, fake_keyring: InMemoryKeyring
     ) -> None:
         with pytest.raises(ValueError, match="refresh_token"):
             storage.store_session(
@@ -399,7 +362,7 @@ class TestAuthLoginCommand:
         self,
         cli_runner,
         monkeypatch: pytest.MonkeyPatch,
-        fake_keyring: _InMemoryKeyring,
+        fake_keyring: InMemoryKeyring,
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
@@ -437,7 +400,7 @@ class TestAuthLoginCommand:
         self,
         cli_runner,
         monkeypatch: pytest.MonkeyPatch,
-        fake_keyring: _InMemoryKeyring,
+        fake_keyring: InMemoryKeyring,
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
@@ -464,7 +427,7 @@ class TestAuthLoginCommand:
         self,
         cli_runner,
         monkeypatch: pytest.MonkeyPatch,
-        fake_keyring: _InMemoryKeyring,
+        fake_keyring: InMemoryKeyring,
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
@@ -512,7 +475,7 @@ class TestAuthLoginCommand:
         self,
         cli_runner,
         monkeypatch: pytest.MonkeyPatch,
-        fake_keyring: _InMemoryKeyring,
+        fake_keyring: InMemoryKeyring,
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
@@ -551,7 +514,7 @@ class TestAuthLoginCommand:
         self,
         cli_runner,
         monkeypatch: pytest.MonkeyPatch,
-        fake_keyring: _InMemoryKeyring,
+        fake_keyring: InMemoryKeyring,
         clean_pipefy_env,
         saved_cwd,
     ) -> None:

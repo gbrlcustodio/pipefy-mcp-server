@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+import typer
 from pipefy_sdk import PipefySettings
 
 from pipefy_cli.auth import get_authenticated_client
 from pipefy_cli.main import app
+from pipefy_cli.oauth import StoredSession
 
 
 def _minimal_oauth_settings() -> PipefySettings:
@@ -83,3 +87,131 @@ def test_cli_uses_pipefy_token_env_when_no_flag(
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
     mock_gc.assert_called_once()
     assert mock_gc.call_args.kwargs.get("bearer_token") == "secret-from-env"
+
+
+# --------------------------------------------------------------------------- #
+# Priority 4: stored user session                                             #
+# --------------------------------------------------------------------------- #
+
+
+_FAR_FUTURE_EXPIRES_IN = 3600
+_ISSUER = "https://signin.example.com/realms/pipefy"
+
+
+def _fresh_stored_session(*, access_token: str = "SESSION_ACCESS") -> StoredSession:
+    return StoredSession(
+        issuer=_ISSUER,
+        client_id="pipefy-cli",
+        access_token=access_token,
+        refresh_token="REFRESH",
+        token_type="Bearer",
+        obtained_at=int(time.time()),
+        expires_in=_FAR_FUTURE_EXPIRES_IN,
+        refresh_expires_in=None,
+        scope="openid offline_access",
+        id_token=None,
+    )
+
+
+def _public_only_settings() -> PipefySettings:
+    """``PIPEFY_OAUTH_*`` triple absent → priority 3 unavailable, falls through to 4."""
+    return PipefySettings(graphql_url="https://unit.example.com/graphql")
+
+
+def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
+    """Priority 1/2 (bearer) MUST short-circuit before the keychain is even consulted."""
+    settings = _minimal_oauth_settings()
+    with (
+        patch("pipefy_cli.auth.PipefyClient") as mock_pc,
+        patch("pipefy_cli.auth.ensure_fresh_session") as mock_ensure,
+    ):
+        mock_pc.return_value = MagicMock()
+        get_authenticated_client(
+            settings,
+            bearer_token="explicit-bearer",
+            auth_url=_ISSUER,
+            auth_client_id="pipefy-cli",
+        )
+        mock_pc.assert_called_once_with(settings, bearer_token="explicit-bearer")
+        mock_ensure.assert_not_called()
+
+
+def test_oauth_client_creds_wins_over_stored_session(clean_pipefy_env):
+    """Priority 3 (full OAuth triple) MUST short-circuit before the keychain is consulted."""
+    settings = _minimal_oauth_settings()
+    with (
+        patch("pipefy_cli.auth.PipefyClient") as mock_pc,
+        patch("pipefy_cli.auth.InternalApiClient"),
+        patch("pipefy_cli.auth.AiAutomationService"),
+        patch("pipefy_cli.auth.ensure_fresh_session") as mock_ensure,
+    ):
+        mock_pc.return_value = MagicMock()
+        get_authenticated_client(
+            settings,
+            auth_url=_ISSUER,
+            auth_client_id="pipefy-cli",
+        )
+        mock_pc.assert_called_once_with(settings)
+        mock_ensure.assert_not_called()
+
+
+def test_stored_session_used_when_no_other_source(clean_pipefy_env):
+    """Priority 4 activates when bearer absent AND OAuth triple incomplete."""
+    settings = _public_only_settings()
+    session = _fresh_stored_session()
+    with (
+        patch("pipefy_cli.auth.PipefyClient") as mock_pc,
+        patch("pipefy_cli.auth.ensure_fresh_session", return_value=session),
+    ):
+        mock_pc.return_value = MagicMock()
+        get_authenticated_client(
+            settings, auth_url=_ISSUER, auth_client_id="pipefy-cli"
+        )
+        mock_pc.assert_called_once_with(settings, bearer_token=session.access_token)
+
+
+def test_cache_invalidates_when_access_token_rotates(clean_pipefy_env):
+    """Two calls with different rotated access tokens → two PipefyClient builds."""
+    settings = _public_only_settings()
+    sessions = iter(
+        [
+            _fresh_stored_session(access_token="ROTATED_1"),
+            _fresh_stored_session(access_token="ROTATED_2"),
+        ]
+    )
+    with (
+        patch("pipefy_cli.auth.PipefyClient") as mock_pc,
+        patch(
+            "pipefy_cli.auth.ensure_fresh_session",
+            side_effect=lambda **_: next(sessions),
+        ),
+    ):
+        mock_pc.side_effect = [MagicMock(), MagicMock()]
+        get_authenticated_client(
+            settings, auth_url=_ISSUER, auth_client_id="pipefy-cli"
+        )
+        get_authenticated_client(
+            settings, auth_url=_ISSUER, auth_client_id="pipefy-cli"
+        )
+        assert mock_pc.call_count == 2
+        assert mock_pc.call_args_list[0].kwargs["bearer_token"] == "ROTATED_1"
+        assert mock_pc.call_args_list[1].kwargs["bearer_token"] == "ROTATED_2"
+
+
+def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
+    """RefreshError from ensure_fresh_session surfaces as exit(2) + relogin message."""
+    from pipefy_cli.oauth import RefreshError
+
+    settings = _public_only_settings()
+    with patch(
+        "pipefy_cli.auth.ensure_fresh_session",
+        side_effect=RefreshError("invalid_grant"),
+    ):
+        with pytest.raises(typer.Exit) as excinfo:
+            get_authenticated_client(
+                settings, auth_url=_ISSUER, auth_client_id="pipefy-cli"
+            )
+        assert excinfo.value.exit_code == 2
+    err = capsys.readouterr().err
+    assert "Stored Pipefy session could not be refreshed" in err
+    assert "pipefy auth login" in err

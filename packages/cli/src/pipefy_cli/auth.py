@@ -98,24 +98,23 @@ def get_authenticated_client(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
 
+    missing_oauth = describe_missing_oauth_vars(pipefy_settings)
+
     # Resolve the effective bearer BEFORE the cache lookup so a refresh-rotated
     # access token produces the right (new) cache signature.
     effective_bearer = bearer_token
-    if not effective_bearer and describe_missing_oauth_vars(pipefy_settings):
-        if auth_url and auth_client_id:
-            try:
-                session = ensure_fresh_session(
-                    issuer=auth_url, client_id=auth_client_id
-                )
-            except RefreshError as exc:
-                typer.echo(
-                    f"Stored Pipefy session could not be refreshed: {exc}. "
-                    "Run `pipefy auth login` to sign in again.",
-                    err=True,
-                )
-                raise typer.Exit(2) from exc
-            if session is not None:
-                effective_bearer = session.access_token
+    if not effective_bearer and missing_oauth and auth_url and auth_client_id:
+        try:
+            session = ensure_fresh_session(issuer=auth_url, client_id=auth_client_id)
+        except RefreshError as exc:
+            typer.echo(
+                f"Stored Pipefy session could not be refreshed: {exc}. "
+                "Run `pipefy auth login` to sign in again.",
+                err=True,
+            )
+            raise typer.Exit(2) from exc
+        if session is not None:
+            effective_bearer = session.access_token
 
     key = _cache_key(pipefy_settings, effective_bearer)
     if _cached_client is not None and _cached_signature == key:
@@ -132,7 +131,7 @@ def get_authenticated_client(
         _cached_client = client
         return client
 
-    if describe_missing_oauth_vars(pipefy_settings):
+    if missing_oauth:
         typer.echo(_missing_auth_message(pipefy_settings), err=True)
         raise typer.Exit(2)
 

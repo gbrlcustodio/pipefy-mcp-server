@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 import httpx
 
+from pipefy_cli.oauth._http import http_client
+
 DISCOVERY_PATH = "/.well-known/openid-configuration"
 _DEFAULT_TIMEOUT = 10.0
 
@@ -41,15 +43,13 @@ def fetch_provider_metadata(
             missing required endpoints. Message is user-facing.
     """
     url = discovery_url(issuer_url)
-    owned = client is None
-    http = client or httpx.Client(timeout=timeout)
-    try:
-        response = http.get(url)
-    except httpx.HTTPError as exc:
-        raise ValueError(f"Could not reach Pipefy auth server at {url}: {exc}") from exc
-    finally:
-        if owned:
-            http.close()
+    with http_client(client, timeout=timeout) as http:
+        try:
+            response = http.get(url)
+        except httpx.HTTPError as exc:
+            raise ValueError(
+                f"Could not reach Pipefy auth server at {url}: {exc}"
+            ) from exc
 
     if response.status_code != 200:
         raise ValueError(

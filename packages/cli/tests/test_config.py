@@ -12,7 +12,6 @@ from pipefy_cli.config import (
     apply_toml_fallback,
     ensure_public_graphql_configured,
     resolve_cli_settings,
-    resolve_pipefy_settings,
 )
 
 
@@ -33,10 +32,10 @@ def test_env_only_resolution(
     monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "env-client")
     monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "env-secret")
 
-    resolved = resolve_pipefy_settings(
+    resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    )
+    ).pipefy
 
     assert resolved.graphql_url == "https://env-only.example.com/graphql"
     assert resolved.internal_api_url == "https://env-only.example.com/internal_api"
@@ -64,10 +63,10 @@ def test_dotenv_only_resolution(
         encoding="utf-8",
     )
 
-    resolved = resolve_pipefy_settings(
+    resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    )
+    ).pipefy
 
     assert resolved.graphql_url == "https://dotenv.example.com/graphql"
     assert resolved.oauth_client == "dotenv-client"
@@ -88,10 +87,10 @@ def test_process_env_overrides_dotenv(
         "https://from-process.example.com/graphql",
     )
 
-    resolved = resolve_pipefy_settings(
+    resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    )
+    ).pipefy
 
     assert resolved.graphql_url == "https://from-process.example.com/graphql"
 
@@ -106,10 +105,10 @@ def test_graphql_url_flag_overrides_env(
         "https://from-env.example.com/graphql",
     )
 
-    resolved = resolve_pipefy_settings(
+    resolved = resolve_cli_settings(
         graphql_url_flag="https://from-flag.example.com/graphql",
         allow_insecure_urls_flag=None,
-    )
+    ).pipefy
 
     assert resolved.graphql_url == "https://from-flag.example.com/graphql"
 
@@ -118,10 +117,10 @@ def test_missing_graphql_url_error_points_to_setup_docs(
     clean_pipefy_env,
     saved_cwd,
 ):
-    resolved = resolve_pipefy_settings(
+    resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    )
+    ).pipefy
 
     with pytest.raises(ValueError, match="docs/setup\\.md"):
         ensure_public_graphql_configured(resolved)
@@ -147,10 +146,10 @@ def test_allow_insecure_urls_flag_overrides_env(
     monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "false")
     monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "http://127.0.0.1:9999/graphql")
 
-    resolved = resolve_pipefy_settings(
+    resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=True,
-    )
+    ).pipefy
 
     assert resolved.allow_insecure_urls is True
     assert resolved.graphql_url == "http://127.0.0.1:9999/graphql"
@@ -175,10 +174,10 @@ def test_user_toml_fallback_lowest_precedence(
     )
     monkeypatch.setattr(config_module, "USER_CONFIG_PATH", cfg_path)
 
-    resolved = resolve_pipefy_settings(
+    resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    )
+    ).pipefy
 
     assert resolved.graphql_url == "https://from-toml.example.com/graphql"
     assert resolved.oauth_client == "toml-client"
@@ -207,10 +206,10 @@ def test_env_overrides_user_toml(
         "https://from-env.example.com/graphql",
     )
 
-    resolved = resolve_pipefy_settings(
+    resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    )
+    ).pipefy
 
     assert resolved.graphql_url == "https://from-env.example.com/graphql"
 
@@ -247,7 +246,7 @@ def test_graphql_url_flag_localhost_rejected_without_insecure(
     saved_cwd,
 ):
     with pytest.raises(ValueError, match="HTTPS|http"):
-        resolve_pipefy_settings(
+        resolve_cli_settings(
             graphql_url_flag="http://localhost/graphql",
             allow_insecure_urls_flag=None,
         )
@@ -257,10 +256,10 @@ def test_graphql_url_flag_localhost_allowed_with_insecure_flag(
     clean_pipefy_env,
     saved_cwd,
 ):
-    resolved = resolve_pipefy_settings(
+    resolved = resolve_cli_settings(
         graphql_url_flag="http://localhost/graphql",
         allow_insecure_urls_flag=True,
-    )
+    ).pipefy
     assert resolved.graphql_url == "http://localhost/graphql"
     assert resolved.allow_insecure_urls is True
 
@@ -279,7 +278,7 @@ def test_toml_private_graphql_url_rejected(clean_pipefy_env, saved_cwd, monkeypa
     monkeypatch.setattr(config_module, "USER_CONFIG_PATH", cfg_path)
 
     with pytest.raises(ValueError):
-        resolve_pipefy_settings(
+        resolve_cli_settings(
             graphql_url_flag=None,
             allow_insecure_urls_flag=None,
         )
@@ -295,7 +294,7 @@ def test_corrupt_user_config_toml_raises_actionable_error(
     monkeypatch.setattr(config_module, "USER_CONFIG_PATH", cfg_path)
 
     with pytest.raises(ValueError, match="docs/setup"):
-        resolve_pipefy_settings(
+        resolve_cli_settings(
             graphql_url_flag=None,
             allow_insecure_urls_flag=None,
         )

@@ -20,7 +20,7 @@ auth_app = typer.Typer(
     no_args_is_help=True,
 )
 
-_CLIENT_CREDENTIALS_ENV_KEYS = (
+_SERVICE_ACCOUNT_ENV_KEYS = (
     "PIPEFY_OAUTH_URL",
     "PIPEFY_OAUTH_CLIENT",
     "PIPEFY_OAUTH_SECRET",
@@ -57,7 +57,7 @@ def _active_masking_sources() -> list[str]:
     sources: list[str] = []
     if os.environ.get("PIPEFY_TOKEN"):
         sources.append("PIPEFY_TOKEN")
-    if all(os.environ.get(k) for k in _CLIENT_CREDENTIALS_ENV_KEYS):
+    if all(os.environ.get(k) for k in _SERVICE_ACCOUNT_ENV_KEYS):
         sources.append("PIPEFY_OAUTH_*")
     return sources
 

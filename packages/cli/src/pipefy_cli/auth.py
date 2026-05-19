@@ -1,14 +1,18 @@
 """Build an authenticated :class:`PipefyClient` from CLI configuration.
 
-The precedence chain — most explicit wins:
+The credential precedence chain (most explicit wins) is:
 
-1. ``bearer_token`` arg (CLI ``--token`` flag or ``PIPEFY_TOKEN`` env).
-2. ``PIPEFY_OAUTH_*`` triple → client-credentials grant (service account).
-3. Stored user session from ``pipefy auth login`` (keychain) — refreshed
-   eagerly when the access token is within the leeway window.
+1. ``--token`` CLI flag
+2. ``PIPEFY_TOKEN`` env var
+3. ``PIPEFY_OAUTH_*`` triple → client-credentials grant (service account)
+4. Stored user session from ``pipefy auth login`` (keychain) — refreshed
+   eagerly when the access token is within the leeway window
 
-The cache key includes whichever bearer ultimately reaches the SDK, so a
-refresh-rotated access token naturally invalidates the cached client.
+Tiers 1 and 2 reach this function collapsed into a single ``bearer_token``
+argument (resolved by the root Typer callback in ``main.py``); tier 4
+resolves into the same slot. The cache key includes whichever bearer
+ultimately reaches the SDK, so a refresh-rotated access token naturally
+invalidates the cached client.
 """
 
 from __future__ import annotations

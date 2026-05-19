@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from pipefy_sdk import PipefySettings
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing_extensions import Self
 
 from pipefy_cli._docs import DOCS_SETUP_REF
 
@@ -37,6 +38,18 @@ class CliSettings(BaseSettings):
     auth_client_id: str = Field(
         default=DEFAULT_AUTH_CLIENT_ID, alias="PIPEFY_AUTH_CLIENT_ID"
     )
+
+    @model_validator(mode="after")
+    def _validate_auth_url(self) -> Self:
+        # Mirrors PipefySettings._validate_pipefy_endpoint_urls; deferred import
+        # to avoid a cycle with url_ssrf at module load.
+        from pipefy_sdk.utils.url_ssrf import validate_https_service_endpoint_url
+
+        if self.auth_url and (u := self.auth_url.strip()):
+            validate_https_service_endpoint_url(
+                u, "PIPEFY_AUTH_URL", allow_insecure=self.pipefy.allow_insecure_urls
+            )
+        return self
 
 
 def _revalidate(pipefy: PipefySettings, patch: dict[str, Any]) -> PipefySettings:

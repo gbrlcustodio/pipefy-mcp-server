@@ -6,7 +6,7 @@ import time
 
 import httpx
 
-from pipefy_cli.oauth._http import http_client
+from pipefy_cli.oauth._http import http_client as _http_client
 from pipefy_cli.oauth.discovery import fetch_provider_metadata
 from pipefy_cli.oauth.storage import StoredSession, load_session, store_session
 
@@ -28,7 +28,7 @@ def refresh_access_token(
     issuer: str,
     client_id: str,
     refresh_token: str,
-    http_client_override: httpx.Client | None = None,
+    http_client: httpx.Client | None = None,
 ) -> dict[str, object]:
     """POST ``grant_type=refresh_token`` to the issuer's token endpoint.
 
@@ -36,7 +36,7 @@ def refresh_access_token(
         RefreshError: For any failure that prevents a fresh token response
             (discovery failure, network error, non-200, malformed body).
     """
-    with http_client(http_client_override, timeout=_TIMEOUT_S) as http:
+    with _http_client(http_client, timeout=_TIMEOUT_S) as http:
         try:
             metadata = fetch_provider_metadata(issuer, client=http)
         except ValueError as exc:
@@ -71,7 +71,7 @@ def ensure_fresh_session(
     issuer: str,
     client_id: str,
     leeway_s: int = _LEEWAY_S,
-    http_client_override: httpx.Client | None = None,
+    http_client: httpx.Client | None = None,
 ) -> StoredSession | None:
     """Load the stored session; refresh it if the access token is near expiry.
 
@@ -96,7 +96,7 @@ def ensure_fresh_session(
         issuer=issuer,
         client_id=client_id,
         refresh_token=session.refresh_token,
-        http_client_override=http_client_override,
+        http_client=http_client,
     )
     # Some IdPs don't rotate the refresh token on every refresh.
     token_response.setdefault("refresh_token", session.refresh_token)

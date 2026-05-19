@@ -49,33 +49,31 @@ def _build_handler(
     return handler
 
 
-def _seed_session(*, obtained_at: int, expires_in: int = 300) -> None:
-    storage.store_session(
-        issuer=_ISSUER,
-        client_id=_CLIENT_ID,
-        token_response={
-            "access_token": "OLD",
-            "refresh_token": "OLD_R",
-            "token_type": "Bearer",
-            "expires_in": expires_in,
-            "scope": "openid offline_access",
-        },
-    )
-    # Overwrite obtained_at to put the token at the desired freshness.
-    loaded = storage.load_session(issuer=_ISSUER, client_id=_CLIENT_ID)
-    assert loaded is not None
-    import dataclasses
+def _seed_session(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    obtained_at: int,
+    expires_in: int = 300,
+) -> None:
+    """Persist a session whose ``obtained_at`` is pinned to ``obtained_at``.
 
-    rewritten = dataclasses.replace(loaded, obtained_at=obtained_at)
-    import json
-
-    import keyring
-
-    keyring.set_password(
-        "pipefy-cli",
-        storage.keychain_key(_ISSUER, _CLIENT_ID),
-        json.dumps(dataclasses.asdict(rewritten)),
-    )
+    ``store_session`` stamps ``obtained_at`` via ``time.time()`` at write time, so
+    we pin the clock for the single store call instead of writing-then-rewriting
+    the keychain entry.
+    """
+    with monkeypatch.context() as mp:
+        mp.setattr(time, "time", lambda: float(obtained_at))
+        storage.store_session(
+            issuer=_ISSUER,
+            client_id=_CLIENT_ID,
+            token_response={
+                "access_token": "OLD",
+                "refresh_token": "OLD_R",
+                "token_type": "Bearer",
+                "expires_in": expires_in,
+                "scope": "openid offline_access",
+            },
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -92,23 +90,29 @@ class TestEnsureFreshSession:
         )
 
     def test_returns_session_unchanged_when_fresh(
-        self, fake_keyring: InMemoryKeyring
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        _seed_session(obtained_at=int(time.time()))  # full 300s ahead
+        _seed_session(monkeypatch, obtained_at=int(time.time()))  # full 300s ahead
 
         client = httpx.Client(transport=httpx.MockTransport(_build_handler()))
         result = refresh.ensure_fresh_session(
             issuer=_ISSUER,
             client_id=_CLIENT_ID,
-            http_client_override=client,
+            http_client=client,
         )
         assert result is not None
         assert result.access_token == "OLD"
         assert result.refresh_token == "OLD_R"
 
-    def test_refreshes_when_within_leeway(self, fake_keyring: InMemoryKeyring) -> None:
+    def test_refreshes_when_within_leeway(
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
         # 30s lifetime + 60s leeway → must refresh.
-        _seed_session(obtained_at=int(time.time()) - 1, expires_in=30)
+        _seed_session(monkeypatch, obtained_at=int(time.time()) - 1, expires_in=30)
 
         client = httpx.Client(
             transport=httpx.MockTransport(
@@ -125,14 +129,18 @@ class TestEnsureFreshSession:
         result = refresh.ensure_fresh_session(
             issuer=_ISSUER,
             client_id=_CLIENT_ID,
-            http_client_override=client,
+            http_client=client,
         )
         assert result is not None
         assert result.access_token == "NEW_A"
         assert result.refresh_token == "NEW_R"
 
-    def test_persists_rotated_session(self, fake_keyring: InMemoryKeyring) -> None:
-        _seed_session(obtained_at=int(time.time()) - 1, expires_in=30)
+    def test_persists_rotated_session(
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _seed_session(monkeypatch, obtained_at=int(time.time()) - 1, expires_in=30)
         client = httpx.Client(
             transport=httpx.MockTransport(
                 _build_handler(
@@ -146,7 +154,7 @@ class TestEnsureFreshSession:
         refresh.ensure_fresh_session(
             issuer=_ISSUER,
             client_id=_CLIENT_ID,
-            http_client_override=client,
+            http_client=client,
         )
 
         reloaded = storage.load_session(issuer=_ISSUER, client_id=_CLIENT_ID)
@@ -155,9 +163,11 @@ class TestEnsureFreshSession:
         assert reloaded.refresh_token == "NEW_R"
 
     def test_falls_back_to_old_refresh_token_when_idp_does_not_rotate(
-        self, fake_keyring: InMemoryKeyring
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        _seed_session(obtained_at=int(time.time()) - 1, expires_in=30)
+        _seed_session(monkeypatch, obtained_at=int(time.time()) - 1, expires_in=30)
         client = httpx.Client(
             transport=httpx.MockTransport(
                 _build_handler(
@@ -169,7 +179,7 @@ class TestEnsureFreshSession:
         result = refresh.ensure_fresh_session(
             issuer=_ISSUER,
             client_id=_CLIENT_ID,
-            http_client_override=client,
+            http_client=client,
         )
         assert result is not None
         assert result.refresh_token == "OLD_R"  # unchanged
@@ -181,7 +191,7 @@ class TestEnsureFreshSession:
     ) -> None:
         # Seed an expired session relative to the pinned "now" so the freshness
         # check decides to refresh and store_session re-stamps obtained_at.
-        _seed_session(obtained_at=1_700_000_000 - 1, expires_in=30)
+        _seed_session(monkeypatch, obtained_at=1_700_000_000 - 1, expires_in=30)
         client = httpx.Client(
             transport=httpx.MockTransport(
                 _build_handler(
@@ -196,16 +206,18 @@ class TestEnsureFreshSession:
         result = refresh.ensure_fresh_session(
             issuer=_ISSUER,
             client_id=_CLIENT_ID,
-            http_client_override=client,
+            http_client=client,
         )
         assert result is not None
         assert result.obtained_at == 1_700_000_000
 
     def test_custom_leeway_forces_earlier_refresh(
-        self, fake_keyring: InMemoryKeyring
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # 100s lifetime, with 90s leeway → must refresh because deadline = 10s ahead.
-        _seed_session(obtained_at=int(time.time()), expires_in=100)
+        _seed_session(monkeypatch, obtained_at=int(time.time()), expires_in=100)
         client = httpx.Client(
             transport=httpx.MockTransport(
                 _build_handler(
@@ -221,15 +233,17 @@ class TestEnsureFreshSession:
             issuer=_ISSUER,
             client_id=_CLIENT_ID,
             leeway_s=200,
-            http_client_override=client,
+            http_client=client,
         )
         assert result is not None
         assert result.access_token == "REFRESHED_BECAUSE_LEEWAY"
 
     def test_refresh_failure_does_not_delete_stored_session(
-        self, fake_keyring: InMemoryKeyring
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        _seed_session(obtained_at=int(time.time()) - 1, expires_in=30)
+        _seed_session(monkeypatch, obtained_at=int(time.time()) - 1, expires_in=30)
         client = httpx.Client(
             transport=httpx.MockTransport(
                 _build_handler(
@@ -242,7 +256,7 @@ class TestEnsureFreshSession:
             refresh.ensure_fresh_session(
                 issuer=_ISSUER,
                 client_id=_CLIENT_ID,
-                http_client_override=client,
+                http_client=client,
             )
         # Session is still present (user can retry / re-login).
         assert storage.load_session(issuer=_ISSUER, client_id=_CLIENT_ID) is not None
@@ -268,7 +282,7 @@ class TestRefreshAccessTokenErrors:
                 issuer=_ISSUER,
                 client_id=_CLIENT_ID,
                 refresh_token="x",
-                http_client_override=client,
+                http_client=client,
             )
 
     def test_network_error_raises_refresh_error(self) -> None:
@@ -282,7 +296,7 @@ class TestRefreshAccessTokenErrors:
                 issuer=_ISSUER,
                 client_id=_CLIENT_ID,
                 refresh_token="x",
-                http_client_override=client,
+                http_client=client,
             )
 
     def test_discovery_failure_raises_refresh_error(self) -> None:
@@ -294,7 +308,7 @@ class TestRefreshAccessTokenErrors:
                 issuer=_ISSUER,
                 client_id=_CLIENT_ID,
                 refresh_token="x",
-                http_client_override=client,
+                http_client=client,
             )
 
     def test_non_object_json_raises_refresh_error(self) -> None:
@@ -309,5 +323,5 @@ class TestRefreshAccessTokenErrors:
                 issuer=_ISSUER,
                 client_id=_CLIENT_ID,
                 refresh_token="x",
-                http_client_override=client,
+                http_client=client,
             )

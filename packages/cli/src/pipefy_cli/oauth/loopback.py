@@ -12,20 +12,24 @@ _LOOPBACK_HOST = "127.0.0.1"
 _CALLBACK_PATH = "/callback"
 _DEFAULT_TIMEOUT_S = 180.0
 
-# Colors mirror Pipefy's design system (bricks: lumen-base ``feedback`` tokens):
-# success heading = positive.500 (#085C40), failure heading = negative.500 (#9D1A06).
+# Colors from Pipefy's design system (bricks/lumen-base):
+# - success heading = brand.300 (#005EFC) — the brand-primary; success state is a
+#   brand moment, not a generic green. The design system has no
+#   ``sys.color.text.positive`` — that's deliberate (success isn't typecast as green).
+# - failure heading = sys.color.text.negative (#C22E00 = feedback.negative.400) —
+#   the documented system-level "this text means error" color.
 _SUCCESS_HTML = b"""<!doctype html>
 <html><head><title>Pipefy CLI \xe2\x80\x94 signed in</title></head>
-<body style="font-family:system-ui,sans-serif;max-width:420px;margin:80px auto;text-align:center;">
-  <h1 style="color:#085C40;">You're signed in to Pipefy</h1>
+<body style="font-family:'Inter',system-ui,sans-serif;max-width:420px;margin:80px auto;text-align:center;color:#101820;">
+  <h1 style="color:#005EFC;">You're signed in to Pipefy</h1>
   <p>You can close this tab and return to your terminal.</p>
 </body></html>
 """
 
 _ERROR_HTML = b"""<!doctype html>
 <html><head><title>Pipefy CLI \xe2\x80\x94 login failed</title></head>
-<body style="font-family:system-ui,sans-serif;max-width:420px;margin:80px auto;text-align:center;">
-  <h1 style="color:#9D1A06;">Login failed</h1>
+<body style="font-family:'Inter',system-ui,sans-serif;max-width:420px;margin:80px auto;text-align:center;color:#101820;">
+  <h1 style="color:#C22E00;">Login failed</h1>
   <p>Check your terminal for details.</p>
 </body></html>
 """

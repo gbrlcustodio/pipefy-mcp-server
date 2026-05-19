@@ -11,6 +11,7 @@ from pipefy_cli.config import (
     CliSettings,
     apply_toml_fallback,
     ensure_public_graphql_configured,
+    resolve_cli_settings,
     resolve_pipefy_settings,
 )
 
@@ -295,6 +296,58 @@ def test_corrupt_user_config_toml_raises_actionable_error(
 
     with pytest.raises(ValueError, match="docs/setup"):
         resolve_pipefy_settings(
+            graphql_url_flag=None,
+            allow_insecure_urls_flag=None,
+        )
+
+
+def test_auth_url_https_accepted(
+    clean_pipefy_env,
+    saved_cwd,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("PIPEFY_AUTH_URL", "https://signin.example.com/realms/pipefy")
+    resolved = resolve_cli_settings(
+        graphql_url_flag=None,
+        allow_insecure_urls_flag=None,
+    )
+    assert resolved.auth_url == "https://signin.example.com/realms/pipefy"
+
+
+def test_auth_url_http_rejected_without_insecure(
+    clean_pipefy_env,
+    saved_cwd,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("PIPEFY_AUTH_URL", "http://signin.example.com/realms/pipefy")
+    with pytest.raises(ValueError, match="PIPEFY_AUTH_URL"):
+        resolve_cli_settings(
+            graphql_url_flag=None,
+            allow_insecure_urls_flag=None,
+        )
+
+
+def test_auth_url_localhost_allowed_with_insecure_flag(
+    clean_pipefy_env,
+    saved_cwd,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("PIPEFY_AUTH_URL", "http://localhost:8080/realms/dev")
+    resolved = resolve_cli_settings(
+        graphql_url_flag=None,
+        allow_insecure_urls_flag=True,
+    )
+    assert resolved.auth_url == "http://localhost:8080/realms/dev"
+
+
+def test_auth_url_private_ip_rejected(
+    clean_pipefy_env,
+    saved_cwd,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("PIPEFY_AUTH_URL", "https://10.0.0.1/realms/pipefy")
+    with pytest.raises(ValueError, match="PIPEFY_AUTH_URL"):
+        resolve_cli_settings(
             graphql_url_flag=None,
             allow_insecure_urls_flag=None,
         )

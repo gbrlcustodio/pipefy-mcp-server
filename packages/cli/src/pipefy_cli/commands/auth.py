@@ -46,7 +46,7 @@ def _auth_config_from_ctx(ctx: typer.Context) -> tuple[str, str]:
     return auth_url, obj["auth_client_id"]
 
 
-def _active_masking_sources() -> list[str]:
+def _session_masking_env_vars() -> list[str]:
     """Env vars that outrank a stored session in the credential precedence chain.
 
     Only ``os.environ`` is consulted — by the precedence model, ``.env`` defaults
@@ -54,20 +54,20 @@ def _active_masking_sources() -> list[str]:
     *complete* triple is configured (otherwise the client-credentials path
     wouldn't activate and the warning would be misleading).
     """
-    sources: list[str] = []
+    env_vars: list[str] = []
     if os.environ.get("PIPEFY_TOKEN"):
-        sources.append("PIPEFY_TOKEN")
+        env_vars.append("PIPEFY_TOKEN")
     if all(os.environ.get(k) for k in _SERVICE_ACCOUNT_ENV_KEYS):
-        sources.append("PIPEFY_OAUTH_*")
-    return sources
+        env_vars.append("PIPEFY_OAUTH_*")
+    return env_vars
 
 
 def _warn_if_masked() -> None:
-    sources = _active_masking_sources()
-    if not sources:
+    env_vars = _session_masking_env_vars()
+    if not env_vars:
         return
     typer.echo(
-        f"Note: {', '.join(sources)} is set in your environment; other `pipefy` "
+        f"Note: {', '.join(env_vars)} is set in your environment; other `pipefy` "
         "commands will continue to use it until you unset it.",
         err=True,
     )

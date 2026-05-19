@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import keyring
+import keyring.backend
 import pytest
 from typer.testing import CliRunner
 
@@ -75,3 +77,39 @@ def _reset_cli_auth_cache() -> None:
     clear_authenticated_client_cache()
     yield
     clear_authenticated_client_cache()
+
+
+class InMemoryKeyring(keyring.backend.KeyringBackend):
+    """In-memory keyring backend that mirrors the real-world ``delete_password``
+    contract (raises ``PasswordDeleteError`` when the entry is missing)."""
+
+    priority = 1  # type: ignore[assignment]
+
+    def __init__(self) -> None:
+        self._store: dict[tuple[str, str], str] = {}
+
+    def get_password(self, service: str, username: str) -> str | None:
+        return self._store.get((service, username))
+
+    def set_password(self, service: str, username: str, password: str) -> None:
+        self._store[(service, username)] = password
+
+    def delete_password(self, service: str, username: str) -> None:
+        from keyring.errors import PasswordDeleteError
+
+        if (service, username) not in self._store:
+            raise PasswordDeleteError(f"no entry for {service}/{username}")
+        del self._store[(service, username)]
+
+
+@pytest.fixture
+def fake_keyring(monkeypatch: pytest.MonkeyPatch) -> InMemoryKeyring:
+    """Patch the ``keyring`` module surface our storage code uses."""
+
+    fake = InMemoryKeyring()
+    monkeypatch.setattr(keyring, "_keyring_backend", fake, raising=False)
+    monkeypatch.setattr(keyring, "get_keyring", lambda: fake)
+    monkeypatch.setattr(keyring, "set_password", fake.set_password)
+    monkeypatch.setattr(keyring, "get_password", fake.get_password)
+    monkeypatch.setattr(keyring, "delete_password", fake.delete_password)
+    return fake

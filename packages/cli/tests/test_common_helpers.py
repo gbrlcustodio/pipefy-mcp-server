@@ -159,9 +159,9 @@ def test_run_pipefy_client_coroutine_runs_factory_and_returns(monkeypatch):
 
     captured: dict[str, Any] = {}
 
-    def fake_get_client(settings: object, *, bearer_token: object) -> object:
+    def fake_get_client(settings: object, **kwargs: object) -> object:
         captured["settings"] = settings
-        captured["bearer_token"] = bearer_token
+        captured["bearer_token"] = kwargs.get("bearer_token")
         return "client-instance"
 
     async def factory(client: object) -> str:
@@ -171,7 +171,14 @@ def test_run_pipefy_client_coroutine_runs_factory_and_returns(monkeypatch):
     sentinel_settings = object()
     monkeypatch.setattr(_common, "get_authenticated_client", fake_get_client)
     monkeypatch.setattr(
-        _common, "settings_and_token", lambda ctx: (sentinel_settings, "abc")
+        _common,
+        "auth_context_from_ctx",
+        lambda ctx: _common.AuthContext(
+            settings=sentinel_settings,
+            bearer_token="abc",
+            auth_url=None,
+            auth_client_id=None,
+        ),
     )
 
     result = run_pipefy_client_coroutine(MagicMock(), factory)
@@ -195,9 +202,15 @@ def test_run_pipefy_client_coroutine_maps_pipefy_error_to_exit_1(monkeypatch):
     from pipefy_cli.commands._common import run_pipefy_client_coroutine
 
     monkeypatch.setattr(
-        _common, "get_authenticated_client", lambda settings, *, bearer_token: object()
+        _common, "get_authenticated_client", lambda settings, **kwargs: object()
     )
-    monkeypatch.setattr(_common, "settings_and_token", lambda ctx: (object(), None))
+    monkeypatch.setattr(
+        _common,
+        "auth_context_from_ctx",
+        lambda ctx: _common.AuthContext(
+            settings=object(), bearer_token=None, auth_url=None, auth_client_id=None
+        ),
+    )
 
     async def factory(client: object) -> str:
         raise PipefyError("graphql denied")
@@ -214,9 +227,15 @@ def test_run_pipefy_client_coroutine_maps_value_error_when_configured(monkeypatc
     from pipefy_cli.commands._common import run_pipefy_client_coroutine
 
     monkeypatch.setattr(
-        _common, "get_authenticated_client", lambda settings, *, bearer_token: object()
+        _common, "get_authenticated_client", lambda settings, **kwargs: object()
     )
-    monkeypatch.setattr(_common, "settings_and_token", lambda ctx: (object(), None))
+    monkeypatch.setattr(
+        _common,
+        "auth_context_from_ctx",
+        lambda ctx: _common.AuthContext(
+            settings=object(), bearer_token=None, auth_url=None, auth_client_id=None
+        ),
+    )
 
     async def factory(client: object) -> None:
         raise ValueError("Export failed (state='failed').")
@@ -233,9 +252,15 @@ def test_run_pipefy_client_coroutine_broken_pipe_exits_0(monkeypatch):
     from pipefy_cli.commands._common import run_pipefy_client_coroutine
 
     monkeypatch.setattr(
-        _common, "get_authenticated_client", lambda settings, *, bearer_token: object()
+        _common, "get_authenticated_client", lambda settings, **kwargs: object()
     )
-    monkeypatch.setattr(_common, "settings_and_token", lambda ctx: (object(), None))
+    monkeypatch.setattr(
+        _common,
+        "auth_context_from_ctx",
+        lambda ctx: _common.AuthContext(
+            settings=object(), bearer_token=None, auth_url=None, auth_client_id=None
+        ),
+    )
 
     async def factory(client: object) -> None:
         raise BrokenPipeError()

@@ -7,6 +7,7 @@ import json
 import math
 import sys
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any, TypeVar
 
 import typer
@@ -16,6 +17,17 @@ from pipefy_sdk.exceptions import PipefyError
 
 from pipefy_cli.auth import get_authenticated_client
 from pipefy_cli.output import render_json, render_rich
+
+
+@dataclass(frozen=True)
+class AuthContext:
+    """All four credential-resolution inputs the auth boundary needs."""
+
+    settings: PipefySettings
+    bearer_token: str | None
+    auth_url: str | None
+    auth_client_id: str | None
+
 
 _T = TypeVar("_T")
 _R = TypeVar("_R")
@@ -142,10 +154,15 @@ def run_pipefy_client_coroutine(
     Raises:
         typer.Exit: On :class:`PipefyError` (exit code 1), optional ``ValueError`` mapping, or ``BrokenPipeError`` (exit 0).
     """
-    pipefy_settings, token = settings_and_token(ctx)
+    auth = auth_context_from_ctx(ctx)
 
     async def _run() -> _T:
-        client = get_authenticated_client(pipefy_settings, bearer_token=token)
+        client = get_authenticated_client(
+            auth.settings,
+            bearer_token=auth.bearer_token,
+            auth_url=auth.auth_url,
+            auth_client_id=auth.auth_client_id,
+        )
         return await coro_factory(client)
 
     try:
@@ -200,10 +217,26 @@ def settings_and_token(ctx: typer.Context) -> tuple[PipefySettings, str | None]:
     return obj["pipefy_settings"], obj.get("token")
 
 
+def auth_context_from_ctx(ctx: typer.Context) -> AuthContext:
+    """Resolve root ``ctx.obj`` into the full auth surface for the auth boundary."""
+    obj = ctx.find_root().obj
+    return AuthContext(
+        settings=obj["pipefy_settings"],
+        bearer_token=obj.get("token"),
+        auth_url=obj.get("auth_url"),
+        auth_client_id=obj.get("auth_client_id"),
+    )
+
+
 def authenticated_client_from_ctx(ctx: typer.Context) -> PipefyClient:
     """Build a :class:`PipefyClient` using the same auth path as ``run_cli_command``."""
-    pipefy_settings, token = settings_and_token(ctx)
-    return get_authenticated_client(pipefy_settings, bearer_token=token)
+    auth = auth_context_from_ctx(ctx)
+    return get_authenticated_client(
+        auth.settings,
+        bearer_token=auth.bearer_token,
+        auth_url=auth.auth_url,
+        auth_client_id=auth.auth_client_id,
+    )
 
 
 def parse_json_value(raw: str | None, option_name: str) -> Any:
@@ -252,11 +285,16 @@ def run_cli_command(
         format_transport_query_error: Optional override for GraphQL transport errors
             (defaults to a single-line formatter).
     """
-    pipefy_settings, token = settings_and_token(ctx)
+    auth = auth_context_from_ctx(ctx)
     transport_fmt = format_transport_query_error or _format_transport_query_error
 
     async def _run() -> _R:
-        client = get_authenticated_client(pipefy_settings, bearer_token=token)
+        client = get_authenticated_client(
+            auth.settings,
+            bearer_token=auth.bearer_token,
+            auth_url=auth.auth_url,
+            auth_client_id=auth.auth_client_id,
+        )
         return await coro_factory(client)
 
     try:

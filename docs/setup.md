@@ -78,6 +78,8 @@ Runtime settings come from **`pipefy_mcp.settings.Settings`** ([Pydantic Setting
 
 All other optional flags (insecure dev URLs, webhooks, introspection cache, etc.) are documented in **[`.env.example`](../.env.example)** only.
 
+> **CLI users:** the variables above feed the **service-account** path. The `pipefy` CLI also supports an interactive `pipefy auth login` flow (browser-based, per-user) and a direct `PIPEFY_TOKEN` bearer. The four-tier precedence between them is documented in **[`cli/auth.md`](cli/auth.md)**.
+
 ---
 
 ## MCP client setup

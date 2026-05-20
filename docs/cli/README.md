@@ -6,6 +6,7 @@ Material here describes **`pipefy-cli`** (Typer): terminal workflows, flags, and
 
 | Path | Description |
 |------|-------------|
+| [`auth.md`](auth.md) | Credential precedence, `pipefy auth login`, env vars, and troubleshooting for the four supported auth sources |
 | [`self-healing.md`](self-healing.md) | Discover GraphQL operations with `pipefy introspect`, then run `pipefy graphql exec` (mutations require `--yes`) |
 
 ## Quick conventions

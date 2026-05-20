@@ -7,7 +7,7 @@ import webbrowser
 
 import typer
 
-from pipefy_cli._docs import DOCS_SETUP_REF
+from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.commands._common import settings_and_auth_from_ctx
 from pipefy_cli.oauth import (
     LoginError,
@@ -80,7 +80,7 @@ def auth_login(
             "PIPEFY_AUTH_URL is required for `pipefy auth login` (the OIDC issuer "
             "URL for Pipefy authentication, e.g. "
             "https://signin.pipefy.com/realms/pipefy). "
-            f"See {DOCS_SETUP_REF}.",
+            f"See {DOCS_CLI_AUTH_REF}.",
             err=True,
         )
         raise typer.Exit(2)

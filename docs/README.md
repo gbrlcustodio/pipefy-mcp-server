@@ -15,6 +15,7 @@ This folder holds **human-facing** guides for the Pipefy Labs monorepo. Use the 
 | Doc | Role |
 |-----|------|
 | [`setup.md`](setup.md) | First-time install, `PIPEFY_*` variables, MCP client JSON samples |
+| [`cli/auth.md`](cli/auth.md) | CLI credential precedence, `pipefy auth login`, troubleshooting |
 | [`parity.md`](parity.md) | MCP tool ↔ CLI command matrix (source of truth for coverage and deferrals) |
 | [`MIGRATION.md`](MIGRATION.md) | Notes for existing MCP users across packaging changes |
 | [`dependencies.md`](dependencies.md) | Why each runtime dependency exists |

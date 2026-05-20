@@ -15,11 +15,13 @@ from gql.transport.exceptions import (
     TransportQueryError,
     TransportServerError,
 )
-from pipefy_sdk import MePayload
+from pipefy_sdk import MePayload, PipefySettings
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
+    AuthContext,
     AuthSource,
+    OidcClient,
     detect_all_sources,
     get_authenticated_client,
 )
@@ -295,6 +297,14 @@ def _render_status_text(report: AuthStatusReport) -> None:
             )
 
 
+def _render(report: AuthStatusReport, *, json_out: bool) -> None:
+    """Render the report on stdout in the requested format."""
+    if json_out:
+        render_json(_to_json_payload(report))
+    else:
+        _render_status_text(report)
+
+
 def _emit_and_exit(
     report: AuthStatusReport,
     *,
@@ -302,85 +312,70 @@ def _emit_and_exit(
     exit_code: int,
     stderr: str | None = None,
 ) -> typer.Exit:
-    """Render the report (JSON or text) and return the ``Exit`` for the caller to raise."""
-    if json_out:
-        render_json(_to_json_payload(report))
-    else:
-        _render_status_text(report)
-        if stderr:
-            typer.echo(stderr, err=True)
+    """Render the report and return the ``Exit`` for the caller to raise."""
+    _render(report, json_out=json_out)
+    if stderr and not json_out:
+        typer.echo(stderr, err=True)
     return typer.Exit(exit_code)
 
 
-@auth_app.command("status")
-def auth_status(
-    ctx: typer.Context,
-    json_out: bool = typer.Option(  # noqa: B008 (Typer Option pattern)
-        False,
-        "--json",
-        "-j",
-        help="Emit a stable JSON schema instead of human-readable text.",
-    ),
+def _populate_stored_session(
+    report: AuthStatusReport, oidc: OidcClient, *, json_out: bool
 ) -> None:
-    """Print which auth source is active, the authenticated identity, and session expiry."""
-    settings, auth = settings_and_auth_from_ctx(ctx)
-    detected = detect_all_sources(settings, auth)
-    source: AuthSource = detected[0] if detected else "none"
-    report = AuthStatusReport(auth_source=source, detected_sources=detected)
-
-    if source == "none":
-        raise _emit_and_exit(report, json_out=json_out, exit_code=2)
-
-    if source == "stored-session":
-        assert auth.oidc_client is not None
-        report.issuer = auth.oidc_client.issuer_url
-        report.keychain_backend = keychain_backend_name()
-        report.masking_env_vars = _session_masking_env_vars()
-        try:
-            fresh_session = ensure_fresh_session(
-                issuer=auth.oidc_client.issuer_url,
-                client_id=auth.oidc_client.client_id,
-            )
-        except RefreshError as exc:
-            report.state = (
-                "refresh-expired" if "invalid_grant" in str(exc) else "needs-login"
-            )
-            # Best-effort expiry from the pre-refresh blob so users see *why*.
-            stale = load_session(
-                issuer=auth.oidc_client.issuer_url,
-                client_id=auth.oidc_client.client_id,
-            )
-            if stale is not None:
-                report.access_expires_at = _iso_expiry(
-                    stale.obtained_at, stale.expires_in
-                )
-                report.refresh_expires_at = _iso_expiry(
-                    stale.obtained_at, stale.refresh_expires_in
-                )
-            raise _emit_and_exit(
-                report,
-                json_out=json_out,
-                exit_code=2,
-                stderr=(
-                    f"Stored Pipefy session could not be refreshed: {exc}. "
-                    "Run `pipefy auth login` to sign in again."
-                ),
-            ) from exc
-        if fresh_session is None:
-            # Session vanished between detection and refresh.
-            raise _emit_and_exit(
-                AuthStatusReport(auth_source="none", detected_sources=detected),
-                json_out=json_out,
-                exit_code=2,
-            )
-        report.state = "active"
-        report.access_expires_at = _iso_expiry(
-            fresh_session.obtained_at, fresh_session.expires_in
+    """Populate stored-session fields on ``report``; ``raise _emit_and_exit`` on failure."""
+    report.issuer = oidc.issuer_url
+    report.keychain_backend = keychain_backend_name()
+    report.masking_env_vars = _session_masking_env_vars()
+    try:
+        fresh_session = ensure_fresh_session(
+            issuer=oidc.issuer_url, client_id=oidc.client_id
         )
-        report.refresh_expires_at = _iso_expiry(
-            fresh_session.obtained_at, fresh_session.refresh_expires_in
+    except RefreshError as exc:
+        report.state = (
+            "refresh-expired" if "invalid_grant" in str(exc) else "needs-login"
         )
+        # Best-effort expiry from the pre-refresh blob so users see *why*.
+        stale = load_session(issuer=oidc.issuer_url, client_id=oidc.client_id)
+        if stale is not None:
+            report.access_expires_at = _iso_expiry(stale.obtained_at, stale.expires_in)
+            report.refresh_expires_at = _iso_expiry(
+                stale.obtained_at, stale.refresh_expires_in
+            )
+        raise _emit_and_exit(
+            report,
+            json_out=json_out,
+            exit_code=2,
+            stderr=(
+                f"Stored Pipefy session could not be refreshed: {exc}. "
+                "Run `pipefy auth login` to sign in again."
+            ),
+        ) from exc
+    if fresh_session is None:
+        # Session vanished between detection and refresh.
+        raise _emit_and_exit(
+            AuthStatusReport(
+                auth_source="none", detected_sources=report.detected_sources
+            ),
+            json_out=json_out,
+            exit_code=2,
+        )
+    report.state = "active"
+    report.access_expires_at = _iso_expiry(
+        fresh_session.obtained_at, fresh_session.expires_in
+    )
+    report.refresh_expires_at = _iso_expiry(
+        fresh_session.obtained_at, fresh_session.refresh_expires_in
+    )
 
+
+def _fetch_identity(
+    report: AuthStatusReport,
+    settings: PipefySettings,
+    auth: AuthContext,
+    *,
+    json_out: bool,
+) -> None:
+    """Populate ``report.identity``; ``raise _emit_and_exit`` on transport / 401."""
     client = get_authenticated_client(settings, auth)
     try:
         report.identity = asyncio.run(client.get_me())
@@ -404,10 +399,31 @@ def auth_status(
             stderr=f"Pipefy transport error: {exc}",
         ) from exc
 
-    if json_out:
-        render_json(_to_json_payload(report))
-    else:
-        _render_status_text(report)
+
+@auth_app.command("status")
+def auth_status(
+    ctx: typer.Context,
+    json_out: bool = typer.Option(  # noqa: B008 (Typer Option pattern)
+        False,
+        "--json",
+        "-j",
+        help="Emit a stable JSON schema instead of human-readable text.",
+    ),
+) -> None:
+    """Print which auth source is active, the authenticated identity, and session expiry."""
+    settings, auth = settings_and_auth_from_ctx(ctx)
+    detected = detect_all_sources(settings, auth)
+    source: AuthSource = detected[0] if detected else "none"
+    report = AuthStatusReport(auth_source=source, detected_sources=detected)
+
+    if source == "none":
+        raise _emit_and_exit(report, json_out=json_out, exit_code=2)
+    if source == "stored-session":
+        assert auth.oidc_client is not None
+        _populate_stored_session(report, auth.oidc_client, json_out=json_out)
+
+    _fetch_identity(report, settings, auth, json_out=json_out)
+    _render(report, json_out=json_out)
 
 
 __all__ = ["auth_app"]

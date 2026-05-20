@@ -8,14 +8,15 @@ The credential precedence chain (most explicit wins) is:
 4. Stored user session from ``pipefy auth login`` (keychain) — refreshed
    eagerly when the access token is within the leeway window
 
-Tiers 1 and 2 reach this function collapsed into a single ``bearer_token``
-argument (resolved by the root Typer callback in ``main.py``); tier 4
-resolves into the same slot. The cache key includes whichever bearer
-ultimately reaches the SDK, so a refresh-rotated access token naturally
-invalidates the cached client.
+Tiers 1 and 2 reach this function collapsed into ``AuthContext.bearer_token``
+(resolved by the root Typer callback in ``main.py``); tier 4 resolves into
+the same slot. The cache key includes whichever bearer ultimately reaches the
+SDK, so a refresh-rotated access token naturally invalidates the cached client.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import typer
 from pipefy_sdk import (
@@ -31,6 +32,32 @@ from pipefy_cli.config import (
     ensure_public_graphql_configured,
 )
 from pipefy_cli.oauth import RefreshError, ensure_fresh_session
+
+
+@dataclass(frozen=True)
+class OidcClient:
+    """OIDC client identity: issuer URL + the public client id registered there.
+
+    The two fields are a single configurable unit; presence of an :class:`OidcClient`
+    on :class:`AuthContext` is what gates tier 4 of the credential precedence chain.
+    """
+
+    issuer_url: str
+    client_id: str
+
+
+@dataclass(frozen=True)
+class AuthContext:
+    """User-auth identity for a single CLI invocation.
+
+    Carries only identity. Where-to-call configuration (URLs, service-account
+    credentials, ``allow_insecure_urls``) lives on :class:`PipefySettings` and is
+    passed alongside.
+    """
+
+    bearer_token: str | None
+    oidc_client: OidcClient | None
+
 
 _cached_signature: tuple[object, ...] | None = None
 # One-shot CLIs reuse this; long-lived programmatic use should call
@@ -71,20 +98,17 @@ def _missing_auth_message(pipefy_settings: PipefySettings) -> str:
 
 def get_authenticated_client(
     pipefy_settings: PipefySettings,
-    *,
-    bearer_token: str | None = None,
-    auth_url: str | None = None,
-    auth_client_id: str | None = None,
+    auth: AuthContext,
 ) -> PipefyClient:
     """Return a facade client using the highest-precedence available auth source.
 
     Args:
         pipefy_settings: Validated Pipefy endpoint settings (``PIPEFY_*``).
-        bearer_token: When set (``--token`` / ``PIPEFY_TOKEN``), skips OAuth and
-            uses this bearer directly. Highest precedence.
-        auth_url: Issuer URL for the stored user session lookup. From
-            ``PIPEFY_AUTH_URL``.
-        auth_client_id: Public client id for the stored session lookup.
+        auth: User-auth identity for this invocation. ``bearer_token`` covers
+            tiers 1 and 2 (``--token`` / ``PIPEFY_TOKEN``); ``oidc_client`` covers
+            tier 4 (stored user session keyed by issuer + client id). Tier 3
+            (service-account client credentials) is resolved from
+            ``pipefy_settings`` alone.
 
     Returns:
         Shared in-process instance when settings match a prior call; otherwise
@@ -106,10 +130,13 @@ def get_authenticated_client(
 
     # Resolve the effective bearer BEFORE the cache lookup so a refresh-rotated
     # access token produces the right (new) cache signature.
-    effective_bearer = bearer_token
-    if not effective_bearer and missing_oauth and auth_url and auth_client_id:
+    effective_bearer = auth.bearer_token
+    if not effective_bearer and missing_oauth and auth.oidc_client is not None:
         try:
-            session = ensure_fresh_session(issuer=auth_url, client_id=auth_client_id)
+            session = ensure_fresh_session(
+                issuer=auth.oidc_client.issuer_url,
+                client_id=auth.oidc_client.client_id,
+            )
         except RefreshError as exc:
             typer.echo(
                 f"Stored Pipefy session could not be refreshed: {exc}. "
@@ -156,6 +183,8 @@ def get_authenticated_client(
 
 
 __all__ = [
+    "AuthContext",
+    "OidcClient",
     "clear_authenticated_client_cache",
     "get_authenticated_client",
 ]

@@ -8,6 +8,7 @@ import webbrowser
 import typer
 
 from pipefy_cli._docs import DOCS_SETUP_REF
+from pipefy_cli.commands._common import settings_and_auth_from_ctx
 from pipefy_cli.oauth import (
     LoginError,
     keychain_backend_name,
@@ -25,25 +26,6 @@ _SERVICE_ACCOUNT_ENV_KEYS = (
     "PIPEFY_OAUTH_CLIENT",
     "PIPEFY_OAUTH_SECRET",
 )
-
-
-def _auth_config_from_ctx(ctx: typer.Context) -> tuple[str, str]:
-    """Return ``(auth_url, client_id)`` from the root callback's stash.
-
-    Raises ``typer.Exit(2)`` when ``PIPEFY_AUTH_URL`` is unset.
-    """
-    obj = ctx.find_root().obj
-    auth_url = obj.get("auth_url") or ""
-    if not auth_url:
-        typer.echo(
-            "PIPEFY_AUTH_URL is required for `pipefy auth login` (the OIDC issuer "
-            "URL for Pipefy authentication, e.g. "
-            "https://signin.pipefy.com/realms/pipefy). "
-            f"See {DOCS_SETUP_REF}.",
-            err=True,
-        )
-        raise typer.Exit(2)
-    return auth_url, obj["auth_client_id"]
 
 
 def _session_masking_env_vars() -> list[str]:
@@ -92,8 +74,19 @@ def auth_login(
     # Lazy to keep keyring's ~30-80ms backend-discovery cost off every CLI startup.
     from keyring.errors import KeyringError
 
-    auth_url, client_id = _auth_config_from_ctx(ctx)
-    typer.echo(f"Signing in to Pipefy at {auth_url} ...")
+    _, auth = settings_and_auth_from_ctx(ctx)
+    if auth.oidc_client is None:
+        typer.echo(
+            "PIPEFY_AUTH_URL is required for `pipefy auth login` (the OIDC issuer "
+            "URL for Pipefy authentication, e.g. "
+            "https://signin.pipefy.com/realms/pipefy). "
+            f"See {DOCS_SETUP_REF}.",
+            err=True,
+        )
+        raise typer.Exit(2)
+    issuer_url = auth.oidc_client.issuer_url
+    client_id = auth.oidc_client.client_id
+    typer.echo(f"Signing in to Pipefy at {issuer_url} ...")
 
     def _print_url(url: str) -> None:
         typer.echo(f"\nAuthorization URL: {url}\n")
@@ -112,7 +105,7 @@ def auth_login(
 
     try:
         result = run_login(
-            issuer_url=auth_url,
+            issuer_url=issuer_url,
             client_id=client_id,
             callback_timeout_s=callback_timeout,
             open_browser=_open,

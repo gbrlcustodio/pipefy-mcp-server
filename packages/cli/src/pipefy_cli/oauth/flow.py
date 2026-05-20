@@ -82,9 +82,7 @@ def exchange_code(
         raise LoginError(f"Token exchange request failed: {exc}") from exc
 
     if response.status_code != 200:
-        raise LoginError(
-            f"Token exchange failed ({response.status_code}): {response.text[:300]}"
-        )
+        raise LoginError(_format_token_error(response))
     try:
         payload = response.json()
     except ValueError as exc:
@@ -92,6 +90,30 @@ def exchange_code(
     if not isinstance(payload, dict):
         raise LoginError("Token endpoint returned a non-object JSON payload.")
     return payload
+
+
+def _format_token_error(response: httpx.Response) -> str:
+    """Render a token-exchange non-200 as a user-safe message.
+
+    Only OAuth-standard ``error`` / ``error_description`` fields are surfaced;
+    raw bodies are never echoed (RFC 6749 doesn't forbid IdPs from including
+    submitted params like ``code_verifier`` in error responses, and a `[:N]`
+    snippet would be a guaranteed echo channel under a hostile IdP).
+    """
+    generic = f"Token endpoint returned HTTP {response.status_code}"
+    try:
+        payload = response.json()
+    except ValueError:
+        return generic
+    if not isinstance(payload, dict):
+        return generic
+    error = payload.get("error")
+    if not error:
+        return generic
+    description = payload.get("error_description")
+    if description:
+        return f"Token exchange failed: {error}: {description}"
+    return f"Token exchange failed: {error}"
 
 
 def run_login(

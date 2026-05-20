@@ -361,6 +361,69 @@ class TestFlow:
                 client=client,
             )
 
+    def _call_exchange(self, response: httpx.Response) -> flow.LoginError:
+        meta = ProviderMetadata(
+            issuer="i",
+            authorization_endpoint="https://a/x",
+            token_endpoint="https://t/x",
+        )
+        client = httpx.Client(transport=httpx.MockTransport(lambda _r: response))
+        with pytest.raises(flow.LoginError) as exc_info:
+            flow.exchange_code(
+                metadata=meta,
+                client_id="cid",
+                code="c",
+                redirect_uri="r",
+                code_verifier="SENTINEL_VERIFIER",
+                client=client,
+            )
+        return exc_info.value
+
+    def test_exchange_error_renders_oauth_fields(self) -> None:
+        err = self._call_exchange(
+            httpx.Response(
+                400,
+                json={"error": "invalid_grant", "error_description": "PKCE failed"},
+            )
+        )
+        assert "invalid_grant" in str(err)
+        assert "PKCE failed" in str(err)
+
+    def test_exchange_error_renders_error_alone_when_description_absent(self) -> None:
+        err = self._call_exchange(httpx.Response(400, json={"error": "invalid_grant"}))
+        assert str(err) == "Token exchange failed: invalid_grant"
+
+    def test_exchange_error_falls_back_when_error_key_missing(self) -> None:
+        # error_description without error is half a message — fall back to generic.
+        err = self._call_exchange(
+            httpx.Response(400, json={"error_description": "PKCE failed"})
+        )
+        assert str(err) == "Token endpoint returned HTTP 400"
+
+    def test_exchange_error_falls_back_on_non_dict_json(self) -> None:
+        err = self._call_exchange(httpx.Response(400, json=["not", "a", "dict"]))
+        assert str(err) == "Token endpoint returned HTTP 400"
+
+    def test_exchange_error_falls_back_on_non_json_body(self) -> None:
+        err = self._call_exchange(httpx.Response(500, text="<html>Bad Gateway</html>"))
+        assert str(err) == "Token endpoint returned HTTP 500"
+
+    def test_exchange_error_does_not_echo_raw_body(self) -> None:
+        # Regression guard for item 3: a hostile IdP could echo submitted params
+        # (like our code_verifier) into the raw response body. The scrub must
+        # never put that text into the LoginError message.
+        sentinel = "code_verifier=SENTINEL_VERIFIER_LEAK"
+        body = (
+            '{"error":"invalid_grant","error_description":"bad pkce",'
+            f'"echoed":"{sentinel}"}}'
+        )
+        err = self._call_exchange(httpx.Response(400, text=body))
+        message = str(err)
+        assert "invalid_grant" in message
+        assert "bad pkce" in message
+        assert sentinel not in message
+        assert "SENTINEL_VERIFIER_LEAK" not in message
+
     def test_run_login_state_mismatch_raises(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

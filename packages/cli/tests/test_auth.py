@@ -81,7 +81,7 @@ def test_missing_oauth_exits_2_cli(clean_pipefy_env, saved_cwd, monkeypatch, run
     result = runner.invoke(app, ["card", "get", "123"])
     assert result.exit_code == 2
     combined = (result.stderr or "") + (result.stdout or "")
-    assert "docs/setup.md" in combined
+    assert "docs/cli/auth.md" in combined
 
 
 def test_cli_uses_pipefy_token_env_when_no_flag(

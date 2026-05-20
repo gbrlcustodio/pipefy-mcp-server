@@ -26,7 +26,7 @@ from pipefy_sdk import (
     PipefySettings,
 )
 
-from pipefy_cli._docs import DOCS_SETUP_REF
+from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.config import (
     describe_missing_oauth_vars,
     ensure_public_graphql_configured,
@@ -92,7 +92,7 @@ def _missing_auth_message(pipefy_settings: PipefySettings) -> str:
     return (
         "Missing authentication. Use --token, set PIPEFY_TOKEN, configure "
         f"PIPEFY_OAUTH_* ({missing}), or run `pipefy auth login`. "
-        f"See {DOCS_SETUP_REF}."
+        f"See {DOCS_CLI_AUTH_REF}."
     )
 
 

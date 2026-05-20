@@ -17,6 +17,7 @@ SDK, so a refresh-rotated access token naturally invalidates the cached client.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import typer
 from pipefy_sdk import (
@@ -31,7 +32,16 @@ from pipefy_cli.config import (
     describe_missing_oauth_vars,
     ensure_public_graphql_configured,
 )
-from pipefy_cli.oauth import RefreshError, ensure_fresh_session
+from pipefy_cli.oauth import RefreshError, ensure_fresh_session, load_session
+
+
+AuthSource = Literal[
+    "flag-token",
+    "env-token",
+    "service-account",
+    "stored-session",
+    "none",
+]
 
 
 @dataclass(frozen=True)
@@ -47,6 +57,18 @@ class OidcClient:
 
 
 @dataclass(frozen=True)
+class BearerToken:
+    """Static bearer token plus the surface that produced it (``--token`` or env).
+
+    Carrying the origin lets diagnostics (e.g. ``pipefy auth status``) report which
+    precedence tier won without having to re-inspect ``argv``/``os.environ``.
+    """
+
+    value: str
+    source: Literal["flag", "env"]
+
+
+@dataclass(frozen=True)
 class AuthContext:
     """User-auth identity for a single CLI invocation.
 
@@ -55,7 +77,7 @@ class AuthContext:
     passed alongside.
     """
 
-    bearer_token: str | None
+    bearer_token: BearerToken | None
     oidc_client: OidcClient | None
 
 
@@ -85,6 +107,40 @@ def _cache_key(
         bool(pipefy_settings.allow_insecure_urls),
         (bearer_token or "").strip(),
     )
+
+
+def detect_all_sources(
+    pipefy_settings: PipefySettings,
+    auth: AuthContext,
+) -> list[AuthSource]:
+    """Return every configured credential source, highest-precedence first.
+
+    Side-effect-free except for a single keychain read when an ``oidc_client`` is
+    set. Powers both :func:`detect_auth_source` (winner = first element) and
+    diagnostic display (full list surfaces masked sources).
+    """
+    sources: list[AuthSource] = []
+    if auth.bearer_token is not None:
+        sources.append(
+            "flag-token" if auth.bearer_token.source == "flag" else "env-token"
+        )
+    if not describe_missing_oauth_vars(pipefy_settings):
+        sources.append("service-account")
+    if auth.oidc_client is not None and load_session(
+        issuer=auth.oidc_client.issuer_url,
+        client_id=auth.oidc_client.client_id,
+    ) is not None:
+        sources.append("stored-session")
+    return sources
+
+
+def detect_auth_source(
+    pipefy_settings: PipefySettings,
+    auth: AuthContext,
+) -> AuthSource:
+    """Return the precedence winner among configured sources, or ``"none"``."""
+    sources = detect_all_sources(pipefy_settings, auth)
+    return sources[0] if sources else "none"
 
 
 def _missing_auth_message(pipefy_settings: PipefySettings) -> str:
@@ -126,12 +182,20 @@ def get_authenticated_client(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
 
-    missing_oauth = describe_missing_oauth_vars(pipefy_settings)
+    source = detect_auth_source(pipefy_settings, auth)
+
+    if source == "none":
+        typer.echo(_missing_auth_message(pipefy_settings), err=True)
+        raise typer.Exit(2)
 
     # Resolve the effective bearer BEFORE the cache lookup so a refresh-rotated
     # access token produces the right (new) cache signature.
-    effective_bearer = auth.bearer_token
-    if not effective_bearer and missing_oauth and auth.oidc_client is not None:
+    effective_bearer: str | None = None
+    if source in ("flag-token", "env-token"):
+        assert auth.bearer_token is not None  # narrowed by detect_auth_source
+        effective_bearer = auth.bearer_token.value
+    elif source == "stored-session":
+        assert auth.oidc_client is not None
         try:
             session = ensure_fresh_session(
                 issuer=auth.oidc_client.issuer_url,
@@ -144,8 +208,12 @@ def get_authenticated_client(
                 err=True,
             )
             raise typer.Exit(2) from exc
-        if session is not None:
-            effective_bearer = session.access_token
+        # ``detect_auth_source`` already confirmed a session is present; if it
+        # vanished between the two reads, fall through to the missing-auth path.
+        if session is None:
+            typer.echo(_missing_auth_message(pipefy_settings), err=True)
+            raise typer.Exit(2)
+        effective_bearer = session.access_token
 
     key = _cache_key(pipefy_settings, effective_bearer)
     if _cached_client is not None and _cached_signature == key:
@@ -162,11 +230,7 @@ def get_authenticated_client(
         _cached_client = client
         return client
 
-    if missing_oauth:
-        typer.echo(_missing_auth_message(pipefy_settings), err=True)
-        raise typer.Exit(2)
-
-    # Priority 3: client-credentials grant.
+    # source == "service-account": client-credentials grant.
     client = PipefyClient(pipefy_settings)
     internal_client = InternalApiClient(
         url=pipefy_settings.internal_api_url,
@@ -184,7 +248,11 @@ def get_authenticated_client(
 
 __all__ = [
     "AuthContext",
+    "AuthSource",
+    "BearerToken",
     "OidcClient",
     "clear_authenticated_client_cache",
+    "detect_all_sources",
+    "detect_auth_source",
     "get_authenticated_client",
 ]

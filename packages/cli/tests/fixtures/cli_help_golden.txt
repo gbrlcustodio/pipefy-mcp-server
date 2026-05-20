@@ -453,8 +453,10 @@ Usage: pipefy auth [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ login   Sign in to Pipefy via your browser and store the session in the OS   │
-│         keychain.                                                            │
+│ login    Sign in to Pipefy via your browser and store the session in the OS  │
+│          keychain.                                                           │
+│ status   Print which auth source is active, the authenticated identity, and  │
+│          session expiry.                                                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP auth/login
@@ -471,6 +473,17 @@ Usage: pipefy auth login [OPTIONS]
 │                                                 giving up.                   │
 │                                                 [default: 180.0]             │
 │ --help                                          Show this message and exit.  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP auth/status
+Usage: pipefy auth status [OPTIONS]
+
+ Print which auth source is active, the authenticated identity, and session
+ expiry.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Emit a stable JSON schema instead of human-readable text.  │
+│ --help            Show this message and exit.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP automation

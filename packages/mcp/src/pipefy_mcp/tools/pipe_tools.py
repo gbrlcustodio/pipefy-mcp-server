@@ -17,6 +17,7 @@ from pipefy_sdk import (
     copy_card_search,
     create_form_model,
 )
+from pipefy_sdk.models.form import MalformedFieldDefinitionError
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
@@ -150,10 +151,17 @@ class PipeTools:
                         expected_fields=expected_fields,
                         ctx=ctx,
                     )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
                 except UserCancelledError:
                     return tool_error("Card creation cancelled by user.")
             elif expected_fields:
-                card_data = _filter_fields_by_definitions(card_data, expected_fields)
+                try:
+                    card_data = _filter_fields_by_definitions(
+                        card_data, expected_fields
+                    )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
 
             try:
                 result = await client.create_card(pipe_id, card_data)
@@ -1016,10 +1024,17 @@ class PipeTools:
                         expected_fields=expected_fields,
                         ctx=ctx,
                     )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
                 except UserCancelledError:
                     return tool_error("Phase field update cancelled by user.")
             elif expected_fields:
-                field_data = _filter_fields_by_definitions(field_data, expected_fields)
+                try:
+                    field_data = _filter_fields_by_definitions(
+                        field_data, expected_fields
+                    )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
 
             if not field_data:
                 return {

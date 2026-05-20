@@ -114,8 +114,8 @@ async def test_get_start_form_fields_required_only_filters_and_returns_message_w
     """Test get_start_form_fields with required_only=True returns message when all optional."""
     pipe_id = 303181849
     mock_fields = [
-        {"id": "priority", "required": False},
-        {"id": "notes", "required": False},
+        {"id": "priority", "type": "select", "required": False},
+        {"id": "notes", "type": "long_text", "required": False},
     ]
 
     service = _make_service(mock_settings, {"pipe": {"start_form_fields": mock_fields}})
@@ -129,25 +129,37 @@ async def test_get_start_form_fields_required_only_filters_and_returns_message_w
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_start_form_fields_raises_on_malformed_graphql_fields(mock_settings):
+    """Null or missing id/type from GraphQL are rejected at the SDK boundary."""
+    from pipefy_sdk.models.field_definition import MalformedFieldDefinitionError
+
+    pipe_id = 303181849
+    mock_fields = [{"id": None, "type": "select", "label": "Status"}]
+
+    service = _make_service(mock_settings, {"pipe": {"start_form_fields": mock_fields}})
+
+    with pytest.raises(MalformedFieldDefinitionError, match="return start form fields"):
+        await service.get_start_form_fields(pipe_id)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_get_start_form_fields_required_only_returns_only_required(mock_settings):
     """Test get_start_form_fields with required_only=True filters correctly."""
     pipe_id = 303181849
     mock_fields = [
-        {"id": "title", "required": True},
-        {"id": "priority", "required": False},
-        {"id": "due_date", "required": True},
+        {"id": "title", "type": "short_text", "required": True},
+        {"id": "priority", "type": "select", "required": False},
+        {"id": "due_date", "type": "date", "required": True},
     ]
 
     service = _make_service(mock_settings, {"pipe": {"start_form_fields": mock_fields}})
     result = await service.get_start_form_fields(pipe_id, required_only=True)
 
-    expected_fields = [
-        {"id": "title", "required": True},
-        {"id": "due_date", "required": True},
-    ]
-    assert result == {"start_form_fields": expected_fields}, (
-        "Expected only required fields"
-    )
+    assert len(result["start_form_fields"]) == 2
+    assert {f["id"] for f in result["start_form_fields"]} == {"title", "due_date"}
+    assert all(f["type"] for f in result["start_form_fields"])
+    assert all(f["required"] for f in result["start_form_fields"])
 
 
 @pytest.fixture

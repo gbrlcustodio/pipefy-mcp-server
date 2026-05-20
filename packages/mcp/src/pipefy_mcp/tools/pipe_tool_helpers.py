@@ -5,6 +5,7 @@ from typing import Any, Literal, cast
 
 from pipefy_sdk import CardSearch, PipefyClient
 from pipefy_sdk.models.comment import MAX_COMMENT_TEXT_LENGTH
+from pipefy_sdk.models.form import ensure_valid_field_definitions
 from pydantic import ValidationError
 from typing_extensions import TypedDict
 
@@ -434,6 +435,7 @@ def _filter_fields_by_definitions(
     fields: dict[str, object] | None, field_definitions: list[dict]
 ) -> dict[str, object]:
     """Filter provided field values to editable field IDs."""
+    ensure_valid_field_definitions(field_definitions, action="filter field values")
     if not fields:
         return {}
     editable_ids = {field_def["id"] for field_def in field_definitions}

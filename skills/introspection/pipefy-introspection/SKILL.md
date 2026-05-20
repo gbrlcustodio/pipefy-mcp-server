@@ -24,10 +24,10 @@ This is **Tier 2** in the resolution strategy: when a dedicated MCP tool fails o
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `introspect_type` | `pipefy introspect type` | Yes | Discover a type's shape: `fields`, `inputFields`, `enumValues`. |
-| `introspect_query` | `pipefy introspect query` | Yes | Get a query's argument types and return shape. |
-| `introspect_mutation` | `pipefy introspect mutation` | Yes | Get a mutation's argument types and return shape. |
-| `search_schema` | `pipefy introspect schema search` | Yes | Keyword search across type / query / mutation names. |
+| `introspect_type` | `pipefy introspect type` | Yes | Type shape: `fields`, `inputFields`, `enumValues`. Optional `max_depth`. |
+| `introspect_query` | `pipefy introspect query` | Yes | Root query arguments and return type. Optional `max_depth`. |
+| `introspect_mutation` | `pipefy introspect mutation` | Yes | Root mutation arguments and return type. Optional `max_depth`. |
+| `search_schema` | `pipefy introspect schema search` | Yes | Keyword search on type names/descriptions. Optional `kind` filter. |
 | `execute_graphql` | `pipefy graphql exec` | No | Execute arbitrary GraphQL (`--yes` required for mutations). |
 | `get_organization` | `pipefy org get` | Yes | Load organization info (name, plan, UUID, member count, pipe count). |
 
@@ -41,6 +41,39 @@ This is **Tier 2** in the resolution strategy: when a dedicated MCP tool fails o
 - **`true`:** response includes **both** `result` (the raw JSON string) AND `data` (the parsed dict). Drill into `data` programmatically; keep `result` to forward verbatim.
 
 Use `include_parsed=true` whenever you plan to read nested fields (e.g. iterating over `phases[].fields[]`). Leave it off for one-shot reads where the raw string is sufficient.
+
+## `max_depth` (introspect_type / query / mutation)
+
+MCP tools accept `max_depth` (default `1`). CLI: `--max-depth`.
+
+- **`1`** — type/field info only (no inlined sub-types).
+- **`2+`** — resolves referenced input/output types inline (`resolvedType`), so one call can replace introspecting the mutation then each input type separately.
+
+Example (CLI):
+
+```bash
+pipefy introspect mutation createCard --max-depth 2 --json
+```
+
+Example (MCP):
+
+```
+introspect_mutation mutation_name="createCard" max_depth=2 include_parsed=true
+```
+
+Scalars (`ID`, `String`, `Int`, …) are never expanded.
+
+## `kind` on `search_schema`
+
+Optional filter: `OBJECT`, `INPUT_OBJECT`, `ENUM`, `SCALAR`, `INTERFACE`, `UNION`.
+
+```
+search_schema keyword="automation" kind="INPUT_OBJECT"
+```
+
+```bash
+pipefy introspect schema search automation --kind INPUT_OBJECT --json
+```
 
 ---
 
@@ -189,5 +222,6 @@ For long-running agent sessions, the MCP can reuse the fetched GraphQL schema ac
 
 ## See also
 
+- [docs/mcp/tools/introspection.md](../../../docs/mcp/tools/introspection.md) — MCP parameters, query/mutation mismatch hints on `execute_graphql`.
 - [skills/api-troubleshoot/pipefy-api-fallback/SKILL.md](../../api-troubleshoot/pipefy-api-fallback/SKILL.md) — Tier 3: direct HTTP fallback when MCP is unavailable.
 - [skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md](../../pipes-and-cards/pipefy-pipes-and-cards/SKILL.md) — most common dedicated tools (prefer over `execute_graphql`).

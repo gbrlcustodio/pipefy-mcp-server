@@ -159,9 +159,9 @@ def test_run_pipefy_client_coroutine_runs_factory_and_returns(monkeypatch):
 
     captured: dict[str, Any] = {}
 
-    def fake_get_client(settings: object, **kwargs: object) -> object:
+    def fake_get_client(settings: object, auth: object) -> object:
         captured["settings"] = settings
-        captured["bearer_token"] = kwargs.get("bearer_token")
+        captured["bearer_token"] = auth.bearer_token  # type: ignore[attr-defined]
         return "client-instance"
 
     async def factory(client: object) -> str:
@@ -169,16 +169,12 @@ def test_run_pipefy_client_coroutine_runs_factory_and_returns(monkeypatch):
         return "done"
 
     sentinel_settings = object()
+    sentinel_auth = _common.AuthContext(bearer_token="abc", oidc_client=None)
     monkeypatch.setattr(_common, "get_authenticated_client", fake_get_client)
     monkeypatch.setattr(
         _common,
-        "auth_context_from_ctx",
-        lambda ctx: _common.AuthContext(
-            settings=sentinel_settings,
-            bearer_token="abc",
-            auth_url=None,
-            auth_client_id=None,
-        ),
+        "settings_and_auth_from_ctx",
+        lambda ctx: (sentinel_settings, sentinel_auth),
     )
 
     result = run_pipefy_client_coroutine(MagicMock(), factory)
@@ -202,13 +198,14 @@ def test_run_pipefy_client_coroutine_maps_pipefy_error_to_exit_1(monkeypatch):
     from pipefy_cli.commands._common import run_pipefy_client_coroutine
 
     monkeypatch.setattr(
-        _common, "get_authenticated_client", lambda settings, **kwargs: object()
+        _common, "get_authenticated_client", lambda settings, auth: object()
     )
     monkeypatch.setattr(
         _common,
-        "auth_context_from_ctx",
-        lambda ctx: _common.AuthContext(
-            settings=object(), bearer_token=None, auth_url=None, auth_client_id=None
+        "settings_and_auth_from_ctx",
+        lambda ctx: (
+            object(),
+            _common.AuthContext(bearer_token=None, oidc_client=None),
         ),
     )
 
@@ -227,13 +224,14 @@ def test_run_pipefy_client_coroutine_maps_value_error_when_configured(monkeypatc
     from pipefy_cli.commands._common import run_pipefy_client_coroutine
 
     monkeypatch.setattr(
-        _common, "get_authenticated_client", lambda settings, **kwargs: object()
+        _common, "get_authenticated_client", lambda settings, auth: object()
     )
     monkeypatch.setattr(
         _common,
-        "auth_context_from_ctx",
-        lambda ctx: _common.AuthContext(
-            settings=object(), bearer_token=None, auth_url=None, auth_client_id=None
+        "settings_and_auth_from_ctx",
+        lambda ctx: (
+            object(),
+            _common.AuthContext(bearer_token=None, oidc_client=None),
         ),
     )
 
@@ -252,13 +250,14 @@ def test_run_pipefy_client_coroutine_broken_pipe_exits_0(monkeypatch):
     from pipefy_cli.commands._common import run_pipefy_client_coroutine
 
     monkeypatch.setattr(
-        _common, "get_authenticated_client", lambda settings, **kwargs: object()
+        _common, "get_authenticated_client", lambda settings, auth: object()
     )
     monkeypatch.setattr(
         _common,
-        "auth_context_from_ctx",
-        lambda ctx: _common.AuthContext(
-            settings=object(), bearer_token=None, auth_url=None, auth_client_id=None
+        "settings_and_auth_from_ctx",
+        lambda ctx: (
+            object(),
+            _common.AuthContext(bearer_token=None, oidc_client=None),
         ),
     )
 

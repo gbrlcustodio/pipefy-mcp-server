@@ -9,7 +9,7 @@ import pytest
 import typer
 from pipefy_sdk import PipefySettings
 
-from pipefy_cli.auth import get_authenticated_client
+from pipefy_cli.auth import AuthContext, OidcClient, get_authenticated_client
 from pipefy_cli.main import app
 from pipefy_cli.oauth import StoredSession
 
@@ -24,11 +24,26 @@ def _minimal_oauth_settings() -> PipefySettings:
     )
 
 
+def _auth(
+    *,
+    bearer_token: str | None = None,
+    issuer_url: str | None = None,
+    client_id: str | None = None,
+) -> AuthContext:
+    """Build an :class:`AuthContext` for tests; constructs :class:`OidcClient` iff both halves are provided."""
+    oidc_client = (
+        OidcClient(issuer_url=issuer_url, client_id=client_id)
+        if issuer_url and client_id
+        else None
+    )
+    return AuthContext(bearer_token=bearer_token, oidc_client=oidc_client)
+
+
 def test_get_authenticated_client_passes_bearer_to_pipefy_client(clean_pipefy_env):
     settings = _minimal_oauth_settings()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
-        client = get_authenticated_client(settings, bearer_token="tok")
+        client = get_authenticated_client(settings, _auth(bearer_token="tok"))
         mock_pc.assert_called_once_with(settings, bearer_token="tok")
         assert client is mock_pc.return_value
 
@@ -37,7 +52,7 @@ def test_get_authenticated_client_oauth_mode_no_bearer(clean_pipefy_env):
     settings = _minimal_oauth_settings()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
-        get_authenticated_client(settings)
+        get_authenticated_client(settings, _auth())
         mock_pc.assert_called_once_with(settings)
 
 
@@ -45,8 +60,8 @@ def test_cache_returns_same_instance_for_identical_oauth_settings(clean_pipefy_e
     settings = _minimal_oauth_settings()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
-        first = get_authenticated_client(settings)
-        second = get_authenticated_client(settings)
+        first = get_authenticated_client(settings, _auth())
+        second = get_authenticated_client(settings, _auth())
         assert first is second
         assert mock_pc.call_count == 1
 
@@ -86,7 +101,8 @@ def test_cli_uses_pipefy_token_env_when_no_flag(
         result = runner.invoke(app, ["card", "get", "77"])
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
     mock_gc.assert_called_once()
-    assert mock_gc.call_args.kwargs.get("bearer_token") == "secret-from-env"
+    auth_arg = mock_gc.call_args.args[1]
+    assert auth_arg.bearer_token == "secret-from-env"
 
 
 # --------------------------------------------------------------------------- #
@@ -128,9 +144,11 @@ def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(
             settings,
-            bearer_token="explicit-bearer",
-            auth_url=_ISSUER,
-            auth_client_id="pipefy-cli",
+            _auth(
+                bearer_token="explicit-bearer",
+                issuer_url=_ISSUER,
+                client_id="pipefy-cli",
+            ),
         )
         mock_pc.assert_called_once_with(settings, bearer_token="explicit-bearer")
         mock_ensure.assert_not_called()
@@ -148,8 +166,7 @@ def test_oauth_client_creds_wins_over_stored_session(clean_pipefy_env):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(
             settings,
-            auth_url=_ISSUER,
-            auth_client_id="pipefy-cli",
+            _auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         mock_pc.assert_called_once_with(settings)
         mock_ensure.assert_not_called()
@@ -165,7 +182,7 @@ def test_stored_session_used_when_no_other_source(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(
-            settings, auth_url=_ISSUER, auth_client_id="pipefy-cli"
+            settings, _auth(issuer_url=_ISSUER, client_id="pipefy-cli")
         )
         mock_pc.assert_called_once_with(settings, bearer_token=session.access_token)
 
@@ -188,10 +205,10 @@ def test_cache_invalidates_when_access_token_rotates(clean_pipefy_env):
     ):
         mock_pc.side_effect = [MagicMock(), MagicMock()]
         get_authenticated_client(
-            settings, auth_url=_ISSUER, auth_client_id="pipefy-cli"
+            settings, _auth(issuer_url=_ISSUER, client_id="pipefy-cli")
         )
         get_authenticated_client(
-            settings, auth_url=_ISSUER, auth_client_id="pipefy-cli"
+            settings, _auth(issuer_url=_ISSUER, client_id="pipefy-cli")
         )
         assert mock_pc.call_count == 2
         assert mock_pc.call_args_list[0].kwargs["bearer_token"] == "ROTATED_1"
@@ -209,7 +226,7 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
     ):
         with pytest.raises(typer.Exit) as excinfo:
             get_authenticated_client(
-                settings, auth_url=_ISSUER, auth_client_id="pipefy-cli"
+                settings, _auth(issuer_url=_ISSUER, client_id="pipefy-cli")
             )
         assert excinfo.value.exit_code == 2
     err = capsys.readouterr().err

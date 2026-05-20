@@ -111,9 +111,7 @@ def fetch_provider_metadata(
                 value, field, allow_insecure=policy.allow_insecure_urls
             )
         except ValueError as exc:
-            raise ValueError(
-                f"OIDC discovery returned invalid {field}: {exc}"
-            ) from exc
+            raise ValueError(f"OIDC discovery returned invalid {field}: {exc}") from exc
 
     return ProviderMetadata(
         issuer=claimed_issuer,

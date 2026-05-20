@@ -392,9 +392,7 @@ class TestFlow:
         assert "PKCE failed" in str(err)
 
     def test_exchange_error_renders_error_alone_when_description_absent(self) -> None:
-        err = _exchange_error_for(
-            httpx.Response(400, json={"error": "invalid_grant"})
-        )
+        err = _exchange_error_for(httpx.Response(400, json={"error": "invalid_grant"}))
         assert str(err) == "Token exchange failed: invalid_grant"
 
     def test_exchange_error_falls_back_when_error_key_missing(self) -> None:
@@ -409,9 +407,7 @@ class TestFlow:
         assert str(err) == "Token endpoint returned HTTP 400"
 
     def test_exchange_error_falls_back_on_non_json_body(self) -> None:
-        err = _exchange_error_for(
-            httpx.Response(500, text="<html>Bad Gateway</html>")
-        )
+        err = _exchange_error_for(httpx.Response(500, text="<html>Bad Gateway</html>"))
         assert str(err) == "Token endpoint returned HTTP 500"
 
     def test_exchange_error_does_not_echo_raw_body(self) -> None:

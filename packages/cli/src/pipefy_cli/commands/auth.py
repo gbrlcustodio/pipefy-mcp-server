@@ -302,28 +302,21 @@ def _render(report: AuthStatusReport, *, json_out: bool) -> None:
         _render_status_text(report)
 
 
-def _fail(
-    report: AuthStatusReport,
-    *,
-    json_out: bool,
-    exit_code: int,
-    stderr: str | None = None,
-) -> typer.Exit:
-    """Render the report on the error path and return the ``Exit`` for the caller to raise.
+@dataclass
+class _StatusExit(Exception):
+    """Control-flow signal raised by phase helpers; translated to ``typer.Exit`` at the command boundary.
 
-    All call sites use a non-zero ``exit_code`` — this is the failure-path counterpart
-    to the final ``_render`` call on the success path.
+    Carries the report (which may differ from the in-progress one — see the vanished-session
+    branch) along with the exit code and optional stderr message.
     """
-    _render(report, json_out=json_out)
-    if stderr and not json_out:
-        typer.echo(stderr, err=True)
-    return typer.Exit(exit_code)
+
+    report: AuthStatusReport
+    exit_code: int
+    stderr: str | None = None
 
 
-def _populate_stored_session(
-    report: AuthStatusReport, oidc: OidcClient, *, json_out: bool
-) -> None:
-    """Populate stored-session fields on ``report``; ``raise _fail`` on failure."""
+def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None:
+    """Populate stored-session fields on ``report``; raise ``_StatusExit`` on failure."""
     report.issuer = oidc.issuer_url
     report.keychain_backend = keychain_backend_name()
     report.masking_env_vars = _session_masking_env_vars()
@@ -342,9 +335,8 @@ def _populate_stored_session(
             report.refresh_expires_at = _iso_expiry(
                 stale.obtained_at, stale.refresh_expires_in
             )
-        raise _fail(
-            report,
-            json_out=json_out,
+        raise _StatusExit(
+            report=report,
             exit_code=2,
             stderr=(
                 f"Stored Pipefy session could not be refreshed: {exc}. "
@@ -353,11 +345,10 @@ def _populate_stored_session(
         ) from exc
     if fresh_session is None:
         # Session vanished between detection and refresh.
-        raise _fail(
-            AuthStatusReport(
+        raise _StatusExit(
+            report=AuthStatusReport(
                 auth_source="none", detected_sources=report.detected_sources
             ),
-            json_out=json_out,
             exit_code=2,
         )
     report.state = "active"
@@ -370,13 +361,9 @@ def _populate_stored_session(
 
 
 def _fetch_identity(
-    report: AuthStatusReport,
-    settings: PipefySettings,
-    auth: AuthContext,
-    *,
-    json_out: bool,
+    report: AuthStatusReport, settings: PipefySettings, auth: AuthContext
 ) -> None:
-    """Populate ``report.identity``; ``raise _fail`` on transport / 401."""
+    """Populate ``report.identity``; raise ``_StatusExit`` on transport / 401."""
     client = get_authenticated_client(settings, auth)
     try:
         report.identity = asyncio.run(client.get_me())
@@ -386,18 +373,12 @@ def _fetch_identity(
         # are upstream/transport problems, not credential rejections.
         if exc.code == 401:
             report.token_rejected = True
-        raise _fail(
-            report,
-            json_out=json_out,
-            exit_code=1,
-            stderr=f"Identity fetch failed: {exc}",
+        raise _StatusExit(
+            report=report, exit_code=1, stderr=f"Identity fetch failed: {exc}"
         ) from exc
     except (TransportQueryError, TransportError) as exc:
-        raise _fail(
-            report,
-            json_out=json_out,
-            exit_code=1,
-            stderr=f"Pipefy transport error: {exc}",
+        raise _StatusExit(
+            report=report, exit_code=1, stderr=f"Pipefy transport error: {exc}"
         ) from exc
 
 
@@ -417,13 +398,19 @@ def auth_status(
     source: AuthSource = detected[0] if detected else "none"
     report = AuthStatusReport(auth_source=source, detected_sources=detected)
 
-    if source == "none":
-        raise _fail(report, json_out=json_out, exit_code=2)
-    if source == "stored-session":
-        assert auth.oidc_client is not None
-        _populate_stored_session(report, auth.oidc_client, json_out=json_out)
+    try:
+        if source == "none":
+            raise _StatusExit(report=report, exit_code=2)
+        if source == "stored-session":
+            assert auth.oidc_client is not None
+            _populate_stored_session(report, auth.oidc_client)
+        _fetch_identity(report, settings, auth)
+    except _StatusExit as exit_:
+        _render(exit_.report, json_out=json_out)
+        if exit_.stderr and not json_out:
+            typer.echo(exit_.stderr, err=True)
+        raise typer.Exit(exit_.exit_code) from exit_
 
-    _fetch_identity(report, settings, auth, json_out=json_out)
     _render(report, json_out=json_out)
 
 

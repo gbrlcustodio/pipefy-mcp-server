@@ -305,14 +305,18 @@ def _render(report: AuthStatusReport, *, json_out: bool) -> None:
         _render_status_text(report)
 
 
-def _emit_and_exit(
+def _fail(
     report: AuthStatusReport,
     *,
     json_out: bool,
     exit_code: int,
     stderr: str | None = None,
 ) -> typer.Exit:
-    """Render the report and return the ``Exit`` for the caller to raise."""
+    """Render the report on the error path and return the ``Exit`` for the caller to raise.
+
+    All call sites use a non-zero ``exit_code`` — this is the failure-path counterpart
+    to the final ``_render`` call on the success path.
+    """
     _render(report, json_out=json_out)
     if stderr and not json_out:
         typer.echo(stderr, err=True)
@@ -322,7 +326,7 @@ def _emit_and_exit(
 def _populate_stored_session(
     report: AuthStatusReport, oidc: OidcClient, *, json_out: bool
 ) -> None:
-    """Populate stored-session fields on ``report``; ``raise _emit_and_exit`` on failure."""
+    """Populate stored-session fields on ``report``; ``raise _fail`` on failure."""
     report.issuer = oidc.issuer_url
     report.keychain_backend = keychain_backend_name()
     report.masking_env_vars = _session_masking_env_vars()
@@ -341,7 +345,7 @@ def _populate_stored_session(
             report.refresh_expires_at = _iso_expiry(
                 stale.obtained_at, stale.refresh_expires_in
             )
-        raise _emit_and_exit(
+        raise _fail(
             report,
             json_out=json_out,
             exit_code=2,
@@ -352,7 +356,7 @@ def _populate_stored_session(
         ) from exc
     if fresh_session is None:
         # Session vanished between detection and refresh.
-        raise _emit_and_exit(
+        raise _fail(
             AuthStatusReport(
                 auth_source="none", detected_sources=report.detected_sources
             ),
@@ -375,7 +379,7 @@ def _fetch_identity(
     *,
     json_out: bool,
 ) -> None:
-    """Populate ``report.identity``; ``raise _emit_and_exit`` on transport / 401."""
+    """Populate ``report.identity``; ``raise _fail`` on transport / 401."""
     client = get_authenticated_client(settings, auth)
     try:
         report.identity = asyncio.run(client.get_me())
@@ -385,14 +389,14 @@ def _fetch_identity(
         # are upstream/transport problems, not credential rejections.
         if exc.code == 401:
             report.token_rejected = True
-        raise _emit_and_exit(
+        raise _fail(
             report,
             json_out=json_out,
             exit_code=1,
             stderr=f"Identity fetch failed: {exc}",
         ) from exc
     except (TransportQueryError, TransportError) as exc:
-        raise _emit_and_exit(
+        raise _fail(
             report,
             json_out=json_out,
             exit_code=1,
@@ -417,7 +421,7 @@ def auth_status(
     report = AuthStatusReport(auth_source=source, detected_sources=detected)
 
     if source == "none":
-        raise _emit_and_exit(report, json_out=json_out, exit_code=2)
+        raise _fail(report, json_out=json_out, exit_code=2)
     if source == "stored-session":
         assert auth.oidc_client is not None
         _populate_stored_session(report, auth.oidc_client, json_out=json_out)

@@ -6,7 +6,7 @@ import time
 
 import httpx
 
-from pipefy_cli.oauth._http import http_client as _http_client
+from pipefy_cli.oauth import _http
 from pipefy_cli.oauth.discovery import fetch_provider_metadata
 from pipefy_cli.oauth.storage import StoredSession, load_session, store_session
 
@@ -36,7 +36,7 @@ def refresh_access_token(
         RefreshError: For any failure that prevents a fresh token response
             (discovery failure, network error, non-200, malformed body).
     """
-    with _http_client(http_client, timeout=_TIMEOUT_S) as http:
+    with _http.http_client(http_client, timeout=_TIMEOUT_S) as http:
         try:
             metadata = fetch_provider_metadata(issuer, client=http)
         except ValueError as exc:

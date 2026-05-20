@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from pipefy_cli.oauth._http import http_client as _http_client
+from pipefy_cli.oauth import _http
 from pipefy_cli.oauth.discovery import ProviderMetadata, fetch_provider_metadata
 from pipefy_cli.oauth.loopback import CallbackResult, LoopbackCapture
 from pipefy_cli.oauth.pkce import challenge_from_verifier, generate_verifier
@@ -124,7 +124,7 @@ def run_login(
             token exchange).
         TimeoutError: When no browser callback arrives in time.
     """
-    with _http_client(http_client, timeout=_TOKEN_EXCHANGE_TIMEOUT_S) as http:
+    with _http.http_client(http_client, timeout=_TOKEN_EXCHANGE_TIMEOUT_S) as http:
         try:
             metadata = fetch_provider_metadata(issuer_url, client=http)
         except ValueError as exc:

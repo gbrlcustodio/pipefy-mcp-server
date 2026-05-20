@@ -270,11 +270,8 @@ def _render_status_text(report: AuthStatusReport) -> None:
     if report.identity is not None:
         email = report.identity["email"]
         name = report.identity.get("name")
-        typer.echo(
-            f"  Identity:      {email} ({name})"
-            if name
-            else f"  Identity:      {email}"
-        )
+        identity_label = f"{email} ({name})" if name else email
+        typer.echo(f"  Identity:      {identity_label}")
     elif report.token_rejected:
         typer.echo("  Identity:      unknown (token rejected by upstream)")
     else:

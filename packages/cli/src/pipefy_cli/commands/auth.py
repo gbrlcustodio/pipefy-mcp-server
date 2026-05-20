@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import webbrowser
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Literal
 
@@ -14,6 +15,7 @@ from gql.transport.exceptions import (
     TransportQueryError,
     TransportServerError,
 )
+from pipefy_sdk import MePayload
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
@@ -34,6 +36,32 @@ from pipefy_cli.oauth import (
 from pipefy_cli.output import render_json
 
 AuthSessionState = Literal["active", "refresh-expired", "needs-login", "n/a"]
+
+
+@dataclass
+class AuthStatusReport:
+    """Typed model for `auth status` rendering.
+
+    Distinct from the locked JSON wire schema (see :func:`_to_json_payload`):
+    renderers consume this typed value, not the wire dict, so the external
+    contract and the internal model can evolve independently.
+    """
+
+    auth_source: AuthSource
+    detected_sources: list[AuthSource]
+    issuer: str | None = None
+    state: AuthSessionState = "n/a"
+    access_expires_at: str | None = None
+    refresh_expires_at: str | None = None
+    identity: MePayload | None = None
+    token_rejected: bool = False
+    keychain_backend: str | None = None
+    masking_env_vars: list[str] = field(default_factory=list)
+
+    @property
+    def signed_in(self) -> bool:
+        return self.auth_source != "none"
+
 
 auth_app = typer.Typer(
     help="Authenticate the CLI as your Pipefy user (browser-based login).",
@@ -204,63 +232,81 @@ def _format_relative(iso_ts: str | None) -> str:
     return f"in {hours}h {minutes}m"
 
 
-def _render_status_text(payload: dict[str, Any]) -> None:
-    """Human-readable rendering of the status payload (stdout)."""
-    source: AuthSource = payload["auth_source"]
-    if not payload["signed_in"]:
+def _to_json_payload(report: AuthStatusReport) -> dict[str, Any]:
+    """Serialize the report to the locked JSON wire schema."""
+    return {
+        "signed_in": report.signed_in,
+        "identity": report.identity,
+        "auth_source": report.auth_source,
+        "detected_sources": report.detected_sources,
+        "issuer": report.issuer,
+        "state": report.state,
+        "access_expires_at": report.access_expires_at,
+        "refresh_expires_at": report.refresh_expires_at,
+        "token_rejected": report.token_rejected,
+        "keychain_backend": report.keychain_backend,
+        "masking_env_vars": report.masking_env_vars,
+    }
+
+
+def _render_status_text(report: AuthStatusReport) -> None:
+    """Human-readable rendering of the status report (stdout)."""
+    if not report.signed_in:
         typer.echo(
             "Not signed in. Run `pipefy auth login`, set PIPEFY_TOKEN, or "
             f"configure PIPEFY_OAUTH_*. See {DOCS_CLI_AUTH_REF}."
         )
         return
 
-    issuer = payload["issuer"]
-    header = f"Signed in to Pipefy ({issuer})" if issuer else "Signed in to Pipefy"
+    header = (
+        f"Signed in to Pipefy ({report.issuer})"
+        if report.issuer
+        else "Signed in to Pipefy"
+    )
     typer.echo(header)
 
-    identity = payload["identity"]
-    if identity is not None:
-        if identity.get("name"):
-            typer.echo(f"  Identity:      {identity['email']} ({identity['name']})")
-        else:
-            typer.echo(f"  Identity:      {identity['email']}")
-    elif payload["token_rejected"]:
+    if report.identity is not None:
+        email = report.identity["email"]
+        name = report.identity.get("name")
+        typer.echo(
+            f"  Identity:      {email} ({name})"
+            if name
+            else f"  Identity:      {email}"
+        )
+    elif report.token_rejected:
         typer.echo("  Identity:      unknown (token rejected by upstream)")
     else:
         typer.echo("  Identity:      unknown")
 
-    typer.echo(f"  Auth source:   {_AUTH_SOURCE_LABELS[source]}")
+    typer.echo(f"  Auth source:   {_AUTH_SOURCE_LABELS[report.auth_source]}")
 
-    if source == "stored-session":
-        typer.echo(f"  Expires:       {_format_relative(payload['access_expires_at'])}")
-        typer.echo(
-            f"  Refresh token: {_format_relative(payload['refresh_expires_at'])}"
-        )
-        if payload["keychain_backend"]:
-            typer.echo(f"  Keychain:      {payload['keychain_backend']}")
+    if report.auth_source == "stored-session":
+        typer.echo(f"  Expires:       {_format_relative(report.access_expires_at)}")
+        typer.echo(f"  Refresh token: {_format_relative(report.refresh_expires_at)}")
+        if report.keychain_backend:
+            typer.echo(f"  Keychain:      {report.keychain_backend}")
 
-    masking = payload["masking_env_vars"]
-    if masking:
+    if report.masking_env_vars:
         typer.echo("")
         typer.echo("Other auth sources detected in env:")
-        for name in masking:
+        for name in report.masking_env_vars:
             typer.echo(
                 f"  {name} (would mask the stored session if no --token is passed)"
             )
 
 
 def _emit_and_exit(
-    payload: dict[str, Any],
+    report: AuthStatusReport,
     *,
     json_out: bool,
     exit_code: int,
     stderr: str | None = None,
 ) -> typer.Exit:
-    """Render ``payload`` (JSON or text) and return the ``Exit`` for the caller to raise."""
+    """Render the report (JSON or text) and return the ``Exit`` for the caller to raise."""
     if json_out:
-        render_json(payload)
+        render_json(_to_json_payload(report))
     else:
-        _render_status_text(payload)
+        _render_status_text(report)
         if stderr:
             typer.echo(stderr, err=True)
     return typer.Exit(exit_code)
@@ -280,53 +326,39 @@ def auth_status(
     settings, auth = settings_and_auth_from_ctx(ctx)
     detected = detect_all_sources(settings, auth)
     source: AuthSource = detected[0] if detected else "none"
-
-    payload: dict[str, Any] = {
-        "signed_in": source != "none",
-        "identity": None,
-        "auth_source": source,
-        "detected_sources": detected,
-        "issuer": None,
-        "state": "n/a",
-        "access_expires_at": None,
-        "refresh_expires_at": None,
-        "token_rejected": False,
-        "keychain_backend": None,
-        "masking_env_vars": [],
-    }
+    report = AuthStatusReport(auth_source=source, detected_sources=detected)
 
     if source == "none":
-        raise _emit_and_exit(payload, json_out=json_out, exit_code=2)
+        raise _emit_and_exit(report, json_out=json_out, exit_code=2)
 
     if source == "stored-session":
         assert auth.oidc_client is not None
-        payload["issuer"] = auth.oidc_client.issuer_url
-        payload["keychain_backend"] = keychain_backend_name()
-        payload["masking_env_vars"] = _session_masking_env_vars()
+        report.issuer = auth.oidc_client.issuer_url
+        report.keychain_backend = keychain_backend_name()
+        report.masking_env_vars = _session_masking_env_vars()
         try:
             fresh_session = ensure_fresh_session(
                 issuer=auth.oidc_client.issuer_url,
                 client_id=auth.oidc_client.client_id,
             )
         except RefreshError as exc:
-            state: AuthSessionState = (
+            report.state = (
                 "refresh-expired" if "invalid_grant" in str(exc) else "needs-login"
             )
-            payload["state"] = state
             # Best-effort expiry from the pre-refresh blob so users see *why*.
             stale = load_session(
                 issuer=auth.oidc_client.issuer_url,
                 client_id=auth.oidc_client.client_id,
             )
             if stale is not None:
-                payload["access_expires_at"] = _iso_expiry(
+                report.access_expires_at = _iso_expiry(
                     stale.obtained_at, stale.expires_in
                 )
-                payload["refresh_expires_at"] = _iso_expiry(
+                report.refresh_expires_at = _iso_expiry(
                     stale.obtained_at, stale.refresh_expires_in
                 )
             raise _emit_and_exit(
-                payload,
+                report,
                 json_out=json_out,
                 exit_code=2,
                 stderr=(
@@ -335,45 +367,47 @@ def auth_status(
                 ),
             ) from exc
         if fresh_session is None:
-            # Vanished between detection and refresh.
-            payload["signed_in"] = False
-            payload["auth_source"] = "none"
-            raise _emit_and_exit(payload, json_out=json_out, exit_code=2)
-        payload["state"] = "active"
-        payload["access_expires_at"] = _iso_expiry(
+            # Session vanished between detection and refresh.
+            raise _emit_and_exit(
+                AuthStatusReport(auth_source="none", detected_sources=detected),
+                json_out=json_out,
+                exit_code=2,
+            )
+        report.state = "active"
+        report.access_expires_at = _iso_expiry(
             fresh_session.obtained_at, fresh_session.expires_in
         )
-        payload["refresh_expires_at"] = _iso_expiry(
+        report.refresh_expires_at = _iso_expiry(
             fresh_session.obtained_at, fresh_session.refresh_expires_in
         )
 
     client = get_authenticated_client(settings, auth)
     try:
-        payload["identity"] = asyncio.run(client.get_me())
+        report.identity = asyncio.run(client.get_me())
     except TransportServerError as exc:
         # Pipefy returns a literal HTTP 401 for invalid bearers (verified via
         # `curl -X POST <graphql>` with a bad token); other HTTP errors here
         # are upstream/transport problems, not credential rejections.
         if exc.code == 401:
-            payload["token_rejected"] = True
+            report.token_rejected = True
         raise _emit_and_exit(
-            payload,
+            report,
             json_out=json_out,
             exit_code=1,
             stderr=f"Identity fetch failed: {exc}",
         ) from exc
     except (TransportQueryError, TransportError) as exc:
         raise _emit_and_exit(
-            payload,
+            report,
             json_out=json_out,
             exit_code=1,
             stderr=f"Pipefy transport error: {exc}",
         ) from exc
 
     if json_out:
-        render_json(payload)
+        render_json(_to_json_payload(report))
     else:
-        _render_status_text(payload)
+        _render_status_text(report)
 
 
 __all__ = ["auth_app"]

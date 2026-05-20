@@ -34,7 +34,6 @@ from pipefy_cli.config import (
 )
 from pipefy_cli.oauth import RefreshError, ensure_fresh_session, load_session
 
-
 AuthSource = Literal[
     "flag-token",
     "env-token",
@@ -126,10 +125,14 @@ def detect_all_sources(
         )
     if not describe_missing_oauth_vars(pipefy_settings):
         sources.append("service-account")
-    if auth.oidc_client is not None and load_session(
-        issuer=auth.oidc_client.issuer_url,
-        client_id=auth.oidc_client.client_id,
-    ) is not None:
+    if (
+        auth.oidc_client is not None
+        and load_session(
+            issuer=auth.oidc_client.issuer_url,
+            client_id=auth.oidc_client.client_id,
+        )
+        is not None
+    ):
         sources.append("stored-session")
     return sources
 

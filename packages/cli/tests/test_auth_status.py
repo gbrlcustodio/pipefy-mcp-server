@@ -67,9 +67,7 @@ def _patch_command_client(client: MagicMock) -> Any:
 def _patch_fresh_session(session: StoredSession | None) -> Iterator[None]:
     """Patch ``ensure_fresh_session`` at both call sites (command + ``get_authenticated_client``)."""
     with (
-        patch(
-            "pipefy_cli.commands.auth.ensure_fresh_session", return_value=session
-        ),
+        patch("pipefy_cli.commands.auth.ensure_fresh_session", return_value=session),
         patch("pipefy_cli.auth.ensure_fresh_session", return_value=session),
     ):
         yield
@@ -282,7 +280,9 @@ def test_status_service_account_wins_over_stored_session(
 ):
     _set_auth_env(monkeypatch)
     _seed_session(monkeypatch)
-    monkeypatch.setenv("PIPEFY_INTERNAL_API_URL", "https://api.example.com/internal_api")
+    monkeypatch.setenv(
+        "PIPEFY_INTERNAL_API_URL", "https://api.example.com/internal_api"
+    )
     monkeypatch.setenv("PIPEFY_OAUTH_URL", "https://auth.example.com/oauth/token")
     monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
     monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "csecret")
@@ -364,7 +364,9 @@ def test_status_service_account_only(
     clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
 ):
     monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "https://api.example.com/graphql")
-    monkeypatch.setenv("PIPEFY_INTERNAL_API_URL", "https://api.example.com/internal_api")
+    monkeypatch.setenv(
+        "PIPEFY_INTERNAL_API_URL", "https://api.example.com/internal_api"
+    )
     monkeypatch.setenv("PIPEFY_OAUTH_URL", "https://auth.example.com/oauth/token")
     monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
     monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "csecret")

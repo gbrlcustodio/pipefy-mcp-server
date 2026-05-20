@@ -92,6 +92,34 @@ class TestDiscovery:
         with pytest.raises(ValueError, match="authorization_endpoint"):
             discovery.fetch_provider_metadata("https://x.test", client=client)
 
+    def test_issuer_mismatch_rejected(self) -> None:
+        bad = _discovery_payload(issuer="https://attacker.test/realms/foo")
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=bad))
+        )
+        with pytest.raises(ValueError, match="issuer mismatch") as exc:
+            discovery.fetch_provider_metadata(
+                "https://example.test/realms/foo", client=client
+            )
+        # Both URLs surface in the message so the user can see which side drifted.
+        assert "https://example.test/realms/foo" in str(exc.value)
+        assert "https://attacker.test/realms/foo" in str(exc.value)
+
+    def test_issuer_trailing_slash_variants_accepted(self) -> None:
+        # Claim with trailing slash; request without — and vice versa.
+        for claimed, requested in (
+            ("https://example.test/realms/foo/", "https://example.test/realms/foo"),
+            ("https://example.test/realms/foo", "https://example.test/realms/foo/"),
+        ):
+            payload = _discovery_payload(issuer=claimed)
+            client = httpx.Client(
+                transport=httpx.MockTransport(
+                    lambda _r, p=payload: httpx.Response(200, json=p)
+                )
+            )
+            meta = discovery.fetch_provider_metadata(requested, client=client)
+            assert meta.issuer == claimed
+
 
 # --------------------------------------------------------------------------- #
 # Loopback                                                                    #

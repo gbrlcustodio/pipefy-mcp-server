@@ -71,8 +71,17 @@ def fetch_provider_metadata(
             f"OIDC discovery at {url} is missing required fields: {', '.join(missing)}"
         )
 
+    # OIDC Discovery 1.0 §4.3 — the ``issuer`` claim must match the URL the
+    # document was fetched from. Trailing slashes don't carry meaning here.
+    claimed_issuer = str(data["issuer"])
+    if _normalize_issuer(claimed_issuer) != _normalize_issuer(issuer_url):
+        raise ValueError(
+            f"OIDC discovery issuer mismatch: requested {issuer_url!r}, "
+            f"document claims {claimed_issuer!r}"
+        )
+
     return ProviderMetadata(
-        issuer=str(data["issuer"]),
+        issuer=claimed_issuer,
         authorization_endpoint=str(data["authorization_endpoint"]),
         token_endpoint=str(data["token_endpoint"]),
     )

@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from pipefy_cli.oauth.discovery import ProviderMetadata, fetch_provider_metadata
+from pipefy_cli.oauth.discovery import (
+    DiscoveryPolicy,
+    ProviderMetadata,
+    fetch_provider_metadata,
+)
 from pipefy_cli.oauth.flow import LoginError, LoginResult, run_login
 from pipefy_cli.oauth.refresh import (
     RefreshError,
@@ -19,6 +23,7 @@ from pipefy_cli.oauth.storage import (
 )
 
 __all__ = [
+    "DiscoveryPolicy",
     "LoginError",
     "LoginResult",
     "ProviderMetadata",

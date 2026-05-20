@@ -11,7 +11,11 @@ from urllib.parse import urlencode
 import httpx
 
 from pipefy_cli.oauth import _http
-from pipefy_cli.oauth.discovery import ProviderMetadata, fetch_provider_metadata
+from pipefy_cli.oauth.discovery import (
+    DiscoveryPolicy,
+    ProviderMetadata,
+    fetch_provider_metadata,
+)
 from pipefy_cli.oauth.loopback import CallbackResult, LoopbackCapture
 from pipefy_cli.oauth.pkce import challenge_from_verifier, generate_verifier
 
@@ -99,6 +103,7 @@ def run_login(
     open_browser: Callable[[str], bool] = webbrowser.open,
     on_url: Callable[[str], None] | None = None,
     http_client: httpx.Client | None = None,
+    discovery_policy: DiscoveryPolicy = DiscoveryPolicy(),
 ) -> LoginResult:
     """Run the full PKCE loopback login. Returns tokens; does **not** persist them.
 
@@ -118,6 +123,9 @@ def run_login(
         http_client: Optional pre-configured ``httpx.Client`` (testing). When
             omitted, one client is created and reused for discovery + token
             exchange so the same TLS connection can serve both requests.
+        discovery_policy: Validation knobs forwarded to
+            :func:`fetch_provider_metadata` (notably ``allow_insecure_urls``
+            for local-development IdPs over http / private IPs).
 
     Raises:
         LoginError: For any user-visible failure (discovery, state mismatch,
@@ -126,7 +134,9 @@ def run_login(
     """
     with _http.http_client(http_client, timeout=_TOKEN_EXCHANGE_TIMEOUT_S) as http:
         try:
-            metadata = fetch_provider_metadata(issuer_url, client=http)
+            metadata = fetch_provider_metadata(
+                issuer_url, policy=discovery_policy, client=http
+            )
         except ValueError as exc:
             raise LoginError(str(exc)) from exc
 

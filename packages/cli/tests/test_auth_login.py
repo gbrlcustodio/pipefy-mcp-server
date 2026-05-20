@@ -120,6 +120,42 @@ class TestDiscovery:
             meta = discovery.fetch_provider_metadata(requested, client=client)
             assert meta.issuer == claimed
 
+    def test_http_authorization_endpoint_rejected(self) -> None:
+        bad = _discovery_payload()
+        bad["authorization_endpoint"] = "http://example.test/realms/foo/auth"
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=bad))
+        )
+        with pytest.raises(ValueError, match="authorization_endpoint"):
+            discovery.fetch_provider_metadata(
+                "https://example.test/realms/foo", client=client
+            )
+
+    def test_internal_token_endpoint_rejected(self) -> None:
+        bad = _discovery_payload()
+        bad["token_endpoint"] = "https://127.0.0.1/realms/foo/token"
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=bad))
+        )
+        with pytest.raises(ValueError, match="token_endpoint"):
+            discovery.fetch_provider_metadata(
+                "https://example.test/realms/foo", client=client
+            )
+
+    def test_allow_insecure_urls_bypasses_ssrf_checks(self) -> None:
+        # Same payload that fails by default succeeds when the policy opts in.
+        bad = _discovery_payload()
+        bad["authorization_endpoint"] = "http://127.0.0.1:8080/realms/foo/auth"
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=bad))
+        )
+        meta = discovery.fetch_provider_metadata(
+            "https://example.test/realms/foo",
+            policy=discovery.DiscoveryPolicy(allow_insecure_urls=True),
+            client=client,
+        )
+        assert meta.authorization_endpoint == "http://127.0.0.1:8080/realms/foo/auth"
+
 
 # --------------------------------------------------------------------------- #
 # Loopback                                                                    #
@@ -335,7 +371,9 @@ class TestFlow:
             token_endpoint="https://x.test/token",
         )
         monkeypatch.setattr(
-            flow, "fetch_provider_metadata", lambda url, client=None: meta
+            flow,
+            "fetch_provider_metadata",
+            lambda url, *, policy=None, client=None: meta,
         )
 
         class _FakeCapture:

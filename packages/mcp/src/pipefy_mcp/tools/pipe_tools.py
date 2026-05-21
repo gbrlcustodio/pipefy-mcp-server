@@ -17,6 +17,7 @@ from pipefy_sdk import (
     copy_card_search,
     create_form_model,
 )
+from pipefy_sdk.models.form import MalformedFieldDefinitionError
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
@@ -128,9 +129,12 @@ class PipeTools:
                 skip_elicitation: When True, bypass interactive elicitation and send
                     ``fields`` directly to the API. Recommended for AI agent workflows.
             """
-            form_fields = await client.get_start_form_fields(
-                pipe_id, required_fields_only
-            )
+            try:
+                form_fields = await client.get_start_form_fields(
+                    pipe_id, required_fields_only
+                )
+            except MalformedFieldDefinitionError as exc:
+                return tool_error(str(exc))
 
             expected_fields = _filter_editable_field_definitions(
                 form_fields.get("start_form_fields", [])
@@ -150,6 +154,8 @@ class PipeTools:
                         expected_fields=expected_fields,
                         ctx=ctx,
                     )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
                 except UserCancelledError:
                     return tool_error("Card creation cancelled by user.")
             elif expected_fields:
@@ -994,9 +1000,12 @@ class PipeTools:
             Returns:
                 dict: GraphQL response with success status and updated card information.
             """
-            phase_fields_result = await client.get_phase_fields(
-                phase_id, required_fields_only
-            )
+            try:
+                phase_fields_result = await client.get_phase_fields(
+                    phase_id, required_fields_only
+                )
+            except MalformedFieldDefinitionError as exc:
+                return tool_error(str(exc))
             expected_fields = _filter_editable_field_definitions(
                 phase_fields_result.get("fields", [])
             )
@@ -1016,6 +1025,8 @@ class PipeTools:
                         expected_fields=expected_fields,
                         ctx=ctx,
                     )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
                 except UserCancelledError:
                     return tool_error("Phase field update cancelled by user.")
             elif expected_fields:

@@ -7,9 +7,36 @@ from typing import Any
 from httpx import Auth
 
 from pipefy_sdk.base_client import BasePipefyClient, unwrap_relay_connection_nodes
+from pipefy_sdk.queries.observability_queries import RESOLVE_ORGANIZATION_UUID_QUERY
 from pipefy_sdk.queries.portal_queries import GET_PORTAL_QUERY, LIST_PORTALS_QUERY
 from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.utils.organization_identifiers import looks_like_uuid
+
+
+def _with_uuid_alias(record: dict[str, Any]) -> dict[str, Any]:
+    """Expose GraphQL ``id`` as ``uuid`` in portal payloads."""
+    if "id" in record and "uuid" not in record:
+        return {**record, "uuid": record["id"]}
+    return record
+
+
+def _normalize_portal_detail(portal: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a ``PortalInterface`` detail payload from the Interfaces schema."""
+    pages = portal.get("pages") or []
+    normalized_pages = []
+    for page in pages:
+        page_record = _with_uuid_alias(page)
+        elements = [_with_uuid_alias(element) for element in page.get("elements") or []]
+        normalized_pages.append({**page_record, "elements": elements})
+    sub_portals = [
+        _with_uuid_alias(sub_portal) for sub_portal in portal.get("subPortals") or []
+    ]
+    return {
+        **_with_uuid_alias(portal),
+        "pages": normalized_pages,
+        "subPortals": sub_portals,
+    }
 
 
 class PortalService:
@@ -34,6 +61,10 @@ class PortalService:
         )
         self._interfaces_client = BasePipefyClient(
             settings=interfaces_settings,
+            auth=auth,
+        )
+        self._graphql_client = BasePipefyClient(
+            settings=settings,
             auth=auth,
         )
         self._internal_api_client = internal_api_client
@@ -70,6 +101,44 @@ class PortalService:
             raise ValueError(msg)
         return await self._internal_api_client.execute_query(query, variables)
 
+    async def _resolve_organization_identifier_for_interfaces(
+        self,
+        organization_identifier: str,
+    ) -> str:
+        """Return org UUID for Interfaces GraphQL, resolving numeric ids when needed.
+
+        Interfaces expects ``org_uuid`` / ``orgUuid``; discovery tools often expose numeric ids.
+
+        Args:
+            organization_identifier: Organization UUID or numeric organization id (string).
+
+        Returns:
+            Organization UUID for Interfaces GraphQL variables.
+
+        Raises:
+            ValueError: When the identifier is empty, invalid, or resolution yields no uuid.
+        """
+        trimmed = organization_identifier.strip()
+        if not trimmed:
+            raise ValueError("organization identifier must be non-empty")
+        if looks_like_uuid(trimmed):
+            return trimmed
+        if trimmed.isdigit():
+            result = await self._graphql_client.execute_query(
+                RESOLVE_ORGANIZATION_UUID_QUERY,
+                {"id": str(trimmed)},
+            )
+            org = result.get("organization")
+            uuid_value = org.get("uuid") if isinstance(org, dict) else None
+            if not uuid_value:
+                raise ValueError(
+                    f"Organization not found or has no uuid for id: {trimmed}"
+                )
+            return str(uuid_value)
+        raise ValueError(
+            f"organization identifier must be a UUID or numeric id, got: {trimmed!r}"
+        )
+
     async def list_portals(
         self,
         org_uuid: str,
@@ -78,17 +147,21 @@ class PortalService:
         """List portals for an organization via the Interfaces schema.
 
         Args:
-            org_uuid: Organization UUID.
+            org_uuid: Organization UUID, or numeric organization id (string).
             search_term: Optional name filter forwarded as ``searchTerm``.
         """
+        resolved_org_uuid = await self._resolve_organization_identifier_for_interfaces(
+            org_uuid
+        )
         variables: dict[str, Any] = {
-            "org_uuid": org_uuid,
+            "org_uuid": resolved_org_uuid,
             "filterBySubType": "portal",
         }
         if search_term is not None:
             variables["searchTerm"] = search_term
         data = await self.execute_interfaces_query(LIST_PORTALS_QUERY, variables)
-        return unwrap_relay_connection_nodes(data.get("interfaces"))
+        nodes = unwrap_relay_connection_nodes(data.get("interfaces"))
+        return [_with_uuid_alias(node) for node in nodes]
 
     async def get_portal(self, uuid: str) -> dict[str, Any]:
         """Fetch a portal by UUID including pages, elements, and sub-portals.
@@ -104,4 +177,4 @@ class PortalService:
         if portal is None:
             msg = f"Portal '{uuid}' was not found."
             raise ValueError(msg)
-        return portal
+        return _normalize_portal_detail(portal)

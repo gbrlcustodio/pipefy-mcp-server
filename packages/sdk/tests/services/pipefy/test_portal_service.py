@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx_auth import OAuth2ClientCredentials
 
+from pipefy_sdk.queries.observability_queries import RESOLVE_ORGANIZATION_UUID_QUERY
 from pipefy_sdk.queries.portal_queries import GET_PORTAL_QUERY, LIST_PORTALS_QUERY
 from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.services.portal_service import PortalService
@@ -16,6 +17,9 @@ INTERFACES_URL = "https://app.pipefy.com/graphql/interfaces"
 MAIN_GRAPHQL_URL = "https://app.pipefy.com/graphql"
 INTERNAL_API_URL = "https://app.pipefy.com/internal_api"
 OAUTH_URL = "https://auth.pipefy.com/oauth/token"
+_ORG_UUID_FOR_TESTS = "341c1327-261c-4766-bb96-7953e4c3970d"
+_OTHER_ORG_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+_NUMERIC_ORG_ID = "302398434"
 
 
 @pytest.fixture
@@ -58,6 +62,7 @@ def test_portal_service_interfaces_client_uses_interfaces_graphql_url(
     )
     assert service._interfaces_client.settings.graphql_url == INTERFACES_URL
     assert service._interfaces_client.settings.graphql_url != MAIN_GRAPHQL_URL
+    assert service._graphql_client.settings.graphql_url == MAIN_GRAPHQL_URL
 
 
 @pytest.mark.unit
@@ -135,34 +140,60 @@ def _make_interfaces_service(
     return service
 
 
-_PORTAL_LIST_NODE = {
-    "uuid": "portal-uuid-1",
+_PORTAL_LIST_GRAPHQL_NODE = {
+    "id": "portal-uuid-1",
     "name": "Main Portal",
     "visibility": "internal",
-    "published": True,
+    "subType": "portal",
 }
 
-_PORTAL_DETAIL = {
+_PORTAL_LIST_NODE = {
+    **_PORTAL_LIST_GRAPHQL_NODE,
     "uuid": "portal-uuid-1",
+}
+
+_PORTAL_DETAIL_GRAPHQL = {
+    "id": "portal-uuid-1",
     "name": "Main Portal",
     "visibility": "public",
     "published": True,
-    "pages": {
-        "nodes": [
-            {
-                "uuid": "page-1",
-                "title": "Home",
-                "elements": [
-                    {
-                        "uuid": "el-1",
-                        "type": "forms",
-                        "metadata": {"formId": "123"},
-                    }
-                ],
-            }
-        ]
-    },
-    "subPortals": [{"uuid": "sub-1", "name": "Sub Portal 1"}],
+    "pages": [
+        {
+            "id": "page-1",
+            "title": "Home",
+            "elements": [
+                {
+                    "id": "el-1",
+                    "type": "forms",
+                    "metadata": {"formId": "123"},
+                }
+            ],
+        }
+    ],
+    "subPortals": [{"id": "sub-1", "name": "Sub Portal 1", "published": False}],
+}
+
+_PORTAL_DETAIL = {
+    **_PORTAL_DETAIL_GRAPHQL,
+    "uuid": "portal-uuid-1",
+    "pages": [
+        {
+            "id": "page-1",
+            "uuid": "page-1",
+            "title": "Home",
+            "elements": [
+                {
+                    "id": "el-1",
+                    "uuid": "el-1",
+                    "type": "forms",
+                    "metadata": {"formId": "123"},
+                }
+            ],
+        }
+    ],
+    "subPortals": [
+        {"id": "sub-1", "uuid": "sub-1", "name": "Sub Portal 1", "published": False}
+    ],
 }
 
 
@@ -175,12 +206,12 @@ async def test_list_portals_returns_portal_nodes(
     """list_portals unwraps Relay edges into a flat list of portal dicts."""
     response = {
         "interfaces": {
-            "edges": [{"node": _PORTAL_LIST_NODE}],
+            "edges": [{"node": _PORTAL_LIST_GRAPHQL_NODE}],
         }
     }
     service = _make_interfaces_service(mock_settings, mock_auth, response)
 
-    result = await service.list_portals("org-123")
+    result = await service.list_portals(_ORG_UUID_FOR_TESTS)
 
     assert result == [_PORTAL_LIST_NODE]
 
@@ -198,12 +229,12 @@ async def test_list_portals_passes_org_uuid_and_portal_filter(
         {"interfaces": {"edges": []}},
     )
 
-    await service.list_portals("org-456")
+    await service.list_portals(_OTHER_ORG_UUID)
 
     service._interfaces_client.execute_query.assert_called_once()
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     assert query_used is LIST_PORTALS_QUERY
-    assert variables == {"org_uuid": "org-456", "filterBySubType": "portal"}
+    assert variables == {"org_uuid": _OTHER_ORG_UUID, "filterBySubType": "portal"}
 
 
 @pytest.mark.unit
@@ -219,12 +250,12 @@ async def test_list_portals_passes_search_term_when_provided(
         {"interfaces": {"edges": []}},
     )
 
-    await service.list_portals("org-123", search_term="intake")
+    await service.list_portals(_ORG_UUID_FOR_TESTS, search_term="intake")
 
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     assert query_used is LIST_PORTALS_QUERY
     assert variables == {
-        "org_uuid": "org-123",
+        "org_uuid": _ORG_UUID_FOR_TESTS,
         "filterBySubType": "portal",
         "searchTerm": "intake",
     }
@@ -243,9 +274,110 @@ async def test_list_portals_empty_returns_empty_list(
         {"interfaces": {"edges": []}},
     )
 
-    result = await service.list_portals("org-empty")
+    result = await service.list_portals(_ORG_UUID_FOR_TESTS)
 
     assert result == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_list_portals_uuid_org_identifier_passes_through_unchanged(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """UUID-shaped org identifiers skip resolve and go straight to Interfaces."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"interfaces": {"edges": []}},
+    )
+    service._graphql_client.execute_query = AsyncMock()
+
+    await service.list_portals(_ORG_UUID_FOR_TESTS)
+
+    service._graphql_client.execute_query.assert_not_called()
+    _, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables["org_uuid"] == _ORG_UUID_FOR_TESTS
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_list_portals_numeric_org_id_resolves_via_main_graphql_client(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Numeric org ids resolve on the public GraphQL client before Interfaces list."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"interfaces": {"edges": []}},
+    )
+    service._graphql_client.execute_query = AsyncMock(
+        return_value={"organization": {"uuid": _ORG_UUID_FOR_TESTS}}
+    )
+
+    await service.list_portals(_NUMERIC_ORG_ID)
+
+    service._graphql_client.execute_query.assert_called_once_with(
+        RESOLVE_ORGANIZATION_UUID_QUERY,
+        {"id": _NUMERIC_ORG_ID},
+    )
+    _, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables["org_uuid"] == _ORG_UUID_FOR_TESTS
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_list_portals_rejects_empty_org_identifier(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Empty org identifiers raise ValueError before any GraphQL call."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"interfaces": {"edges": []}},
+    )
+
+    with pytest.raises(ValueError, match="must be non-empty"):
+        await service.list_portals("   ")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_list_portals_rejects_invalid_org_identifier(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Non-UUID, non-numeric org identifiers raise ValueError."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"interfaces": {"edges": []}},
+    )
+
+    with pytest.raises(ValueError, match="must be a UUID or numeric id"):
+        await service.list_portals("not-a-uuid-or-digits")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_list_portals_org_not_found_on_resolve_raises_value_error(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """When resolve yields no uuid, list_portals raises ValueError."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"interfaces": {"edges": []}},
+    )
+    service._graphql_client.execute_query = AsyncMock(
+        return_value={"organization": None}
+    )
+
+    with pytest.raises(ValueError, match="Organization not found"):
+        await service.list_portals(_NUMERIC_ORG_ID)
 
 
 @pytest.mark.unit
@@ -258,14 +390,14 @@ async def test_get_portal_returns_full_portal_shape(
     service = _make_interfaces_service(
         mock_settings,
         mock_auth,
-        {"portalInterface": _PORTAL_DETAIL},
+        {"portalInterface": _PORTAL_DETAIL_GRAPHQL},
     )
 
     result = await service.get_portal("portal-uuid-1")
 
     assert result == _PORTAL_DETAIL
     assert result["published"] is True
-    assert len(result["pages"]["nodes"]) == 1
+    assert len(result["pages"]) == 1
     assert result["subPortals"][0]["uuid"] == "sub-1"
 
 

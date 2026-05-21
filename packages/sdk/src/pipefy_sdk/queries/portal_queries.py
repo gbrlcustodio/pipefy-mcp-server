@@ -8,7 +8,7 @@ LIST_PORTALS_QUERY = gql(
     """
     query ListPortals(
         $org_uuid: ID!
-        $filterBySubType: InterfaceSubType!
+        $filterBySubType: InterfaceSubTypeFilter!
         $searchTerm: String
     ) {
         interfaces(
@@ -18,10 +18,10 @@ LIST_PORTALS_QUERY = gql(
         ) {
             edges {
                 node {
-                    uuid
+                    id
                     name
                     visibility
-                    published
+                    subType
                 }
             }
         }
@@ -33,24 +33,23 @@ GET_PORTAL_QUERY = gql(
     """
     query GetPortal($uuid: ID!) {
         portalInterface(uuid: $uuid) {
-            uuid
+            id
             name
             visibility
             published
             pages {
-                nodes {
-                    uuid
-                    title
-                    elements {
-                        uuid
-                        type
-                        metadata
-                    }
+                id
+                title
+                elements {
+                    id
+                    type
+                    metadata
                 }
             }
             subPortals {
-                uuid
+                id
                 name
+                published
             }
         }
     }

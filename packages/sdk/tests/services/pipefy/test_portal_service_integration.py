@@ -44,7 +44,7 @@ def _portal_org_uuid() -> str | None:
 async def test_live_list_portals_returns_list_shape(
     live_portal_service: PortalService,
 ) -> None:
-    """Smoke: list_portals returns a list; nodes include uuid and published when present."""
+    """Smoke: list_portals returns a list; nodes include uuid and name when present."""
     org_uuid = _portal_org_uuid()
     if org_uuid is None:
         pytest.skip("Set PIPEFY_PORTAL_ORG_UUID for live portal list smoke")
@@ -55,7 +55,7 @@ async def test_live_list_portals_returns_list_shape(
     if portals:
         portal = portals[0]
         assert "uuid" in portal
-        assert "published" in portal
+        assert "name" in portal
 
 
 @pytest.mark.integration

@@ -2,16 +2,9 @@
 
 from __future__ import annotations
 
-import uuid as uuid_mod
-
-
-def looks_like_uuid_token(token: str) -> bool:
-    """True when ``token`` parses as a UUID (Pipefy often uses uuid for field ``id``)."""
-    try:
-        uuid_mod.UUID(str(token).strip())
-    except ValueError:
-        return False
-    return True
+from pipefy_sdk.utils.organization_identifiers import (
+    looks_like_uuid as looks_like_uuid_token,
+)
 
 
 def slug_like_field_token(token: str | int) -> bool:

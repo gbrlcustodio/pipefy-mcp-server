@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import Any, TypedDict
 from zipfile import BadZipFile
 
@@ -26,16 +25,9 @@ from pipefy_sdk.services.observability_export_csv import (
     download_bytes,
     xlsx_first_sheet_to_csv_limited,
 )
+from pipefy_sdk.utils.organization_identifiers import looks_like_uuid
 
 _DEFAULT_PAGE_SIZE = 30
-
-
-def _looks_like_uuid(value: str) -> bool:
-    try:
-        uuid.UUID(value.strip())
-    except ValueError:
-        return False
-    return True
 
 
 DateRange = TypedDict("DateRange", {"from": str, "to": str})
@@ -121,7 +113,7 @@ class ObservabilityService(BasePipefyClient):
         trimmed = organization_identifier.strip()
         if not trimmed:
             raise ValueError("organization identifier must be non-empty")
-        if _looks_like_uuid(trimmed):
+        if looks_like_uuid(trimmed):
             return trimmed
         if trimmed.isdigit():
             result = await self.execute_query(

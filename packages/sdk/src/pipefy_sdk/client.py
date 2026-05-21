@@ -1188,7 +1188,7 @@ class PipefyClient:
         """List portals for an organization.
 
         Args:
-            org_uuid: Organization UUID.
+            org_uuid: Organization UUID, or numeric organization id (string).
             search_term: Optional name filter.
         """
         return await self._portal_service.list_portals(

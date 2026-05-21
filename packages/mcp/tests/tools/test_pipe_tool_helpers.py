@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pipefy_sdk import CommentInput
-from pipefy_sdk.models.form import MalformedFieldDefinitionError
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.graphql_error_helpers import (
@@ -483,13 +482,6 @@ def test_filter_fields_by_definitions_keeps_only_editable_ids():
     defs = [{"id": "a", "type": "short_text"}, {"id": "c", "type": "short_text"}]
     result = _filter_fields_by_definitions(fields, defs)
     assert result == {"a": 1, "c": 3}
-
-
-@pytest.mark.unit
-def test_filter_fields_by_definitions_raises_on_malformed_definitions():
-    """Malformed definitions fail before filtering field values."""
-    with pytest.raises(MalformedFieldDefinitionError, match="filter field values"):
-        _filter_fields_by_definitions({"a": 1}, [{"label": "A", "type": "short_text"}])
 
 
 # =============================================================================

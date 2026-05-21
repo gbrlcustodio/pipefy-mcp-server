@@ -24,7 +24,7 @@ class FieldDefinition(BaseModel):
 
     id: NonBlankStr
     type: NonBlankStr
-    required: bool = False
+    required: bool | None = None
     label: str | None = None
     editable: bool | None = None
     options: list[str] | None = None

@@ -27,25 +27,7 @@ FIELD_FORMATS = {
 __all__ = [
     "MalformedFieldDefinitionError",
     "create_form_model",
-    "ensure_valid_field_definitions",
 ]
-
-
-def ensure_valid_field_definitions(
-    field_definitions: list,
-    *,
-    action: str,
-) -> None:
-    """Raise when field definitions lack the minimum shape for form handling.
-
-    Args:
-        field_definitions: Field definitions from Pipefy API.
-        action: User-facing verb phrase, e.g. ``build the interactive form``.
-
-    Raises:
-        MalformedFieldDefinitionError: When any definition lacks ``id`` or ``type``.
-    """
-    parse_field_definitions(field_definitions, action=action)
 
 
 def _get_default_value(

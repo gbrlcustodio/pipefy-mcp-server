@@ -2439,10 +2439,16 @@ class TestSkipElicitation:
     async def test_create_card_skip_elicitation_returns_error_for_malformed_fields(
         self, client_session, mock_pipefy_client, pipe_id, extract_payload
     ):
-        """skip_elicitation=True still rejects malformed pipe field definitions."""
-        mock_pipefy_client.get_start_form_fields.return_value = {
-            "start_form_fields": [{"label": "Status", "type": "select"}]
-        }
+        """skip_elicitation=True surfaces SDK field-definition validation errors."""
+        from pipefy_sdk.models.field_definition import MalformedFieldDefinitionError
+
+        mock_pipefy_client.get_start_form_fields.side_effect = (
+            MalformedFieldDefinitionError(
+                "Cannot return start form fields: 1 field definition(s) from Pipefy "
+                "are missing required 'id' or 'type'. "
+                "The pipe configuration may be incomplete or unsupported."
+            )
+        )
 
         async with client_session as session:
             result = await session.call_tool(
@@ -2456,7 +2462,7 @@ class TestSkipElicitation:
 
         payload = extract_payload(result)
         assert payload.get("success") is False
-        assert "filter field values" in tool_error_message(payload).lower()
+        assert "return start form fields" in tool_error_message(payload).lower()
         mock_pipefy_client.create_card.assert_not_called()
 
     @pytest.mark.parametrize(

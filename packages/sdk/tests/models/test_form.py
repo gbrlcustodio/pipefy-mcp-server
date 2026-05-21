@@ -3,7 +3,6 @@ import pytest
 from pipefy_sdk.models.form import (
     MalformedFieldDefinitionError,
     create_form_model,
-    ensure_valid_field_definitions,
 )
 
 
@@ -179,16 +178,6 @@ def test_create_form_model_raises_when_all_definitions_malformed():
     """All-malformed input must fail before building an empty interactive form."""
     with pytest.raises(MalformedFieldDefinitionError, match="1 field definition"):
         create_form_model([{"label": "Status", "type": "select"}])
-
-
-@pytest.mark.unit
-def test_ensure_valid_field_definitions_uses_action_in_message():
-    """Shared validator includes the caller action in the error message."""
-    with pytest.raises(MalformedFieldDefinitionError, match="filter field values"):
-        ensure_valid_field_definitions(
-            [{"label": "Status", "type": "select"}],
-            action="filter field values",
-        )
 
 
 @pytest.mark.unit

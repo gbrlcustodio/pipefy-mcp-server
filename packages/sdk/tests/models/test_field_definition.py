@@ -33,6 +33,15 @@ def test_parse_field_definitions_preserves_extra_keys():
 
 
 @pytest.mark.unit
+def test_parse_field_definitions_accepts_null_required():
+    parsed = parse_field_definitions(
+        [{"id": "title", "type": "short_text", "required": None}],
+        action="test",
+    )
+    assert "required" not in parsed[0]
+
+
+@pytest.mark.unit
 def test_parse_field_definitions_raises_with_action():
     with pytest.raises(MalformedFieldDefinitionError, match="filter phase fields"):
         parse_field_definitions(

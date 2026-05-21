@@ -53,6 +53,7 @@ from pipefy_sdk.services.pipe_service import (
     SEARCH_PIPES_MAX_PER_ORG_CAP,
     PipeService,
 )
+from pipefy_sdk.services.portal_service import PortalService
 from pipefy_sdk.services.relation_service import RelationService
 from pipefy_sdk.services.report_service import ReportService
 from pipefy_sdk.services.schema_introspection_service import (
@@ -129,6 +130,7 @@ class PipefyClient:
         )
         self._ai_automation_service: AiAutomationService | None = None
         self._internal_api_client: InternalApiClient | None = None
+        self._portal_service = PortalService(settings=settings, auth=auth)
 
     @property
     def ai_automation_available(self) -> bool:

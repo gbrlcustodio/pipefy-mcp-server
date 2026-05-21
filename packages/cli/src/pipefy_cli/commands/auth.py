@@ -324,8 +324,10 @@ def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None
             issuer=oidc.issuer_url, client_id=oidc.client_id
         )
     except RefreshError as exc:
+        # Branch on the RFC 6749 ``error`` field, not on ``str(exc)``. The
+        # message text is for humans; ``error_code`` is the machine contract.
         report.state = (
-            "refresh-expired" if "invalid_grant" in str(exc) else "needs-login"
+            "refresh-expired" if exc.error_code == "invalid_grant" else "needs-login"
         )
         # Best-effort expiry from the pre-refresh blob so users see *why*.
         stale = load_session(issuer=oidc.issuer_url, client_id=oidc.client_id)

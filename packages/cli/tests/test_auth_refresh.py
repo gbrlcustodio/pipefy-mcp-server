@@ -296,7 +296,7 @@ class TestEnsureFreshSession:
 
 
 class TestRefreshAccessTokenErrors:
-    def test_invalid_grant_raises_refresh_error(self) -> None:
+    def test_invalid_grant_carries_oauth_error_code(self) -> None:
         client = httpx.Client(
             transport=httpx.MockTransport(
                 _build_handler(
@@ -305,13 +305,90 @@ class TestRefreshAccessTokenErrors:
                 )
             )
         )
-        with pytest.raises(refresh.RefreshError, match="Refresh failed"):
+        with pytest.raises(refresh.RefreshError) as exc_info:
             refresh.refresh_access_token(
                 issuer=_ISSUER,
                 client_id=_CLIENT_ID,
                 refresh_token="x",
                 http_client=client,
             )
+        assert exc_info.value.error_code == "invalid_grant"
+        assert "invalid_grant" in str(exc_info.value)
+
+    def test_oauth_error_description_included_in_message(self) -> None:
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                _build_handler(
+                    token_status=400,
+                    token_payload={
+                        "error": "invalid_grant",
+                        "error_description": "refresh token expired",
+                    },
+                )
+            )
+        )
+        with pytest.raises(refresh.RefreshError) as exc_info:
+            refresh.refresh_access_token(
+                issuer=_ISSUER,
+                client_id=_CLIENT_ID,
+                refresh_token="x",
+                http_client=client,
+            )
+        assert exc_info.value.error_code == "invalid_grant"
+        assert "refresh token expired" in str(exc_info.value)
+
+    def test_non_oauth_error_body_yields_generic_message_and_no_code(self) -> None:
+        """Non-200 with non-JSON body must not echo the body and must not invent
+        an ``error_code`` — callers branch on ``error_code``, not the message."""
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/.well-known/openid-configuration"):
+                return httpx.Response(200, json=_discovery_payload())
+            return httpx.Response(503, text="<html>upstream gateway timeout</html>")
+
+        client = httpx.Client(transport=httpx.MockTransport(handler))
+        with pytest.raises(refresh.RefreshError) as exc_info:
+            refresh.refresh_access_token(
+                issuer=_ISSUER,
+                client_id=_CLIENT_ID,
+                refresh_token="x",
+                http_client=client,
+            )
+        assert exc_info.value.error_code is None
+        assert "HTTP 503" in str(exc_info.value)
+        assert "upstream gateway" not in str(exc_info.value)
+        assert "<html>" not in str(exc_info.value)
+
+    def test_error_response_does_not_echo_raw_body(self) -> None:
+        """Regression guard for the same threat-model as ``flow._format_token_error``.
+
+        A hostile or buggy IdP could include submitted params (e.g. the
+        ``refresh_token`` itself) in its error response body. The structured
+        scrub must never surface raw response text.
+        """
+        sentinel = "refresh_token=SENTINEL_REFRESH_LEAK"
+        body = (
+            '{"error":"invalid_grant","error_description":"bad refresh",'
+            f'"echoed":"{sentinel}"}}'
+        )
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/.well-known/openid-configuration"):
+                return httpx.Response(200, json=_discovery_payload())
+            return httpx.Response(400, text=body)
+
+        client = httpx.Client(transport=httpx.MockTransport(handler))
+        with pytest.raises(refresh.RefreshError) as exc_info:
+            refresh.refresh_access_token(
+                issuer=_ISSUER,
+                client_id=_CLIENT_ID,
+                refresh_token="x",
+                http_client=client,
+            )
+        message = str(exc_info.value)
+        assert "invalid_grant" in message
+        assert "bad refresh" in message
+        assert sentinel not in message
+        assert "SENTINEL_REFRESH_LEAK" not in message
 
     def test_network_error_raises_refresh_error(self) -> None:
         client = httpx.Client(

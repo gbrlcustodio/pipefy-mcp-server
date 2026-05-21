@@ -163,7 +163,9 @@ def test_status_refresh_expired_exits_2(
     _seed_session(monkeypatch)
     with patch(
         "pipefy_cli.commands.auth.ensure_fresh_session",
-        side_effect=RefreshError("Refresh failed (400): invalid_grant"),
+        side_effect=RefreshError(
+            "Refresh failed (HTTP 400): invalid_grant", error_code="invalid_grant"
+        ),
     ):
         result = _invoke_status(runner, ["--json"])
 
@@ -182,12 +184,39 @@ def test_status_refresh_expired_text_includes_relogin_hint(
     _seed_session(monkeypatch)
     with patch(
         "pipefy_cli.commands.auth.ensure_fresh_session",
-        side_effect=RefreshError("Refresh failed (400): invalid_grant"),
+        side_effect=RefreshError(
+            "Refresh failed (HTTP 400): invalid_grant", error_code="invalid_grant"
+        ),
     ):
         result = _invoke_status(runner)
 
     assert result.exit_code == 2
     assert "pipefy auth login" in (result.stderr or "")
+
+
+def test_status_other_refresh_error_categorized_as_needs_login(
+    clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
+):
+    """A non-``invalid_grant`` refresh failure must classify as ``needs-login``.
+
+    Proves the branch is driven by ``RefreshError.error_code``, not by a
+    substring match on the message — sentinel text containing ``invalid_grant``
+    in the human message must not flip ``state`` to ``refresh-expired``.
+    """
+    _set_auth_env(monkeypatch)
+    _seed_session(monkeypatch)
+    with patch(
+        "pipefy_cli.commands.auth.ensure_fresh_session",
+        side_effect=RefreshError(
+            "Refresh failed (HTTP 400): unauthorized_client (mentions invalid_grant in prose)",
+            error_code="unauthorized_client",
+        ),
+    ):
+        result = _invoke_status(runner, ["--json"])
+
+    assert result.exit_code == 2
+    payload = json.loads(result.stdout)
+    assert payload["state"] == "needs-login"
 
 
 # --------------------------------------------------------------------------- #

@@ -11,7 +11,11 @@ from urllib.parse import urlencode
 import httpx
 
 from pipefy_cli.oauth import _http
-from pipefy_cli.oauth.discovery import ProviderMetadata, fetch_provider_metadata
+from pipefy_cli.oauth.discovery import (
+    DiscoveryPolicy,
+    ProviderMetadata,
+    fetch_provider_metadata,
+)
 from pipefy_cli.oauth.loopback import CallbackResult, LoopbackCapture
 from pipefy_cli.oauth.pkce import challenge_from_verifier, generate_verifier
 
@@ -78,9 +82,7 @@ def exchange_code(
         raise LoginError(f"Token exchange request failed: {exc}") from exc
 
     if response.status_code != 200:
-        raise LoginError(
-            f"Token exchange failed ({response.status_code}): {response.text[:300]}"
-        )
+        raise LoginError(_format_token_error(response))
     try:
         payload = response.json()
     except ValueError as exc:
@@ -88,6 +90,34 @@ def exchange_code(
     if not isinstance(payload, dict):
         raise LoginError("Token endpoint returned a non-object JSON payload.")
     return payload
+
+
+def _format_token_error(response: httpx.Response) -> str:
+    """Render a token-exchange non-200 as a user-safe message.
+
+    Only OAuth-standard ``error`` / ``error_description`` fields are surfaced;
+    raw bodies are never echoed (RFC 6749 doesn't forbid IdPs from including
+    submitted params like ``code_verifier`` in error responses, and a `[:N]`
+    snippet would be a guaranteed echo channel under a hostile IdP).
+    """
+    generic = f"Token endpoint returned HTTP {response.status_code}"
+    try:
+        payload = response.json()
+    except ValueError:
+        return generic
+    if not isinstance(payload, dict):
+        return generic
+    error = payload.get("error")
+    if not error:
+        return generic
+    # ``error_description`` is free-form per RFC 6749 §5.2 — its content reflects
+    # the IdP's framing, and surfacing it at all is part of trusting the IdP. A
+    # length cap wouldn't change that (an attacker can truncate to fit any cap,
+    # and a tight cap kills legitimate error context).
+    description = payload.get("error_description")
+    if description:
+        return f"Token exchange failed: {error}: {description}"
+    return f"Token exchange failed: {error}"
 
 
 def run_login(
@@ -99,6 +129,7 @@ def run_login(
     open_browser: Callable[[str], bool] = webbrowser.open,
     on_url: Callable[[str], None] | None = None,
     http_client: httpx.Client | None = None,
+    discovery_policy: DiscoveryPolicy = DiscoveryPolicy(),
 ) -> LoginResult:
     """Run the full PKCE loopback login. Returns tokens; does **not** persist them.
 
@@ -118,6 +149,9 @@ def run_login(
         http_client: Optional pre-configured ``httpx.Client`` (testing). When
             omitted, one client is created and reused for discovery + token
             exchange so the same TLS connection can serve both requests.
+        discovery_policy: Validation knobs forwarded to
+            :func:`fetch_provider_metadata` (notably ``allow_insecure_urls``
+            for local-development IdPs over http / private IPs).
 
     Raises:
         LoginError: For any user-visible failure (discovery, state mismatch,
@@ -126,7 +160,9 @@ def run_login(
     """
     with _http.http_client(http_client, timeout=_TOKEN_EXCHANGE_TIMEOUT_S) as http:
         try:
-            metadata = fetch_provider_metadata(issuer_url, client=http)
+            metadata = fetch_provider_metadata(
+                issuer_url, policy=discovery_policy, client=http
+            )
         except ValueError as exc:
             raise LoginError(str(exc)) from exc
 

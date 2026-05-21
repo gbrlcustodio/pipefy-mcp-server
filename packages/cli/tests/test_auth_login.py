@@ -78,11 +78,18 @@ class TestDiscovery:
         assert meta.token_endpoint == payload["token_endpoint"]
 
     def test_fetch_non_200_raises(self) -> None:
+        sentinel = "SENTINEL_DISCOVERY_LEAK"
         client = httpx.Client(
-            transport=httpx.MockTransport(lambda _r: httpx.Response(404, text="nope"))
+            transport=httpx.MockTransport(
+                lambda _r: httpx.Response(404, text=f"<html>nope {sentinel}</html>")
+            )
         )
-        with pytest.raises(ValueError, match="OIDC discovery failed"):
+        with pytest.raises(ValueError, match="OIDC discovery failed") as exc_info:
             discovery.fetch_provider_metadata("https://x.test/realms/y", client=client)
+        # Status-only message; raw body must not leak (same threat-model as the
+        # token-exchange scrub).
+        assert sentinel not in str(exc_info.value)
+        assert "<html>" not in str(exc_info.value)
 
     def test_fetch_missing_field_raises(self) -> None:
         bad = {"issuer": "https://x.test", "token_endpoint": "https://x.test/t"}
@@ -91,6 +98,70 @@ class TestDiscovery:
         )
         with pytest.raises(ValueError, match="authorization_endpoint"):
             discovery.fetch_provider_metadata("https://x.test", client=client)
+
+    def test_issuer_mismatch_rejected(self) -> None:
+        bad = _discovery_payload(issuer="https://attacker.test/realms/foo")
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=bad))
+        )
+        with pytest.raises(ValueError, match="issuer mismatch") as exc:
+            discovery.fetch_provider_metadata(
+                "https://example.test/realms/foo", client=client
+            )
+        # Both URLs surface in the message so the user can see which side drifted.
+        assert "https://example.test/realms/foo" in str(exc.value)
+        assert "https://attacker.test/realms/foo" in str(exc.value)
+
+    def test_issuer_trailing_slash_variants_accepted(self) -> None:
+        # Claim with trailing slash; request without — and vice versa.
+        for claimed, requested in (
+            ("https://example.test/realms/foo/", "https://example.test/realms/foo"),
+            ("https://example.test/realms/foo", "https://example.test/realms/foo/"),
+        ):
+            payload = _discovery_payload(issuer=claimed)
+            client = httpx.Client(
+                transport=httpx.MockTransport(
+                    lambda _r, p=payload: httpx.Response(200, json=p)
+                )
+            )
+            meta = discovery.fetch_provider_metadata(requested, client=client)
+            assert meta.issuer == claimed
+
+    def test_http_authorization_endpoint_rejected(self) -> None:
+        bad = _discovery_payload()
+        bad["authorization_endpoint"] = "http://example.test/realms/foo/auth"
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=bad))
+        )
+        with pytest.raises(ValueError, match="authorization_endpoint"):
+            discovery.fetch_provider_metadata(
+                "https://example.test/realms/foo", client=client
+            )
+
+    def test_internal_token_endpoint_rejected(self) -> None:
+        bad = _discovery_payload()
+        bad["token_endpoint"] = "https://127.0.0.1/realms/foo/token"
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=bad))
+        )
+        with pytest.raises(ValueError, match="token_endpoint"):
+            discovery.fetch_provider_metadata(
+                "https://example.test/realms/foo", client=client
+            )
+
+    def test_allow_insecure_urls_bypasses_ssrf_checks(self) -> None:
+        # Same payload that fails by default succeeds when the policy opts in.
+        bad = _discovery_payload()
+        bad["authorization_endpoint"] = "http://127.0.0.1:8080/realms/foo/auth"
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=bad))
+        )
+        meta = discovery.fetch_provider_metadata(
+            "https://example.test/realms/foo",
+            policy=discovery.DiscoveryPolicy(allow_insecure_urls=True),
+            client=client,
+        )
+        assert meta.authorization_endpoint == "http://127.0.0.1:8080/realms/foo/auth"
 
 
 # --------------------------------------------------------------------------- #
@@ -220,6 +291,26 @@ class TestStorage:
 # --------------------------------------------------------------------------- #
 
 
+def _exchange_error_for(response: httpx.Response) -> flow.LoginError:
+    """Invoke ``exchange_code`` against a canned response and return the raised error."""
+    meta = ProviderMetadata(
+        issuer="i",
+        authorization_endpoint="https://a/x",
+        token_endpoint="https://t/x",
+    )
+    client = httpx.Client(transport=httpx.MockTransport(lambda _r: response))
+    with pytest.raises(flow.LoginError) as exc_info:
+        flow.exchange_code(
+            metadata=meta,
+            client_id="cid",
+            code="c",
+            redirect_uri="r",
+            code_verifier="SENTINEL_VERIFIER",
+            client=client,
+        )
+    return exc_info.value
+
+
 class TestFlow:
     def test_build_authorization_url_has_all_required_params(self) -> None:
         meta = ProviderMetadata(
@@ -297,6 +388,51 @@ class TestFlow:
                 client=client,
             )
 
+    def test_exchange_error_renders_oauth_fields(self) -> None:
+        err = _exchange_error_for(
+            httpx.Response(
+                400,
+                json={"error": "invalid_grant", "error_description": "PKCE failed"},
+            )
+        )
+        assert "invalid_grant" in str(err)
+        assert "PKCE failed" in str(err)
+
+    def test_exchange_error_renders_error_alone_when_description_absent(self) -> None:
+        err = _exchange_error_for(httpx.Response(400, json={"error": "invalid_grant"}))
+        assert str(err) == "Token exchange failed: invalid_grant"
+
+    def test_exchange_error_falls_back_when_error_key_missing(self) -> None:
+        # error_description without error is half a message — fall back to generic.
+        err = _exchange_error_for(
+            httpx.Response(400, json={"error_description": "PKCE failed"})
+        )
+        assert str(err) == "Token endpoint returned HTTP 400"
+
+    def test_exchange_error_falls_back_on_non_dict_json(self) -> None:
+        err = _exchange_error_for(httpx.Response(400, json=["not", "a", "dict"]))
+        assert str(err) == "Token endpoint returned HTTP 400"
+
+    def test_exchange_error_falls_back_on_non_json_body(self) -> None:
+        err = _exchange_error_for(httpx.Response(500, text="<html>Bad Gateway</html>"))
+        assert str(err) == "Token endpoint returned HTTP 500"
+
+    def test_exchange_error_does_not_echo_raw_body(self) -> None:
+        # Regression guard for item 3: a hostile IdP could echo submitted params
+        # (like our code_verifier) into the raw response body. The scrub must
+        # never put that text into the LoginError message.
+        sentinel = "code_verifier=SENTINEL_VERIFIER_LEAK"
+        body = (
+            '{"error":"invalid_grant","error_description":"bad pkce",'
+            f'"echoed":"{sentinel}"}}'
+        )
+        err = _exchange_error_for(httpx.Response(400, text=body))
+        message = str(err)
+        assert "invalid_grant" in message
+        assert "bad pkce" in message
+        assert sentinel not in message
+        assert "SENTINEL_VERIFIER_LEAK" not in message
+
     def test_run_login_state_mismatch_raises(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -307,7 +443,9 @@ class TestFlow:
             token_endpoint="https://x.test/token",
         )
         monkeypatch.setattr(
-            flow, "fetch_provider_metadata", lambda url, client=None: meta
+            flow,
+            "fetch_provider_metadata",
+            lambda url, *, policy=None, client=None: meta,
         )
 
         class _FakeCapture:

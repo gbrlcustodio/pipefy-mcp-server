@@ -27,6 +27,7 @@ from pipefy_cli.auth import (
 )
 from pipefy_cli.commands._common import settings_and_auth_from_ctx
 from pipefy_cli.oauth import (
+    DiscoveryPolicy,
     LoginError,
     RefreshError,
     ensure_fresh_session,
@@ -123,7 +124,7 @@ def auth_login(
     # Lazy to keep keyring's ~30-80ms backend-discovery cost off every CLI startup.
     from keyring.errors import KeyringError
 
-    _, auth = settings_and_auth_from_ctx(ctx)
+    settings, auth = settings_and_auth_from_ctx(ctx)
     if auth.oidc_client is None:
         typer.echo(
             "PIPEFY_AUTH_URL is required for `pipefy auth login` (the OIDC issuer "
@@ -159,6 +160,9 @@ def auth_login(
             callback_timeout_s=callback_timeout,
             open_browser=_open,
             on_url=_print_url,
+            discovery_policy=DiscoveryPolicy(
+                allow_insecure_urls=settings.allow_insecure_urls
+            ),
         )
     except LoginError as exc:
         typer.echo(f"Login failed: {exc}", err=True)

@@ -319,7 +319,6 @@ def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None
     """Populate stored-session fields on ``report``; raise ``_StatusExit`` on failure."""
     report.issuer = oidc.issuer_url
     report.keychain_backend = keychain_backend_name()
-    report.masking_env_vars = _session_masking_env_vars()
     try:
         fresh_session = ensure_fresh_session(
             issuer=oidc.issuer_url, client_id=oidc.client_id
@@ -397,6 +396,13 @@ def auth_status(
     detected = detect_all_sources(settings, auth)
     source: AuthSource = detected[0] if detected else "none"
     report = AuthStatusReport(auth_source=source, detected_sources=detected)
+    # Whenever a stored session exists — even if a higher-precedence source
+    # ranks above it — surface the env vars masking it. That's the field's
+    # entire purpose: diagnose the "keychain login exists but CI vars override
+    # it" failure mode. Populated here (not inside `_populate_stored_session`)
+    # because that helper only runs when stored-session is the *winner*.
+    if "stored-session" in detected:
+        report.masking_env_vars = _session_masking_env_vars()
 
     try:
         if source == "none":

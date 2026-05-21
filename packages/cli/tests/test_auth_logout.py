@@ -1,11 +1,13 @@
-"""Unit tests for ``oauth/revoke.py`` (the ``pipefy auth logout`` command lands next)."""
+"""Unit tests for ``oauth/revoke.py`` and the ``pipefy auth logout`` command."""
 
 from __future__ import annotations
 
 import httpx
 import pytest
+from conftest import InMemoryKeyring
 
-from pipefy_cli.oauth import revoke
+from pipefy_cli.main import app as cli_app
+from pipefy_cli.oauth import revoke, storage
 
 # --------------------------------------------------------------------------- #
 # Helpers                                                                     #
@@ -120,3 +122,133 @@ class TestRevokeSession:
                 refresh_token="rt",
                 http_client=_make_client(handler),
             )
+
+
+# --------------------------------------------------------------------------- #
+# Command — pipefy auth logout                                                #
+# --------------------------------------------------------------------------- #
+
+
+def _store_test_session(issuer: str = _ISSUER, client_id: str = "pipefy-cli") -> None:
+    storage.store_session(
+        issuer=issuer,
+        client_id=client_id,
+        token_response={
+            "access_token": "AAA",
+            "refresh_token": "RRR",
+            "token_type": "Bearer",
+            "expires_in": 300,
+        },
+    )
+
+
+class TestAuthLogoutCommand:
+    def test_missing_auth_url_exits_2(
+        self,
+        runner,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 2
+        assert "PIPEFY_AUTH_URL is required" in result.stderr
+
+    def test_no_session_is_idempotent(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 0, result.stderr
+        assert "Not signed in. Nothing to do." in result.stdout
+        assert result.stderr == ""
+
+    def test_happy_path_revokes_and_deletes(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        _store_test_session()
+
+        revoke_calls: list[tuple[str, str, str]] = []
+
+        def _fake_revoke_session(
+            *,
+            issuer: str,
+            client_id: str,
+            refresh_token: str,
+            policy=None,
+            http_client=None,
+        ) -> None:
+            revoke_calls.append((issuer, client_id, refresh_token))
+
+        from pipefy_cli.commands import auth as auth_module
+
+        monkeypatch.setattr(auth_module, "revoke_session", _fake_revoke_session)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 0, result.stderr
+        assert revoke_calls == [(_ISSUER, "pipefy-cli", "RRR")]
+        assert f"Signed out of Pipefy ({_ISSUER})." in result.stdout
+        assert result.stderr == ""
+        assert storage.load_session(issuer=_ISSUER, client_id="pipefy-cli") is None
+
+    def test_revoke_network_failure_still_deletes_keychain(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        _store_test_session()
+
+        def _boom(**_kwargs: object) -> None:
+            raise revoke.RevocationError("Revocation request failed: ConnectError")
+
+        from pipefy_cli.commands import auth as auth_module
+
+        monkeypatch.setattr(auth_module, "revoke_session", _boom)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 0, result.stderr
+        assert f"Signed out of Pipefy ({_ISSUER})." in result.stdout
+        assert "Could not revoke refresh token at the IdP" in result.stderr
+        assert "may remain valid at the server" in result.stderr
+        assert storage.load_session(issuer=_ISSUER, client_id="pipefy-cli") is None
+
+    def test_end_session_unsupported_warns_and_deletes(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        _store_test_session()
+
+        def _unsupported(**_kwargs: object) -> None:
+            raise revoke.RevocationUnsupportedError(
+                "OIDC provider does not advertise an end_session_endpoint."
+            )
+
+        from pipefy_cli.commands import auth as auth_module
+
+        monkeypatch.setattr(auth_module, "revoke_session", _unsupported)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 0, result.stderr
+        assert f"Signed out of Pipefy ({_ISSUER})." in result.stdout
+        assert "does not advertise a logout endpoint" in result.stderr
+        assert storage.load_session(issuer=_ISSUER, client_id="pipefy-cli") is None

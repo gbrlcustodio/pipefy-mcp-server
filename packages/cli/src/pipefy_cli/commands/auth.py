@@ -30,9 +30,13 @@ from pipefy_cli.oauth import (
     DiscoveryPolicy,
     LoginError,
     RefreshError,
+    RevocationError,
+    RevocationUnsupportedError,
+    delete_session,
     ensure_fresh_session,
     keychain_backend_name,
     load_session,
+    revoke_session,
     run_login,
     store_session,
 )
@@ -430,6 +434,59 @@ def auth_status(
         raise typer.Exit(exit_.exit_code) from exit_
 
     _render(report, json_out=json_out)
+
+
+@auth_app.command("logout")
+def auth_logout(ctx: typer.Context) -> None:
+    """Revoke the stored refresh token at the IdP and clear the local session."""
+    settings, auth = settings_and_auth_from_ctx(ctx)
+    if auth.oidc_client is None:
+        typer.echo(
+            "PIPEFY_AUTH_URL is required for `pipefy auth logout` (the OIDC "
+            "issuer URL used at login). "
+            f"See {DOCS_CLI_AUTH_REF}.",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    issuer = auth.oidc_client.issuer_url
+    client_id = auth.oidc_client.client_id
+
+    session = load_session(issuer=issuer, client_id=client_id)
+    if session is None:
+        typer.echo("Not signed in. Nothing to do.")
+        return
+
+    # Revoke at the IdP first — once we delete the keychain entry we no longer
+    # have the refresh_token to send. On any revoke failure still proceed to
+    # delete (warning makes the difference honest: server-side credential may
+    # remain valid until natural expiry).
+    revoke_warning: str | None = None
+    try:
+        revoke_session(
+            issuer=issuer,
+            client_id=client_id,
+            refresh_token=session.refresh_token,
+            policy=DiscoveryPolicy(allow_insecure_urls=settings.allow_insecure_urls),
+        )
+    except RevocationUnsupportedError:
+        revoke_warning = (
+            "Pipefy auth server does not advertise a logout endpoint; the "
+            "refresh token could not be revoked server-side. Clearing local "
+            "session only."
+        )
+    except RevocationError as exc:
+        revoke_warning = (
+            f"Could not revoke refresh token at the IdP: {exc}. Clearing "
+            "local session anyway; the refresh token may remain valid at the "
+            "server until natural expiry."
+        )
+
+    delete_session(issuer=issuer, client_id=client_id)
+
+    if revoke_warning:
+        typer.echo(revoke_warning, err=True)
+    typer.echo(f"Signed out of Pipefy ({issuer}).")
 
 
 __all__ = ["auth_app"]

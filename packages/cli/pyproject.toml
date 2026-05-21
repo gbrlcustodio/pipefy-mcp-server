@@ -46,7 +46,8 @@ markers = [
 ]
 
 [tool.ruff]
-lint.extend-select = ["I", "TID251"]
+extend = "../../pyproject.toml"
+lint.extend-select = ["TID251"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "pipefy_mcp".msg = "pipefy_cli must not import the MCP package; use pipefy_sdk instead."

@@ -159,9 +159,7 @@ class PipeTools:
                 except UserCancelledError:
                     return tool_error("Card creation cancelled by user.")
             elif expected_fields:
-                card_data = _filter_fields_by_definitions(
-                    card_data, expected_fields
-                )
+                card_data = _filter_fields_by_definitions(card_data, expected_fields)
 
             try:
                 result = await client.create_card(pipe_id, card_data)
@@ -1032,9 +1030,7 @@ class PipeTools:
                 except UserCancelledError:
                     return tool_error("Phase field update cancelled by user.")
             elif expected_fields:
-                field_data = _filter_fields_by_definitions(
-                    field_data, expected_fields
-                )
+                field_data = _filter_fields_by_definitions(field_data, expected_fields)
 
             if not field_data:
                 return {

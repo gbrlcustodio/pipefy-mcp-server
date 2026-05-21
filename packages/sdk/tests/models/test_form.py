@@ -1,6 +1,9 @@
 import pytest
 
-from pipefy_sdk.models.form import create_form_model
+from pipefy_sdk.models.form import (
+    MalformedFieldDefinitionError,
+    create_form_model,
+)
 
 
 @pytest.mark.unit
@@ -154,3 +157,37 @@ def test_form_model_with_default_values():
     description_field_no_default = FormModelWithoutDefaults.model_fields["description"]
     assert description_field_no_default.is_required() is False
     assert description_field_no_default.get_default() is None
+
+
+@pytest.mark.unit
+def test_create_form_model_raises_on_malformed_field_definitions():
+    """Malformed API field shapes return a clear error instead of crashing (issue #30)."""
+    field_definitions = [
+        {"label": "Status", "type": "select"},
+        "not a dict",
+        None,
+        {"id": "name", "type": "short_text", "label": "Name", "required": True},
+    ]
+
+    with pytest.raises(MalformedFieldDefinitionError, match="3 field definition"):
+        create_form_model(field_definitions)
+
+
+@pytest.mark.unit
+def test_create_form_model_raises_when_all_definitions_malformed():
+    """All-malformed input must fail before building an empty interactive form."""
+    with pytest.raises(MalformedFieldDefinitionError, match="1 field definition"):
+        create_form_model([{"label": "Status", "type": "select"}])
+
+
+@pytest.mark.unit
+def test_create_form_model_uses_field_id_as_label_fallback():
+    """Fields without label still produce a valid model using id as title."""
+    field_definitions = [
+        {"id": "status", "type": "select", "required": False},
+    ]
+
+    FormModel = create_form_model(field_definitions)
+
+    assert "status" in FormModel.model_fields
+    assert FormModel.model_fields["status"].title == "status"

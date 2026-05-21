@@ -464,14 +464,14 @@ def test_filter_editable_field_definitions_skips_non_dict():
 @pytest.mark.unit
 def test_filter_fields_by_definitions_none_returns_empty():
     """None fields returns empty dict."""
-    defs = [{"id": "a"}]
+    defs = [{"id": "a", "type": "short_text"}]
     assert _filter_fields_by_definitions(None, defs) == {}
 
 
 @pytest.mark.unit
 def test_filter_fields_by_definitions_empty_returns_empty():
     """Empty fields returns empty dict."""
-    defs = [{"id": "a"}]
+    defs = [{"id": "a", "type": "short_text"}]
     assert _filter_fields_by_definitions({}, defs) == {}
 
 
@@ -479,7 +479,7 @@ def test_filter_fields_by_definitions_empty_returns_empty():
 def test_filter_fields_by_definitions_keeps_only_editable_ids():
     """Only field IDs present in definitions are kept."""
     fields = {"a": 1, "b": 2, "c": 3}
-    defs = [{"id": "a"}, {"id": "c"}]
+    defs = [{"id": "a", "type": "short_text"}, {"id": "c", "type": "short_text"}]
     result = _filter_fields_by_definitions(fields, defs)
     assert result == {"a": 1, "c": 3}
 

@@ -1,6 +1,6 @@
 # Documentation index
 
-This folder holds **human-facing** guides for the Pipefy Labs monorepo. Use the sections below to load only the context you need.
+Human-facing guides for the **pipefy-labs** monorepo (`pipefy-mcp-server` on GitHub). Use the sections below to load only the surface you need.
 
 ## By surface
 
@@ -19,5 +19,7 @@ This folder holds **human-facing** guides for the Pipefy Labs monorepo. Use the 
 | [`parity.md`](parity.md) | MCP tool ↔ CLI command matrix (source of truth for coverage and deferrals) |
 | [`MIGRATION.md`](MIGRATION.md) | Notes for existing MCP users across packaging changes |
 | [`dependencies.md`](dependencies.md) | Why each runtime dependency exists |
+| [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Contributing skills (Markdown playbooks) |
+| [`../RELEASE.md`](../RELEASE.md) | Versioning and GitHub Releases |
 
-Package-level READMEs under `packages/*/README.md` link back here for install and parity details.
+Package READMEs under `packages/*/README.md` link here for install, parity, and MCP client setup.

@@ -1,6 +1,13 @@
+from __future__ import annotations
+
 from typing import Any
 
 from pydantic import BaseModel, Field, create_model
+
+from pipefy_sdk.models.field_definition import (
+    MalformedFieldDefinitionError,
+    parse_field_definitions,
+)
 
 FIELD_TYPES = {
     "short_text": str,
@@ -16,6 +23,11 @@ FIELD_FORMATS = {
     "datetime": "date-time",
     "email": "email",
 }
+
+__all__ = [
+    "MalformedFieldDefinitionError",
+    "create_form_model",
+]
 
 
 def _get_default_value(
@@ -40,12 +52,19 @@ def create_form_model(
 
     Returns:
         A Pydantic model class for validating form input
+
+    Raises:
+        MalformedFieldDefinitionError: When any field definition lacks ``id`` or ``type``.
     """
+    validated_fields = parse_field_definitions(
+        field_definitions, action="build the interactive form"
+    )
+
     fields: dict[str, Any] = {}
-    for field_def in field_definitions:
+    for field_def in validated_fields:
         field_id = field_def["id"]
         field_type = field_def["type"]
-        required = field_def["required"]
+        required = field_def.get("required", False)
         options = field_def.get("options", [])
 
         pydantic_type = FIELD_TYPES.get(field_type, str)
@@ -56,7 +75,7 @@ def create_form_model(
             pydantic_type,
             Field(
                 default=default_value,
-                title=field_def["label"],
+                title=field_def.get("label") or field_id,
                 description=field_def.get("description", ""),
                 json_schema_extra=_create_json_schema_extra(
                     options, required, schema_format

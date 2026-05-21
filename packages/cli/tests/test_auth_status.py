@@ -77,6 +77,42 @@ def _invoke_status(runner: Any, args: list[str] | None = None) -> Any:
     return runner.invoke(app, ["auth", "status", *(args or [])])
 
 
+_LOAD_SESSION_PATCH_TARGETS = (
+    "pipefy_cli.oauth.storage.load_session",
+    "pipefy_cli.oauth.refresh.load_session",
+    "pipefy_cli.commands.auth.load_session",
+    "pipefy_cli.auth.load_session",
+)
+
+
+def test_auth_status_stored_session_calls_load_session_once(
+    clean_pipefy_env,
+    saved_cwd,
+    monkeypatch,
+    runner,
+    fake_keyring,
+):
+    """``auth status`` must not re-read the keychain after the initial preload."""
+    _set_auth_env(monkeypatch)
+    _seed_session(monkeypatch)
+    load_calls = 0
+    real_load = storage.load_session
+
+    def counting_load(**kwargs: object) -> StoredSession | None:
+        nonlocal load_calls
+        load_calls += 1
+        return real_load(**kwargs)
+
+    for target in _LOAD_SESSION_PATCH_TARGETS:
+        monkeypatch.setattr(target, counting_load)
+    client = _mock_client_with_me()
+    with patch("pipefy_cli.auth.PipefyClient", return_value=client):
+        result = _invoke_status(runner, ["--json"])
+
+    assert result.exit_code == 0, (result.stdout or "") + (result.stderr or "")
+    assert load_calls == 1
+
+
 # --------------------------------------------------------------------------- #
 # Scenario 1: stored-session, fresh access token                              #
 # --------------------------------------------------------------------------- #
@@ -161,11 +197,14 @@ def test_status_refresh_expired_exits_2(
 ):
     _set_auth_env(monkeypatch)
     _seed_session(monkeypatch)
-    with patch(
-        "pipefy_cli.commands.auth.ensure_fresh_session",
-        side_effect=RefreshError(
-            "Refresh failed (HTTP 400): invalid_grant", error_code="invalid_grant"
+    with (
+        patch(
+            "pipefy_cli.commands.auth.ensure_fresh_session",
+            side_effect=RefreshError(
+                "Refresh failed (HTTP 400): invalid_grant", error_code="invalid_grant"
+            ),
         ),
+        patch("pipefy_cli.commands.auth._session_is_fresh", return_value=False),
     ):
         result = _invoke_status(runner, ["--json"])
 
@@ -182,11 +221,14 @@ def test_status_refresh_expired_text_includes_relogin_hint(
 ):
     _set_auth_env(monkeypatch)
     _seed_session(monkeypatch)
-    with patch(
-        "pipefy_cli.commands.auth.ensure_fresh_session",
-        side_effect=RefreshError(
-            "Refresh failed (HTTP 400): invalid_grant", error_code="invalid_grant"
+    with (
+        patch(
+            "pipefy_cli.commands.auth.ensure_fresh_session",
+            side_effect=RefreshError(
+                "Refresh failed (HTTP 400): invalid_grant", error_code="invalid_grant"
+            ),
         ),
+        patch("pipefy_cli.commands.auth._session_is_fresh", return_value=False),
     ):
         result = _invoke_status(runner)
 
@@ -205,12 +247,15 @@ def test_status_other_refresh_error_categorized_as_needs_login(
     """
     _set_auth_env(monkeypatch)
     _seed_session(monkeypatch)
-    with patch(
-        "pipefy_cli.commands.auth.ensure_fresh_session",
-        side_effect=RefreshError(
-            "Refresh failed (HTTP 400): unauthorized_client (mentions invalid_grant in prose)",
-            error_code="unauthorized_client",
+    with (
+        patch(
+            "pipefy_cli.commands.auth.ensure_fresh_session",
+            side_effect=RefreshError(
+                "Refresh failed (HTTP 400): unauthorized_client (mentions invalid_grant in prose)",
+                error_code="unauthorized_client",
+            ),
         ),
+        patch("pipefy_cli.commands.auth._session_is_fresh", return_value=False),
     ):
         result = _invoke_status(runner, ["--json"])
 

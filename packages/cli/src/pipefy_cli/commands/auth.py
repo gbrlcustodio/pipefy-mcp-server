@@ -22,6 +22,7 @@ from pipefy_cli.auth import (
     AuthContext,
     AuthSource,
     OidcClient,
+    _session_is_fresh,
     detect_all_sources,
     get_authenticated_client,
 )
@@ -30,6 +31,7 @@ from pipefy_cli.oauth import (
     DiscoveryPolicy,
     LoginError,
     RefreshError,
+    StoredSession,
     ensure_fresh_session,
     keychain_backend_name,
     load_session,
@@ -319,14 +321,25 @@ class _StatusExit(Exception):
     stderr: str | None = None
 
 
-def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None:
-    """Populate stored-session fields on ``report``; raise ``_StatusExit`` on failure."""
+def _populate_stored_session(
+    report: AuthStatusReport,
+    oidc: OidcClient,
+    *,
+    loaded_session: StoredSession | None = None,
+) -> StoredSession:
+    """Populate stored-session fields on ``report``; raise ``_StatusExit`` on failure.
+
+    Returns the (possibly refreshed) session for reuse by :func:`_fetch_identity`.
+    """
     report.issuer = oidc.issuer_url
     report.keychain_backend = keychain_backend_name()
     try:
-        fresh_session = ensure_fresh_session(
-            issuer=oidc.issuer_url, client_id=oidc.client_id
-        )
+        if loaded_session is not None and _session_is_fresh(loaded_session):
+            fresh_session = loaded_session
+        else:
+            fresh_session = ensure_fresh_session(
+                issuer=oidc.issuer_url, client_id=oidc.client_id
+            )
     except RefreshError as exc:
         # Branch on the RFC 6749 ``error`` field, not on ``str(exc)``. The
         # message text is for humans; ``error_code`` is the machine contract.
@@ -334,7 +347,11 @@ def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None
             "refresh-expired" if exc.error_code == "invalid_grant" else "needs-login"
         )
         # Best-effort expiry from the pre-refresh blob so users see *why*.
-        stale = load_session(issuer=oidc.issuer_url, client_id=oidc.client_id)
+        stale = (
+            loaded_session
+            if loaded_session is not None
+            else load_session(issuer=oidc.issuer_url, client_id=oidc.client_id)
+        )
         if stale is not None:
             report.access_expires_at = _iso_expiry(stale.obtained_at, stale.expires_in)
             report.refresh_expires_at = _iso_expiry(
@@ -363,13 +380,20 @@ def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None
     report.refresh_expires_at = _iso_expiry(
         fresh_session.obtained_at, fresh_session.refresh_expires_in
     )
+    return fresh_session
 
 
 def _fetch_identity(
-    report: AuthStatusReport, settings: PipefySettings, auth: AuthContext
+    report: AuthStatusReport,
+    settings: PipefySettings,
+    auth: AuthContext,
+    *,
+    prefetched_session: StoredSession | None = None,
 ) -> None:
     """Populate ``report.identity``; raise ``_StatusExit`` on transport / 401."""
-    client = get_authenticated_client(settings, auth)
+    client = get_authenticated_client(
+        settings, auth, prefetched_session=prefetched_session
+    )
     try:
         report.identity = asyncio.run(client.get_me())
     except TransportServerError as exc:
@@ -399,7 +423,19 @@ def auth_status(
 ) -> None:
     """Print which auth source is active, the authenticated identity, and session expiry."""
     settings, auth = settings_and_auth_from_ctx(ctx)
-    detected = detect_all_sources(settings, auth)
+    loaded_session: StoredSession | None = None
+    if auth.oidc_client is not None:
+        loaded_session = load_session(
+            issuer=auth.oidc_client.issuer_url,
+            client_id=auth.oidc_client.client_id,
+        )
+    detected = detect_all_sources(
+        settings,
+        auth,
+        cached_stored_session=loaded_session is not None
+        if auth.oidc_client is not None
+        else None,
+    )
     source: AuthSource = detected[0] if detected else "none"
     report = AuthStatusReport(auth_source=source, detected_sources=detected)
     # Surface masking env vars whenever a stored session exists — that's the
@@ -421,8 +457,12 @@ def auth_status(
                         "but no OIDC client is configured. Please file an issue."
                     ),
                 )
-            _populate_stored_session(report, auth.oidc_client)
-        _fetch_identity(report, settings, auth)
+            prefetched = _populate_stored_session(
+                report, auth.oidc_client, loaded_session=loaded_session
+            )
+            _fetch_identity(report, settings, auth, prefetched_session=prefetched)
+        else:
+            _fetch_identity(report, settings, auth)
     except _StatusExit as exit_:
         _render(exit_.report, json_out=json_out)
         if exit_.stderr and not json_out:

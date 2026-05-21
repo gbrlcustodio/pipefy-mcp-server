@@ -179,6 +179,8 @@ def auth_login(
             issuer=result.issuer,
             client_id=client_id,
             token_response=result.token_response,
+            authorization_endpoint=result.authorization_endpoint,
+            token_endpoint=result.token_endpoint,
         )
     except ValueError as exc:
         typer.echo(

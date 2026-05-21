@@ -35,29 +35,34 @@ class RefreshError(RuntimeError):
 
 def refresh_access_token(
     *,
-    issuer: str,
-    client_id: str,
-    refresh_token: str,
+    session: StoredSession,
     http_client: httpx.Client | None = None,
 ) -> dict[str, object]:
     """POST ``grant_type=refresh_token`` to the issuer's token endpoint.
+
+    Uses the persisted ``token_endpoint`` when available; otherwise falls back
+    to OIDC discovery (legacy keychain entries from before endpoint caching).
 
     Raises:
         RefreshError: For any failure that prevents a fresh token response
             (discovery failure, network error, non-200, malformed body).
     """
     with _http.http_client(http_client, timeout=_TIMEOUT_S) as http:
-        try:
-            metadata = fetch_provider_metadata(issuer, client=http)
-        except ValueError as exc:
-            raise RefreshError(f"OIDC discovery failed: {exc}") from exc
+        if session.token_endpoint:
+            token_endpoint = session.token_endpoint
+        else:
+            try:
+                metadata = fetch_provider_metadata(session.issuer, client=http)
+            except ValueError as exc:
+                raise RefreshError(f"OIDC discovery failed: {exc}") from exc
+            token_endpoint = metadata.token_endpoint
         try:
             response = http.post(
-                metadata.token_endpoint,
+                token_endpoint,
                 data={
                     "grant_type": "refresh_token",
-                    "refresh_token": refresh_token,
-                    "client_id": client_id,
+                    "refresh_token": session.refresh_token,
+                    "client_id": session.client_id,
                 },
             )
         except httpx.HTTPError as exc:
@@ -129,12 +134,7 @@ def ensure_fresh_session(
     if time.time() < deadline:
         return session
 
-    token_response = refresh_access_token(
-        issuer=issuer,
-        client_id=client_id,
-        refresh_token=session.refresh_token,
-        http_client=http_client,
-    )
+    token_response = refresh_access_token(session=session, http_client=http_client)
     # Carry forward fields the IdP may omit from a refresh response so the
     # rotated session keeps its full shape — without ``expires_in`` the next
     # freshness check treats the token as already expired and refreshes again
@@ -152,6 +152,8 @@ def ensure_fresh_session(
         issuer=session.issuer,
         client_id=session.client_id,
         token_response=token_response,
+        authorization_endpoint=session.authorization_endpoint,
+        token_endpoint=session.token_endpoint,
     )
 
 

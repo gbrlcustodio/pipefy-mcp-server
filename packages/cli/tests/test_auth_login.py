@@ -223,6 +223,12 @@ class TestLoopback:
 # --------------------------------------------------------------------------- #
 
 
+_ENDPTS = {
+    "authorization_endpoint": "https://x.test/realms/foo/protocol/openid-connect/auth",
+    "token_endpoint": "https://x.test/realms/foo/protocol/openid-connect/token",
+}
+
+
 class TestStorage:
     def test_keychain_key_uses_host_and_client(self) -> None:
         key = storage.keychain_key(
@@ -244,6 +250,8 @@ class TestStorage:
             issuer="https://x.test/realms/foo",
             client_id="pipefy-cli",
             token_response=token,
+            authorization_endpoint=_ENDPTS["authorization_endpoint"],
+            token_endpoint=_ENDPTS["token_endpoint"],
         )
         assert stored.access_token == "AAA"
         assert stored.refresh_token == "RRR"
@@ -255,6 +263,39 @@ class TestStorage:
         assert loaded is not None
         assert loaded.refresh_token == "RRR"
         assert loaded.scope == "openid email"
+        assert loaded.token_endpoint == _ENDPTS["token_endpoint"]
+
+    def test_load_accepts_legacy_keychain_entry_without_endpoints(self, fake_keyring):
+        """Soft migration: pre-cache keychain blobs must still load."""
+        import json
+
+        import keyring
+
+        legacy = {
+            "issuer": "https://x.test/realms/foo",
+            "client_id": "pipefy-cli",
+            "access_token": "AAA",
+            "refresh_token": "RRR",
+            "token_type": "Bearer",
+            "obtained_at": 1700000000,
+            "expires_in": 300,
+            "refresh_expires_in": None,
+            "scope": "openid",
+            "id_token": None,
+        }
+        keyring.set_password(
+            "pipefy-cli",
+            storage.keychain_key("https://x.test/realms/foo", "pipefy-cli"),
+            json.dumps(legacy),
+        )
+        loaded = storage.load_session(
+            issuer="https://x.test/realms/foo", client_id="pipefy-cli"
+        )
+        assert (
+            loaded
+            and loaded.authorization_endpoint is None
+            and loaded.token_endpoint is None
+        )
 
     def test_load_returns_none_when_absent(self, fake_keyring: InMemoryKeyring) -> None:
         assert (
@@ -518,6 +559,8 @@ class TestAuthLoginCommand:
                     "token_type": "Bearer",
                     "expires_in": 300,
                 },
+                authorization_endpoint=_ENDPTS["authorization_endpoint"],
+                token_endpoint=_ENDPTS["token_endpoint"],
             )
 
         from pipefy_cli.commands import auth as auth_module
@@ -533,6 +576,7 @@ class TestAuthLoginCommand:
         )
         assert loaded is not None
         assert loaded.refresh_token == "RRR"
+        assert loaded.token_endpoint == _ENDPTS["token_endpoint"]
 
     def test_masking_env_warning(
         self,
@@ -553,6 +597,8 @@ class TestAuthLoginCommand:
             lambda **_k: flow.LoginResult(
                 issuer="https://x.test/realms/foo",
                 token_response={"access_token": "A", "refresh_token": "R"},
+                authorization_endpoint=_ENDPTS["authorization_endpoint"],
+                token_endpoint=_ENDPTS["token_endpoint"],
             ),
         )
 
@@ -589,6 +635,8 @@ class TestAuthLoginCommand:
             return flow.LoginResult(
                 issuer="https://x.test/realms/foo",
                 token_response={"access_token": "A", "refresh_token": "R"},
+                authorization_endpoint=_ENDPTS["authorization_endpoint"],
+                token_endpoint=_ENDPTS["token_endpoint"],
             )
 
         monkeypatch.setattr(auth_module, "run_login", _spy_run_login)
@@ -638,6 +686,8 @@ class TestAuthLoginCommand:
             return flow.LoginResult(
                 issuer="https://x.test/realms/foo",
                 token_response={"access_token": "A", "refresh_token": "R"},
+                authorization_endpoint=_ENDPTS["authorization_endpoint"],
+                token_endpoint=_ENDPTS["token_endpoint"],
             )
 
         monkeypatch.setattr(auth_module, "run_login", _spy_run_login)

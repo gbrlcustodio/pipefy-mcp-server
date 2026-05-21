@@ -12,6 +12,14 @@ from pipefy_cli.oauth import refresh, storage
 
 _ISSUER = "https://signin.example.com/realms/pipefy"
 _CLIENT_ID = "pipefy-cli"
+_TOKEN_ENDPOINT = f"{_ISSUER}/protocol/openid-connect/token"
+_AUTH_ENDPOINT = f"{_ISSUER}/protocol/openid-connect/auth"
+
+
+def _session(**overrides: object) -> storage.StoredSession:
+    defaults = {"issuer": _ISSUER, "client_id": _CLIENT_ID, "access_token": "x", "refresh_token": "x", "token_type": "Bearer", "obtained_at": 0, "expires_in": None, "refresh_expires_in": None, "scope": None, "id_token": None, "authorization_endpoint": None, "token_endpoint": None}
+    defaults.update(overrides)
+    return storage.StoredSession(**defaults)
 
 
 def _discovery_payload(issuer: str = _ISSUER) -> dict[str, str]:
@@ -54,6 +62,8 @@ def _seed_session(
     *,
     obtained_at: int,
     expires_in: int = 300,
+    authorization_endpoint: str | None = None,
+    token_endpoint: str | None = None,
 ) -> None:
     """Persist a session whose ``obtained_at`` is pinned to ``obtained_at``.
 
@@ -73,6 +83,8 @@ def _seed_session(
                 "expires_in": expires_in,
                 "scope": "openid offline_access",
             },
+            authorization_endpoint=authorization_endpoint,
+            token_endpoint=token_endpoint,
         )
 
 
@@ -290,6 +302,31 @@ class TestEnsureFreshSession:
         assert storage.load_session(issuer=_ISSUER, client_id=_CLIENT_ID) is not None
 
 
+class TestCachedTokenEndpoint:
+    def test_refresh_skips_discovery_when_token_endpoint_persisted(self, fake_keyring, monkeypatch):
+        _seed_session(monkeypatch, obtained_at=int(time.time())-1, expires_in=30, token_endpoint=_TOKEN_ENDPOINT)
+        called = False
+        def handler(r):
+            nonlocal called
+            if r.url.path.endswith("/.well-known/openid-configuration"):
+                called = True
+                return httpx.Response(500)
+            return httpx.Response(200, json={"access_token":"NEW","refresh_token":"NEW"})
+        refresh.ensure_fresh_session(issuer=_ISSUER, client_id=_CLIENT_ID, http_client=httpx.Client(transport=httpx.MockTransport(handler)))
+        assert not called
+
+    def test_legacy_session_without_endpoints_still_rediscovers(self, fake_keyring, monkeypatch):
+        _seed_session(monkeypatch, obtained_at=int(time.time())-1, expires_in=30)
+        called = False
+        def handler(r):
+            nonlocal called
+            if r.url.path.endswith("/.well-known/openid-configuration"):
+                called = True
+                return httpx.Response(200, json=_discovery_payload())
+            return httpx.Response(200, json={"access_token":"NEW","refresh_token":"NEW"})
+        refresh.ensure_fresh_session(issuer=_ISSUER, client_id=_CLIENT_ID, http_client=httpx.Client(transport=httpx.MockTransport(handler)))
+        assert called
+
 # --------------------------------------------------------------------------- #
 # refresh_access_token (low-level)                                            #
 # --------------------------------------------------------------------------- #
@@ -306,12 +343,7 @@ class TestRefreshAccessTokenErrors:
             )
         )
         with pytest.raises(refresh.RefreshError) as exc_info:
-            refresh.refresh_access_token(
-                issuer=_ISSUER,
-                client_id=_CLIENT_ID,
-                refresh_token="x",
-                http_client=client,
-            )
+            refresh.refresh_access_token(session=_session(refresh_token="x"), http_client=client)
         assert exc_info.value.error_code == "invalid_grant"
         assert "invalid_grant" in str(exc_info.value)
 
@@ -328,12 +360,7 @@ class TestRefreshAccessTokenErrors:
             )
         )
         with pytest.raises(refresh.RefreshError) as exc_info:
-            refresh.refresh_access_token(
-                issuer=_ISSUER,
-                client_id=_CLIENT_ID,
-                refresh_token="x",
-                http_client=client,
-            )
+            refresh.refresh_access_token(session=_session(refresh_token="x"), http_client=client)
         assert exc_info.value.error_code == "invalid_grant"
         assert "refresh token expired" in str(exc_info.value)
 
@@ -348,12 +375,7 @@ class TestRefreshAccessTokenErrors:
 
         client = httpx.Client(transport=httpx.MockTransport(handler))
         with pytest.raises(refresh.RefreshError) as exc_info:
-            refresh.refresh_access_token(
-                issuer=_ISSUER,
-                client_id=_CLIENT_ID,
-                refresh_token="x",
-                http_client=client,
-            )
+            refresh.refresh_access_token(session=_session(refresh_token="x"), http_client=client)
         assert exc_info.value.error_code is None
         assert "HTTP 503" in str(exc_info.value)
         assert "upstream gateway" not in str(exc_info.value)
@@ -379,12 +401,7 @@ class TestRefreshAccessTokenErrors:
 
         client = httpx.Client(transport=httpx.MockTransport(handler))
         with pytest.raises(refresh.RefreshError) as exc_info:
-            refresh.refresh_access_token(
-                issuer=_ISSUER,
-                client_id=_CLIENT_ID,
-                refresh_token="x",
-                http_client=client,
-            )
+            refresh.refresh_access_token(session=_session(refresh_token="x"), http_client=client)
         message = str(exc_info.value)
         assert "invalid_grant" in message
         assert "bad refresh" in message
@@ -398,24 +415,14 @@ class TestRefreshAccessTokenErrors:
             )
         )
         with pytest.raises(refresh.RefreshError, match="Refresh request failed"):
-            refresh.refresh_access_token(
-                issuer=_ISSUER,
-                client_id=_CLIENT_ID,
-                refresh_token="x",
-                http_client=client,
-            )
+            refresh.refresh_access_token(session=_session(refresh_token="x"), http_client=client)
 
     def test_discovery_failure_raises_refresh_error(self) -> None:
         client = httpx.Client(
             transport=httpx.MockTransport(_build_handler(discovery_status=404))
         )
         with pytest.raises(refresh.RefreshError, match="OIDC discovery failed"):
-            refresh.refresh_access_token(
-                issuer=_ISSUER,
-                client_id=_CLIENT_ID,
-                refresh_token="x",
-                http_client=client,
-            )
+            refresh.refresh_access_token(session=_session(refresh_token="x"), http_client=client)
 
     def test_non_object_json_raises_refresh_error(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -425,9 +432,15 @@ class TestRefreshAccessTokenErrors:
 
         client = httpx.Client(transport=httpx.MockTransport(handler))
         with pytest.raises(refresh.RefreshError, match="non-object"):
-            refresh.refresh_access_token(
-                issuer=_ISSUER,
-                client_id=_CLIENT_ID,
-                refresh_token="x",
-                http_client=client,
-            )
+            refresh.refresh_access_token(session=_session(refresh_token="x"), http_client=client)
+
+    def test_persisted_token_endpoint_skips_discovery(self) -> None:
+        called = False
+        def handler(r):
+            nonlocal called
+            if r.url.path.endswith("/.well-known/openid-configuration"):
+                called = True
+                return httpx.Response(500)
+            return httpx.Response(200, json={"access_token":"new","refresh_token":"new_r"})
+        refresh.refresh_access_token(session=_session(refresh_token="x", token_endpoint=_TOKEN_ENDPOINT), http_client=httpx.Client(transport=httpx.MockTransport(handler)))
+        assert not called

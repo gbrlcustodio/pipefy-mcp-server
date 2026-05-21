@@ -33,6 +33,8 @@ class LoginResult:
 
     issuer: str
     token_response: dict[str, object]
+    authorization_endpoint: str
+    token_endpoint: str
 
 
 def build_authorization_url(
@@ -196,7 +198,12 @@ def run_login(
                 code_verifier=verifier,
                 client=http,
             )
-    return LoginResult(issuer=metadata.issuer, token_response=token_response)
+    return LoginResult(
+        issuer=metadata.issuer,
+        token_response=token_response,
+        authorization_endpoint=metadata.authorization_endpoint,
+        token_endpoint=metadata.token_endpoint,
+    )
 
 
 def _ensure_callback_ok(callback: CallbackResult, *, expected_state: str) -> None:

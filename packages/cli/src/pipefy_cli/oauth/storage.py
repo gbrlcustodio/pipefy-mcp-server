@@ -34,6 +34,8 @@ class StoredSession:
     refresh_expires_in: int | None
     scope: str | None
     id_token: str | None
+    authorization_endpoint: str | None = None
+    token_endpoint: str | None = None
 
 
 def _issuer_host(issuer_url: str) -> str:
@@ -53,6 +55,8 @@ def store_session(
     issuer: str,
     client_id: str,
     token_response: dict[str, object],
+    authorization_endpoint: str | None = None,
+    token_endpoint: str | None = None,
 ) -> StoredSession:
     """Persist a token response in the OS keychain. Returns the stored shape.
 
@@ -83,6 +87,8 @@ def store_session(
         refresh_expires_in=_optional_int(token_response.get("refresh_expires_in")),
         scope=_optional_str(token_response.get("scope")),
         id_token=_optional_str(token_response.get("id_token")),
+        authorization_endpoint=authorization_endpoint,
+        token_endpoint=token_endpoint,
     )
     keyring.set_password(
         _SERVICE, keychain_key(issuer, client_id), json.dumps(asdict(session))

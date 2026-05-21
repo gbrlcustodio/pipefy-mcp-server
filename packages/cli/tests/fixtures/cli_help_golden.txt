@@ -457,6 +457,8 @@ Usage: pipefy auth [OPTIONS] COMMAND [ARGS]...
 │          keychain.                                                           │
 │ status   Print which auth source is active, the authenticated identity, and  │
 │          session expiry.                                                     │
+│ logout   Revoke the stored refresh token at the IdP and clear the local      │
+│          session.                                                            │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP auth/login
@@ -473,6 +475,15 @@ Usage: pipefy auth login [OPTIONS]
 │                                                 giving up.                   │
 │                                                 [default: 180.0]             │
 │ --help                                          Show this message and exit.  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP auth/logout
+Usage: pipefy auth logout [OPTIONS]
+
+ Revoke the stored refresh token at the IdP and clear the local session.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP auth/status

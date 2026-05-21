@@ -37,16 +37,23 @@ def refresh_access_token(
     *,
     session: StoredSession,
     http_client: httpx.Client | None = None,
-) -> dict[str, object]:
+) -> tuple[dict[str, object], str | None, str | None]:
     """POST ``grant_type=refresh_token`` to the issuer's token endpoint.
 
     Uses the persisted ``token_endpoint`` when available; otherwise falls back
     to OIDC discovery (legacy keychain entries from before endpoint caching).
 
+    Returns:
+        A tuple of ``(token_response, authorization_endpoint, token_endpoint)``.
+        The endpoint fields are populated only when discovery ran (legacy
+        sessions); callers should merge them into the stored session.
+
     Raises:
         RefreshError: For any failure that prevents a fresh token response
             (discovery failure, network error, non-200, malformed body).
     """
+    discovered_authorization_endpoint: str | None = None
+    discovered_token_endpoint: str | None = None
     with _http.http_client(http_client, timeout=_TIMEOUT_S) as http:
         if session.token_endpoint:
             token_endpoint = session.token_endpoint
@@ -56,6 +63,8 @@ def refresh_access_token(
             except ValueError as exc:
                 raise RefreshError(f"OIDC discovery failed: {exc}") from exc
             token_endpoint = metadata.token_endpoint
+            discovered_authorization_endpoint = metadata.authorization_endpoint
+            discovered_token_endpoint = metadata.token_endpoint
         try:
             response = http.post(
                 token_endpoint,
@@ -76,7 +85,7 @@ def refresh_access_token(
         raise RefreshError(f"Token endpoint returned non-JSON: {exc}") from exc
     if not isinstance(payload, dict):
         raise RefreshError("Token endpoint returned a non-object JSON payload.")
-    return payload
+    return payload, discovered_authorization_endpoint, discovered_token_endpoint
 
 
 def _refresh_error_from(response: httpx.Response) -> RefreshError:
@@ -134,7 +143,9 @@ def ensure_fresh_session(
     if time.time() < deadline:
         return session
 
-    token_response = refresh_access_token(session=session, http_client=http_client)
+    token_response, discovered_auth, discovered_token = refresh_access_token(
+        session=session, http_client=http_client
+    )
     # Carry forward fields the IdP may omit from a refresh response so the
     # rotated session keeps its full shape — without ``expires_in`` the next
     # freshness check treats the token as already expired and refreshes again
@@ -152,8 +163,8 @@ def ensure_fresh_session(
         issuer=session.issuer,
         client_id=session.client_id,
         token_response=token_response,
-        authorization_endpoint=session.authorization_endpoint,
-        token_endpoint=session.token_endpoint,
+        authorization_endpoint=session.authorization_endpoint or discovered_auth,
+        token_endpoint=session.token_endpoint or discovered_token,
     )
 
 

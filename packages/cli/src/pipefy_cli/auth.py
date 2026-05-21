@@ -195,10 +195,25 @@ def get_authenticated_client(
     # access token produces the right (new) cache signature.
     effective_bearer: str | None = None
     if source in ("flag-token", "env-token"):
-        assert auth.bearer_token is not None  # narrowed by detect_auth_source
+        if auth.bearer_token is None:
+            # Internal inconsistency: `detect_auth_source` returned a bearer
+            # source but the AuthContext doesn't carry one. Asserts get stripped
+            # under `python -O`, so guard explicitly.
+            typer.echo(
+                f"Internal error: auth source {source!r} detected but no bearer "
+                "token is configured. Please file an issue.",
+                err=True,
+            )
+            raise typer.Exit(2)
         effective_bearer = auth.bearer_token.value
     elif source == "stored-session":
-        assert auth.oidc_client is not None
+        if auth.oidc_client is None:
+            typer.echo(
+                "Internal error: auth source 'stored-session' detected but no "
+                "OIDC client is configured. Please file an issue.",
+                err=True,
+            )
+            raise typer.Exit(2)
         try:
             session = ensure_fresh_session(
                 issuer=auth.oidc_client.issuer_url,

@@ -402,7 +402,19 @@ def auth_status(
         if source == "none":
             raise _StatusExit(report=report, exit_code=2)
         if source == "stored-session":
-            assert auth.oidc_client is not None
+            if auth.oidc_client is None:
+                # Internal inconsistency: `detect_all_sources` ranked
+                # 'stored-session' but no OIDC client is configured to refresh
+                # against. Asserts get stripped under `python -O`, so guard
+                # explicitly.
+                raise _StatusExit(
+                    report=report,
+                    exit_code=2,
+                    stderr=(
+                        "Internal error: auth source 'stored-session' detected "
+                        "but no OIDC client is configured. Please file an issue."
+                    ),
+                )
             _populate_stored_session(report, auth.oidc_client)
         _fetch_identity(report, settings, auth)
     except _StatusExit as exit_:

@@ -43,7 +43,12 @@ from pipefy_sdk.services.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
 )
-from pipefy_sdk.services.types import AiAgentGraphPayload, CardSearch, copy_card_search
+from pipefy_sdk.services.types import (
+    AiAgentGraphPayload,
+    CardSearch,
+    MePayload,
+    copy_card_search,
+)
 from pipefy_sdk.settings import PipefySettings
 
 __all__ = [
@@ -67,6 +72,7 @@ __all__ = [
     "DeleteCommentInput",
     "download_bytes",
     "InternalApiClient",
+    "MePayload",
     "MemberInvite",
     "NonBlankStr",
     "PipefyAPIError",

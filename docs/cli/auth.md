@@ -107,7 +107,7 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 | Command | Status | Notes |
 |---------|--------|-------|
 | `pipefy auth login` | Available | Browser-based PKCE login; persists the session in the OS keychain. |
-| `pipefy auth status` | Forthcoming (#135) | Print which auth source is active, identity, and session expiry. |
+| `pipefy auth status` | Available | Print which auth source is active, identity, and session expiry. |
 | `pipefy auth logout` | Forthcoming (#136) | Delete the stored session and revoke the refresh token. |
 
 #### `pipefy auth login` flags
@@ -116,6 +116,43 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 |------|---------|--------|
 | `--no-browser` | _off_ | Print the authorization URL to stdout instead of trying to launch a browser. |
 | `--callback-timeout <s>` | `180.0` | Seconds to wait for the browser callback (minimum 5). |
+
+#### `pipefy auth status` flags
+
+| Flag | Default | Effect |
+|------|---------|--------|
+| `--json` / `-j` | _off_ | Emit a stable JSON schema instead of human-readable text. |
+
+The command answers four diagnostic questions: am I signed in, as whom, via which precedence tier, and (for stored sessions) when does the access/refresh token expire. It also reports which *other* credential sources are configured, so a CI failure where `PIPEFY_OAUTH_*` masks a stored login is one command away from being obvious.
+
+##### JSON schema
+
+```jsonc
+{
+  "signed_in": true,
+  "identity": {"email": "user@pipefy.com", "name": "Pipefy User"},
+  "auth_source": "stored-session",                // or "flag-token" | "env-token" | "service-account" | "none"
+  "detected_sources": ["stored-session"],         // every configured source (winner + masked)
+  "issuer": "https://signin.pipefy.com/realms/pipefy",
+  "state": "active",                              // or "refresh-expired" | "needs-login" | "n/a"
+  "access_expires_at": "2026-05-20T22:14:03Z",    // ISO 8601, null for static-bearer
+  "refresh_expires_at": "2026-06-19T18:02:00Z",   // ISO 8601, null when not stored-session
+  "token_rejected": false,                        // true only when the identity `me` query returned 401
+  "keychain_backend": "Keyring",                  // null for non-stored-session sources
+  "masking_env_vars": []                          // env vars masking a stored session, if any
+}
+```
+
+The shape is stable across all sources (fields you don't have are `null` rather than absent), so a script can `jq .auth_source` without branching on which tier is active.
+
+##### Exit codes
+
+| Case | Exit |
+|------|------|
+| `auth_source == "none"` | **2** — same code as a domain command that fails on missing credentials. |
+| Stored session present but refresh grant rejected (`state` ∈ {`refresh-expired`, `needs-login`}) | **2** |
+| Signed in, but the identity `me` query returned 401 or transport-failed | **1** |
+| Signed in, identity fetched successfully | **0** |
 
 ### Pipefy issuer URLs
 

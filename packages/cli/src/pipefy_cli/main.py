@@ -7,6 +7,7 @@ import os
 import typer
 
 from pipefy_cli import __version__ as _cli_version
+from pipefy_cli.auth import BearerToken
 from pipefy_cli.commands.agent import agent_app
 from pipefy_cli.commands.ai_automation import ai_automation_app
 from pipefy_cli.commands.attachment import attachment_app
@@ -92,7 +93,14 @@ def main(
     from_env = os.environ.get("PIPEFY_TOKEN")
     cli_token = token.strip() if token else None
     env_token = from_env.strip() if from_env else None
-    ctx.obj["token"] = cli_token or env_token
+    bearer: BearerToken | None
+    if cli_token:
+        bearer = BearerToken(value=cli_token, source="flag")
+    elif env_token:
+        bearer = BearerToken(value=env_token, source="env")
+    else:
+        bearer = None
+    ctx.obj["token"] = bearer
 
 
 app.add_typer(agent_app, name="agent")

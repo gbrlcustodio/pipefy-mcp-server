@@ -67,8 +67,10 @@ from pipefy_sdk.services.types import (
     AiAgentGraphPayload,
     AutomationServiceResult,
     CardSearch,
+    MePayload,
     ToggleAgentStatusResult,
 )
+from pipefy_sdk.services.user_service import UserService
 from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
 
@@ -120,6 +122,7 @@ class PipefyClient:
         self._observability_service = ObservabilityService(settings=settings, auth=auth)
         self._report_service = ReportService(settings=settings, auth=auth)
         self._organization_service = OrganizationService(settings=settings, auth=auth)
+        self._user_service = UserService(settings=settings, auth=auth)
         self._attachment_service = AttachmentService(settings=settings, auth=auth)
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
@@ -1174,6 +1177,10 @@ class PipefyClient:
             organization_id: Numeric organization ID.
         """
         return await self._organization_service.get_organization(organization_id)
+
+    async def get_me(self) -> MePayload | None:
+        """Return the authenticated user's identity, or ``None`` when ``me`` resolves null."""
+        return await self._user_service.get_me()
 
     async def create_presigned_url(
         self,

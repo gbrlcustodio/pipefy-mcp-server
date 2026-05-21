@@ -9,7 +9,12 @@ import pytest
 import typer
 from pipefy_sdk import PipefySettings
 
-from pipefy_cli.auth import AuthContext, OidcClient, get_authenticated_client
+from pipefy_cli.auth import (
+    AuthContext,
+    BearerToken,
+    OidcClient,
+    get_authenticated_client,
+)
 from pipefy_cli.main import app
 from pipefy_cli.oauth import StoredSession
 
@@ -27,6 +32,7 @@ def _minimal_oauth_settings() -> PipefySettings:
 def _auth(
     *,
     bearer_token: str | None = None,
+    bearer_source: str = "flag",
     issuer_url: str | None = None,
     client_id: str | None = None,
 ) -> AuthContext:
@@ -36,7 +42,12 @@ def _auth(
         if issuer_url and client_id
         else None
     )
-    return AuthContext(bearer_token=bearer_token, oidc_client=oidc_client)
+    bearer = (
+        BearerToken(value=bearer_token, source=bearer_source)  # type: ignore[arg-type]
+        if bearer_token is not None
+        else None
+    )
+    return AuthContext(bearer_token=bearer, oidc_client=oidc_client)
 
 
 def test_get_authenticated_client_passes_bearer_to_pipefy_client(clean_pipefy_env):
@@ -102,7 +113,7 @@ def test_cli_uses_pipefy_token_env_when_no_flag(
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
     mock_gc.assert_called_once()
     auth_arg = mock_gc.call_args.args[1]
-    assert auth_arg.bearer_token == "secret-from-env"
+    assert auth_arg.bearer_token == BearerToken(value="secret-from-env", source="env")
 
 
 # --------------------------------------------------------------------------- #
@@ -178,6 +189,7 @@ def test_stored_session_used_when_no_other_source(clean_pipefy_env):
     session = _fresh_stored_session()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
+        patch("pipefy_cli.auth.load_session", return_value=session),
         patch("pipefy_cli.auth.ensure_fresh_session", return_value=session),
     ):
         mock_pc.return_value = MagicMock()
@@ -190,6 +202,7 @@ def test_stored_session_used_when_no_other_source(clean_pipefy_env):
 def test_cache_invalidates_when_access_token_rotates(clean_pipefy_env):
     """Two calls with different rotated access tokens → two PipefyClient builds."""
     settings = _public_only_settings()
+    stored = _fresh_stored_session()
     sessions = iter(
         [
             _fresh_stored_session(access_token="ROTATED_1"),
@@ -198,6 +211,7 @@ def test_cache_invalidates_when_access_token_rotates(clean_pipefy_env):
     )
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
+        patch("pipefy_cli.auth.load_session", return_value=stored),
         patch(
             "pipefy_cli.auth.ensure_fresh_session",
             side_effect=lambda **_: next(sessions),
@@ -220,9 +234,12 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
     from pipefy_cli.oauth import RefreshError
 
     settings = _public_only_settings()
-    with patch(
-        "pipefy_cli.auth.ensure_fresh_session",
-        side_effect=RefreshError("invalid_grant"),
+    with (
+        patch("pipefy_cli.auth.load_session", return_value=_fresh_stored_session()),
+        patch(
+            "pipefy_cli.auth.ensure_fresh_session",
+            side_effect=RefreshError("invalid_grant"),
+        ),
     ):
         with pytest.raises(typer.Exit) as excinfo:
             get_authenticated_client(

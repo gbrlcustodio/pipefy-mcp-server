@@ -14,7 +14,12 @@ from gql.transport.exceptions import TransportError, TransportQueryError
 from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
 from pipefy_sdk.exceptions import PipefyError
 
-from pipefy_cli.auth import AuthContext, OidcClient, get_authenticated_client
+from pipefy_cli.auth import (
+    AuthContext,
+    BearerToken,
+    OidcClient,
+    get_authenticated_client,
+)
 from pipefy_cli.output import render_json, render_rich
 
 _T = TypeVar("_T")
@@ -193,7 +198,9 @@ def format_card_get_transport_query_error(exc: TransportQueryError) -> str:
     return base
 
 
-def settings_and_token(ctx: typer.Context) -> tuple[PipefySettings, str | None]:
+def settings_and_token(
+    ctx: typer.Context,
+) -> tuple[PipefySettings, BearerToken | None]:
     """Resolve root CLI context object into settings and optional bearer token."""
     root = ctx.find_root()
     obj = root.obj

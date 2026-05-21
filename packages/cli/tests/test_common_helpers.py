@@ -161,7 +161,8 @@ def test_run_pipefy_client_coroutine_runs_factory_and_returns(monkeypatch):
 
     def fake_get_client(settings: object, auth: object) -> object:
         captured["settings"] = settings
-        captured["bearer_token"] = auth.bearer_token  # type: ignore[attr-defined]
+        bearer = auth.bearer_token  # type: ignore[attr-defined]
+        captured["bearer_token"] = bearer.value if bearer is not None else None
         return "client-instance"
 
     async def factory(client: object) -> str:
@@ -169,7 +170,10 @@ def test_run_pipefy_client_coroutine_runs_factory_and_returns(monkeypatch):
         return "done"
 
     sentinel_settings = object()
-    sentinel_auth = _common.AuthContext(bearer_token="abc", oidc_client=None)
+    sentinel_auth = _common.AuthContext(
+        bearer_token=_common.BearerToken(value="abc", source="flag"),
+        oidc_client=None,
+    )
     monkeypatch.setattr(_common, "get_authenticated_client", fake_get_client)
     monkeypatch.setattr(
         _common,

@@ -20,7 +20,17 @@ class RefreshError(RuntimeError):
     Distinct from "no session" (which surfaces as ``None`` from
     :func:`ensure_fresh_session`). The caller should surface a "run
     ``pipefy auth login`` again" message and exit.
+
+    ``error_code`` carries the RFC 6749 ``error`` value (e.g. ``invalid_grant``)
+    when the token endpoint returned a structured OAuth error response. Callers
+    that classify failures (e.g. CLI ``auth status`` deciding between
+    ``refresh-expired`` and ``needs-login``) should branch on this attribute,
+    not on substrings of ``str(exc)`` — message text isn't a stable contract.
     """
+
+    def __init__(self, message: str, *, error_code: str | None = None) -> None:
+        super().__init__(message)
+        self.error_code = error_code
 
 
 def refresh_access_token(
@@ -54,9 +64,7 @@ def refresh_access_token(
             raise RefreshError(f"Refresh request failed: {exc}") from exc
 
     if response.status_code != 200:
-        raise RefreshError(
-            f"Refresh failed ({response.status_code}): {response.text[:300]}"
-        )
+        raise _refresh_error_from(response)
     try:
         payload = response.json()
     except ValueError as exc:
@@ -64,6 +72,35 @@ def refresh_access_token(
     if not isinstance(payload, dict):
         raise RefreshError("Token endpoint returned a non-object JSON payload.")
     return payload
+
+
+def _refresh_error_from(response: httpx.Response) -> RefreshError:
+    """Render a non-200 refresh response as a structured ``RefreshError``.
+
+    Only OAuth-standard ``error`` / ``error_description`` fields are surfaced;
+    raw bodies are never echoed (same threat model as the token-exchange scrub
+    in ``flow._format_token_error`` — a hostile IdP could echo submitted params
+    like ``refresh_token`` in error responses, and a ``[:N]`` window would be a
+    guaranteed leak channel).
+    """
+    generic = f"Refresh failed (HTTP {response.status_code})"
+    try:
+        payload = response.json()
+    except ValueError:
+        return RefreshError(generic)
+    if not isinstance(payload, dict):
+        return RefreshError(generic)
+    error_value = payload.get("error")
+    error_code = error_value if isinstance(error_value, str) else None
+    description_value = payload.get("error_description")
+    description = description_value if isinstance(description_value, str) else None
+    if not error_code:
+        return RefreshError(generic)
+    if description:
+        return RefreshError(
+            f"{generic}: {error_code}: {description}", error_code=error_code
+        )
+    return RefreshError(f"{generic}: {error_code}", error_code=error_code)
 
 
 def ensure_fresh_session(

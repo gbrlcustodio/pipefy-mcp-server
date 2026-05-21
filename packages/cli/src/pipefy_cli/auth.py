@@ -161,9 +161,13 @@ def detect_all_sources(
 def detect_auth_source(
     pipefy_settings: PipefySettings,
     auth: AuthContext,
+    *,
+    cached_stored_session: bool | None = None,
 ) -> AuthSource:
     """Return the precedence winner among configured sources, or ``"none"``."""
-    sources = detect_all_sources(pipefy_settings, auth)
+    sources = detect_all_sources(
+        pipefy_settings, auth, cached_stored_session=cached_stored_session
+    )
     return sources[0] if sources else "none"
 
 
@@ -222,10 +226,11 @@ def get_authenticated_client(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
 
-    if prefetched_session is not None:
-        source: AuthSource = "stored-session"
-    else:
-        source = detect_auth_source(pipefy_settings, auth)
+    source = detect_auth_source(
+        pipefy_settings,
+        auth,
+        cached_stored_session=True if prefetched_session is not None else None,
+    )
 
     if source == "none":
         typer.echo(_missing_auth_message(pipefy_settings), err=True)

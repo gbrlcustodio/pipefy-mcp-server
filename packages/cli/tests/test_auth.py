@@ -201,6 +201,28 @@ def test_prefetched_session_skips_ensure_fresh_session(clean_pipefy_env):
         mock_pc.assert_called_once_with(settings, bearer_token=session.access_token)
 
 
+def test_prefetched_session_does_not_override_bearer_precedence(clean_pipefy_env):
+    """``prefetched_session`` must not bypass tiers 1/2 even when supplied."""
+    settings = _public_only_settings()
+    session = _fresh_stored_session()
+    with (
+        patch("pipefy_cli.auth.PipefyClient") as mock_pc,
+        patch("pipefy_cli.auth.ensure_fresh_session") as mock_ensure,
+    ):
+        mock_pc.return_value = MagicMock()
+        get_authenticated_client(
+            settings,
+            _auth(
+                bearer_token="explicit-bearer",
+                issuer_url=_ISSUER,
+                client_id="pipefy-cli",
+            ),
+            prefetched_session=session,
+        )
+        mock_pc.assert_called_once_with(settings, bearer_token="explicit-bearer")
+        mock_ensure.assert_not_called()
+
+
 def test_stored_session_used_when_no_other_source(clean_pipefy_env):
     """Priority 4 activates when bearer absent AND OAuth triple incomplete."""
     settings = _public_only_settings()

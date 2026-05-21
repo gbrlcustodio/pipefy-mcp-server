@@ -16,6 +16,7 @@ from gql.transport.exceptions import (
     TransportServerError,
 )
 from pipefy_sdk import MePayload, PipefySettings
+from pipefy_sdk.settings import _LEGACY_ENV_KEYS_TO_NEW
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
@@ -71,30 +72,18 @@ auth_app = typer.Typer(
     no_args_is_help=True,
 )
 
-_SERVICE_ACCOUNT_ENV_KEYS = (
-    "PIPEFY_SERVICE_ACCOUNT_URL",
-    "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
-    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-)
-_LEGACY_SERVICE_ACCOUNT_ENV_KEYS = (
-    "PIPEFY_OAUTH_URL",
-    "PIPEFY_OAUTH_CLIENT",
-    "PIPEFY_OAUTH_SECRET",
-)
+_SERVICE_ACCOUNT_ENV_KEYS = tuple(_LEGACY_ENV_KEYS_TO_NEW.values())
+_LEGACY_SERVICE_ACCOUNT_ENV_KEYS = tuple(_LEGACY_ENV_KEYS_TO_NEW.keys())
 
 
 def _session_masking_env_vars() -> list[str]:
-    """Env vars that outrank a stored session in the credential precedence chain.
+    """Env vars in ``os.environ`` that outrank a stored session.
 
-    Only ``os.environ`` is consulted — by the precedence model, ``.env`` defaults
-    sit below the stored session. A service-account triple is listed only when
-    *complete* (otherwise the client-credentials path wouldn't activate and the
-    warning would be misleading). Both the canonical
-    ``PIPEFY_SERVICE_ACCOUNT_*`` and the legacy ``PIPEFY_OAUTH_*`` triples are
-    recognised during the deprecation window — ``PipefySettings.AliasChoices``
-    resolves either, so the masking diagnostic has to match or it would
-    silently regress on the legacy form. The label echoes the form the user
-    actually set so they know which keys to unset.
+    A service-account triple counts only when *complete* (otherwise the
+    client-credentials path wouldn't activate and the warning would mislead).
+    Both the canonical and legacy forms are accepted during the deprecation
+    window, and the label echoes whichever the user actually set so they know
+    which keys to unset.
     """
     env_vars: list[str] = []
     if os.environ.get("PIPEFY_TOKEN"):

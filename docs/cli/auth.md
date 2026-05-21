@@ -94,7 +94,7 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 | `PIPEFY_AUTH_URL` | Tier 4 | **OIDC issuer URL** for interactive login. The CLI appends `/.well-known/openid-configuration` to discover the authorization and token endpoints. Required for `pipefy auth login`. |
 | `PIPEFY_AUTH_CLIENT_ID` | Tier 4 | Public client id registered for the CLI. Defaults to `pipefy-cli`. |
 
-`PIPEFY_SERVICE_ACCOUNT_URL` and `PIPEFY_AUTH_URL` are **not** interchangeable: the first is a token URL for client-credentials, the second is an OIDC issuer URL for the user-login flow. (The previous name `PIPEFY_OAUTH_URL` was one letter from `PIPEFY_AUTH_URL` and is the reason for the rename — see the legacy-names note above.)
+`PIPEFY_SERVICE_ACCOUNT_URL` and `PIPEFY_AUTH_URL` are **not** interchangeable: the first is a token URL for client-credentials, the second is an OIDC issuer URL for the user-login flow.
 
 ### Global flags
 

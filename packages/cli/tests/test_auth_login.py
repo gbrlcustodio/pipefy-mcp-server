@@ -163,6 +163,55 @@ class TestDiscovery:
         )
         assert meta.authorization_endpoint == "http://127.0.0.1:8080/realms/foo/auth"
 
+    def test_end_session_endpoint_advertised(self) -> None:
+        payload = _discovery_payload()
+        payload["end_session_endpoint"] = (
+            "https://example.test/realms/foo/protocol/openid-connect/logout"
+        )
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=payload))
+        )
+        meta = discovery.fetch_provider_metadata(
+            "https://example.test/realms/foo", client=client
+        )
+        assert meta.end_session_endpoint == payload["end_session_endpoint"]
+
+    def test_end_session_endpoint_absent_is_none(self) -> None:
+        # Optional per OIDC Discovery 1.0; absence must not raise.
+        payload = _discovery_payload()
+        assert "end_session_endpoint" not in payload
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=payload))
+        )
+        meta = discovery.fetch_provider_metadata(
+            "https://example.test/realms/foo", client=client
+        )
+        assert meta.end_session_endpoint is None
+
+    def test_http_end_session_endpoint_rejected(self) -> None:
+        bad = _discovery_payload()
+        bad["end_session_endpoint"] = "http://example.test/realms/foo/logout"
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=bad))
+        )
+        with pytest.raises(ValueError, match="end_session_endpoint"):
+            discovery.fetch_provider_metadata(
+                "https://example.test/realms/foo", client=client
+            )
+
+    def test_allow_insecure_urls_bypasses_end_session_check(self) -> None:
+        bad = _discovery_payload()
+        bad["end_session_endpoint"] = "http://127.0.0.1:8080/realms/foo/logout"
+        client = httpx.Client(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=bad))
+        )
+        meta = discovery.fetch_provider_metadata(
+            "https://example.test/realms/foo",
+            policy=discovery.DiscoveryPolicy(allow_insecure_urls=True),
+            client=client,
+        )
+        assert meta.end_session_endpoint == "http://127.0.0.1:8080/realms/foo/logout"
+
 
 # --------------------------------------------------------------------------- #
 # Loopback                                                                    #

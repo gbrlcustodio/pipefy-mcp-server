@@ -17,7 +17,11 @@ portal_app = typer.Typer(help="Portal operations.", no_args_is_help=True)
 @portal_app.command("list")
 def portal_list(
     ctx: typer.Context,
-    org_uuid: str = typer.Option(..., "--org-uuid", help="Organization UUID."),
+    org_uuid: str = typer.Option(
+        ...,
+        "--org-uuid",
+        help="Organization UUID, or numeric organization id (string).",
+    ),
     search_term: str | None = typer.Option(
         None,
         "--search-term",
@@ -33,9 +37,7 @@ def portal_list(
     """List portals for an organization."""
 
     async def factory(client: PipefyClient):
-        if search_term is not None:
-            return await client.list_portals(org_uuid, search_term=search_term)
-        return await client.list_portals(org_uuid)
+        return await client.list_portals(org_uuid, search_term=search_term)
 
     run_cli_command(ctx, json_out, factory)
 

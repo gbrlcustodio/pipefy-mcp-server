@@ -8,33 +8,35 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pipefy_cli.main import app
 
 _PORTAL_LIST_NODE = {
+    "id": "portal-uuid-1",
     "uuid": "portal-uuid-1",
     "name": "Main Portal",
     "visibility": "internal",
-    "published": True,
+    "subType": "portal",
 }
 
 _PORTAL_DETAIL = {
+    "id": "portal-uuid-1",
     "uuid": "portal-uuid-1",
     "name": "Main Portal",
     "visibility": "public",
     "published": True,
-    "pages": {
-        "nodes": [
-            {
-                "uuid": "page-1",
-                "title": "Home",
-                "elements": [
-                    {
-                        "uuid": "el-1",
-                        "type": "forms",
-                        "metadata": {"formId": "123"},
-                    }
-                ],
-            }
-        ]
-    },
-    "subPortals": [{"uuid": "sub-1", "name": "Sub Portal 1"}],
+    "pages": [
+        {
+            "id": "page-1",
+            "uuid": "page-1",
+            "title": "Home",
+            "elements": [
+                {
+                    "id": "el-1",
+                    "uuid": "el-1",
+                    "type": "forms",
+                    "metadata": {"formId": "123"},
+                }
+            ],
+        }
+    ],
+    "subPortals": [{"id": "sub-1", "uuid": "sub-1", "name": "Sub Portal 1"}],
 }
 
 
@@ -53,7 +55,7 @@ def test_portal_list_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
         )
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
     assert json.loads(result.stdout) == payload
-    mock_client.list_portals.assert_awaited_once_with("org-123")
+    mock_client.list_portals.assert_awaited_once_with("org-123", search_term=None)
 
 
 def test_portal_get_json(runner, clean_pipefy_env, saved_cwd, oauth_env):

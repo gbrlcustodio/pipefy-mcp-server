@@ -26,6 +26,7 @@ from pipefy_cli.commands.member import member_app
 from pipefy_cli.commands.org import org_app
 from pipefy_cli.commands.phase import phase_app
 from pipefy_cli.commands.pipe import pipe_app
+from pipefy_cli.commands.portal import portal_app
 from pipefy_cli.commands.record import record_app
 from pipefy_cli.commands.relation import relation_app
 from pipefy_cli.commands.report_org import report_org_app
@@ -113,6 +114,7 @@ app.add_typer(card_app, name="card")
 app.add_typer(email_app, name="email")
 app.add_typer(field_condition_app, name="field-condition")
 app.add_typer(pipe_app, name="pipe")
+app.add_typer(portal_app, name="portal")
 app.add_typer(phase_app, name="phase")
 app.add_typer(field_app, name="field")
 app.add_typer(table_app, name="table")

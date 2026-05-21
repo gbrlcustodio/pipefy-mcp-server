@@ -17,7 +17,7 @@ SDK, so a refresh-rotated access token naturally invalidates the cached client.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, NoReturn
 
 import typer
 from pipefy_sdk import (
@@ -155,6 +155,17 @@ def _missing_auth_message(pipefy_settings: PipefySettings) -> str:
     )
 
 
+def _raise_internal_error(detail: str) -> NoReturn:
+    """Exit(2) with an internal-error message.
+
+    Used for branches the auth-source classifier rules out but the type system
+    can't prove unreachable. ``assert`` would strip under ``python -O``; this
+    survives the optimization and gives the user a clean error.
+    """
+    typer.echo(f"Internal error: {detail} Please file an issue.", err=True)
+    raise typer.Exit(2)
+
+
 def get_authenticated_client(
     pipefy_settings: PipefySettings,
     auth: AuthContext,
@@ -196,24 +207,15 @@ def get_authenticated_client(
     effective_bearer: str | None = None
     if source in ("flag-token", "env-token"):
         if auth.bearer_token is None:
-            # Internal inconsistency: `detect_auth_source` returned a bearer
-            # source but the AuthContext doesn't carry one. Asserts get stripped
-            # under `python -O`, so guard explicitly.
-            typer.echo(
-                f"Internal error: auth source {source!r} detected but no bearer "
-                "token is configured. Please file an issue.",
-                err=True,
+            _raise_internal_error(
+                f"auth source {source!r} detected but no bearer token is configured."
             )
-            raise typer.Exit(2)
         effective_bearer = auth.bearer_token.value
     elif source == "stored-session":
         if auth.oidc_client is None:
-            typer.echo(
-                "Internal error: auth source 'stored-session' detected but no "
-                "OIDC client is configured. Please file an issue.",
-                err=True,
+            _raise_internal_error(
+                "auth source 'stored-session' detected but no OIDC client is configured."
             )
-            raise typer.Exit(2)
         try:
             session = ensure_fresh_session(
                 issuer=auth.oidc_client.issuer_url,

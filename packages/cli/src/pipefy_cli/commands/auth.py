@@ -398,11 +398,9 @@ def auth_status(
     detected = detect_all_sources(settings, auth)
     source: AuthSource = detected[0] if detected else "none"
     report = AuthStatusReport(auth_source=source, detected_sources=detected)
-    # Whenever a stored session exists — even if a higher-precedence source
-    # ranks above it — surface the env vars masking it. That's the field's
-    # entire purpose: diagnose the "keychain login exists but CI vars override
-    # it" failure mode. Populated here (not inside `_populate_stored_session`)
-    # because that helper only runs when stored-session is the *winner*.
+    # Surface masking env vars whenever a stored session exists — that's the
+    # CI-overrides-keychain failure mode the field is for, and the higher-
+    # precedence winner is the case where it matters.
     if "stored-session" in detected:
         report.masking_env_vars = _session_masking_env_vars()
 
@@ -411,10 +409,6 @@ def auth_status(
             raise _StatusExit(report=report, exit_code=2)
         if source == "stored-session":
             if auth.oidc_client is None:
-                # Internal inconsistency: `detect_all_sources` ranked
-                # 'stored-session' but no OIDC client is configured to refresh
-                # against. Asserts get stripped under `python -O`, so guard
-                # explicitly.
                 raise _StatusExit(
                     report=report,
                     exit_code=2,

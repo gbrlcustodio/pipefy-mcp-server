@@ -326,8 +326,6 @@ def test_status_service_account_wins_over_stored_session(
     assert "stored-session" in payload["detected_sources"]
     assert payload["issuer"] is None
     assert payload["state"] == "n/a"
-    # `masking_env_vars` must surface the env vars hiding the keychain login,
-    # even when a higher-precedence source wins. That's the field's purpose.
     assert payload["masking_env_vars"] == ["PIPEFY_OAUTH_*"]
 
 

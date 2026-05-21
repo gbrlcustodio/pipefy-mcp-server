@@ -324,6 +324,22 @@ class TestStorage:
             issuer="https://x.test/realms/foo", client_id="cid"
         )
 
+    def test_delete_raises_on_backend_failure(
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Backend rejection is distinct from "entry absent": raise, don't return False."""
+        import keyring
+        from keyring.errors import KeyringError
+
+        def _boom(service: str, username: str) -> None:
+            raise KeyringError("backend locked")
+
+        monkeypatch.setattr(keyring, "delete_password", _boom)
+        with pytest.raises(storage.SessionDeleteError, match="backend locked"):
+            storage.delete_session(issuer="https://x.test/realms/foo", client_id="cid")
+
     def test_store_rejects_missing_required_field(
         self, fake_keyring: InMemoryKeyring
     ) -> None:

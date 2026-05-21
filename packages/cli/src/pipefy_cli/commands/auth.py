@@ -32,6 +32,7 @@ from pipefy_cli.oauth import (
     RefreshError,
     RevocationError,
     RevocationUnsupportedError,
+    SessionDeleteError,
     delete_session,
     ensure_fresh_session,
     keychain_backend_name,
@@ -482,7 +483,18 @@ def auth_logout(ctx: typer.Context) -> None:
             "server until natural expiry."
         )
 
-    delete_session(issuer=issuer, client_id=client_id)
+    try:
+        delete_session(issuer=issuer, client_id=client_id)
+    except SessionDeleteError as exc:
+        if revoke_warning:
+            typer.echo(revoke_warning, err=True)
+        typer.echo(
+            f"Could not delete local session from the keychain: {exc}. "
+            "The stored credential may still be present; remove it manually "
+            f"via your OS keychain (service: 'pipefy-cli'). See {DOCS_CLI_AUTH_REF}.",
+            err=True,
+        )
+        raise typer.Exit(1) from exc
 
     if revoke_warning:
         typer.echo(revoke_warning, err=True)

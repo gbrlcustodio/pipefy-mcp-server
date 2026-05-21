@@ -224,6 +224,33 @@ class TestAuthLogoutCommand:
         assert "may remain valid at the server" in result.stderr
         assert storage.load_session(issuer=_ISSUER, client_id="pipefy-cli") is None
 
+    def test_keychain_delete_failure_after_revoke_exits_1(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """Revoke succeeds but keychain rejects delete: warn, don't claim sign-out, exit 1."""
+        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        _store_test_session()
+
+        def _ok_revoke(**_kwargs: object) -> None:
+            return None
+
+        def _delete_boom(*, issuer: str, client_id: str) -> bool:
+            raise storage.SessionDeleteError("Keychain is locked")
+
+        monkeypatch.setattr(auth_module, "revoke_session", _ok_revoke)
+        monkeypatch.setattr(auth_module, "delete_session", _delete_boom)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 1
+        assert "Signed out of Pipefy" not in result.stdout
+        assert "Could not delete local session from the keychain" in result.stderr
+        assert "Keychain is locked" in result.stderr
+
     def test_end_session_unsupported_warns_and_deletes(
         self,
         runner,

@@ -19,6 +19,7 @@ from pipefy_cli.oauth.revoke import (
     revoke_session,
 )
 from pipefy_cli.oauth.storage import (
+    SessionDeleteError,
     StoredSession,
     delete_session,
     keychain_backend_name,
@@ -35,6 +36,7 @@ __all__ = [
     "RefreshError",
     "RevocationError",
     "RevocationUnsupportedError",
+    "SessionDeleteError",
     "StoredSession",
     "delete_session",
     "ensure_fresh_session",

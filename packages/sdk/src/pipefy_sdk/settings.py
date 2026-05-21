@@ -23,6 +23,8 @@ def _warn_once_for_legacy_oauth_env_keys() -> None:
     this nudge tells users to rename. Dedup state is process-global; tests reset via
     :func:`_reset_legacy_oauth_warning_state`.
     """
+    if len(_warned_legacy_env_keys) == len(_LEGACY_ENV_KEYS_TO_NEW):
+        return
     for legacy, new in _LEGACY_ENV_KEYS_TO_NEW.items():
         if legacy in _warned_legacy_env_keys:
             continue

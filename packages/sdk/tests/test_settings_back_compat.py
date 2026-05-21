@@ -10,24 +10,19 @@ from __future__ import annotations
 import pytest
 
 from pipefy_sdk.settings import (
+    _LEGACY_ENV_KEYS_TO_NEW,
     PipefySettings,
     _reset_legacy_oauth_warning_state,
     _warn_once_for_legacy_oauth_env_keys,
 )
 
-_LEGACY_TO_NEW_KEY = {
-    "PIPEFY_OAUTH_URL": "PIPEFY_SERVICE_ACCOUNT_URL",
-    "PIPEFY_OAUTH_CLIENT": "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
-    "PIPEFY_OAUTH_SECRET": "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-}
-
 
 @pytest.fixture(autouse=True)
 def _reset_warning_dedup(monkeypatch: pytest.MonkeyPatch) -> None:
     """Each test sees a fresh warning dedup set and a clean process env."""
-    for key in _LEGACY_TO_NEW_KEY:
+    for key in _LEGACY_ENV_KEYS_TO_NEW:
         monkeypatch.delenv(key, raising=False)
-    for key in _LEGACY_TO_NEW_KEY.values():
+    for key in _LEGACY_ENV_KEYS_TO_NEW.values():
         monkeypatch.delenv(key, raising=False)
     _reset_legacy_oauth_warning_state()
     yield

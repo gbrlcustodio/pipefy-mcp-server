@@ -19,8 +19,6 @@ _ALLOW_INSECURE_ENV_KEY = "PIPEFY_ALLOW_INSECURE_URLS"
 
 USER_CONFIG_PATH = Path.home() / ".config/pipefy/config.toml"
 
-# Legacy ``[pipefy]`` TOML keys mapped to their replacements (mirrors the
-# ``PIPEFY_OAUTH_*`` → ``PIPEFY_SERVICE_ACCOUNT_*`` env-var rename in #127).
 _LEGACY_TOML_KEYS_TO_NEW: dict[str, str] = {
     "oauth_url": "service_account_url",
     "oauth_client": "service_account_client_id",
@@ -125,6 +123,8 @@ def _normalize_legacy_toml_keys(blob: dict[str, Any]) -> dict[str, Any]:
 
     When both keys are present, the new key wins (mirrors ``AliasChoices`` precedence).
     """
+    if not any(legacy in blob for legacy in _LEGACY_TOML_KEYS_TO_NEW):
+        return blob
     for legacy, new in _LEGACY_TOML_KEYS_TO_NEW.items():
         if legacy in blob:
             _warn_once_for_legacy_toml_key(legacy, new)

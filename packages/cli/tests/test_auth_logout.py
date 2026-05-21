@@ -6,6 +6,7 @@ import httpx
 import pytest
 from conftest import InMemoryKeyring
 
+from pipefy_cli.commands import auth as auth_module
 from pipefy_cli.main import app as cli_app
 from pipefy_cli.oauth import revoke, storage
 
@@ -191,8 +192,6 @@ class TestAuthLogoutCommand:
         ) -> None:
             revoke_calls.append((issuer, client_id, refresh_token))
 
-        from pipefy_cli.commands import auth as auth_module
-
         monkeypatch.setattr(auth_module, "revoke_session", _fake_revoke_session)
 
         result = runner.invoke(cli_app, ["auth", "logout"])
@@ -215,8 +214,6 @@ class TestAuthLogoutCommand:
 
         def _boom(**_kwargs: object) -> None:
             raise revoke.RevocationError("Revocation request failed: ConnectError")
-
-        from pipefy_cli.commands import auth as auth_module
 
         monkeypatch.setattr(auth_module, "revoke_session", _boom)
 
@@ -242,8 +239,6 @@ class TestAuthLogoutCommand:
             raise revoke.RevocationUnsupportedError(
                 "OIDC provider does not advertise an end_session_endpoint."
             )
-
-        from pipefy_cli.commands import auth as auth_module
 
         monkeypatch.setattr(auth_module, "revoke_session", _unsupported)
 

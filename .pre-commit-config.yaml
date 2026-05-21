@@ -10,8 +10,6 @@
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    # Keep `rev` in sync with the ruff pin in `uv.lock`. CI uses `uv run ruff`
-    # (lockfile), so a drift here makes hook output disagree with CI.
     rev: v0.11.4
     hooks:
       - id: ruff

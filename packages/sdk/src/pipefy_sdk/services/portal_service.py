@@ -6,7 +6,8 @@ from typing import Any
 
 from httpx import Auth
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.base_client import BasePipefyClient, unwrap_relay_connection_nodes
+from pipefy_sdk.queries.portal_queries import GET_PORTAL_QUERY, LIST_PORTALS_QUERY
 from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.settings import PipefySettings
 
@@ -68,3 +69,39 @@ class PortalService:
             msg = "Internal API client is not configured."
             raise ValueError(msg)
         return await self._internal_api_client.execute_query(query, variables)
+
+    async def list_portals(
+        self,
+        org_uuid: str,
+        search_term: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List portals for an organization via the Interfaces schema.
+
+        Args:
+            org_uuid: Organization UUID.
+            search_term: Optional name filter forwarded as ``searchTerm``.
+        """
+        variables: dict[str, Any] = {
+            "org_uuid": org_uuid,
+            "filterBySubType": "portal",
+        }
+        if search_term is not None:
+            variables["searchTerm"] = search_term
+        data = await self.execute_interfaces_query(LIST_PORTALS_QUERY, variables)
+        return unwrap_relay_connection_nodes(data.get("interfaces"))
+
+    async def get_portal(self, uuid: str) -> dict[str, Any]:
+        """Fetch a portal by UUID including pages, elements, and sub-portals.
+
+        Args:
+            uuid: Portal interface UUID.
+
+        Raises:
+            ValueError: When ``portalInterface`` resolves to null.
+        """
+        data = await self.execute_interfaces_query(GET_PORTAL_QUERY, {"uuid": uuid})
+        portal = data.get("portalInterface")
+        if portal is None:
+            msg = f"Portal '{uuid}' was not found."
+            raise ValueError(msg)
+        return portal

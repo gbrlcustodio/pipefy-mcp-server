@@ -1180,6 +1180,29 @@ class PipefyClient:
         """
         return await self._organization_service.get_organization(organization_id)
 
+    async def list_portals(
+        self,
+        org_uuid: str,
+        search_term: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List portals for an organization.
+
+        Args:
+            org_uuid: Organization UUID.
+            search_term: Optional name filter.
+        """
+        return await self._portal_service.list_portals(
+            org_uuid, search_term=search_term
+        )
+
+    async def get_portal(self, uuid: str) -> dict[str, Any]:
+        """Fetch a portal by UUID.
+
+        Args:
+            uuid: Portal interface UUID.
+        """
+        return await self._portal_service.get_portal(uuid)
+
     async def get_me(self) -> MePayload | None:
         """Return the authenticated user's identity, or ``None`` when ``me`` resolves null."""
         return await self._user_service.get_me()

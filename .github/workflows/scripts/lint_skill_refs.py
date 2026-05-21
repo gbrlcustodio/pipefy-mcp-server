@@ -30,6 +30,7 @@ PIPEFY_CLI_ROOT_COMMANDS = frozenset(
         "org",
         "phase",
         "pipe",
+        "portal",
         "record",
         "relation",
         "report-org",

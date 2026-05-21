@@ -25,9 +25,9 @@ class InternalApiClient:
     def __init__(
         self,
         url: str,
-        oauth_url: str,
-        oauth_client: str,
-        oauth_secret: str,
+        service_account_url: str,
+        service_account_client_id: str,
+        service_account_client_secret: str,
         *,
         allow_insecure_urls: bool = False,
     ) -> None:
@@ -35,22 +35,24 @@ class InternalApiClient:
 
         Args:
             url: URL of the internal_api endpoint (e.g. https://app.pipefy.com/internal_api).
-            oauth_url: OAuth token URL.
-            oauth_client: OAuth client ID.
-            oauth_secret: OAuth client secret.
+            service_account_url: Service-account token endpoint URL.
+            service_account_client_id: Service-account OAuth client_id.
+            service_account_client_secret: Service-account OAuth client_secret.
             allow_insecure_urls: When True, allow http and internal hosts (must match settings).
         """
         validate_https_service_endpoint_url(
             url.strip(), "internal_api URL", allow_insecure=allow_insecure_urls
         )
         validate_https_service_endpoint_url(
-            oauth_url.strip(), "OAuth URL", allow_insecure=allow_insecure_urls
+            service_account_url.strip(),
+            "service-account URL",
+            allow_insecure=allow_insecure_urls,
         )
         self._url = url
         self._auth = OAuth2ClientCredentials(
-            token_url=oauth_url,
-            client_id=oauth_client,
-            client_secret=oauth_secret,
+            token_url=service_account_url,
+            client_id=service_account_client_id,
+            client_secret=service_account_client_secret,
         )
 
     async def execute_query(self, query: str, variables: dict[str, Any]) -> dict:

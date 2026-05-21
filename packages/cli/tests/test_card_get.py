@@ -37,11 +37,11 @@ def test_card_get_json_stdout(runner, clean_pipefy_env, saved_cwd, monkeypatch):
         "https://cli-card-json.example.com/internal_api",
     )
     monkeypatch.setenv(
-        "PIPEFY_OAUTH_URL",
+        "PIPEFY_SERVICE_ACCOUNT_URL",
         "https://cli-card-json.example.com/oauth/token",
     )
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "sec")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
     payload = {"id": "501", "title": "Unit card"}
     patcher, mock_client = _patch_get_client(payload)
@@ -66,11 +66,11 @@ def test_card_get_rich_stdout(runner, clean_pipefy_env, saved_cwd, monkeypatch):
         "https://cli-card-rich.example.com/internal_api",
     )
     monkeypatch.setenv(
-        "PIPEFY_OAUTH_URL",
+        "PIPEFY_SERVICE_ACCOUNT_URL",
         "https://cli-card-rich.example.com/oauth/token",
     )
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "sec")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
     payload = {"id": "502", "title": "Rich card"}
     patcher, _mock_client = _patch_get_client(payload)
@@ -93,11 +93,11 @@ def test_card_get_sdk_error_stderr_exit_1(
         "https://cli-card-err.example.com/internal_api",
     )
     monkeypatch.setenv(
-        "PIPEFY_OAUTH_URL",
+        "PIPEFY_SERVICE_ACCOUNT_URL",
         "https://cli-card-err.example.com/oauth/token",
     )
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "sec")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
     mock_client = MagicMock()
     mock_client.get_card = AsyncMock(side_effect=PipefyAPIError("GraphQL failure"))
@@ -122,11 +122,11 @@ def test_card_get_permission_denied_hint_on_stderr(
         "https://cli-card-pd.example.com/internal_api",
     )
     monkeypatch.setenv(
-        "PIPEFY_OAUTH_URL",
+        "PIPEFY_SERVICE_ACCOUNT_URL",
         "https://cli-card-pd.example.com/oauth/token",
     )
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "sec")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
     exc = TransportQueryError(
         "unused",
@@ -148,9 +148,14 @@ def test_card_get_permission_denied_hint_on_stderr(
 def _apply_settings_to_env(monkeypatch: pytest.MonkeyPatch, s: PipefySettings) -> None:
     monkeypatch.setenv("PIPEFY_GRAPHQL_URL", str(s.graphql_url))
     monkeypatch.setenv("PIPEFY_INTERNAL_API_URL", str(s.internal_api_url))
-    monkeypatch.setenv("PIPEFY_OAUTH_URL", str(s.oauth_url))
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", str(s.oauth_client))
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", str(s.oauth_secret))
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_URL", str(s.service_account_url))
+    monkeypatch.setenv(
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", str(s.service_account_client_id)
+    )
+    monkeypatch.setenv(
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
+        str(s.service_account_client_secret),
+    )
     if s.allow_insecure_urls:
         monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
 

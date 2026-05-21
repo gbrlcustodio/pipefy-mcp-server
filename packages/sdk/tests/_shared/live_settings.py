@@ -32,15 +32,15 @@ def live_pipefy_settings() -> PipefySettings:
 
 
 def pipefy_live_configured() -> bool:
-    """Return True when all OAuth + GraphQL credentials are present."""
+    """Return True when all service-account + GraphQL credentials are present."""
     p = _resolved_pipefy()
     return bool(
         p.graphql_url
         and str(p.graphql_url).startswith(("http://", "https://"))
-        and p.oauth_url
-        and str(p.oauth_url).startswith(("http://", "https://"))
-        and p.oauth_client
-        and p.oauth_secret
+        and p.service_account_url
+        and str(p.service_account_url).startswith(("http://", "https://"))
+        and p.service_account_client_id
+        and p.service_account_client_secret
     )
 
 
@@ -48,5 +48,6 @@ def require_live_creds() -> None:
     """Skip the current test if live credentials are not configured."""
     if not pipefy_live_configured():
         pytest.skip(
-            "Pipefy credentials not configured (PIPEFY_GRAPHQL_URL + OAuth in .env)"
+            "Pipefy credentials not configured "
+            "(PIPEFY_GRAPHQL_URL + PIPEFY_SERVICE_ACCOUNT_* in .env)"
         )

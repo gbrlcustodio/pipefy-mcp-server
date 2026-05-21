@@ -72,9 +72,9 @@ auth_app = typer.Typer(
 )
 
 _SERVICE_ACCOUNT_ENV_KEYS = (
-    "PIPEFY_OAUTH_URL",
-    "PIPEFY_OAUTH_CLIENT",
-    "PIPEFY_OAUTH_SECRET",
+    "PIPEFY_SERVICE_ACCOUNT_URL",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
 )
 
 
@@ -82,15 +82,15 @@ def _session_masking_env_vars() -> list[str]:
     """Env vars that outrank a stored session in the credential precedence chain.
 
     Only ``os.environ`` is consulted — by the precedence model, ``.env`` defaults
-    sit below the stored session. ``PIPEFY_OAUTH_*`` is listed only when the
-    *complete* triple is configured (otherwise the client-credentials path
+    sit below the stored session. ``PIPEFY_SERVICE_ACCOUNT_*`` is listed only when
+    the *complete* triple is configured (otherwise the client-credentials path
     wouldn't activate and the warning would be misleading).
     """
     env_vars: list[str] = []
     if os.environ.get("PIPEFY_TOKEN"):
         env_vars.append("PIPEFY_TOKEN")
     if all(os.environ.get(k) for k in _SERVICE_ACCOUNT_ENV_KEYS):
-        env_vars.append("PIPEFY_OAUTH_*")
+        env_vars.append("PIPEFY_SERVICE_ACCOUNT_*")
     return env_vars
 
 
@@ -204,7 +204,7 @@ def auth_login(
 _AUTH_SOURCE_LABELS: dict[AuthSource, str] = {
     "flag-token": "--token flag",
     "env-token": "PIPEFY_TOKEN environment variable",
-    "service-account": "PIPEFY_OAUTH_* (client credentials)",
+    "service-account": "PIPEFY_SERVICE_ACCOUNT_* (client credentials)",
     "stored-session": "stored session (`pipefy auth login`)",
     "none": "none",
 }
@@ -260,7 +260,7 @@ def _render_status_text(report: AuthStatusReport) -> None:
     if not report.signed_in:
         typer.echo(
             "Not signed in. Run `pipefy auth login`, set PIPEFY_TOKEN, or "
-            f"configure PIPEFY_OAUTH_*. See {DOCS_CLI_AUTH_REF}."
+            f"configure PIPEFY_SERVICE_ACCOUNT_*. See {DOCS_CLI_AUTH_REF}."
         )
         return
 

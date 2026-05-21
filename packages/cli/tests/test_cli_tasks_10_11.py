@@ -493,11 +493,11 @@ def test_agent_toggle_inactive_yes_skips_confirm(
     )
 
 
-def test_ai_automation_create_requires_oauth(
+def test_ai_automation_create_requires_service_account(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
 ):
-    """``ai-automation create`` exits 2 with a clear message when OAuth is not configured."""
-    oauth_env("ai-no-oauth")
+    """``ai-automation create`` exits 2 with a clear message when service-account creds are not configured."""
+    oauth_env("ai-no-service-account")
     mock_client = MagicMock()
     mock_client.ai_automation_available = False
 
@@ -525,7 +525,7 @@ def test_ai_automation_create_requires_oauth(
         )
 
     assert r.exit_code == 2
-    assert "OAuth" in r.stderr
+    assert "service-account credentials" in r.stderr
     mock_client.create_ai_automation.assert_not_called()
 
 

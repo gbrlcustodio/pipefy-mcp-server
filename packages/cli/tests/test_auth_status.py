@@ -302,7 +302,7 @@ def test_status_me_500_is_transport_error_not_token_rejected(
 
 
 # --------------------------------------------------------------------------- #
-# Scenario 5: stored-session masked by PIPEFY_OAUTH_*                         #
+# Scenario 5: stored-session masked by PIPEFY_SERVICE_ACCOUNT_*               #
 # --------------------------------------------------------------------------- #
 def test_status_service_account_wins_over_stored_session(
     clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
@@ -312,9 +312,11 @@ def test_status_service_account_wins_over_stored_session(
     monkeypatch.setenv(
         "PIPEFY_INTERNAL_API_URL", "https://api.example.com/internal_api"
     )
-    monkeypatch.setenv("PIPEFY_OAUTH_URL", "https://auth.example.com/oauth/token")
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "csecret")
+    monkeypatch.setenv(
+        "PIPEFY_SERVICE_ACCOUNT_URL", "https://auth.example.com/oauth/token"
+    )
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "csecret")
     client = _mock_client_with_me()
     with _patch_command_client(client):
         result = _invoke_status(runner, ["--json"])
@@ -326,7 +328,7 @@ def test_status_service_account_wins_over_stored_session(
     assert "stored-session" in payload["detected_sources"]
     assert payload["issuer"] is None
     assert payload["state"] == "n/a"
-    assert payload["masking_env_vars"] == ["PIPEFY_OAUTH_*"]
+    assert payload["masking_env_vars"] == ["PIPEFY_SERVICE_ACCOUNT_*"]
 
 
 # --------------------------------------------------------------------------- #
@@ -398,9 +400,11 @@ def test_status_service_account_only(
     monkeypatch.setenv(
         "PIPEFY_INTERNAL_API_URL", "https://api.example.com/internal_api"
     )
-    monkeypatch.setenv("PIPEFY_OAUTH_URL", "https://auth.example.com/oauth/token")
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "csecret")
+    monkeypatch.setenv(
+        "PIPEFY_SERVICE_ACCOUNT_URL", "https://auth.example.com/oauth/token"
+    )
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "csecret")
     client = _mock_client_with_me()
     with _patch_command_client(client):
         result = _invoke_status(runner, ["--json"])
@@ -437,4 +441,4 @@ def test_status_none_text_mentions_onboarding(
     assert "Not signed in" in result.stdout
     assert "pipefy auth login" in result.stdout
     assert "PIPEFY_TOKEN" in result.stdout
-    assert "PIPEFY_OAUTH_*" in result.stdout
+    assert "PIPEFY_SERVICE_ACCOUNT_*" in result.stdout

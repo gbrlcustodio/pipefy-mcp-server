@@ -10,6 +10,12 @@ from typer.testing import CliRunner
 _PIPEFY_ENV_KEYS = (
     "PIPEFY_GRAPHQL_URL",
     "PIPEFY_INTERNAL_API_URL",
+    "PIPEFY_SERVICE_ACCOUNT_URL",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
+    # Legacy aliases — kept so tests that opt into back-compat coverage start
+    # from a clean slate even when the dropped names linger in the developer
+    # shell.
     "PIPEFY_OAUTH_URL",
     "PIPEFY_OAUTH_CLIENT",
     "PIPEFY_OAUTH_SECRET",
@@ -28,7 +34,7 @@ _PIPEFY_ENV_KEYS = (
 
 @pytest.fixture
 def oauth_env(monkeypatch: pytest.MonkeyPatch):
-    """Set minimal OAuth + GraphQL URLs for CLI commands that require OAuth mode."""
+    """Set minimal service-account + GraphQL URLs for CLI commands that require client-credentials mode."""
 
     def _set(host: str) -> None:
         monkeypatch.setenv("PIPEFY_GRAPHQL_URL", f"https://{host}.example.com/graphql")
@@ -37,10 +43,11 @@ def oauth_env(monkeypatch: pytest.MonkeyPatch):
             f"https://{host}.example.com/internal_api",
         )
         monkeypatch.setenv(
-            "PIPEFY_OAUTH_URL", f"https://{host}.example.com/oauth/token"
+            "PIPEFY_SERVICE_ACCOUNT_URL",
+            f"https://{host}.example.com/oauth/token",
         )
-        monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
-        monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "sec")
+        monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+        monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
     return _set
 

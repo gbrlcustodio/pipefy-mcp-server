@@ -68,17 +68,19 @@ class BasePipefyClient:
             self._fetched_gql_schema_lock = asyncio.Lock()
             return
 
-        if settings.oauth_url is None:
-            raise ValueError("OAuth URL must be provided in settings.")
-        if settings.oauth_client is None:
-            raise ValueError("OAuth client ID must be provided in settings.")
-        if settings.oauth_secret is None:
-            raise ValueError("OAuth client secret must be provided in settings.")
+        if settings.service_account_url is None:
+            raise ValueError("Service-account URL must be provided in settings.")
+        if settings.service_account_client_id is None:
+            raise ValueError("Service-account client ID must be provided in settings.")
+        if settings.service_account_client_secret is None:
+            raise ValueError(
+                "Service-account client secret must be provided in settings."
+            )
 
         self._auth = auth or OAuth2ClientCredentials(
-            token_url=settings.oauth_url,
-            client_id=settings.oauth_client,
-            client_secret=settings.oauth_secret,
+            token_url=settings.service_account_url,
+            client_id=settings.service_account_client_id,
+            client_secret=settings.service_account_client_secret,
         )
         # Populated when gql_reuse_fetched_graphql_schema is True; avoids repeating
         # introspection on every new Client (see Cons5 code review).

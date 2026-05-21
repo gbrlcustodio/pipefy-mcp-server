@@ -420,15 +420,16 @@ class PipeTools:
             confirm: bool = False,
             debug: bool = False,
         ) -> dict:
-            """Remove a link between two related cards (requires OAuth credentials).
+            """Remove a link between two related cards (requires service-account credentials).
 
             ``source_id`` is the **pipe relation** id from ``get_pipe_relations`` (same as
             ``create_card_relation``). Two-step flow: preview with ``confirm=False`` (default),
             then execute with ``confirm=True`` after explicit approval.
 
-            Requires OAuth credentials (PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET,
-            PIPEFY_OAUTH_URL) because the ``deleteCardRelation`` mutation is only available
-            on the internal API, not the public GraphQL schema.
+            Requires service-account credentials (PIPEFY_SERVICE_ACCOUNT_URL,
+            PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET) because the
+            ``deleteCardRelation`` mutation is only available on the internal API, not the
+            public GraphQL schema.
 
             Args:
                 child_id: Child card ID in the relation.
@@ -448,8 +449,9 @@ class PipeTools:
             if not client.internal_api_available:
                 return build_relation_error_payload(
                     message=(
-                        "delete_card_relation requires OAuth credentials "
-                        "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL). "
+                        "delete_card_relation requires service-account credentials "
+                        "(PIPEFY_SERVICE_ACCOUNT_URL, PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
+                        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
                         "The deleteCardRelation mutation is only available on the "
                         "internal API. Check .env.example for the required variables."
                     ),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any, Self
@@ -17,6 +18,31 @@ from pipefy_cli._docs import DOCS_SETUP_REF
 _ALLOW_INSECURE_ENV_KEY = "PIPEFY_ALLOW_INSECURE_URLS"
 
 USER_CONFIG_PATH = Path.home() / ".config/pipefy/config.toml"
+
+# Legacy ``[pipefy]`` TOML keys mapped to their replacements (mirrors the
+# ``PIPEFY_OAUTH_*`` → ``PIPEFY_SERVICE_ACCOUNT_*`` env-var rename in #127).
+_LEGACY_TOML_KEYS_TO_NEW: dict[str, str] = {
+    "oauth_url": "service_account_url",
+    "oauth_client": "service_account_client_id",
+    "oauth_secret": "service_account_client_secret",
+}
+
+_warned_legacy_toml_keys: set[str] = set()
+
+
+def _warn_once_for_legacy_toml_key(legacy_key: str, new_key: str) -> None:
+    if legacy_key in _warned_legacy_toml_keys:
+        return
+    sys.stderr.write(
+        f"warning: '{legacy_key}' in {USER_CONFIG_PATH} is deprecated; "
+        f"rename to '{new_key}'. The legacy key will be removed in a future beta.\n"
+    )
+    _warned_legacy_toml_keys.add(legacy_key)
+
+
+def _reset_legacy_toml_warning_state() -> None:
+    """Test helper: clear the one-shot dedup so a fixture can re-trigger the warning."""
+    _warned_legacy_toml_keys.clear()
 
 
 DEFAULT_AUTH_CLIENT_ID = "pipefy-cli"
@@ -94,17 +120,41 @@ def _fill_if_missing_str(
         patch[field] = str(blob[key]).strip()
 
 
+def _normalize_legacy_toml_keys(blob: dict[str, Any]) -> dict[str, Any]:
+    """Translate legacy ``oauth_*`` TOML keys to ``service_account_*``; warn once per legacy key.
+
+    When both keys are present, the new key wins (mirrors ``AliasChoices`` precedence).
+    """
+    for legacy, new in _LEGACY_TOML_KEYS_TO_NEW.items():
+        if legacy in blob:
+            _warn_once_for_legacy_toml_key(legacy, new)
+            if new not in blob:
+                blob[new] = blob[legacy]
+    return blob
+
+
 def apply_toml_fallback(pipefy: PipefySettings) -> PipefySettings:
     """Fill only attributes still unset after env / ``.env`` (lowest precedence)."""
     blob = _read_toml_pipefy_dict()
     if not blob:
         return pipefy
+    blob = _normalize_legacy_toml_keys(blob)
     patch: dict[str, Any] = {}
     _fill_if_missing_str(pipefy, blob, "graphql_url", "graphql_url", patch)
     _fill_if_missing_str(pipefy, blob, "internal_api_url", "internal_api_url", patch)
-    _fill_if_missing_str(pipefy, blob, "oauth_url", "oauth_url", patch)
-    _fill_if_missing_str(pipefy, blob, "oauth_client", "oauth_client", patch)
-    _fill_if_missing_str(pipefy, blob, "oauth_secret", "oauth_secret", patch)
+    _fill_if_missing_str(
+        pipefy, blob, "service_account_url", "service_account_url", patch
+    )
+    _fill_if_missing_str(
+        pipefy, blob, "service_account_client_id", "service_account_client_id", patch
+    )
+    _fill_if_missing_str(
+        pipefy,
+        blob,
+        "service_account_client_secret",
+        "service_account_client_secret",
+        patch,
+    )
     if blob.get("service_account_ids") is not None and not pipefy.service_account_ids:
         patch["service_account_ids"] = blob["service_account_ids"]
     if blob.get("allow_insecure_urls") is not None and not pipefy.allow_insecure_urls:
@@ -168,15 +218,15 @@ def ensure_public_graphql_configured(pipefy: PipefySettings) -> None:
         raise ValueError(msg)
 
 
-def describe_missing_oauth_vars(pipefy: PipefySettings) -> str:
-    """Return a short message listing missing OAuth-related variables."""
+def describe_missing_service_account_vars(pipefy: PipefySettings) -> str:
+    """Return a short message listing missing service-account credential variables."""
     missing: list[str] = []
-    if _is_missing(pipefy.oauth_url):
-        missing.append("PIPEFY_OAUTH_URL")
-    if _is_missing(pipefy.oauth_client):
-        missing.append("PIPEFY_OAUTH_CLIENT")
-    if _is_missing(pipefy.oauth_secret):
-        missing.append("PIPEFY_OAUTH_SECRET")
+    if _is_missing(pipefy.service_account_url):
+        missing.append("PIPEFY_SERVICE_ACCOUNT_URL")
+    if _is_missing(pipefy.service_account_client_id):
+        missing.append("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID")
+    if _is_missing(pipefy.service_account_client_secret):
+        missing.append("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET")
     return ", ".join(missing)
 
 
@@ -185,7 +235,7 @@ __all__ = [
     "DEFAULT_AUTH_CLIENT_ID",
     "USER_CONFIG_PATH",
     "apply_toml_fallback",
-    "describe_missing_oauth_vars",
+    "describe_missing_service_account_vars",
     "ensure_public_graphql_configured",
     "resolve_cli_settings",
 ]

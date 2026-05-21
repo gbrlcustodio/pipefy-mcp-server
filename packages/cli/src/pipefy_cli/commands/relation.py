@@ -157,13 +157,14 @@ def relation_card_delete(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Remove a card relation (requires OAuth; internal API)."""
+    """Remove a card relation (requires service-account credentials; internal API)."""
 
     client = authenticated_client_from_ctx(ctx)
     if not client.internal_api_available:
         typer.echo(
-            "delete_card_relation requires OAuth credentials "
-            "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL). "
+            "delete_card_relation requires service-account credentials "
+            "(PIPEFY_SERVICE_ACCOUNT_URL, PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
+            "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
             "The deleteCardRelation mutation is only available on the internal API.",
             err=True,
         )

@@ -72,10 +72,10 @@ def fetch_provider_metadata(
             ) from exc
 
     if response.status_code != 200:
-        raise ValueError(
-            f"OIDC discovery failed ({response.status_code}) at {url}: "
-            f"{response.text[:200]}"
-        )
+        # Status-only; never echo the raw body. Discovery isn't OAuth so there's
+        # no RFC 6749 ``error`` field to surface, and a `[:N]` window of the
+        # body is the same echo-channel class scrubbed in ``_format_token_error``.
+        raise ValueError(f"OIDC discovery failed ({response.status_code}) at {url}")
 
     try:
         data = response.json()

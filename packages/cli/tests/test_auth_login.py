@@ -78,11 +78,18 @@ class TestDiscovery:
         assert meta.token_endpoint == payload["token_endpoint"]
 
     def test_fetch_non_200_raises(self) -> None:
+        sentinel = "SENTINEL_DISCOVERY_LEAK"
         client = httpx.Client(
-            transport=httpx.MockTransport(lambda _r: httpx.Response(404, text="nope"))
+            transport=httpx.MockTransport(
+                lambda _r: httpx.Response(404, text=f"<html>nope {sentinel}</html>")
+            )
         )
-        with pytest.raises(ValueError, match="OIDC discovery failed"):
+        with pytest.raises(ValueError, match="OIDC discovery failed") as exc_info:
             discovery.fetch_provider_metadata("https://x.test/realms/y", client=client)
+        # Status-only message; raw body must not leak (same threat-model as the
+        # token-exchange scrub).
+        assert sentinel not in str(exc_info.value)
+        assert "<html>" not in str(exc_info.value)
 
     def test_fetch_missing_field_raises(self) -> None:
         bad = {"issuer": "https://x.test", "token_endpoint": "https://x.test/t"}

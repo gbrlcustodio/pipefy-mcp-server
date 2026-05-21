@@ -110,6 +110,10 @@ def _format_token_error(response: httpx.Response) -> str:
     error = payload.get("error")
     if not error:
         return generic
+    # ``error_description`` is free-form per RFC 6749 §5.2 — its content reflects
+    # the IdP's framing, and surfacing it at all is part of trusting the IdP. A
+    # length cap wouldn't change that (an attacker can truncate to fit any cap,
+    # and a tight cap kills legitimate error context).
     description = payload.get("error_description")
     if description:
         return f"Token exchange failed: {error}: {description}"

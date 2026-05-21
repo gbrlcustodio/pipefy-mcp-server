@@ -108,7 +108,7 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 |---------|--------|-------|
 | `pipefy auth login` | Available | Browser-based PKCE login; persists the session in the OS keychain. |
 | `pipefy auth status` | Available | Print which auth source is active, identity, and session expiry. |
-| `pipefy auth logout` | Forthcoming (#136) | Delete the stored session and revoke the refresh token. |
+| `pipefy auth logout` | Available | Revoke the refresh token at the IdP and clear the stored session. |
 
 #### `pipefy auth login` flags
 
@@ -153,6 +153,25 @@ The shape is stable across all sources (fields you don't have are `null` rather 
 | Stored session present but refresh grant rejected (`state` ∈ {`refresh-expired`, `needs-login`}) | **2** |
 | Signed in, but the identity `me` query returned 401 or transport-failed | **1** |
 | Signed in, identity fetched successfully | **0** |
+
+#### `pipefy auth logout`
+
+POSTs the stored refresh token to the IdP's `end_session_endpoint` (advertised in the OIDC discovery document) and removes the keychain entry. Without server-side revocation the refresh token would remain valid at the IdP until natural expiry — anyone who recovered it from a backup could still mint new access tokens.
+
+The command always clears the local keychain entry once it runs, even when the IdP round-trip fails. The two non-happy paths surface a stderr warning so the user knows whether server-side revocation succeeded:
+
+- **Revocation network / non-2xx failure** — stderr `Could not revoke refresh token at the IdP: <reason>. Clearing local session anyway; the refresh token may remain valid at the server until natural expiry.`
+- **IdP doesn't advertise `end_session_endpoint`** — stderr `Pipefy auth server does not advertise a logout endpoint; the refresh token could not be revoked server-side. Clearing local session only.` (OIDC Discovery 1.0 makes the field optional; Keycloak ships it.)
+
+When no session is stored, `pipefy auth logout` prints `Not signed in. Nothing to do.` and exits 0 — idempotent, matching `gh auth logout` and similar CLIs.
+
+##### Exit codes
+
+| Case | Exit |
+|------|------|
+| `PIPEFY_AUTH_URL` is unset | **2** — same gate as `pipefy auth login`. |
+| No session stored (no-op) | **0** |
+| Session cleared (revoke succeeded, failed, or unsupported) | **0** |
 
 ### Pipefy issuer URLs
 

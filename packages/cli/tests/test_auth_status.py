@@ -332,6 +332,33 @@ def test_status_service_account_wins_over_stored_session(
 
 
 # --------------------------------------------------------------------------- #
+# Scenario 5b: stored-session masked by legacy PIPEFY_OAUTH_* triple          #
+# --------------------------------------------------------------------------- #
+def test_status_legacy_service_account_triple_masks_stored_session(
+    clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
+):
+    """During the alias window a legacy triple still masks — diagnostic must reflect it."""
+    _set_auth_env(monkeypatch)
+    _seed_session(monkeypatch)
+    monkeypatch.setenv(
+        "PIPEFY_INTERNAL_API_URL", "https://api.example.com/internal_api"
+    )
+    monkeypatch.setenv("PIPEFY_OAUTH_URL", "https://auth.example.com/oauth/token")
+    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
+    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "csecret")
+    client = _mock_client_with_me()
+    with _patch_command_client(client):
+        result = _invoke_status(runner, ["--json"])
+
+    assert result.exit_code == 0, (result.stdout or "") + (result.stderr or "")
+    payload = json.loads(result.stdout)
+    assert payload["auth_source"] == "service-account"
+    assert "service-account" in payload["detected_sources"]
+    assert "stored-session" in payload["detected_sources"]
+    assert payload["masking_env_vars"] == ["PIPEFY_OAUTH_*"]
+
+
+# --------------------------------------------------------------------------- #
 # Scenario 6: stored-session masked by PIPEFY_TOKEN                           #
 # --------------------------------------------------------------------------- #
 def test_status_env_token_wins_over_stored_session(

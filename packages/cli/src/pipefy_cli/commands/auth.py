@@ -76,21 +76,33 @@ _SERVICE_ACCOUNT_ENV_KEYS = (
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
 )
+_LEGACY_SERVICE_ACCOUNT_ENV_KEYS = (
+    "PIPEFY_OAUTH_URL",
+    "PIPEFY_OAUTH_CLIENT",
+    "PIPEFY_OAUTH_SECRET",
+)
 
 
 def _session_masking_env_vars() -> list[str]:
     """Env vars that outrank a stored session in the credential precedence chain.
 
     Only ``os.environ`` is consulted — by the precedence model, ``.env`` defaults
-    sit below the stored session. ``PIPEFY_SERVICE_ACCOUNT_*`` is listed only when
-    the *complete* triple is configured (otherwise the client-credentials path
-    wouldn't activate and the warning would be misleading).
+    sit below the stored session. A service-account triple is listed only when
+    *complete* (otherwise the client-credentials path wouldn't activate and the
+    warning would be misleading). Both the canonical
+    ``PIPEFY_SERVICE_ACCOUNT_*`` and the legacy ``PIPEFY_OAUTH_*`` triples are
+    recognised during the deprecation window — ``PipefySettings.AliasChoices``
+    resolves either, so the masking diagnostic has to match or it would
+    silently regress on the legacy form. The label echoes the form the user
+    actually set so they know which keys to unset.
     """
     env_vars: list[str] = []
     if os.environ.get("PIPEFY_TOKEN"):
         env_vars.append("PIPEFY_TOKEN")
     if all(os.environ.get(k) for k in _SERVICE_ACCOUNT_ENV_KEYS):
         env_vars.append("PIPEFY_SERVICE_ACCOUNT_*")
+    elif all(os.environ.get(k) for k in _LEGACY_SERVICE_ACCOUNT_ENV_KEYS):
+        env_vars.append("PIPEFY_OAUTH_*")
     return env_vars
 
 

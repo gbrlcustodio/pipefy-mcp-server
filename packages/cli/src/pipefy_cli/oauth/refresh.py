@@ -97,7 +97,9 @@ def _refresh_error_from(response: httpx.Response) -> RefreshError:
     if not error_code:
         return RefreshError(generic)
     if description:
-        return RefreshError(f"{generic}: {error_code}: {description}", error_code=error_code)
+        return RefreshError(
+            f"{generic}: {error_code}: {description}", error_code=error_code
+        )
     return RefreshError(f"{generic}: {error_code}", error_code=error_code)
 
 

@@ -340,6 +340,7 @@ class TestRefreshAccessTokenErrors:
     def test_non_oauth_error_body_yields_generic_message_and_no_code(self) -> None:
         """Non-200 with non-JSON body must not echo the body and must not invent
         an ``error_code`` — callers branch on ``error_code``, not the message."""
+
         def handler(request: httpx.Request) -> httpx.Response:
             if request.url.path.endswith("/.well-known/openid-configuration"):
                 return httpx.Response(200, json=_discovery_payload())

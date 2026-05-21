@@ -15,10 +15,10 @@ uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-mcp-serve
 Set the following environment variables (or add to a `.env` file in your working directory):
 
 ```env
-PIPEFY_OAUTH_CLIENT=your_client_id
-PIPEFY_OAUTH_SECRET=your_client_secret
+PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=your_client_id
+PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=your_client_secret
 PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql
-PIPEFY_OAUTH_URL=https://app.pipefy.com/oauth/token
+PIPEFY_SERVICE_ACCOUNT_URL=https://app.pipefy.com/oauth/token
 PIPEFY_INTERNAL_API_URL=https://app.pipefy.com/internal_api
 ```
 

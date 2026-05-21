@@ -63,11 +63,13 @@ Runtime settings come from **`pipefy_mcp.settings.Settings`** ([Pydantic Setting
 |-----|------|
 | `PIPEFY_GRAPHQL_URL` | Public GraphQL endpoint (default in `.env.example`). |
 | `PIPEFY_INTERNAL_API_URL` | Internal GraphQL (AI automations, some relation flows). Use the value from [`.env.example`](../.env.example). |
-| `PIPEFY_OAUTH_URL` | OAuth token URL for the service account. |
-| `PIPEFY_OAUTH_CLIENT` | Service account client ID. |
-| `PIPEFY_OAUTH_SECRET` | Service account client secret. |
+| `PIPEFY_SERVICE_ACCOUNT_URL` | Service-account OAuth 2.0 token endpoint (client-credentials grant). |
+| `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | Service-account client_id (OAuth 2.0 RFC 6749). |
+| `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | Service-account client_secret. |
 
 `PIPEFY_INTERNAL_API_URL` points at Pipefy’s internal GraphQL; it is required for tools that use that path (e.g. AI automations, some relations). Values are **validated at startup** — public Pipefy hosts are the normal case; `localhost` / private hosts are rejected to avoid SSRF unless you use the insecure-dev flags in [`.env.example`](../.env.example).
+
+> **Legacy names:** `PIPEFY_OAUTH_URL`, `PIPEFY_OAUTH_CLIENT`, and `PIPEFY_OAUTH_SECRET` are still honored (with a one-shot stderr deprecation warning) for back-compat. They will be removed in a future beta. See [docs/MIGRATION.md](MIGRATION.md#service-account-env-var-rename).
 
 ### Optional
 
@@ -92,9 +94,9 @@ Use this **`env` shape** when you need to inline values (e.g. CI or machines wit
 "env": {
     "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
     "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
-    "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
-    "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
-    "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
+    "PIPEFY_SERVICE_ACCOUNT_URL": "https://app.pipefy.com/oauth/token",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<SERVICE_ACCOUNT_CLIENT_ID>",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
 }
 ```
 
@@ -119,9 +121,9 @@ Use this **`env` shape** when you need to inline values (e.g. CI or machines wit
             "env": {
                 "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
                 "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
-                "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
-                "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
-                "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
+                "PIPEFY_SERVICE_ACCOUNT_URL": "https://app.pipefy.com/oauth/token",
+                "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<SERVICE_ACCOUNT_CLIENT_ID>",
+                "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
             }
         }
     }
@@ -155,9 +157,9 @@ MCP servers load from a JSON config file. You can keep credentials in **`.env`**
             "env": {
                 "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
                 "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
-                "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
-                "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
-                "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
+                "PIPEFY_SERVICE_ACCOUNT_URL": "https://app.pipefy.com/oauth/token",
+                "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<SERVICE_ACCOUNT_CLIENT_ID>",
+                "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
             }
         }
     }
@@ -180,11 +182,11 @@ claude mcp add --scope project pipefy \
 Then (repeat for each key you need, matching [`.env.example`](../.env.example)):
 
 ```bash
-claude mcp add-env pipefy PIPEFY_OAUTH_CLIENT <YOUR_CLIENT_ID>
-claude mcp add-env pipefy PIPEFY_OAUTH_SECRET <YOUR_CLIENT_SECRET>
+claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_ID <YOUR_CLIENT_ID>
+claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET <YOUR_CLIENT_SECRET>
 claude mcp add-env pipefy PIPEFY_GRAPHQL_URL https://app.pipefy.com/graphql
 claude mcp add-env pipefy PIPEFY_INTERNAL_API_URL https://app.pipefy.com/internal_api
-claude mcp add-env pipefy PIPEFY_OAUTH_URL https://app.pipefy.com/oauth/token
+claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_URL https://app.pipefy.com/oauth/token
 ```
 
 **`.mcp.json` (project root)**
@@ -203,9 +205,9 @@ claude mcp add-env pipefy PIPEFY_OAUTH_URL https://app.pipefy.com/oauth/token
             "env": {
                 "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
                 "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
-                "PIPEFY_OAUTH_URL": "https://app.pipefy.com/oauth/token",
-                "PIPEFY_OAUTH_CLIENT": "<SERVICE_ACCOUNT_CLIENT_ID>",
-                "PIPEFY_OAUTH_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
+                "PIPEFY_SERVICE_ACCOUNT_URL": "https://app.pipefy.com/oauth/token",
+                "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<SERVICE_ACCOUNT_CLIENT_ID>",
+                "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
             }
         }
     }

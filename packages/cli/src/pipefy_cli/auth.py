@@ -16,6 +16,7 @@ SDK, so a refresh-rotated access token naturally invalidates the cached client.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Literal, NoReturn
 
@@ -32,7 +33,14 @@ from pipefy_cli.config import (
     describe_missing_oauth_vars,
     ensure_public_graphql_configured,
 )
-from pipefy_cli.oauth import RefreshError, ensure_fresh_session, load_session
+from pipefy_cli.oauth import (
+    RefreshError,
+    StoredSession,
+    ensure_fresh_session,
+    load_session,
+)
+
+_SESSION_FRESHNESS_LEEWAY_S = 60
 
 AuthSource = Literal[
     "flag-token",
@@ -108,9 +116,19 @@ def _cache_key(
     )
 
 
+def _session_is_fresh(
+    session: StoredSession, *, leeway_s: int = _SESSION_FRESHNESS_LEEWAY_S
+) -> bool:
+    """Return whether the access token is outside the refresh leeway window."""
+    expires_in = session.expires_in or 0
+    return time.time() < session.obtained_at + expires_in - leeway_s
+
+
 def detect_all_sources(
     pipefy_settings: PipefySettings,
     auth: AuthContext,
+    *,
+    cached_stored_session: bool | None = None,
 ) -> list[AuthSource]:
     """Return every configured credential source, highest-precedence first.
 
@@ -125,24 +143,31 @@ def detect_all_sources(
         )
     if not describe_missing_oauth_vars(pipefy_settings):
         sources.append("service-account")
-    if (
-        auth.oidc_client is not None
-        and load_session(
-            issuer=auth.oidc_client.issuer_url,
-            client_id=auth.oidc_client.client_id,
+    if auth.oidc_client is not None:
+        has_stored = (
+            cached_stored_session
+            if cached_stored_session is not None
+            else load_session(
+                issuer=auth.oidc_client.issuer_url,
+                client_id=auth.oidc_client.client_id,
+            )
+            is not None
         )
-        is not None
-    ):
-        sources.append("stored-session")
+        if has_stored:
+            sources.append("stored-session")
     return sources
 
 
 def detect_auth_source(
     pipefy_settings: PipefySettings,
     auth: AuthContext,
+    *,
+    cached_stored_session: bool | None = None,
 ) -> AuthSource:
     """Return the precedence winner among configured sources, or ``"none"``."""
-    sources = detect_all_sources(pipefy_settings, auth)
+    sources = detect_all_sources(
+        pipefy_settings, auth, cached_stored_session=cached_stored_session
+    )
     return sources[0] if sources else "none"
 
 
@@ -169,6 +194,8 @@ def _raise_internal_error(detail: str) -> NoReturn:
 def get_authenticated_client(
     pipefy_settings: PipefySettings,
     auth: AuthContext,
+    *,
+    prefetched_session: StoredSession | None = None,
 ) -> PipefyClient:
     """Return a facade client using the highest-precedence available auth source.
 
@@ -179,6 +206,9 @@ def get_authenticated_client(
             tier 4 (stored user session keyed by issuer + client id). Tier 3
             (service-account client credentials) is resolved from
             ``pipefy_settings`` alone.
+        prefetched_session: When set (e.g. by ``pipefy auth status`` after a
+            single keychain read + refresh), skips a second
+            ``ensure_fresh_session`` round-trip for the stored-session branch.
 
     Returns:
         Shared in-process instance when settings match a prior call; otherwise
@@ -196,7 +226,11 @@ def get_authenticated_client(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
 
-    source = detect_auth_source(pipefy_settings, auth)
+    source = detect_auth_source(
+        pipefy_settings,
+        auth,
+        cached_stored_session=True if prefetched_session is not None else None,
+    )
 
     if source == "none":
         typer.echo(_missing_auth_message(pipefy_settings), err=True)
@@ -216,24 +250,25 @@ def get_authenticated_client(
             _raise_internal_error(
                 "auth source 'stored-session' detected but no OIDC client is configured."
             )
-        try:
-            session = ensure_fresh_session(
-                issuer=auth.oidc_client.issuer_url,
-                client_id=auth.oidc_client.client_id,
-            )
-        except RefreshError as exc:
-            typer.echo(
-                f"Stored Pipefy session could not be refreshed: {exc}. "
-                "Run `pipefy auth login` to sign in again.",
-                err=True,
-            )
-            raise typer.Exit(2) from exc
-        # ``detect_auth_source`` already confirmed a session is present; if it
-        # vanished between the two reads, fall through to the missing-auth path.
-        if session is None:
-            typer.echo(_missing_auth_message(pipefy_settings), err=True)
-            raise typer.Exit(2)
-        effective_bearer = session.access_token
+        if prefetched_session is not None:
+            effective_bearer = prefetched_session.access_token
+        else:
+            try:
+                session = ensure_fresh_session(
+                    issuer=auth.oidc_client.issuer_url,
+                    client_id=auth.oidc_client.client_id,
+                )
+            except RefreshError as exc:
+                typer.echo(
+                    f"Stored Pipefy session could not be refreshed: {exc}. "
+                    "Run `pipefy auth login` to sign in again.",
+                    err=True,
+                )
+                raise typer.Exit(2) from exc
+            if session is None:
+                typer.echo(_missing_auth_message(pipefy_settings), err=True)
+                raise typer.Exit(2)
+            effective_bearer = session.access_token
 
     key = _cache_key(pipefy_settings, effective_bearer)
     if _cached_client is not None and _cached_signature == key:

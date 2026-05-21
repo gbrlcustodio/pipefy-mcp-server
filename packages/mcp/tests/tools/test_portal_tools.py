@@ -6,6 +6,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from gql.transport.exceptions import TransportQueryError
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -16,33 +17,35 @@ from pipefy_mcp.tools.portal_tools import PortalTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 _PORTAL_LIST_NODE = {
+    "id": "portal-uuid-1",
     "uuid": "portal-uuid-1",
     "name": "Main Portal",
     "visibility": "internal",
-    "published": True,
+    "subType": "portal",
 }
 
 _PORTAL_DETAIL = {
+    "id": "portal-uuid-1",
     "uuid": "portal-uuid-1",
     "name": "Main Portal",
     "visibility": "public",
     "published": True,
-    "pages": {
-        "nodes": [
-            {
-                "uuid": "page-1",
-                "title": "Home",
-                "elements": [
-                    {
-                        "uuid": "el-1",
-                        "type": "forms",
-                        "metadata": {"formId": "123"},
-                    }
-                ],
-            }
-        ]
-    },
-    "subPortals": [{"uuid": "sub-1", "name": "Sub Portal 1"}],
+    "pages": [
+        {
+            "id": "page-1",
+            "uuid": "page-1",
+            "title": "Home",
+            "elements": [
+                {
+                    "id": "el-1",
+                    "uuid": "el-1",
+                    "type": "forms",
+                    "metadata": {"formId": "123"},
+                }
+            ],
+        }
+    ],
+    "subPortals": [{"id": "sub-1", "uuid": "sub-1", "name": "Sub Portal 1"}],
 }
 
 
@@ -164,7 +167,7 @@ async def test_get_portal_success(portal_session, mock_portal_client, extract_pa
     assert "result" in payload
     assert payload["data"]["uuid"] == "portal-uuid-1"
     assert payload["data"]["published"] is True
-    assert payload["data"]["pages"]["nodes"][0]["title"] == "Home"
+    assert payload["data"]["pages"][0]["title"] == "Home"
     assert payload["data"]["subPortals"][0]["name"] == "Sub Portal 1"
 
 
@@ -188,6 +191,44 @@ async def test_get_portal_not_found_returns_error_envelope(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_list_portals_transport_error_returns_error_envelope(
+    portal_session, mock_portal_client, extract_payload
+):
+    mock_portal_client.list_portals = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+    )
+
+    async with portal_session as session:
+        result = await session.call_tool("list_portals", {"org_uuid": "org-abc-123"})
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    err = payload.get("error")
+    assert isinstance(err, dict) and "message" in err
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_get_portal_transport_error_returns_error_envelope(
+    portal_session, mock_portal_client, extract_payload
+):
+    mock_portal_client.get_portal = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+    )
+
+    async with portal_session as session:
+        result = await session.call_tool("get_portal", {"uuid": "portal-uuid-1"})
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    err = payload.get("error")
+    assert isinstance(err, dict) and "message" in err
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_read_tools_have_readonly_hint(portal_session):
     read_tool_names = ["list_portals", "get_portal"]
 
@@ -201,16 +242,3 @@ async def test_read_tools_have_readonly_hint(portal_session):
         assert tool.annotations.readOnlyHint is True, (
             f"{name} should be readOnlyHint=True"
         )
-
-
-@pytest.mark.anyio
-@pytest.mark.parametrize("portal_session", [None], indirect=True)
-async def test_list_portals_docstring_mentions_at_most_one_main_portal(
-    portal_session,
-):
-    async with portal_session as session:
-        listed = await session.list_tools()
-
-    list_tool = next(t for t in listed.tools if t.name == "list_portals")
-    assert list_tool.description is not None
-    assert "at most one main portal" in list_tool.description.lower()

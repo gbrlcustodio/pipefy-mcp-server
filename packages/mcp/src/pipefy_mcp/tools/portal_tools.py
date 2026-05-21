@@ -9,11 +9,9 @@ from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.tools.portal_tool_helpers import (
-    build_get_portal_success_payload,
-    build_list_portals_success_payload,
-    build_portal_error_payload,
-    map_portal_error_to_message,
+from pipefy_mcp.tools.introspection_tool_helpers import (
+    build_error_payload,
+    build_success_payload,
 )
 
 
@@ -35,12 +33,13 @@ class PortalTools:
             """List portals for an organization.
 
             Each organization has at most one main portal; additional entries may be
-            sub-portals. Returns uuid, name, visibility, and published status for each
-            portal. The response includes both ``result`` (pretty-printed JSON string)
+            sub-portals. Returns uuid, name, visibility, and subType for each
+            portal (use ``get_portal`` for ``published`` and page detail). The
+            response includes both ``result`` (pretty-printed JSON string)
             and ``data`` (parsed dict) for convenience.
 
             Args:
-                org_uuid: Organization UUID.
+                org_uuid: Organization UUID, or numeric organization id (string).
                 search_term: Optional name filter.
             """
             await ctx.debug(
@@ -48,9 +47,9 @@ class PortalTools:
             )
             try:
                 portals = await client.list_portals(org_uuid, search_term=search_term)
-            except ValueError as exc:
-                return build_portal_error_payload(map_portal_error_to_message(exc))
-            return build_list_portals_success_payload(portals)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(str(exc))
+            return build_success_payload({"portals": portals}, include_parsed=True)
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
@@ -71,6 +70,6 @@ class PortalTools:
             await ctx.debug(f"get_portal: uuid={uuid}")
             try:
                 portal = await client.get_portal(uuid)
-            except ValueError as exc:
-                return build_portal_error_payload(map_portal_error_to_message(exc))
-            return build_get_portal_success_payload(portal)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(str(exc))
+            return build_success_payload(portal, include_parsed=True)

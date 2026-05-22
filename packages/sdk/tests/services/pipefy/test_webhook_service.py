@@ -149,7 +149,9 @@ async def test_send_email_with_template_success(mock_settings):
             }
         }
     )
-    service = WebhookService(settings=mock_settings, card_service=card_service)
+    service = WebhookService(
+        settings=mock_settings, auth=_TEST_AUTH, card_service=card_service
+    )
     service.execute_query = AsyncMock(
         side_effect=[
             {

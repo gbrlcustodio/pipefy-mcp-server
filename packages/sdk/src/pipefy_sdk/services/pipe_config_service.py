@@ -52,8 +52,8 @@ class PipeConfigService(BasePipefyClient):
     def __init__(
         self,
         settings: PipefySettings,
-        auth: Auth | None = None,
         *,
+        auth: Auth,
         pipe_service: PipeService | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)

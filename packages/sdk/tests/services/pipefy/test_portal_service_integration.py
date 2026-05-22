@@ -89,7 +89,9 @@ async def test_live_create_portal_idempotent_returns_same_uuid(
     """Smoke: create_portal called twice returns the same portal uuid (idempotent)."""
     org_uuid = _portal_org_uuid()
     if org_uuid is None:
-        pytest.skip("Set PIPEFY_PORTAL_ORG_UUID for live create_portal idempotency smoke")
+        pytest.skip(
+            "Set PIPEFY_PORTAL_ORG_UUID for live create_portal idempotency smoke"
+        )
 
     first = await live_portal_service.create_portal(org_uuid)
     second = await live_portal_service.create_portal(org_uuid)

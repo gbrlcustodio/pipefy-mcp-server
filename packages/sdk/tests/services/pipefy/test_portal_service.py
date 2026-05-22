@@ -537,9 +537,7 @@ async def test_create_portal_resolves_numeric_org_and_calls_find_or_create_templ
     service._interfaces_client.execute_query.assert_called_once()
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "FIND_OR_CREATE_PORTAL_MUTATION")
-    assert variables == {
-        "input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}
-    }
+    assert variables == {"input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}}
     assert result["uuid"] == "portal-created-uuid"
 
 
@@ -561,9 +559,7 @@ async def test_create_portal_uuid_org_skips_resolve(
 
     service._graphql_client.execute_query.assert_not_called()
     _, variables = service._interfaces_client.execute_query.call_args[0]
-    assert variables == {
-        "input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}
-    }
+    assert variables == {"input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}}
 
 
 @pytest.mark.unit
@@ -712,3 +708,43 @@ async def test_create_portal_permission_denied_surfaces_actionable_message(
 
     with pytest.raises(ValueError, match=r"(create_portal|manage_portals)"):
         await service.create_portal(_ORG_UUID_FOR_TESTS)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_permission_denied_surfaces_actionable_message(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """PERMISSION_DENIED on update maps to portal permission guidance."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"updateInterface": {"interface": _CREATE_PORTAL_GRAPHQL_INTERFACE}},
+    )
+    service._interfaces_client.execute_query = AsyncMock(
+        side_effect=_PERMISSION_DENIED_ERROR
+    )
+
+    with pytest.raises(ValueError, match=r"(create_portal|manage_portals)"):
+        await service.update_portal("portal-created-uuid", name="Renamed")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_portal_permission_denied_surfaces_actionable_message(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """PERMISSION_DENIED on delete maps to portal permission guidance."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"deleteInterface": {"success": True}},
+    )
+    service._interfaces_client.execute_query = AsyncMock(
+        side_effect=_PERMISSION_DENIED_ERROR
+    )
+
+    with pytest.raises(ValueError, match=r"(create_portal|manage_portals)"):
+        await service.delete_portal("portal-to-delete")

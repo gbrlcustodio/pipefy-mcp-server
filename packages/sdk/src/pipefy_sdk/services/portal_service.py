@@ -8,7 +8,7 @@ from gql.transport.exceptions import TransportQueryError
 from httpx import Auth
 
 from pipefy_sdk.base_client import BasePipefyClient, unwrap_relay_connection_nodes
-from pipefy_sdk.models.portal import UpdatePortalInput
+from pipefy_sdk.models.portal import CreatePortalInput, UpdatePortalInput
 from pipefy_sdk.queries.portal_queries import (
     DELETE_INTERFACE_MUTATION,
     FIND_OR_CREATE_PORTAL_MUTATION,
@@ -195,9 +195,12 @@ class PortalService:
         Returns:
             Portal interface summary with ``uuid`` alias for ``id``.
         """
+        portal_input = CreatePortalInput.model_validate(
+            {"organization_uuid": organization_uuid}
+        )
         resolved_org_uuid = await resolve_organization_uuid(
             self._graphql_client.execute_query,
-            organization_uuid,
+            portal_input.organization_uuid,
         )
         data = await _execute_interfaces_query_with_portal_errors(
             self.execute_interfaces_query,

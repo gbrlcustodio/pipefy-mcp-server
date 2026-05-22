@@ -328,6 +328,32 @@ async def test_list_portals_numeric_org_id_resolves_via_main_graphql_client(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_list_portals_accepts_int_org_id(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Integer org ids coerce to string before resolve and Interfaces list."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"interfaces": {"edges": []}},
+    )
+    service._graphql_client.execute_query = AsyncMock(
+        return_value={"organization": {"uuid": _ORG_UUID_FOR_TESTS}}
+    )
+
+    await service.list_portals(int(_NUMERIC_ORG_ID))
+
+    service._graphql_client.execute_query.assert_called_once_with(
+        RESOLVE_ORGANIZATION_UUID_QUERY,
+        {"id": _NUMERIC_ORG_ID},
+    )
+    _, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables["org_uuid"] == _ORG_UUID_FOR_TESTS
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_list_portals_rejects_empty_org_identifier(
     mock_settings: PipefySettings,
     mock_auth: OAuth2ClientCredentials,

@@ -19,13 +19,12 @@ from pipefy_sdk.queries.observability_queries import (
     GET_AUTOMATION_LOGS_BY_REPO_QUERY,
     GET_AUTOMATION_LOGS_QUERY,
     GET_AUTOMATIONS_USAGE_QUERY,
-    RESOLVE_ORGANIZATION_UUID_QUERY,
 )
 from pipefy_sdk.services.observability_export_csv import (
     download_bytes,
     xlsx_first_sheet_to_csv_limited,
 )
-from pipefy_sdk.utils.organization_identifiers import looks_like_uuid
+from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
 
 _DEFAULT_PAGE_SIZE = 30
 
@@ -94,42 +93,6 @@ def _build_usage_variables(
 
 class ObservabilityService(BasePipefyClient):
     """Reads for AI agent logs, automation logs, usage stats, and credit dashboard."""
-
-    async def _resolve_organization_uuid(self, organization_identifier: str) -> str:
-        """Return the organization UUID, resolving numeric IDs via GraphQL.
-
-        Pipefy accepts a numeric organization id in URLs, but several GraphQL queries expect
-        ``organizationUuid``. When the caller passes digits only, resolve via ``organization``.
-
-        Args:
-            organization_identifier: Organization UUID, or numeric organization id as a string.
-
-        Returns:
-            Organization UUID string for GraphQL variables.
-
-        Raises:
-            ValueError: When the identifier is empty, or resolution yields no uuid.
-        """
-        trimmed = organization_identifier.strip()
-        if not trimmed:
-            raise ValueError("organization identifier must be non-empty")
-        if looks_like_uuid(trimmed):
-            return trimmed
-        if trimmed.isdigit():
-            result = await self.execute_query(
-                RESOLVE_ORGANIZATION_UUID_QUERY,
-                {"id": str(trimmed)},
-            )
-            org = result.get("organization")
-            uuid_value = org.get("uuid") if isinstance(org, dict) else None
-            if not uuid_value:
-                raise ValueError(
-                    f"Organization not found or has no uuid for id: {trimmed}"
-                )
-            return str(uuid_value)
-        raise ValueError(
-            f"organization identifier must be a UUID or numeric id, got: {trimmed!r}"
-        )
 
     async def get_ai_agent_logs(
         self,
@@ -244,7 +207,9 @@ class ObservabilityService(BasePipefyClient):
             search: Free-text search.
             sort: SortCriteria (field + direction).
         """
-        resolved = await self._resolve_organization_uuid(organization_uuid)
+        resolved = await resolve_organization_uuid(
+            self.execute_query, organization_uuid
+        )
         variables = _build_usage_variables(
             resolved,
             filter_date,
@@ -273,7 +238,9 @@ class ObservabilityService(BasePipefyClient):
             search: Free-text search.
             sort: SortCriteria (field + direction).
         """
-        resolved = await self._resolve_organization_uuid(organization_uuid)
+        resolved = await resolve_organization_uuid(
+            self.execute_query, organization_uuid
+        )
         variables = _build_usage_variables(
             resolved,
             filter_date,
@@ -295,7 +262,9 @@ class ObservabilityService(BasePipefyClient):
                 are resolved to UUID via a short GraphQL query before calling ``aiCreditUsageStats``.
             period: PeriodFilter enum value (current_month, last_month, last_3_months).
         """
-        resolved = await self._resolve_organization_uuid(organization_uuid)
+        resolved = await resolve_organization_uuid(
+            self.execute_query, organization_uuid
+        )
         return await self.execute_query(
             GET_AI_CREDIT_USAGE_QUERY,
             {"organizationUuid": resolved, "period": period},

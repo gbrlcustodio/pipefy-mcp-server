@@ -15,21 +15,10 @@ from gql.transport.exceptions import (
     TransportQueryError,
     TransportServerError,
 )
-from pipefy_sdk import MePayload, PipefySettings
-from pipefy_sdk.settings import _LEGACY_ENV_KEYS_TO_NEW
-
-from pipefy_cli._docs import DOCS_CLI_AUTH_REF
-from pipefy_cli.auth import (
-    AuthContext,
-    AuthSource,
-    OidcClient,
-    detect_all_sources,
-    get_authenticated_client,
-)
-from pipefy_cli.commands._common import settings_and_auth_from_ctx
-from pipefy_cli.oauth import (
+from pipefy_auth import (
     DiscoveryPolicy,
     LoginError,
+    OidcClient,
     RefreshError,
     RevocationError,
     RevocationUnsupportedError,
@@ -42,6 +31,17 @@ from pipefy_cli.oauth import (
     run_login,
     store_session,
 )
+from pipefy_sdk import MePayload, PipefySettings
+from pipefy_sdk.settings import _LEGACY_ENV_KEYS_TO_NEW
+
+from pipefy_cli._docs import DOCS_CLI_AUTH_REF
+from pipefy_cli.auth import (
+    AuthContext,
+    AuthSource,
+    detect_all_sources,
+    get_authenticated_client,
+)
+from pipefy_cli.commands._common import settings_and_auth_from_ctx
 from pipefy_cli.output import render_json
 
 AuthSessionState = Literal["active", "refresh-expired", "needs-login", "n/a"]
@@ -492,7 +492,7 @@ def auth_logout(ctx: typer.Context) -> None:
         typer.echo(
             f"Could not delete local session from the keychain: {exc}. "
             "The stored credential may still be present; remove it manually "
-            f"via your OS keychain (service: 'pipefy-cli'). See {DOCS_CLI_AUTH_REF}.",
+            f"via your OS keychain (service: 'pipefy'). See {DOCS_CLI_AUTH_REF}.",
             err=True,
         )
         raise typer.Exit(1) from exc

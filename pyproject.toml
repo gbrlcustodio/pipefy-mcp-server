@@ -10,18 +10,20 @@ dependencies = []
 package = false
 
 [tool.uv.workspace]
-members = ["packages/sdk", "packages/mcp", "packages/cli"]
+members = ["packages/sdk", "packages/mcp", "packages/cli", "packages/auth"]
 
 [tool.uv.sources]
 pipefy-sdk = { workspace = true }
 pipefy-mcp-server = { workspace = true }
 pipefy-cli = { workspace = true }
+pipefy-auth = { workspace = true }
 
 [dependency-groups]
 dev = [
     "pipefy-sdk",
     "pipefy-mcp-server",
     "pipefy-cli",
+    "pipefy-auth",
     "aiohttp>=3.11.16",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
@@ -36,12 +38,14 @@ lint.extend-select = ["I", "S101"]
 lint.per-file-ignores = { "**/tests/**" = ["S101"] }
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "packages/sdk/tests", "packages/mcp/tests", "packages/cli/tests"]
+testpaths = ["tests", "packages/sdk/tests", "packages/mcp/tests", "packages/cli/tests", "packages/auth/tests"]
 pythonpath = [
     "packages/mcp/tests",
     "packages/sdk/tests",
     "packages/cli/src",
     "packages/cli/tests",
+    "packages/auth/src",
+    "packages/auth/tests",
 ]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]

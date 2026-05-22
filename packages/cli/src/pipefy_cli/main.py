@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 import typer
+from pipefy_auth import DEFAULT_AUTH_CLIENT_ID
 
 from pipefy_cli import __version__ as _cli_version
 from pipefy_cli.auth import BearerToken
@@ -34,7 +35,7 @@ from pipefy_cli.commands.skills import skills_app
 from pipefy_cli.commands.table import table_app
 from pipefy_cli.commands.usage import usage_app
 from pipefy_cli.commands.webhook import webhook_app
-from pipefy_cli.config import DEFAULT_AUTH_CLIENT_ID, resolve_cli_settings
+from pipefy_cli.config import resolve_cli_settings
 
 app = typer.Typer(
     name="pipefy",

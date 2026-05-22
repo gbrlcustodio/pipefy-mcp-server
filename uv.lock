@@ -8,6 +8,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "pipefy-auth",
     "pipefy-cli",
     "pipefy-mcp-server",
     "pipefy-sdk",
@@ -811,10 +812,38 @@ wheels = [
 ]
 
 [[package]]
+name = "pipefy-auth"
+source = { editable = "packages/auth" }
+dependencies = [
+    { name = "httpx" },
+    { name = "keyring" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28" },
+    { name = "keyring", specifier = ">=24" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.3.5" },
+    { name = "pytest-asyncio", specifier = ">=0.26.0" },
+    { name = "ruff", specifier = ">=0.11.4" },
+]
+
+[[package]]
 name = "pipefy-cli"
 source = { editable = "packages/cli" }
 dependencies = [
-    { name = "keyring" },
+    { name = "pipefy-auth" },
     { name = "pipefy-sdk" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
@@ -831,7 +860,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "keyring", specifier = ">=24" },
+    { name = "pipefy-auth", editable = "packages/auth" },
     { name = "pipefy-sdk", editable = "packages/sdk" },
     { name = "pydantic-settings", specifier = ">=2.8.1" },
     { name = "pyyaml", specifier = ">=6" },
@@ -942,6 +971,7 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "aiohttp" },
+    { name = "pipefy-auth" },
     { name = "pipefy-cli" },
     { name = "pipefy-mcp-server" },
     { name = "pipefy-sdk" },
@@ -958,6 +988,7 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "aiohttp", specifier = ">=3.11.16" },
+    { name = "pipefy-auth", editable = "packages/auth" },
     { name = "pipefy-cli", editable = "packages/cli" },
     { name = "pipefy-mcp-server", editable = "packages/mcp" },
     { name = "pipefy-sdk", editable = "packages/sdk" },

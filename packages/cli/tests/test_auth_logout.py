@@ -5,10 +5,10 @@ from __future__ import annotations
 import httpx
 import pytest
 from conftest import InMemoryKeyring
+from pipefy_auth import revoke, storage
 
 from pipefy_cli.commands import auth as auth_module
 from pipefy_cli.main import app as cli_app
-from pipefy_cli.oauth import revoke, storage
 
 # --------------------------------------------------------------------------- #
 # Helpers                                                                     #

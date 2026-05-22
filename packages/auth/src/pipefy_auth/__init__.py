@@ -1,24 +1,34 @@
-"""OAuth 2.0 Authorization Code + PKCE login flow for the Pipefy CLI."""
+"""Shared OAuth + keychain helpers for Pipefy CLI and MCP server.
+
+Owns the keychain-backed user session (``StoredSession``), the OIDC discovery /
+authorization-code-with-PKCE login flow, the refresh-token grant, and the OIDC
+client identity (``OidcClient``, ``DEFAULT_AUTH_CLIENT_ID``). Consumers
+(``pipefy_cli`` and ``pipefy_mcp``) build an authenticated client by passing the
+artifacts surfaced here to the SDK.
+"""
 
 from __future__ import annotations
 
-from pipefy_cli.oauth.discovery import (
+__version__ = "0.2.0-beta.1"
+
+from pipefy_auth.discovery import (
     DiscoveryPolicy,
     ProviderMetadata,
     fetch_provider_metadata,
 )
-from pipefy_cli.oauth.flow import LoginError, LoginResult, run_login
-from pipefy_cli.oauth.refresh import (
+from pipefy_auth.flow import LoginError, LoginResult, run_login
+from pipefy_auth.identity import DEFAULT_AUTH_CLIENT_ID, OidcClient
+from pipefy_auth.refresh import (
     RefreshError,
     ensure_fresh_session,
     refresh_access_token,
 )
-from pipefy_cli.oauth.revoke import (
+from pipefy_auth.revoke import (
     RevocationError,
     RevocationUnsupportedError,
     revoke_session,
 )
-from pipefy_cli.oauth.storage import (
+from pipefy_auth.storage import (
     SessionDeleteError,
     StoredSession,
     delete_session,
@@ -29,15 +39,18 @@ from pipefy_cli.oauth.storage import (
 )
 
 __all__ = [
+    "DEFAULT_AUTH_CLIENT_ID",
     "DiscoveryPolicy",
     "LoginError",
     "LoginResult",
+    "OidcClient",
     "ProviderMetadata",
     "RefreshError",
     "RevocationError",
     "RevocationUnsupportedError",
     "SessionDeleteError",
     "StoredSession",
+    "__version__",
     "delete_session",
     "ensure_fresh_session",
     "fetch_provider_metadata",

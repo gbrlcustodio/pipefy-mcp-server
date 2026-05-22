@@ -191,3 +191,37 @@ def test_portal_update_name_visibility_json(
         name="Renamed Portal",
         visibility="public",
     )
+
+
+def test_portal_update_no_attributes_exit_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-upd-none")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["portal", "update", "portal-uuid-1", "--json"],
+        )
+    assert result.exit_code == 2
+    mock_client.update_portal.assert_not_called()
+
+
+def test_portal_update_blank_name_exit_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-upd-blank-name")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["portal", "update", "portal-uuid-1", "--name", "   ", "--json"],
+        )
+    assert result.exit_code == 2
+    mock_client.update_portal.assert_not_called()

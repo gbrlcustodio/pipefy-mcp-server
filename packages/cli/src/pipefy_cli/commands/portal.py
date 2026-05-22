@@ -15,6 +15,19 @@ from pipefy_cli.commands._common import (
 portal_app = typer.Typer(help="Portal operations.", no_args_is_help=True)
 
 
+def _require_non_empty_portal_uuid(portal_uuid: str) -> str:
+    """Reject blank portal UUIDs before SDK calls."""
+    if not portal_uuid.strip():
+        raise typer.BadParameter("Portal UUID must be non-empty.")
+    return portal_uuid.strip()
+
+
+def _reject_blank_optional_string(value: str | None, flag: str) -> None:
+    """Reject whitespace-only optional string flags on update."""
+    if value is not None and not value.strip():
+        raise typer.BadParameter(f"{flag}, when provided, must be non-empty.")
+
+
 @portal_app.command("list")
 def portal_list(
     ctx: typer.Context,
@@ -55,6 +68,8 @@ def portal_get(
     ),
 ) -> None:
     """Fetch a portal by UUID."""
+
+    portal_uuid = _require_non_empty_portal_uuid(portal_uuid)
 
     async def factory(client: PipefyClient):
         return await client.get_portal(portal_uuid)
@@ -111,22 +126,28 @@ def portal_update(
 ) -> None:
     """Update portal metadata (pass at least one attribute)."""
 
+    portal_uuid = _require_non_empty_portal_uuid(portal_uuid)
+
     if all(x is None for x in (name, visibility, color, icon, display_pipefy_header)):
         raise typer.BadParameter(
             "Provide at least one of: --name, --visibility, --color, --icon, "
             "--display-pipefy-header / --no-display-pipefy-header."
         )
 
+    _reject_blank_optional_string(name, "--name")
+    _reject_blank_optional_string(color, "--color")
+    _reject_blank_optional_string(icon, "--icon")
+
     async def factory(client: PipefyClient):
         update_kwargs: dict[str, str | bool] = {}
         if name is not None:
-            update_kwargs["name"] = name
+            update_kwargs["name"] = name.strip()
         if visibility is not None:
             update_kwargs["visibility"] = visibility
         if color is not None:
-            update_kwargs["color"] = color
+            update_kwargs["color"] = color.strip()
         if icon is not None:
-            update_kwargs["icon"] = icon
+            update_kwargs["icon"] = icon.strip()
         if display_pipefy_header is not None:
             update_kwargs["display_pipefy_header"] = display_pipefy_header
         return await client.update_portal(portal_uuid, **update_kwargs)
@@ -153,6 +174,7 @@ def portal_delete(
 ) -> None:
     """Delete a portal permanently."""
 
+    portal_uuid = _require_non_empty_portal_uuid(portal_uuid)
     confirm_destructive(yes=yes, description=f"portal {portal_uuid}")
 
     async def factory(client: PipefyClient):

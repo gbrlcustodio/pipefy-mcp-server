@@ -10,9 +10,9 @@ from pipefy_sdk.settings import PipefySettings
 def valid_settings() -> PipefySettings:
     return PipefySettings(
         graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url="https://auth.pipefy.com/oauth/token",
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
 
 
@@ -108,9 +108,9 @@ def test_init_raises_when_graphql_url_is_none():
     """Test that __init__ raises ValueError when graphql_url is None."""
     settings = PipefySettings(
         graphql_url=None,
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url="https://auth.pipefy.com/oauth/token",
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
 
     with pytest.raises(ValueError) as exc:
@@ -120,48 +120,50 @@ def test_init_raises_when_graphql_url_is_none():
 
 
 @pytest.mark.unit
-def test_init_raises_when_oauth_url_is_none():
-    """Test that __init__ raises ValueError when oauth_url is None."""
+def test_init_raises_when_service_account_url_is_none():
+    """Test that __init__ raises ValueError when service_account_url is None."""
     settings = PipefySettings(
         graphql_url="https://api.pipefy.com/graphql",
-        oauth_url=None,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url=None,
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
 
     with pytest.raises(ValueError) as exc:
         BasePipefyClient(settings=settings)
 
-    assert "OAuth URL must be provided in settings" in str(exc.value)
+    assert "Service-account URL must be provided in settings" in str(exc.value)
 
 
 @pytest.mark.unit
-def test_init_raises_when_oauth_client_is_none():
-    """Test that __init__ raises ValueError when oauth_client is None."""
+def test_init_raises_when_service_account_client_id_is_none():
+    """Test that __init__ raises ValueError when service_account_client_id is None."""
     settings = PipefySettings(
         graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client=None,
-        oauth_secret="client_secret",
+        service_account_url="https://auth.pipefy.com/oauth/token",
+        service_account_client_id=None,
+        service_account_client_secret="client_secret",
     )
 
     with pytest.raises(ValueError) as exc:
         BasePipefyClient(settings=settings)
 
-    assert "OAuth client ID must be provided in settings" in str(exc.value)
+    assert "Service-account client ID must be provided in settings" in str(exc.value)
 
 
 @pytest.mark.unit
-def test_init_raises_when_oauth_secret_is_none():
-    """Test that __init__ raises ValueError when oauth_secret is None."""
+def test_init_raises_when_service_account_client_secret_is_none():
+    """Test that __init__ raises ValueError when service_account_client_secret is None."""
     settings = PipefySettings(
         graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret=None,
+        service_account_url="https://auth.pipefy.com/oauth/token",
+        service_account_client_id="client_id",
+        service_account_client_secret=None,
     )
 
     with pytest.raises(ValueError) as exc:
         BasePipefyClient(settings=settings)
 
-    assert "OAuth client secret must be provided in settings" in str(exc.value)
+    assert "Service-account client secret must be provided in settings" in str(
+        exc.value
+    )

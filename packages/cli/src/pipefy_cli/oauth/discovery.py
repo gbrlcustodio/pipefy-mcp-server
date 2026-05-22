@@ -15,11 +15,17 @@ _DEFAULT_TIMEOUT = 10.0
 
 @dataclass(frozen=True)
 class ProviderMetadata:
-    """Subset of OIDC provider metadata the login flow needs."""
+    """Subset of OIDC provider metadata the login flow needs.
+
+    ``end_session_endpoint`` is optional per OIDC Discovery 1.0 — not every IdP
+    advertises it. ``auth logout`` soft-fails when it's absent (warns + clears
+    the local session only).
+    """
 
     issuer: str
     authorization_endpoint: str
     token_endpoint: str
+    end_session_endpoint: str | None = None
 
 
 @dataclass(frozen=True)
@@ -102,10 +108,16 @@ def fetch_provider_metadata(
 
     authorization_endpoint = str(data["authorization_endpoint"])
     token_endpoint = str(data["token_endpoint"])
-    for field, value in (
+    raw_end_session = data.get("end_session_endpoint")
+    end_session_endpoint = str(raw_end_session) if raw_end_session else None
+
+    endpoints: list[tuple[str, str]] = [
         ("authorization_endpoint", authorization_endpoint),
         ("token_endpoint", token_endpoint),
-    ):
+    ]
+    if end_session_endpoint is not None:
+        endpoints.append(("end_session_endpoint", end_session_endpoint))
+    for field, value in endpoints:
         try:
             validate_https_service_endpoint_url(
                 value, field, allow_insecure=policy.allow_insecure_urls
@@ -117,6 +129,7 @@ def fetch_provider_metadata(
         issuer=claimed_issuer,
         authorization_endpoint=authorization_endpoint,
         token_endpoint=token_endpoint,
+        end_session_endpoint=end_session_endpoint,
     )
 
 

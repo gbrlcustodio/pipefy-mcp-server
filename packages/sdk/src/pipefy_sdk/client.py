@@ -97,9 +97,9 @@ class PipefyClient:
             auth: Auth = StaticBearerAuth(bearer_token)
         else:
             auth = OAuth2ClientCredentials(
-                token_url=settings.oauth_url,
-                client_id=settings.oauth_client,
-                client_secret=settings.oauth_secret,
+                token_url=settings.service_account_url,
+                client_id=settings.service_account_client_id,
+                client_secret=settings.service_account_client_secret,
             )
         self._pipe_service = PipeService(settings=settings, auth=auth)
         self._card_service = CardService(settings=settings, auth=auth)

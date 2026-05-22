@@ -5,7 +5,7 @@ from __future__ import annotations
 import secrets
 import webbrowser
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, cast
 from urllib.parse import urlencode
 
 import httpx
@@ -186,12 +186,12 @@ def run_login(
 
             callback = capture.await_callback(timeout=callback_timeout_s)
             _ensure_callback_ok(callback, expected_state=state)
-            assert callback.code is not None
+            code = cast(str, callback.code)
 
             token_response = exchange_code(
                 metadata=metadata,
                 client_id=client_id,
-                code=callback.code,
+                code=code,
                 redirect_uri=capture.redirect_uri,
                 code_verifier=verifier,
                 client=http,

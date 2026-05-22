@@ -23,7 +23,7 @@ Most-explicit wins. The CLI walks this list top-down and stops at the first sour
 |---|--------|----------|-------|
 | 1 | `--token <bearer>` | Whoever owns the token | Skips OAuth entirely |
 | 2 | `PIPEFY_TOKEN` env var | Whoever owns the token | Same path as `--token` |
-| 3 | `PIPEFY_OAUTH_*` triple | Service account | Client-credentials grant (unlocks AI automations) |
+| 3 | `PIPEFY_SERVICE_ACCOUNT_*` triple | Service account | Client-credentials grant (unlocks AI automations) |
 | 4 | Stored user session | You (the signed-in user) | Eager refresh inside a 60 s leeway window |
 
 Tiers 1, 2, and 4 ultimately become a **static bearer token** on the GraphQL client. Only tier 3 builds the `InternalApiClient` that some MCP/CLI features (AI automations, certain relation flows) rely on — see [Limitations on the bearer path](#limitations-on-the-bearer-path).
@@ -56,12 +56,14 @@ Use this for CI, scripts, MCP servers, and any context where opening a browser i
 ```env
 PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql
 PIPEFY_INTERNAL_API_URL=https://app.pipefy.com/internal_api
-PIPEFY_OAUTH_URL=https://app.pipefy.com/oauth/token
-PIPEFY_OAUTH_CLIENT=<SERVICE_ACCOUNT_CLIENT_ID>
-PIPEFY_OAUTH_SECRET=<SERVICE_ACCOUNT_CLIENT_SECRET>
+PIPEFY_SERVICE_ACCOUNT_URL=https://app.pipefy.com/oauth/token
+PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=<SERVICE_ACCOUNT_CLIENT_ID>
+PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=<SERVICE_ACCOUNT_CLIENT_SECRET>
 ```
 
 The CLI loads `.env` from the current working directory; see [`docs/setup.md`](../setup.md) for the full Pydantic precedence rules.
+
+> **Legacy names:** `PIPEFY_OAUTH_URL`, `PIPEFY_OAUTH_CLIENT`, and `PIPEFY_OAUTH_SECRET` are still honored (with a one-shot stderr deprecation warning) for back-compat. They will be removed in a future beta. See [`docs/MIGRATION.md`](../MIGRATION.md#service-account-env-var-rename).
 
 ### Static bearer (one-off)
 
@@ -73,7 +75,7 @@ uv run pipefy --token "$MY_BEARER" pipe list
 PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 ```
 
-`--token` wins over every other source, including a stored session and `PIPEFY_OAUTH_*`.
+`--token` wins over every other source, including a stored session and `PIPEFY_SERVICE_ACCOUNT_*`.
 
 ---
 
@@ -85,14 +87,14 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 |-----|---------|--------|
 | `PIPEFY_GRAPHQL_URL` | All commands | Public GraphQL endpoint. Required for any GraphQL call (default in `.env.example`). |
 | `PIPEFY_TOKEN` | Tier 2 | Direct bearer token. Overridden by `--token`. |
-| `PIPEFY_OAUTH_URL` | Tier 3 | Service-account token URL (e.g. `https://app.pipefy.com/oauth/token`). |
-| `PIPEFY_OAUTH_CLIENT` | Tier 3 | Service-account client id. |
-| `PIPEFY_OAUTH_SECRET` | Tier 3 | Service-account client secret. |
+| `PIPEFY_SERVICE_ACCOUNT_URL` | Tier 3 | Service-account token URL (e.g. `https://app.pipefy.com/oauth/token`). |
+| `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | Tier 3 | Service-account client id. |
+| `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | Tier 3 | Service-account client secret. |
 | `PIPEFY_INTERNAL_API_URL` | Tier 3 | Internal GraphQL endpoint for AI automations / some relation flows. Required for those tools only. |
 | `PIPEFY_AUTH_URL` | Tier 4 | **OIDC issuer URL** for interactive login. The CLI appends `/.well-known/openid-configuration` to discover the authorization and token endpoints. Required for `pipefy auth login`. |
 | `PIPEFY_AUTH_CLIENT_ID` | Tier 4 | Public client id registered for the CLI. Defaults to `pipefy-cli`. |
 
-`PIPEFY_OAUTH_URL` and `PIPEFY_AUTH_URL` are **not** interchangeable: the first is a token URL for client-credentials, the second is an OIDC issuer URL for the user-login flow.
+`PIPEFY_SERVICE_ACCOUNT_URL` and `PIPEFY_AUTH_URL` are **not** interchangeable: the first is a token URL for client-credentials, the second is an OIDC issuer URL for the user-login flow.
 
 ### Global flags
 
@@ -108,7 +110,7 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 |---------|--------|-------|
 | `pipefy auth login` | Available | Browser-based PKCE login; persists the session in the OS keychain. |
 | `pipefy auth status` | Available | Print which auth source is active, identity, and session expiry. |
-| `pipefy auth logout` | Forthcoming (#136) | Delete the stored session and revoke the refresh token. |
+| `pipefy auth logout` | Available | Revoke the refresh token at the IdP and clear the stored session. |
 
 #### `pipefy auth login` flags
 
@@ -123,7 +125,7 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 |------|---------|--------|
 | `--json` / `-j` | _off_ | Emit a stable JSON schema instead of human-readable text. |
 
-The command answers four diagnostic questions: am I signed in, as whom, via which precedence tier, and (for stored sessions) when does the access/refresh token expire. It also reports which *other* credential sources are configured, so a CI failure where `PIPEFY_OAUTH_*` masks a stored login is one command away from being obvious.
+The command answers four diagnostic questions: am I signed in, as whom, via which precedence tier, and (for stored sessions) when does the access/refresh token expire. It also reports which *other* credential sources are configured, so a CI failure where `PIPEFY_SERVICE_ACCOUNT_*` masks a stored login is one command away from being obvious.
 
 ##### JSON schema
 
@@ -154,6 +156,25 @@ The shape is stable across all sources (fields you don't have are `null` rather 
 | Signed in, but the identity `me` query returned 401 or transport-failed | **1** |
 | Signed in, identity fetched successfully | **0** |
 
+#### `pipefy auth logout`
+
+POSTs the stored refresh token to the IdP's `end_session_endpoint` (advertised in the OIDC discovery document) and removes the keychain entry. Without server-side revocation the refresh token would remain valid at the IdP until natural expiry — anyone who recovered it from a backup could still mint new access tokens.
+
+The command always clears the local keychain entry once it runs, even when the IdP round-trip fails. The two non-happy paths surface a stderr warning so the user knows whether server-side revocation succeeded:
+
+- **Revocation network / non-2xx failure** — stderr `Could not revoke refresh token at the IdP: <reason>. Clearing local session anyway; the refresh token may remain valid at the server until natural expiry.`
+- **IdP doesn't advertise `end_session_endpoint`** — stderr `Pipefy auth server does not advertise a logout endpoint; the refresh token could not be revoked server-side. Clearing local session only.` (OIDC Discovery 1.0 makes the field optional; Keycloak ships it.)
+
+When no session is stored, `pipefy auth logout` prints `Not signed in. Nothing to do.` and exits 0 — idempotent, matching `gh auth logout` and similar CLIs.
+
+##### Exit codes
+
+| Case | Exit |
+|------|------|
+| `PIPEFY_AUTH_URL` is unset | **2** — same gate as `pipefy auth login`. |
+| No session stored (no-op) | **0** |
+| Session cleared (revoke succeeded, failed, or unsupported) | **0** |
+
 ### Pipefy issuer URLs
 
 | Environment | `PIPEFY_AUTH_URL` |
@@ -176,7 +197,7 @@ The PKCE flow needs a loopback HTTP server on `127.0.0.1:<ephemeral>` and a brow
 Options today:
 
 1. **Run `pipefy auth login` on your laptop**, then copy `.env` plus the relevant secrets over. The keychain entry itself doesn't transfer between machines.
-2. **Use a service account** (`PIPEFY_OAUTH_*`) on the headless box — this is the canonical answer for CI and servers.
+2. **Use a service account** (`PIPEFY_SERVICE_ACCOUNT_*`) on the headless box — this is the canonical answer for CI and servers.
 3. **Static bearer** via `PIPEFY_TOKEN` for short-lived debugging.
 
 Forthcoming: an OAuth 2.0 Device Authorization Grant (`pipefy auth login --device`) that swaps the loopback callback for a code you paste into a browser elsewhere. Tracked in issue #138.
@@ -197,17 +218,17 @@ You haven't set the issuer URL. Use the value from [Pipefy issuer URLs](#pipefy-
 
 The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running — install `gnome-keyring` or `kwallet`, or fall back to a static `PIPEFY_TOKEN`.
 
-### `Missing authentication. Use --token, set PIPEFY_TOKEN, configure PIPEFY_OAUTH_*, or run pipefy auth login.`
+### `Missing authentication. Use --token, set PIPEFY_TOKEN, configure PIPEFY_SERVICE_ACCOUNT_*, or run pipefy auth login.`
 
-No source resolved. Pick one from [Credential precedence](#credential-precedence). The message also lists which `PIPEFY_OAUTH_*` keys are missing, in case you have a partial service-account setup.
+No source resolved. Pick one from [Credential precedence](#credential-precedence). The message also lists which `PIPEFY_SERVICE_ACCOUNT_*` keys are missing, in case you have a partial service-account setup.
 
-### `Note: PIPEFY_OAUTH_* is set in your environment; other pipefy commands will continue to use it ...`
+### `Note: PIPEFY_SERVICE_ACCOUNT_* is set in your environment; other pipefy commands will continue to use it ...`
 
-You ran `pipefy auth login` successfully, but a higher-precedence source is set in your shell. That source will keep being used until you unset it. Common when a `.env` file sets `PIPEFY_OAUTH_*` and the user expects the stored session to take over.
+You ran `pipefy auth login` successfully, but a higher-precedence source is set in your shell. That source will keep being used until you unset it. Common when a `.env` file sets `PIPEFY_SERVICE_ACCOUNT_*` and the user expects the stored session to take over. During the deprecation window the warning fires identically for the legacy `PIPEFY_OAUTH_*` triple, naming whichever form is actually set.
 
 ### Identity mismatch (commands run as the wrong user)
 
-Run `whoami`-style queries (e.g. `pipefy graphql exec --query '{ me { email name } }'`) to confirm which identity the CLI is actually using. If you expected your own user but see a service account, check whether `--token`, `PIPEFY_TOKEN`, or a complete `PIPEFY_OAUTH_*` triple is set in your environment — any of them outranks the stored session.
+Run `whoami`-style queries (e.g. `pipefy graphql exec --query '{ me { email name } }'`) to confirm which identity the CLI is actually using. If you expected your own user but see a service account, check whether `--token`, `PIPEFY_TOKEN`, or a complete `PIPEFY_SERVICE_ACCOUNT_*` triple (or the legacy `PIPEFY_OAUTH_*` form) is set in your environment — any of them outranks the stored session.
 
 ### `State mismatch on OAuth callback (possible CSRF)`
 

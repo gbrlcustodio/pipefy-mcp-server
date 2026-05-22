@@ -4,6 +4,7 @@ from httpx import Auth
 from rapidfuzz import fuzz
 
 from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.models.field_definition import parse_field_definitions
 from pipefy_sdk.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
     GET_PHASE_CARDS_COUNT_QUERY,
@@ -80,6 +81,9 @@ class PipeService(BasePipefyClient):
         result = await self.execute_query(GET_START_FORM_FIELDS_QUERY, variables)
 
         fields = result.get("pipe", {}).get("start_form_fields", [])
+
+        if fields:
+            fields = parse_field_definitions(fields, action="return start form fields")
 
         if not fields:
             return {
@@ -265,6 +269,9 @@ class PipeService(BasePipefyClient):
 
         phase = result.get("phase", {})
         fields = phase.get("fields", [])
+
+        if fields:
+            fields = parse_field_definitions(fields, action="return phase fields")
 
         empty_reason = ""
 

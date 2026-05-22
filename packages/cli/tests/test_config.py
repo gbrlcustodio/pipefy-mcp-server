@@ -28,9 +28,11 @@ def test_env_only_resolution(
         "PIPEFY_INTERNAL_API_URL",
         "https://env-only.example.com/internal_api",
     )
-    monkeypatch.setenv("PIPEFY_OAUTH_URL", "https://env-only.example.com/oauth/token")
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "env-client")
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "env-secret")
+    monkeypatch.setenv(
+        "PIPEFY_SERVICE_ACCOUNT_URL", "https://env-only.example.com/oauth/token"
+    )
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "env-client")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "env-secret")
 
     resolved = resolve_cli_settings(
         graphql_url_flag=None,
@@ -39,9 +41,9 @@ def test_env_only_resolution(
 
     assert resolved.graphql_url == "https://env-only.example.com/graphql"
     assert resolved.internal_api_url == "https://env-only.example.com/internal_api"
-    assert resolved.oauth_url == "https://env-only.example.com/oauth/token"
-    assert resolved.oauth_client == "env-client"
-    assert resolved.oauth_secret == "env-secret"
+    assert resolved.service_account_url == "https://env-only.example.com/oauth/token"
+    assert resolved.service_account_client_id == "env-client"
+    assert resolved.service_account_client_secret == "env-secret"
 
 
 def test_dotenv_only_resolution(
@@ -55,9 +57,9 @@ def test_dotenv_only_resolution(
             """\
             PIPEFY_GRAPHQL_URL=https://dotenv.example.com/graphql
             PIPEFY_INTERNAL_API_URL=https://dotenv.example.com/internal_api
-            PIPEFY_OAUTH_URL=https://dotenv.example.com/oauth/token
-            PIPEFY_OAUTH_CLIENT=dotenv-client
-            PIPEFY_OAUTH_SECRET=dotenv-secret
+            PIPEFY_SERVICE_ACCOUNT_URL=https://dotenv.example.com/oauth/token
+            PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=dotenv-client
+            PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=dotenv-secret
             """
         ),
         encoding="utf-8",
@@ -69,7 +71,7 @@ def test_dotenv_only_resolution(
     ).pipefy
 
     assert resolved.graphql_url == "https://dotenv.example.com/graphql"
-    assert resolved.oauth_client == "dotenv-client"
+    assert resolved.service_account_client_id == "dotenv-client"
 
 
 def test_process_env_overrides_dotenv(
@@ -166,8 +168,8 @@ def test_user_toml_fallback_lowest_precedence(
             """\
             [pipefy]
             graphql_url = "https://from-toml.example.com/graphql"
-            oauth_client = "toml-client"
-            oauth_secret = "toml-secret"
+            service_account_client_id = "toml-client"
+            service_account_client_secret = "toml-secret"
             """
         ),
         encoding="utf-8",
@@ -180,7 +182,7 @@ def test_user_toml_fallback_lowest_precedence(
     ).pipefy
 
     assert resolved.graphql_url == "https://from-toml.example.com/graphql"
-    assert resolved.oauth_client == "toml-client"
+    assert resolved.service_account_client_id == "toml-client"
 
 
 def test_env_overrides_user_toml(
@@ -194,8 +196,8 @@ def test_env_overrides_user_toml(
             """\
             [pipefy]
             graphql_url = "https://from-toml.example.com/graphql"
-            oauth_client = "toml-client"
-            oauth_secret = "toml-secret"
+            service_account_client_id = "toml-client"
+            service_account_client_secret = "toml-secret"
             """
         ),
         encoding="utf-8",
@@ -227,18 +229,18 @@ def test_apply_toml_fills_only_missing_fields(
             """\
             [pipefy]
             graphql_url = "https://toml-only.example.com/graphql"
-            oauth_client = "toml-client"
+            service_account_client_id = "toml-client"
             """
         ),
         encoding="utf-8",
     )
     monkeypatch.setattr(config_module, "USER_CONFIG_PATH", cfg_path)
 
-    base = PipefySettings(oauth_client="from-env")
+    base = PipefySettings(service_account_client_id="from-env")
     merged = apply_toml_fallback(base)
 
     assert merged.graphql_url == "https://toml-only.example.com/graphql"
-    assert merged.oauth_client == "from-env"
+    assert merged.service_account_client_id == "from-env"
 
 
 def test_graphql_url_flag_localhost_rejected_without_insecure(

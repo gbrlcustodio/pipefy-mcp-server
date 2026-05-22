@@ -20,9 +20,9 @@ from pipefy_sdk.settings import PipefySettings
 def mock_settings() -> PipefySettings:
     return PipefySettings(
         graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url="https://auth.pipefy.com/oauth/token",
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
 
 

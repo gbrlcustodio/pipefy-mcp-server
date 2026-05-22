@@ -1,4 +1,4 @@
-"""Tests for ``pipefy_cli.auth`` (OAuth / bearer factory and CLI exits)."""
+"""Tests for ``pipefy_cli.auth`` (service-account / bearer factory and CLI exits)."""
 
 from __future__ import annotations
 
@@ -19,13 +19,13 @@ from pipefy_cli.main import app
 from pipefy_cli.oauth import StoredSession
 
 
-def _minimal_oauth_settings() -> PipefySettings:
+def _minimal_service_account_settings() -> PipefySettings:
     return PipefySettings(
         graphql_url="https://unit.example.com/graphql",
         internal_api_url="https://unit.example.com/internal_api",
-        oauth_url="https://unit.example.com/oauth/token",
-        oauth_client="cid",
-        oauth_secret="csecret",
+        service_account_url="https://unit.example.com/oauth/token",
+        service_account_client_id="cid",
+        service_account_client_secret="csecret",
     )
 
 
@@ -51,7 +51,7 @@ def _auth(
 
 
 def test_get_authenticated_client_passes_bearer_to_pipefy_client(clean_pipefy_env):
-    settings = _minimal_oauth_settings()
+    settings = _minimal_service_account_settings()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
         client = get_authenticated_client(settings, _auth(bearer_token="tok"))
@@ -59,16 +59,18 @@ def test_get_authenticated_client_passes_bearer_to_pipefy_client(clean_pipefy_en
         assert client is mock_pc.return_value
 
 
-def test_get_authenticated_client_oauth_mode_no_bearer(clean_pipefy_env):
-    settings = _minimal_oauth_settings()
+def test_get_authenticated_client_service_account_mode_no_bearer(clean_pipefy_env):
+    settings = _minimal_service_account_settings()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
         get_authenticated_client(settings, _auth())
         mock_pc.assert_called_once_with(settings)
 
 
-def test_cache_returns_same_instance_for_identical_oauth_settings(clean_pipefy_env):
-    settings = _minimal_oauth_settings()
+def test_cache_returns_same_instance_for_identical_service_account_settings(
+    clean_pipefy_env,
+):
+    settings = _minimal_service_account_settings()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
         first = get_authenticated_client(settings, _auth())
@@ -141,13 +143,13 @@ def _fresh_stored_session(*, access_token: str = "SESSION_ACCESS") -> StoredSess
 
 
 def _public_only_settings() -> PipefySettings:
-    """``PIPEFY_OAUTH_*`` triple absent → priority 3 unavailable, falls through to 4."""
+    """``PIPEFY_SERVICE_ACCOUNT_*`` triple absent → priority 3 unavailable, falls through to 4."""
     return PipefySettings(graphql_url="https://unit.example.com/graphql")
 
 
 def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
     """Priority 1/2 (bearer) MUST short-circuit before the keychain is even consulted."""
-    settings = _minimal_oauth_settings()
+    settings = _minimal_service_account_settings()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.ensure_fresh_session") as mock_ensure,
@@ -165,9 +167,9 @@ def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
         mock_ensure.assert_not_called()
 
 
-def test_oauth_client_creds_wins_over_stored_session(clean_pipefy_env):
-    """Priority 3 (full OAuth triple) MUST short-circuit before the keychain is consulted."""
-    settings = _minimal_oauth_settings()
+def test_service_account_creds_win_over_stored_session(clean_pipefy_env):
+    """Priority 3 (full service-account triple) MUST short-circuit before the keychain is consulted."""
+    settings = _minimal_service_account_settings()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient"),

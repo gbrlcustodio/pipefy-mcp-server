@@ -173,6 +173,30 @@ class TestCreateCardTool:
             assert result.isError is False, "Unexpected tool result"
             mock_pipefy_client.create_card.assert_not_called()
 
+    @pytest.mark.parametrize(
+        "client_session",
+        [elicitation_callback_for(action="accept", content={})],
+        indirect=True,
+    )
+    async def test_create_card_returns_friendly_error_for_malformed_form_fields(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        extract_payload,
+    ):
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": [{"label": "Status", "type": "select"}]
+        }
+
+        async with client_session as session:
+            result = await session.call_tool("create_card", {"pipe_id": pipe_id})
+
+        payload = extract_payload(result)
+        assert payload.get("success") is False
+        assert "interactive form" in tool_error_message(payload).lower()
+        mock_pipefy_client.create_card.assert_not_called()
+
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_without_elicitation(
         self,
@@ -2316,13 +2340,13 @@ class TestDeleteCardRelation:
         assert "did not succeed" in tool_error_message(payload).lower()
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_not_configured_returns_oauth_message(
+    async def test_not_configured_returns_service_account_message(
         self,
         client_session,
         mock_pipefy_client,
         extract_payload,
     ) -> None:
-        """delete_card_relation requires internal API (OAuth) credentials."""
+        """delete_card_relation requires internal API (service-account) credentials."""
         mock_pipefy_client.internal_api_available = False
         async with client_session as session:
             result = await session.call_tool(
@@ -2338,7 +2362,7 @@ class TestDeleteCardRelation:
         mock_pipefy_client.delete_card_relation.assert_not_called()
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "OAuth" in tool_error_message(payload)
+        assert "service-account credentials" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -2410,6 +2434,36 @@ class TestSkipElicitation:
         mock_pipefy_client.create_card.assert_called_once_with(
             str(pipe_id), {"f1": "a"}
         )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_create_card_skip_elicitation_returns_error_for_malformed_fields(
+        self, client_session, mock_pipefy_client, pipe_id, extract_payload
+    ):
+        """skip_elicitation=True surfaces SDK field-definition validation errors."""
+        from pipefy_sdk.models.field_definition import MalformedFieldDefinitionError
+
+        mock_pipefy_client.get_start_form_fields.side_effect = (
+            MalformedFieldDefinitionError(
+                "Cannot return start form fields: 1 field definition(s) from Pipefy "
+                "are missing required 'id' or 'type'. "
+                "The pipe configuration may be incomplete or unsupported."
+            )
+        )
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {
+                    "pipe_id": pipe_id,
+                    "fields": {"status": "open"},
+                    "skip_elicitation": True,
+                },
+            )
+
+        payload = extract_payload(result)
+        assert payload.get("success") is False
+        assert "return start form fields" in tool_error_message(payload).lower()
+        mock_pipefy_client.create_card.assert_not_called()
 
     @pytest.mark.parametrize(
         "client_session",

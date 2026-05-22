@@ -31,16 +31,16 @@ pipefy skills show pipes-and-cards | pbcopy
 Same `PIPEFY_*` environment variables as `pipefy-mcp-server` (`.env` in CWD is loaded automatically):
 
 ```env
-PIPEFY_OAUTH_CLIENT=your_client_id
-PIPEFY_OAUTH_SECRET=your_client_secret
+PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=your_client_id
+PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=your_client_secret
 PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql
-PIPEFY_OAUTH_URL=https://app.pipefy.com/oauth/token
+PIPEFY_SERVICE_ACCOUNT_URL=https://app.pipefy.com/oauth/token
 PIPEFY_INTERNAL_API_URL=https://app.pipefy.com/internal_api
 ```
 
 Full guide: [`docs/setup.md`](../../docs/setup.md). CLI-focused docs: [`docs/cli/`](../../docs/cli/README.md).
 
-Use `PIPEFY_TOKEN` (or `--token`) for a direct bearer token instead of OAuth.
+Use `PIPEFY_TOKEN` (or `--token`) for a direct bearer token instead of service-account credentials.
 
 ## Output modes
 

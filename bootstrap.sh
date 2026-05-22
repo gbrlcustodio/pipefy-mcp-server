@@ -14,5 +14,5 @@ if [[ -f .env ]]; then
   echo ".env already exists; not overwriting."
 else
   cp .env.example .env
-  echo "Created .env from .env.example — set PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, and any optional keys."
+  echo "Created .env from .env.example — set PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET, and any optional keys."
 fi

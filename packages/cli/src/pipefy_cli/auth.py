@@ -4,7 +4,7 @@ The credential precedence chain (most explicit wins) is:
 
 1. ``--token`` CLI flag
 2. ``PIPEFY_TOKEN`` env var
-3. ``PIPEFY_OAUTH_*`` triple → client-credentials grant (service account)
+3. ``PIPEFY_SERVICE_ACCOUNT_*`` triple → client-credentials grant (service account)
 4. Stored user session from ``pipefy auth login`` (keychain) — refreshed
    eagerly when the access token is within the leeway window
 
@@ -29,7 +29,7 @@ from pipefy_sdk import (
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.config import (
-    describe_missing_oauth_vars,
+    describe_missing_service_account_vars,
     ensure_public_graphql_configured,
 )
 from pipefy_cli.oauth import RefreshError, ensure_fresh_session, load_session
@@ -100,9 +100,9 @@ def _cache_key(
     return (
         (pipefy_settings.graphql_url or "").strip(),
         (pipefy_settings.internal_api_url or "").strip(),
-        (pipefy_settings.oauth_url or "").strip(),
-        (pipefy_settings.oauth_client or "").strip(),
-        (pipefy_settings.oauth_secret or "").strip(),
+        (pipefy_settings.service_account_url or "").strip(),
+        (pipefy_settings.service_account_client_id or "").strip(),
+        (pipefy_settings.service_account_client_secret or "").strip(),
         bool(pipefy_settings.allow_insecure_urls),
         (bearer_token or "").strip(),
     )
@@ -123,7 +123,7 @@ def detect_all_sources(
         sources.append(
             "flag-token" if auth.bearer_token.source == "flag" else "env-token"
         )
-    if not describe_missing_oauth_vars(pipefy_settings):
+    if not describe_missing_service_account_vars(pipefy_settings):
         sources.append("service-account")
     if (
         auth.oidc_client is not None
@@ -147,10 +147,10 @@ def detect_auth_source(
 
 
 def _missing_auth_message(pipefy_settings: PipefySettings) -> str:
-    missing = describe_missing_oauth_vars(pipefy_settings)
+    missing = describe_missing_service_account_vars(pipefy_settings)
     return (
         "Missing authentication. Use --token, set PIPEFY_TOKEN, configure "
-        f"PIPEFY_OAUTH_* ({missing}), or run `pipefy auth login`. "
+        f"PIPEFY_SERVICE_ACCOUNT_* ({missing}), or run `pipefy auth login`. "
         f"See {DOCS_CLI_AUTH_REF}."
     )
 
@@ -254,9 +254,9 @@ def get_authenticated_client(
     client = PipefyClient(pipefy_settings)
     internal_client = InternalApiClient(
         url=pipefy_settings.internal_api_url,
-        oauth_url=pipefy_settings.oauth_url,
-        oauth_client=pipefy_settings.oauth_client,
-        oauth_secret=pipefy_settings.oauth_secret,
+        service_account_url=pipefy_settings.service_account_url,
+        service_account_client_id=pipefy_settings.service_account_client_id,
+        service_account_client_secret=pipefy_settings.service_account_client_secret,
         allow_insecure_urls=pipefy_settings.allow_insecure_urls,
     )
     client.set_internal_api_client(internal_client)

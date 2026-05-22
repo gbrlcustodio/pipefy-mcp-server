@@ -20,6 +20,10 @@ from urllib.parse import urlparse
 _SERVICE = "pipefy-cli"
 
 
+class SessionDeleteError(RuntimeError):
+    """Keychain backend rejected the delete (distinct from "entry absent")."""
+
+
 @dataclass(frozen=True)
 class StoredSession:
     """Persisted session shape (JSON-serialised under one keychain key)."""
@@ -112,7 +116,14 @@ def load_session(*, issuer: str, client_id: str) -> StoredSession | None:
 
 
 def delete_session(*, issuer: str, client_id: str) -> bool:
-    """Remove the stored session. Returns True if an entry was present."""
+    """Remove the stored session. Returns True if an entry was present.
+
+    Raises:
+        SessionDeleteError: When the keychain backend rejects the operation
+            (distinct from "no entry to delete"). The local credential may
+            still exist; callers should surface a user-facing error rather
+            than claim a successful sign-out.
+    """
     import keyring
     from keyring.errors import KeyringError, PasswordDeleteError
 
@@ -120,8 +131,8 @@ def delete_session(*, issuer: str, client_id: str) -> bool:
         keyring.delete_password(_SERVICE, keychain_key(issuer, client_id))
     except PasswordDeleteError:
         return False
-    except KeyringError:
-        return False
+    except KeyringError as exc:
+        raise SessionDeleteError(str(exc)) from exc
     return True
 
 
@@ -154,6 +165,7 @@ def _optional_str(value: object) -> str | None:
 
 
 __all__ = [
+    "SessionDeleteError",
     "StoredSession",
     "delete_session",
     "keychain_backend_name",

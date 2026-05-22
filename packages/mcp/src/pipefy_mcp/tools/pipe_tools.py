@@ -17,6 +17,7 @@ from pipefy_sdk import (
     copy_card_search,
     create_form_model,
 )
+from pipefy_sdk.models.form import MalformedFieldDefinitionError
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
@@ -128,9 +129,12 @@ class PipeTools:
                 skip_elicitation: When True, bypass interactive elicitation and send
                     ``fields`` directly to the API. Recommended for AI agent workflows.
             """
-            form_fields = await client.get_start_form_fields(
-                pipe_id, required_fields_only
-            )
+            try:
+                form_fields = await client.get_start_form_fields(
+                    pipe_id, required_fields_only
+                )
+            except MalformedFieldDefinitionError as exc:
+                return tool_error(str(exc))
 
             expected_fields = _filter_editable_field_definitions(
                 form_fields.get("start_form_fields", [])
@@ -150,6 +154,8 @@ class PipeTools:
                         expected_fields=expected_fields,
                         ctx=ctx,
                     )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
                 except UserCancelledError:
                     return tool_error("Card creation cancelled by user.")
             elif expected_fields:
@@ -420,15 +426,16 @@ class PipeTools:
             confirm: bool = False,
             debug: bool = False,
         ) -> dict:
-            """Remove a link between two related cards (requires OAuth credentials).
+            """Remove a link between two related cards (requires service-account credentials).
 
             ``source_id`` is the **pipe relation** id from ``get_pipe_relations`` (same as
             ``create_card_relation``). Two-step flow: preview with ``confirm=False`` (default),
             then execute with ``confirm=True`` after explicit approval.
 
-            Requires OAuth credentials (PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET,
-            PIPEFY_OAUTH_URL) because the ``deleteCardRelation`` mutation is only available
-            on the internal API, not the public GraphQL schema.
+            Requires service-account credentials (PIPEFY_SERVICE_ACCOUNT_URL,
+            PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET) because the
+            ``deleteCardRelation`` mutation is only available on the internal API, not the
+            public GraphQL schema.
 
             Args:
                 child_id: Child card ID in the relation.
@@ -448,8 +455,9 @@ class PipeTools:
             if not client.internal_api_available:
                 return build_relation_error_payload(
                     message=(
-                        "delete_card_relation requires OAuth credentials "
-                        "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL). "
+                        "delete_card_relation requires service-account credentials "
+                        "(PIPEFY_SERVICE_ACCOUNT_URL, PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
+                        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
                         "The deleteCardRelation mutation is only available on the "
                         "internal API. Check .env.example for the required variables."
                     ),
@@ -994,9 +1002,12 @@ class PipeTools:
             Returns:
                 dict: GraphQL response with success status and updated card information.
             """
-            phase_fields_result = await client.get_phase_fields(
-                phase_id, required_fields_only
-            )
+            try:
+                phase_fields_result = await client.get_phase_fields(
+                    phase_id, required_fields_only
+                )
+            except MalformedFieldDefinitionError as exc:
+                return tool_error(str(exc))
             expected_fields = _filter_editable_field_definitions(
                 phase_fields_result.get("fields", [])
             )
@@ -1016,6 +1027,8 @@ class PipeTools:
                         expected_fields=expected_fields,
                         ctx=ctx,
                     )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
                 except UserCancelledError:
                     return tool_error("Phase field update cancelled by user.")
             elif expected_fields:

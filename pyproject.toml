@@ -32,7 +32,8 @@ dev = [
 ]
 
 [tool.ruff]
-lint.extend-select = ["I"]
+lint.extend-select = ["I", "S101"]
+lint.per-file-ignores = { "**/tests/**" = ["S101"] }
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages/sdk/tests", "packages/mcp/tests", "packages/cli/tests"]

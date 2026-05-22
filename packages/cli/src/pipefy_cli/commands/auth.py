@@ -16,6 +16,7 @@ from gql.transport.exceptions import (
     TransportServerError,
 )
 from pipefy_sdk import MePayload, PipefySettings
+from pipefy_sdk.settings import _LEGACY_ENV_KEYS_TO_NEW
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
@@ -30,9 +31,14 @@ from pipefy_cli.oauth import (
     DiscoveryPolicy,
     LoginError,
     RefreshError,
+    RevocationError,
+    RevocationUnsupportedError,
+    SessionDeleteError,
+    delete_session,
     ensure_fresh_session,
     keychain_backend_name,
     load_session,
+    revoke_session,
     run_login,
     store_session,
 )
@@ -71,25 +77,25 @@ auth_app = typer.Typer(
     no_args_is_help=True,
 )
 
-_SERVICE_ACCOUNT_ENV_KEYS = (
-    "PIPEFY_OAUTH_URL",
-    "PIPEFY_OAUTH_CLIENT",
-    "PIPEFY_OAUTH_SECRET",
-)
+_SERVICE_ACCOUNT_ENV_KEYS = tuple(_LEGACY_ENV_KEYS_TO_NEW.values())
+_LEGACY_SERVICE_ACCOUNT_ENV_KEYS = tuple(_LEGACY_ENV_KEYS_TO_NEW.keys())
 
 
 def _session_masking_env_vars() -> list[str]:
-    """Env vars that outrank a stored session in the credential precedence chain.
+    """Env vars in ``os.environ`` that outrank a stored session.
 
-    Only ``os.environ`` is consulted — by the precedence model, ``.env`` defaults
-    sit below the stored session. ``PIPEFY_OAUTH_*`` is listed only when the
-    *complete* triple is configured (otherwise the client-credentials path
-    wouldn't activate and the warning would be misleading).
+    A service-account triple counts only when *complete* (otherwise the
+    client-credentials path wouldn't activate and the warning would mislead).
+    Both the canonical and legacy forms are accepted during the deprecation
+    window, and the label echoes whichever the user actually set so they know
+    which keys to unset.
     """
     env_vars: list[str] = []
     if os.environ.get("PIPEFY_TOKEN"):
         env_vars.append("PIPEFY_TOKEN")
     if all(os.environ.get(k) for k in _SERVICE_ACCOUNT_ENV_KEYS):
+        env_vars.append("PIPEFY_SERVICE_ACCOUNT_*")
+    elif all(os.environ.get(k) for k in _LEGACY_SERVICE_ACCOUNT_ENV_KEYS):
         env_vars.append("PIPEFY_OAUTH_*")
     return env_vars
 
@@ -204,7 +210,7 @@ def auth_login(
 _AUTH_SOURCE_LABELS: dict[AuthSource, str] = {
     "flag-token": "--token flag",
     "env-token": "PIPEFY_TOKEN environment variable",
-    "service-account": "PIPEFY_OAUTH_* (client credentials)",
+    "service-account": "PIPEFY_SERVICE_ACCOUNT_* (client credentials)",
     "stored-session": "stored session (`pipefy auth login`)",
     "none": "none",
 }
@@ -260,7 +266,7 @@ def _render_status_text(report: AuthStatusReport) -> None:
     if not report.signed_in:
         typer.echo(
             "Not signed in. Run `pipefy auth login`, set PIPEFY_TOKEN, or "
-            f"configure PIPEFY_OAUTH_*. See {DOCS_CLI_AUTH_REF}."
+            f"configure PIPEFY_SERVICE_ACCOUNT_*. See {DOCS_CLI_AUTH_REF}."
         )
         return
 
@@ -430,6 +436,70 @@ def auth_status(
         raise typer.Exit(exit_.exit_code) from exit_
 
     _render(report, json_out=json_out)
+
+
+@auth_app.command("logout")
+def auth_logout(ctx: typer.Context) -> None:
+    """Revoke the stored refresh token at the IdP and clear the local session."""
+    settings, auth = settings_and_auth_from_ctx(ctx)
+    if auth.oidc_client is None:
+        typer.echo(
+            "PIPEFY_AUTH_URL is required for `pipefy auth logout` (the OIDC "
+            "issuer URL used at login). "
+            f"See {DOCS_CLI_AUTH_REF}.",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    issuer = auth.oidc_client.issuer_url
+    client_id = auth.oidc_client.client_id
+
+    session = load_session(issuer=issuer, client_id=client_id)
+    if session is None:
+        typer.echo("Not signed in. Nothing to do.")
+        return
+
+    # Revoke at the IdP first — once we delete the keychain entry we no longer
+    # have the refresh_token to send. On any revoke failure still proceed to
+    # delete (warning makes the difference honest: server-side credential may
+    # remain valid until natural expiry).
+    revoke_warning: str | None = None
+    try:
+        revoke_session(
+            issuer=issuer,
+            client_id=client_id,
+            refresh_token=session.refresh_token,
+            policy=DiscoveryPolicy(allow_insecure_urls=settings.allow_insecure_urls),
+        )
+    except RevocationUnsupportedError:
+        revoke_warning = (
+            "Pipefy auth server does not advertise a logout endpoint; the "
+            "refresh token could not be revoked server-side. Clearing local "
+            "session only."
+        )
+    except RevocationError as exc:
+        revoke_warning = (
+            f"Could not revoke refresh token at the IdP: {exc}. Clearing "
+            "local session anyway; the refresh token may remain valid at the "
+            "server until natural expiry."
+        )
+
+    try:
+        delete_session(issuer=issuer, client_id=client_id)
+    except SessionDeleteError as exc:
+        if revoke_warning:
+            typer.echo(revoke_warning, err=True)
+        typer.echo(
+            f"Could not delete local session from the keychain: {exc}. "
+            "The stored credential may still be present; remove it manually "
+            f"via your OS keychain (service: 'pipefy-cli'). See {DOCS_CLI_AUTH_REF}.",
+            err=True,
+        )
+        raise typer.Exit(1) from exc
+
+    if revoke_warning:
+        typer.echo(revoke_warning, err=True)
+    typer.echo(f"Signed out of Pipefy ({issuer}).")
 
 
 __all__ = ["auth_app"]

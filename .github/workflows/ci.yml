@@ -67,6 +67,7 @@ jobs:
             "sdk": Path("packages/sdk/src/pipefy_sdk/__init__.py"),
             "mcp": Path("packages/mcp/src/pipefy_mcp/__init__.py"),
             "cli": Path("packages/cli/src/pipefy_cli/__init__.py"),
+            "auth": Path("packages/auth/src/pipefy_auth/__init__.py"),
         }
         rx = re.compile(r'^__version__\s*=\s*["\']([^"\']+)["\']', re.M)
         found = {}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bump the lockstep workspace version across SDK, MCP, CLI, and root workspace meta."""
+"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, and root workspace meta."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ INIT_PATHS = (
     REPO_ROOT / "packages/sdk/src/pipefy_sdk/__init__.py",
     REPO_ROOT / "packages/mcp/src/pipefy_mcp/__init__.py",
     REPO_ROOT / "packages/cli/src/pipefy_cli/__init__.py",
+    REPO_ROOT / "packages/auth/src/pipefy_auth/__init__.py",
 )
 
 ROOT_PROJECT_VERSION_RE = re.compile(

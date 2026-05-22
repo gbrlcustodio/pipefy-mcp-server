@@ -473,7 +473,6 @@ async def test_get_agents_usage_transport_error(mock_settings):
         await service.get_agents_usage(_ORG_UUID_FOR_TESTS, filter_date)
 
 
-
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_logs_transport_error(mock_settings):

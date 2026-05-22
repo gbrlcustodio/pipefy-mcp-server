@@ -83,7 +83,9 @@ async def test_list_portals_success(
     mock_portal_client.list_portals = AsyncMock(return_value=[_PORTAL_LIST_NODE])
 
     async with portal_session as session:
-        result = await session.call_tool("list_portals", {"organization_uuid": "org-abc-123"})
+        result = await session.call_tool(
+            "list_portals", {"organization_uuid": "org-abc-123"}
+        )
 
     assert result.isError is False
     mock_portal_client.list_portals.assert_awaited_once_with(
@@ -148,7 +150,9 @@ async def test_list_portals_empty_returns_empty_list(
     mock_portal_client.list_portals = AsyncMock(return_value=[])
 
     async with portal_session as session:
-        result = await session.call_tool("list_portals", {"organization_uuid": "org-empty"})
+        result = await session.call_tool(
+            "list_portals", {"organization_uuid": "org-empty"}
+        )
 
     assert result.isError is False
     payload = extract_payload(result)
@@ -166,7 +170,9 @@ async def test_list_portals_value_error_returns_error_envelope(
     )
 
     async with portal_session as session:
-        result = await session.call_tool("list_portals", {"organization_uuid": "org-bad"})
+        result = await session.call_tool(
+            "list_portals", {"organization_uuid": "org-bad"}
+        )
 
     assert result.isError is False
     payload = extract_payload(result)
@@ -203,7 +209,9 @@ async def test_get_portal_not_found_returns_error_envelope(
     )
 
     async with portal_session as session:
-        result = await session.call_tool("get_portal", {"portal_uuid": "portal-missing"})
+        result = await session.call_tool(
+            "get_portal", {"portal_uuid": "portal-missing"}
+        )
 
     assert result.isError is False
     payload = extract_payload(result)
@@ -221,7 +229,9 @@ async def test_list_portals_transport_error_returns_error_envelope(
     )
 
     async with portal_session as session:
-        result = await session.call_tool("list_portals", {"organization_uuid": "org-abc-123"})
+        result = await session.call_tool(
+            "list_portals", {"organization_uuid": "org-abc-123"}
+        )
 
     assert result.isError is False
     payload = extract_payload(result)

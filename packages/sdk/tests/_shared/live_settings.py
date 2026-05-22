@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+from httpx import Auth
+from pipefy_auth import AuthSettings, resolve_pipefy_auth
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,17 +33,40 @@ def live_pipefy_settings() -> PipefySettings:
     return _resolved_pipefy()
 
 
-def pipefy_live_configured() -> bool:
-    """Return True when all service-account + GraphQL credentials are present."""
-    p = _resolved_pipefy()
-    return bool(
-        p.graphql_url
-        and str(p.graphql_url).startswith(("http://", "https://"))
-        and p.service_account_url
-        and str(p.service_account_url).startswith(("http://", "https://"))
-        and p.service_account_client_id
-        and p.service_account_client_secret
+def live_auth_settings() -> AuthSettings:
+    """Load ``AuthSettings`` from the process environment and optional ``.env`` file."""
+    return AuthSettings()
+
+
+def live_resolved_auth() -> Auth:
+    """Resolve a live ``httpx.Auth`` via the production precedence chain, or skip the test."""
+    a = live_auth_settings()
+    resolved = resolve_pipefy_auth(
+        static_token=a.static_token,
+        service_account=a.to_service_account(),
+        oidc_client=a.to_oidc_client(),
     )
+    if resolved is None:
+        pytest.skip(
+            "No live Pipefy auth configured "
+            "(set PIPEFY_TOKEN or PIPEFY_SERVICE_ACCOUNT_* in .env)"
+        )
+    return resolved
+
+
+def pipefy_live_configured() -> bool:
+    """Return True when GraphQL URL plus at least one auth tier is configured."""
+    p = _resolved_pipefy()
+    a = live_auth_settings()
+    has_url = bool(
+        p.graphql_url and str(p.graphql_url).startswith(("http://", "https://"))
+    )
+    has_auth = bool(
+        (a.static_token and a.static_token.strip())
+        or a.to_service_account() is not None
+        or a.to_oidc_client() is not None
+    )
+    return has_url and has_auth
 
 
 def require_live_creds() -> None:
@@ -49,5 +74,5 @@ def require_live_creds() -> None:
     if not pipefy_live_configured():
         pytest.skip(
             "Pipefy credentials not configured "
-            "(PIPEFY_GRAPHQL_URL + PIPEFY_SERVICE_ACCOUNT_* in .env)"
+            "(PIPEFY_GRAPHQL_URL plus PIPEFY_TOKEN or PIPEFY_SERVICE_ACCOUNT_* in .env)"
         )

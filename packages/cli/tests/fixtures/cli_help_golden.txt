@@ -1814,12 +1814,12 @@ Usage: pipefy portal [OPTIONS] COMMAND [ARGS]...
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/get
-Usage: pipefy portal get [OPTIONS] UUID
+Usage: pipefy portal get [OPTIONS] PORTAL_UUID
 
  Fetch a portal by UUID.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    uuid      TEXT  Portal UUID. [required]                                 │
+│ *    portal_uuid      TEXT  Portal UUID. [required]                          │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --json  -j        Print machine-readable JSON to stdout.                     │
@@ -1832,12 +1832,12 @@ Usage: pipefy portal list [OPTIONS]
  List portals for an organization.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --org-uuid             TEXT  Organization UUID, or numeric organization   │
-│                                 id (string).                                 │
-│                                 [required]                                   │
-│    --search-term          TEXT  Optional portal name filter.                 │
-│    --json         -j            Print machine-readable JSON to stdout.       │
-│    --help                       Show this message and exit.                  │
+│ *  --organization-uuid          TEXT  Organization UUID, or numeric          │
+│                                       organization id (string).              │
+│                                       [required]                             │
+│    --search-term                TEXT  Optional portal name filter.           │
+│    --json               -j            Print machine-readable JSON to stdout. │
+│    --help                             Show this message and exit.            │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP record

@@ -51,7 +51,7 @@ def test_portal_list_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     ):
         result = runner.invoke(
             app,
-            ["portal", "list", "--org-uuid", "org-123", "--json"],
+            ["portal", "list", "--organization-uuid", "org-123", "--json"],
         )
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
     assert json.loads(result.stdout) == payload

@@ -8,6 +8,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Self
 
+from pipefy_auth import DEFAULT_AUTH_CLIENT_ID
 from pipefy_sdk import PipefySettings
 from pipefy_sdk.utils.url_ssrf import validate_https_service_endpoint_url
 from pydantic import Field, ValidationError, model_validator
@@ -41,9 +42,6 @@ def _warn_once_for_legacy_toml_key(legacy_key: str, new_key: str) -> None:
 def _reset_legacy_toml_warning_state() -> None:
     """Test helper: clear the one-shot dedup so a fixture can re-trigger the warning."""
     _warned_legacy_toml_keys.clear()
-
-
-DEFAULT_AUTH_CLIENT_ID = "pipefy-cli"
 
 
 class CliSettings(BaseSettings):
@@ -232,7 +230,6 @@ def describe_missing_service_account_vars(pipefy: PipefySettings) -> str:
 
 __all__ = [
     "CliSettings",
-    "DEFAULT_AUTH_CLIENT_ID",
     "USER_CONFIG_PATH",
     "apply_toml_fallback",
     "describe_missing_service_account_vars",

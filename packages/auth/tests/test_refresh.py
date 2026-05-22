@@ -1,4 +1,4 @@
-"""Unit tests for ``oauth/refresh.py`` — ``ensure_fresh_session`` + refresh grant."""
+"""Unit tests for ``pipefy_auth.refresh`` — ``ensure_fresh_session`` + refresh grant."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import httpx
 import pytest
 from conftest import InMemoryKeyring
 
-from pipefy_cli.oauth import refresh, storage
+from pipefy_auth import refresh, storage
 
 _ISSUER = "https://signin.example.com/realms/pipefy"
 _CLIENT_ID = "pipefy-cli"

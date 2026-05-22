@@ -10,9 +10,9 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pipefy_auth import RefreshError, StoredSession, storage
 
 from pipefy_cli.main import app
-from pipefy_cli.oauth import RefreshError, StoredSession, storage
 
 _ISSUER = "https://signin.example.com/realms/pipefy"
 _CLIENT_ID = "pipefy-cli"

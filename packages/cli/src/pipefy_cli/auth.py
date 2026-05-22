@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Literal, NoReturn
 
 import typer
+from pipefy_auth import OidcClient, RefreshError, ensure_fresh_session, load_session
 from pipefy_sdk import (
     AiAutomationService,
     InternalApiClient,
@@ -32,7 +33,6 @@ from pipefy_cli.config import (
     describe_missing_service_account_vars,
     ensure_public_graphql_configured,
 )
-from pipefy_cli.oauth import RefreshError, ensure_fresh_session, load_session
 
 AuthSource = Literal[
     "flag-token",
@@ -41,18 +41,6 @@ AuthSource = Literal[
     "stored-session",
     "none",
 ]
-
-
-@dataclass(frozen=True)
-class OidcClient:
-    """OIDC client identity: issuer URL + the public client id registered there.
-
-    The two fields are a single configurable unit; presence of an :class:`OidcClient`
-    on :class:`AuthContext` is what gates tier 4 of the credential precedence chain.
-    """
-
-    issuer_url: str
-    client_id: str
 
 
 @dataclass(frozen=True)
@@ -270,7 +258,6 @@ __all__ = [
     "AuthContext",
     "AuthSource",
     "BearerToken",
-    "OidcClient",
     "clear_authenticated_client_cache",
     "detect_all_sources",
     "detect_auth_source",

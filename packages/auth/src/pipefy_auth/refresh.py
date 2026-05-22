@@ -6,9 +6,9 @@ import time
 
 import httpx
 
-from pipefy_cli.oauth import _http
-from pipefy_cli.oauth.discovery import fetch_provider_metadata
-from pipefy_cli.oauth.storage import StoredSession, load_session, store_session
+from pipefy_auth import _http
+from pipefy_auth.discovery import fetch_provider_metadata
+from pipefy_auth.storage import StoredSession, load_session, store_session
 
 _LEEWAY_S = 60
 _TIMEOUT_S = 30.0

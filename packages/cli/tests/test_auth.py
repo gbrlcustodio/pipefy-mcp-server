@@ -7,16 +7,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import typer
+from pipefy_auth import OidcClient, StoredSession
 from pipefy_sdk import PipefySettings
 
 from pipefy_cli.auth import (
     AuthContext,
     BearerToken,
-    OidcClient,
     get_authenticated_client,
 )
 from pipefy_cli.main import app
-from pipefy_cli.oauth import StoredSession
 
 
 def _minimal_service_account_settings() -> PipefySettings:
@@ -233,7 +232,7 @@ def test_cache_invalidates_when_access_token_rotates(clean_pipefy_env):
 
 def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
     """RefreshError from ensure_fresh_session surfaces as exit(2) + relogin message."""
-    from pipefy_cli.oauth import RefreshError
+    from pipefy_auth import RefreshError
 
     settings = _public_only_settings()
     with (

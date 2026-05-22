@@ -11,10 +11,10 @@ import time
 import httpx
 import pytest
 from conftest import InMemoryKeyring
+from pipefy_auth import discovery, flow, loopback, pkce, storage
+from pipefy_auth.discovery import ProviderMetadata
 
 from pipefy_cli.main import app as cli_app
-from pipefy_cli.oauth import discovery, flow, loopback, pkce, storage
-from pipefy_cli.oauth.discovery import ProviderMetadata
 
 # --------------------------------------------------------------------------- #
 # PKCE                                                                        #

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import httpx
 
-from pipefy_cli.oauth import _http
-from pipefy_cli.oauth.discovery import DiscoveryPolicy, fetch_provider_metadata
+from pipefy_auth import _http
+from pipefy_auth.discovery import DiscoveryPolicy, fetch_provider_metadata
 
 _TIMEOUT_S = 30.0
 

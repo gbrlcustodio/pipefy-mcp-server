@@ -17,7 +17,7 @@ import time
 from dataclasses import asdict, dataclass
 from urllib.parse import urlparse
 
-_SERVICE = "pipefy-cli"
+_SERVICE = "pipefy"
 
 
 class SessionDeleteError(RuntimeError):

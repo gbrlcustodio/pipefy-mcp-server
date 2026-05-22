@@ -10,14 +10,14 @@ from urllib.parse import urlencode
 
 import httpx
 
-from pipefy_cli.oauth import _http
-from pipefy_cli.oauth.discovery import (
+from pipefy_auth import _http
+from pipefy_auth.discovery import (
     DiscoveryPolicy,
     ProviderMetadata,
     fetch_provider_metadata,
 )
-from pipefy_cli.oauth.loopback import CallbackResult, LoopbackCapture
-from pipefy_cli.oauth.pkce import challenge_from_verifier, generate_verifier
+from pipefy_auth.loopback import CallbackResult, LoopbackCapture
+from pipefy_auth.pkce import challenge_from_verifier, generate_verifier
 
 _DEFAULT_SCOPES = ("openid", "profile", "email", "offline_access")
 _TOKEN_EXCHANGE_TIMEOUT_S = 30.0

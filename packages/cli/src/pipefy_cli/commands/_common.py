@@ -11,13 +11,13 @@ from typing import Any, TypeVar
 
 import typer
 from gql.transport.exceptions import TransportError, TransportQueryError
+from pipefy_auth import OidcClient
 from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
 from pipefy_sdk.exceptions import PipefyError
 
 from pipefy_cli.auth import (
     AuthContext,
     BearerToken,
-    OidcClient,
     get_authenticated_client,
 )
 from pipefy_cli.output import render_json, render_rich

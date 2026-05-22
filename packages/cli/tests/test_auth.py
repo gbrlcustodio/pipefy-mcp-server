@@ -79,6 +79,24 @@ def test_get_authenticated_client_service_account_wires_internal_api(clean_pipef
         mock_internal.assert_called_once()
 
 
+def test_get_authenticated_client_bearer_path_shares_auth_with_internal_api(
+    clean_pipefy_env,
+):
+    """Both clients receive the SAME ``auth`` instance on the bearer path."""
+    settings = _minimal_service_account_settings()
+    with (
+        patch("pipefy_cli.auth.PipefyClient") as mock_pc,
+        patch("pipefy_cli.auth.InternalApiClient") as mock_internal,
+        patch("pipefy_cli.auth.AiAutomationService"),
+    ):
+        mock_pc.return_value = MagicMock()
+        get_authenticated_client(settings, _auth(bearer_token="tok"))
+        pc_auth = mock_pc.call_args.kwargs["auth"]
+        internal_auth = mock_internal.call_args.kwargs["auth"]
+        assert isinstance(pc_auth, StaticBearerAuth)
+        assert internal_auth is pc_auth
+
+
 def test_cache_returns_same_instance_for_identical_service_account_settings(
     clean_pipefy_env,
 ):

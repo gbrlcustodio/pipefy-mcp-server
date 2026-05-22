@@ -115,8 +115,15 @@ class TestServicesContainer:
         mock_ai_automation_service_class,
         monkeypatch,
     ):
-        """``PIPEFY_TOKEN`` outranks ``PIPEFY_SERVICE_ACCOUNT_*`` (same precedence as the CLI)."""
-        mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
+        """``PIPEFY_TOKEN`` outranks ``PIPEFY_SERVICE_ACCOUNT_*`` (same precedence as the CLI).
+
+        Also asserts that the bearer path wires ``InternalApiClient`` +
+        ``AiAutomationService`` with the SAME ``auth`` instance
+        ``PipefyClient`` got, so GraphQL auth and AI automation can't drift.
+        """
+        mock_client = Mock(spec=PipefyClient)
+        mock_client.client = Mock()
+        mock_pipefy_client_class.return_value = mock_client
         monkeypatch.setenv("PIPEFY_TOKEN", "env-bearer")
         settings = Settings(
             pipefy=PipefySettings(
@@ -127,8 +134,14 @@ class TestServicesContainer:
             )
         )
         ServicesContainer().initialize_services(settings)
-        auth = mock_pipefy_client_class.call_args.kwargs["auth"]
-        assert isinstance(auth, StaticBearerAuth)
+        pc_auth = mock_pipefy_client_class.call_args.kwargs["auth"]
+        assert isinstance(pc_auth, StaticBearerAuth)
+        mock_internal_api_client_class.assert_called_once()
+        assert mock_internal_api_client_class.call_args.kwargs["auth"] is pc_auth
+        mock_ai_automation_service_class.assert_called_once()
+        mock_client.set_ai_automation_service.assert_called_once_with(
+            mock_ai_automation_service_class.return_value
+        )
 
     @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.InternalApiClient")

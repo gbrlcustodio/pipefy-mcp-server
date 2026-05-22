@@ -50,8 +50,8 @@ class PortalService:
     def __init__(
         self,
         settings: PipefySettings,
-        auth: Auth | None = None,
         *,
+        auth: Auth,
         internal_api_client: InternalApiClient | None = None,
     ) -> None:
         """Wire clients for Interfaces schema and optional internal_api mutations.

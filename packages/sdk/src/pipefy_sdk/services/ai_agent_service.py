@@ -65,7 +65,8 @@ class AiAgentService(BasePipefyClient):
     def __init__(
         self,
         settings: PipefySettings,
-        auth: Auth | None = None,
+        *,
+        auth: Auth,
     ) -> None:
         """Initialize the GraphQL client.
 

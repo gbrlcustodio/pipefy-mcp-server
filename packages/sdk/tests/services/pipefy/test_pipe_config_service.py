@@ -49,7 +49,9 @@ def _make_service(mock_settings, return_value: dict):
 
 
 def _make_service_with_pipe(mock_settings, return_value: dict, pipe_service: AsyncMock):
-    service = PipeConfigService(settings=mock_settings, pipe_service=pipe_service)
+    service = PipeConfigService(
+        settings=mock_settings, auth=_TEST_AUTH, pipe_service=pipe_service
+    )
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 

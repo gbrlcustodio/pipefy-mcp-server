@@ -153,7 +153,9 @@ async def test_remove_members_from_pipe_success(mock_settings):
     pipe_service.get_pipe = AsyncMock(
         return_value={"pipe": {"uuid": "pipe-uuid-1", "id": 99}}
     )
-    service = MemberService(settings=mock_settings, pipe_service=pipe_service)
+    service = MemberService(
+        settings=mock_settings, auth=_TEST_AUTH, pipe_service=pipe_service
+    )
     service.execute_query = AsyncMock(return_value=payload)
     result = await service.remove_members_from_pipe(
         "99",
@@ -180,7 +182,9 @@ async def test_remove_members_from_pipe_success(mock_settings):
 async def test_remove_members_from_pipe_transport_error(mock_settings):
     pipe_service = AsyncMock(spec=PipeService)
     pipe_service.get_pipe = AsyncMock(return_value={"pipe": {"uuid": "pu", "id": 1}})
-    service = MemberService(settings=mock_settings, pipe_service=pipe_service)
+    service = MemberService(
+        settings=mock_settings, auth=_TEST_AUTH, pipe_service=pipe_service
+    )
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
     )
@@ -220,7 +224,9 @@ async def test_remove_members_from_pipe_resolves_numeric_user_ids(mock_settings)
             }
         }
     )
-    service = MemberService(settings=mock_settings, pipe_service=pipe_service)
+    service = MemberService(
+        settings=mock_settings, auth=_TEST_AUTH, pipe_service=pipe_service
+    )
     service.execute_query = AsyncMock(return_value=payload)
     await service.remove_members_from_pipe("42", ["7", "8"])
 

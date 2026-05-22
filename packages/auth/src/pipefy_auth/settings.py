@@ -207,22 +207,4 @@ class AuthSettings(BaseSettings):
             )
 
 
-def describe_missing_service_account_vars(auth: AuthSettings) -> str:
-    """Return a short message listing missing service-account credential variables."""
-    missing: list[str] = []
-    if not auth.service_account_url or not auth.service_account_url.strip():
-        missing.append("PIPEFY_SERVICE_ACCOUNT_URL")
-    if not auth.service_account_client_id or not auth.service_account_client_id.strip():
-        missing.append("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID")
-    if (
-        not auth.service_account_client_secret
-        or not auth.service_account_client_secret.strip()
-    ):
-        missing.append("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET")
-    return ", ".join(missing)
-
-
-__all__ = [
-    "AuthSettings",
-    "describe_missing_service_account_vars",
-]
+__all__ = ["AuthSettings"]

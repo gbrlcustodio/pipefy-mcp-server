@@ -13,5 +13,4 @@ Shared OAuth + keychain helpers for Pipefy CLI and MCP server.
 
 ## Consumers
 
-- `pipefy-cli` builds an authenticated `PipefyClient` by reading the stored session and handing the bearer to the SDK.
-- `pipefy-mcp-server` (planned, see issue #213) reads the same keychain entry so an MCP client launched per-user picks up the session without service-account env vars.
+`pipefy-cli` and `pipefy-mcp-server` both depend on this package and read the same keychain entry, so a single `pipefy auth login` serves both binaries.

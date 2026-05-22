@@ -8,9 +8,6 @@ the long-lived refresh token is the durable credential.
 ``keyring`` is imported lazily inside each function so that merely importing
 this module (which happens at CLI startup via the ``auth`` subcommand) does not
 pay the ~30-80ms backend-discovery cost on every ``pipefy`` invocation.
-
-The keychain service name is neutral (``"pipefy"``) so that the CLI and the MCP
-server share a single entry — the same login serves both consumers.
 """
 
 from __future__ import annotations

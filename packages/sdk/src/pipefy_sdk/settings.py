@@ -1,9 +1,44 @@
 from __future__ import annotations
 
+import os
+import sys
 from typing import Annotated, Self
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 from pydantic_settings import NoDecode
+
+_LEGACY_ENV_KEYS_TO_NEW: dict[str, str] = {
+    "PIPEFY_OAUTH_URL": "PIPEFY_SERVICE_ACCOUNT_URL",
+    "PIPEFY_OAUTH_CLIENT": "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
+    "PIPEFY_OAUTH_SECRET": "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
+}
+
+_warned_legacy_env_keys: set[str] = set()
+
+
+def _warn_once_for_legacy_oauth_env_keys() -> None:
+    """Print a one-shot stderr deprecation warning for each ``PIPEFY_OAUTH_*`` env var still set.
+
+    Pydantic accepts the legacy names via ``AliasChoices`` so old configs keep working;
+    this nudge tells users to rename. Dedup state is process-global; tests reset via
+    :func:`_reset_legacy_oauth_warning_state`.
+    """
+    if len(_warned_legacy_env_keys) == len(_LEGACY_ENV_KEYS_TO_NEW):
+        return
+    for legacy, new in _LEGACY_ENV_KEYS_TO_NEW.items():
+        if legacy in _warned_legacy_env_keys:
+            continue
+        if legacy in os.environ:
+            sys.stderr.write(
+                f"warning: {legacy} is deprecated; rename to {new}. "
+                "The legacy name will be removed in a future beta.\n"
+            )
+            _warned_legacy_env_keys.add(legacy)
+
+
+def _reset_legacy_oauth_warning_state() -> None:
+    """Test helper: clear the one-shot dedup so a fixture can re-trigger the warning."""
+    _warned_legacy_env_keys.clear()
 
 
 class PipefySettings(BaseModel):
@@ -27,19 +62,31 @@ class PipefySettings(BaseModel):
         description="Internal API URL for AI Automation endpoints",
     )
 
-    oauth_url: str | None = Field(
+    service_account_url: str | None = Field(
         default=None,
-        description="OAuth URL for Pipefy",
+        validation_alias=AliasChoices("service_account_url", "oauth_url"),
+        description=(
+            "Service-account token endpoint (OAuth 2.0 client-credentials grant) "
+            "(env: PIPEFY_SERVICE_ACCOUNT_URL; legacy PIPEFY_OAUTH_URL still honored)."
+        ),
     )
 
-    oauth_client: str | None = Field(
+    service_account_client_id: str | None = Field(
         default=None,
-        description="OAuth client ID for Pipefy",
+        validation_alias=AliasChoices("service_account_client_id", "oauth_client"),
+        description=(
+            "Service-account OAuth client_id "
+            "(env: PIPEFY_SERVICE_ACCOUNT_CLIENT_ID; legacy PIPEFY_OAUTH_CLIENT still honored)."
+        ),
     )
 
-    oauth_secret: str | None = Field(
+    service_account_client_secret: str | None = Field(
         default=None,
-        description="OAuth client secret for Pipefy",
+        validation_alias=AliasChoices("service_account_client_secret", "oauth_secret"),
+        description=(
+            "Service-account OAuth client_secret "
+            "(env: PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET; legacy PIPEFY_OAUTH_SECRET still honored)."
+        ),
     )
 
     org_id: str | None = Field(
@@ -113,6 +160,13 @@ class PipefySettings(BaseModel):
         msg = "service_account_ids must be a list or a comma-separated string"
         raise ValueError(msg)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _emit_legacy_oauth_env_var_warning(cls, data: object) -> object:
+        # Runs before field validation so the nudge surfaces even if SSRF/URL checks fail.
+        _warn_once_for_legacy_oauth_env_keys()
+        return data
+
     @model_validator(mode="after")
     def _validate_pipefy_endpoint_urls(self) -> Self:
         # Deferred import: ``url_ssrf`` validates URLs that may reference settings types (cycle if top-level).
@@ -121,8 +175,12 @@ class PipefySettings(BaseModel):
         allow = self.allow_insecure_urls
         if self.graphql_url is not None and (u := self.graphql_url.strip()):
             validate_https_service_endpoint_url(u, "graphql_url", allow_insecure=allow)
-        if self.oauth_url is not None and (u := self.oauth_url.strip()):
-            validate_https_service_endpoint_url(u, "oauth_url", allow_insecure=allow)
+        if self.service_account_url is not None and (
+            u := self.service_account_url.strip()
+        ):
+            validate_https_service_endpoint_url(
+                u, "service_account_url", allow_insecure=allow
+            )
         if u := self.internal_api_url.strip():
             validate_https_service_endpoint_url(
                 u, "internal_api_url", allow_insecure=allow

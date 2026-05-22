@@ -26,7 +26,7 @@ def test_pipefy_settings_internal_api_url_default():
     assert settings.internal_api_url == DEFAULT_INTERNAL_API_URL
 
 
-OAUTH_TOKEN_URL = "https://auth.pipefy.com/oauth/token"
+SERVICE_ACCOUNT_TOKEN_URL = "https://auth.pipefy.com/oauth/token"
 
 
 @pytest.mark.unit
@@ -38,7 +38,7 @@ async def test_execute_query_sends_post_with_correct_headers_and_body(respx_mock
     variables = {"key": "value"}
     expected_json = {"data": {"automation": {"id": "123"}}}
 
-    respx_mock.post(OAUTH_TOKEN_URL).mock(
+    respx_mock.post(SERVICE_ACCOUNT_TOKEN_URL).mock(
         return_value=httpx.Response(
             200,
             json={
@@ -54,9 +54,9 @@ async def test_execute_query_sends_post_with_correct_headers_and_body(respx_mock
 
     client = InternalApiClient(
         url=DEFAULT_INTERNAL_API_URL,
-        oauth_url=OAUTH_TOKEN_URL,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url=SERVICE_ACCOUNT_TOKEN_URL,
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
     result = await client.execute_query(query_string, variables)
 
@@ -76,7 +76,7 @@ async def test_execute_query_sends_post_with_correct_headers_and_body(respx_mock
 async def test_execute_query_returns_parsed_json_response(respx_mock):
     """Test execute_query returns the parsed JSON response from the API."""
     api_response = {"data": {"automation": {"id": "456"}}}
-    respx_mock.post(OAUTH_TOKEN_URL).mock(
+    respx_mock.post(SERVICE_ACCOUNT_TOKEN_URL).mock(
         return_value=httpx.Response(
             200,
             json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
@@ -88,9 +88,9 @@ async def test_execute_query_returns_parsed_json_response(respx_mock):
 
     client = InternalApiClient(
         url=DEFAULT_INTERNAL_API_URL,
-        oauth_url=OAUTH_TOKEN_URL,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url=SERVICE_ACCOUNT_TOKEN_URL,
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
     result = await client.execute_query("query { x }", {})
 
@@ -102,7 +102,7 @@ async def test_execute_query_returns_parsed_json_response(respx_mock):
 @respx.mock(assert_all_mocked=False, assert_all_called=False)
 async def test_execute_query_raises_on_non_2xx_response(respx_mock):
     """Test execute_query raises when HTTP response is not 2xx."""
-    respx_mock.post(OAUTH_TOKEN_URL).mock(
+    respx_mock.post(SERVICE_ACCOUNT_TOKEN_URL).mock(
         return_value=httpx.Response(
             200,
             json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
@@ -114,9 +114,9 @@ async def test_execute_query_raises_on_non_2xx_response(respx_mock):
 
     client = InternalApiClient(
         url=DEFAULT_INTERNAL_API_URL,
-        oauth_url=OAUTH_TOKEN_URL,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url=SERVICE_ACCOUNT_TOKEN_URL,
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
 
     with pytest.raises(httpx.HTTPStatusError):
@@ -129,7 +129,7 @@ async def test_execute_query_raises_on_non_2xx_response(respx_mock):
 async def test_execute_query_raises_on_graphql_errors_in_body(respx_mock):
     """Test execute_query detects GraphQL errors (HTTP 200 but errors in JSON) and raises."""
     graphql_error_response = {"errors": [{"message": "Something went wrong"}]}
-    respx_mock.post(OAUTH_TOKEN_URL).mock(
+    respx_mock.post(SERVICE_ACCOUNT_TOKEN_URL).mock(
         return_value=httpx.Response(
             200,
             json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
@@ -141,9 +141,9 @@ async def test_execute_query_raises_on_graphql_errors_in_body(respx_mock):
 
     client = InternalApiClient(
         url=DEFAULT_INTERNAL_API_URL,
-        oauth_url=OAUTH_TOKEN_URL,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url=SERVICE_ACCOUNT_TOKEN_URL,
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
 
     with pytest.raises(ValueError, match=r"^Something went wrong$"):
@@ -168,7 +168,7 @@ async def test_execute_query_error_includes_extensions_code_and_correlation_id(
             }
         ]
     }
-    respx_mock.post(OAUTH_TOKEN_URL).mock(
+    respx_mock.post(SERVICE_ACCOUNT_TOKEN_URL).mock(
         return_value=httpx.Response(
             200,
             json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
@@ -180,9 +180,9 @@ async def test_execute_query_error_includes_extensions_code_and_correlation_id(
 
     client = InternalApiClient(
         url=DEFAULT_INTERNAL_API_URL,
-        oauth_url=OAUTH_TOKEN_URL,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url=SERVICE_ACCOUNT_TOKEN_URL,
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
 
     with pytest.raises(
@@ -207,7 +207,7 @@ async def test_execute_query_error_includes_correlation_id_when_code_absent(
             }
         ]
     }
-    respx_mock.post(OAUTH_TOKEN_URL).mock(
+    respx_mock.post(SERVICE_ACCOUNT_TOKEN_URL).mock(
         return_value=httpx.Response(
             200,
             json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
@@ -219,9 +219,9 @@ async def test_execute_query_error_includes_correlation_id_when_code_absent(
 
     client = InternalApiClient(
         url=DEFAULT_INTERNAL_API_URL,
-        oauth_url=OAUTH_TOKEN_URL,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url=SERVICE_ACCOUNT_TOKEN_URL,
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
 
     with pytest.raises(
@@ -242,7 +242,7 @@ async def test_execute_query_error_concatenates_multiple_errors(respx_mock):
             {"message": "Error two", "extensions": {"code": "BAD_INPUT"}},
         ]
     }
-    respx_mock.post(OAUTH_TOKEN_URL).mock(
+    respx_mock.post(SERVICE_ACCOUNT_TOKEN_URL).mock(
         return_value=httpx.Response(
             200,
             json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
@@ -254,9 +254,9 @@ async def test_execute_query_error_concatenates_multiple_errors(respx_mock):
 
     client = InternalApiClient(
         url=DEFAULT_INTERNAL_API_URL,
-        oauth_url=OAUTH_TOKEN_URL,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url=SERVICE_ACCOUNT_TOKEN_URL,
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
 
     with pytest.raises(
@@ -274,7 +274,7 @@ async def test_execute_query_error_without_message_uses_fallback(respx_mock):
     graphql_error_response = {
         "errors": [{"extensions": {"code": "UNKNOWN"}}],
     }
-    respx_mock.post(OAUTH_TOKEN_URL).mock(
+    respx_mock.post(SERVICE_ACCOUNT_TOKEN_URL).mock(
         return_value=httpx.Response(
             200,
             json={"access_token": "tok", "token_type": "bearer", "expires_in": 3600},
@@ -286,9 +286,9 @@ async def test_execute_query_error_without_message_uses_fallback(respx_mock):
 
     client = InternalApiClient(
         url=DEFAULT_INTERNAL_API_URL,
-        oauth_url=OAUTH_TOKEN_URL,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        service_account_url=SERVICE_ACCOUNT_TOKEN_URL,
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
     )
 
     with pytest.raises(
@@ -315,9 +315,9 @@ async def test_execute_query_raises_on_timeout():
     ):
         client = InternalApiClient(
             url=DEFAULT_INTERNAL_API_URL,
-            oauth_url=OAUTH_TOKEN_URL,
-            oauth_client="client_id",
-            oauth_secret="client_secret",
+            service_account_url=SERVICE_ACCOUNT_TOKEN_URL,
+            service_account_client_id="client_id",
+            service_account_client_secret="client_secret",
         )
 
         with pytest.raises(httpx.TimeoutException):
@@ -329,20 +329,20 @@ def test_internal_api_client_rejects_http_url():
     with pytest.raises(ValueError, match="HTTPS"):
         InternalApiClient(
             url="http://app.pipefy.com/internal_api",
-            oauth_url="https://auth.pipefy.com/oauth/token",
-            oauth_client="id",
-            oauth_secret="secret",
+            service_account_url="https://auth.pipefy.com/oauth/token",
+            service_account_client_id="id",
+            service_account_client_secret="secret",
         )
 
 
 @pytest.mark.unit
-def test_internal_api_client_rejects_http_oauth_url():
+def test_internal_api_client_rejects_http_service_account_url():
     with pytest.raises(ValueError, match="HTTPS"):
         InternalApiClient(
             url="https://app.pipefy.com/internal_api",
-            oauth_url="http://auth.pipefy.com/oauth/token",
-            oauth_client="id",
-            oauth_secret="secret",
+            service_account_url="http://auth.pipefy.com/oauth/token",
+            service_account_client_id="id",
+            service_account_client_secret="secret",
         )
 
 
@@ -351,9 +351,9 @@ def test_internal_api_client_rejects_empty_hostname():
     with pytest.raises(ValueError, match="hostname"):
         InternalApiClient(
             url="https://",
-            oauth_url="https://auth.pipefy.com/oauth/token",
-            oauth_client="id",
-            oauth_secret="secret",
+            service_account_url="https://auth.pipefy.com/oauth/token",
+            service_account_client_id="id",
+            service_account_client_secret="secret",
         )
 
 
@@ -362,9 +362,9 @@ def test_internal_api_client_rejects_localhost():
     with pytest.raises(ValueError, match="localhost"):
         InternalApiClient(
             url="https://localhost/internal_api",
-            oauth_url="https://auth.pipefy.com/oauth/token",
-            oauth_client="id",
-            oauth_secret="secret",
+            service_account_url="https://auth.pipefy.com/oauth/token",
+            service_account_client_id="id",
+            service_account_client_secret="secret",
         )
 
 
@@ -373,9 +373,9 @@ def test_internal_api_client_rejects_private_literal_ip():
     with pytest.raises(ValueError, match="private|loopback|link-local"):
         InternalApiClient(
             url="https://10.0.0.1/internal_api",
-            oauth_url="https://auth.pipefy.com/oauth/token",
-            oauth_client="id",
-            oauth_secret="secret",
+            service_account_url="https://auth.pipefy.com/oauth/token",
+            service_account_client_id="id",
+            service_account_client_secret="secret",
         )
 
 
@@ -383,8 +383,8 @@ def test_internal_api_client_rejects_private_literal_ip():
 def test_internal_api_client_allow_insecure_accepts_http():
     InternalApiClient(
         url="http://127.0.0.1/internal_api",
-        oauth_url="http://127.0.0.1/oauth/token",
-        oauth_client="id",
-        oauth_secret="secret",
+        service_account_url="http://127.0.0.1/oauth/token",
+        service_account_client_id="id",
+        service_account_client_secret="secret",
         allow_insecure_urls=True,
     )

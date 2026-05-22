@@ -28,16 +28,20 @@ class ServicesContainer:
         """
         self.pipefy_client = PipefyClient(settings=settings.pipefy)
 
-        oauth_url = settings.pipefy.oauth_url
-        oauth_client = settings.pipefy.oauth_client
-        oauth_secret = settings.pipefy.oauth_secret
+        service_account_url = settings.pipefy.service_account_url
+        service_account_client_id = settings.pipefy.service_account_client_id
+        service_account_client_secret = settings.pipefy.service_account_client_secret
 
-        if oauth_url and oauth_client and oauth_secret:
+        if (
+            service_account_url
+            and service_account_client_id
+            and service_account_client_secret
+        ):
             internal_client = InternalApiClient(
                 url=settings.pipefy.internal_api_url,
-                oauth_url=oauth_url,
-                oauth_client=oauth_client,
-                oauth_secret=oauth_secret,
+                service_account_url=service_account_url,
+                service_account_client_id=service_account_client_id,
+                service_account_client_secret=service_account_client_secret,
                 allow_insecure_urls=settings.pipefy.allow_insecure_urls,
             )
             self.pipefy_client.set_internal_api_client(internal_client)

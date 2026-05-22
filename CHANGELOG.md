@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **SDK / MCP / CLI**: renamed the three service-account credential env vars for clarity and to remove the one-letter footgun against `PIPEFY_AUTH_URL` (interactive user-login issuer): `PIPEFY_OAUTH_URL` → `PIPEFY_SERVICE_ACCOUNT_URL`, `PIPEFY_OAUTH_CLIENT` → `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`, `PIPEFY_OAUTH_SECRET` → `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`. Closes #127.
+
+### Deprecated
+
+- **SDK**: legacy `PIPEFY_OAUTH_*` env vars and `oauth_*` keys in `~/.config/pipefy/config.toml` still resolve to the new `service_account_*` fields via an alias shim, with a one-shot stderr deprecation warning per legacy key. The aliases will be removed in a later `0.2.0-beta.x` release (carrying an explicit breaking-change callout). See [`docs/MIGRATION.md`](docs/MIGRATION.md#service-account-env-var-rename).
+
 ### Fixed
 
 ### Removed
@@ -44,7 +50,7 @@ Monorepo **Pipefy Labs** public beta on the `v0.2.0-beta.*` line (GitHub Release
   files into `packages/cli/src/pipefy_cli/skills/`; use `--check` in CI or before release.
 - **CLI**: introduce `pipefy-cli` workspace package with `pipefy` entry point.
 - **CLI**: `pipefy card get <id>` (mirrors MCP `get_card`) with `--json` / Rich rendering.
-- **CLI**: OAuth client-credentials auth (`PIPEFY_OAUTH_*`) and `--token` / `PIPEFY_TOKEN` static bearer override; auth precedence flag > env > `~/.config/pipefy/config.toml`.
+- **CLI**: OAuth client-credentials auth (`PIPEFY_OAUTH_*`; renamed to `PIPEFY_SERVICE_ACCOUNT_*` in the Unreleased section) and `--token` / `PIPEFY_TOKEN` static bearer override; auth precedence flag > env > `~/.config/pipefy/config.toml`.
 - **CLI**: `--graphql-url` and `--allow-insecure-urls` global flags; same SSRF policy as MCP.
 - **CLI**: shell completion via `pipefy --install-completion bash|zsh`.
 - **SDK**: optional `bearer_token=` constructor on `PipefyClient` and `StaticBearerAuth` in `base_client` (transport auth path used by the CLI `--token` / `PIPEFY_TOKEN`).

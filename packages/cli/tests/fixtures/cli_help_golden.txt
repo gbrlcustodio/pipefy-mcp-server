@@ -17,7 +17,8 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ agent             AI Agents (repo-scoped).                                   │
-│ ai-automation     AI Automations (generate_with_ai; requires OAuth).         │
+│ ai-automation     AI Automations (generate_with_ai; requires service-account │
+│                   credentials).                                              │
 │ attachment        Attachment uploads (presigned URL + field update).         │
 │ audit             Pipe audit log exports.                                    │
 │ auth              Authenticate the CLI as your Pipefy user (browser-based    │
@@ -241,7 +242,7 @@ Usage: pipefy agent validate-behaviors [OPTIONS]
 ### HELP ai-automation
 Usage: pipefy ai-automation [OPTIONS] COMMAND [ARGS]...
 
- AI Automations (generate_with_ai; requires OAuth).
+ AI Automations (generate_with_ai; requires service-account credentials).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
@@ -1932,7 +1933,8 @@ Usage: pipefy relation card [OPTIONS] COMMAND [ARGS]...
 │ list     List parent and child relations for a card (raw                     │
 │          ``get_card_relations`` payload).                                    │
 │ create   Link two cards via an existing pipe relation.                       │
-│ delete   Remove a card relation (requires OAuth; internal API).              │
+│ delete   Remove a card relation (requires service-account credentials;       │
+│          internal API).                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP relation/card/create
@@ -1953,7 +1955,7 @@ Usage: pipefy relation card create [OPTIONS]
 ### HELP relation/card/delete
 Usage: pipefy relation card delete [OPTIONS]
 
- Remove a card relation (requires OAuth; internal API).
+ Remove a card relation (requires service-account credentials; internal API).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --child           TEXT  Child card id. [required]                         │

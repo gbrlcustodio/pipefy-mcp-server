@@ -20,11 +20,11 @@ def test_org_get_uses_pipefy_org_id_when_argument_omitted(
         "https://cli-org-env.example.com/internal_api",
     )
     monkeypatch.setenv(
-        "PIPEFY_OAUTH_URL",
+        "PIPEFY_SERVICE_ACCOUNT_URL",
         "https://cli-org-env.example.com/oauth/token",
     )
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "sec")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
     monkeypatch.setenv("PIPEFY_ORG_ID", "302398434")
 
     payload = {"id": "302398434", "name": "Test Org"}
@@ -53,11 +53,11 @@ def test_org_get_positional_overrides_pipefy_org_id(
         "https://cli-org-pos.example.com/internal_api",
     )
     monkeypatch.setenv(
-        "PIPEFY_OAUTH_URL",
+        "PIPEFY_SERVICE_ACCOUNT_URL",
         "https://cli-org-pos.example.com/oauth/token",
     )
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "sec")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
     monkeypatch.setenv("PIPEFY_ORG_ID", "111")
 
     payload = {"id": "222", "name": "Other Org"}
@@ -85,11 +85,11 @@ def test_org_get_missing_id_and_env_exits_2(
         "https://cli-org-miss.example.com/internal_api",
     )
     monkeypatch.setenv(
-        "PIPEFY_OAUTH_URL",
+        "PIPEFY_SERVICE_ACCOUNT_URL",
         "https://cli-org-miss.example.com/oauth/token",
     )
-    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
-    monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "sec")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
     result = runner.invoke(app, ["org", "get", "--json"])
     assert result.exit_code == 2

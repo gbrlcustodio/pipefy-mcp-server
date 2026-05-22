@@ -1203,6 +1203,51 @@ class PipefyClient:
         """
         return await self._portal_service.get_portal(portal_uuid)
 
+    async def create_portal(self, organization_uuid: str | int) -> dict[str, Any]:
+        """Create or fetch the organization's main portal (idempotent).
+
+        Args:
+            organization_uuid: Organization UUID or numeric organization id.
+        """
+        return await self._portal_service.create_portal(organization_uuid)
+
+    async def update_portal(
+        self,
+        interface_uuid: str,
+        *,
+        name: str | None = None,
+        visibility: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        display_pipefy_header: bool | None = None,
+    ) -> dict[str, Any]:
+        """Update portal metadata.
+
+        Args:
+            interface_uuid: Portal interface UUID.
+            name: Optional display name.
+            visibility: ``internal``, ``private``, or ``public``.
+            color: Optional theme color.
+            icon: Optional icon identifier.
+            display_pipefy_header: Whether to show the Pipefy header.
+        """
+        return await self._portal_service.update_portal(
+            interface_uuid,
+            name=name,
+            visibility=visibility,
+            color=color,
+            icon=icon,
+            display_pipefy_header=display_pipefy_header,
+        )
+
+    async def delete_portal(self, interface_uuid: str) -> dict[str, Any]:
+        """Delete a portal interface (irreversible).
+
+        Args:
+            interface_uuid: Portal interface UUID.
+        """
+        return await self._portal_service.delete_portal(interface_uuid)
+
     async def get_me(self) -> MePayload | None:
         """Return the authenticated user's identity, or ``None`` when ``me`` resolves null."""
         return await self._user_service.get_me()

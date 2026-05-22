@@ -1,4 +1,4 @@
-"""GraphQL queries for Pipefy portal read operations (Interfaces schema)."""
+"""GraphQL queries and mutations for Pipefy portals (Interfaces schema)."""
 
 from __future__ import annotations
 
@@ -56,7 +56,50 @@ GET_PORTAL_QUERY = gql(
     """
 )
 
+FIND_OR_CREATE_PORTAL_MUTATION = gql(
+    """
+    mutation FindOrCreatePortal($input: InterfaceCreateByTemplateMutationInput!) {
+        findOrCreateInterfaceByTemplate(input: $input) {
+            interface {
+                id
+                name
+                visibility
+                subType
+            }
+        }
+    }
+    """
+)
+
+UPDATE_INTERFACE_MUTATION = gql(
+    """
+    mutation UpdatePortal($input: InterfaceUpdateMutationInput!) {
+        updateInterface(input: $input) {
+            interface {
+                id
+                name
+                visibility
+                subType
+            }
+        }
+    }
+    """
+)
+
+DELETE_INTERFACE_MUTATION = gql(
+    """
+    mutation DeletePortal($input: InterfaceDeleteMutationInput!) {
+        deleteInterface(input: $input) {
+            success
+        }
+    }
+    """
+)
+
 __all__ = [
+    "DELETE_INTERFACE_MUTATION",
+    "FIND_OR_CREATE_PORTAL_MUTATION",
     "GET_PORTAL_QUERY",
     "LIST_PORTALS_QUERY",
+    "UPDATE_INTERFACE_MUTATION",
 ]

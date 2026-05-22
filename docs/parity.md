@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **130** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **133** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -40,6 +40,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_pipe` | `pipefy pipe create` | shipped | Task **5.3** (`--org`). |
 | `create_pipe_relation` | `pipefy relation pipe create` | shipped | Task **5.10**. |
 | `create_pipe_report` | `pipefy report-pipe create` | shipped | Reports domain; deferred from v0.1 CLI parity. |
+| `create_portal` | `pipefy portal create` | shipped | Portal CRUD task **3.0**; `--organization-uuid`; idempotent (find-or-create main portal). |
 | `create_send_task_automation` | `pipefy automation send-task create` | shipped | Task **9.1** (task title + recipients; optional `--event-params` / `--condition` JSON). |
 | `create_table` | `pipefy table create` | shipped | Task **5.6**. |
 | `create_table_field` | — | deferred | Table fields; not in FR-5.2 launch list (table CRUD only). |
@@ -59,6 +60,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `delete_pipe` | `pipefy pipe delete` | shipped | Task **5.3**; `--yes` or confirm. |
 | `delete_pipe_relation` | `pipefy relation pipe delete` | shipped | Task **5.10**; destructive: `--yes`. |
 | `delete_pipe_report` | `pipefy report-pipe delete` | shipped | Reports domain. |
+| `delete_portal` | `pipefy portal delete` | shipped | Portal CRUD task **3.0**; destructive: `--yes` or confirm. |
 | `delete_table` | `pipefy table delete` | shipped | Task **5.6**; destructive: `--yes`. |
 | `delete_table_field` | — | deferred | Table fields; not in launch list. |
 | `delete_table_record` | `pipefy record delete` | shipped | Task **5.7**; destructive: `--yes`. |
@@ -147,6 +149,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_pipe` | `pipefy pipe update` | shipped | Task **5.3** (`--name`, `--icon`, `--color`, `--preferences` JSON). |
 | `update_pipe_relation` | `pipefy relation pipe update` | shipped | Task **5.10**. |
 | `update_pipe_report` | `pipefy report-pipe update` | shipped | Reports domain. |
+| `update_portal` | `pipefy portal update` | shipped | Portal CRUD task **3.0** (`--name`, `--visibility`, optional `--color`, `--icon`, header flags). |
 | `update_table` | `pipefy table update` | shipped | Task **5.6**. |
 | `update_table_field` | — | deferred | Table fields; not in launch list. |
 | `update_table_record` | `pipefy record update` | shipped | Task **5.7** (``--fields`` JSON). |

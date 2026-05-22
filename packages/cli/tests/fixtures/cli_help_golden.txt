@@ -1821,8 +1821,38 @@ Usage: pipefy portal [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list   List portals for an organization.                                     │
-│ get    Fetch a portal by UUID.                                               │
+│ list     List portals for an organization.                                   │
+│ get      Fetch a portal by UUID.                                             │
+│ create   Create or fetch the organization's main portal (idempotent).        │
+│ update   Update portal metadata (pass at least one attribute).               │
+│ delete   Delete a portal permanently.                                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/create
+Usage: pipefy portal create [OPTIONS]
+
+ Create or fetch the organization's main portal (idempotent).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization-uuid          TEXT  Organization UUID, or numeric          │
+│                                       organization id (string).              │
+│                                       [required]                             │
+│    --json               -j            Print machine-readable JSON to stdout. │
+│    --help                             Show this message and exit.            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/delete
+Usage: pipefy portal delete [OPTIONS] PORTAL_UUID
+
+ Delete a portal permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Portal UUID. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/get
@@ -1850,6 +1880,30 @@ Usage: pipefy portal list [OPTIONS]
 │    --search-term                TEXT  Optional portal name filter.           │
 │    --json               -j            Print machine-readable JSON to stdout. │
 │    --help                             Show this message and exit.            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/update
+Usage: pipefy portal update [OPTIONS] PORTAL_UUID
+
+ Update portal metadata (pass at least one attribute).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Portal UUID. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name                                            TEXT  Portal display name. │
+│ --visibility                                      TEXT  Portal visibility:   │
+│                                                         internal, private,   │
+│                                                         or public.           │
+│ --color                                           TEXT  Theme color.         │
+│ --icon                                            TEXT  Icon identifier.     │
+│ --display-pipefy-he…      --no-display-pipefy…          Show or hide the     │
+│                                                         Pipefy header.       │
+│ --json                -j                                Print                │
+│                                                         machine-readable     │
+│                                                         JSON to stdout.      │
+│ --help                                                  Show this message    │
+│                                                         and exit.            │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP record

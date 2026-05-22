@@ -8,6 +8,7 @@ Optional smoke (set ``PIPEFY_PORTAL_ORG_UUID`` to an org with a main portal):
     uv run pytest packages/sdk/tests/services/pipefy/test_portal_service_integration.py -m integration -v
 
 Full publish-cycle coverage is deferred to task 6.7.
+Create-portal idempotency smoke is deferred to task 7.x when creds are unavailable locally.
 """
 
 from __future__ import annotations
@@ -78,3 +79,20 @@ async def test_live_get_portal_round_trip_from_list(
     assert detail["uuid"] == portal_uuid
     assert "published" in detail
     assert "pages" in detail
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_live_create_portal_idempotent_returns_same_uuid(
+    live_portal_service: PortalService,
+) -> None:
+    """Smoke: create_portal called twice returns the same portal uuid (idempotent)."""
+    org_uuid = _portal_org_uuid()
+    if org_uuid is None:
+        pytest.skip("Set PIPEFY_PORTAL_ORG_UUID for live create_portal idempotency smoke")
+
+    first = await live_portal_service.create_portal(org_uuid)
+    second = await live_portal_service.create_portal(org_uuid)
+
+    assert first["uuid"] == second["uuid"]
+    assert first["uuid"]

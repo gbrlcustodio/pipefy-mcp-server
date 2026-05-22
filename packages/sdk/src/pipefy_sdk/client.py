@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from httpx import Auth
-from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
 from pipefy_sdk.attachment_upload import (
@@ -16,7 +15,6 @@ from pipefy_sdk.attachment_upload import (
 from pipefy_sdk.automation_preflight import (
     validate_traditional_automation_move_transition,
 )
-from pipefy_sdk.base_client import StaticBearerAuth
 from pipefy_sdk.models.ai_agent import (
     BehaviorInput,
     CreateAiAgentInput,
@@ -83,24 +81,16 @@ class PipefyClient:
         self,
         settings: PipefySettings,
         *,
-        bearer_token: str | None = None,
+        auth: Auth,
     ) -> None:
-        """Build a facade wired for OAuth client-credentials or a static bearer token.
+        """Build a facade wired with a pre-constructed ``httpx.Auth``.
 
         Args:
-            settings: Pipefy endpoints and credentials (OAuth fields may be omitted when
-                ``bearer_token`` is set).
-            bearer_token: When set, GraphQL requests use this bearer and OAuth credentials
-                from ``settings`` are not required for the public GraphQL transport.
+            settings: Pipefy endpoint configuration.
+            auth: ``httpx.Auth`` that supplies the credentials for every GraphQL
+                call (construct via ``pipefy_auth.resolve`` or one of the bearer
+                adapters from ``pipefy_auth``).
         """
-        if bearer_token is not None:
-            auth: Auth = StaticBearerAuth(bearer_token)
-        else:
-            auth = OAuth2ClientCredentials(
-                token_url=settings.service_account_url,
-                client_id=settings.service_account_client_id,
-                client_secret=settings.service_account_client_secret,
-            )
         self._pipe_service = PipeService(settings=settings, auth=auth)
         self._card_service = CardService(settings=settings, auth=auth)
         self._pipe_config_service = PipeConfigService(

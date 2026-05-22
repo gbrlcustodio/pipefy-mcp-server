@@ -37,12 +37,23 @@ from pipefy_sdk.settings import _LEGACY_ENV_KEYS_TO_NEW
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
     AuthContext,
-    AuthSource,
-    detect_all_sources,
+    detect_cli_sources,
     get_authenticated_client,
 )
 from pipefy_cli.commands._common import settings_and_auth_from_ctx
 from pipefy_cli.output import render_json
+
+# Locked JSON wire schema. Matches the policy ``name`` field produced by
+# :func:`pipefy_cli.auth.build_policies` (so the resolver's identifiers reach
+# the wire unchanged), plus an explicit ``"none"`` sentinel for the case where
+# no policy resolved.
+DisplaySource = Literal[
+    "flag-token",
+    "env-token",
+    "service-account",
+    "stored-session",
+    "none",
+]
 
 AuthSessionState = Literal["active", "refresh-expired", "needs-login", "n/a"]
 
@@ -56,8 +67,8 @@ class AuthStatusReport:
     contract and the internal model can evolve independently.
     """
 
-    auth_source: AuthSource
-    detected_sources: list[AuthSource]
+    auth_source: DisplaySource
+    detected_sources: list[DisplaySource]
     issuer: str | None = None
     state: AuthSessionState = "n/a"
     access_expires_at: str | None = None
@@ -207,7 +218,7 @@ def auth_login(
     _warn_if_masked()
 
 
-_AUTH_SOURCE_LABELS: dict[AuthSource, str] = {
+_AUTH_SOURCE_LABELS: dict[DisplaySource, str] = {
     "flag-token": "--token flag",
     "env-token": "PIPEFY_TOKEN environment variable",
     "service-account": "PIPEFY_SERVICE_ACCOUNT_* (client credentials)",
@@ -405,8 +416,14 @@ def auth_status(
 ) -> None:
     """Print which auth source is active, the authenticated identity, and session expiry."""
     settings, auth = settings_and_auth_from_ctx(ctx)
-    detected = detect_all_sources(settings, auth)
-    source: AuthSource = detected[0] if detected else "none"
+    detected_names = detect_cli_sources(settings, auth)
+    # The locked JSON wire schema matches the policy names exactly; cast for
+    # typing only — values are already constrained by ``build_policies``.
+    detected: list[DisplaySource] = [
+        name  # type: ignore[misc]
+        for name in detected_names
+    ]
+    source: DisplaySource = detected[0] if detected else "none"
     report = AuthStatusReport(auth_source=source, detected_sources=detected)
     # Surface masking env vars whenever a stored session exists — that's the
     # CI-overrides-keychain failure mode the field is for, and the higher-

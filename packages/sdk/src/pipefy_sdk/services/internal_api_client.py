@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from httpx import Timeout
-from httpx_auth import OAuth2ClientCredentials
+from httpx import Auth, Timeout
 
 from pipefy_sdk.utils.url_ssrf import (
     validate_https_service_endpoint_url,
@@ -18,42 +17,29 @@ REQUEST_TIMEOUT_SECONDS = 30
 class InternalApiClient:
     """HTTP client for Pipefy internal API (AI Automation mutations).
 
-    Uses OAuth2 client credentials for token authentication. Sends GraphQL
-    requests as JSON POST to the configured internal_api URL.
+    Sends GraphQL requests as JSON POST to the configured internal_api URL,
+    using the ``httpx.Auth`` supplied at construction time.
     """
 
     def __init__(
         self,
         url: str,
-        service_account_url: str,
-        service_account_client_id: str,
-        service_account_client_secret: str,
         *,
+        auth: Auth,
         allow_insecure_urls: bool = False,
     ) -> None:
         """Create an internal API client.
 
         Args:
             url: URL of the internal_api endpoint (e.g. https://app.pipefy.com/internal_api).
-            service_account_url: Service-account token endpoint URL.
-            service_account_client_id: Service-account OAuth client_id.
-            service_account_client_secret: Service-account OAuth client_secret.
+            auth: Pre-constructed ``httpx.Auth`` (e.g. from ``pipefy_auth.resolve``).
             allow_insecure_urls: When True, allow http and internal hosts (must match settings).
         """
         validate_https_service_endpoint_url(
             url.strip(), "internal_api URL", allow_insecure=allow_insecure_urls
         )
-        validate_https_service_endpoint_url(
-            service_account_url.strip(),
-            "service-account URL",
-            allow_insecure=allow_insecure_urls,
-        )
         self._url = url
-        self._auth = OAuth2ClientCredentials(
-            token_url=service_account_url,
-            client_id=service_account_client_id,
-            client_secret=service_account_client_secret,
-        )
+        self._auth = auth
 
     async def execute_query(self, query: str, variables: dict[str, Any]) -> dict:
         """Execute a GraphQL query/mutation via POST.

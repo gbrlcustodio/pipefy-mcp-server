@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.report_queries import (
     CREATE_ORGANIZATION_REPORT_MUTATION,
@@ -26,6 +27,8 @@ from pipefy_sdk.queries.report_queries import (
 from pipefy_sdk.services.report_service import ReportService
 from pipefy_sdk.settings import PipefySettings
 
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
+
 
 @pytest.fixture
 def mock_settings():
@@ -38,7 +41,7 @@ def mock_settings():
 
 
 def _make_service(mock_settings, return_value):
-    service = ReportService(settings=mock_settings)
+    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -106,7 +109,7 @@ async def test_get_pipe_reports_with_optional_params(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_pipe_reports_transport_error(mock_settings):
-    service = ReportService(settings=mock_settings)
+    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -322,7 +325,7 @@ async def test_create_pipe_report_minimal(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_pipe_report_transport_error(mock_settings):
-    service = ReportService(settings=mock_settings)
+    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -449,7 +452,7 @@ async def test_export_pipe_report_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_export_pipe_report_transport_error(mock_settings):
-    service = ReportService(settings=mock_settings)
+    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -499,7 +502,7 @@ async def test_export_pipe_audit_logs_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_pipe_report_columns_transport_error(mock_settings):
-    service = ReportService(settings=mock_settings)
+    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -510,7 +513,7 @@ async def test_get_pipe_report_columns_transport_error(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_pipe_report_transport_error(mock_settings):
-    service = ReportService(settings=mock_settings)
+    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
     )

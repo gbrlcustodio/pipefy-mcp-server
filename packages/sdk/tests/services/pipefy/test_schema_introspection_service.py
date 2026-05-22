@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from gql.transport.exceptions import TransportQueryError
 from graphql import GraphQLError
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.introspection_queries import (
     INTROSPECT_MUTATION_QUERY,
@@ -16,6 +17,8 @@ from pipefy_sdk.services.schema_introspection_service import (
     SchemaIntrospectionService,
 )
 from pipefy_sdk.settings import PipefySettings
+
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
 @pytest.fixture
@@ -29,7 +32,7 @@ def mock_settings():
 
 
 def _make_service(mock_settings, return_value):
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -353,7 +356,7 @@ async def test_introspect_type_depth_2_resolves_deeply_wrapped_types(mock_settin
         "enumValues": None,
     }
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
 
     async def mock_execute_query(query, variables):
         type_name = variables.get("typeName", "")
@@ -407,7 +410,7 @@ async def test_introspect_type_depth_2_resolves_field_types(mock_settings):
         "enumValues": None,
     }
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     call_count = 0
 
     async def mock_execute_query(query, variables):
@@ -493,7 +496,7 @@ async def test_introspect_mutation_depth_2_resolves_arg_types(mock_settings):
         "enumValues": None,
     }
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
 
     async def mock_execute_query(query, variables):
         type_name = variables.get("typeName", "")
@@ -728,7 +731,7 @@ async def test_execute_graphql_surfaces_graphql_errors_from_transport(mock_setti
             ],
         )
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=raise_transport_error)
     result = await service.execute_graphql("query Q { __typename }", {})
 
@@ -744,7 +747,7 @@ async def test_execute_graphql_surfaces_graphql_errors_from_transport(mock_setti
 @pytest.mark.asyncio
 async def test_execute_graphql_surfaces_gql_client_graphql_error(mock_settings):
     """Schema validation errors from gql (before or during execute) map to an errors payload."""
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=GraphQLError("Cannot query field `nope` on type `Query`.")
     )
@@ -780,7 +783,7 @@ async def test_execute_graphql_query_field_not_found_hints_mutation(mock_setting
             }
         }
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=mock_execute)
     result = await service.execute_graphql("query Q { createCard { id } }", None)
 
@@ -812,7 +815,7 @@ async def test_execute_graphql_mutation_field_not_found_hints_query(mock_setting
             }
         }
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=mock_execute)
     result = await service.execute_graphql("mutation M { pipe(id: 1) { name } }", None)
 
@@ -840,7 +843,7 @@ async def test_execute_graphql_no_hint_when_field_absent_from_both(mock_settings
             )
         return {"__type": {"fields": [{"name": "pipe"}]}}
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=mock_execute)
     result = await service.execute_graphql("query Q { nonexistent }", None)
 
@@ -870,7 +873,7 @@ async def test_execute_graphql_hint_works_with_backtick_error_format(mock_settin
             }
         }
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=mock_execute)
     result = await service.execute_graphql("query Q { createCard { id } }", None)
 
@@ -891,7 +894,7 @@ async def test_execute_graphql_no_hint_on_unrelated_error(mock_settings):
             errors=[{"message": "Permission denied"}],
         )
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=raise_transport_error)
     result = await service.execute_graphql("query Q { __typename }", None)
 
@@ -918,7 +921,7 @@ async def test_execute_graphql_hint_lookup_failure_does_not_mask_error(mock_sett
         # Hint lookup also fails
         raise TransportQueryError("hint lookup failed", errors=[])
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=mock_execute)
     result = await service.execute_graphql("query Q { createCard { id } }", None)
 
@@ -950,7 +953,7 @@ async def test_execute_graphql_hint_lookup_unexpected_error_propagates(
             )
         raise RuntimeError("simulated bug during hint introspection")
 
-    service = SchemaIntrospectionService(settings=mock_settings)
+    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=mock_execute)
 
     with caplog.at_level("ERROR"):

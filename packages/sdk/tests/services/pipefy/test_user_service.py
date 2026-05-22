@@ -3,10 +3,13 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.me_queries import GET_ME_QUERY
 from pipefy_sdk.services.user_service import UserService
 from pipefy_sdk.settings import PipefySettings
+
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
 @pytest.fixture
@@ -20,7 +23,7 @@ def mock_settings():
 
 
 def _make_service(mock_settings, return_value):
-    service = UserService(settings=mock_settings)
+    service = UserService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 

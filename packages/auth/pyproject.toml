@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.28",
+    "httpx-auth>=0.23.1",
     "keyring>=24",
 ]
 

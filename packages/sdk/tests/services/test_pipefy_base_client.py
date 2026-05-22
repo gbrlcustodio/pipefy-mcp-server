@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.settings import PipefySettings
@@ -14,6 +15,10 @@ def valid_settings() -> PipefySettings:
         service_account_client_id="client_id",
         service_account_client_secret="client_secret",
     )
+
+
+def _bearer() -> StaticBearerAuth:
+    return StaticBearerAuth("test-token")
 
 
 @pytest.mark.unit
@@ -30,7 +35,7 @@ async def test_execute_query_passes_variables_to_session(valid_settings):
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = BasePipefyClient(settings=valid_settings)
+        base = BasePipefyClient(settings=valid_settings, auth=_bearer())
         result = await base.execute_query(query, variables)
 
     mock_session.execute.assert_called_once_with(query, variable_values=variables)
@@ -66,7 +71,7 @@ async def test_execute_query_reuse_fetches_once_then_passes_cached_schema(
         second.schema = None
         mock_client_cls.side_effect = [first, second]
 
-        base = BasePipefyClient(settings=settings)
+        base = BasePipefyClient(settings=settings, auth=_bearer())
         assert await base.execute_query(query, variables) == {"one": 1}
         assert await base.execute_query(query, variables) == {"two": 2}
 
@@ -95,7 +100,7 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged(valid_settings)
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = BasePipefyClient(settings=valid_settings)
+        base = BasePipefyClient(settings=valid_settings, auth=_bearer())
 
         with pytest.raises(RuntimeError) as exc:
             await base.execute_query(query, variables)
@@ -114,56 +119,6 @@ def test_init_raises_when_graphql_url_is_none():
     )
 
     with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=settings)
+        BasePipefyClient(settings=settings, auth=_bearer())
 
     assert "GraphQL URL must be provided in settings" in str(exc.value)
-
-
-@pytest.mark.unit
-def test_init_raises_when_service_account_url_is_none():
-    """Test that __init__ raises ValueError when service_account_url is None."""
-    settings = PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        service_account_url=None,
-        service_account_client_id="client_id",
-        service_account_client_secret="client_secret",
-    )
-
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=settings)
-
-    assert "Service-account URL must be provided in settings" in str(exc.value)
-
-
-@pytest.mark.unit
-def test_init_raises_when_service_account_client_id_is_none():
-    """Test that __init__ raises ValueError when service_account_client_id is None."""
-    settings = PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        service_account_url="https://auth.pipefy.com/oauth/token",
-        service_account_client_id=None,
-        service_account_client_secret="client_secret",
-    )
-
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=settings)
-
-    assert "Service-account client ID must be provided in settings" in str(exc.value)
-
-
-@pytest.mark.unit
-def test_init_raises_when_service_account_client_secret_is_none():
-    """Test that __init__ raises ValueError when service_account_client_secret is None."""
-    settings = PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        service_account_url="https://auth.pipefy.com/oauth/token",
-        service_account_client_id="client_id",
-        service_account_client_secret=None,
-    )
-
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=settings)
-
-    assert "Service-account client secret must be provided in settings" in str(
-        exc.value
-    )

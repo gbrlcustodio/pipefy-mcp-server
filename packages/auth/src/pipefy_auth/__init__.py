@@ -11,6 +11,7 @@ from __future__ import annotations
 
 __version__ = "0.2.0-beta.1"
 
+from pipefy_auth.bearer import CallableBearerAuth, StaticBearerAuth
 from pipefy_auth.discovery import (
     DiscoveryPolicy,
     ProviderMetadata,
@@ -22,6 +23,16 @@ from pipefy_auth.refresh import (
     RefreshError,
     ensure_fresh_session,
     refresh_access_token,
+)
+from pipefy_auth.resolver import (
+    SERVICE_ACCOUNT_TIER,
+    STATIC_TOKEN_TIER,
+    STORED_SESSION_TIER,
+    ServiceAccount,
+    detect_pipefy_tiers,
+    missing_auth_message,
+    resolve_pipefy_auth,
+    tier_for,
 )
 from pipefy_auth.revoke import (
     RevocationError,
@@ -39,6 +50,7 @@ from pipefy_auth.storage import (
 )
 
 __all__ = [
+    "CallableBearerAuth",
     "DEFAULT_AUTH_CLIENT_ID",
     "DiscoveryPolicy",
     "LoginError",
@@ -48,17 +60,26 @@ __all__ = [
     "RefreshError",
     "RevocationError",
     "RevocationUnsupportedError",
+    "SERVICE_ACCOUNT_TIER",
+    "STATIC_TOKEN_TIER",
+    "STORED_SESSION_TIER",
+    "ServiceAccount",
     "SessionDeleteError",
+    "StaticBearerAuth",
     "StoredSession",
     "__version__",
     "delete_session",
+    "detect_pipefy_tiers",
     "ensure_fresh_session",
     "fetch_provider_metadata",
     "keychain_backend_name",
     "keychain_key",
     "load_session",
+    "missing_auth_message",
     "refresh_access_token",
+    "resolve_pipefy_auth",
     "revoke_session",
     "run_login",
     "store_session",
+    "tier_for",
 ]

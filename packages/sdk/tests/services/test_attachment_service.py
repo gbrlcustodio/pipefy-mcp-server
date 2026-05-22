@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from graphql import print_ast
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.queries.attachment_queries import (
@@ -11,6 +12,8 @@ from pipefy_sdk.queries.attachment_queries import (
 )
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.settings import PipefySettings
+
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
 @pytest.fixture
@@ -24,7 +27,7 @@ def mock_settings():
 
 
 def _make_service(mock_settings, return_value):
-    service = AttachmentService(settings=mock_settings)
+    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -144,7 +147,7 @@ async def test_upload_file_to_s3_success(mock_settings):
     mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
     mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-    service = AttachmentService(settings=mock_settings)
+    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
     with patch("httpx.AsyncClient", return_value=mock_cm):
         result = await service.upload_file_to_s3(
             "https://s3.us-east-1.amazonaws.com/presigned",
@@ -171,7 +174,7 @@ async def test_upload_file_to_s3_forbidden_includes_body_snippet(mock_settings):
     mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
     mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-    service = AttachmentService(settings=mock_settings)
+    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
     with patch("httpx.AsyncClient", return_value=mock_cm):
         result = await service.upload_file_to_s3(
             "https://s3.us-east-1.amazonaws.com/presigned",
@@ -198,7 +201,7 @@ async def test_upload_file_to_s3_sets_content_type_header(mock_settings):
     mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
     mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-    service = AttachmentService(settings=mock_settings)
+    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
     with patch("httpx.AsyncClient", return_value=mock_cm):
         await service.upload_file_to_s3(
             "https://s3.us-east-1.amazonaws.com/presigned",
@@ -279,7 +282,7 @@ def test_pipefy_client_extract_storage_path_delegates_to_attachment_service():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_upload_file_to_s3_rejects_non_allowed_host(mock_settings):
-    service = AttachmentService(settings=mock_settings)
+    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
     with pytest.raises(ValueError, match="not in the allow-list"):
         await service.upload_file_to_s3(
             "https://evil.example.com/upload",
@@ -299,7 +302,7 @@ async def test_upload_file_to_s3_accepts_pipefy_host(mock_settings):
     mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
     mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-    service = AttachmentService(settings=mock_settings)
+    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
     with patch("httpx.AsyncClient", return_value=mock_cm):
         result = await service.upload_file_to_s3(
             "https://uploads.pipefy.com/presigned",

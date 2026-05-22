@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from _shared.pagination_test_defaults import DEFAULT_FIRST
 from gql.transport.exceptions import TransportQueryError
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.table_queries import (
     CREATE_TABLE_FIELD_MUTATION,
@@ -26,6 +27,8 @@ from pipefy_sdk.queries.table_queries import (
 from pipefy_sdk.services.table_service import TableService
 from pipefy_sdk.settings import PipefySettings
 
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
+
 
 @pytest.fixture
 def mock_settings():
@@ -38,7 +41,7 @@ def mock_settings():
 
 
 def _make_service(mock_settings, return_value: dict):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -192,7 +195,7 @@ async def test_create_table_sends_create_table_input(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_table_raises_transport_query_error(mock_settings):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("x", errors=[{"message": "denied"}])
     )
@@ -217,7 +220,7 @@ async def test_update_table_merges_id_and_attrs(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_table_raises_transport_query_error(mock_settings):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("x", errors=[{"message": "bad"}])
     )
@@ -240,7 +243,7 @@ async def test_delete_table_sends_delete_input(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_table_raises_transport_query_error(mock_settings):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("x", errors=[{"message": "nope"}])
     )
@@ -270,7 +273,7 @@ async def test_create_table_record_converts_dict_fields(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_table_record_raises_transport_query_error(mock_settings):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("x", errors=[{"message": "err"}])
     )
@@ -312,7 +315,7 @@ async def test_update_table_record_maps_status_id(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_table_record_raises_transport_query_error(mock_settings):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("x", errors=[{"message": "x"}])
     )
@@ -334,7 +337,7 @@ async def test_delete_table_record_sends_id(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_table_record_raises_transport_query_error(mock_settings):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("x", errors=[{"message": "x"}])
     )
@@ -367,7 +370,7 @@ async def test_set_table_record_field_value_wraps_scalar(mock_settings):
 async def test_set_table_record_field_value_raises_transport_query_error(
     mock_settings,
 ):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("x", errors=[{"message": "x"}])
     )
@@ -409,7 +412,7 @@ async def test_create_table_field_sends_input(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_table_field_raises_transport_query_error(mock_settings):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("x", errors=[{"message": "e"}])
     )
@@ -434,7 +437,7 @@ async def test_update_table_field_merges_id_and_attrs(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_table_field_raises_transport_query_error(mock_settings):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("x", errors=[{"message": "e"}])
     )
@@ -457,7 +460,7 @@ async def test_delete_table_field_sends_id(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_table_field_raises_transport_query_error(mock_settings):
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("x", errors=[{"message": "e"}])
     )

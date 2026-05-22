@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from graphql import print_ast
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
@@ -16,6 +17,8 @@ from pipefy_sdk.queries.pipe_queries import (
 )
 from pipefy_sdk.services.pipe_service import PipeService
 from pipefy_sdk.settings import PipefySettings
+
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
 @pytest.fixture
@@ -29,7 +32,7 @@ def mock_settings() -> PipefySettings:
 
 
 def _make_service(mock_settings, return_value):
-    service = PipeService(settings=mock_settings)
+    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -371,7 +374,7 @@ async def test_search_pipes_empty_organizations(mock_settings):
         },
     ]
 
-    service = PipeService(settings=mock_settings)
+    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value={"organizations": mock_orgs})
 
     result = await service.search_pipes()
@@ -386,7 +389,7 @@ async def test_search_pipes_empty_organizations(mock_settings):
 @pytest.mark.asyncio
 async def test_search_pipes_all_organizations_empty(mock_settings):
     """Test search_pipes handles API response with no organizations."""
-    service = PipeService(settings=mock_settings)
+    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value={"organizations": []})
 
     result = await service.search_pipes()
@@ -569,7 +572,7 @@ class TestGetPhaseFields:
         """Factory fixture to create a PipeService with mocked phase response."""
 
         def _create(phase_response: dict):
-            service = PipeService(settings=mock_settings)
+            service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
             service.execute_query = AsyncMock(return_value={"phase": phase_response})
             return service, service.execute_query
 

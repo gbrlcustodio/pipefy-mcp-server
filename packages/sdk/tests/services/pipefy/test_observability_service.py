@@ -7,6 +7,7 @@ import httpx
 import pytest
 from gql.transport.exceptions import TransportQueryError
 from openpyxl import Workbook
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
@@ -23,6 +24,9 @@ from pipefy_sdk.queries.observability_queries import (
 from pipefy_sdk.services.observability_service import ObservabilityService
 from pipefy_sdk.settings import PipefySettings
 
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
+
+
 _ORG_UUID_FOR_TESTS = "341c1327-261c-4766-bb96-7953e4c3970d"
 
 
@@ -37,7 +41,7 @@ def mock_settings():
 
 
 def _make_service(mock_settings, return_value):
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -199,7 +203,7 @@ async def test_get_automation_logs_by_repo_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_ai_agent_logs_transport_error(mock_settings):
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -316,7 +320,7 @@ async def test_get_ai_credit_usage_resolves_numeric_organization_id(mock_setting
             },
         }
     }
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=[resolve_payload, credit_payload])
     result = await service.get_ai_credit_usage("300514213", "current_month")
 
@@ -337,7 +341,7 @@ async def test_get_ai_credit_usage_resolves_numeric_organization_id(mock_setting
 async def test_get_ai_credit_usage_resolve_fails_when_organization_missing(
     mock_settings,
 ):
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value={"organization": None})
     with pytest.raises(ValueError, match="Organization not found"):
         await service.get_ai_credit_usage("999999999", "current_month")
@@ -397,7 +401,7 @@ def _tiny_xlsx_bytes() -> bytes:
 @pytest.mark.asyncio
 async def test_get_automation_jobs_export_csv_success(mock_settings):
     xlsx = _tiny_xlsx_bytes()
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         return_value={
             "automationJobsExport": {
@@ -424,7 +428,7 @@ async def test_get_automation_jobs_export_csv_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_jobs_export_csv_not_finished(mock_settings):
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         return_value={
             "automationJobsExport": {
@@ -441,7 +445,7 @@ async def test_get_automation_jobs_export_csv_not_finished(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_jobs_export_csv_download_error(mock_settings):
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         return_value={
             "automationJobsExport": {
@@ -464,7 +468,7 @@ async def test_get_automation_jobs_export_csv_download_error(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_agents_usage_transport_error(mock_settings):
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
     )
@@ -476,7 +480,7 @@ async def test_get_agents_usage_transport_error(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_logs_transport_error(mock_settings):
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -494,7 +498,7 @@ async def test_get_agents_usage_resolves_numeric_organization_id(mock_settings):
             "totalCredits": 5.0,
         }
     }
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=[resolve_payload, usage_payload])
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
     result = await service.get_agents_usage("300514213", filter_date)
@@ -518,7 +522,7 @@ async def test_get_automations_usage_resolves_numeric_organization_id(mock_setti
             "totalExecutions": 42,
         }
     }
-    service = ObservabilityService(settings=mock_settings)
+    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=[resolve_payload, usage_payload])
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
     result = await service.get_automations_usage("300514213", filter_date)

@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 import pytest
+from pipefy_auth import StaticBearerAuth
 from pipefy_sdk import PipefyClient, PipefySettings
 
 from pipefy_mcp.core.container import ServicesContainer
@@ -67,7 +68,10 @@ class TestServicesContainer:
         container = ServicesContainer()
         container.initialize_services(settings)
 
-        mock_pipefy_client_class.assert_called_once_with(settings=settings.pipefy)
+        mock_pipefy_client_class.assert_called_once()
+        kwargs = mock_pipefy_client_class.call_args.kwargs
+        assert kwargs["settings"] is settings.pipefy
+        assert "auth" in kwargs
         assert container.pipefy_client is mock_client
 
     @patch("pipefy_mcp.core.container.InternalApiClient")
@@ -100,3 +104,48 @@ class TestServicesContainer:
         mock_client.set_ai_automation_service.assert_called_once_with(
             mock_ai_automation_service_class.return_value
         )
+
+    @patch("pipefy_mcp.core.container.AiAutomationService")
+    @patch("pipefy_mcp.core.container.InternalApiClient")
+    @patch("pipefy_mcp.core.container.PipefyClient")
+    def test_initialize_services_picks_up_pipefy_token_over_service_account(
+        self,
+        mock_pipefy_client_class,
+        mock_internal_api_client_class,
+        mock_ai_automation_service_class,
+        monkeypatch,
+    ):
+        """``PIPEFY_TOKEN`` outranks ``PIPEFY_SERVICE_ACCOUNT_*`` (same precedence as the CLI)."""
+        mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
+        monkeypatch.setenv("PIPEFY_TOKEN", "env-bearer")
+        settings = Settings(
+            pipefy=PipefySettings(
+                graphql_url="https://api.pipefy.com/graphql",
+                service_account_url="https://auth.pipefy.com/oauth/token",
+                service_account_client_id="client_id",
+                service_account_client_secret="client_secret",
+            )
+        )
+        ServicesContainer().initialize_services(settings)
+        auth = mock_pipefy_client_class.call_args.kwargs["auth"]
+        assert isinstance(auth, StaticBearerAuth)
+
+    @patch("pipefy_mcp.core.container.AiAutomationService")
+    @patch("pipefy_mcp.core.container.InternalApiClient")
+    @patch("pipefy_mcp.core.container.PipefyClient")
+    def test_initialize_services_raises_when_no_auth_source_configured(
+        self,
+        mock_pipefy_client_class,
+        mock_internal_api_client_class,
+        mock_ai_automation_service_class,
+        monkeypatch,
+    ):
+        """No PIPEFY_TOKEN and no service-account triple → runtime error with policy chain."""
+        monkeypatch.delenv("PIPEFY_TOKEN", raising=False)
+        settings = Settings(
+            pipefy=PipefySettings(
+                graphql_url="https://api.pipefy.com/graphql",
+            )
+        )
+        with pytest.raises(RuntimeError, match="Missing Pipefy authentication"):
+            ServicesContainer().initialize_services(settings)

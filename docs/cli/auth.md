@@ -23,10 +23,10 @@ Most-explicit wins. The CLI walks this list top-down and stops at the first sour
 |---|--------|----------|-------|
 | 1 | `--token <bearer>` | Whoever owns the token | Skips OAuth entirely |
 | 2 | `PIPEFY_TOKEN` env var | Whoever owns the token | Same path as `--token` |
-| 3 | `PIPEFY_SERVICE_ACCOUNT_*` triple | Service account | Client-credentials grant (unlocks AI automations) |
+| 3 | `PIPEFY_SERVICE_ACCOUNT_*` triple | Service account | OAuth2 client-credentials grant |
 | 4 | Stored user session | You (the signed-in user) | Eager refresh inside a 60 s leeway window |
 
-Tiers 1, 2, and 4 ultimately become a **static bearer token** on the GraphQL client. Only tier 3 builds the `InternalApiClient` that some MCP/CLI features (AI automations, certain relation flows) rely on — see [Limitations on the bearer path](#limitations-on-the-bearer-path).
+Every tier wires the `InternalApiClient` against `PIPEFY_INTERNAL_API_URL` when that variable is set, so features that go through the internal API (AI agent automations, some relation flows) work from any path — not just the service-account one.
 
 If `pipefy auth login` succeeds but a higher-precedence source is set in your shell env, the CLI prints a one-line note so you know your stored session is being shadowed.
 
@@ -184,10 +184,6 @@ When no session is stored, `pipefy auth logout` prints `Not signed in. Nothing t
 
 Pair each issuer with the matching `PIPEFY_GRAPHQL_URL` (`https://app.pipefy.com/graphql` for prod, `https://piporacle.pipefy.com/graphql` for piporacle).
 
-### Limitations on the bearer path
-
-Tiers 1, 2, and 4 all reach the SDK as a static bearer. Only tier 3 builds an `InternalApiClient` against `PIPEFY_INTERNAL_API_URL`. As a result, features that go through the internal API — AI agent automations, some relation flows — are **only available on the service-account path** today. This is the same limitation that already applies to `--token` / `PIPEFY_TOKEN`; lifting it for stored sessions is tracked separately.
-
 ---
 
 ## Headless / SSH
@@ -218,9 +214,9 @@ You haven't set the issuer URL. Use the value from [Pipefy issuer URLs](#pipefy-
 
 The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running — install `gnome-keyring` or `kwallet`, or fall back to a static `PIPEFY_TOKEN`.
 
-### `Missing authentication. Use --token, set PIPEFY_TOKEN, configure PIPEFY_SERVICE_ACCOUNT_*, or run pipefy auth login.`
+### `Missing Pipefy authentication. Set PIPEFY_TOKEN, configure PIPEFY_SERVICE_ACCOUNT_*, or run \`pipefy auth login\`.`
 
-No source resolved. Pick one from [Credential precedence](#credential-precedence). The message also lists which `PIPEFY_SERVICE_ACCOUNT_*` keys are missing, in case you have a partial service-account setup.
+No source resolved. Pick one from [Credential precedence](#credential-precedence). You can also pass `--token <bearer>` for a one-off override.
 
 ### `Note: PIPEFY_SERVICE_ACCOUNT_* is set in your environment; other pipefy commands will continue to use it ...`
 

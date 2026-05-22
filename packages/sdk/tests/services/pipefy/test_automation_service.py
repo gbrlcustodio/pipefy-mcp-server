@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.automation_queries import (
     AUTOMATION_SIMULATION_QUERY,
@@ -23,6 +24,9 @@ from pipefy_sdk.services.automation_service import (
     _format_automation_error_details,
 )
 from pipefy_sdk.settings import PipefySettings
+
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
+
 
 ## ---------------------------------------------------------------------------
 ## _format_automation_error_details edge cases
@@ -112,7 +116,7 @@ def mock_settings():
 
 
 def _make_service(mock_settings, return_value: dict):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -175,7 +179,7 @@ async def test_get_automation_when_api_returns_null(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
     )
@@ -204,7 +208,7 @@ async def test_get_automations_success(mock_settings):
 @pytest.mark.asyncio
 async def test_get_automations_success_resolves_org_from_pipe(mock_settings):
     rows = [{"id": "a1", "name": "Rule 1", "active": True}]
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=[
             {"pipe": {"organizationId": "300"}},
@@ -240,7 +244,7 @@ async def test_get_automations_organization_only_omits_repo_id(mock_settings):
 @pytest.mark.asyncio
 async def test_get_automations_pipe_only_org_not_found_returns_empty(mock_settings):
     """When pipe_id is given but org lookup returns no organizationId, return empty."""
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value={"pipe": {"organizationId": None}})
     result = await service.get_automations(pipe_id="100")
     assert result == []
@@ -250,7 +254,7 @@ async def test_get_automations_pipe_only_org_not_found_returns_empty(mock_settin
 @pytest.mark.asyncio
 async def test_get_automations_pipe_only_pipe_missing_returns_empty(mock_settings):
     """When pipe lookup returns no pipe key at all, return empty."""
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value={"pipe": None})
     result = await service.get_automations(pipe_id="100")
     assert result == []
@@ -291,7 +295,7 @@ async def test_get_automation_events_null_returns_empty(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automations_both_none_returns_empty(mock_settings):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock()
     result = await service.get_automations()
     service.execute_query.assert_not_called()
@@ -301,7 +305,7 @@ async def test_get_automations_both_none_returns_empty(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automations_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -338,7 +342,7 @@ async def test_get_automation_actions_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_actions_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "bad pipe"}])
     )
@@ -370,7 +374,7 @@ async def test_get_automation_events_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_automation_events_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "nope"}])
     )
@@ -510,7 +514,7 @@ async def test_create_send_task_automation_includes_event_params_and_condition(
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_automation_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "reject"}])
     )
@@ -571,7 +575,7 @@ async def test_update_automation_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_automation_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
     )
@@ -595,7 +599,7 @@ async def test_delete_automation_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_automation_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "no access"}])
     )
@@ -619,7 +623,7 @@ async def test_simulate_automation_success(mock_settings):
             "simulationResult": {"preview": True},
         },
     }
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=[mutation_payload, query_payload])
     result = await service.simulate_automation(
         pipe_id="pipe-77",
@@ -667,7 +671,7 @@ async def test_simulate_automation_extra_input_overrides_repo_ids(mock_settings)
             "simulationResult": None,
         },
     }
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=[mutation_payload, query_payload])
     await service.simulate_automation(
         pipe_id="default-pipe",
@@ -683,7 +687,7 @@ async def test_simulate_automation_extra_input_overrides_repo_ids(mock_settings)
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_simulate_automation_raises_when_no_simulation_id(mock_settings):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         return_value={"createAutomationSimulation": {"simulationId": None}},
     )
@@ -698,7 +702,7 @@ async def test_simulate_automation_raises_when_no_simulation_id(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_simulate_automation_transport_error(mock_settings):
-    service = AutomationService(settings=mock_settings)
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )

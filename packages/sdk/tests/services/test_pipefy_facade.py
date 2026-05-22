@@ -1,9 +1,8 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from httpx_auth import OAuth2ClientCredentials
+from pipefy_auth import StaticBearerAuth
 
-from pipefy_sdk.base_client import StaticBearerAuth
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
@@ -32,12 +31,11 @@ def mock_settings():
 
 
 @pytest.mark.unit
-def test_pipefy_client_bearer_token_uses_static_bearer_auth(mock_settings):
-    oauth_client = PipefyClient(mock_settings)
-    assert isinstance(oauth_client._card_service._auth, OAuth2ClientCredentials)
-
-    bearer_client = PipefyClient(mock_settings, bearer_token="unit-token")
-    assert isinstance(bearer_client._card_service._auth, StaticBearerAuth)
+def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
+    auth = StaticBearerAuth("unit-token")
+    client = PipefyClient(mock_settings, auth=auth)
+    assert client._card_service._auth is auth
+    assert client._pipe_service._auth is auth
 
 
 @pytest.mark.unit
@@ -546,7 +544,7 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 
 @pytest.mark.unit
 def test_pipefy_client_creates_services_with_shared_auth():
-    """Test PipefyClient creates services that share the same OAuth auth instance."""
+    """Test PipefyClient creates services that share the same auth instance."""
 
     settings = PipefySettings(
         graphql_url="https://api.pipefy.com/graphql",
@@ -554,7 +552,8 @@ def test_pipefy_client_creates_services_with_shared_auth():
         service_account_client_id="client_id",
         service_account_client_secret="client_secret",
     )
-    client = PipefyClient(settings=settings)
+    auth = StaticBearerAuth("shared-token")
+    client = PipefyClient(settings=settings, auth=auth)
 
     assert isinstance(client._pipe_service, PipeService)
     assert isinstance(client._card_service, CardService)
@@ -726,7 +725,7 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
     )
     from pipefy_sdk.services.internal_api_client import InternalApiClient
 
-    client = PipefyClient(settings=mock_settings)
+    client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
     internal = MagicMock(spec=InternalApiClient)
     internal.execute_query = AsyncMock(
         return_value={"deleteCardRelation": {"success": True}}

@@ -121,7 +121,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `introspect_query` | `pipefy introspect query` | shipped | Task **9.2**. |
 | `introspect_type` | `pipefy introspect type` | shipped | Task **9.2**. |
 | `invite_members` | `pipefy member invite` | shipped | Task **5.11**. |
-| `list_portals` | `pipefy portal list` | shipped | Portal CRUD task **2.0**; `--org-uuid`; at most one main portal per org. |
+| `list_portals` | `pipefy portal list` | shipped | Portal CRUD task **2.0**; `--organization-uuid`; at most one main portal per org. |
 | `move_card_to_phase` | `pipefy card move` | shipped | Task **5.2** (`--phase`). |
 | `remove_member_from_pipe` | `pipefy member remove` | shipped | Task **5.11**; ``PIPEFY_SERVICE_ACCOUNT_IDS`` guard like MCP. |
 | `search_pipes` | `pipefy pipe list` | shipped | Task **5.3** (`--name`, `--max-per-org`). |

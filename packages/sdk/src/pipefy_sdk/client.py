@@ -53,6 +53,7 @@ from pipefy_sdk.services.pipe_service import (
     SEARCH_PIPES_MAX_PER_ORG_CAP,
     PipeService,
 )
+from pipefy_sdk.services.portal_service import PortalService
 from pipefy_sdk.services.relation_service import RelationService
 from pipefy_sdk.services.report_service import ReportService
 from pipefy_sdk.services.schema_introspection_service import (
@@ -129,6 +130,7 @@ class PipefyClient:
         )
         self._ai_automation_service: AiAutomationService | None = None
         self._internal_api_client: InternalApiClient | None = None
+        self._portal_service = PortalService(settings=settings, auth=auth)
 
     @property
     def ai_automation_available(self) -> bool:
@@ -1177,6 +1179,29 @@ class PipefyClient:
             organization_id: Numeric organization ID.
         """
         return await self._organization_service.get_organization(organization_id)
+
+    async def list_portals(
+        self,
+        organization_uuid: str | int,
+        search_term: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List portals for an organization.
+
+        Args:
+            organization_uuid: Organization UUID, or numeric organization id.
+            search_term: Optional name filter.
+        """
+        return await self._portal_service.list_portals(
+            organization_uuid, search_term=search_term
+        )
+
+    async def get_portal(self, portal_uuid: str) -> dict[str, Any]:
+        """Fetch a portal by UUID.
+
+        Args:
+            portal_uuid: Portal interface UUID.
+        """
+        return await self._portal_service.get_portal(portal_uuid)
 
     async def get_me(self) -> MePayload | None:
         """Return the authenticated user's identity, or ``None`` when ``me`` resolves null."""

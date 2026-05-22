@@ -28,6 +28,7 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │ email             Inbox emails and email templates.                          │
 │ field-condition   Field conditions (dynamic form rules on phases).           │
 │ pipe              Pipe operations.                                           │
+│ portal            Portal operations.                                         │
 │ phase             Pipe phase operations.                                     │
 │ field             Phase field operations.                                    │
 │ table             Database table operations.                                 │
@@ -1809,6 +1810,46 @@ Usage: pipefy pipe update [OPTIONS] PIPE_ID
 │                              (UpdatePipeInput).                              │
 │ --json         -j                                                            │
 │ --help                       Show this message and exit.                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal
+Usage: pipefy portal [OPTIONS] COMMAND [ARGS]...
+
+ Portal operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list   List portals for an organization.                                     │
+│ get    Fetch a portal by UUID.                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/get
+Usage: pipefy portal get [OPTIONS] PORTAL_UUID
+
+ Fetch a portal by UUID.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Portal UUID. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/list
+Usage: pipefy portal list [OPTIONS]
+
+ List portals for an organization.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization-uuid          TEXT  Organization UUID, or numeric          │
+│                                       organization id (string).              │
+│                                       [required]                             │
+│    --search-term                TEXT  Optional portal name filter.           │
+│    --json               -j            Print machine-readable JSON to stdout. │
+│    --help                             Show this message and exit.            │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP record

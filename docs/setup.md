@@ -63,6 +63,7 @@ Runtime settings come from **`pipefy_mcp.settings.Settings`** ([Pydantic Setting
 |-----|------|
 | `PIPEFY_GRAPHQL_URL` | Public GraphQL endpoint (default in `.env.example`). |
 | `PIPEFY_INTERNAL_API_URL` | Internal GraphQL (AI automations, some relation flows). Use the value from [`.env.example`](../.env.example). |
+| `PIPEFY_INTERFACES_GRAPHQL_URL` | Interfaces GraphQL (portals, pages, elements). Optional; defaults to `https://app.pipefy.com/graphql/interfaces`. |
 | `PIPEFY_SERVICE_ACCOUNT_URL` | Service-account OAuth 2.0 token endpoint (client-credentials grant). |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | Service-account client_id (OAuth 2.0 RFC 6749). |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | Service-account client_secret. |
@@ -88,12 +89,13 @@ All other optional flags (insecure dev URLs, webhooks, introspection cache, etc.
 
 **Recommended:** set the client’s working directory to your **clone root** and use **`.env`** for `PIPEFY_*` values. Then the JSON `env` block can be minimal or empty for local dev. If you put secrets only in JSON, use the same keys as [`.env.example`](../.env.example).
 
-Use this **`env` shape** when you need to inline values (e.g. CI or machines without a `.env` file). Include **`PIPEFY_INTERNAL_API_URL`** for parity with full tool coverage (same as [`.env.example`](../.env.example)).
+Use this **`env` shape** when you need to inline values (e.g. CI or machines without a `.env` file). Include **`PIPEFY_INTERNAL_API_URL`** and **`PIPEFY_INTERFACES_GRAPHQL_URL`** for parity with full tool coverage (same as [`.env.example`](../.env.example)).
 
 ```json
 "env": {
     "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
     "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
+    "PIPEFY_INTERFACES_GRAPHQL_URL": "https://app.pipefy.com/graphql/interfaces",
     "PIPEFY_SERVICE_ACCOUNT_URL": "https://app.pipefy.com/oauth/token",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<SERVICE_ACCOUNT_CLIENT_ID>",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
@@ -121,6 +123,7 @@ Use this **`env` shape** when you need to inline values (e.g. CI or machines wit
             "env": {
                 "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
                 "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
+                "PIPEFY_INTERFACES_GRAPHQL_URL": "https://app.pipefy.com/graphql/interfaces",
                 "PIPEFY_SERVICE_ACCOUNT_URL": "https://app.pipefy.com/oauth/token",
                 "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<SERVICE_ACCOUNT_CLIENT_ID>",
                 "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
@@ -157,6 +160,7 @@ MCP servers load from a JSON config file. You can keep credentials in **`.env`**
             "env": {
                 "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
                 "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
+                "PIPEFY_INTERFACES_GRAPHQL_URL": "https://app.pipefy.com/graphql/interfaces",
                 "PIPEFY_SERVICE_ACCOUNT_URL": "https://app.pipefy.com/oauth/token",
                 "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<SERVICE_ACCOUNT_CLIENT_ID>",
                 "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"
@@ -186,6 +190,7 @@ claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_ID <YOUR_CLIENT_ID>
 claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET <YOUR_CLIENT_SECRET>
 claude mcp add-env pipefy PIPEFY_GRAPHQL_URL https://app.pipefy.com/graphql
 claude mcp add-env pipefy PIPEFY_INTERNAL_API_URL https://app.pipefy.com/internal_api
+claude mcp add-env pipefy PIPEFY_INTERFACES_GRAPHQL_URL https://app.pipefy.com/graphql/interfaces
 claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_URL https://app.pipefy.com/oauth/token
 ```
 
@@ -205,6 +210,7 @@ claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_URL https://app.pipefy.com/oaut
             "env": {
                 "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
                 "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
+                "PIPEFY_INTERFACES_GRAPHQL_URL": "https://app.pipefy.com/graphql/interfaces",
                 "PIPEFY_SERVICE_ACCOUNT_URL": "https://app.pipefy.com/oauth/token",
                 "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<SERVICE_ACCOUNT_CLIENT_ID>",
                 "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<SERVICE_ACCOUNT_CLIENT_SECRET>"

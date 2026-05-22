@@ -14,6 +14,7 @@ from pipefy_mcp.tools.observability_tools import ObservabilityTools
 from pipefy_mcp.tools.organization_tools import OrganizationTools
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.pipe_tools import PipeTools
+from pipefy_mcp.tools.portal_tools import PortalTools
 from pipefy_mcp.tools.relation_tools import RelationTools
 from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.table_tools import TableTools
@@ -97,6 +98,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "get_organization_report_export",
         "get_organization_reports",
         "get_phase_fields",
+        "get_portal",
         "get_pipe",
         "get_pipe_members",
         "get_pipe_relations",
@@ -116,6 +118,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "introspect_query",
         "introspect_type",
         "invite_members",
+        "list_portals",
         "move_card_to_phase",
         "remove_member_from_pipe",
         "search_pipes",
@@ -211,6 +214,7 @@ class ToolRegistry:
         AutomationTools.register(self.mcp, self.services_container.pipefy_client)
         IntrospectionTools.register(self.mcp, self.services_container.pipefy_client)
         OrganizationTools.register(self.mcp, self.services_container.pipefy_client)
+        PortalTools.register(self.mcp, self.services_container.pipefy_client)
         ObservabilityTools.register(self.mcp, self.services_container.pipefy_client)
 
         AiAutomationTools.register(self.mcp, self.services_container.pipefy_client)

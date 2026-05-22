@@ -62,6 +62,11 @@ class PipefySettings(BaseModel):
         description="Internal API URL for AI Automation endpoints",
     )
 
+    interfaces_graphql_url: str = Field(
+        default="https://app.pipefy.com/graphql/interfaces",
+        description="GraphQL URL for Pipefy Interfaces schema (portals, pages, elements)",
+    )
+
     service_account_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices("service_account_url", "oauth_url"),
@@ -184,5 +189,9 @@ class PipefySettings(BaseModel):
         if u := self.internal_api_url.strip():
             validate_https_service_endpoint_url(
                 u, "internal_api_url", allow_insecure=allow
+            )
+        if u := self.interfaces_graphql_url.strip():
+            validate_https_service_endpoint_url(
+                u, "interfaces_graphql_url", allow_insecure=allow
             )
         return self

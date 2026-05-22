@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **128** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **130** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -109,6 +109,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `get_pipe_report_export` | (poll via `pipefy report-pipe export --format json`) | shipped | Reports + exports. |
 | `get_pipe_report_filterable_fields` | `pipefy report-pipe filterable-fields` | shipped | Reports domain. |
 | `get_pipe_reports` | `pipefy report-pipe list` | shipped | Reports domain. |
+| `get_portal` | `pipefy portal get` | shipped | Portal CRUD task **2.0**; Interfaces schema; read-only; includes `published`. |
 | `get_start_form_fields` | — | deferred | Pipe configuration / building; not in FR-5.2 launch list. |
 | `get_table` | `pipefy table get` | shipped | Task **5.6**. |
 | `get_table_record` | `pipefy record get` | shipped | Task **5.7**. |
@@ -120,6 +121,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `introspect_query` | `pipefy introspect query` | shipped | Task **9.2**. |
 | `introspect_type` | `pipefy introspect type` | shipped | Task **9.2**. |
 | `invite_members` | `pipefy member invite` | shipped | Task **5.11**. |
+| `list_portals` | `pipefy portal list` | shipped | Portal CRUD task **2.0**; `--organization-uuid`; at most one main portal per org. |
 | `move_card_to_phase` | `pipefy card move` | shipped | Task **5.2** (`--phase`). |
 | `remove_member_from_pipe` | `pipefy member remove` | shipped | Task **5.11**; ``PIPEFY_SERVICE_ACCOUNT_IDS`` guard like MCP. |
 | `search_pipes` | `pipefy pipe list` | shipped | Task **5.3** (`--name`, `--max-per-org`). |
@@ -165,6 +167,6 @@ for n in m.body:
             print(len(v.args[0].elts))"
 ```
 
-Expect **128** tool names in `PIPEFY_TOOL_NAMES` and **128** data rows in the parity table (excluding the header rows).
+Expect **130** tool names in `PIPEFY_TOOL_NAMES` and **130** data rows in the parity table (excluding the header rows).
 
 When adding or removing an MCP tool, update **this file** and `PIPEFY_TOOL_NAMES` in the same change set.

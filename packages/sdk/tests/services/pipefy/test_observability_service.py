@@ -475,14 +475,6 @@ async def test_get_agents_usage_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_resolve_organization_uuid_rejects_non_uuid_non_numeric(mock_settings):
-    service = ObservabilityService(settings=mock_settings)
-    with pytest.raises(ValueError, match="must be a UUID or numeric id"):
-        await service._resolve_organization_uuid("not-a-uuid-or-digits")
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
 async def test_get_automation_logs_transport_error(mock_settings):
     service = ObservabilityService(settings=mock_settings)
     service.execute_query = AsyncMock(

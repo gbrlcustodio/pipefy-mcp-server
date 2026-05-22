@@ -54,14 +54,16 @@ class BearerToken:
 
 @dataclass(frozen=True)
 class AuthContext:
-    """User-auth identity for a single CLI invocation.
+    """Auth inputs for a single CLI invocation.
 
-    Carries only identity. Where-to-call configuration (URLs, service-account
-    credentials, ``allow_insecure_urls``) lives on :class:`PipefySettings` and is
-    passed alongside.
+    Each field maps to one resolver tier (bearer-token, service-account,
+    stored-session). Built once at startup from the loaded
+    :class:`pipefy_auth.AuthSettings` plus the per-invocation ``--token`` /
+    ``PIPEFY_TOKEN`` resolution.
     """
 
     bearer_token: BearerToken | None
+    service_account: ServiceAccount | None
     oidc_client: OidcClient | None
 
 
@@ -78,24 +80,10 @@ def clear_authenticated_client_cache() -> None:
     _cached_client = None
 
 
-def _service_account(pipefy_settings: PipefySettings) -> ServiceAccount | None:
-    if (
-        pipefy_settings.service_account_url
-        and pipefy_settings.service_account_client_id
-        and pipefy_settings.service_account_client_secret
-    ):
-        return ServiceAccount(
-            token_url=pipefy_settings.service_account_url,
-            client_id=pipefy_settings.service_account_client_id,
-            client_secret=pipefy_settings.service_account_client_secret,
-        )
-    return None
-
-
-def _resolve(pipefy_settings: PipefySettings, auth: AuthContext) -> Auth | None:
+def _resolve(auth: AuthContext) -> Auth | None:
     return resolve_pipefy_auth(
         static_token=auth.bearer_token.value if auth.bearer_token else None,
-        service_account=_service_account(pipefy_settings),
+        service_account=auth.service_account,
         oidc_client=auth.oidc_client,
     )
 
@@ -111,11 +99,11 @@ def _to_display_source(tier: str, bearer: BearerToken | None) -> str:
     return tier
 
 
-def detect_cli_sources(pipefy_settings: PipefySettings, auth: AuthContext) -> list[str]:
+def detect_cli_sources(auth: AuthContext) -> list[str]:
     """Return detected sources mapped to CLI display labels."""
     detected = detect_pipefy_tiers(
         static_token=auth.bearer_token.value if auth.bearer_token else None,
-        service_account=_service_account(pipefy_settings),
+        service_account=auth.service_account,
         oidc_client=auth.oidc_client,
     )
     return [_to_display_source(tier, auth.bearer_token) for tier in detected]
@@ -164,7 +152,7 @@ def get_authenticated_client(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
 
-    resolved = _resolve(pipefy_settings, auth)
+    resolved = _resolve(auth)
     if resolved is None:
         typer.echo(f"{missing_auth_message()} See {DOCS_CLI_AUTH_REF}.", err=True)
         raise typer.Exit(2)

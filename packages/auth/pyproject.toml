@@ -8,6 +8,7 @@ dependencies = [
     "httpx>=0.28",
     "httpx-auth>=0.23.1",
     "keyring>=24",
+    "pydantic>=2.11.3",
 ]
 
 [dependency-groups]

@@ -10,7 +10,7 @@ from __future__ import annotations
 import textwrap
 
 import pytest
-from pipefy_sdk.settings import _reset_legacy_oauth_warning_state
+from pipefy_auth.settings import _reset_legacy_oauth_warning_state
 
 from pipefy_cli import config as config_module
 from pipefy_cli.config import (
@@ -41,7 +41,7 @@ def test_legacy_env_vars_still_populate_new_fields(
     resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    ).pipefy
+    ).auth
 
     assert resolved.service_account_url == "https://legacy.example.com/oauth/token"
     assert resolved.service_account_client_id == "legacy-client"
@@ -62,7 +62,7 @@ def test_new_env_var_wins_when_both_legacy_and_new_set(
     resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    ).pipefy
+    ).auth
 
     assert resolved.service_account_url == "https://new.example.com/oauth/token"
 
@@ -109,7 +109,7 @@ def test_legacy_toml_keys_still_populate_new_fields(
     resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    ).pipefy
+    ).auth
 
     assert resolved.service_account_url == "https://legacy-toml.example.com/oauth/token"
     assert resolved.service_account_client_id == "legacy-toml-client"
@@ -138,7 +138,7 @@ def test_toml_new_key_wins_when_both_legacy_and_new_present(
     resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    ).pipefy
+    ).auth
 
     assert resolved.service_account_url == "https://new-toml.example.com/oauth/token"
 

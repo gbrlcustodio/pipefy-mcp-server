@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from pipefy_auth import StaticBearerAuth
+from pipefy_auth import AuthSettings, StaticBearerAuth
 from pipefy_sdk import PipefyClient, PipefySettings
 
 from pipefy_mcp.core.container import ServicesContainer
@@ -153,12 +153,20 @@ class TestServicesContainer:
         mock_ai_automation_service_class,
         monkeypatch,
     ):
-        """No PIPEFY_TOKEN and no service-account triple → runtime error with policy chain."""
-        monkeypatch.delenv("PIPEFY_TOKEN", raising=False)
+        """No PIPEFY_TOKEN and no service-account triple → runtime error."""
+        for key in (
+            "PIPEFY_TOKEN",
+            "PIPEFY_SERVICE_ACCOUNT_URL",
+            "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
+            "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
+            "PIPEFY_OAUTH_URL",
+            "PIPEFY_OAUTH_CLIENT",
+            "PIPEFY_OAUTH_SECRET",
+        ):
+            monkeypatch.delenv(key, raising=False)
         settings = Settings(
-            pipefy=PipefySettings(
-                graphql_url="https://api.pipefy.com/graphql",
-            )
+            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            auth=AuthSettings(),
         )
         with pytest.raises(RuntimeError, match="Missing Pipefy authentication"):
             ServicesContainer().initialize_services(settings)

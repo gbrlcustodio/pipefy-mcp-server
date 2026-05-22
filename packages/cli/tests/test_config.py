@@ -37,13 +37,17 @@ def test_env_only_resolution(
     resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    ).pipefy
+    )
 
-    assert resolved.graphql_url == "https://env-only.example.com/graphql"
-    assert resolved.internal_api_url == "https://env-only.example.com/internal_api"
-    assert resolved.service_account_url == "https://env-only.example.com/oauth/token"
-    assert resolved.service_account_client_id == "env-client"
-    assert resolved.service_account_client_secret == "env-secret"
+    assert resolved.pipefy.graphql_url == "https://env-only.example.com/graphql"
+    assert (
+        resolved.pipefy.internal_api_url == "https://env-only.example.com/internal_api"
+    )
+    assert (
+        resolved.auth.service_account_url == "https://env-only.example.com/oauth/token"
+    )
+    assert resolved.auth.service_account_client_id == "env-client"
+    assert resolved.auth.service_account_client_secret == "env-secret"
 
 
 def test_dotenv_only_resolution(
@@ -68,10 +72,10 @@ def test_dotenv_only_resolution(
     resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    ).pipefy
+    )
 
-    assert resolved.graphql_url == "https://dotenv.example.com/graphql"
-    assert resolved.service_account_client_id == "dotenv-client"
+    assert resolved.pipefy.graphql_url == "https://dotenv.example.com/graphql"
+    assert resolved.auth.service_account_client_id == "dotenv-client"
 
 
 def test_process_env_overrides_dotenv(
@@ -179,10 +183,10 @@ def test_user_toml_fallback_lowest_precedence(
     resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
-    ).pipefy
+    )
 
-    assert resolved.graphql_url == "https://from-toml.example.com/graphql"
-    assert resolved.service_account_client_id == "toml-client"
+    assert resolved.pipefy.graphql_url == "https://from-toml.example.com/graphql"
+    assert resolved.auth.service_account_client_id == "toml-client"
 
 
 def test_env_overrides_user_toml(
@@ -221,6 +225,7 @@ def test_apply_toml_fills_only_missing_fields(
     saved_cwd,
     monkeypatch: pytest.MonkeyPatch,
 ):
+    from pipefy_auth import AuthSettings
     from pipefy_sdk import PipefySettings
 
     cfg_path = saved_cwd / "config.toml"
@@ -236,11 +241,13 @@ def test_apply_toml_fills_only_missing_fields(
     )
     monkeypatch.setattr(config_module, "USER_CONFIG_PATH", cfg_path)
 
-    base = PipefySettings(service_account_client_id="from-env")
-    merged = apply_toml_fallback(base)
+    pipefy, auth = apply_toml_fallback(
+        PipefySettings(),
+        AuthSettings(service_account_client_id="from-env"),
+    )
 
-    assert merged.graphql_url == "https://toml-only.example.com/graphql"
-    assert merged.service_account_client_id == "from-env"
+    assert pipefy.graphql_url == "https://toml-only.example.com/graphql"
+    assert auth.service_account_client_id == "from-env"
 
 
 def test_graphql_url_flag_localhost_rejected_without_insecure(
@@ -337,4 +344,4 @@ def test_auth_url_validation(
             graphql_url_flag=None,
             allow_insecure_urls_flag=allow_insecure_flag,
         )
-        assert resolved.auth_url == url
+        assert resolved.auth.auth_url == url

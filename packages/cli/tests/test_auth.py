@@ -10,6 +10,7 @@ import typer
 from pipefy_auth import (
     CallableBearerAuth,
     OidcClient,
+    ServiceAccount,
     StaticBearerAuth,
     StoredSession,
 )
@@ -24,14 +25,24 @@ from pipefy_cli.auth import (
 from pipefy_cli.main import app
 
 
-def _minimal_service_account_settings() -> PipefySettings:
+def _minimal_settings() -> PipefySettings:
     return PipefySettings(
         graphql_url="https://unit.example.com/graphql",
         internal_api_url="https://unit.example.com/internal_api",
-        service_account_url="https://unit.example.com/oauth/token",
-        service_account_client_id="cid",
-        service_account_client_secret="csecret",
     )
+
+
+def _service_account() -> ServiceAccount:
+    return ServiceAccount(
+        token_url="https://unit.example.com/oauth/token",
+        client_id="cid",
+        client_secret="csecret",
+    )
+
+
+# Backwards-compatible alias for tests that pre-date the settings split.
+def _minimal_service_account_settings() -> PipefySettings:
+    return _minimal_settings()
 
 
 def _auth(
@@ -40,8 +51,10 @@ def _auth(
     bearer_source: str = "flag",
     issuer_url: str | None = None,
     client_id: str | None = None,
+    service_account: ServiceAccount | None = None,
+    include_service_account: bool = True,
 ) -> AuthContext:
-    """Build an :class:`AuthContext` for tests; constructs :class:`OidcClient` iff both halves are provided."""
+    """Build an :class:`AuthContext` for tests."""
     oidc_client = (
         OidcClient(issuer_url=issuer_url, client_id=client_id)
         if issuer_url and client_id
@@ -52,7 +65,12 @@ def _auth(
         if bearer_token is not None
         else None
     )
-    return AuthContext(bearer_token=bearer, oidc_client=oidc_client)
+    sa = (
+        service_account
+        if service_account is not None
+        else (_service_account() if include_service_account else None)
+    )
+    return AuthContext(bearer_token=bearer, service_account=sa, oidc_client=oidc_client)
 
 
 def test_get_authenticated_client_passes_auth_to_pipefy_client(clean_pipefy_env):
@@ -159,17 +177,13 @@ def test_cli_uses_pipefy_token_env_when_no_flag(
 
 def test_detect_cli_sources_maps_static_token_to_flag_label(clean_pipefy_env):
     """``--token`` source surfaces as the locked ``flag-token`` wire value."""
-    settings = _minimal_service_account_settings()
-    sources = detect_cli_sources(
-        settings, _auth(bearer_token="t", bearer_source="flag")
-    )
+    sources = detect_cli_sources(_auth(bearer_token="t", bearer_source="flag"))
     assert sources[0] == "flag-token"
 
 
 def test_detect_cli_sources_maps_env_token_to_env_label(clean_pipefy_env):
     """``PIPEFY_TOKEN`` source surfaces as the locked ``env-token`` wire value."""
-    settings = _minimal_service_account_settings()
-    sources = detect_cli_sources(settings, _auth(bearer_token="t", bearer_source="env"))
+    sources = detect_cli_sources(_auth(bearer_token="t", bearer_source="env"))
     assert sources[0] == "env-token"
 
 
@@ -200,6 +214,23 @@ def _fresh_stored_session(*, access_token: str = "SESSION_ACCESS") -> StoredSess
 def _public_only_settings() -> PipefySettings:
     """``PIPEFY_SERVICE_ACCOUNT_*`` triple absent → service-account tier unavailable, stored session wins."""
     return PipefySettings(graphql_url="https://unit.example.com/graphql")
+
+
+def _public_only_auth(
+    *,
+    bearer_token: str | None = None,
+    bearer_source: str = "flag",
+    issuer_url: str | None = None,
+    client_id: str | None = None,
+) -> AuthContext:
+    """``AuthContext`` without a service-account tier (stored-session scenario)."""
+    return _auth(
+        bearer_token=bearer_token,
+        bearer_source=bearer_source,
+        issuer_url=issuer_url,
+        client_id=client_id,
+        include_service_account=False,
+    )
 
 
 def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
@@ -257,7 +288,8 @@ def test_stored_session_used_when_no_other_source(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(
-            settings, _auth(issuer_url=_ISSUER, client_id="pipefy-cli")
+            settings,
+            _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         mock_pc.assert_called_once()
         assert isinstance(mock_pc.call_args.kwargs["auth"], CallableBearerAuth)
@@ -274,10 +306,12 @@ def test_cache_reuses_resolved_auth_for_stored_session(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         first = get_authenticated_client(
-            settings, _auth(issuer_url=_ISSUER, client_id="pipefy-cli")
+            settings,
+            _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         second = get_authenticated_client(
-            settings, _auth(issuer_url=_ISSUER, client_id="pipefy-cli")
+            settings,
+            _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         assert first is second
         assert mock_pc.call_count == 1
@@ -304,7 +338,8 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
         mock_resolve.return_value = CallableBearerAuth(lambda: "ACCESS")
         with pytest.raises(typer.Exit) as excinfo:
             get_authenticated_client(
-                settings, _auth(issuer_url=_ISSUER, client_id="pipefy-cli")
+                settings,
+                _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
             )
         assert excinfo.value.exit_code == 2
     err = capsys.readouterr().err

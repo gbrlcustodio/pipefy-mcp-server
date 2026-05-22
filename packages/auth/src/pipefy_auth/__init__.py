@@ -39,6 +39,10 @@ from pipefy_auth.revoke import (
     RevocationUnsupportedError,
     revoke_session,
 )
+from pipefy_auth.settings import (
+    AuthSettings,
+    describe_missing_service_account_vars,
+)
 from pipefy_auth.storage import (
     SessionDeleteError,
     StoredSession,
@@ -50,6 +54,7 @@ from pipefy_auth.storage import (
 )
 
 __all__ = [
+    "AuthSettings",
     "CallableBearerAuth",
     "DEFAULT_AUTH_CLIENT_ID",
     "DiscoveryPolicy",
@@ -69,6 +74,7 @@ __all__ = [
     "StoredSession",
     "__version__",
     "delete_session",
+    "describe_missing_service_account_vars",
     "detect_pipefy_tiers",
     "ensure_fresh_session",
     "fetch_provider_metadata",

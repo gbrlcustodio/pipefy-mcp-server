@@ -31,8 +31,8 @@ from pipefy_auth import (
     run_login,
     store_session,
 )
+from pipefy_auth.settings import _LEGACY_ENV_KEYS_TO_NEW
 from pipefy_sdk import MePayload, PipefySettings
-from pipefy_sdk.settings import _LEGACY_ENV_KEYS_TO_NEW
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
@@ -416,7 +416,7 @@ def auth_status(
 ) -> None:
     """Print which auth source is active, the authenticated identity, and session expiry."""
     settings, auth = settings_and_auth_from_ctx(ctx)
-    detected_names = detect_cli_sources(settings, auth)
+    detected_names = detect_cli_sources(auth)
     # The locked JSON wire schema matches the policy names exactly; cast for
     # typing only — values are already constrained by ``build_policies``.
     detected: list[DisplaySource] = [

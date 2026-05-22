@@ -172,6 +172,7 @@ def test_run_pipefy_client_coroutine_runs_factory_and_returns(monkeypatch):
     sentinel_settings = object()
     sentinel_auth = _common.AuthContext(
         bearer_token=_common.BearerToken(value="abc", source="flag"),
+        service_account=None,
         oidc_client=None,
     )
     monkeypatch.setattr(_common, "get_authenticated_client", fake_get_client)
@@ -209,7 +210,9 @@ def test_run_pipefy_client_coroutine_maps_pipefy_error_to_exit_1(monkeypatch):
         "settings_and_auth_from_ctx",
         lambda ctx: (
             object(),
-            _common.AuthContext(bearer_token=None, oidc_client=None),
+            _common.AuthContext(
+                bearer_token=None, service_account=None, oidc_client=None
+            ),
         ),
     )
 
@@ -235,7 +238,9 @@ def test_run_pipefy_client_coroutine_maps_value_error_when_configured(monkeypatc
         "settings_and_auth_from_ctx",
         lambda ctx: (
             object(),
-            _common.AuthContext(bearer_token=None, oidc_client=None),
+            _common.AuthContext(
+                bearer_token=None, service_account=None, oidc_client=None
+            ),
         ),
     )
 
@@ -261,7 +266,9 @@ def test_run_pipefy_client_coroutine_broken_pipe_exits_0(monkeypatch):
         "settings_and_auth_from_ctx",
         lambda ctx: (
             object(),
-            _common.AuthContext(bearer_token=None, oidc_client=None),
+            _common.AuthContext(
+                bearer_token=None, service_account=None, oidc_client=None
+            ),
         ),
     )
 

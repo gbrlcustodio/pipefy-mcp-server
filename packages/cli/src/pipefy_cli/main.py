@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 import typer
 
 from pipefy_cli import __version__ as _cli_version
@@ -88,14 +86,17 @@ def main(
         raise typer.Exit(2) from exc
     ctx.obj["pipefy_settings"] = cli_settings.pipefy
     ctx.obj["auth_settings"] = cli_settings.auth
-    from_env = os.environ.get("PIPEFY_TOKEN")
     cli_token = token.strip() if token else None
-    env_token = from_env.strip() if from_env else None
+    settings_token = (
+        cli_settings.auth.static_token.strip()
+        if cli_settings.auth.static_token
+        else None
+    )
     bearer: BearerToken | None
     if cli_token:
         bearer = BearerToken(value=cli_token, source="flag")
-    elif env_token:
-        bearer = BearerToken(value=env_token, source="env")
+    elif settings_token:
+        bearer = BearerToken(value=settings_token, source="env")
     else:
         bearer = None
     ctx.obj["token"] = bearer

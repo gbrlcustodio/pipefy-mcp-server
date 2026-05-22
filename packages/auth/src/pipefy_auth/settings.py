@@ -88,6 +88,15 @@ class AuthSettings(BaseSettings):
     # canonical env var comes first to outrank the legacy ``PIPEFY_OAUTH_*``
     # name. The unprefixed form (e.g. ``oauth_url``) keeps direct kwarg
     # construction working (``AuthSettings(oauth_url=...)``).
+    static_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PIPEFY_TOKEN", "static_token"),
+        description=(
+            "Pre-issued bearer for the static-token tier (env: PIPEFY_TOKEN). "
+            "When set, outranks both the service-account triple and any stored session."
+        ),
+    )
+
     service_account_url: str | None = Field(
         default=None,
         validation_alias=AliasChoices(

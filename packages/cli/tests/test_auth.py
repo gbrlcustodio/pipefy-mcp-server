@@ -96,7 +96,7 @@ def test_get_authenticated_client_bearer_path_shares_auth_with_internal_api(
     clean_pipefy_env,
 ):
     """Both clients receive the SAME ``auth`` instance on the bearer path."""
-    settings = _minimal_service_account_settings()
+    settings = _minimal_settings()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient") as mock_internal,

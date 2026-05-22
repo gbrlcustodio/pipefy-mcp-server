@@ -7,9 +7,34 @@ from pipefy_sdk import PipefyClient, PipefySettings
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.settings import Settings
 
+_AUTH_ENV_KEYS = (
+    "PIPEFY_TOKEN",
+    "PIPEFY_SERVICE_ACCOUNT_URL",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
+    "PIPEFY_OAUTH_URL",
+    "PIPEFY_OAUTH_CLIENT",
+    "PIPEFY_OAUTH_SECRET",
+    "PIPEFY_AUTH_URL",
+)
+
+
+def _service_account_auth_settings() -> AuthSettings:
+    return AuthSettings(
+        service_account_url="https://auth.pipefy.com/oauth/token",
+        service_account_client_id="client_id",
+        service_account_client_secret="client_secret",
+    )
+
 
 class TestServicesContainer:
     """Test cases for ServicesContainer"""
+
+    @pytest.fixture(autouse=True)
+    def clear_auth_env(self, monkeypatch):
+        """Strip ambient ``PIPEFY_*`` auth env so ``AuthSettings()`` is hermetic."""
+        for key in _AUTH_ENV_KEYS:
+            monkeypatch.delenv(key, raising=False)
 
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
@@ -57,12 +82,8 @@ class TestServicesContainer:
         mock_pipefy_client_class.return_value = mock_client
 
         settings = Settings(
-            pipefy=PipefySettings(
-                graphql_url="https://api.pipefy.com/graphql",
-                service_account_url="https://auth.pipefy.com/oauth/token",
-                service_account_client_id="client_id",
-                service_account_client_secret="client_secret",
-            )
+            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            auth=_service_account_auth_settings(),
         )
 
         container = ServicesContainer()
@@ -88,12 +109,8 @@ class TestServicesContainer:
         mock_pipefy_client_class.return_value = mock_client
 
         settings = Settings(
-            pipefy=PipefySettings(
-                graphql_url="https://api.pipefy.com/graphql",
-                service_account_url="https://auth.pipefy.com/oauth/token",
-                service_account_client_id="client_id",
-                service_account_client_secret="client_secret",
-            )
+            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            auth=_service_account_auth_settings(),
         )
 
         container = ServicesContainer()
@@ -113,7 +130,6 @@ class TestServicesContainer:
         mock_pipefy_client_class,
         mock_internal_api_client_class,
         mock_ai_automation_service_class,
-        monkeypatch,
     ):
         """``PIPEFY_TOKEN`` outranks ``PIPEFY_SERVICE_ACCOUNT_*`` (same precedence as the CLI).
 
@@ -124,14 +140,14 @@ class TestServicesContainer:
         mock_client = Mock(spec=PipefyClient)
         mock_client.client = Mock()
         mock_pipefy_client_class.return_value = mock_client
-        monkeypatch.setenv("PIPEFY_TOKEN", "env-bearer")
         settings = Settings(
-            pipefy=PipefySettings(
-                graphql_url="https://api.pipefy.com/graphql",
+            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            auth=AuthSettings(
+                static_token="env-bearer",
                 service_account_url="https://auth.pipefy.com/oauth/token",
                 service_account_client_id="client_id",
                 service_account_client_secret="client_secret",
-            )
+            ),
         )
         ServicesContainer().initialize_services(settings)
         pc_auth = mock_pipefy_client_class.call_args.kwargs["auth"]
@@ -151,19 +167,8 @@ class TestServicesContainer:
         mock_pipefy_client_class,
         mock_internal_api_client_class,
         mock_ai_automation_service_class,
-        monkeypatch,
     ):
         """No PIPEFY_TOKEN and no service-account triple → runtime error."""
-        for key in (
-            "PIPEFY_TOKEN",
-            "PIPEFY_SERVICE_ACCOUNT_URL",
-            "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
-            "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-            "PIPEFY_OAUTH_URL",
-            "PIPEFY_OAUTH_CLIENT",
-            "PIPEFY_OAUTH_SECRET",
-        ):
-            monkeypatch.delenv(key, raising=False)
         settings = Settings(
             pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
             auth=AuthSettings(),

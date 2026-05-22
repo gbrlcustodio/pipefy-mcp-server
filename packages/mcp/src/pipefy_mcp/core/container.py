@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Self
 
 from pipefy_auth import (
@@ -34,7 +33,7 @@ class ServicesContainer:
         pipefy = settings.pipefy
         # The stored-session tier is wired in a follow-up against #213.
         resolved = resolve_pipefy_auth(
-            static_token=os.environ.get("PIPEFY_TOKEN"),
+            static_token=settings.auth.static_token,
             service_account=settings.auth.to_service_account(),
         )
         if resolved is None:

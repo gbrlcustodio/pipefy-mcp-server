@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from typing import Self
+
 from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +29,14 @@ class Settings(BaseSettings):
 
     pipefy: PipefySettings = Field(default_factory=PipefySettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
+
+    @model_validator(mode="after")
+    def _validate_auth_urls(self) -> Self:
+        # PipefySettings validates its own endpoint URLs on construction; mirror
+        # that for AuthSettings here so unsafe service-account / OIDC URLs fail
+        # fast at settings load (matches CliSettings.resolve_cli_settings).
+        self.auth.validate_urls(allow_insecure=self.pipefy.allow_insecure_urls)
+        return self
 
 
 settings = Settings()

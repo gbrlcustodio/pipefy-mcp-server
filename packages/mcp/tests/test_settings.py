@@ -131,3 +131,29 @@ def test_default_webhook_name_from_env(monkeypatch):
 def test_default_webhook_name_rejects_empty_string():
     with pytest.raises(ValidationError):
         PipefySettings(default_webhook_name="")
+
+
+@pytest.mark.unit
+def test_settings_rejects_link_local_service_account_url(monkeypatch):
+    """Settings load must SSRF-check ``AuthSettings`` URLs (regression: MCP forgot this after the split)."""
+    monkeypatch.setenv(
+        "PIPEFY_SERVICE_ACCOUNT_URL", "https://169.254.169.254/oauth/token"
+    )
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "csecret")
+    with pytest.raises(ValidationError, match="link-local|private|loopback"):
+        Settings()
+
+
+@pytest.mark.unit
+def test_settings_picks_up_pipefy_token_from_env(monkeypatch):
+    """``PIPEFY_TOKEN`` must populate ``auth.static_token`` so MCP boots from ``.env``-only setups."""
+    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "https://api.pipefy.com/graphql")
+    monkeypatch.setenv("PIPEFY_TOKEN", "env-bearer")
+    monkeypatch.delenv("PIPEFY_SERVICE_ACCOUNT_URL", raising=False)
+    monkeypatch.delenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", raising=False)
+    monkeypatch.delenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("PIPEFY_OAUTH_URL", raising=False)
+    monkeypatch.delenv("PIPEFY_OAUTH_CLIENT", raising=False)
+    monkeypatch.delenv("PIPEFY_OAUTH_SECRET", raising=False)
+    assert Settings().auth.static_token == "env-bearer"

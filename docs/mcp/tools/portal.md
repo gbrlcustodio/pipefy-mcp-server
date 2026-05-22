@@ -31,7 +31,28 @@ Each organization has **at most one main portal** (`subType: portal`). Additiona
 | `get_portal` | Yes | Full portal: `uuid`, `name`, `visibility`, **`published`**, `pages[]` (with `elements[]`), `subPortals[]`. GraphQL `id` fields are normalized as `uuid` in responses. |
 | `create_portal` | No | Create or fetch the org's main portal (**idempotent**). Uses `findOrCreateInterfaceByTemplate`; a second call returns the same portal UUID. Requires `create_portal` or `manage_portals` permission. |
 | `update_portal` | No | Update portal metadata: pass only fields to change (`name`, `visibility`, `color`, `icon`, `display_pipefy_header`). `visibility` must be `internal`, `private`, or `public`. |
-| `delete_portal` | No | Delete a portal interface (**irreversible**). `destructiveHint=True`. Requires confirmation in agent flows; CLI uses `--yes` or interactive prompt. |
+| `delete_portal` | No | Delete a portal interface (**irreversible**). `destructiveHint=True`. Two-step MCP flow: call with default `confirm=false` for a preview (`requires_confirmation: true`), then `confirm=true` after explicit approval. CLI uses `--yes` or interactive prompt. |
+
+---
+
+## Destructive delete (`delete_portal`)
+
+MCP agents must use the same two-step pattern as other `delete_*` tools:
+
+1. **Preview:** `delete_portal(portal_uuid="…")` — default `confirm=false`. Returns a preview payload with `requires_confirmation: true`; **does not** call the API.
+2. **Execute:** `delete_portal(portal_uuid="…", confirm=true)` — only after human approval.
+
+If GraphQL returns `deleteInterface.success: false`, the tool responds with `{ success: false }` (not a success envelope).
+
+---
+
+## Input validation
+
+| Parameter | Rule |
+|-----------|------|
+| `portal_uuid` on `get_portal`, `update_portal`, `delete_portal` | Non-empty string (whitespace-only rejected at the MCP boundary). |
+| `name`, `color`, `icon` on `update_portal` | When provided, must be non-empty after trimming (whitespace-only rejected). |
+| `update_portal` fields | At least one of `name`, `visibility`, `color`, `icon`, `display_pipefy_header` must be set. |
 
 ---
 
@@ -71,4 +92,4 @@ Additional element types may appear; treat unknown keys as opaque JSON.
 2. `get_portal(portal_uuid=...)` — read pages, elements, publish state, and sub-portals.
 3. `create_portal(organization_uuid=...)` — bootstrap the main portal when none exists (safe to call twice).
 4. `update_portal(portal_uuid=..., visibility="public")` — change metadata as needed.
-5. `delete_portal(portal_uuid=...)` — only when permanently removing the portal (confirm with the user first).
+5. `delete_portal(portal_uuid=..., confirm=false)` — preview deletion; then `confirm=true` only after explicit approval.

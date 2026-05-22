@@ -11,7 +11,6 @@ from typing import Any, TypeVar
 
 import typer
 from gql.transport.exceptions import TransportError, TransportQueryError
-from pipefy_auth import OidcClient
 from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
 from pipefy_sdk.exceptions import PipefyError
 
@@ -212,13 +211,12 @@ def settings_and_auth_from_ctx(
 ) -> tuple[PipefySettings, AuthContext]:
     """Resolve root ``ctx.obj`` into the (settings, auth) pair the client boundary needs."""
     obj = ctx.find_root().obj
-    auth_url = obj.get("auth_url")
-    oidc_client = (
-        OidcClient(issuer_url=auth_url, client_id=obj["auth_client_id"])
-        if auth_url
-        else None
+    auth_settings = obj["auth_settings"]
+    auth = AuthContext(
+        bearer_token=obj.get("token"),
+        service_account=auth_settings.to_service_account(),
+        oidc_client=auth_settings.to_oidc_client(),
     )
-    auth = AuthContext(bearer_token=obj.get("token"), oidc_client=oidc_client)
     return obj["pipefy_settings"], auth
 
 

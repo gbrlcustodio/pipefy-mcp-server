@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
+from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.server import mcp as mcp_server
@@ -24,12 +25,12 @@ def client_session():
 
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
-    pipefy=PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
+    pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+    auth=AuthSettings(
         service_account_url="https://api.pipefy.com/oauth/token",
         service_account_client_id="test-client",
         service_account_client_secret="test-secret",
-    )
+    ),
 )
 
 

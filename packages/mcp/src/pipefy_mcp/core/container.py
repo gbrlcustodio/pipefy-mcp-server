@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import os
 from typing import Self
 
 from pipefy_auth import (
-    ServiceAccount,
     missing_auth_message,
     resolve_pipefy_auth,
 )
@@ -33,21 +31,10 @@ class ServicesContainer:
             settings: Application settings with Pipefy credentials.
         """
         pipefy = settings.pipefy
-        service_account: ServiceAccount | None = None
-        if (
-            pipefy.service_account_url
-            and pipefy.service_account_client_id
-            and pipefy.service_account_client_secret
-        ):
-            service_account = ServiceAccount(
-                token_url=pipefy.service_account_url,
-                client_id=pipefy.service_account_client_id,
-                client_secret=pipefy.service_account_client_secret,
-            )
         # The stored-session tier is wired in a follow-up against #213.
         resolved = resolve_pipefy_auth(
-            static_token=os.environ.get("PIPEFY_TOKEN"),
-            service_account=service_account,
+            static_token=settings.auth.static_token,
+            service_account=settings.auth.to_service_account(),
         )
         if resolved is None:
             raise RuntimeError(missing_auth_message())

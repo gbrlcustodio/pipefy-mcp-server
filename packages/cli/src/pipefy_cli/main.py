@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import os
-
 import typer
-from pipefy_auth import DEFAULT_AUTH_CLIENT_ID
 
 from pipefy_cli import __version__ as _cli_version
 from pipefy_cli.auth import BearerToken
@@ -88,18 +85,13 @@ def main(
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
     ctx.obj["pipefy_settings"] = cli_settings.pipefy
-    ctx.obj["auth_url"] = (cli_settings.auth_url or "").strip() or None
-    ctx.obj["auth_client_id"] = (
-        cli_settings.auth_client_id or DEFAULT_AUTH_CLIENT_ID
-    ).strip()
-    from_env = os.environ.get("PIPEFY_TOKEN")
+    ctx.obj["auth_settings"] = cli_settings.auth
     cli_token = token.strip() if token else None
-    env_token = from_env.strip() if from_env else None
     bearer: BearerToken | None
     if cli_token:
         bearer = BearerToken(value=cli_token, source="flag")
-    elif env_token:
-        bearer = BearerToken(value=env_token, source="env")
+    elif cli_settings.auth.static_token:
+        bearer = BearerToken(value=cli_settings.auth.static_token, source="env")
     else:
         bearer = None
     ctx.obj["token"] = bearer

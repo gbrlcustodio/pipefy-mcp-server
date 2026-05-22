@@ -818,6 +818,8 @@ dependencies = [
     { name = "httpx" },
     { name = "httpx-auth" },
     { name = "keyring" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
 ]
 
 [package.dev-dependencies]
@@ -832,6 +834,8 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28" },
     { name = "httpx-auth", specifier = ">=0.23.1" },
     { name = "keyring", specifier = ">=24" },
+    { name = "pydantic", specifier = ">=2.11.3" },
+    { name = "pydantic-settings", specifier = ">=2.8.1" },
 ]
 
 [package.metadata.requires-dev]

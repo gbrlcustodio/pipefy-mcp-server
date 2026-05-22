@@ -104,6 +104,45 @@ The legacy names will be removed in a later `0.2.0-beta.x` release; the change w
 
 ---
 
+## Settings model split (library / script users only)
+
+End users of `pipefy-cli` and `pipefy-mcp-server` are unaffected — every `PIPEFY_*` env var, `.env` entry, and `~/.config/pipefy/config.toml` key keeps loading exactly as before. The split matters only if you construct settings types directly in Python code that depends on `pipefy-sdk`.
+
+Auth-related fields have moved from `PipefySettings` (which now owns endpoint config only) to a new `pipefy_auth.AuthSettings`:
+
+| Was on `pipefy_sdk.PipefySettings` | Now on `pipefy_auth.AuthSettings` |
+|---|---|
+| `service_account_url` | `service_account_url` |
+| `service_account_client_id` | `service_account_client_id` |
+| `service_account_client_secret` | `service_account_client_secret` |
+| (read from env only) | `auth_url`, `auth_client_id`, `static_token` |
+
+Because `PipefySettings` is configured with `extra="ignore"`, code like `PipefySettings(service_account_url=...)` **silently drops the credentials** — no exception, no warning. Migrate by composing the two models side by side:
+
+```python
+from pipefy_auth import AuthSettings
+from pipefy_sdk import PipefySettings
+
+pipefy = PipefySettings(graphql_url="https://app.pipefy.com/graphql")
+auth = AuthSettings(
+    service_account_url="https://app.pipefy.com/oauth/token",
+    service_account_client_id="...",
+    service_account_client_secret="...",
+)
+```
+
+If you already build a `pipefy-mcp-server` or `pipefy-cli` settings object, the application-level `Settings` / `CliSettings` already nests both:
+
+```python
+from pipefy_mcp.settings import Settings
+
+s = Settings()  # s.pipefy + s.auth, env-loaded
+```
+
+The legacy `PIPEFY_OAUTH_*` env-var aliases and the deprecation warning live on `AuthSettings`; behaviour is preserved through the rename window above.
+
+---
+
 ## Questions?
 
 Open an issue at [github.com/<owner>/pipefy-labs/issues](https://github.com/<owner>/pipefy-labs/issues) or email **dev@pipefy.com**.

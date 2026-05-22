@@ -40,4 +40,4 @@ lint.extend-select = ["TID251"]
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "pipefy_cli".msg = "pipefy_auth must not import the CLI package."
 "pipefy_mcp".msg = "pipefy_auth must not import the MCP package."
-"pipefy_sdk".msg = "pipefy_auth must not import the SDK package; auth is a leaf workspace member."
+"pipefy_sdk".msg = "pipefy_auth must not import the SDK package."

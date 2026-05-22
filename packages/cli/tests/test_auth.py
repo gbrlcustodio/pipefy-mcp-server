@@ -40,11 +40,6 @@ def _service_account() -> ServiceAccount:
     )
 
 
-# Backwards-compatible alias for tests that pre-date the settings split.
-def _minimal_service_account_settings() -> PipefySettings:
-    return _minimal_settings()
-
-
 def _auth(
     *,
     bearer_token: str | None = None,
@@ -74,7 +69,7 @@ def _auth(
 
 
 def test_get_authenticated_client_passes_auth_to_pipefy_client(clean_pipefy_env):
-    settings = _minimal_service_account_settings()
+    settings = _minimal_settings()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
         client = get_authenticated_client(settings, _auth(bearer_token="tok"))
@@ -85,7 +80,7 @@ def test_get_authenticated_client_passes_auth_to_pipefy_client(clean_pipefy_env)
 
 
 def test_get_authenticated_client_service_account_wires_internal_api(clean_pipefy_env):
-    settings = _minimal_service_account_settings()
+    settings = _minimal_settings()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient") as mock_internal,
@@ -118,7 +113,7 @@ def test_get_authenticated_client_bearer_path_shares_auth_with_internal_api(
 def test_cache_returns_same_instance_for_identical_service_account_settings(
     clean_pipefy_env,
 ):
-    settings = _minimal_service_account_settings()
+    settings = _minimal_settings()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient"),
@@ -235,7 +230,7 @@ def _public_only_auth(
 
 def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
     """The static-token tier MUST short-circuit before the keychain is even consulted."""
-    settings = _minimal_service_account_settings()
+    settings = _minimal_settings()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient"),
@@ -259,7 +254,7 @@ def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
 
 def test_service_account_creds_win_over_stored_session(clean_pipefy_env):
     """The service-account tier MUST short-circuit before the keychain is consulted."""
-    settings = _minimal_service_account_settings()
+    settings = _minimal_settings()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient"),

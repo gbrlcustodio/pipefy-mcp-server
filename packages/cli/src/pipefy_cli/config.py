@@ -5,12 +5,13 @@ from __future__ import annotations
 import os
 import sys
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, TypeVar
 
 from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
-from pydantic import Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pipefy_cli._docs import DOCS_SETUP_REF
@@ -25,18 +26,9 @@ _LEGACY_TOML_KEYS_TO_NEW: dict[str, str] = {
     "oauth_secret": "service_account_client_secret",
 }
 
-# Keys recognised under ``[pipefy]`` that belong to auth, not the SDK. Used by
-# the TOML loader to route values into ``AuthSettings`` instead of
-# ``PipefySettings``.
-_AUTH_TOML_KEYS: frozenset[str] = frozenset(
-    {
-        "service_account_url",
-        "service_account_client_id",
-        "service_account_client_secret",
-        "auth_url",
-        "auth_client_id",
-    }
-)
+# Keys under ``[pipefy]`` that belong to auth, not the SDK. Derived from the
+# model so a field rename does not need a second edit here.
+_AUTH_TOML_KEYS: frozenset[str] = frozenset(AuthSettings.model_fields)
 
 _warned_legacy_toml_keys: set[str] = set()
 
@@ -76,22 +68,29 @@ class CliSettings(BaseSettings):
         return self
 
 
-def _revalidate_pipefy(pipefy: PipefySettings, patch: dict[str, Any]) -> PipefySettings:
-    """Merge ``patch`` and re-validate (``model_copy`` would skip URL validators)."""
-    if not patch:
-        return pipefy
-    merged = {**pipefy.model_dump(), **patch}
-    return PipefySettings.model_validate(merged)
+_ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
-def _revalidate_auth(
-    auth: AuthSettings, patch: dict[str, Any], *, allow_insecure: bool
-) -> AuthSettings:
+def _revalidate(
+    model: _ModelT,
+    patch: dict[str, Any],
+    *,
+    post: Callable[[_ModelT], None] | None = None,
+) -> _ModelT:
+    """Merge ``patch`` and re-validate (``model_copy`` would skip URL validators).
+
+    ``post`` runs after validation for follow-up checks the model itself does
+    not own (e.g. SSRF validation on :class:`AuthSettings` that needs the
+    sibling ``allow_insecure_urls`` flag).
+    """
     if not patch:
-        return auth
-    merged = {**auth.model_dump(), **patch}
-    fresh = AuthSettings.model_validate(merged)
-    fresh.validate_urls(allow_insecure=allow_insecure)
+        if post is not None:
+            post(model)
+        return model
+    merged = {**model.model_dump(), **patch}
+    fresh = type(model).model_validate(merged)
+    if post is not None:
+        post(fresh)
     return fresh
 
 
@@ -168,10 +167,11 @@ def apply_toml_fallback(
     for key in _AUTH_TOML_KEYS:
         _fill_if_missing_str(auth, blob, key, key, auth_patch)
 
-    new_pipefy = _revalidate_pipefy(pipefy, pipefy_patch)
-    new_auth = _revalidate_auth(
-        auth, auth_patch, allow_insecure=new_pipefy.allow_insecure_urls
-    )
+    new_pipefy = _revalidate(pipefy, pipefy_patch)
+    # Auth URLs are SSRF-checked once at the end of ``resolve_cli_settings``
+    # against the final ``allow_insecure_urls`` value, so we skip the post-hook
+    # here to avoid validating twice.
+    new_auth = _revalidate(auth, auth_patch)
     return new_pipefy, new_auth
 
 
@@ -206,8 +206,9 @@ def resolve_cli_settings(
             pipefy_patch["graphql_url"] = graphql_url_flag.strip()
         if allow_insecure_urls_flag is not None:
             pipefy_patch["allow_insecure_urls"] = allow_insecure_urls_flag
-        pipefy = _revalidate_pipefy(pipefy, pipefy_patch)
-        # Re-validate auth URLs against the (possibly newly-flipped) allow_insecure_urls.
+        pipefy = _revalidate(pipefy, pipefy_patch)
+        # The flag may have flipped ``allow_insecure_urls``; re-run the auth-URL
+        # SSRF guard against the resolved value rather than the env-loaded one.
         auth.validate_urls(allow_insecure=pipefy.allow_insecure_urls)
     except ValidationError as exc:
         raise ValueError(str(exc)) from exc

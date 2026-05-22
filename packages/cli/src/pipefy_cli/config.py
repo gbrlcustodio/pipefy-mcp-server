@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import sys
 import tomllib
-from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Self, TypeVar
 
@@ -27,8 +26,12 @@ _LEGACY_TOML_KEYS_TO_NEW: dict[str, str] = {
 }
 
 # Keys under ``[pipefy]`` that belong to auth, not the SDK. Derived from the
-# model so a field rename does not need a second edit here.
-_AUTH_TOML_KEYS: frozenset[str] = frozenset(AuthSettings.model_fields)
+# model so a field rename does not need a second edit here. ``static_token``
+# is excluded: bearers are short-lived secrets and don't belong in a long-
+# lived plaintext user config file (use ``PIPEFY_TOKEN`` env or ``--token``).
+_AUTH_TOML_KEYS: frozenset[str] = frozenset(AuthSettings.model_fields) - {
+    "static_token"
+}
 
 _warned_legacy_toml_keys: set[str] = set()
 
@@ -71,27 +74,12 @@ class CliSettings(BaseSettings):
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
-def _revalidate(
-    model: _ModelT,
-    patch: dict[str, Any],
-    *,
-    post: Callable[[_ModelT], None] | None = None,
-) -> _ModelT:
-    """Merge ``patch`` and re-validate (``model_copy`` would skip URL validators).
-
-    ``post`` runs after validation for follow-up checks the model itself does
-    not own (e.g. SSRF validation on :class:`AuthSettings` that needs the
-    sibling ``allow_insecure_urls`` flag).
-    """
+def _revalidate(model: _ModelT, patch: dict[str, Any]) -> _ModelT:
+    """Merge ``patch`` and re-validate (``model_copy`` would skip URL validators)."""
     if not patch:
-        if post is not None:
-            post(model)
         return model
     merged = {**model.model_dump(), **patch}
-    fresh = type(model).model_validate(merged)
-    if post is not None:
-        post(fresh)
-    return fresh
+    return type(model).model_validate(merged)
 
 
 def _read_toml_pipefy_dict() -> dict[str, Any]:

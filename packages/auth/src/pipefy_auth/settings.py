@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import sys
 
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pipefy_auth.identity import DEFAULT_AUTH_CLIENT_ID, OidcClient
@@ -83,6 +83,21 @@ class AuthSettings(BaseSettings):
         # Mirrors the pre-split behaviour: warn once per legacy env key still set.
         _warn_once_for_legacy_oauth_env_keys()
         return data
+
+    @field_validator(
+        "static_token",
+        "service_account_url",
+        "service_account_client_id",
+        "service_account_client_secret",
+        "auth_url",
+        mode="before",
+    )
+    @classmethod
+    def _blank_to_none(cls, value: object) -> object:
+        # Empty / whitespace-only env values mean "not set", not "set to ''".
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     # ``AliasChoices`` precedence is left-to-right. The fully-prefixed
     # canonical env var comes first to outrank the legacy ``PIPEFY_OAUTH_*``

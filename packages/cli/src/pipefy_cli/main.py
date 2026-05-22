@@ -87,16 +87,11 @@ def main(
     ctx.obj["pipefy_settings"] = cli_settings.pipefy
     ctx.obj["auth_settings"] = cli_settings.auth
     cli_token = token.strip() if token else None
-    settings_token = (
-        cli_settings.auth.static_token.strip()
-        if cli_settings.auth.static_token
-        else None
-    )
     bearer: BearerToken | None
     if cli_token:
         bearer = BearerToken(value=cli_token, source="flag")
-    elif settings_token:
-        bearer = BearerToken(value=settings_token, source="env")
+    elif cli_settings.auth.static_token:
+        bearer = BearerToken(value=cli_settings.auth.static_token, source="env")
     else:
         bearer = None
     ctx.obj["token"] = bearer

@@ -1,5 +1,5 @@
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from mcp.server.fastmcp import FastMCP
@@ -69,6 +69,7 @@ async def test_repeat_lifespan_preserves_foreign_tools_and_stable_pipefy_names()
         return "ok"
 
     mock_container = MagicMock()
+    mock_container.initialize_services = AsyncMock()
     mock_container.pipefy_client = MagicMock()
 
     with (
@@ -101,7 +102,9 @@ async def test_lifespan_logs_error_when_initialization_raises():
         patch("pipefy_mcp.server.logger") as mock_logger,
     ):
         mock_container = MagicMock()
-        mock_container.initialize_services.side_effect = ValueError("init failed")
+        mock_container.initialize_services = AsyncMock(
+            side_effect=ValueError("init failed")
+        )
         mock_get_instance.return_value = mock_container
 
         with pytest.raises(ValueError, match="init failed"):
@@ -122,6 +125,7 @@ async def test_lifespan_failed_register_tools_does_not_mark_repeat_visit_state()
 
     app = FastMCP("fail-register-tools")
     mock_container = MagicMock()
+    mock_container.initialize_services = AsyncMock()
     mock_container.pipefy_client = MagicMock()
 
     with (
@@ -154,6 +158,7 @@ async def test_lifespan_retry_after_failed_register_tools_succeeds():
 
     app = FastMCP("retry-after-fail")
     mock_container = MagicMock()
+    mock_container.initialize_services = AsyncMock()
     mock_container.pipefy_client = MagicMock()
 
     with (
@@ -200,6 +205,7 @@ async def test_lifespan_tool_name_collision_fails_before_registration():
         return "foreign"
 
     mock_container = MagicMock()
+    mock_container.initialize_services = AsyncMock()
     mock_container.pipefy_client = MagicMock()
 
     with (
@@ -229,6 +235,7 @@ async def test_lifespan_partial_register_failure_cleans_pipefy_tools_retry_uses_
 
     app = FastMCP("partial-reg")
     mock_container = MagicMock()
+    mock_container.initialize_services = AsyncMock()
     client1 = MagicMock()
     client2 = MagicMock()
     mock_container.pipefy_client = client1

@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from pipefy_auth import AuthSettings, StaticBearerAuth
+from pipefy_auth import AuthSettings, CallableBearerAuth, StaticBearerAuth
 from pipefy_sdk import PipefyClient, PipefySettings
 
 from pipefy_mcp.core.container import ServicesContainer
@@ -25,6 +25,10 @@ def _service_account_auth_settings() -> AuthSettings:
         service_account_client_id="client_id",
         service_account_client_secret="client_secret",
     )
+
+
+def _stored_session_auth_settings() -> AuthSettings:
+    return AuthSettings(auth_url="https://signin.pipefy.com/realms/pipefy")
 
 
 class TestServicesContainer:
@@ -70,7 +74,7 @@ class TestServicesContainer:
     @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.PipefyClient")
-    def test_initialize_services_creates_pipefy_client(
+    async def test_initialize_services_creates_pipefy_client(
         self,
         mock_pipefy_client_class,
         mock_internal_api_client_class,
@@ -87,7 +91,7 @@ class TestServicesContainer:
         )
 
         container = ServicesContainer()
-        container.initialize_services(settings)
+        await container.initialize_services(settings)
 
         mock_pipefy_client_class.assert_called_once()
         kwargs = mock_pipefy_client_class.call_args.kwargs
@@ -98,7 +102,7 @@ class TestServicesContainer:
     @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.PipefyClient")
-    def test_initialize_services_creates_ai_services(
+    async def test_initialize_services_creates_ai_services(
         self,
         mock_pipefy_client_class,
         mock_ai_automation_service_class,
@@ -114,7 +118,7 @@ class TestServicesContainer:
         )
 
         container = ServicesContainer()
-        container.initialize_services(settings)
+        await container.initialize_services(settings)
 
         mock_internal_api_client_class.assert_called_once()
         mock_ai_automation_service_class.assert_called_once()
@@ -125,7 +129,7 @@ class TestServicesContainer:
     @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.PipefyClient")
-    def test_initialize_services_picks_up_pipefy_token_over_service_account(
+    async def test_initialize_services_picks_up_pipefy_token_over_service_account(
         self,
         mock_pipefy_client_class,
         mock_internal_api_client_class,
@@ -149,7 +153,7 @@ class TestServicesContainer:
                 service_account_client_secret="client_secret",
             ),
         )
-        ServicesContainer().initialize_services(settings)
+        await ServicesContainer().initialize_services(settings)
         pc_auth = mock_pipefy_client_class.call_args.kwargs["auth"]
         assert isinstance(pc_auth, StaticBearerAuth)
         mock_internal_api_client_class.assert_called_once()
@@ -162,7 +166,7 @@ class TestServicesContainer:
     @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.PipefyClient")
-    def test_initialize_services_raises_when_no_auth_source_configured(
+    async def test_initialize_services_raises_when_no_auth_source_configured(
         self,
         mock_pipefy_client_class,
         mock_internal_api_client_class,
@@ -174,4 +178,50 @@ class TestServicesContainer:
             auth=AuthSettings(),
         )
         with pytest.raises(RuntimeError, match="Missing Pipefy authentication"):
-            ServicesContainer().initialize_services(settings)
+            await ServicesContainer().initialize_services(settings)
+
+    @patch("pipefy_mcp.core.container.ensure_fresh_session")
+    @patch("pipefy_mcp.core.container.PipefyClient")
+    async def test_initialize_services_warms_up_stored_session(
+        self,
+        mock_pipefy_client_class,
+        mock_ensure_fresh_session,
+    ):
+        """When the resolved tier is the stored session, the refresh is pre-warmed."""
+        mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
+        settings = Settings(
+            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            auth=_stored_session_auth_settings(),
+        )
+        with patch("pipefy_auth.resolver._has_stored_session", return_value=True):
+            await ServicesContainer().initialize_services(settings)
+
+        pc_auth = mock_pipefy_client_class.call_args.kwargs["auth"]
+        assert isinstance(pc_auth, CallableBearerAuth)
+        mock_ensure_fresh_session.assert_called_once_with(
+            issuer="https://signin.pipefy.com/realms/pipefy",
+            client_id=settings.auth.auth_client_id,
+        )
+
+    @patch("pipefy_mcp.core.container.ensure_fresh_session")
+    @patch("pipefy_mcp.core.container.PipefyClient")
+    async def test_initialize_services_does_not_warm_up_when_static_token_wins(
+        self,
+        mock_pipefy_client_class,
+        mock_ensure_fresh_session,
+    ):
+        """A configured ``PIPEFY_AUTH_URL`` is ignored at warm-up when a higher tier wins."""
+        mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
+        settings = Settings(
+            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            auth=AuthSettings(
+                static_token="env-bearer",
+                auth_url="https://signin.pipefy.com/realms/pipefy",
+            ),
+        )
+        # Even if a stored session existed, the static-token tier wins —
+        # ``ensure_fresh_session`` must not be called.
+        with patch("pipefy_auth.resolver._has_stored_session", return_value=True):
+            await ServicesContainer().initialize_services(settings)
+
+        mock_ensure_fresh_session.assert_not_called()

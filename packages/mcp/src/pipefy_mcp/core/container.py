@@ -37,8 +37,6 @@ class ServicesContainer:
         When the resolved auth tier is the keychain-backed stored session,
         :func:`ensure_fresh_session` is invoked eagerly so a stale or revoked
         session surfaces at server startup rather than on first tool call.
-        The blocking refresh POST runs on a worker thread to keep the
-        lifespan event loop responsive.
 
         Args:
             settings: Application settings with Pipefy credentials.

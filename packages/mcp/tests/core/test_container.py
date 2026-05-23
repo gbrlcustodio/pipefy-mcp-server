@@ -1,7 +1,9 @@
+import time
 from unittest.mock import Mock, patch
 
 import pytest
 from pipefy_auth import AuthSettings, CallableBearerAuth, StaticBearerAuth
+from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefyClient, PipefySettings
 
 from pipefy_mcp.core.container import ServicesContainer
@@ -29,6 +31,21 @@ def _service_account_auth_settings() -> AuthSettings:
 
 def _stored_session_auth_settings() -> AuthSettings:
     return AuthSettings(auth_url="https://signin.pipefy.com/realms/pipefy")
+
+
+def _fresh_stored_session() -> StoredSession:
+    return StoredSession(
+        issuer="https://signin.pipefy.com/realms/pipefy",
+        client_id="pipefy-cli",
+        access_token="ACCESS",
+        refresh_token="REFRESH",
+        token_type="Bearer",
+        obtained_at=int(time.time()),
+        expires_in=3600,
+        refresh_expires_in=None,
+        scope=None,
+        id_token=None,
+    )
 
 
 class TestServicesContainer:
@@ -193,7 +210,10 @@ class TestServicesContainer:
             pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
             auth=_stored_session_auth_settings(),
         )
-        with patch("pipefy_auth.resolver._has_stored_session", return_value=True):
+        with patch(
+            "pipefy_auth.resolver.load_session",
+            return_value=_fresh_stored_session(),
+        ):
             await ServicesContainer().initialize_services(settings)
 
         pc_auth = mock_pipefy_client_class.call_args.kwargs["auth"]
@@ -219,9 +239,11 @@ class TestServicesContainer:
                 auth_url="https://signin.pipefy.com/realms/pipefy",
             ),
         )
-        # Even if a stored session existed, the static-token tier wins —
-        # ``ensure_fresh_session`` must not be called.
-        with patch("pipefy_auth.resolver._has_stored_session", return_value=True):
+        # Force a detectable stored session so we prove precedence, not absence.
+        with patch(
+            "pipefy_auth.resolver.load_session",
+            return_value=_fresh_stored_session(),
+        ):
             await ServicesContainer().initialize_services(settings)
 
         mock_ensure_fresh_session.assert_not_called()

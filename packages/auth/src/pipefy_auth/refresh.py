@@ -8,6 +8,7 @@ import httpx
 
 from pipefy_auth import _http
 from pipefy_auth.discovery import fetch_provider_metadata
+from pipefy_auth.locks import RefreshLockTimeout, file_lock, refresh_lock_path
 from pipefy_auth.storage import StoredSession, load_session, store_session
 
 _LEEWAY_S = 60
@@ -103,32 +104,19 @@ def _refresh_error_from(response: httpx.Response) -> RefreshError:
     return RefreshError(f"{generic}: {error_code}", error_code=error_code)
 
 
-def ensure_fresh_session(
+def _is_stale(session: StoredSession, leeway_s: int) -> bool:
+    expires_in = session.expires_in or 0
+    deadline = session.obtained_at + expires_in - leeway_s
+    return time.time() >= deadline
+
+
+def _refresh_and_store(
+    session: StoredSession,
     *,
     issuer: str,
     client_id: str,
-    leeway_s: int = _LEEWAY_S,
-    http_client: httpx.Client | None = None,
-) -> StoredSession | None:
-    """Load the stored session; refresh it if the access token is near expiry.
-
-    Returns ``None`` when no session is stored (or the keychain is unreachable
-    — ``load_session`` already collapses those cases). Returns the (possibly
-    refreshed) :class:`StoredSession` when one is usable.
-
-    Raises:
-        RefreshError: When a stored session exists but refresh failed.
-            Caller surfaces a "run ``pipefy auth login`` again" message.
-    """
-    session = load_session(issuer=issuer, client_id=client_id)
-    if session is None:
-        return None
-
-    expires_in = session.expires_in or 0
-    deadline = session.obtained_at + expires_in - leeway_s
-    if time.time() < deadline:
-        return session
-
+    http_client: httpx.Client | None,
+) -> StoredSession:
     token_response = refresh_access_token(
         issuer=issuer,
         client_id=client_id,
@@ -153,6 +141,55 @@ def ensure_fresh_session(
         client_id=session.client_id,
         token_response=token_response,
     )
+
+
+def ensure_fresh_session(
+    *,
+    issuer: str,
+    client_id: str,
+    leeway_s: int = _LEEWAY_S,
+    http_client: httpx.Client | None = None,
+) -> StoredSession | None:
+    """Load the stored session; refresh it if the access token is near expiry.
+
+    Returns ``None`` when no session is stored (or the keychain is unreachable
+    — ``load_session`` already collapses those cases). Returns the (possibly
+    refreshed) :class:`StoredSession` when one is usable.
+
+    Concurrent ``pipefy`` processes near the leeway boundary are serialised
+    via a cross-process filesystem lock; a re-load + re-check inside the
+    critical section means the loser of the race observes the winner's
+    rotated session and skips its own refresh round-trip.
+
+    Raises:
+        RefreshError: When a stored session exists but refresh failed
+            (including ``RefreshLockTimeout``, surfaced as a clean
+            "lock could not be acquired" message rather than a raw
+            ``RuntimeError``).
+    """
+    session = load_session(issuer=issuer, client_id=client_id)
+    if session is None:
+        return None
+    if not _is_stale(session, leeway_s):
+        return session
+
+    try:
+        with file_lock(refresh_lock_path()):
+            session = load_session(issuer=issuer, client_id=client_id)
+            if session is None:
+                return None
+            if not _is_stale(session, leeway_s):
+                return session
+            return _refresh_and_store(
+                session,
+                issuer=issuer,
+                client_id=client_id,
+                http_client=http_client,
+            )
+    except RefreshLockTimeout as exc:
+        raise RefreshError(
+            f"Could not acquire refresh lock; another process may be hung: {exc}"
+        ) from exc
 
 
 __all__ = [

@@ -2,9 +2,24 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import keyring
 import keyring.backend
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolate_refresh_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Redirect the cross-process refresh lock into the test's tmp dir.
+
+    Without this autouse, any test exercising ``ensure_fresh_session`` would
+    create ``~/.config/pipefy/refresh.lock`` on the developer's machine.
+    """
+    monkeypatch.setattr(
+        "pipefy_auth.refresh.refresh_lock_path",
+        lambda: tmp_path / "refresh.lock",
+    )
 
 
 class InMemoryKeyring(keyring.backend.KeyringBackend):

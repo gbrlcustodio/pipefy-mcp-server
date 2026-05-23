@@ -56,9 +56,7 @@ def _fresh(*, obtained_at: int) -> StoredSession:
 
 
 @pytest.mark.unit
-def test_lock_brackets_refresh_and_store(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_lock_brackets_refresh_and_store(monkeypatch: pytest.MonkeyPatch) -> None:
     """Lock is entered before the refresh POST and exited after the keychain write."""
     events: list[str] = []
 
@@ -70,27 +68,21 @@ def test_lock_brackets_refresh_and_store(
         finally:
             events.append("lock-exit")
 
-    monkeypatch.setattr(refresh_module, "file_lock", recording_lock)
-    monkeypatch.setattr(
-        refresh_module,
-        "load_session",
-        lambda issuer, client_id: _stored(obtained_at=int(time.time()) - 100),
-    )
+    def fake_load(*, issuer: str, client_id: str) -> StoredSession:
+        return _stored(obtained_at=int(time.time()) - 100)
 
-    refresh_called = MagicMock(
-        return_value={"access_token": "NEW", "refresh_token": "NEW_R"}
-    )
-    store_called = MagicMock(return_value=_fresh(obtained_at=int(time.time())))
-    monkeypatch.setattr(
-        refresh_module,
-        "refresh_access_token",
-        lambda **kw: (events.append("refresh-post"), refresh_called(**kw))[1],
-    )
-    monkeypatch.setattr(
-        refresh_module,
-        "store_session",
-        lambda **kw: (events.append("store"), store_called(**kw))[1],
-    )
+    def fake_refresh(**_kw: Any) -> dict[str, str]:
+        events.append("refresh-post")
+        return {"access_token": "NEW", "refresh_token": "NEW_R"}
+
+    def fake_store(**_kw: Any) -> StoredSession:
+        events.append("store")
+        return _fresh(obtained_at=int(time.time()))
+
+    monkeypatch.setattr(refresh_module, "file_lock", recording_lock)
+    monkeypatch.setattr(refresh_module, "load_session", fake_load)
+    monkeypatch.setattr(refresh_module, "refresh_access_token", fake_refresh)
+    monkeypatch.setattr(refresh_module, "store_session", fake_store)
 
     result = refresh_module.ensure_fresh_session(issuer=_ISSUER, client_id=_CLIENT_ID)
     assert result is not None

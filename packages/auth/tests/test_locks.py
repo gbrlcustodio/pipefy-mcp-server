@@ -103,16 +103,26 @@ def test_file_lock_released_after_sigkill(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
-def test_refresh_lock_path_creates_parent_dir(
+def test_refresh_lock_path_is_pure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``refresh_lock_path()`` creates ``<config>/pipefy`` if missing."""
+    """``refresh_lock_path()`` resolves the path without touching the filesystem."""
     fake_home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(fake_home))
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
 
     expected_dir = fake_home / ".config" / "pipefy"
-    assert not expected_dir.exists()
     path = refresh_lock_path()
     assert path == expected_dir / "refresh.lock"
-    assert expected_dir.is_dir()
+    assert not expected_dir.exists()
+
+
+@pytest.mark.unit
+def test_file_lock_creates_parent_dir(tmp_path: Path) -> None:
+    """``file_lock`` creates the lock file's parent dir on first acquire."""
+    lock = tmp_path / "fresh" / "subdir" / "x.lock"
+    assert not lock.parent.exists()
+    with file_lock(lock):
+        pass
+    assert lock.parent.is_dir()
+    assert lock.exists()

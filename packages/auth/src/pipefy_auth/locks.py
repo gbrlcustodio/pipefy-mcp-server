@@ -28,14 +28,13 @@ class RefreshLockTimeout(RuntimeError):
 
 
 def refresh_lock_path() -> Path:
-    """Filesystem path used to coordinate concurrent refreshes."""
+    """Filesystem path used to coordinate concurrent refreshes (pure)."""
     if sys.platform == "win32":
         appdata = os.environ.get("APPDATA")
         base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
         directory = base / "pipefy"
     else:
         directory = Path.home() / ".config" / "pipefy"
-    directory.mkdir(parents=True, exist_ok=True)
     return directory / "refresh.lock"
 
 
@@ -50,6 +49,7 @@ def file_lock(path: Path, *, timeout_s: float = 30.0) -> Iterator[None]:
     Raises:
         RefreshLockTimeout: When the lock cannot be acquired within ``timeout_s``.
     """
+    path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
         if sys.platform == "win32":

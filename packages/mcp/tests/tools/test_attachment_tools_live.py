@@ -26,7 +26,7 @@ from unittest.mock import patch
 
 import httpx
 import pytest
-from _shared.live_settings import require_live_creds
+from _shared.live_settings import live_resolved_auth, require_live_creds
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -36,6 +36,11 @@ from pipefy_sdk import PipefyClient
 from pipefy_mcp.server import mcp as mcp_server
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.attachment_tools import AttachmentTools
+
+
+def _live_pipefy_client() -> PipefyClient:
+    """PipefyClient wired with auth via the production precedence chain."""
+    return PipefyClient(settings=settings.pipefy, auth=live_resolved_auth())
 
 
 def _card_upload_env():
@@ -73,7 +78,7 @@ def _assert_field_shows_upload(value, file_name: str) -> None:
 @pytest.fixture
 def live_pipefy_client():
     require_live_creds()
-    return PipefyClient(settings=settings.pipefy)
+    return _live_pipefy_client()
 
 
 @pytest.fixture
@@ -126,7 +131,7 @@ async def test_live_upload_attachment_to_card_end_to_end(
     assert payload.get("field_id") == field_id
     assert payload.get("card_id") == card_id
 
-    client = PipefyClient(settings=settings.pipefy)
+    client = _live_pipefy_client()
     data = await client.get_card(card_id, include_fields=True)
     card = data.get("card") or {}
     value = _find_named_field_value(card.get("fields"), field_id)
@@ -174,7 +179,7 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
     assert payload.get("success") is True
     assert payload.get("table_record_id") == record_id
 
-    client = PipefyClient(settings=settings.pipefy)
+    client = _live_pipefy_client()
     data = await client.get_table_record(record_id)
     rec = data.get("table_record") or {}
     value = _find_named_field_value(rec.get("record_fields"), field_id)
@@ -238,7 +243,7 @@ async def test_live_s3_put_mismatched_content_length():
     if not _s3_matrix_enabled():
         pytest.skip("Set PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 to run S3 PUT matrix tests")
 
-    client = PipefyClient(settings=settings.pipefy)
+    client = _live_pipefy_client()
     file_name = f"s3-mismatch-{uuid.uuid4().hex[:10]}.bin"
     signed_len = 200
     presigned = await client.create_presigned_url(
@@ -283,7 +288,7 @@ async def test_live_s3_put_expired_presigned_url():
         )
     wait_sec = int(wait_raw)
 
-    client = PipefyClient(settings=settings.pipefy)
+    client = _live_pipefy_client()
     file_name = f"s3-expiry-{uuid.uuid4().hex[:10]}.txt"
     presigned = await client.create_presigned_url(
         organization_id=org,
@@ -319,7 +324,7 @@ async def test_live_s3_put_omits_content_type_when_signed():
     if not _s3_matrix_enabled():
         pytest.skip("Set PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 for S3 matrix tests")
 
-    client = PipefyClient(settings=settings.pipefy)
+    client = _live_pipefy_client()
     file_name = f"s3-no-ctype-{uuid.uuid4().hex[:10]}.txt"
     body = b"abcd"
     presigned = await client.create_presigned_url(

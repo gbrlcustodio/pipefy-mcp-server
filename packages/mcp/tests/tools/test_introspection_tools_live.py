@@ -10,7 +10,11 @@ Run:
 from datetime import timedelta
 
 import pytest
-from _shared.live_settings import live_pipefy_settings, pipefy_live_configured
+from _shared.live_settings import (
+    live_pipefy_settings,
+    live_resolved_auth,
+    require_live_creds,
+)
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -22,11 +26,8 @@ from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 
 @pytest.fixture
 def live_pipefy_client():
-    if not pipefy_live_configured():
-        pytest.skip(
-            "Pipefy credentials not configured (PIPEFY_GRAPHQL_URL + OAuth in .env)"
-        )
-    return PipefyClient(settings=live_pipefy_settings())
+    require_live_creds()
+    return PipefyClient(settings=live_pipefy_settings(), auth=live_resolved_auth())
 
 
 @pytest.fixture

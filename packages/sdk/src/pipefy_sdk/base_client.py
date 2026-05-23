@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from typing import Any, ClassVar
 
 from gql import Client
+from gql.transport.exceptions import TransportQueryError
 from gql.transport.httpx import HTTPXAsyncTransport
 from graphql import GraphQLSchema
 from httpx import Auth, Timeout
@@ -45,12 +47,18 @@ class BasePipefyClient:
         settings: PipefySettings,
         *,
         auth: Auth,
+        on_graphql_error: Callable[[list[dict]], str] | None = None,
     ) -> None:
         if settings.graphql_url is None:
             raise ValueError("GraphQL URL must be provided in settings.")
 
         self.settings = settings
         self._auth = auth
+        # When set, ``TransportQueryError`` is converted to ``ValueError`` using the
+        # formatter's output. Used by ``InternalApiClient`` to surface its
+        # ``[code=…] [correlation_id=…]`` envelope; ``None`` leaves gql exceptions
+        # untouched (PipefyClient's behaviour).
+        self._on_graphql_error = on_graphql_error
         # Populated when gql_reuse_fetched_graphql_schema is True; avoids repeating
         # introspection on every new Client (see Cons5 code review).
         self._fetched_gql_schema: GraphQLSchema | None = None
@@ -70,30 +78,35 @@ class BasePipefyClient:
             auth=self._auth,
             timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
         )
-        if self.settings.gql_reuse_fetched_graphql_schema:
-            if self._fetched_gql_schema is None:
-                async with self._fetched_gql_schema_lock:
-                    if self._fetched_gql_schema is None:
-                        client = Client(
-                            transport=transport,
-                            fetch_schema_from_transport=True,
-                        )
-                        async with client as session:
-                            result = await session.execute(
-                                query, variable_values=variables
+        try:
+            if self.settings.gql_reuse_fetched_graphql_schema:
+                if self._fetched_gql_schema is None:
+                    async with self._fetched_gql_schema_lock:
+                        if self._fetched_gql_schema is None:
+                            client = Client(
+                                transport=transport,
+                                fetch_schema_from_transport=True,
                             )
-                        if client.schema is not None:
-                            self._fetched_gql_schema = client.schema
-                        return result
-            reuse_client = Client(
-                transport=transport,
-                schema=self._fetched_gql_schema,
-                fetch_schema_from_transport=False,
-            )
-            async with reuse_client as session:
-                return await session.execute(query, variable_values=variables)
+                            async with client as session:
+                                result = await session.execute(
+                                    query, variable_values=variables
+                                )
+                            if client.schema is not None:
+                                self._fetched_gql_schema = client.schema
+                            return result
+                reuse_client = Client(
+                    transport=transport,
+                    schema=self._fetched_gql_schema,
+                    fetch_schema_from_transport=False,
+                )
+                async with reuse_client as session:
+                    return await session.execute(query, variable_values=variables)
 
-        async with Client(
-            transport=transport, fetch_schema_from_transport=False
-        ) as session:
-            return await session.execute(query, variable_values=variables)
+            async with Client(
+                transport=transport, fetch_schema_from_transport=False
+            ) as session:
+                return await session.execute(query, variable_values=variables)
+        except TransportQueryError as exc:
+            if self._on_graphql_error is None:
+                raise
+            raise ValueError(self._on_graphql_error(exc.errors or [])) from exc

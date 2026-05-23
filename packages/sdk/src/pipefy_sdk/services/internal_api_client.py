@@ -1,25 +1,41 @@
-"""HTTP client for Pipefy's internal_api endpoint."""
+"""GraphQL client for Pipefy's internal_api endpoint.
+
+A thin :class:`pipefy_sdk.base_client.BasePipefyClient` subclass — the only
+real difference from the public-API client is the error envelope: each GraphQL
+error is decorated with ``[code=…]`` / ``[correlation_id=…]`` suffixes drawn
+from ``extensions``. AI-automation MCP tools strip those suffixes via
+``pipefy_mcp.tools.graphql_error_helpers.strip_internal_api_diagnostic_markers``
+before surfacing the message to end users; service-layer tests assert the
+fully suffixed text.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-import httpx
-from httpx import Auth, Timeout
+from gql import gql as parse_gql
+from httpx import Auth
 
-from pipefy_sdk.utils.url_ssrf import (
-    validate_https_service_endpoint_url,
-)
-
-REQUEST_TIMEOUT_SECONDS = 30
+from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.utils.url_ssrf import validate_https_service_endpoint_url
 
 
-class InternalApiClient:
-    """HTTP client for Pipefy internal API (AI Automation mutations).
+def _format_internal_api_error(errors: list[dict]) -> str:
+    parts: list[str] = []
+    for err in errors:
+        msg = err.get("message", "Unknown error")
+        ext = err.get("extensions", {})
+        code = ext.get("code", "")
+        corr = ext.get("correlation_id", "")
+        suffix = f" [code={code}]" if code else ""
+        suffix += f" [correlation_id={corr}]" if corr else ""
+        parts.append(f"{msg}{suffix}")
+    return "; ".join(parts)
 
-    Sends GraphQL requests as JSON POST to the configured internal_api URL,
-    using the ``httpx.Auth`` supplied at construction time.
-    """
+
+class InternalApiClient(BasePipefyClient):
+    """GraphQL client for Pipefy internal API (AI Automation mutations)."""
 
     def __init__(
         self,
@@ -33,53 +49,20 @@ class InternalApiClient:
         Args:
             url: URL of the internal_api endpoint (e.g. https://app.pipefy.com/internal_api).
             auth: Pre-constructed ``httpx.Auth`` (e.g. from ``pipefy_auth.resolve``).
-            allow_insecure_urls: When True, allow http and internal hosts (must match settings).
+            allow_insecure_urls: When True, allow http and internal hosts.
         """
         validate_https_service_endpoint_url(
             url.strip(), "internal_api URL", allow_insecure=allow_insecure_urls
         )
-        self._url = url
-        self._auth = auth
+        # SSRF is already enforced above with the right error label; pass
+        # ``allow_insecure_urls=True`` here so ``PipefySettings`` does not re-validate
+        # the same URL under the misleading ``graphql_url`` label.
+        settings = PipefySettings(graphql_url=url, allow_insecure_urls=True)
+        super().__init__(
+            settings, auth=auth, on_graphql_error=_format_internal_api_error
+        )
 
-    async def execute_query(self, query: str, variables: dict[str, Any]) -> dict:
-        """Execute a GraphQL query/mutation via POST.
-
-        Args:
-            query: GraphQL query string.
-            variables: Variables for the query.
-
-        Returns:
-            Parsed JSON response from the API.
-
-        Raises:
-            httpx.HTTPStatusError: When response status is not 2xx.
-            httpx.TimeoutException: When the request times out.
-            ValueError: When response contains GraphQL errors (HTTP 200 but {"errors": [...]}).
-        """
-        async with httpx.AsyncClient(
-            auth=self._auth,
-            timeout=Timeout(timeout=REQUEST_TIMEOUT_SECONDS),
-        ) as client:
-            response = await client.post(
-                self._url,
-                json={"query": query, "variables": variables},
-                headers={"Content-Type": "application/json"},
-            )
-            response.raise_for_status()
-
-            data = response.json()
-            if "errors" in data and data["errors"]:
-                error_msgs = []
-                for err in data["errors"]:
-                    msg = err.get("message", "Unknown error")
-                    ext = err.get("extensions", {})
-                    code = ext.get("code", "")
-                    corr = ext.get("correlation_id", "")
-                    # Include extensions for logs and service-layer tests; MCP-facing tools
-                    # should omit these suffixes from default user-visible errors.
-                    suffix = f" [code={code}]" if code else ""
-                    suffix += f" [correlation_id={corr}]" if corr else ""
-                    error_msgs.append(f"{msg}{suffix}")
-                raise ValueError("; ".join(error_msgs))
-            # Unwrap the "data" envelope to match BasePipefyClient.execute_query
-            return data.get("data", data)
+    async def execute_query(  # type: ignore[override]
+        self, query: str, variables: dict[str, Any]
+    ) -> dict:
+        return await super().execute_query(parse_gql(query), variables)

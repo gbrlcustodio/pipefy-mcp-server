@@ -7,11 +7,11 @@ tool handlers and ``strip_internal_api_diagnostic_markers``.
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 import respx
+from gql.transport.exceptions import TransportServerError
 from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.services.internal_api_client import InternalApiClient
@@ -59,10 +59,13 @@ async def test_execute_query_sends_post_with_correct_headers_and_body(respx_mock
     request = route.calls.last.request
     assert request.content
     body = json.loads(request.content)
-    assert body == {"query": query_string, "variables": variables}
+    # gql serialises the parsed AST back to a string (plus may attach
+    # ``operationName``); pin only the contract we care about.
+    assert body["variables"] == variables
+    assert "test" in body["query"]
     assert "authorization" in (h.lower() for h in request.headers.keys())
     assert "content-type" in (h.lower() for h in request.headers.keys())
-    assert result == expected_json.get("data", expected_json)
+    assert result == expected_json["data"]
 
 
 @pytest.mark.unit
@@ -88,7 +91,9 @@ async def test_execute_query_raises_on_non_2xx_response(respx_mock):
         return_value=httpx.Response(500, json={"error": "Internal Server Error"})
     )
 
-    with pytest.raises(httpx.HTTPStatusError):
+    # gql's HTTPXAsyncTransport wraps ``httpx.HTTPStatusError`` as
+    # ``TransportServerError`` — same path as the public-API client.
+    with pytest.raises(TransportServerError):
         await _build_client().execute_query("query { x }", {})
 
 
@@ -204,22 +209,15 @@ async def test_execute_query_error_without_message_uses_fallback(respx_mock):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_raises_on_timeout():
+@respx.mock(assert_all_mocked=False, assert_all_called=False)
+async def test_execute_query_raises_on_timeout(respx_mock):
     """Test execute_query raises appropriate error when HTTP request times out."""
-    mock_client = MagicMock()
-    mock_client.post = AsyncMock(
+    respx_mock.post(DEFAULT_INTERNAL_API_URL).mock(
         side_effect=httpx.TimeoutException("Request timed out")
     )
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
 
-    with patch(
-        "pipefy_sdk.services.internal_api_client.httpx.AsyncClient",
-        return_value=mock_client,
-    ):
-        client = _build_client()
-        with pytest.raises(httpx.TimeoutException):
-            await client.execute_query("query { x }", {})
+    with pytest.raises(httpx.TimeoutException):
+        await _build_client().execute_query("query { x }", {})
 
 
 @pytest.mark.unit

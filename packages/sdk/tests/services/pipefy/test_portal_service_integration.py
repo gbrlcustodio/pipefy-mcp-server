@@ -15,8 +15,11 @@ from __future__ import annotations
 import os
 
 import pytest
-from _shared.live_settings import live_pipefy_settings, require_live_creds
-from httpx_auth import OAuth2ClientCredentials
+from _shared.live_settings import (
+    live_pipefy_settings,
+    live_resolved_auth,
+    require_live_creds,
+)
 
 from pipefy_sdk.services.portal_service import PortalService
 
@@ -25,13 +28,7 @@ from pipefy_sdk.services.portal_service import PortalService
 def live_portal_service() -> PortalService:
     """PortalService wired against live Interfaces schema credentials."""
     require_live_creds()
-    settings = live_pipefy_settings()
-    auth = OAuth2ClientCredentials(
-        token_url=settings.oauth_url,
-        client_id=settings.oauth_client,
-        client_secret=settings.oauth_secret,
-    )
-    return PortalService(settings=settings, auth=auth)
+    return PortalService(settings=live_pipefy_settings(), auth=live_resolved_auth())
 
 
 def _portal_org_uuid() -> str | None:

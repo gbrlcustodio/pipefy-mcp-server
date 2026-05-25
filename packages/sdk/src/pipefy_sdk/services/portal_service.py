@@ -11,11 +11,16 @@ from pipefy_sdk.base_client import BasePipefyClient, unwrap_relay_connection_nod
 from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.models.portal import CreatePortalInput, UpdatePortalInput
 from pipefy_sdk.queries.portal_queries import (
+    CREATE_PAGE_MUTATION,
     DELETE_INTERFACE_MUTATION,
+    DELETE_PAGE_MUTATION,
     FIND_OR_CREATE_PORTAL_MUTATION,
     GET_PORTAL_QUERY,
     LIST_PORTALS_QUERY,
+    SORT_PAGES_MUTATION,
     UPDATE_INTERFACE_MUTATION,
+    UPDATE_PAGE_LAYOUT_MUTATION,
+    UPDATE_PAGE_MUTATION,
 )
 from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.settings import PipefySettings
@@ -56,6 +61,13 @@ async def _execute_interfaces_query_with_portal_errors(
         return await execute(query, variables)
     except TransportQueryError as exc:
         raise _map_portal_permission_error(exc) from exc
+
+
+def _normalize_portal_page(page: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a portal page payload with ``uuid`` alias and element ids."""
+    page_record = _with_uuid_alias(page)
+    elements = [_with_uuid_alias(element) for element in page.get("elements") or []]
+    return {**page_record, "elements": elements}
 
 
 def _normalize_portal_detail(portal: dict[str, Any]) -> dict[str, Any]:
@@ -270,4 +282,126 @@ class PortalService:
             self.execute_interfaces_query,
             DELETE_INTERFACE_MUTATION,
             {"input": {"interface_uuid": interface_uuid}},
+        )
+
+    async def create_portal_page(
+        self,
+        interface_uuid: str,
+        title: str,
+        *,
+        description: str | None = None,
+        index: int | None = None,
+    ) -> dict[str, Any]:
+        """Create a portal page on the Interfaces schema.
+
+        On an empty main portal, ``createPage`` without ``elements`` may
+        auto-provision a templated page with multiple default elements.
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            title: Page title.
+            description: Optional page description.
+            index: Optional sort index.
+        """
+        page_input: dict[str, Any] = {
+            "interface_uuid": interface_uuid,
+            "title": title,
+        }
+        if description is not None:
+            page_input["description"] = description
+        if index is not None:
+            page_input["index"] = index
+        data = await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            CREATE_PAGE_MUTATION,
+            {"input": page_input},
+        )
+        page = (data.get("createPage") or {}).get("page")
+        if not isinstance(page, dict):
+            msg = "createPage returned no page."
+            raise ValueError(msg)
+        return _normalize_portal_page(page)
+
+    async def update_portal_page(
+        self,
+        interface_uuid: str,
+        page_id: str,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        index: int | None = None,
+    ) -> dict[str, Any]:
+        """Update portal page metadata.
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            page_id: Page UUID.
+            title: Optional new title.
+            description: Optional new description.
+            index: Optional sort index.
+        """
+        page_input: dict[str, Any] = {
+            "interface_uuid": interface_uuid,
+            "page_id": page_id,
+        }
+        if title is not None:
+            page_input["title"] = title
+        if description is not None:
+            page_input["description"] = description
+        if index is not None:
+            page_input["index"] = index
+        data = await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            UPDATE_PAGE_MUTATION,
+            {"input": page_input},
+        )
+        page = (data.get("updatePage") or {}).get("page")
+        if not isinstance(page, dict):
+            msg = "updatePage returned no page."
+            raise ValueError(msg)
+        return _normalize_portal_page(page)
+
+    async def delete_portal_page(
+        self, interface_uuid: str, page_id: str
+    ) -> dict[str, Any]:
+        """Delete a portal page (irreversible).
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            page_id: Page UUID.
+        """
+        return await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            DELETE_PAGE_MUTATION,
+            {"input": {"interface_uuid": interface_uuid, "page_id": page_id}},
+        )
+
+    async def sort_portal_pages(
+        self, interface_uuid: str, page_ids: list[str]
+    ) -> dict[str, Any]:
+        """Reorder portal pages by id list.
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            page_ids: Ordered list of page UUIDs.
+        """
+        return await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            SORT_PAGES_MUTATION,
+            {"input": {"interface_uuid": interface_uuid, "page_ids": page_ids}},
+        )
+
+    async def update_portal_page_layout(
+        self, page_id: str, layout: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a portal page grid layout (full layout blob).
+
+        Args:
+            page_id: Page UUID (no parent ``interface_uuid`` on this mutation).
+            layout: Layout JSON as required by ``updatePageLayout``.
+        """
+        return await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            UPDATE_PAGE_LAYOUT_MUTATION,
+            {"input": {"page_id": page_id, "layout": layout}},
         )

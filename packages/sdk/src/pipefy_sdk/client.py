@@ -1238,6 +1238,88 @@ class PipefyClient:
         """
         return await self._portal_service.delete_portal(interface_uuid)
 
+    async def create_portal_page(
+        self,
+        interface_uuid: str,
+        title: str,
+        *,
+        description: str | None = None,
+        index: int | None = None,
+    ) -> dict[str, Any]:
+        """Create a portal page.
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            title: Page title.
+            description: Optional page description.
+            index: Optional sort index.
+        """
+        return await self._portal_service.create_portal_page(
+            interface_uuid,
+            title,
+            description=description,
+            index=index,
+        )
+
+    async def update_portal_page(
+        self,
+        interface_uuid: str,
+        page_id: str,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        index: int | None = None,
+    ) -> dict[str, Any]:
+        """Update portal page metadata.
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            page_id: Page UUID.
+            title: Optional new title.
+            description: Optional new description.
+            index: Optional sort index.
+        """
+        return await self._portal_service.update_portal_page(
+            interface_uuid,
+            page_id,
+            title=title,
+            description=description,
+            index=index,
+        )
+
+    async def delete_portal_page(
+        self, interface_uuid: str, page_id: str
+    ) -> dict[str, Any]:
+        """Delete a portal page (irreversible).
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            page_id: Page UUID.
+        """
+        return await self._portal_service.delete_portal_page(interface_uuid, page_id)
+
+    async def sort_portal_pages(
+        self, interface_uuid: str, page_ids: list[str]
+    ) -> dict[str, Any]:
+        """Reorder portal pages.
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            page_ids: Ordered list of page UUIDs.
+        """
+        return await self._portal_service.sort_portal_pages(interface_uuid, page_ids)
+
+    async def update_portal_page_layout(
+        self, page_id: str, layout: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a portal page grid layout.
+
+        Args:
+            page_id: Page UUID.
+            layout: Layout JSON for ``updatePageLayout``.
+        """
+        return await self._portal_service.update_portal_page_layout(page_id, layout)
+
     async def get_me(self) -> MePayload | None:
         """Return the authenticated user's identity, or ``None`` when ``me`` resolves null."""
         return await self._user_service.get_me()

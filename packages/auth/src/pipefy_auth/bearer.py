@@ -65,10 +65,11 @@ class RefreshableBearerAuth(Auth):
     check and the API call.
 
     Concurrency model: under async fan-out, the internal lock **serializes**
-    ``force_refresh`` calls — three concurrent 401s will run three refreshes
-    back-to-back, not one shared refresh. Coalescing belongs to a future
-    cross-process mutex (issue #133); the in-class lock only guarantees that
-    refreshes are not interleaved.
+    both eager token reads (``token_provider``) and reactive refreshes
+    (``force_refresh``) — three concurrent 401s run three refreshes
+    back-to-back, not one shared refresh. Coalescing racing refreshes is
+    out of scope here; it's the responsibility of the refresh-token grant
+    path.
     """
 
     def __init__(
@@ -110,11 +111,9 @@ class RefreshableBearerAuth(Auth):
         yield request
 
     def _safe_force_refresh(self) -> str | None:
-        # Narrow on purpose: programming errors (AttributeError, TypeError, …)
-        # should surface, not collapse into a 401.
         try:
             return self._force_refresh()
-        except (RefreshError, RuntimeError):
+        except RefreshError:
             return None
 
 

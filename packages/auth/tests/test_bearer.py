@@ -63,11 +63,6 @@ async def test_callable_bearer_async_serializes_provider_calls():
     assert len(call_order) == 3
 
 
-# --------------------------------------------------------------------------- #
-# RefreshableBearerAuth — reactive 401-refresh-retry safety net.              #
-# --------------------------------------------------------------------------- #
-
-
 def _scripted_handler(
     statuses: list[int], seen: list[str]
 ) -> Callable[[httpx.Request], httpx.Response]:
@@ -157,7 +152,6 @@ class TestRefreshableBearerAuthSync:
 
     @pytest.mark.unit
     def test_refresh_returns_same_token_does_not_retry(self) -> None:
-        # A no-op refresh must not retry — same bearer would just 401 again.
         seen: list[str] = []
         client = httpx.Client(
             transport=httpx.MockTransport(_scripted_handler([401], seen))
@@ -185,7 +179,6 @@ class TestRefreshableBearerAuthSync:
 
         response = client.get("https://example.test/", auth=auth)
 
-        # Only the retry runs once — the second 401 is the terminal answer.
         assert response.status_code == 401
         assert seen == ["Bearer OLD", "Bearer NEW"]
 
@@ -228,13 +221,31 @@ class TestRefreshableBearerAuthAsync:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_retry_also_401_does_not_loop(self) -> None:
+        # Async-generator yield semantics differ from sync; pin that the
+        # second ``yield request`` fires at most once even when it also 401s.
+        seen: list[str] = []
+        transport = httpx.MockTransport(_scripted_handler([401, 401], seen))
+        auth = RefreshableBearerAuth(
+            token_provider=lambda: "OLD",
+            force_refresh=lambda: "NEW",
+        )
+
+        async with httpx.AsyncClient(transport=transport) as client:
+            response = await client.get("https://example.test/", auth=auth)
+
+        assert response.status_code == 401
+        assert seen == ["Bearer OLD", "Bearer NEW"]
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_concurrent_401s_serialize_under_async_lock(self) -> None:
         """Under async fan-out, ``force_refresh`` runs serially — never two
         threads inside it at once. Probed with ``threading.Barrier(parties=3)``:
         without the lock all three threads rendezvous, with the lock only one
         ever arrives and the barrier raises ``BrokenBarrierError``. Three
         refresh calls (not one) pins the serialize-but-don't-coalesce contract;
-        coalescing belongs to the cross-process mutex in issue #133.
+        coalescing racing refreshes is out of scope for this class.
         """
 
         def handler(request: httpx.Request) -> httpx.Response:

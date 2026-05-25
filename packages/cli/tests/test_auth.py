@@ -327,8 +327,7 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
             side_effect=RefreshError("invalid_grant"),
         ),
     ):
-        # ``resolve_pipefy_auth`` now returns the ``httpx.Auth`` directly;
-        # use a real ``RefreshableBearerAuth`` so ``tier_for`` recognises it as
+        # Use a real ``RefreshableBearerAuth`` so ``tier_for`` recognises it as
         # the stored-session tier and triggers the eager warmup.
         mock_resolve.return_value = RefreshableBearerAuth(
             token_provider=lambda: "ACCESS",

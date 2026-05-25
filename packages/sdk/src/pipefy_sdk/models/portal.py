@@ -29,7 +29,9 @@ class UpdatePortalInput(BaseModel):
     visibility: PortalVisibility | None = None
     color: str | None = None
     icon: str | None = None
-    display_pipefy_header: bool | None = Field(default=None, alias="displayPipefyHeader")
+    display_pipefy_header: bool | None = Field(
+        default=None, alias="displayPipefyHeader"
+    )
 
 
 __all__ = [

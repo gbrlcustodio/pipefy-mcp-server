@@ -470,6 +470,58 @@ def test_portal_page_sort_ids_json_json(runner, clean_pipefy_env, saved_cwd, oau
     mock_client.sort_portal_pages.assert_awaited_once_with(_PORTAL_UUID, page_ids)
 
 
+def test_portal_page_sort_page_ids_csv_rejects_invalid_items(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-sort-invalid-csv")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "sort",
+                "--portal-uuid",
+                _PORTAL_UUID,
+                "--page-ids",
+                "0,-1,page-1",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.sort_portal_pages.assert_not_called()
+
+
+def test_portal_page_sort_ids_json_rejects_invalid_items(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-sort-invalid-json")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "sort",
+                "--portal-uuid",
+                _PORTAL_UUID,
+                "--ids-json",
+                json.dumps([None, "   ", False]),
+                "--json",
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.sort_portal_pages.assert_not_called()
+
+
 def test_portal_page_sort_missing_page_ids_exit_2(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):

@@ -32,6 +32,32 @@ def _reject_blank_optional_string(value: str | None, flag: str) -> None:
         raise typer.BadParameter(f"{flag}, when provided, must be non-empty.")
 
 
+def _validate_sort_page_id_item(value: object) -> str:
+    """Validate one page UUID from ``--page-ids`` or ``--ids-json`` before a sort write."""
+    if isinstance(value, bool) or value is None:
+        raise typer.BadParameter(
+            "Each page UUID must be a non-empty string or positive integer."
+        )
+    if isinstance(value, (dict, list)):
+        raise typer.BadParameter(
+            "Each page UUID must be a non-empty string or positive integer."
+        )
+    if not isinstance(value, (str, int)):
+        raise typer.BadParameter(
+            "Each page UUID must be a non-empty string or positive integer."
+        )
+    cleaned = str(value).strip() if isinstance(value, int) else value.strip()
+    if not cleaned:
+        raise typer.BadParameter(
+            "Each page UUID must be a non-empty string or positive integer."
+        )
+    if cleaned.startswith("-") and cleaned[1:].isdigit():
+        raise typer.BadParameter("Each page UUID must be a positive integer.")
+    if cleaned.isdigit() and int(cleaned) <= 0:
+        raise typer.BadParameter("Each page UUID must be a positive integer.")
+    return cleaned
+
+
 def _parse_page_ids_for_sort(
     page_ids_csv: str | None,
     ids_json: str | None,
@@ -41,14 +67,14 @@ def _parse_page_ids_for_sort(
         parts = [p.strip() for p in page_ids_csv.split(",") if p.strip()]
         if not parts:
             raise typer.BadParameter("--page-ids must list at least one page UUID.")
-        return parts
+        return [_validate_sort_page_id_item(part) for part in parts]
     if ids_json is not None and ids_json.strip():
         parsed = parse_json_value(ids_json, "--ids-json")
         if not isinstance(parsed, list):
             raise typer.BadParameter("--ids-json must be a JSON array of page UUIDs.")
         if not parsed:
             raise typer.BadParameter("--ids-json must list at least one page UUID.")
-        return [str(item) for item in parsed]
+        return [_validate_sort_page_id_item(item) for item in parsed]
     raise typer.BadParameter(
         "Provide --page-ids or --ids-json with at least one page UUID."
     )

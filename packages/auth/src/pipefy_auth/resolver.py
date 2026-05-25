@@ -18,9 +18,13 @@ from dataclasses import dataclass
 from httpx import Auth
 from httpx_auth import OAuth2ClientCredentials
 
-from pipefy_auth.bearer import CallableBearerAuth, StaticBearerAuth
+from pipefy_auth.bearer import (
+    CallableBearerAuth,
+    RefreshableBearerAuth,
+    StaticBearerAuth,
+)
 from pipefy_auth.identity import OidcClient
-from pipefy_auth.refresh import ensure_fresh_session
+from pipefy_auth.refresh import RefreshError, ensure_fresh_session
 from pipefy_auth.storage import load_session
 
 STATIC_TOKEN_TIER = "static-token"
@@ -40,10 +44,13 @@ class ServiceAccount:
 # Maps each ``httpx.Auth`` implementation back to the resolver-tier name that
 # produced it. ``tier_for`` is the public lookup; the mapping itself is the
 # single source of truth so the wire-schema strings (e.g. ``"stored-session"``)
-# stay in one place.
+# stay in one place. ``CallableBearerAuth`` is listed alongside
+# ``RefreshableBearerAuth`` so consumers who build one directly still resolve
+# to the stored-session tier.
 _TIER_BY_AUTH_TYPE: dict[type[Auth], str] = {
     StaticBearerAuth: STATIC_TOKEN_TIER,
     OAuth2ClientCredentials: SERVICE_ACCOUNT_TIER,
+    RefreshableBearerAuth: STORED_SESSION_TIER,
     CallableBearerAuth: STORED_SESSION_TIER,
 }
 
@@ -64,8 +71,8 @@ def tier_for(auth: Auth) -> str:
     )
 
 
-def _stored_session_provider(oidc_client: OidcClient) -> CallableBearerAuth:
-    def _provider() -> str:
+def _stored_session_provider(oidc_client: OidcClient) -> RefreshableBearerAuth:
+    def _token() -> str:
         session = ensure_fresh_session(
             issuer=oidc_client.issuer_url, client_id=oidc_client.client_id
         )
@@ -75,7 +82,18 @@ def _stored_session_provider(oidc_client: OidcClient) -> CallableBearerAuth:
             )
         return session.access_token
 
-    return CallableBearerAuth(_provider)
+    def _force_refresh() -> str | None:
+        try:
+            session = ensure_fresh_session(
+                issuer=oidc_client.issuer_url,
+                client_id=oidc_client.client_id,
+                force=True,
+            )
+        except RefreshError:
+            return None
+        return session.access_token if session is not None else None
+
+    return RefreshableBearerAuth(token_provider=_token, force_refresh=_force_refresh)
 
 
 def _has_stored_session(oidc_client: OidcClient) -> bool:
@@ -108,7 +126,9 @@ def resolve_pipefy_auth(
         service_account: Service-account client-credentials inputs.
         oidc_client: OIDC client identity for the stored-session tier; the
             session is loaded from the keychain at detection time, and a fresh
-            access token is fetched per request via :class:`CallableBearerAuth`.
+            access token is fetched per request via
+            :class:`pipefy_auth.bearer.RefreshableBearerAuth`, which also
+            forces a refresh + retry on a 401 response.
     """
     if static_token and static_token.strip():
         return StaticBearerAuth(static_token.strip())

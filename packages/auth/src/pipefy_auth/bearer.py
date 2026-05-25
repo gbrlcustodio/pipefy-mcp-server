@@ -8,6 +8,8 @@ from typing import AsyncGenerator
 
 from httpx import Auth, Request, Response
 
+from pipefy_auth.refresh import RefreshError
+
 
 class StaticBearerAuth(Auth):
     """Attach a fixed ``Authorization: Bearer …`` header."""
@@ -46,7 +48,78 @@ class CallableBearerAuth(Auth):
         yield request
 
 
+class RefreshableBearerAuth(Auth):
+    """Per-request bearer + reactive refresh-on-401 retry.
+
+    Pairs the per-request token rotation behaviour of :class:`CallableBearerAuth`
+    with a 401 safety net: when an API call returns 401, ``force_refresh`` is
+    invoked to obtain a new bearer and the request is retried exactly once. If
+    the refresh fails (raises) or returns ``None`` / the same token, the 401
+    propagates so callers surface a "session expired, re-login" error instead
+    of looping.
+
+    The eager refresh path (``token_provider`` calling
+    :func:`pipefy_auth.refresh.ensure_fresh_session`) still handles the common
+    "token expired by our clock" case. This class fills the gap eager refresh
+    cannot see — IdP-side revocation, and the narrow race between the eager
+    check and the API call.
+
+    Concurrency model: under async fan-out, the internal lock **serializes**
+    ``force_refresh`` calls — three concurrent 401s will run three refreshes
+    back-to-back, not one shared refresh. Coalescing belongs to a future
+    cross-process mutex (issue #133); the in-class lock only guarantees that
+    refreshes are not interleaved.
+    """
+
+    def __init__(
+        self,
+        *,
+        token_provider: Callable[[], str],
+        force_refresh: Callable[[], str | None],
+    ) -> None:
+        self._token_provider = token_provider
+        self._force_refresh = force_refresh
+        self._async_lock = asyncio.Lock()
+
+    def auth_flow(self, request: Request) -> Generator[Request, Response, None]:
+        token = self._token_provider()
+        request.headers["Authorization"] = f"Bearer {token}"
+        response = yield request
+        if response.status_code != 401:
+            return
+        new_token = self._safe_force_refresh()
+        if new_token is None or new_token == token:
+            return
+        request.headers["Authorization"] = f"Bearer {new_token}"
+        yield request
+
+    async def async_auth_flow(
+        self, request: Request
+    ) -> AsyncGenerator[Request, Response]:
+        async with self._async_lock:
+            token = await asyncio.to_thread(self._token_provider)
+        request.headers["Authorization"] = f"Bearer {token}"
+        response = yield request
+        if response.status_code != 401:
+            return
+        async with self._async_lock:
+            new_token = await asyncio.to_thread(self._safe_force_refresh)
+        if new_token is None or new_token == token:
+            return
+        request.headers["Authorization"] = f"Bearer {new_token}"
+        yield request
+
+    def _safe_force_refresh(self) -> str | None:
+        # Narrow on purpose: programming errors (AttributeError, TypeError, …)
+        # should surface, not collapse into a 401.
+        try:
+            return self._force_refresh()
+        except (RefreshError, RuntimeError):
+            return None
+
+
 __all__ = [
     "CallableBearerAuth",
+    "RefreshableBearerAuth",
     "StaticBearerAuth",
 ]

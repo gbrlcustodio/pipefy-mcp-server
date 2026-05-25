@@ -7,8 +7,13 @@ import time
 import pytest
 from httpx_auth import OAuth2ClientCredentials
 
-from pipefy_auth.bearer import CallableBearerAuth, StaticBearerAuth
+from pipefy_auth.bearer import (
+    CallableBearerAuth,
+    RefreshableBearerAuth,
+    StaticBearerAuth,
+)
 from pipefy_auth.identity import OidcClient
+from pipefy_auth.refresh import RefreshError
 from pipefy_auth.resolver import (
     SERVICE_ACCOUNT_TIER,
     STATIC_TOKEN_TIER,
@@ -92,7 +97,7 @@ def test_stored_session_wins_when_nothing_else_configured(monkeypatch):
         "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
     )
     resolved = resolve_pipefy_auth(oidc_client=_oidc())
-    assert isinstance(resolved, CallableBearerAuth)
+    assert isinstance(resolved, RefreshableBearerAuth)
     assert tier_for(resolved) == STORED_SESSION_TIER
 
 
@@ -153,6 +158,14 @@ def test_tier_for_raises_on_foreign_auth_class():
 
 
 @pytest.mark.unit
+def test_tier_for_recognises_callable_bearer_auth_as_stored_session():
+    # Regression guard: ``CallableBearerAuth`` is still public — direct
+    # construction must keep resolving to the stored-session tier.
+    auth = CallableBearerAuth(lambda: "TOKEN")
+    assert tier_for(auth) == STORED_SESSION_TIER
+
+
+@pytest.mark.unit
 def test_stored_session_provider_raises_when_session_vanishes(monkeypatch):
     """The callable provider raises if the keychain entry disappears after detect."""
     monkeypatch.setattr(
@@ -160,10 +173,67 @@ def test_stored_session_provider_raises_when_session_vanishes(monkeypatch):
     )
     monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", lambda **_: None)
     resolved = resolve_pipefy_auth(oidc_client=_oidc())
-    assert isinstance(resolved, CallableBearerAuth)
+    assert isinstance(resolved, RefreshableBearerAuth)
     provider = resolved._token_provider  # type: ignore[attr-defined]
     with pytest.raises(RuntimeError, match="session was removed"):
         provider()
+
+
+@pytest.mark.unit
+def test_stored_session_force_refresh_calls_ensure_fresh_session_with_force(
+    monkeypatch,
+):
+    rotated = _stored_session()
+    monkeypatch.setattr("pipefy_auth.resolver.load_session", lambda **_: rotated)
+    captured: dict[str, object] = {}
+
+    def fake_ensure(**kwargs):
+        captured.update(kwargs)
+        return StoredSession(
+            issuer=rotated.issuer,
+            client_id=rotated.client_id,
+            access_token="ROTATED",
+            refresh_token="ROTATED_R",
+            token_type="Bearer",
+            obtained_at=int(time.time()),
+            expires_in=3600,
+            refresh_expires_in=None,
+            scope=None,
+            id_token=None,
+        )
+
+    monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", fake_ensure)
+    resolved = resolve_pipefy_auth(oidc_client=_oidc())
+    assert isinstance(resolved, RefreshableBearerAuth)
+    new_token = resolved._force_refresh()  # type: ignore[attr-defined]
+    assert new_token == "ROTATED"
+    assert captured.get("force") is True
+
+
+@pytest.mark.unit
+def test_stored_session_force_refresh_returns_none_on_refresh_error(monkeypatch):
+    monkeypatch.setattr(
+        "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
+    )
+
+    def fake_ensure(**_: object) -> StoredSession:
+        raise RefreshError("invalid_grant", error_code="invalid_grant")
+
+    monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", fake_ensure)
+    resolved = resolve_pipefy_auth(oidc_client=_oidc())
+    assert isinstance(resolved, RefreshableBearerAuth)
+    assert resolved._force_refresh() is None  # type: ignore[attr-defined]
+
+
+@pytest.mark.unit
+def test_stored_session_force_refresh_returns_none_when_session_vanished(monkeypatch):
+    monkeypatch.setattr(
+        "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
+    )
+    monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", lambda **_: None)
+    resolved = resolve_pipefy_auth(oidc_client=_oidc())
+    assert isinstance(resolved, RefreshableBearerAuth)
+    assert resolved._force_refresh() is None  # type: ignore[attr-defined]
 
 
 class MockCounter:

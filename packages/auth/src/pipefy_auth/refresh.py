@@ -148,6 +148,7 @@ def ensure_fresh_session(
     issuer: str,
     client_id: str,
     leeway_s: int = _LEEWAY_S,
+    force: bool = False,
     http_client: httpx.Client | None = None,
 ) -> StoredSession | None:
     """Load the stored session; refresh it if the access token is near expiry.
@@ -155,6 +156,10 @@ def ensure_fresh_session(
     Returns ``None`` when no session is stored (or the keychain is unreachable
     — ``load_session`` already collapses those cases). Returns the (possibly
     refreshed) :class:`StoredSession` when one is usable.
+
+    ``force=True`` bypasses the deadline check and always refreshes when a
+    session is stored — used by the reactive 401-retry path to recover from
+    IdP-side revocation when the clock-side lifetime still looks fine.
 
     Concurrent ``pipefy`` processes near the leeway boundary are serialised
     via a cross-process filesystem lock; a re-load + re-check inside the
@@ -170,7 +175,7 @@ def ensure_fresh_session(
     session = load_session(issuer=issuer, client_id=client_id)
     if session is None:
         return None
-    if not _is_stale(session, leeway_s):
+    if not force and not _is_stale(session, leeway_s):
         return session
 
     try:
@@ -178,7 +183,7 @@ def ensure_fresh_session(
             session = load_session(issuer=issuer, client_id=client_id)
             if session is None:
                 return None
-            if not _is_stale(session, leeway_s):
+            if not force and not _is_stale(session, leeway_s):
                 return session
             return _refresh_and_store(
                 session,

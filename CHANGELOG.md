@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **CLI**: `pipefy auth status [--json|-j]` — reports auth source, identity, session expiry, and exit codes.
 - **CLI**: `pipefy auth logout` — revokes the refresh token at the IdP and clears the stored session.
 - **MCP**: stored-session tier wired into `ServicesContainer`; setting `PIPEFY_AUTH_URL` after `pipefy auth login` now lets the MCP server reuse the keychain-backed session, with the refresh pre-warmed at startup so a stale or revoked session surfaces before the first tool call.
+- **Auth**: reactive refresh-on-401 for the stored-session tier (`RefreshableBearerAuth`). When an API call returns 401, the SDK transport forces a refresh via `ensure_fresh_session(force=True)`, persists any rotated tokens, and retries the request once before surfacing the error. Complements the eager refresh path for IdP-side revocation and mid-process token expiry. Closes #137.
 
 ### Changed
 

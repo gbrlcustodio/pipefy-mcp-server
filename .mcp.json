@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "git+https://github.com/gbrlcustodio/pipefy-mcp-server",
+        "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/mcp",
         "pipefy-mcp-server"
       ]
     }

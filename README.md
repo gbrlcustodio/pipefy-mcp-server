@@ -54,10 +54,10 @@ Feedback and issues: [GitHub Issues](https://github.com/gbrlcustodio/pipefy-mcp-
 ```text
 /plugin marketplace add gbrlcustodio/pipefy-mcp-server
 /plugin install pipefy
-/pipefy-login
+/pipefy:login
 ```
 
-`/plugin install pipefy` registers the MCP server (via `uvx --from git+...`) and the `/pipefy-login` slash command. `/pipefy-login` runs the OAuth browser flow and stores the session in the OS keychain — no permanent CLI install required. A live MCP server picks up the rotated session on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes. Claude Code only; other hosts use the terminal flow below.
+`/plugin install pipefy` registers the MCP server (via `uvx --from git+...#subdirectory=packages/mcp`) and the `/pipefy:login` slash command. `/pipefy:login` runs the OAuth browser flow and stores the session in the OS keychain — no permanent CLI install required. A live MCP server picks up the rotated session on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes. Claude Code only; other hosts use the terminal flow below.
 
 ### Pre-1.0 (git)
 

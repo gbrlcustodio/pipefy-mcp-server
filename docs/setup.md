@@ -178,15 +178,15 @@ Either rely on [`.env.example`](../.env.example) → **`.env`** at the repo root
 
 **Plugin install (recommended)**
 
-The repo ships a Claude Code plugin that registers the MCP server and a `/pipefy-login` slash command in one step:
+The repo ships a Claude Code plugin that registers the MCP server and a `/pipefy:login` slash command in one step:
 
 ```text
 /plugin marketplace add gbrlcustodio/pipefy-mcp-server
 /plugin install pipefy
-/pipefy-login
+/pipefy:login
 ```
 
-`/pipefy-login` prompts you to confirm the underlying `uvx --from git+https://github.com/gbrlcustodio/pipefy-mcp-server pipefy auth login` command — no permanent CLI install required. The OAuth session is stored in the OS keychain. A live MCP server picks up the rotated session on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes. Terminal-based users can run `pipefy auth login` directly instead.
+`/pipefy:login` prompts you to confirm the underlying `uvx --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/cli" pipefy auth login` command — no permanent CLI install required. The OAuth session is stored in the OS keychain. A live MCP server picks up the rotated session on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes. Terminal-based users can run `pipefy auth login` directly instead.
 
 **CLI (per project)**
 

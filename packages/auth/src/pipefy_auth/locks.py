@@ -31,8 +31,7 @@ def refresh_lock_path() -> Path:
     """Filesystem path used to coordinate concurrent refreshes (pure).
 
     One global lock per host, not per ``(issuer, client_id)`` — multi-account
-    isn't a current goal; switch to hashing the pair into the filename if it
-    becomes one.
+    isn't a current goal.
     """
     if sys.platform == "win32":
         appdata = os.environ.get("APPDATA")

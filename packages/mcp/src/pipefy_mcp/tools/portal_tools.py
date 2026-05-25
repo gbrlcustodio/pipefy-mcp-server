@@ -426,15 +426,25 @@ class PortalTools:
                     "Invalid 'page_ids': must be a non-empty list of page UUIDs.",
                     code="INVALID_ARGUMENTS",
                 )
+            cleaned_page_ids: list[str] = []
+            for page_id in page_ids:
+                cleaned_id, id_err = validate_tool_id(page_id, "page_ids")
+                if id_err is not None:
+                    return id_err
+                cleaned_page_ids.append(cleaned_id)
             await ctx.debug(
                 f"sort_portal_pages: portal_uuid={portal_uuid}, "
-                f"page_ids_count={len(page_ids)}"
+                f"page_ids_count={len(cleaned_page_ids)}"
             )
             try:
-                result = await client.sort_portal_pages(portal_uuid, page_ids)
+                result = await client.sort_portal_pages(portal_uuid, cleaned_page_ids)
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(map_portal_error_to_message(exc))
-            return build_success_payload(result, include_parsed=True)
+            if result.get("sortPages", {}).get("success"):
+                return build_success_payload(result, include_parsed=True)
+            return build_error_payload(
+                "Failed to reorder portal pages. Please try again or contact support."
+            )
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
@@ -461,4 +471,9 @@ class PortalTools:
                 result = await client.update_portal_page_layout(page_id, layout)
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(str(exc))
-            return build_success_payload(result, include_parsed=True)
+            if result.get("updatePageLayout", {}).get("success"):
+                return build_success_payload(result, include_parsed=True)
+            return build_error_payload(
+                f"Failed to update layout for portal page '{page_id}'. "
+                "Please try again or contact support."
+            )

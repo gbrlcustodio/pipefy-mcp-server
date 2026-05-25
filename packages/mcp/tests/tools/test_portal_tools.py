@@ -893,6 +893,60 @@ async def test_sort_portal_pages_rejects_empty_page_ids(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("portal_session", [None], indirect=True)
+@pytest.mark.parametrize(
+    "invalid_page_ids",
+    [
+        ["   "],
+        [True],
+        [None],
+        [{"id": "x"}],
+    ],
+)
+async def test_sort_portal_pages_rejects_invalid_page_id_items(
+    portal_session,
+    mock_portal_client,
+    extract_payload,
+    invalid_page_ids,
+):
+    async with portal_session as session:
+        result = await session.call_tool(
+            "sort_portal_pages",
+            {"portal_uuid": _PORTAL_UUID, "page_ids": invalid_page_ids},
+        )
+
+    mock_portal_client.sort_portal_pages.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "page_ids" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_sort_portal_pages_fails_when_success_false(
+    portal_session, mock_portal_client, extract_payload
+):
+    page_ids = [_PAGE_UUID_2, _PAGE_UUID]
+    mock_portal_client.sort_portal_pages = AsyncMock(
+        return_value={"sortPages": {"success": False}}
+    )
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "sort_portal_pages",
+            {"portal_uuid": _PORTAL_UUID, "page_ids": page_ids},
+        )
+
+    assert result.isError is False
+    mock_portal_client.sort_portal_pages.assert_awaited_once_with(
+        _PORTAL_UUID, page_ids
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "failed to reorder" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_update_portal_page_layout_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -913,6 +967,30 @@ async def test_update_portal_page_layout_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["updatePageLayout"]["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_update_portal_page_layout_fails_when_success_false(
+    portal_session, mock_portal_client, extract_payload
+):
+    mock_portal_client.update_portal_page_layout = AsyncMock(
+        return_value={"updatePageLayout": {"success": False}}
+    )
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "update_portal_page_layout",
+            {"page_id": _PAGE_UUID, "layout": _PAGE_LAYOUT},
+        )
+
+    assert result.isError is False
+    mock_portal_client.update_portal_page_layout.assert_awaited_once_with(
+        _PAGE_UUID, _PAGE_LAYOUT
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "failed to update layout" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio

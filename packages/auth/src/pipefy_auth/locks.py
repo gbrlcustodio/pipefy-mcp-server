@@ -28,7 +28,12 @@ class RefreshLockTimeout(RuntimeError):
 
 
 def refresh_lock_path() -> Path:
-    """Filesystem path used to coordinate concurrent refreshes (pure)."""
+    """Filesystem path used to coordinate concurrent refreshes (pure).
+
+    One global lock per host, not per ``(issuer, client_id)`` — multi-account
+    isn't a current goal; switch to hashing the pair into the filename if it
+    becomes one.
+    """
     if sys.platform == "win32":
         appdata = os.environ.get("APPDATA")
         base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"

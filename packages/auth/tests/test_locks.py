@@ -118,6 +118,32 @@ def test_refresh_lock_path_is_pure(
 
 
 @pytest.mark.unit
+def test_refresh_lock_path_uses_appdata_on_windows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows with ``APPDATA`` set, the lock lives under ``%APPDATA%/pipefy``."""
+    appdata = tmp_path / "AppData" / "Roaming"
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("APPDATA", str(appdata))
+    assert refresh_lock_path() == appdata / "pipefy" / "refresh.lock"
+
+
+@pytest.mark.unit
+def test_refresh_lock_path_windows_falls_back_when_appdata_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows without ``APPDATA``, falls back to ``~/AppData/Roaming/pipefy``."""
+    fake_home = tmp_path / "home"
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delenv("APPDATA", raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
+    assert (
+        refresh_lock_path()
+        == fake_home / "AppData" / "Roaming" / "pipefy" / "refresh.lock"
+    )
+
+
+@pytest.mark.unit
 def test_file_lock_creates_parent_dir(tmp_path: Path) -> None:
     """``file_lock`` creates the lock file's parent dir on first acquire."""
     lock = tmp_path / "fresh" / "subdir" / "x.lock"

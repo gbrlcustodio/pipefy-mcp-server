@@ -1826,6 +1826,7 @@ Usage: pipefy portal [OPTIONS] COMMAND [ARGS]...
 │ create   Create or fetch the organization's main portal (idempotent).        │
 │ update   Update portal metadata (pass at least one attribute).               │
 │ delete   Delete a portal permanently.                                        │
+│ page     Portal page operations.                                             │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/create
@@ -1880,6 +1881,106 @@ Usage: pipefy portal list [OPTIONS]
 │    --search-term                TEXT  Optional portal name filter.           │
 │    --json               -j            Print machine-readable JSON to stdout. │
 │    --help                             Show this message and exit.            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page
+Usage: pipefy portal page [OPTIONS] COMMAND [ARGS]...
+
+ Portal page operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create   Create a portal page (bootstrap template when elements omitted on   │
+│          the API).                                                           │
+│ update   Update portal page metadata (pass at least one attribute).          │
+│ delete   Delete a portal page permanently.                                   │
+│ sort     Reorder portal pages.                                               │
+│ layout   Portal page layout.                                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/create
+Usage: pipefy portal page create [OPTIONS]
+
+ Create a portal page (bootstrap template when elements omitted on the API).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --portal-uuid          TEXT     Parent portal interface UUID. [required]  │
+│ *  --title                TEXT     Page title. [required]                    │
+│    --description          TEXT     Optional page description.                │
+│    --index                INTEGER  Optional sort index.                      │
+│    --json         -j               Print machine-readable JSON to stdout.    │
+│    --help                          Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/delete
+Usage: pipefy portal page delete [OPTIONS] PORTAL_UUID PAGE_UUID
+
+ Delete a portal page permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Parent portal interface UUID. [required]         │
+│ *    page_uuid        TEXT  Page UUID. [required]                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/layout
+Usage: pipefy portal page layout [OPTIONS] COMMAND [ARGS]...
+
+ Portal page layout.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ update   Update a portal page grid layout.                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/layout/update
+Usage: pipefy portal page layout update [OPTIONS]
+
+ Update a portal page grid layout.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --page-id          TEXT  Page UUID. [required]                            │
+│ *  --layout           TEXT  Layout JSON for updatePageLayout. [required]     │
+│    --json     -j            Print machine-readable JSON to stdout.           │
+│    --help                   Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/sort
+Usage: pipefy portal page sort [OPTIONS]
+
+ Reorder portal pages.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --portal-uuid          TEXT  Parent portal interface UUID. [required]     │
+│    --page-ids             TEXT  Comma-separated ordered page UUIDs.          │
+│    --ids-json             TEXT  JSON array of ordered page UUIDs.            │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/update
+Usage: pipefy portal page update [OPTIONS] PORTAL_UUID PAGE_UUID
+
+ Update portal page metadata (pass at least one attribute).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Parent portal interface UUID. [required]         │
+│ *    page_uuid        TEXT  Page UUID. [required]                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --title                TEXT     New page title.                              │
+│ --description          TEXT     New page description.                        │
+│ --index                INTEGER  New sort index.                              │
+│ --json         -j               Print machine-readable JSON to stdout.       │
+│ --help                          Show this message and exit.                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/update

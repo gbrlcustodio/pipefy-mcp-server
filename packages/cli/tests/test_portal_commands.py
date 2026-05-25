@@ -225,3 +225,293 @@ def test_portal_update_blank_name_exit_2(
         )
     assert result.exit_code == 2
     mock_client.update_portal.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Portal page subcommands (task 4.5 RED)
+# ---------------------------------------------------------------------------
+
+_PORTAL_UUID = "portal-uuid-1"
+_PAGE_UUID = "page-uuid-1"
+_PAGE_UUID_2 = "page-uuid-2"
+_PAGE_TITLE = "Portal Home"
+
+_CREATED_PAGE = {
+    "id": _PAGE_UUID,
+    "uuid": _PAGE_UUID,
+    "title": _PAGE_TITLE,
+    "elements": [{"id": "el-1", "uuid": "el-1", "type": "text"}],
+}
+
+_PAGE_LAYOUT = {"rows": [{"columns": [{"width": 12}]}]}
+
+
+def test_portal_page_create_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("portal-page-create")
+    mock_client = MagicMock()
+    mock_client.create_portal_page = AsyncMock(return_value=_CREATED_PAGE)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "create",
+                "--portal-uuid",
+                _PORTAL_UUID,
+                "--title",
+                _PAGE_TITLE,
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == _CREATED_PAGE
+    mock_client.create_portal_page.assert_awaited_once_with(
+        _PORTAL_UUID,
+        _PAGE_TITLE,
+        description=None,
+        index=None,
+    )
+
+
+def test_portal_page_create_with_optional_fields_json(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-create-opts")
+    mock_client = MagicMock()
+    mock_client.create_portal_page = AsyncMock(return_value=_CREATED_PAGE)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "create",
+                "--portal-uuid",
+                _PORTAL_UUID,
+                "--title",
+                _PAGE_TITLE,
+                "--description",
+                "Landing copy",
+                "--index",
+                "1",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    mock_client.create_portal_page.assert_awaited_once_with(
+        _PORTAL_UUID,
+        _PAGE_TITLE,
+        description="Landing copy",
+        index=1,
+    )
+
+
+def test_portal_page_update_title_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("portal-page-update")
+    payload = {**_CREATED_PAGE, "title": "Renamed Page"}
+    mock_client = MagicMock()
+    mock_client.update_portal_page = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "update",
+                _PORTAL_UUID,
+                _PAGE_UUID,
+                "--title",
+                "Renamed Page",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == payload
+    mock_client.update_portal_page.assert_awaited_once_with(
+        _PORTAL_UUID,
+        _PAGE_UUID,
+        title="Renamed Page",
+    )
+
+
+def test_portal_page_update_no_attributes_exit_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-upd-none")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "update",
+                _PORTAL_UUID,
+                _PAGE_UUID,
+                "--json",
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.update_portal_page.assert_not_called()
+
+
+def test_portal_page_delete_without_yes_exit_1(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-del-no-yes")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["portal", "page", "delete", _PORTAL_UUID, _PAGE_UUID],
+        )
+    assert result.exit_code == 1
+    mock_client.delete_portal_page.assert_not_called()
+
+
+def test_portal_page_delete_with_yes_json(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-del-yes")
+    payload = {"deletePage": {"success": True}}
+    mock_client = MagicMock()
+    mock_client.delete_portal_page = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "delete",
+                _PORTAL_UUID,
+                _PAGE_UUID,
+                "--yes",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == payload
+    mock_client.delete_portal_page.assert_awaited_once_with(_PORTAL_UUID, _PAGE_UUID)
+
+
+def test_portal_page_sort_comma_separated_page_ids_json(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-sort-csv")
+    page_ids = [_PAGE_UUID_2, _PAGE_UUID]
+    payload = {"sortPages": {"success": True}}
+    mock_client = MagicMock()
+    mock_client.sort_portal_pages = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "sort",
+                "--portal-uuid",
+                _PORTAL_UUID,
+                "--page-ids",
+                f"{_PAGE_UUID_2},{_PAGE_UUID}",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == payload
+    mock_client.sort_portal_pages.assert_awaited_once_with(_PORTAL_UUID, page_ids)
+
+
+def test_portal_page_sort_ids_json_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("portal-page-sort-json")
+    page_ids = [_PAGE_UUID_2, _PAGE_UUID]
+    payload = {"sortPages": {"success": True}}
+    mock_client = MagicMock()
+    mock_client.sort_portal_pages = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "sort",
+                "--portal-uuid",
+                _PORTAL_UUID,
+                "--ids-json",
+                json.dumps(page_ids),
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    mock_client.sort_portal_pages.assert_awaited_once_with(_PORTAL_UUID, page_ids)
+
+
+def test_portal_page_sort_missing_page_ids_exit_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-sort-missing")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["portal", "page", "sort", "--portal-uuid", _PORTAL_UUID, "--json"],
+        )
+    assert result.exit_code == 2
+    mock_client.sort_portal_pages.assert_not_called()
+
+
+def test_portal_page_layout_update_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("portal-page-layout")
+    payload = {"updatePageLayout": {"success": True}}
+    mock_client = MagicMock()
+    mock_client.update_portal_page_layout = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "layout",
+                "update",
+                "--page-id",
+                _PAGE_UUID,
+                "--layout",
+                json.dumps(_PAGE_LAYOUT),
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == payload
+    mock_client.update_portal_page_layout.assert_awaited_once_with(
+        _PAGE_UUID, _PAGE_LAYOUT
+    )

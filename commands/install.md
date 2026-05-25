@@ -1,16 +1,24 @@
 ---
 name: install
-description: Install the Pipefy CLI (pipefy-cli + pipefy-auth + pipefy-sdk) as a persistent uv tool. Required before /pipefy:login can store the OAuth session in the OS keychain (uvx's ephemeral binary identity is rejected by macOS Keychain).
+description: Install the Pipefy CLI (pipefy-cli + pipefy-auth + pipefy-sdk) as a persistent uv tool. Required for /pipefy:login because uvx's ephemeral binary identity is rejected by macOS Keychain.
 disable-model-invocation: true
 ---
 
-Run the following command. The user must confirm before it executes — do not pre-approve.
+First, check whether `pipefy` is already on PATH:
+
+```
+command -v pipefy
+```
+
+If it is, surface `pipefy --version` and stop — there is no reason to reinstall.
+
+Otherwise run the following command. The user must confirm before it executes — do not pre-approve.
 
 ```
 uv tool install --force \
-  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/auth" \
-  "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/cli"
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/auth" \
+  "git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/cli"
 ```
 
 After install, `pipefy` is on PATH. Verify with `pipefy --version`.

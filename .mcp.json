@@ -3,8 +3,12 @@
     "pipefy": {
       "command": "uvx",
       "args": [
+        "--with",
+        "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/sdk",
+        "--with",
+        "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/auth",
         "--from",
-        "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/mcp",
+        "git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/mcp",
         "pipefy-mcp-server"
       ]
     }

@@ -186,22 +186,28 @@ The repo ships a Claude Code plugin that registers the MCP server and a `/pipefy
 /pipefy:login
 ```
 
-`/pipefy:login` prompts you to confirm the underlying `uvx --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/cli" pipefy auth login` command — no permanent CLI install required. The OAuth session is stored in the OS keychain. A live MCP server picks up the rotated session on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes. Terminal-based users can run `pipefy auth login` directly instead.
+`/pipefy:login` runs the OAuth browser flow and stores the session in the OS keychain. On first invocation, the slash command persists the Pipefy CLI as a `uv tool install` (creating a stable `pipefy` binary on PATH) because `uvx`'s ephemeral Python binary lacks the stable identity macOS Keychain requires for new-item writes. Subsequent invocations skip the install when `pipefy` is already on PATH. A live MCP server picks up the rotated session on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes. Terminal-based users can run `pipefy auth login` directly instead.
 
-Configure the plugin-spawned MCP server's environment with `claude mcp add-env` (server name: `pipefy`). `PIPEFY_GRAPHQL_URL` and `PIPEFY_INTERNAL_API_URL` are required; `PIPEFY_AUTH_URL` is required if you intend to use `/pipefy:login` or the stored-session tier; the service-account triple is only needed for the service-account tier:
+Configure the plugin-spawned MCP server's environment by editing the `env` block of the `pipefy` MCP server entry in your Claude Code settings (`~/.claude.json` or via the settings UI; the plugin's `.mcp.json` ships `command`+`args` only). `PIPEFY_GRAPHQL_URL` is required; `PIPEFY_INTERNAL_API_URL` is required for AI-automation tools; `PIPEFY_AUTH_URL` is required if you intend to use `/pipefy:login` or the stored-session tier; the service-account triple is only needed for the service-account tier:
 
-```bash
-claude mcp add-env pipefy PIPEFY_GRAPHQL_URL https://app.pipefy.com/graphql
-claude mcp add-env pipefy PIPEFY_INTERNAL_API_URL https://app.pipefy.com/internal_api
-# /pipefy:login + stored-session tier (OIDC issuer URL):
-claude mcp add-env pipefy PIPEFY_AUTH_URL https://signin.pipefy.com/realms/pipefy
-# Service-account tier (alternative to /pipefy:login):
-claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_URL https://app.pipefy.com/oauth/token
-claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_ID <CLIENT_ID>
-claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET <CLIENT_SECRET>
+```json
+{
+  "mcpServers": {
+    "pipefy": {
+      "env": {
+        "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
+        "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
+        "PIPEFY_AUTH_URL": "https://signin.pipefy.com/realms/pipefy",
+        "PIPEFY_SERVICE_ACCOUNT_URL": "https://app.pipefy.com/oauth/token",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<CLIENT_ID>",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<CLIENT_SECRET>"
+      }
+    }
+  }
+}
 ```
 
-Legacy `PIPEFY_OAUTH_*` aliases still work but the CLI prints rename warnings; prefer the canonical `PIPEFY_SERVICE_ACCOUNT_*` names above. `PIPEFY_AUTH_URL` will become an optional override once #233 lands a CLI-level default.
+Note: `/pipefy:login` itself runs `pipefy auth login` in your shell (not in the MCP server process), so `PIPEFY_AUTH_URL` must also be in the shell environment Claude Code inherited from — exported or placed in a `.env` file at the CWD. Issue #233 will make `PIPEFY_AUTH_URL` an optional override once a CLI-level default lands. Legacy `PIPEFY_OAUTH_*` aliases still resolve but the CLI prints rename warnings; prefer the canonical `PIPEFY_SERVICE_ACCOUNT_*` names above.
 
 **CLI (per project)**
 

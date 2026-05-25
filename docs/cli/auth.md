@@ -91,7 +91,7 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | Tier 3 | Service-account client id. |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | Tier 3 | Service-account client secret. |
 | `PIPEFY_INTERNAL_API_URL` | Tier 3 | Internal GraphQL endpoint for AI automations / some relation flows. Required for those tools only. |
-| `PIPEFY_AUTH_URL` | Tier 4 | **OIDC issuer URL** for interactive login. The CLI appends `/.well-known/openid-configuration` to discover the authorization and token endpoints. Required for `pipefy auth login`. |
+| `PIPEFY_AUTH_URL` | Tier 4 | **OIDC issuer URL** for interactive login. The CLI appends `/.well-known/openid-configuration` to discover the authorization and token endpoints. **Defaults to `https://signin.pipefy.com/realms/pipefy` (Pipefy production IdP)**; set to an empty string (`PIPEFY_AUTH_URL=`) to disable the stored-session tier, or override to point at a non-prod IdP. |
 | `PIPEFY_AUTH_CLIENT_ID` | Tier 4 | Public client id registered for the CLI. Defaults to `pipefy-cli`. |
 
 `PIPEFY_SERVICE_ACCOUNT_URL` and `PIPEFY_AUTH_URL` are **not** interchangeable: the first is a token URL for client-credentials, the second is an OIDC issuer URL for the user-login flow.

@@ -8,6 +8,7 @@ from gql.transport.exceptions import TransportQueryError
 from httpx import Auth
 
 from pipefy_sdk.base_client import BasePipefyClient, unwrap_relay_connection_nodes
+from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.models.portal import CreatePortalInput, UpdatePortalInput
 from pipefy_sdk.queries.portal_queries import (
     DELETE_INTERFACE_MUTATION,
@@ -28,21 +29,21 @@ def _with_uuid_alias(record: dict[str, Any]) -> dict[str, Any]:
     return record
 
 
-_PORTAL_VISIBILITY_VALUES = frozenset({"internal", "private", "public"})
+_PORTAL_PERMISSION_MESSAGE = (
+    "Permission denied. Request organization permissions such as "
+    "`create_portal` or `manage_portals` from your admin."
+)
 
 
-def _map_portal_permission_error(exc: TransportQueryError) -> ValueError:
+def _map_portal_permission_error(exc: TransportQueryError) -> PortalPermissionError:
     """Turn PERMISSION_DENIED GraphQL errors into actionable portal guidance."""
     for err in exc.errors or []:
         if not isinstance(err, dict):
             continue
         extensions = err.get("extensions") or {}
         if extensions.get("code") == "PERMISSION_DENIED":
-            return ValueError(
-                "Permission denied. Request organization permissions such as "
-                "`create_portal` or `manage_portals` from your admin."
-            )
-    return ValueError(str(exc))
+            return PortalPermissionError(_PORTAL_PERMISSION_MESSAGE)
+    return PortalPermissionError(str(exc))
 
 
 async def _execute_interfaces_query_with_portal_errors(
@@ -233,22 +234,20 @@ class PortalService:
             icon: Optional icon identifier.
             display_pipefy_header: Whether to show the Pipefy header.
         """
-        if visibility is not None and visibility not in _PORTAL_VISIBILITY_VALUES:
-            msg = (
-                f"Invalid visibility {visibility!r}. "
-                "Must be one of: internal, private, public."
-            )
-            raise ValueError(msg)
         portal_input = UpdatePortalInput(
             interface_uuid=interface_uuid,
             name=name,
-            visibility=visibility,  # type: ignore[arg-type]
+            visibility=visibility,
             color=color,
             icon=icon,
             display_pipefy_header=display_pipefy_header,
         )
         variables = {
-            "input": portal_input.model_dump(exclude_unset=True, exclude_none=True)
+            "input": portal_input.model_dump(
+                exclude_unset=True,
+                exclude_none=True,
+                by_alias=True,
+            )
         }
         data = await _execute_interfaces_query_with_portal_errors(
             self.execute_interfaces_query,

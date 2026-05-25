@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from gql.transport.exceptions import TransportQueryError
+from pipefy_sdk.exceptions import PortalPermissionError
 
 from pipefy_mcp.tools.graphql_error_helpers import extract_graphql_error_codes
 from pipefy_mcp.tools.tool_error_envelope import tool_error
@@ -23,10 +24,11 @@ def map_portal_error_to_message(exc: BaseException) -> str:
         User-visible error string; permission failures mention ``create_portal``
         and ``manage_portals``.
     """
+    if isinstance(exc, PortalPermissionError):
+        return str(exc).strip()
+
     text = str(exc).strip()
     lowered = text.lower()
-    if "create_portal" in lowered or "manage_portals" in lowered:
-        return text
 
     codes: list[str] = []
     if isinstance(exc, TransportQueryError):

@@ -22,14 +22,14 @@ class CreatePortalInput(BaseModel):
 class UpdatePortalInput(BaseModel):
     """Partial update payload for ``updateInterface`` (Interfaces schema)."""
 
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
     interface_uuid: str = Field(min_length=1)
     name: str | None = None
     visibility: PortalVisibility | None = None
     color: str | None = None
     icon: str | None = None
-    display_pipefy_header: bool | None = None
-
-    model_config = ConfigDict(extra="forbid")
+    display_pipefy_header: bool | None = Field(default=None, alias="displayPipefyHeader")
 
 
 __all__ = [

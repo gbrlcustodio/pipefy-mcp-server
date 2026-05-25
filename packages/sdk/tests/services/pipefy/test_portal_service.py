@@ -8,7 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from gql.transport.exceptions import TransportQueryError
 from httpx_auth import OAuth2ClientCredentials
+from pydantic import ValidationError
 
+from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.queries.observability_queries import RESOLVE_ORGANIZATION_UUID_QUERY
 from pipefy_sdk.queries.portal_queries import GET_PORTAL_QUERY, LIST_PORTALS_QUERY
 from pipefy_sdk.services.internal_api_client import InternalApiClient
@@ -652,20 +654,63 @@ async def test_update_portal_rejects_invalid_visibility_before_graphql(
     mock_settings: PipefySettings,
     mock_auth: OAuth2ClientCredentials,
 ) -> None:
-    """Invalid visibility values raise ValueError before any GraphQL call."""
+    """Invalid visibility values raise ValidationError before any GraphQL call."""
     service = _make_interfaces_service(
         mock_settings,
         mock_auth,
         {"updateInterface": {"interface": _CREATE_PORTAL_GRAPHQL_INTERFACE}},
     )
 
-    with pytest.raises(ValueError, match="visibility"):
+    with pytest.raises(ValidationError):
         await service.update_portal(
             "portal-created-uuid",
             visibility="public_visibility",
         )
 
     service._interfaces_client.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_serializes_all_fields_with_camel_case_aliases(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """update_portal sends displayPipefyHeader and omits unset fields."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {
+            "updateInterface": {
+                "interface": {
+                    **_CREATE_PORTAL_GRAPHQL_INTERFACE,
+                    "name": "Full Update",
+                    "visibility": "public",
+                }
+            }
+        },
+    )
+
+    await service.update_portal(
+        "portal-created-uuid",
+        name="Full Update",
+        visibility="public",
+        color="#aabbcc",
+        icon="layout",
+        display_pipefy_header=True,
+    )
+
+    _, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables == {
+        "input": {
+            "interface_uuid": "portal-created-uuid",
+            "name": "Full Update",
+            "visibility": "public",
+            "color": "#aabbcc",
+            "icon": "layout",
+            "displayPipefyHeader": True,
+        }
+    }
 
 
 @pytest.mark.unit
@@ -706,7 +751,7 @@ async def test_create_portal_permission_denied_surfaces_actionable_message(
         side_effect=_PERMISSION_DENIED_ERROR
     )
 
-    with pytest.raises(ValueError, match=r"(create_portal|manage_portals)"):
+    with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
         await service.create_portal(_ORG_UUID_FOR_TESTS)
 
 
@@ -726,7 +771,7 @@ async def test_update_portal_permission_denied_surfaces_actionable_message(
         side_effect=_PERMISSION_DENIED_ERROR
     )
 
-    with pytest.raises(ValueError, match=r"(create_portal|manage_portals)"):
+    with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
         await service.update_portal("portal-created-uuid", name="Renamed")
 
 
@@ -746,5 +791,5 @@ async def test_delete_portal_permission_denied_surfaces_actionable_message(
         side_effect=_PERMISSION_DENIED_ERROR
     )
 
-    with pytest.raises(ValueError, match=r"(create_portal|manage_portals)"):
+    with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
         await service.delete_portal("portal-to-delete")

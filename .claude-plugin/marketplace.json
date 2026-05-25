@@ -1,0 +1,15 @@
+{
+  "name": "pipefy",
+  "owner": {
+    "name": "Gabriel Custodio",
+    "url": "https://github.com/gbrlcustodio"
+  },
+  "plugins": [
+    {
+      "name": "pipefy",
+      "source": "./",
+      "description": "Pipefy MCP server + /pipefy-login slash command.",
+      "version": "0.2.0-beta.1"
+    }
+  ]
+}

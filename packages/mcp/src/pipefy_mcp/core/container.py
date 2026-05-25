@@ -14,6 +14,7 @@ from pipefy_auth import (
 )
 from pipefy_sdk import AiAutomationService, InternalApiClient, PipefyClient
 
+from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -50,7 +51,10 @@ class ServicesContainer:
             oidc_client=oidc_client,
         )
         if resolved is None:
-            raise RuntimeError(missing_auth_message())
+            raise RuntimeError(
+                f"{missing_auth_message()} "
+                f"See {DOCS_SETUP_REF} for host-specific install steps."
+            )
         if oidc_client is not None and tier_for(resolved) == STORED_SESSION_TIER:
             try:
                 await asyncio.to_thread(
@@ -61,8 +65,10 @@ class ServicesContainer:
             except RefreshError as exc:
                 logger.error(
                     "Stored Pipefy session could not be refreshed at startup: %s. "
-                    "Run `pipefy auth login` to sign in again.",
+                    "Run `pipefy auth login` to sign in again; see %s for "
+                    "host-specific alternatives.",
                     exc,
+                    DOCS_SETUP_REF,
                 )
                 raise
             logger.info("Pipefy stored session warmed up at startup")

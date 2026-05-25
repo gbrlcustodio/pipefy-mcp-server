@@ -1,0 +1,20 @@
+{
+  "name": "pipefy",
+  "displayName": "Pipefy",
+  "version": "0.2.0-beta.1",
+  "description": "Pipefy MCP server + /pipefy-login slash command.",
+  "author": { "name": "Gabriel Custodio" },
+  "homepage": "https://github.com/gbrlcustodio/pipefy-mcp-server",
+  "repository": "https://github.com/gbrlcustodio/pipefy-mcp-server",
+  "license": "Apache-2.0",
+  "mcpServers": {
+    "pipefy": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/gbrlcustodio/pipefy-mcp-server",
+        "pipefy-mcp-server"
+      ]
+    }
+  }
+}

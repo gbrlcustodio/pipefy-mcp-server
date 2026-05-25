@@ -188,18 +188,20 @@ The repo ships a Claude Code plugin that registers the MCP server and a `/pipefy
 
 `/pipefy:login` prompts you to confirm the underlying `uvx --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/cli" pipefy auth login` command — no permanent CLI install required. The OAuth session is stored in the OS keychain. A live MCP server picks up the rotated session on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes. Terminal-based users can run `pipefy auth login` directly instead.
 
-Configure the plugin-spawned MCP server's environment with `claude mcp add-env` (server name: `pipefy`). `PIPEFY_GRAPHQL_URL` and `PIPEFY_INTERNAL_API_URL` are required; the service-account triple is only needed for the service-account tier (skip if you only use `/pipefy:login` + stored-session tier):
+Configure the plugin-spawned MCP server's environment with `claude mcp add-env` (server name: `pipefy`). `PIPEFY_GRAPHQL_URL` and `PIPEFY_INTERNAL_API_URL` are required; `PIPEFY_AUTH_URL` is required if you intend to use `/pipefy:login` or the stored-session tier; the service-account triple is only needed for the service-account tier:
 
 ```bash
 claude mcp add-env pipefy PIPEFY_GRAPHQL_URL https://app.pipefy.com/graphql
 claude mcp add-env pipefy PIPEFY_INTERNAL_API_URL https://app.pipefy.com/internal_api
+# /pipefy:login + stored-session tier (OIDC issuer URL):
+claude mcp add-env pipefy PIPEFY_AUTH_URL https://signin.pipefy.com/realms/pipefy
 # Service-account tier (alternative to /pipefy:login):
 claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_URL https://app.pipefy.com/oauth/token
 claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_ID <CLIENT_ID>
 claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET <CLIENT_SECRET>
 ```
 
-Legacy `PIPEFY_OAUTH_*` aliases still work but the CLI prints rename warnings; prefer the canonical `PIPEFY_SERVICE_ACCOUNT_*` names above.
+Legacy `PIPEFY_OAUTH_*` aliases still work but the CLI prints rename warnings; prefer the canonical `PIPEFY_SERVICE_ACCOUNT_*` names above. `PIPEFY_AUTH_URL` will become an optional override once #233 lands a CLI-level default.
 
 **CLI (per project)**
 

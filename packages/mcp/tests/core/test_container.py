@@ -2,7 +2,7 @@ import time
 from unittest.mock import Mock, patch
 
 import pytest
-from pipefy_auth import AuthSettings, CallableBearerAuth, StaticBearerAuth
+from pipefy_auth import AuthSettings, CallableBearerAuth, RefreshError, StaticBearerAuth
 from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefyClient, PipefySettings
 
@@ -247,3 +247,25 @@ class TestServicesContainer:
             await ServicesContainer().initialize_services(settings)
 
         mock_ensure_fresh_session.assert_not_called()
+
+    @patch("pipefy_mcp.core.container.ensure_fresh_session")
+    @patch("pipefy_mcp.core.container.PipefyClient")
+    async def test_initialize_services_aborts_before_client_when_refresh_fails(
+        self,
+        mock_pipefy_client_class,
+        mock_ensure_fresh_session,
+    ):
+        """A failed warm-up surfaces ``RefreshError`` *before* ``PipefyClient`` is constructed."""
+        mock_ensure_fresh_session.side_effect = RefreshError("invalid_grant")
+        settings = Settings(
+            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            auth=_stored_session_auth_settings(),
+        )
+        with patch(
+            "pipefy_auth.resolver.load_session",
+            return_value=_fresh_stored_session(),
+        ):
+            with pytest.raises(RefreshError, match="invalid_grant"):
+                await ServicesContainer().initialize_services(settings)
+
+        mock_pipefy_client_class.assert_not_called()

@@ -6,6 +6,7 @@ from typing import Self
 
 from pipefy_auth import (
     STORED_SESSION_TIER,
+    RefreshError,
     ensure_fresh_session,
     missing_auth_message,
     resolve_pipefy_auth,
@@ -51,11 +52,18 @@ class ServicesContainer:
         if resolved is None:
             raise RuntimeError(missing_auth_message())
         if oidc_client is not None and tier_for(resolved) == STORED_SESSION_TIER:
-            await asyncio.to_thread(
-                ensure_fresh_session,
-                issuer=oidc_client.issuer_url,
-                client_id=oidc_client.client_id,
-            )
+            try:
+                await asyncio.to_thread(
+                    ensure_fresh_session,
+                    issuer=oidc_client.issuer_url,
+                    client_id=oidc_client.client_id,
+                )
+            except RefreshError:
+                logger.error(
+                    "Stored Pipefy session could not be refreshed at startup. "
+                    "Run `pipefy auth login` to sign in again."
+                )
+                raise
             logger.info("Pipefy stored session warmed up at startup")
         self.pipefy_client = PipefyClient(settings=pipefy, auth=resolved)
         if pipefy.internal_api_url:

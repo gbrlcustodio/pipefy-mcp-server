@@ -8,7 +8,7 @@
     {
       "name": "pipefy",
       "source": "./",
-      "description": "Pipefy MCP server + /pipefy-login slash command.",
+      "description": "Pipefy MCP server + /pipefy:login slash command.",
       "version": "0.2.0-beta.1"
     }
   ]

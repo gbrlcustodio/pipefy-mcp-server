@@ -1,3 +1,4 @@
+import logging
 import time
 from unittest.mock import Mock, patch
 
@@ -254,8 +255,9 @@ class TestServicesContainer:
         self,
         mock_pipefy_client_class,
         mock_ensure_fresh_session,
+        caplog,
     ):
-        """A failed warm-up surfaces ``RefreshError`` *before* ``PipefyClient`` is constructed."""
+        """A failed warm-up logs the ``pipefy auth login`` hint and surfaces ``RefreshError`` *before* ``PipefyClient`` is constructed."""
         mock_ensure_fresh_session.side_effect = RefreshError("invalid_grant")
         settings = Settings(
             pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
@@ -265,7 +267,17 @@ class TestServicesContainer:
             "pipefy_auth.resolver.load_session",
             return_value=_fresh_stored_session(),
         ):
-            with pytest.raises(RefreshError, match="invalid_grant"):
-                await ServicesContainer().initialize_services(settings)
+            with caplog.at_level(logging.ERROR, logger="pipefy_mcp.core.container"):
+                with pytest.raises(RefreshError, match="invalid_grant"):
+                    await ServicesContainer().initialize_services(settings)
 
         mock_pipefy_client_class.assert_not_called()
+        hint_records = [
+            r
+            for r in caplog.records
+            if r.name == "pipefy_mcp.core.container" and r.levelno == logging.ERROR
+        ]
+        assert len(hint_records) == 1
+        hint_message = hint_records[0].getMessage()
+        assert "invalid_grant" in hint_message
+        assert "pipefy auth login" in hint_message

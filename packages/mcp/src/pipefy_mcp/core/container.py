@@ -58,10 +58,11 @@ class ServicesContainer:
                     issuer=oidc_client.issuer_url,
                     client_id=oidc_client.client_id,
                 )
-            except RefreshError:
+            except RefreshError as exc:
                 logger.error(
-                    "Stored Pipefy session could not be refreshed at startup. "
-                    "Run `pipefy auth login` to sign in again."
+                    "Stored Pipefy session could not be refreshed at startup: %s. "
+                    "Run `pipefy auth login` to sign in again.",
+                    exc,
                 )
                 raise
             logger.info("Pipefy stored session warmed up at startup")

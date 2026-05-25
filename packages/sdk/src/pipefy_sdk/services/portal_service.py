@@ -4,10 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from gql.transport.exceptions import TransportQueryError
 from httpx import Auth
 
 from pipefy_sdk.base_client import BasePipefyClient, unwrap_relay_connection_nodes
-from pipefy_sdk.queries.portal_queries import GET_PORTAL_QUERY, LIST_PORTALS_QUERY
+from pipefy_sdk.exceptions import PortalPermissionError
+from pipefy_sdk.models.portal import CreatePortalInput, UpdatePortalInput
+from pipefy_sdk.queries.portal_queries import (
+    DELETE_INTERFACE_MUTATION,
+    FIND_OR_CREATE_PORTAL_MUTATION,
+    GET_PORTAL_QUERY,
+    LIST_PORTALS_QUERY,
+    UPDATE_INTERFACE_MUTATION,
+)
 from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.settings import PipefySettings
 from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
@@ -18,6 +27,35 @@ def _with_uuid_alias(record: dict[str, Any]) -> dict[str, Any]:
     if "id" in record and "uuid" not in record:
         return {**record, "uuid": record["id"]}
     return record
+
+
+_PORTAL_PERMISSION_MESSAGE = (
+    "Permission denied. Request organization permissions such as "
+    "`create_portal` or `manage_portals` from your admin."
+)
+
+
+def _map_portal_permission_error(exc: TransportQueryError) -> PortalPermissionError:
+    """Turn PERMISSION_DENIED GraphQL errors into actionable portal guidance."""
+    for err in exc.errors or []:
+        if not isinstance(err, dict):
+            continue
+        extensions = err.get("extensions") or {}
+        if extensions.get("code") == "PERMISSION_DENIED":
+            return PortalPermissionError(_PORTAL_PERMISSION_MESSAGE)
+    return PortalPermissionError(str(exc))
+
+
+async def _execute_interfaces_query_with_portal_errors(
+    execute: Any,
+    query: Any,
+    variables: dict[str, Any],
+) -> dict[str, Any]:
+    """Run an Interfaces operation and map portal permission failures."""
+    try:
+        return await execute(query, variables)
+    except TransportQueryError as exc:
+        raise _map_portal_permission_error(exc) from exc
 
 
 def _normalize_portal_detail(portal: dict[str, Any]) -> dict[str, Any]:
@@ -148,3 +186,88 @@ class PortalService:
             msg = f"Portal '{portal_uuid}' was not found."
             raise ValueError(msg)
         return _normalize_portal_detail(portal)
+
+    async def create_portal(self, organization_uuid: str | int) -> dict[str, Any]:
+        """Create or fetch the organization's main portal (idempotent template flow).
+
+        Args:
+            organization_uuid: Organization UUID or numeric organization id.
+
+        Returns:
+            Portal interface summary with ``uuid`` alias for ``id``.
+        """
+        portal_input = CreatePortalInput.model_validate(
+            {"organization_uuid": organization_uuid}
+        )
+        resolved_org_uuid = await resolve_organization_uuid(
+            self._graphql_client.execute_query,
+            portal_input.organization_uuid,
+        )
+        data = await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            FIND_OR_CREATE_PORTAL_MUTATION,
+            {"input": {"orgUuid": resolved_org_uuid, "subType": "portal"}},
+        )
+        interface = (data.get("findOrCreateInterfaceByTemplate") or {}).get("interface")
+        if not isinstance(interface, dict):
+            msg = "findOrCreateInterfaceByTemplate returned no interface."
+            raise ValueError(msg)
+        return _with_uuid_alias(interface)
+
+    async def update_portal(
+        self,
+        interface_uuid: str,
+        *,
+        name: str | None = None,
+        visibility: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        display_pipefy_header: bool | None = None,
+    ) -> dict[str, Any]:
+        """Update portal metadata on the Interfaces schema.
+
+        Args:
+            interface_uuid: Portal interface UUID.
+            name: Optional display name.
+            visibility: ``internal``, ``private``, or ``public``.
+            color: Optional theme color.
+            icon: Optional icon identifier.
+            display_pipefy_header: Whether to show the Pipefy header.
+        """
+        portal_input = UpdatePortalInput(
+            interface_uuid=interface_uuid,
+            name=name,
+            visibility=visibility,
+            color=color,
+            icon=icon,
+            display_pipefy_header=display_pipefy_header,
+        )
+        variables = {
+            "input": portal_input.model_dump(
+                exclude_unset=True,
+                exclude_none=True,
+                by_alias=True,
+            )
+        }
+        data = await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            UPDATE_INTERFACE_MUTATION,
+            variables,
+        )
+        interface = (data.get("updateInterface") or {}).get("interface")
+        if not isinstance(interface, dict):
+            msg = "updateInterface returned no interface."
+            raise ValueError(msg)
+        return _with_uuid_alias(interface)
+
+    async def delete_portal(self, interface_uuid: str) -> dict[str, Any]:
+        """Delete a portal interface (irreversible).
+
+        Args:
+            interface_uuid: Portal interface UUID.
+        """
+        return await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            DELETE_INTERFACE_MUTATION,
+            {"input": {"interface_uuid": interface_uuid}},
+        )

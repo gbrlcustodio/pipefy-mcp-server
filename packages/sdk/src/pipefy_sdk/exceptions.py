@@ -9,3 +9,7 @@ class PipefyError(Exception):
 
 class PipefyAPIError(PipefyError):
     """Raised when the Pipefy GraphQL API returns an error payload."""
+
+
+class PortalPermissionError(ValueError):
+    """Raised when a portal Interfaces operation fails with PERMISSION_DENIED."""

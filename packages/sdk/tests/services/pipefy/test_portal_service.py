@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import importlib
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from gql.transport.exceptions import TransportQueryError
 from httpx_auth import OAuth2ClientCredentials
+from pydantic import ValidationError
 
+from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.queries.observability_queries import RESOLVE_ORGANIZATION_UUID_QUERY
 from pipefy_sdk.queries.portal_queries import GET_PORTAL_QUERY, LIST_PORTALS_QUERY
 from pipefy_sdk.services.internal_api_client import InternalApiClient
@@ -462,3 +466,330 @@ async def test_get_portal_uses_correct_variables(
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     assert query_used is GET_PORTAL_QUERY
     assert variables == {"uuid": "uuid-abc"}
+
+
+_portal_queries_module = importlib.import_module("pipefy_sdk.queries.portal_queries")
+
+
+def _portal_mutation_constant(name: str):
+    """Resolve portal mutation constant when present (GREEN); else None for RED."""
+    return getattr(_portal_queries_module, name, None)
+
+
+def _assert_interfaces_mutation_query(query_used: object, constant_name: str) -> None:
+    """Assert Interfaces mutation document matches the expected portal_queries constant."""
+    expected = _portal_mutation_constant(constant_name)
+    if expected is not None:
+        assert query_used is expected
+    else:
+        operation_snippets = {
+            "FIND_OR_CREATE_PORTAL_MUTATION": "findOrCreateInterfaceByTemplate",
+            "UPDATE_INTERFACE_MUTATION": "updateInterface",
+            "DELETE_INTERFACE_MUTATION": "deleteInterface",
+        }
+        assert operation_snippets[constant_name] in str(query_used)
+
+
+_CREATE_PORTAL_GRAPHQL_INTERFACE = {
+    "id": "portal-created-uuid",
+    "name": "Org Portal",
+    "visibility": "internal",
+    "subType": "portal",
+}
+
+_CREATE_PORTAL_RESPONSE = {
+    "findOrCreateInterfaceByTemplate": {
+        "interface": _CREATE_PORTAL_GRAPHQL_INTERFACE,
+    }
+}
+
+_PERMISSION_DENIED_ERROR = TransportQueryError(
+    "GraphQL request failed",
+    errors=[
+        {
+            "message": "Permission Denied",
+            "extensions": {"code": "PERMISSION_DENIED"},
+        }
+    ],
+)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_resolves_numeric_org_and_calls_find_or_create_template(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """create_portal resolves numeric org id then findOrCreateInterfaceByTemplate."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_PORTAL_RESPONSE,
+    )
+    service._graphql_client.execute_query = AsyncMock(
+        return_value={"organization": {"uuid": _ORG_UUID_FOR_TESTS}}
+    )
+
+    result = await service.create_portal(_NUMERIC_ORG_ID)
+
+    service._graphql_client.execute_query.assert_called_once_with(
+        RESOLVE_ORGANIZATION_UUID_QUERY,
+        {"id": _NUMERIC_ORG_ID},
+    )
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "FIND_OR_CREATE_PORTAL_MUTATION")
+    assert variables == {"input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}}
+    assert result["uuid"] == "portal-created-uuid"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_uuid_org_skips_resolve(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """UUID-shaped org identifiers skip resolve before findOrCreate mutation."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_PORTAL_RESPONSE,
+    )
+    service._graphql_client.execute_query = AsyncMock()
+
+    await service.create_portal(_ORG_UUID_FOR_TESTS)
+
+    service._graphql_client.execute_query.assert_not_called()
+    _, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables == {"input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_idempotent_returns_same_interface_uuid(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Second create_portal call returns the same interface uuid (idempotent)."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_PORTAL_RESPONSE,
+    )
+
+    first = await service.create_portal(_ORG_UUID_FOR_TESTS)
+    second = await service.create_portal(_ORG_UUID_FOR_TESTS)
+
+    assert first["uuid"] == second["uuid"] == "portal-created-uuid"
+    assert service._interfaces_client.execute_query.call_count == 2
+    for call in service._interfaces_client.execute_query.call_args_list:
+        _, variables = call[0]
+        assert variables == {
+            "input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}
+        }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_passes_only_set_fields_under_input(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """update_portal sends snake_case interface_uuid and only provided fields."""
+    update_response = {
+        "updateInterface": {
+            "interface": {**_CREATE_PORTAL_GRAPHQL_INTERFACE, "name": "Renamed"},
+        }
+    }
+    service = _make_interfaces_service(mock_settings, mock_auth, update_response)
+
+    await service.update_portal("portal-created-uuid", name="Renamed")
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "UPDATE_INTERFACE_MUTATION")
+    assert variables == {
+        "input": {"interface_uuid": "portal-created-uuid", "name": "Renamed"}
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_omits_unset_optional_fields(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Unset optional fields are not included in updateInterface input."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {
+            "updateInterface": {
+                "interface": {
+                    **_CREATE_PORTAL_GRAPHQL_INTERFACE,
+                    "visibility": "public",
+                }
+            }
+        },
+    )
+
+    await service.update_portal(
+        "portal-created-uuid",
+        visibility="public",
+    )
+
+    _, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables == {
+        "input": {
+            "interface_uuid": "portal-created-uuid",
+            "visibility": "public",
+        }
+    }
+    assert "name" not in variables["input"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_rejects_invalid_visibility_before_graphql(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Invalid visibility values raise ValidationError before any GraphQL call."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"updateInterface": {"interface": _CREATE_PORTAL_GRAPHQL_INTERFACE}},
+    )
+
+    with pytest.raises(ValidationError):
+        await service.update_portal(
+            "portal-created-uuid",
+            visibility="public_visibility",
+        )
+
+    service._interfaces_client.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_serializes_all_fields_with_camel_case_aliases(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """update_portal sends displayPipefyHeader and omits unset fields."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {
+            "updateInterface": {
+                "interface": {
+                    **_CREATE_PORTAL_GRAPHQL_INTERFACE,
+                    "name": "Full Update",
+                    "visibility": "public",
+                }
+            }
+        },
+    )
+
+    await service.update_portal(
+        "portal-created-uuid",
+        name="Full Update",
+        visibility="public",
+        color="#aabbcc",
+        icon="layout",
+        display_pipefy_header=True,
+    )
+
+    _, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables == {
+        "input": {
+            "interface_uuid": "portal-created-uuid",
+            "name": "Full Update",
+            "visibility": "public",
+            "color": "#aabbcc",
+            "icon": "layout",
+            "displayPipefyHeader": True,
+        }
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_portal_calls_delete_interface_with_interface_uuid(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """delete_portal uses deleteInterface with snake_case input.interface_uuid."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"deleteInterface": {"success": True}},
+    )
+
+    result = await service.delete_portal("portal-to-delete")
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "DELETE_INTERFACE_MUTATION")
+    assert variables == {"input": {"interface_uuid": "portal-to-delete"}}
+    assert result == {"deleteInterface": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_permission_denied_surfaces_actionable_message(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """PERMISSION_DENIED from Interfaces maps to portal permission guidance."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_PORTAL_RESPONSE,
+    )
+    service._interfaces_client.execute_query = AsyncMock(
+        side_effect=_PERMISSION_DENIED_ERROR
+    )
+
+    with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
+        await service.create_portal(_ORG_UUID_FOR_TESTS)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_permission_denied_surfaces_actionable_message(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """PERMISSION_DENIED on update maps to portal permission guidance."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"updateInterface": {"interface": _CREATE_PORTAL_GRAPHQL_INTERFACE}},
+    )
+    service._interfaces_client.execute_query = AsyncMock(
+        side_effect=_PERMISSION_DENIED_ERROR
+    )
+
+    with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
+        await service.update_portal("portal-created-uuid", name="Renamed")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_portal_permission_denied_surfaces_actionable_message(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """PERMISSION_DENIED on delete maps to portal permission guidance."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"deleteInterface": {"success": True}},
+    )
+    service._interfaces_client.execute_query = AsyncMock(
+        side_effect=_PERMISSION_DENIED_ERROR
+    )
+
+    with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
+        await service.delete_portal("portal-to-delete")

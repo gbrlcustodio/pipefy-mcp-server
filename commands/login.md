@@ -1,6 +1,6 @@
 ---
 name: login
-description: Authenticate with Pipefy via OAuth (browser login). Stores the session in the OS keychain so the Pipefy MCP server's stored-session tier can use it. Installs the Pipefy CLI persistently if it isn't already on PATH (uvx ephemeral binaries are rejected by the macOS Keychain).
+description: Authenticate with Pipefy via OAuth (browser login). Stores the session in the OS keychain so the Pipefy MCP server's stored-session tier can use it. Installs the Pipefy CLI persistently if it isn't already on PATH so subsequent auth-status / refresh commands have a stable binary to run against.
 disable-model-invocation: true
 argument-hint: "[--no-browser] [--callback-timeout <seconds>]"
 ---
@@ -11,7 +11,7 @@ First, check whether the Pipefy CLI is installed:
 command -v pipefy
 ```
 
-If `pipefy` is **not** on PATH, install it persistently before attempting login. Run the following command and prompt the user to confirm:
+If `pipefy` is **not** on PATH, install it before attempting login so the user has a stable binary for subsequent `pipefy auth status` / `pipefy auth logout` invocations. Run the following command and prompt the user to confirm:
 
 ```
 uv tool install --force \
@@ -20,7 +20,9 @@ uv tool install --force \
   "git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/cli"
 ```
 
-`uvx --from`-based one-shot invocations cannot store the OAuth session in the macOS Keychain because the ephemeral Python binary lacks a stable identity that macOS Keychain accepts for new-item writes. A persistent `uv tool install` is required. `--with` is required because each workspace member's `[tool.uv.sources]` declares its siblings as `{ workspace = true }`, which uv cannot resolve from a remote git URL — issue #234 tracks switching to release-wheel URLs once they ship all four packages.
+`--with` is required because each workspace member's `[tool.uv.sources]` declares its siblings as `{ workspace = true }`, which uv cannot resolve from a remote git URL — issue #234 tracks switching to release-wheel URLs once they ship all four packages.
+
+Note: on macOS, `pipefy auth login` may fail at the final keychain write with `errSecParam (-25244)` when invoked from a non-TTY subprocess (e.g. the Bash tool inside an IDE/agent host) because `Security.framework` cannot surface the new-item ACL dialog. The OAuth handshake itself completes; only the persistence step stumbles. Issue #235 tracks platform-aware error messaging and first-run UX guidance.
 
 Then run, prompting the user to confirm:
 

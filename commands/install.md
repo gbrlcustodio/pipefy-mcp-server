@@ -1,6 +1,6 @@
 ---
 name: install
-description: Install the Pipefy CLI (pipefy-cli + pipefy-auth + pipefy-sdk) as a persistent uv tool. Required for /pipefy:login because uvx's ephemeral binary identity is rejected by macOS Keychain.
+description: Install the Pipefy CLI (pipefy-cli + pipefy-auth + pipefy-sdk) as a persistent uv tool so `/pipefy:login` and subsequent `pipefy auth status` / `pipefy auth logout` invocations have a stable binary on PATH.
 disable-model-invocation: true
 ---
 

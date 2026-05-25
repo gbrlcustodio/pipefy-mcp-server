@@ -45,12 +45,8 @@ def live_auth_settings() -> AuthSettings:
 
 def _try_resolve_live_auth() -> Auth | None:
     a = live_auth_settings()
-    # Intentionally omit ``oidc_client``: live integration tests must authenticate
-    # via a service account or static bearer, never via a developer's personal
-    # stored OAuth session. After PIPEFY_AUTH_URL gained a default value, a stray
-    # ``pipefy auth login`` run on a developer machine would otherwise opt that
-    # developer's tests into the stored-session tier and fire real traffic against
-    # the prod Pipefy API under a personal user account.
+    # ``oidc_client=None``: a stray ``pipefy auth login`` on a dev machine would
+    # otherwise satisfy live-creds detection via the developer's personal session.
     return resolve_pipefy_auth(
         static_token=a.static_token,
         service_account=a.to_service_account(),

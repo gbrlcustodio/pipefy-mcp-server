@@ -171,7 +171,7 @@ When no session is stored, `pipefy auth logout` prints `Not signed in. Nothing t
 
 | Case | Exit |
 |------|------|
-| `PIPEFY_AUTH_URL` is unset | **2** — same gate as `pipefy auth login`. |
+| `PIPEFY_AUTH_URL` explicitly disabled (`PIPEFY_AUTH_URL=`) | **2** — same gate as `pipefy auth login`. With the var unset, the prod issuer default applies and this case does not trigger. |
 | No session stored (no-op) | **0** |
 | Session cleared (revoke succeeded, failed, or unsupported) | **0** |
 
@@ -208,7 +208,7 @@ The keychain has a session but its refresh token won't exchange. Most common cau
 
 ### `PIPEFY_AUTH_URL is required for pipefy auth login`
 
-You haven't set the issuer URL. Use the value from [Pipefy issuer URLs](#pipefy-issuer-urls). The same env var also gates whether tier 4 can fire from any other command — without it, the CLI never consults the keychain.
+Tier 4 is explicitly disabled. With `PIPEFY_AUTH_URL` unset the CLI falls back to the Pipefy production issuer default, so this message means the var is set to an empty string (`PIPEFY_AUTH_URL=`) — usually to opt out of the stored-session tier on a host that can't reach prod. Unset the variable to restore the default, or set it to a valid issuer URL (see [Pipefy issuer URLs](#pipefy-issuer-urls)) if you need a non-prod IdP.
 
 ### `Login succeeded but the session could not be stored in your OS keychain (<backend>)`
 

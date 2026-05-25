@@ -1,18 +1,12 @@
 ---
 name: install
-description: Install the Pipefy CLI (pipefy-cli + pipefy-auth + pipefy-sdk) as a persistent uv tool so `/pipefy:login` and subsequent `pipefy auth status` / `pipefy auth logout` invocations have a stable binary on PATH.
+description: Install the Pipefy CLI (pipefy-cli + pipefy-auth + pipefy-sdk) as a persistent uv tool.
 disable-model-invocation: true
 ---
 
-First, check whether `pipefy` is already on PATH:
+If `command -v pipefy` succeeds, surface `pipefy --version` and stop.
 
-```
-command -v pipefy
-```
-
-If it is, surface `pipefy --version` and stop — there is no reason to reinstall.
-
-Otherwise run the following command. The user must confirm before it executes — do not pre-approve.
+Otherwise prompt the user to confirm running:
 
 ```
 uv tool install --force \
@@ -21,6 +15,4 @@ uv tool install --force \
   "git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/cli"
 ```
 
-After install, `pipefy` is on PATH. Verify with `pipefy --version`.
-
-The `--with` chain is required today because each workspace member's `[tool.uv.sources]` declares its siblings as `{ workspace = true }`, which uv cannot resolve from a remote git URL — only from a local workspace context. Issue #234 tracks switching this to release-wheel URLs once the next tag ships all four wheels (SDK + CLI + MCP + Auth).
+Verify with `pipefy --version`.

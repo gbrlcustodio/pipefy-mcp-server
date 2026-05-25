@@ -12,7 +12,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **CLI**: `pipefy auth status [--json|-j]` — reports auth source, identity, session expiry, and exit codes.
 - **CLI**: `pipefy auth logout` — revokes the refresh token at the IdP and clears the stored session.
-- **CLI**: `pipefy auth login` / `pipefy auth logout` now fall back to `https://signin.pipefy.com/realms/pipefy` (Pipefy production IdP) when `PIPEFY_AUTH_URL` is unset, removing the previous `PIPEFY_AUTH_URL is required` exit-2 friction for first-time / one-shot users. Scoped to the CLI commands only — the resolver / MCP server / SDK still require an explicit `PIPEFY_AUTH_URL` to activate the stored-session tier (so service-account-only deployments do not pay a keychain probe per invocation). Closes #233.
 - **MCP**: stored-session tier wired into `ServicesContainer`; setting `PIPEFY_AUTH_URL` after `pipefy auth login` now lets the MCP server reuse the keychain-backed session, with the refresh pre-warmed at startup so a stale or revoked session surfaces before the first tool call.
 
 ### Changed

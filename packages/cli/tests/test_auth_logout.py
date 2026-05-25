@@ -144,17 +144,18 @@ def _store_test_session(issuer: str = _ISSUER, client_id: str = "pipefy-cli") ->
 
 
 class TestAuthLogoutCommand:
-    def test_no_env_falls_back_to_default_idp(
+    def test_empty_auth_url_exits_2(
         self,
         runner,
+        monkeypatch: pytest.MonkeyPatch,
         clean_pipefy_env,
         saved_cwd,
-        fake_keyring: InMemoryKeyring,
     ) -> None:
-        """With no ``PIPEFY_AUTH_URL`` set, logout targets the Pipefy production IdP."""
+        """Explicit empty ``PIPEFY_AUTH_URL`` opts out of the stored-session tier."""
+        monkeypatch.setenv("PIPEFY_AUTH_URL", "")
         result = runner.invoke(cli_app, ["auth", "logout"])
-        assert result.exit_code == 0
-        assert "Not signed in" in result.stdout
+        assert result.exit_code == 2
+        assert "PIPEFY_AUTH_URL is required" in result.stderr
 
     def test_no_session_is_idempotent(
         self,

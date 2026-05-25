@@ -21,11 +21,7 @@ import sys
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from pipefy_auth.identity import (
-    DEFAULT_AUTH_CLIENT_ID,
-    DEFAULT_AUTH_URL,
-    OidcClient,
-)
+from pipefy_auth.identity import DEFAULT_AUTH_CLIENT_ID, OidcClient
 from pipefy_auth.resolver import ServiceAccount
 
 # Legacy ``PIPEFY_OAUTH_*`` env vars still resolve to the new
@@ -159,12 +155,14 @@ class AuthSettings(BaseSettings):
     )
 
     auth_url: str | None = Field(
-        default=DEFAULT_AUTH_URL,
+        default=None,
         description=(
             "OIDC issuer URL for the stored-session tier "
-            "(env: PIPEFY_AUTH_URL; defaults to the Pipefy production IdP at "
-            f"{DEFAULT_AUTH_URL}). Set to an empty string to disable the "
-            "stored-session tier on hosts that need an explicit opt-out."
+            "(env: PIPEFY_AUTH_URL, e.g. https://signin.pipefy.com/realms/pipefy). "
+            "Leave unset to disable stored-session detection in the resolver / "
+            "MCP startup; `pipefy auth login` / `pipefy auth logout` fall back "
+            "to `DEFAULT_AUTH_URL` (the Pipefy production IdP) at the CLI "
+            "layer when this is None."
         ),
     )
 

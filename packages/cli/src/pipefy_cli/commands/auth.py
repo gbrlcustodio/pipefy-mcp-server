@@ -16,6 +16,8 @@ from gql.transport.exceptions import (
     TransportServerError,
 )
 from pipefy_auth import (
+    DEFAULT_AUTH_CLIENT_ID,
+    DEFAULT_AUTH_URL,
     DiscoveryPolicy,
     LoginError,
     OidcClient,
@@ -142,17 +144,11 @@ def auth_login(
     from keyring.errors import KeyringError
 
     settings, auth = settings_and_auth_from_ctx(ctx)
-    if auth.oidc_client is None:
-        typer.echo(
-            "PIPEFY_AUTH_URL is required for `pipefy auth login` (the OIDC issuer "
-            "URL for Pipefy authentication, e.g. "
-            "https://signin.pipefy.com/realms/pipefy). "
-            f"See {DOCS_CLI_AUTH_REF}.",
-            err=True,
-        )
-        raise typer.Exit(2)
-    issuer_url = auth.oidc_client.issuer_url
-    client_id = auth.oidc_client.client_id
+    oidc = auth.oidc_client or OidcClient(
+        issuer_url=DEFAULT_AUTH_URL, client_id=DEFAULT_AUTH_CLIENT_ID
+    )
+    issuer_url = oidc.issuer_url
+    client_id = oidc.client_id
     typer.echo(f"Signing in to Pipefy at {issuer_url} ...")
 
     def _print_url(url: str) -> None:
@@ -459,17 +455,12 @@ def auth_status(
 def auth_logout(ctx: typer.Context) -> None:
     """Revoke the stored refresh token at the IdP and clear the local session."""
     settings, auth = settings_and_auth_from_ctx(ctx)
-    if auth.oidc_client is None:
-        typer.echo(
-            "PIPEFY_AUTH_URL is required for `pipefy auth logout` (the OIDC "
-            "issuer URL used at login). "
-            f"See {DOCS_CLI_AUTH_REF}.",
-            err=True,
-        )
-        raise typer.Exit(2)
+    oidc = auth.oidc_client or OidcClient(
+        issuer_url=DEFAULT_AUTH_URL, client_id=DEFAULT_AUTH_CLIENT_ID
+    )
 
-    issuer = auth.oidc_client.issuer_url
-    client_id = auth.oidc_client.client_id
+    issuer = oidc.issuer_url
+    client_id = oidc.client_id
 
     session = load_session(issuer=issuer, client_id=client_id)
     if session is None:

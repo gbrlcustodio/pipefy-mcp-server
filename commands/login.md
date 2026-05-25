@@ -22,7 +22,21 @@ uv tool install --force \
 
 `--with` is required because each workspace member's `[tool.uv.sources]` declares its siblings as `{ workspace = true }`, which uv cannot resolve from a remote git URL — issue #234 tracks switching to release-wheel URLs once they ship all four packages.
 
-Note: on macOS, `pipefy auth login` may fail at the final keychain write with `errSecParam (-25244)` when invoked from a non-TTY subprocess (e.g. the Bash tool inside an IDE/agent host) because `Security.framework` cannot surface the new-item ACL dialog. The OAuth handshake itself completes; only the persistence step stumbles. Issue #235 tracks platform-aware error messaging and first-run UX guidance.
+## macOS first-run keychain ACL (one-time, per user)
+
+`uv tool install` provisions its own standalone CPython under `~/.local/share/uv/python/...`. macOS Keychain ACL is per-calling-binary; that interpreter has no ACL entry on the `pipefy` keychain service yet. The OAuth handshake will succeed but the keychain write fails with `errSecParam (-25244)` because the macOS "Allow access" prompt cannot render in this non-TTY subprocess context.
+
+**If `pipefy auth login` has never been run on this machine from a regular Terminal.app session**, instruct the user to run it manually **outside** Claude Code:
+
+```
+PIPEFY_AUTH_URL=<your OIDC issuer URL> pipefy auth login
+```
+
+When macOS shows the keychain-access dialog, click **Always Allow**. After that the ACL persists and subsequent `/pipefy:login` invocations from this session work without prompting. Re-run this slash command after the user confirms the first manual login succeeded.
+
+Issue #235 tracks platform-aware error messaging so the CLI can surface this exact guidance inline.
+
+## Run the login
 
 Then run, prompting the user to confirm:
 

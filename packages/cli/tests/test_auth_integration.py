@@ -5,7 +5,11 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from _shared.live_settings import live_pipefy_settings, require_live_creds
+from _shared.live_settings import (
+    live_auth_settings,
+    live_pipefy_settings,
+    require_live_creds,
+)
 
 from pipefy_cli.auth import AuthContext, get_authenticated_client
 
@@ -16,10 +20,16 @@ def test_live_oauth_round_trip_triggers_graphql_auth():
 
     require_live_creds()
     settings = live_pipefy_settings()
+    auth_settings = live_auth_settings()
 
     async def run():
         client = get_authenticated_client(
-            settings, AuthContext(bearer_token=None, oidc_client=None)
+            settings,
+            AuthContext(
+                bearer_token=None,
+                service_account=auth_settings.to_service_account(),
+                oidc_client=auth_settings.to_oidc_client(),
+            ),
         )
         return await client.search_schema("Card", kind="OBJECT")
 

@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **133** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **138** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -41,6 +41,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_pipe_relation` | `pipefy relation pipe create` | shipped | Task **5.10**. |
 | `create_pipe_report` | `pipefy report-pipe create` | shipped | Reports domain; deferred from v0.1 CLI parity. |
 | `create_portal` | `pipefy portal create` | shipped | Portal CRUD task **3.0**; `--organization-uuid`; idempotent (find-or-create main portal). |
+| `create_portal_page` | `pipefy portal page create` | shipped | Portal pages task **4.0**; `--portal-uuid`, `--title`; optional `--description`, `--index`. Empty main portal may bootstrap a templated page when the API omits `elements`. |
 | `create_send_task_automation` | `pipefy automation send-task create` | shipped | Task **9.1** (task title + recipients; optional `--event-params` / `--condition` JSON). |
 | `create_table` | `pipefy table create` | shipped | Task **5.6**. |
 | `create_table_field` | — | deferred | Table fields; not in FR-5.2 launch list (table CRUD only). |
@@ -61,6 +62,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `delete_pipe_relation` | `pipefy relation pipe delete` | shipped | Task **5.10**; destructive: `--yes`. |
 | `delete_pipe_report` | `pipefy report-pipe delete` | shipped | Reports domain. |
 | `delete_portal` | `pipefy portal delete` | shipped | Portal CRUD task **3.0**; destructive: `--yes` or confirm. |
+| `delete_portal_page` | `pipefy portal page delete` | shipped | Portal pages task **4.0**; destructive: `--yes` or confirm; positional portal + page UUIDs. |
 | `delete_table` | `pipefy table delete` | shipped | Task **5.6**; destructive: `--yes`. |
 | `delete_table_field` | — | deferred | Table fields; not in launch list. |
 | `delete_table_record` | `pipefy record delete` | shipped | Task **5.7**; destructive: `--yes`. |
@@ -134,6 +136,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `set_role` | `pipefy member set-role` | shipped | Task **5.11**. |
 | `set_table_record_field_value` | `pipefy record update` | shipped | Task **5.7** (``--field-id`` + ``--value``). |
 | `simulate_automation` | `pipefy automation simulate` | shipped | Task **9.1** (`--pipe`, `--action-id`, `--sample-card`, optional JSON fragments). |
+| `sort_portal_pages` | `pipefy portal page sort` | shipped | Portal pages task **4.0**; `--portal-uuid` plus ordered ids via `--page-ids` or `--ids-json`. |
 | `toggle_ai_agent_status` | `pipefy agent toggle` | shipped | AI Agents domain. |
 | `update_ai_agent` | `pipefy agent update` | shipped | AI Agents domain. |
 | `update_ai_automation` | `pipefy ai-automation update` | shipped | AI Automations domain. |
@@ -150,6 +153,8 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_pipe_relation` | `pipefy relation pipe update` | shipped | Task **5.10**. |
 | `update_pipe_report` | `pipefy report-pipe update` | shipped | Reports domain. |
 | `update_portal` | `pipefy portal update` | shipped | Portal CRUD task **3.0** (`--name`, `--visibility`, optional `--color`, `--icon`, header flags). |
+| `update_portal_page` | `pipefy portal page update` | shipped | Portal pages task **4.0**; positional portal + page UUIDs; at least one of `--title`, `--description`, `--index`. |
+| `update_portal_page_layout` | `pipefy portal page layout update` | shipped | Portal pages task **4.0**; `--page-id` + `--layout` JSON only (no portal UUID on the wire). |
 | `update_table` | `pipefy table update` | shipped | Task **5.6**. |
 | `update_table_field` | — | deferred | Table fields; not in launch list. |
 | `update_table_record` | `pipefy record update` | shipped | Task **5.7** (``--fields`` JSON). |

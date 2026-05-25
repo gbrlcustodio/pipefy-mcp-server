@@ -181,6 +181,7 @@ class TestServicesContainer:
             mock_ai_automation_service_class.return_value
         )
 
+    @patch("pipefy_auth.resolver.load_session", lambda **_: None)
     @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.PipefyClient")
@@ -190,7 +191,15 @@ class TestServicesContainer:
         mock_internal_api_client_class,
         mock_ai_automation_service_class,
     ):
-        """No PIPEFY_TOKEN and no service-account triple → runtime error."""
+        """No PIPEFY_TOKEN and no service-account triple → runtime error.
+
+        ``AuthSettings.auth_url`` now defaults to the Pipefy prod IdP, so the
+        resolver's stored-session tier always carries a non-None ``OidcClient``
+        — the keychain probe inside ``_has_stored_session`` is patched to return
+        ``None`` so the test stays hermetic regardless of the host's OS keychain
+        state (a stray ``pipefy auth login`` against prod would otherwise leak
+        a real session into the test).
+        """
         settings = Settings(
             pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
             auth=AuthSettings(),

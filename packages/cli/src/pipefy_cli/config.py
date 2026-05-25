@@ -128,7 +128,17 @@ def _fill_if_missing_str(
     key: str,
     patch: dict[str, Any],
 ) -> None:
-    if _is_missing(getattr(model, field)) and blob.get(key):
+    """Fill ``field`` from ``blob`` when the model did not load a value for it.
+
+    "Did not load" means either the attribute is missing per :func:`_is_missing`
+    *or* the field was never explicitly set on the model (``model_fields_set``).
+    The latter check matters for fields that carry a non-``None`` default
+    (e.g. ``AuthSettings.auth_url`` defaults to the Pipefy production IdP) —
+    without it, the default would always win over the user's TOML override.
+    """
+    if not blob.get(key):
+        return
+    if _is_missing(getattr(model, field)) or field not in model.model_fields_set:
         patch[field] = str(blob[key]).strip()
 
 

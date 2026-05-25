@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pipefy": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/gbrlcustodio/pipefy-mcp-server",
+        "pipefy-mcp-server"
+      ]
+    }
+  }
+}

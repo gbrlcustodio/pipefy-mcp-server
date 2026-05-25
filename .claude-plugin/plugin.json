@@ -6,15 +6,5 @@
   "author": { "name": "Gabriel Custodio" },
   "homepage": "https://github.com/gbrlcustodio/pipefy-mcp-server",
   "repository": "https://github.com/gbrlcustodio/pipefy-mcp-server",
-  "license": "Apache-2.0",
-  "mcpServers": {
-    "pipefy": {
-      "command": "uvx",
-      "args": [
-        "--from",
-        "git+https://github.com/gbrlcustodio/pipefy-mcp-server",
-        "pipefy-mcp-server"
-      ]
-    }
-  }
+  "license": "Apache-2.0"
 }

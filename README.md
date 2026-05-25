@@ -54,10 +54,11 @@ Feedback and issues: [GitHub Issues](https://github.com/gbrlcustodio/pipefy-mcp-
 ```text
 /plugin marketplace add gbrlcustodio/pipefy-mcp-server
 /plugin install pipefy
+/pipefy:install
 /pipefy:login
 ```
 
-`/plugin install pipefy` registers the MCP server and the `/pipefy:login` slash command. `/pipefy:login` runs the OAuth browser flow and stores the session in the OS keychain; on first run it persists the Pipefy CLI as a `uv tool install` so subsequent commands have a stable binary on PATH. Environment variables (`PIPEFY_GRAPHQL_URL`, `PIPEFY_AUTH_URL`, service-account credentials, etc.) are configured per **[`docs/setup.md`](docs/setup.md#claude-code)** — that file is the single source of truth so the names do not drift. Claude Code only; other hosts use the terminal flow below.
+`/plugin install pipefy` registers the MCP server and the `/pipefy:install` and `/pipefy:login` slash commands. `/pipefy:install` is a one-shot that runs `uv tool install` to put a stable `pipefy` binary on PATH (idempotent; a subsequent invocation reports the existing version and exits). `/pipefy:login` runs the OAuth browser flow and stores the session in the OS keychain; it requires `pipefy` on PATH and will tell you to run `/pipefy:install` first if it isn't. Environment variables (`PIPEFY_GRAPHQL_URL`, `PIPEFY_AUTH_URL`, service-account credentials, etc.) are configured per **[`docs/setup.md`](docs/setup.md#claude-code)** — that file is the single source of truth so the names do not drift. Claude Code only; other hosts use the terminal flow below.
 
 ### Pre-1.0 (git)
 

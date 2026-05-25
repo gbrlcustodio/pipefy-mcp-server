@@ -22,23 +22,9 @@ uv tool install --force \
 
 `--with` is required because each workspace member's `[tool.uv.sources]` declares its siblings as `{ workspace = true }`, which uv cannot resolve from a remote git URL — issue #234 tracks switching to release-wheel URLs once they ship all four packages.
 
-## macOS first-run keychain ACL (one-time, per user)
-
-`uv tool install` provisions its own standalone CPython under `~/.local/share/uv/python/...`. macOS Keychain ACL is per-calling-binary; that interpreter has no ACL entry on the `pipefy` keychain service yet. The OAuth handshake will succeed but the keychain write fails with `errSecParam (-25244)` because the macOS "Allow access" prompt cannot render in this non-TTY subprocess context.
-
-**If `pipefy auth login` has never been run on this machine from a regular Terminal.app session**, instruct the user to run it manually **outside** Claude Code:
-
-```
-PIPEFY_AUTH_URL=<your OIDC issuer URL> pipefy auth login
-```
-
-When macOS shows the keychain-access dialog, click **Always Allow**. After that the ACL persists and subsequent `/pipefy:login` invocations from this session work without prompting. Re-run this slash command after the user confirms the first manual login succeeded.
-
-Issue #235 tracks platform-aware error messaging so the CLI can surface this exact guidance inline.
-
 ## Run the login
 
-Then run, prompting the user to confirm:
+Run, prompting the user to confirm:
 
 ```
 pipefy auth login $ARGUMENTS
@@ -49,3 +35,14 @@ pipefy auth login $ARGUMENTS
 On success the OAuth session is written to the OS keychain. A live MCP server picks up the rotated session on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes.
 
 Pass `--no-browser` to print the authorization URL instead of opening a browser, and `--callback-timeout <seconds>` to override the default 180-second loopback wait.
+
+## macOS keychain `errSecParam (-25244)` (intermittent)
+
+On macOS, `pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a per-binary ACL problem.
+
+If this happens:
+
+1. **Retry** the slash command. The transient condition usually clears on a second attempt.
+2. If retry still fails, run `pipefy auth login` once from a regular Terminal.app session as a fallback. Approve any macOS keychain dialog that appears.
+
+Issue #235 tracks platform-aware error messaging.

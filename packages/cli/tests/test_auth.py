@@ -126,14 +126,24 @@ def test_cache_returns_same_instance_for_identical_service_account_settings(
         assert mock_pc.call_count == 1
 
 
-def test_missing_graphql_exits_2_cli(clean_pipefy_env, saved_cwd, runner):
+def test_empty_graphql_exits_2_cli(clean_pipefy_env, saved_cwd, monkeypatch, runner):
+    # ``PipefySettings.graphql_url`` defaults to the Pipefy production endpoint;
+    # the missing-URL exit only fires when the caller explicitly opts out by
+    # setting an empty string (mirrors the ``PIPEFY_AUTH_URL=""`` opt-out).
+    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "")
     result = runner.invoke(app, ["card", "get", "123"])
     assert result.exit_code == 2
     combined = (result.stderr or "") + (result.stdout or "")
     assert "docs/setup.md" in combined
 
 
-def test_missing_oauth_exits_2_cli(clean_pipefy_env, saved_cwd, monkeypatch, runner):
+def test_missing_oauth_exits_2_cli(
+    clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
+):
+    # ``fake_keyring`` isolates the stored-session tier from the host's real
+    # OS keychain. Without it, ``PIPEFY_AUTH_URL``'s production-IdP default
+    # would let a developer's actual stored session bypass the missing-oauth
+    # exit and fail this test with a stale-refresh error.
     monkeypatch.setenv(
         "PIPEFY_GRAPHQL_URL",
         "https://oauth-missing.example.com/graphql",

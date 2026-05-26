@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from httpx import Auth
 from pipefy_auth import AuthSettings, missing_auth_message, resolve_pipefy_auth
@@ -69,10 +71,12 @@ def pipefy_live_configured() -> bool:
     setup that names a stored-session tier but has no keychain entry is
     reported as unconfigured (matches what ``live_resolved_auth`` would do).
     """
-    p = _resolved_pipefy()
-    has_url = bool(
-        p.graphql_url and str(p.graphql_url).startswith(("http://", "https://"))
-    )
+    # ``PipefySettings.graphql_url`` now defaults to the Pipefy production
+    # endpoint; consulting the resolved field would flip live tests on for
+    # every dev machine that has *any* auth tier configured. Gate on the env
+    # var instead so live tests stay opt-in (mirrors how ``_try_resolve_live_auth``
+    # ignores the stored-session tier).
+    has_url = bool(os.environ.get("PIPEFY_GRAPHQL_URL", "").strip())
     return has_url and _try_resolve_live_auth() is not None
 
 

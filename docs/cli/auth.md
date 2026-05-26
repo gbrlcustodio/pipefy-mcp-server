@@ -39,11 +39,10 @@ If `pipefy auth login` succeeds but a higher-precedence source is set in your sh
 Use this when you want commands to run **as your Pipefy user** — useful for parity with the app's permission model and for AI-automation features that need a real user identity.
 
 ```bash
-export PIPEFY_AUTH_URL=https://signin.pipefy.com/realms/pipefy
-export PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql
-
 uv run pipefy auth login
 ```
+
+`PIPEFY_AUTH_URL` and `PIPEFY_GRAPHQL_URL` default to the Pipefy production IdP and GraphQL endpoint; export them explicitly only when you need to point at a non-prod tenant.
 
 This opens your browser, completes an OAuth 2.0 Authorization Code + PKCE flow against the Pipefy identity provider, and writes the resulting session (access token + refresh token + minimal metadata) into your OS keychain.
 
@@ -85,7 +84,7 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 
 | Key | Used by | Effect |
 |-----|---------|--------|
-| `PIPEFY_GRAPHQL_URL` | All commands | Public GraphQL endpoint. Required for any GraphQL call (default in `.env.example`). |
+| `PIPEFY_GRAPHQL_URL` | All commands | Public GraphQL endpoint. **Defaults to `https://app.pipefy.com/graphql` (Pipefy production API)**; override to point at a non-prod tenant, or set to an empty string (`PIPEFY_GRAPHQL_URL=`) to require an explicit value on hosts that must not pick up the default. |
 | `PIPEFY_TOKEN` | Tier 2 | Direct bearer token. Overridden by `--token`. |
 | `PIPEFY_SERVICE_ACCOUNT_URL` | Tier 3 | Service-account token URL (e.g. `https://app.pipefy.com/oauth/token`). |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | Tier 3 | Service-account client id. |

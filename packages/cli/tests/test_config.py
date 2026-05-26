@@ -119,10 +119,15 @@ def test_graphql_url_flag_overrides_env(
     assert resolved.graphql_url == "https://from-flag.example.com/graphql"
 
 
-def test_missing_graphql_url_error_points_to_setup_docs(
+def test_empty_graphql_url_error_points_to_setup_docs(
     clean_pipefy_env,
     saved_cwd,
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    # ``PipefySettings.graphql_url`` defaults to the Pipefy production endpoint,
+    # so the missing-URL exit only fires when the caller explicitly opts out
+    # by setting an empty string (mirrors ``PIPEFY_AUTH_URL=""`` opt-out).
+    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "")
     resolved = resolve_cli_settings(
         graphql_url_flag=None,
         allow_insecure_urls_flag=None,
@@ -130,6 +135,20 @@ def test_missing_graphql_url_error_points_to_setup_docs(
 
     with pytest.raises(ValueError, match="docs/setup\\.md"):
         ensure_public_graphql_configured(resolved)
+
+
+def test_graphql_url_defaults_to_pipefy_prod_endpoint(
+    clean_pipefy_env,
+    saved_cwd,
+):
+    from pipefy_sdk.settings import DEFAULT_GRAPHQL_URL
+
+    resolved = resolve_cli_settings(
+        graphql_url_flag=None,
+        allow_insecure_urls_flag=None,
+    ).pipefy
+
+    assert resolved.graphql_url == DEFAULT_GRAPHQL_URL
 
 
 def test_localhost_graphql_rejected_without_insecure_flag(

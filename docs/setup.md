@@ -61,7 +61,7 @@ Runtime settings come from **`pipefy_mcp.settings.Settings`** ([Pydantic Setting
 
 | Key | Role |
 |-----|------|
-| `PIPEFY_GRAPHQL_URL` | Public GraphQL endpoint (default in `.env.example`). |
+| `PIPEFY_GRAPHQL_URL` | Public GraphQL endpoint. Optional; defaults to `https://app.pipefy.com/graphql`. Set to an empty string to opt out on hosts that need to require an explicit value. |
 | `PIPEFY_INTERNAL_API_URL` | Internal GraphQL (AI automations, some relation flows). Use the value from [`.env.example`](../.env.example). |
 | `PIPEFY_INTERFACES_GRAPHQL_URL` | Interfaces GraphQL (portals, pages, elements). Optional; defaults to `https://app.pipefy.com/graphql/interfaces`. |
 | `PIPEFY_SERVICE_ACCOUNT_URL` | Service-account OAuth 2.0 token endpoint (client-credentials grant). |
@@ -191,7 +191,7 @@ The repo ships a Claude Code plugin that registers the MCP server, a `/pipefy:in
 
 On macOS, `pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a deterministic per-binary ACL problem. If it occurs, retry the slash command first; as a fallback, run `pipefy auth login` once from a regular Terminal.app session and approve any macOS keychain dialog that appears. Issue #235 tracks platform-aware error messaging.
 
-Configure the plugin-spawned MCP server's environment by editing the `env` block of the `pipefy` MCP server entry in your Claude Code settings (`~/.claude.json` or via the settings UI; the plugin's `.mcp.json` ships `command`+`args` only). `PIPEFY_GRAPHQL_URL` is required; `PIPEFY_INTERNAL_API_URL` is required for AI-automation tools; `PIPEFY_AUTH_URL` is required if you intend to use `/pipefy:login` or the stored-session tier; the service-account triple is only needed for the service-account tier:
+Configure the plugin-spawned MCP server's environment by editing the `env` block of the `pipefy` MCP server entry in your Claude Code settings (`~/.claude.json` or via the settings UI; the plugin's `.mcp.json` ships `command`+`args` only). `PIPEFY_GRAPHQL_URL` is optional and defaults to the Pipefy production endpoint; `PIPEFY_INTERNAL_API_URL` is required for AI-automation tools; `PIPEFY_AUTH_URL` is optional (defaults to the Pipefy production IdP) and only consulted by the stored-session tier; the service-account triple is only needed for the service-account tier:
 
 ```json
 {

@@ -5,6 +5,11 @@ from typing import Annotated, Self
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import NoDecode
 
+# Canonical Pipefy production GraphQL endpoint. Used as the default when
+# ``PIPEFY_GRAPHQL_URL`` is not set in the environment — override by setting
+# the env var (or passing ``graphql_url`` explicitly to ``PipefySettings``).
+DEFAULT_GRAPHQL_URL = "https://app.pipefy.com/graphql"
+
 
 class PipefySettings(BaseModel):
     """Pipefy API connection and shared runtime knobs (MCP, CLI, scripts).
@@ -23,8 +28,12 @@ class PipefySettings(BaseModel):
     )
 
     graphql_url: str | None = Field(
-        default=None,
-        description="GraphQL URL for Pipefy",
+        default=DEFAULT_GRAPHQL_URL,
+        description=(
+            "Pipefy GraphQL endpoint (env: PIPEFY_GRAPHQL_URL; defaults to the "
+            f"Pipefy production API at {DEFAULT_GRAPHQL_URL}). Set to an empty "
+            "string to opt out on hosts that need to require an explicit value."
+        ),
     )
 
     internal_api_url: str = Field(

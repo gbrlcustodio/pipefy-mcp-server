@@ -49,7 +49,7 @@ from pipefy_sdk.services.types import (
     MePayload,
     copy_card_search,
 )
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.settings import DEFAULT_GRAPHQL_URL, PipefySettings
 
 __all__ = [
     "__version__",
@@ -69,6 +69,7 @@ __all__ = [
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
     "CreateSendTaskAutomationInput",
+    "DEFAULT_GRAPHQL_URL",
     "DeleteCommentInput",
     "download_bytes",
     "InternalApiClient",

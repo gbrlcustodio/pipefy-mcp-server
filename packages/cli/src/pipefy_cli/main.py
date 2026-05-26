@@ -61,10 +61,14 @@ def main(
         "--token",
         help="Bearer token for GraphQL (skips OAuth). Overrides PIPEFY_TOKEN if both are set.",
     ),
-    allow_insecure_urls: bool = typer.Option(
-        False,
-        "--allow-insecure-urls",
-        help="Allow http:// and private hosts (overrides env for this process).",
+    allow_insecure_urls: bool | None = typer.Option(
+        None,
+        "--allow-insecure-urls/--no-allow-insecure-urls",
+        help=(
+            "Allow http:// and private hosts (overrides env for this process). "
+            "Pass --no-allow-insecure-urls to force-disable when "
+            "PIPEFY_ALLOW_INSECURE_URLS=true is in env."
+        ),
     ),
     version: bool = typer.Option(
         False,
@@ -79,7 +83,7 @@ def main(
     try:
         cli_settings = resolve_cli_settings(
             base_url_flag=base_url,
-            allow_insecure_urls_flag=True if allow_insecure_urls else None,
+            allow_insecure_urls_flag=allow_insecure_urls,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)

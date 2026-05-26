@@ -129,7 +129,9 @@ def test_empty_base_url_exits_2_cli(clean_pipefy_env, saved_cwd, monkeypatch, ru
     result = runner.invoke(app, ["card", "get", "123"])
     assert result.exit_code == 2
     combined = (result.stderr or "") + (result.stdout or "")
-    assert "PIPEFY_BASE_URL" in combined
+    # Pydantic error references the field name ``base_url`` (mapped from
+    # ``PIPEFY_BASE_URL`` via ``env_prefix``).
+    assert "base_url" in combined
     assert "should match pattern" in combined
 
 
@@ -142,7 +144,7 @@ def test_missing_oauth_exits_2_cli(
     # fail this test with a stale-refresh error.
     monkeypatch.setenv(
         "PIPEFY_BASE_URL",
-        "https://oauth-missing.example.com/graphql",
+        "https://oauth-missing.example.com",
     )
     result = runner.invoke(app, ["card", "get", "123"])
     assert result.exit_code == 2
@@ -155,7 +157,7 @@ def test_cli_uses_pipefy_token_env_when_no_flag(
 ):
     monkeypatch.setenv(
         "PIPEFY_BASE_URL",
-        "https://token-env.example.com/graphql",
+        "https://token-env.example.com",
     )
     monkeypatch.setenv("PIPEFY_TOKEN", "secret-from-env")
     mock_client = MagicMock()

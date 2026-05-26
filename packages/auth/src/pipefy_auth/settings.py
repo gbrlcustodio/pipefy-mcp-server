@@ -68,7 +68,19 @@ _LEGACY_ENV_KEYS_TO_NEW: dict[str, str] = {
     "PIPEFY_OAUTH_SECRET": "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
 }
 
+# Env vars that earlier betas honored but this release no longer reads (``extra="ignore"``
+# silently drops them). Emit a one-shot stderr warning so operators upgrading from a
+# non-prod configuration get a runtime breadcrumb instead of silently authenticating
+# against the prod default.
+_LEGACY_DROPPED_ENV_KEYS: dict[str, str] = {
+    "PIPEFY_OAUTH_URL": (
+        "no replacement — the OAuth token endpoint now derives from PIPEFY_BASE_URL "
+        "(default https://app.pipefy.com)"
+    ),
+}
+
 _warned_legacy_env_keys: set[str] = set()
+_warned_dropped_env_keys: set[str] = set()
 
 
 def _warn_once_for_legacy_oauth_env_keys() -> None:
@@ -86,9 +98,25 @@ def _warn_once_for_legacy_oauth_env_keys() -> None:
             _warned_legacy_env_keys.add(legacy)
 
 
+def _warn_once_for_dropped_oauth_env_keys() -> None:
+    """Emit a one-shot stderr warning for each removed env var still present in the environment."""
+    if len(_warned_dropped_env_keys) == len(_LEGACY_DROPPED_ENV_KEYS):
+        return
+    for legacy, note in _LEGACY_DROPPED_ENV_KEYS.items():
+        if legacy in _warned_dropped_env_keys:
+            continue
+        if legacy in os.environ:
+            sys.stderr.write(
+                f"warning: {legacy} is no longer recognized — {note}. "
+                "The stale value is silently ignored; remove it from your env / .env.\n"
+            )
+            _warned_dropped_env_keys.add(legacy)
+
+
 def _reset_legacy_oauth_warning_state() -> None:
     """Test helper: clear the one-shot dedup so a fixture can re-trigger the warning."""
     _warned_legacy_env_keys.clear()
+    _warned_dropped_env_keys.clear()
 
 
 class AuthSettings(BaseSettings):
@@ -121,6 +149,7 @@ class AuthSettings(BaseSettings):
     def _emit_legacy_oauth_env_var_warning(cls, data: object) -> object:
         # Mirrors the pre-split behaviour: warn once per legacy env key still set.
         _warn_once_for_legacy_oauth_env_keys()
+        _warn_once_for_dropped_oauth_env_keys()
         return data
 
     @field_validator(
@@ -205,10 +234,13 @@ class AuthSettings(BaseSettings):
         ),
     )
 
+    # ``base_url`` and ``allow_insecure_urls`` use the ``env_prefix="PIPEFY_"``
+    # mapping directly (env name = ``PIPEFY_<FIELD_NAME>``) — no ``AliasChoices``
+    # needed. Field-name init kwargs (``AuthSettings(base_url=...)``) win over
+    # env on the source chain, matching the natural call site.
     base_url: str = Field(
         default=DEFAULT_BASE_URL,
         pattern=_URL_SHAPE_PATTERN,
-        validation_alias=AliasChoices("PIPEFY_BASE_URL"),
         description=(
             "Pipefy API host root (env: PIPEFY_BASE_URL). Drives the "
             "service-account OAuth token endpoint via the "
@@ -220,7 +252,6 @@ class AuthSettings(BaseSettings):
 
     allow_insecure_urls: bool = Field(
         default=False,
-        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
         description=(
             "When true (env: PIPEFY_ALLOW_INSECURE_URLS), auth-related URLs "
             "may use http:// and internal hosts; local development only; do "
@@ -261,10 +292,25 @@ class AuthSettings(BaseSettings):
     def _validate_endpoint_urls(self) -> Self:
         # Self-validate so direct ``AuthSettings()`` construction (outside
         # ``CliSettings`` / ``Settings``) is safe.
+        from urllib.parse import urlparse
+
         from pipefy_auth._url_ssrf import validate_https_service_endpoint_url
 
+        stripped_base = self.base_url.strip()
+        parsed_base = urlparse(stripped_base)
+        # ``base_url`` must be a host root: ``service_account_url`` appends
+        # ``/oauth/token`` via f-string. A query / fragment / non-root path
+        # would land inside the resulting URL's query slot rather than as a
+        # path component, producing silently-malformed token endpoints.
+        if parsed_base.path.strip("/") or parsed_base.query or parsed_base.fragment:
+            msg = (
+                f"base_url must be a host root with no path, query, or fragment "
+                f"(got {self.base_url!r}); the OAuth token endpoint derives via "
+                "``<base_url>/oauth/token``."
+            )
+            raise ValueError(msg)
         validate_https_service_endpoint_url(
-            self.base_url.strip(),
+            stripped_base,
             "base_url",
             allow_insecure=self.allow_insecure_urls,
         )

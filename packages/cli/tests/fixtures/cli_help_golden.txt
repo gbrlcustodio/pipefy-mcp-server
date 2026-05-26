@@ -4,17 +4,34 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
  Pipefy CLI (GraphQL via pipefy-sdk).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --base-url                   TEXT  Override PIPEFY_BASE_URL (Pipefy API host │
-│                                    root).                                    │
-│ --token                      TEXT  Bearer token for GraphQL (skips OAuth).   │
-│                                    Overrides PIPEFY_TOKEN if both are set.   │
-│ --allow-insecure-urls              Allow http:// and private hosts           │
-│                                    (overrides env for this process).         │
-│ --version                          Print the pipefy-cli version and exit.    │
-│ --install-completion               Install completion for the current shell. │
-│ --show-completion                  Show completion for the current shell, to │
-│                                    copy it or customize the installation.    │
-│ --help                             Show this message and exit.               │
+│ --base-url                                       TEXT  Override              │
+│                                                        PIPEFY_BASE_URL       │
+│                                                        (Pipefy API host      │
+│                                                        root).                │
+│ --token                                          TEXT  Bearer token for      │
+│                                                        GraphQL (skips        │
+│                                                        OAuth). Overrides     │
+│                                                        PIPEFY_TOKEN if both  │
+│                                                        are set.              │
+│ --allow-insecure-urls    --no-allow-insecure…          Allow http:// and     │
+│                                                        private hosts         │
+│                                                        (overrides env for    │
+│                                                        this process). Pass   │
+│                                                        --no-allow-insecure-… │
+│                                                        to force-disable when │
+│                                                        PIPEFY_ALLOW_INSECUR… │
+│                                                        is in env.            │
+│ --version                                              Print the pipefy-cli  │
+│                                                        version and exit.     │
+│ --install-completion                                   Install completion    │
+│                                                        for the current       │
+│                                                        shell.                │
+│ --show-completion                                      Show completion for   │
+│                                                        the current shell, to │
+│                                                        copy it or customize  │
+│                                                        the installation.     │
+│ --help                                                 Show this message and │
+│                                                        exit.                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ agent             AI Agents (repo-scoped).                                   │

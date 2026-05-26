@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
-from pydantic_settings import NoDecode
+from pydantic import Field, computed_field, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # Canonical Pipefy production API host root.
 DEFAULT_BASE_URL = "https://app.pipefy.com"
@@ -21,12 +21,15 @@ _URL_SHAPE_PATTERN = r"^(?i:https?)://\S+$"
 _ORG_ID_PATTERN = r"^[0-9]+$"
 
 
-class PipefySettings(BaseModel):
+class PipefySettings(BaseSettings):
     """Pipefy API connection and shared runtime knobs (MCP, CLI, scripts).
 
     Endpoint configuration only — credentials live on
     :class:`pipefy_auth.AuthSettings`. Consumers compose both side by side in
-    their own settings type.
+    their own settings type; each model owns its own env loading so the parent
+    composition does not need ``env_nested_delimiter`` (which routes any
+    matching env var into a nested field — a credential-leak primitive when
+    multiple nested models share field names).
 
     A single ``PIPEFY_BASE_URL`` drives every API endpoint via
     :data:`@computed_field` properties (``graphql_url``,
@@ -34,6 +37,14 @@ class PipefySettings(BaseModel):
     non-prod environments set ``PIPEFY_BASE_URL=https://<api-host>``;
     operators on prod leave it unset (default Pipefy production).
     """
+
+    model_config = SettingsConfigDict(
+        env_prefix="PIPEFY_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     allow_insecure_urls: bool = Field(
         default=False,
@@ -161,9 +172,25 @@ class PipefySettings(BaseModel):
     @model_validator(mode="after")
     def _validate_pipefy_endpoint_urls(self) -> Self:
         # Deferred import: ``url_ssrf`` validates URLs that may reference settings types (cycle if top-level).
+        from urllib.parse import urlparse
+
         from pipefy_sdk.utils.url_ssrf import validate_https_service_endpoint_url
 
+        stripped = self.base_url.strip()
+        parsed = urlparse(stripped)
+        # ``base_url`` must be a host root: derived endpoints (``graphql_url``,
+        # ``internal_api_url``, ``interfaces_graphql_url``) append fixed paths to
+        # it via f-strings. A query / fragment / non-root path would land inside
+        # the resulting URL's query slot or as a path prefix, producing
+        # silently-malformed endpoints rather than a loud validation error.
+        if parsed.path.strip("/") or parsed.query or parsed.fragment:
+            msg = (
+                f"base_url must be a host root with no path, query, or fragment "
+                f"(got {self.base_url!r}); the SDK appends "
+                "``/graphql`` / ``/internal_api`` / ``/graphql/interfaces`` to it."
+            )
+            raise ValueError(msg)
         validate_https_service_endpoint_url(
-            self.base_url.strip(), "base_url", allow_insecure=self.allow_insecure_urls
+            stripped, "base_url", allow_insecure=self.allow_insecure_urls
         )
         return self

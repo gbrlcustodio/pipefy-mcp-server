@@ -140,3 +140,46 @@ def test_settings_picks_up_pipefy_token_from_env(monkeypatch):
     monkeypatch.delenv("PIPEFY_OAUTH_CLIENT", raising=False)
     monkeypatch.delenv("PIPEFY_OAUTH_SECRET", raising=False)
     assert Settings().auth.static_token == "env-bearer"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "leak_env_var",
+    [
+        "AUTH_BASE_URL",
+        "AUTH_STATIC_TOKEN",
+        "AUTH_SERVICE_ACCOUNT_CLIENT_ID",
+        "AUTH_SERVICE_ACCOUNT_CLIENT_SECRET",
+        "AUTH_AUTH_URL",
+        "AUTH_AUTH_CLIENT_ID",
+        "AUTH_ALLOW_INSECURE_URLS",
+        "PIPEFY_AUTH_BASE_URL",
+        "PIPEFY_AUTH_STATIC_TOKEN",
+    ],
+)
+def test_settings_does_not_route_unprefixed_env_into_auth(monkeypatch, leak_env_var):
+    """``env_nested_delimiter`` must NOT be set on the parent — otherwise unprefixed
+    env vars like ``AUTH_BASE_URL`` would split into ``auth.base_url`` and bypass
+    :class:`AuthSettings`'s ``env_prefix="PIPEFY_"`` gate, enabling a credential /
+    auth-redirect leak. Locks in the security fix that closes the leak.
+    """
+    # Clear any host-side ``PIPEFY_*`` env to isolate the leak check.
+    for var in (
+        "PIPEFY_BASE_URL",
+        "PIPEFY_TOKEN",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
+        "PIPEFY_OAUTH_CLIENT",
+        "PIPEFY_OAUTH_SECRET",
+        "PIPEFY_AUTH_URL",
+        "PIPEFY_AUTH_CLIENT_ID",
+        "PIPEFY_ALLOW_INSECURE_URLS",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv(leak_env_var, "https://attacker.example.com")
+    settings = Settings()
+    assert settings.auth.base_url == "https://app.pipefy.com"
+    assert settings.auth.service_account_url == "https://app.pipefy.com/oauth/token"
+    assert settings.auth.static_token is None
+    assert settings.auth.service_account_client_id is None
+    assert settings.auth.service_account_client_secret is None

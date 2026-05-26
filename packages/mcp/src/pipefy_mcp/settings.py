@@ -9,22 +9,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application configuration via pydantic-settings.
 
-    Precedence: init kwargs > ``PIPEFY_*`` env > ``.env`` > defaults.
-
-    The nested ``pipefy`` model uses names ``PIPEFY_*`` (e.g.
-    ``PIPEFY_BASE_URL`` → ``pipefy.base_url``); the nested ``auth`` model
-    owns ``PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`` / ``_SECRET``,
-    ``PIPEFY_AUTH_URL``, ``PIPEFY_AUTH_CLIENT_ID``, and a mirror of
-    ``PIPEFY_BASE_URL``. Both nested models run their own SSRF / shape checks
-    at construction; no parent-side ``_validate_*`` validator is required.
+    Each nested model owns its own env loading (``env_prefix="PIPEFY_"``).
+    The composition deliberately does NOT set ``env_nested_delimiter`` — that
+    flag splits any matching env var (e.g. ``AUTH_BASE_URL``) into a nested
+    path, which would bypass each model's prefix gate and let unprefixed env
+    vars hijack auth fields. Both nested models run their own SSRF / shape
+    checks at construction; no parent-side ``_validate_*`` validator is needed.
     """
 
-    model_config = SettingsConfigDict(
-        env_nested_delimiter="_",
-        env_nested_max_split=1,
-        env_file=".env",
-        env_file_encoding="utf-8",
-    )
+    model_config = SettingsConfigDict(extra="ignore")
 
     pipefy: PipefySettings = Field(default_factory=PipefySettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)

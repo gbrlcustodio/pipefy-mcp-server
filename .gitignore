@@ -38,8 +38,11 @@ venv.bak/
 .cursor/
 .claude/
 CLAUDE.md
-# Cursor MCP workspace config (machine-specific paths or local server entries)
+# Cursor MCP workspace config (machine-specific paths or local server entries).
+# Carve-out: repo-root .mcp.json is the Claude Code plugin's MCP server config
+# (auto-discovered at plugin root) and is intentionally tracked.
 .mcp.json
+!/.mcp.json
 
 # Tracked release tooling only (ignore ad-hoc local scripts and smoke artifacts)
 scripts/*

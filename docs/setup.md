@@ -176,6 +176,42 @@ Replace `/absolute/path/to/pipefy-mcp-server` with your clone path.
 
 Either rely on [`.env.example`](../.env.example) → **`.env`** at the repo root, or set vars with `claude mcp add-env`.
 
+**Plugin install (recommended)**
+
+The repo ships a Claude Code plugin that registers the MCP server, a `/pipefy:install` slash command, and a `/pipefy:login` slash command:
+
+```text
+/plugin marketplace add gbrlcustodio/pipefy-mcp-server
+/plugin install pipefy
+/pipefy:install
+/pipefy:login
+```
+
+`/pipefy:install` is a one-shot that runs `uv tool install` to put a stable `pipefy` binary on PATH (idempotent; rerunning when `pipefy` is already on PATH surfaces `pipefy --version` and stops). `/pipefy:login` runs the OAuth browser flow and stores the session in the OS keychain; it requires `pipefy` on PATH and will tell you to run `/pipefy:install` first if it isn't. Subsequent `pipefy auth status` / `pipefy auth logout` invocations use the same binary `/pipefy:install` put in place. A live MCP server picks up the rotated session on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes. Terminal-based users can run `pipefy auth login` directly instead.
+
+On macOS, `pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a deterministic per-binary ACL problem. If it occurs, retry the slash command first; as a fallback, run `pipefy auth login` once from a regular Terminal.app session and approve any macOS keychain dialog that appears. Issue #235 tracks platform-aware error messaging.
+
+Configure the plugin-spawned MCP server's environment by editing the `env` block of the `pipefy` MCP server entry in your Claude Code settings (`~/.claude.json` or via the settings UI; the plugin's `.mcp.json` ships `command`+`args` only). `PIPEFY_GRAPHQL_URL` is required; `PIPEFY_INTERNAL_API_URL` is required for AI-automation tools; `PIPEFY_AUTH_URL` is required if you intend to use `/pipefy:login` or the stored-session tier; the service-account triple is only needed for the service-account tier:
+
+```json
+{
+  "mcpServers": {
+    "pipefy": {
+      "env": {
+        "PIPEFY_GRAPHQL_URL": "https://app.pipefy.com/graphql",
+        "PIPEFY_INTERNAL_API_URL": "https://app.pipefy.com/internal_api",
+        "PIPEFY_AUTH_URL": "https://signin.pipefy.com/realms/pipefy",
+        "PIPEFY_SERVICE_ACCOUNT_URL": "https://app.pipefy.com/oauth/token",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<CLIENT_ID>",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<CLIENT_SECRET>"
+      }
+    }
+  }
+}
+```
+
+Note: `/pipefy:login` itself runs `pipefy auth login` in your shell (not in the MCP server process), so `PIPEFY_AUTH_URL` must also be in the shell environment Claude Code inherited from — exported or placed in a `.env` file at the CWD. Issue #233 will make `PIPEFY_AUTH_URL` an optional override once a CLI-level default lands. Legacy `PIPEFY_OAUTH_*` aliases still resolve but the CLI prints rename warnings; prefer the canonical `PIPEFY_SERVICE_ACCOUNT_*` names above.
+
 **CLI (per project)**
 
 ```bash

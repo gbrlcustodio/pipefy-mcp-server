@@ -7,6 +7,7 @@ from pipefy_auth import AuthSettings, CallableBearerAuth, RefreshError, StaticBe
 from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefyClient, PipefySettings
 
+from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.settings import Settings
 
@@ -199,8 +200,11 @@ class TestServicesContainer:
             pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
             auth=AuthSettings(),
         )
-        with pytest.raises(RuntimeError, match="Missing Pipefy authentication"):
+        with pytest.raises(
+            RuntimeError, match="Missing Pipefy authentication"
+        ) as exc_info:
             await ServicesContainer().initialize_services(settings)
+        assert DOCS_SETUP_REF in str(exc_info.value)
 
     @patch("pipefy_mcp.core.container.ensure_fresh_session")
     @patch("pipefy_mcp.core.container.PipefyClient")
@@ -285,3 +289,4 @@ class TestServicesContainer:
         hint_message = hint_records[0].getMessage()
         assert "invalid_grant" in hint_message
         assert "pipefy auth login" in hint_message
+        assert DOCS_SETUP_REF in hint_message

@@ -9,12 +9,7 @@ from pipefy_sdk.settings import PipefySettings
 
 @pytest.fixture
 def valid_settings() -> PipefySettings:
-    return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        service_account_url="https://auth.pipefy.com/oauth/token",
-        service_account_client_id="client_id",
-        service_account_client_secret="client_secret",
-    )
+    return PipefySettings(base_url="https://api.pipefy.com")
 
 
 def _bearer() -> StaticBearerAuth:
@@ -109,16 +104,20 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged(valid_settings)
 
 
 @pytest.mark.unit
-def test_init_raises_when_graphql_url_is_none():
-    """Test that __init__ raises ValueError when graphql_url is None."""
-    settings = PipefySettings(
-        graphql_url=None,
-        service_account_url="https://auth.pipefy.com/oauth/token",
-        service_account_client_id="client_id",
-        service_account_client_secret="client_secret",
+def test_init_accepts_url_override():
+    """``url_override`` lets callers point a BasePipefyClient at a sibling endpoint."""
+    settings = PipefySettings(base_url="https://api.pipefy.com")
+    base = BasePipefyClient(
+        settings=settings,
+        auth=_bearer(),
+        url_override="https://api.pipefy.com/graphql/interfaces",
     )
+    assert base._graphql_url == "https://api.pipefy.com/graphql/interfaces"
 
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=settings, auth=_bearer())
 
-    assert "GraphQL URL must be provided in settings" in str(exc.value)
+@pytest.mark.unit
+def test_init_defaults_to_settings_graphql_url():
+    """Without ``url_override`` the client uses ``settings.graphql_url``."""
+    settings = PipefySettings(base_url="https://api.pipefy.com")
+    base = BasePipefyClient(settings=settings, auth=_bearer())
+    assert base._graphql_url == "https://api.pipefy.com/graphql"

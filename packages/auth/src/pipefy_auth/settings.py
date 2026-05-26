@@ -2,38 +2,68 @@
 
 Owns every value that describes *how* to authenticate against Pipefy:
 
-* ``PIPEFY_SERVICE_ACCOUNT_*`` — OAuth2 client-credentials grant inputs
-  (legacy ``PIPEFY_OAUTH_*`` names still honoured via :class:`AliasChoices`).
-* ``PIPEFY_AUTH_URL`` — OIDC issuer URL for the stored-session tier.
+* ``PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`` / ``PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET``
+  — OAuth2 client-credentials grant inputs (legacy ``PIPEFY_OAUTH_CLIENT`` /
+  ``_SECRET`` names still honoured via :class:`AliasChoices`).
+* ``PIPEFY_AUTH_URL`` — full OIDC issuer URL for the stored-session tier
+  (default ``https://signin.pipefy.com/realms/pipefy``).
 * ``PIPEFY_AUTH_CLIENT_ID`` — OIDC public client id (defaults to
   :data:`pipefy_auth.identity.DEFAULT_AUTH_CLIENT_ID`).
+* ``PIPEFY_BASE_URL`` — API host root that drives the OAuth token endpoint
+  (default ``https://app.pipefy.com``). Same env var that drives the SDK's
+  ``base_url`` field on :class:`pipefy_sdk.PipefySettings`; both models load
+  it independently so they stay in sync without cross-package coupling.
 
-Endpoint settings (``PIPEFY_GRAPHQL_URL``, ``PIPEFY_INTERNAL_API_URL``) live
-on :class:`pipefy_sdk.PipefySettings` — they are SDK concerns, not auth.
-Consumers compose both models side by side in their own settings type.
+Per-URL env vars from earlier betas (``PIPEFY_GRAPHQL_URL``,
+``PIPEFY_INTERNAL_API_URL``, ``PIPEFY_INTERFACES_GRAPHQL_URL``,
+``PIPEFY_SERVICE_ACCOUNT_URL``, ``PIPEFY_TENANT``, ``PIPEFY_AUTH_REALM``,
+``PIPEFY_OAUTH_URL``) are no longer recognized — set ``PIPEFY_BASE_URL`` to
+the API host and ``PIPEFY_AUTH_URL`` to the full OIDC issuer URL instead.
 """
 
 from __future__ import annotations
 
 import os
 import sys
+from typing import Self
 
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pipefy_auth.identity import (
     DEFAULT_AUTH_CLIENT_ID,
-    DEFAULT_AUTH_URL,
     OidcClient,
 )
 from pipefy_auth.resolver import ServiceAccount
 
+# Production defaults.
+DEFAULT_AUTH_URL = "https://signin.pipefy.com/realms/pipefy"
+DEFAULT_BASE_URL = "https://app.pipefy.com"
+
+# Opaque secret / identifier strings: reject leading / trailing whitespace and
+# blank values. Anything in between is opaque to us (the IdP defines the format).
+_OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
+
+# URL-shape gate. ``pipefy_auth._url_ssrf.validate_https_service_endpoint_url``
+# does the deeper SSRF + scheme check after settings construction. The
+# scheme part is case-insensitive (RFC 3986 §3.1) so `HTTPS://...` from
+# operator copy-paste passes the shape gate; httpx + gql normalize the
+# scheme downstream.
+_URL_SHAPE_PATTERN = r"^(?i:https?)://\S+$"
+
 # Legacy ``PIPEFY_OAUTH_*`` env vars still resolve to the new
 # ``PIPEFY_SERVICE_ACCOUNT_*`` fields. The mapping is exported for
 # diagnostics (e.g. CLI's ``pipefy auth status`` lists which legacy keys
-# would still mask a stored session).
+# would still mask a stored session). The legacy ``PIPEFY_OAUTH_URL`` alias
+# was dropped in the ``PIPEFY_BASE_URL`` rewrite — the token endpoint now
+# derives from ``base_url``.
 _LEGACY_ENV_KEYS_TO_NEW: dict[str, str] = {
-    "PIPEFY_OAUTH_URL": "PIPEFY_SERVICE_ACCOUNT_URL",
     "PIPEFY_OAUTH_CLIENT": "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
     "PIPEFY_OAUTH_SECRET": "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
 }
@@ -65,9 +95,14 @@ class AuthSettings(BaseSettings):
     """Auth-related configuration loaded from env / config files.
 
     Reads its own ``PIPEFY_*`` env vars directly (with the ``PIPEFY_`` prefix
-    folded into the field names). Pure data — SSRF validation happens via
-    :meth:`validate_urls` once the surrounding settings know whether insecure
-    URLs are allowed.
+    folded into the field names). Self-contained: SSRF validation runs inline
+    as a ``model_validator(mode="after")`` hook, so direct construction
+    (`AuthSettings()`) is safe even when not composed under
+    :class:`CliSettings` / :class:`Settings`. The ``allow_insecure_urls``
+    field mirrors :class:`pipefy_sdk.PipefySettings`'s field of the same name
+    and is read from ``PIPEFY_ALLOW_INSECURE_URLS``; the ``base_url`` field
+    likewise mirrors PipefySettings via ``PIPEFY_BASE_URL`` and drives the
+    OAuth token endpoint.
     """
 
     model_config = SettingsConfigDict(
@@ -77,7 +112,7 @@ class AuthSettings(BaseSettings):
         extra="ignore",
         # Required so ``env_prefix`` is applied to the field name on top of the
         # ``AliasChoices`` lookups (otherwise env lookups would only consider
-        # the aliases, and ``PIPEFY_SERVICE_ACCOUNT_URL`` would be ignored).
+        # the aliases, and ``PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`` would be ignored).
         populate_by_name=True,
     )
 
@@ -90,52 +125,45 @@ class AuthSettings(BaseSettings):
 
     @field_validator(
         "static_token",
-        "service_account_url",
         "service_account_client_id",
         "service_account_client_secret",
         "auth_url",
+        "auth_client_id",
+        "base_url",
         mode="before",
     )
     @classmethod
-    def _blank_to_none(cls, value: object) -> object:
-        # Empty / whitespace-only env values mean "not set", not "set to ''".
-        if isinstance(value, str) and not value.strip():
-            return None
+    def _strip_str(cls, value: object) -> object:
+        # Strip surrounding whitespace on every env-loaded string so a stray
+        # leading / trailing space from copy-paste does not trip the per-field
+        # ``pattern`` constraint. Empty-after-strip still fails the pattern
+        # (the "empty raises" contract).
+        if isinstance(value, str):
+            return value.strip()
         return value
 
-    # ``AliasChoices`` precedence is left-to-right. The fully-prefixed
-    # canonical env var comes first to outrank the legacy ``PIPEFY_OAUTH_*``
-    # name. The unprefixed form (e.g. ``oauth_url``) keeps direct kwarg
-    # construction working (``AuthSettings(oauth_url=...)``).
+    # ``AliasChoices`` lists ONLY fully-prefixed env-var names. Unprefixed
+    # entries would let pydantic-settings pick up bare-name env vars
+    # (e.g. ``BASE_URL``, ``STATIC_TOKEN``, ``OAUTH_CLIENT``) — an
+    # auth-redirect / credential-leak primitive for any host whose env
+    # accidentally carries those common names. Kwarg construction by
+    # field name (e.g. ``AuthSettings(static_token=...)``) still works
+    # via ``populate_by_name=True``.
     static_token: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("PIPEFY_TOKEN", "static_token"),
+        pattern=_OPAQUE_CREDENTIAL_PATTERN,
+        validation_alias=AliasChoices("PIPEFY_TOKEN"),
         description=(
             "Pre-issued bearer for the static-token tier (env: PIPEFY_TOKEN). "
             "When set, outranks both the service-account triple and any stored session."
         ),
     )
 
-    service_account_url: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices(
-            "PIPEFY_SERVICE_ACCOUNT_URL",
-            "service_account_url",
-            "oauth_url",
-            "PIPEFY_OAUTH_URL",
-        ),
-        description=(
-            "Service-account token endpoint (OAuth 2.0 client-credentials grant) "
-            "(env: PIPEFY_SERVICE_ACCOUNT_URL; legacy PIPEFY_OAUTH_URL still honored)."
-        ),
-    )
-
     service_account_client_id: str | None = Field(
         default=None,
+        pattern=_OPAQUE_CREDENTIAL_PATTERN,
         validation_alias=AliasChoices(
             "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
-            "service_account_client_id",
-            "oauth_client",
             "PIPEFY_OAUTH_CLIENT",
         ),
         description=(
@@ -146,10 +174,9 @@ class AuthSettings(BaseSettings):
 
     service_account_client_secret: str | None = Field(
         default=None,
+        pattern=_OPAQUE_CREDENTIAL_PATTERN,
         validation_alias=AliasChoices(
             "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-            "service_account_client_secret",
-            "oauth_secret",
             "PIPEFY_OAUTH_SECRET",
         ),
         description=(
@@ -158,23 +185,56 @@ class AuthSettings(BaseSettings):
         ),
     )
 
-    auth_url: str | None = Field(
+    auth_url: str = Field(
         default=DEFAULT_AUTH_URL,
+        pattern=_URL_SHAPE_PATTERN,
         description=(
             "OIDC issuer URL for the stored-session tier "
-            "(env: PIPEFY_AUTH_URL; defaults to the Pipefy production IdP at "
-            f"{DEFAULT_AUTH_URL}). Set to an empty string to disable the "
-            "stored-session tier on hosts that need an explicit opt-out."
+            "(env: PIPEFY_AUTH_URL). Defaults to "
+            f"'{DEFAULT_AUTH_URL}' (canonical Pipefy production IdP). Set to "
+            "the full issuer URL for a non-prod IdP."
         ),
     )
 
     auth_client_id: str = Field(
         default=DEFAULT_AUTH_CLIENT_ID,
+        pattern=_OPAQUE_CREDENTIAL_PATTERN,
         description=(
             "OIDC public client id registered at the issuer "
             "(env: PIPEFY_AUTH_CLIENT_ID; rarely overridden)."
         ),
     )
+
+    base_url: str = Field(
+        default=DEFAULT_BASE_URL,
+        pattern=_URL_SHAPE_PATTERN,
+        validation_alias=AliasChoices("PIPEFY_BASE_URL"),
+        description=(
+            "Pipefy API host root (env: PIPEFY_BASE_URL). Drives the "
+            "service-account OAuth token endpoint via the "
+            "``service_account_url`` computed property. Mirrors the field of "
+            "the same name on :class:`pipefy_sdk.PipefySettings`; both models "
+            "load it independently from the same env var so they stay in sync."
+        ),
+    )
+
+    allow_insecure_urls: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
+        description=(
+            "When true (env: PIPEFY_ALLOW_INSECURE_URLS), auth-related URLs "
+            "may use http:// and internal hosts; local development only; do "
+            "not enable in production. Mirrors the field of the same name on "
+            ":class:`pipefy_sdk.PipefySettings` so this model can run its own "
+            "inline SSRF check without consulting the parent composition."
+        ),
+    )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def service_account_url(self) -> str:
+        """OAuth 2.0 token endpoint for the service-account tier."""
+        return f"{self.base_url.rstrip('/')}/oauth/token"
 
     def to_service_account(self) -> ServiceAccount | None:
         """Project the triple into a :class:`ServiceAccount`, or ``None`` if incomplete."""
@@ -190,27 +250,30 @@ class AuthSettings(BaseSettings):
             )
         return None
 
-    def to_oidc_client(self) -> OidcClient | None:
-        """Project the OIDC fields into an :class:`OidcClient`, or ``None`` without ``auth_url``."""
-        if self.auth_url and self.auth_url.strip():
-            return OidcClient(
-                issuer_url=self.auth_url.strip(),
-                client_id=self.auth_client_id.strip() or DEFAULT_AUTH_CLIENT_ID,
-            )
-        return None
+    def to_oidc_client(self) -> OidcClient:
+        """Project the OIDC fields into an :class:`OidcClient` (never returns None)."""
+        return OidcClient(
+            issuer_url=self.auth_url.strip(),
+            client_id=self.auth_client_id.strip(),
+        )
 
-    def validate_urls(self, *, allow_insecure: bool) -> None:
-        """Run SSRF checks on every URL this model carries. Call after composing."""
+    @model_validator(mode="after")
+    def _validate_endpoint_urls(self) -> Self:
+        # Self-validate so direct ``AuthSettings()`` construction (outside
+        # ``CliSettings`` / ``Settings``) is safe.
         from pipefy_auth._url_ssrf import validate_https_service_endpoint_url
 
-        if self.service_account_url and (u := self.service_account_url.strip()):
-            validate_https_service_endpoint_url(
-                u, "service_account_url", allow_insecure=allow_insecure
-            )
-        if self.auth_url and (u := self.auth_url.strip()):
-            validate_https_service_endpoint_url(
-                u, "auth_url", allow_insecure=allow_insecure
-            )
+        validate_https_service_endpoint_url(
+            self.base_url.strip(),
+            "base_url",
+            allow_insecure=self.allow_insecure_urls,
+        )
+        validate_https_service_endpoint_url(
+            self.auth_url.strip(),
+            "auth_url",
+            allow_insecure=self.allow_insecure_urls,
+        )
+        return self
 
 
 __all__ = ["AuthSettings"]

@@ -432,10 +432,9 @@ class PipeTools:
             ``create_card_relation``). Two-step flow: preview with ``confirm=False`` (default),
             then execute with ``confirm=True`` after explicit approval.
 
-            Requires service-account credentials (PIPEFY_SERVICE_ACCOUNT_URL,
-            PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET) because the
-            ``deleteCardRelation`` mutation is only available on the internal API, not the
-            public GraphQL schema.
+            Requires service-account credentials (PIPEFY_SERVICE_ACCOUNT_CLIENT_ID,
+            PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET) because the ``deleteCardRelation``
+            mutation is only available on the internal API, not the public GraphQL schema.
 
             Args:
                 child_id: Child card ID in the relation.
@@ -456,7 +455,7 @@ class PipeTools:
                 return build_relation_error_payload(
                     message=(
                         "delete_card_relation requires service-account credentials "
-                        "(PIPEFY_SERVICE_ACCOUNT_URL, PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
+                        "(PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
                         "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
                         "The deleteCardRelation mutation is only available on the "
                         "internal API. Check .env.example for the required variables."

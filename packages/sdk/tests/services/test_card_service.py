@@ -22,10 +22,7 @@ _TEST_AUTH = StaticBearerAuth("test-bearer-token")
 @pytest.fixture
 def mock_settings() -> PipefySettings:
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        service_account_url="https://auth.pipefy.com/oauth/token",
-        service_account_client_id="client_id",
-        service_account_client_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 

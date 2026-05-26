@@ -2,8 +2,23 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 from pydantic_settings import NoDecode
+
+# Canonical Pipefy production API host root.
+DEFAULT_BASE_URL = "https://app.pipefy.com"
+
+# URL-shape gate. ``_validate_pipefy_endpoint_urls`` runs the deeper SSRF +
+# scheme check after settings construction. The scheme part is
+# case-insensitive (RFC 3986 §3.1) so `HTTPS://...` from operator
+# copy-paste passes the shape gate; httpx + gql normalize the scheme
+# downstream.
+_URL_SHAPE_PATTERN = r"^(?i:https?)://\S+$"
+
+# Pipefy organization IDs are ASCII numeric strings (matches the docstring).
+# ``\d`` is Unicode-aware in Python ``re`` (Arabic-Indic ١٢٣, Devanagari १२३,
+# etc. would pass), so pin to ``[0-9]`` for the wire format the API expects.
+_ORG_ID_PATTERN = r"^[0-9]+$"
 
 
 class PipefySettings(BaseModel):
@@ -12,6 +27,12 @@ class PipefySettings(BaseModel):
     Endpoint configuration only — credentials live on
     :class:`pipefy_auth.AuthSettings`. Consumers compose both side by side in
     their own settings type.
+
+    A single ``PIPEFY_BASE_URL`` drives every API endpoint via
+    :data:`@computed_field` properties (``graphql_url``,
+    ``internal_api_url``, ``interfaces_graphql_url``). Operators on
+    non-prod environments set ``PIPEFY_BASE_URL=https://<api-host>``;
+    operators on prod leave it unset (default Pipefy production).
     """
 
     allow_insecure_urls: bool = Field(
@@ -22,27 +43,27 @@ class PipefySettings(BaseModel):
         ),
     )
 
-    graphql_url: str | None = Field(
-        default=None,
-        description="GraphQL URL for Pipefy",
-    )
-
-    internal_api_url: str = Field(
-        default="https://app.pipefy.com/internal_api",
-        description="Internal API URL for AI Automation endpoints",
-    )
-
-    interfaces_graphql_url: str = Field(
-        default="https://app.pipefy.com/graphql/interfaces",
-        description="GraphQL URL for Pipefy Interfaces schema (portals, pages, elements)",
+    base_url: str = Field(
+        default=DEFAULT_BASE_URL,
+        pattern=_URL_SHAPE_PATTERN,
+        description=(
+            "Pipefy API host root (env: PIPEFY_BASE_URL). Drives ``graphql_url`` / "
+            "``internal_api_url`` / ``interfaces_graphql_url`` (and the OAuth "
+            "token endpoint on :class:`pipefy_auth.AuthSettings`). Defaults to "
+            f"'{DEFAULT_BASE_URL}' (canonical Pipefy production). Set to a "
+            "different host for non-prod environments, regional / proxy "
+            "deployments, or local development (with PIPEFY_ALLOW_INSECURE_URLS)."
+        ),
     )
 
     org_id: str | None = Field(
         default=None,
+        pattern=_ORG_ID_PATTERN,
         description=(
             "Optional default organization id (numeric string) for CLI commands that "
             "allow an implicit org, e.g. ``pipefy org get`` when the id argument is "
-            "omitted (env: PIPEFY_ORG_ID)."
+            "omitted (env: PIPEFY_ORG_ID). Must be a numeric string; empty or "
+            "non-numeric values are rejected."
         ),
     )
 
@@ -96,6 +117,17 @@ class PipefySettings(BaseModel):
         ),
     )
 
+    @field_validator("base_url", "org_id", mode="before")
+    @classmethod
+    def _strip_str(cls, value: object) -> object:
+        # Strip surrounding whitespace on every env-loaded string so a stray
+        # leading / trailing space from copy-paste does not trip the per-field
+        # ``pattern`` constraint. Empty-after-strip still fails the pattern
+        # (the "empty raises" contract).
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
     @field_validator("service_account_ids", mode="before")
     @classmethod
     def _coerce_service_account_ids(cls, value: object) -> list[str]:
@@ -108,20 +140,30 @@ class PipefySettings(BaseModel):
         msg = "service_account_ids must be a list or a comma-separated string"
         raise ValueError(msg)
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def graphql_url(self) -> str:
+        """Pipefy GraphQL endpoint, derived from ``base_url``."""
+        return f"{self.base_url.rstrip('/')}/graphql"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def internal_api_url(self) -> str:
+        """Internal API endpoint for AI Automation, derived from ``base_url``."""
+        return f"{self.base_url.rstrip('/')}/internal_api"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def interfaces_graphql_url(self) -> str:
+        """Interfaces GraphQL endpoint (portals/pages/elements), derived from ``base_url``."""
+        return f"{self.base_url.rstrip('/')}/graphql/interfaces"
+
     @model_validator(mode="after")
     def _validate_pipefy_endpoint_urls(self) -> Self:
         # Deferred import: ``url_ssrf`` validates URLs that may reference settings types (cycle if top-level).
         from pipefy_sdk.utils.url_ssrf import validate_https_service_endpoint_url
 
-        allow = self.allow_insecure_urls
-        if self.graphql_url is not None and (u := self.graphql_url.strip()):
-            validate_https_service_endpoint_url(u, "graphql_url", allow_insecure=allow)
-        if u := self.internal_api_url.strip():
-            validate_https_service_endpoint_url(
-                u, "internal_api_url", allow_insecure=allow
-            )
-        if u := self.interfaces_graphql_url.strip():
-            validate_https_service_endpoint_url(
-                u, "interfaces_graphql_url", allow_insecure=allow
-            )
+        validate_https_service_endpoint_url(
+            self.base_url.strip(), "base_url", allow_insecure=self.allow_insecure_urls
+        )
         return self

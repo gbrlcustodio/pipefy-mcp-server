@@ -142,15 +142,6 @@ def auth_login(
     from keyring.errors import KeyringError
 
     settings, auth = settings_and_auth_from_ctx(ctx)
-    if auth.oidc_client is None:
-        typer.echo(
-            "PIPEFY_AUTH_URL is required for `pipefy auth login` (the OIDC issuer "
-            "URL for Pipefy authentication, e.g. "
-            "https://signin.pipefy.com/realms/pipefy). "
-            f"See {DOCS_CLI_AUTH_REF}.",
-            err=True,
-        )
-        raise typer.Exit(2)
     issuer_url = auth.oidc_client.issuer_url
     client_id = auth.oidc_client.client_id
     typer.echo(f"Signing in to Pipefy at {issuer_url} ...")
@@ -435,15 +426,6 @@ def auth_status(
         if source == "none":
             raise _StatusExit(report=report, exit_code=2)
         if source == "stored-session":
-            if auth.oidc_client is None:
-                raise _StatusExit(
-                    report=report,
-                    exit_code=2,
-                    stderr=(
-                        "Internal error: auth source 'stored-session' detected "
-                        "but no OIDC client is configured. Please file an issue."
-                    ),
-                )
             _populate_stored_session(report, auth.oidc_client)
         _fetch_identity(report, settings, auth)
     except _StatusExit as exit_:
@@ -459,15 +441,6 @@ def auth_status(
 def auth_logout(ctx: typer.Context) -> None:
     """Revoke the stored refresh token at the IdP and clear the local session."""
     settings, auth = settings_and_auth_from_ctx(ctx)
-    if auth.oidc_client is None:
-        typer.echo(
-            "PIPEFY_AUTH_URL is required for `pipefy auth logout` (the OIDC "
-            "issuer URL used at login). "
-            f"See {DOCS_CLI_AUTH_REF}.",
-            err=True,
-        )
-        raise typer.Exit(2)
-
     issuer = auth.oidc_client.issuer_url
     client_id = auth.oidc_client.client_id
 

@@ -17,10 +17,7 @@ _TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 def _mock_settings() -> PipefySettings:
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 

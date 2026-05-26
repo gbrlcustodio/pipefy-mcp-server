@@ -26,7 +26,7 @@ Most-explicit wins. The CLI walks this list top-down and stops at the first sour
 | 3 | `PIPEFY_SERVICE_ACCOUNT_*` triple | Service account | OAuth2 client-credentials grant |
 | 4 | Stored user session | You (the signed-in user) | Eager refresh inside a 60 s leeway window |
 
-Every tier wires the `InternalApiClient` against `PIPEFY_INTERNAL_API_URL` when that variable is set, so features that go through the internal API (AI agent automations, some relation flows) work from any path — not just the service-account one.
+Every tier wires the `InternalApiClient` against `<PIPEFY_BASE_URL>/internal_api` (derived from `PIPEFY_BASE_URL`), so features that go through the internal API (AI agent automations, some relation flows) work from any path — not just the service-account one.
 
 If `pipefy auth login` succeeds but a higher-precedence source is set in your shell env, the CLI prints a one-line note so you know your stored session is being shadowed.
 
@@ -39,11 +39,10 @@ If `pipefy auth login` succeeds but a higher-precedence source is set in your sh
 Use this when you want commands to run **as your Pipefy user** — useful for parity with the app's permission model and for AI-automation features that need a real user identity.
 
 ```bash
-export PIPEFY_AUTH_URL=https://signin.pipefy.com/realms/pipefy
-export PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql
-
 uv run pipefy auth login
 ```
+
+`PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Export non-prod values only when targeting a non-prod environment.
 
 This opens your browser, completes an OAuth 2.0 Authorization Code + PKCE flow against the Pipefy identity provider, and writes the resulting session (access token + refresh token + minimal metadata) into your OS keychain.
 
@@ -54,16 +53,16 @@ After login, every other `pipefy <cmd>` invocation transparently reuses that ses
 Use this for CI, scripts, MCP servers, and any context where opening a browser isn't an option. Get the client id and secret from **Pipefy Admin → Service Accounts** and put them in `.env` at the repo root:
 
 ```env
-PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql
-PIPEFY_INTERNAL_API_URL=https://app.pipefy.com/internal_api
-PIPEFY_SERVICE_ACCOUNT_URL=https://app.pipefy.com/oauth/token
 PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=<SERVICE_ACCOUNT_CLIENT_ID>
 PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=<SERVICE_ACCOUNT_CLIENT_SECRET>
+# Non-prod environments only:
+# PIPEFY_BASE_URL=https://<your-api-host>
+# PIPEFY_AUTH_URL=https://<your-signin-host>/realms/<realm>
 ```
 
 The CLI loads `.env` from the current working directory; see [`docs/setup.md`](../setup.md) for the full Pydantic precedence rules.
 
-> **Legacy names:** `PIPEFY_OAUTH_URL`, `PIPEFY_OAUTH_CLIENT`, and `PIPEFY_OAUTH_SECRET` are still honored (with a one-shot stderr deprecation warning) for back-compat. They will be removed in a future beta. See [`docs/MIGRATION.md`](../MIGRATION.md#service-account-env-var-rename).
+> **Legacy names:** `PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` are still honored (with a one-shot stderr deprecation warning) for back-compat. They will be removed in a future beta. `PIPEFY_OAUTH_URL` has no alias — the OAuth token endpoint now derives from `PIPEFY_BASE_URL`. See [`docs/MIGRATION.md`](../MIGRATION.md#service-account-env-var-rename).
 
 ### Static bearer (one-off)
 
@@ -85,23 +84,23 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 
 | Key | Used by | Effect |
 |-----|---------|--------|
-| `PIPEFY_GRAPHQL_URL` | All commands | Public GraphQL endpoint. Required for any GraphQL call (default in `.env.example`). |
+| `PIPEFY_BASE_URL` | All commands | Pipefy API host root. Defaults to `https://app.pipefy.com`. Drives the GraphQL, internal-API, interfaces, and service-account OAuth token URLs (all four are computed from this base). Set to a different host for non-prod / regional / proxy / local-dev deployments. |
+| `PIPEFY_AUTH_URL` | Tier 4 | Full OIDC issuer URL for interactive login. The CLI appends `/.well-known/openid-configuration` to discover the authorization and token endpoints. Defaults to `https://signin.pipefy.com/realms/pipefy`. Set to the full issuer URL for a non-prod IdP. |
 | `PIPEFY_TOKEN` | Tier 2 | Direct bearer token. Overridden by `--token`. |
-| `PIPEFY_SERVICE_ACCOUNT_URL` | Tier 3 | Service-account token URL (e.g. `https://app.pipefy.com/oauth/token`). |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | Tier 3 | Service-account client id. |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | Tier 3 | Service-account client secret. |
-| `PIPEFY_INTERNAL_API_URL` | Tier 3 | Internal GraphQL endpoint for AI automations / some relation flows. Required for those tools only. |
-| `PIPEFY_AUTH_URL` | Tier 4 | **OIDC issuer URL** for interactive login. The CLI appends `/.well-known/openid-configuration` to discover the authorization and token endpoints. **Defaults to `https://signin.pipefy.com/realms/pipefy` (Pipefy production IdP)**; set to an empty string (`PIPEFY_AUTH_URL=`) to disable the stored-session tier, or override to point at a non-prod IdP. |
 | `PIPEFY_AUTH_CLIENT_ID` | Tier 4 | Public client id registered for the CLI. Defaults to `pipefy-cli`. |
 
-`PIPEFY_SERVICE_ACCOUNT_URL` and `PIPEFY_AUTH_URL` are **not** interchangeable: the first is a token URL for client-credentials, the second is an OIDC issuer URL for the user-login flow.
+The service-account OAuth token URL (Tier 3) and the OIDC issuer URL (Tier 4) are **not** interchangeable: the first is `<base>/oauth/token` for client-credentials, the second is the full OIDC discovery root for the user-login flow.
+
+**Empty / malformed values raise.** Any `PIPEFY_*` env var that does not match its pattern is rejected at settings load. Unset the variable to fall back to the default.
 
 ### Global flags
 
 | Flag | Effect |
 |------|--------|
 | `--token <bearer>` | Tier 1 bearer. Overrides `PIPEFY_TOKEN` if both are set. |
-| `--graphql-url <url>` | Override `PIPEFY_GRAPHQL_URL` for this process. |
+| `--base-url <url>` | Override `PIPEFY_BASE_URL` for this process. |
 | `--allow-insecure-urls` | Allow `http://` and private hosts for this process (dev only). |
 
 ### Commands
@@ -171,18 +170,13 @@ When no session is stored, `pipefy auth logout` prints `Not signed in. Nothing t
 
 | Case | Exit |
 |------|------|
-| `PIPEFY_AUTH_URL` explicitly disabled (`PIPEFY_AUTH_URL=`) | **2** — same gate as `pipefy auth login`. With the var unset, the prod issuer default applies and this case does not trigger. |
+| `PIPEFY_AUTH_URL=""` (or any other `PIPEFY_*` env var set to empty) | **2** — pydantic rejects empty values at settings load. Unset the var to fall back to the prod default. |
 | No session stored (no-op) | **0** |
 | Session cleared (revoke succeeded, failed, or unsupported) | **0** |
 
 ### Pipefy issuer URLs
 
-| Environment | `PIPEFY_AUTH_URL` |
-|-------------|--------------------|
-| Production | `https://signin.pipefy.com/realms/pipefy` |
-| Validation (piporacle) | `https://signin-piporacle.pipefy.com/realms/st-piporacle-pud1m` |
-
-Pair each issuer with the matching `PIPEFY_GRAPHQL_URL` (`https://app.pipefy.com/graphql` for prod, `https://piporacle.pipefy.com/graphql` for piporacle).
+Production: `https://signin.pipefy.com/realms/pipefy` (the `PIPEFY_AUTH_URL` default). For a non-prod IdP, set `PIPEFY_AUTH_URL` to the full issuer URL (host + realm) directly — the CLI doesn't try to derive it from any tenant convention.
 
 ---
 
@@ -206,9 +200,17 @@ Forthcoming: an OAuth 2.0 Device Authorization Grant (`pipefy auth login --devic
 
 The keychain has a session but its refresh token won't exchange. Most common causes: the refresh token's absolute lifetime expired, you signed out of the IdP, or the issuer URL changed (e.g. you switched between prod and piporacle without re-logging). Re-run `pipefy auth login`.
 
-### `PIPEFY_AUTH_URL is required for pipefy auth login`
+### `String should match pattern '<regex>'` (any `PIPEFY_*` env var)
 
-The stored-session tier is explicitly disabled. With `PIPEFY_AUTH_URL` unset the CLI falls back to the Pipefy production issuer default, so this message means the var is set to an empty string (`PIPEFY_AUTH_URL=`) — usually to opt out of the stored-session tier on a host that can't reach prod. Unset the variable to restore the default, or set it to a valid issuer URL (see [Pipefy issuer URLs](#pipefy-issuer-urls)) if you need a non-prod IdP.
+Every `PIPEFY_*` env var is validated against a semantically meaningful regex at settings load — URL env vars (`PIPEFY_BASE_URL`, `PIPEFY_AUTH_URL`) must start with `http(s)://`, credentials must not begin/end with whitespace, `PIPEFY_ORG_ID` must be a numeric string. Empty / blank / specially-charactered values are rejected at construction — there's no overload of `PIPEFY_<NAME>=""` for opt-out semantics (a separate kill-switch mechanism is tracked in [#237](https://github.com/gbrlcustodio/pipefy-mcp-server/issues/237)). Unset the variable to fall back to the prod default (for URLs) or to leave the tier unconfigured (for credentials). The error message names the offending field plus the violated pattern.
+
+> **`VAR= command` is not "unset".** A shell command-prefix assignment (`PIPEFY_AUTH_URL= pipefy auth status`) sets the variable to the empty string for the child process; it does **not** unset it. Pydantic then rejects the empty value and the command exits with a `ValidationError`. To actually unset a variable for a single command, use `env -u VAR command` (POSIX one-shot, leaves the parent shell untouched):
+>
+> ```sh
+> env -u PIPEFY_AUTH_URL pipefy auth status
+> ```
+>
+> To unset for the remainder of the current shell session, `unset PIPEFY_AUTH_URL` (bash / zsh) or `set -e PIPEFY_AUTH_URL` (fish).
 
 ### `Login succeeded but the session could not be stored in your OS keychain (<backend>)`
 

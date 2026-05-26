@@ -4,7 +4,8 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
  Pipefy CLI (GraphQL via pipefy-sdk).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --graphql-url                TEXT  Override PIPEFY_GRAPHQL_URL.              │
+│ --base-url                   TEXT  Override PIPEFY_BASE_URL (Pipefy API host │
+│                                    root).                                    │
 │ --token                      TEXT  Bearer token for GraphQL (skips OAuth).   │
 │                                    Overrides PIPEFY_TOKEN if both are set.   │
 │ --allow-insecure-urls              Allow http:// and private hosts           │

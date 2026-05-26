@@ -46,7 +46,6 @@ def _seed_session(
 
 
 def _set_auth_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "https://api.example.com/graphql")
     monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
     monkeypatch.setenv("PIPEFY_AUTH_CLIENT_ID", _CLIENT_ID)
 
@@ -309,12 +308,6 @@ def test_status_service_account_wins_over_stored_session(
 ):
     _set_auth_env(monkeypatch)
     _seed_session(monkeypatch)
-    monkeypatch.setenv(
-        "PIPEFY_INTERNAL_API_URL", "https://api.example.com/internal_api"
-    )
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL", "https://auth.example.com/oauth/token"
-    )
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "csecret")
     client = _mock_client_with_me()
@@ -340,10 +333,6 @@ def test_status_legacy_service_account_triple_masks_stored_session(
     """During the alias window a legacy triple still masks — diagnostic must reflect it."""
     _set_auth_env(monkeypatch)
     _seed_session(monkeypatch)
-    monkeypatch.setenv(
-        "PIPEFY_INTERNAL_API_URL", "https://api.example.com/internal_api"
-    )
-    monkeypatch.setenv("PIPEFY_OAUTH_URL", "https://auth.example.com/oauth/token")
     monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
     monkeypatch.setenv("PIPEFY_OAUTH_SECRET", "csecret")
     client = _mock_client_with_me()
@@ -385,7 +374,6 @@ def test_status_env_token_wins_over_stored_session(
 def test_status_flag_token(
     clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
 ):
-    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "https://api.example.com/graphql")
     client = _mock_client_with_me()
     with _patch_command_client(client):
         result = runner.invoke(
@@ -406,7 +394,6 @@ def test_status_flag_token(
 def test_status_env_token_only(
     clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
 ):
-    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "https://api.example.com/graphql")
     monkeypatch.setenv("PIPEFY_TOKEN", "env-bearer")
     client = _mock_client_with_me()
     with _patch_command_client(client):
@@ -423,13 +410,6 @@ def test_status_env_token_only(
 def test_status_service_account_only(
     clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
 ):
-    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "https://api.example.com/graphql")
-    monkeypatch.setenv(
-        "PIPEFY_INTERNAL_API_URL", "https://api.example.com/internal_api"
-    )
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL", "https://auth.example.com/oauth/token"
-    )
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "csecret")
     client = _mock_client_with_me()
@@ -448,7 +428,6 @@ def test_status_service_account_only(
 def test_status_none_exits_2(
     clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
 ):
-    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "https://api.example.com/graphql")
     result = _invoke_status(runner, ["--json"])
 
     assert result.exit_code == 2
@@ -461,7 +440,6 @@ def test_status_none_exits_2(
 def test_status_none_text_mentions_onboarding(
     clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
 ):
-    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "https://api.example.com/graphql")
     result = _invoke_status(runner)
 
     assert result.exit_code == 2

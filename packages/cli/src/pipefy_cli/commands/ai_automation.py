@@ -35,7 +35,7 @@ def _require_ai_automation(client: PipefyClient) -> None:
     if not client.ai_automation_available:
         typer.echo(
             "AI Automation requires service-account credentials "
-            "(PIPEFY_SERVICE_ACCOUNT_URL, PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
+            "(PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
             "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
             "Bearer --token mode does not attach the internal API client.",
             err=True,

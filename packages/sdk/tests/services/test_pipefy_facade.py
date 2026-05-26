@@ -23,10 +23,7 @@ from pipefy_sdk.settings import PipefySettings
 @pytest.fixture
 def mock_settings():
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        service_account_url="https://auth.pipefy.com/oauth/token",
-        service_account_client_id="client_id",
-        service_account_client_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 
@@ -547,10 +544,7 @@ def test_pipefy_client_creates_services_with_shared_auth():
     """Test PipefyClient creates services that share the same auth instance."""
 
     settings = PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        service_account_url="https://auth.pipefy.com/oauth/token",
-        service_account_client_id="client_id",
-        service_account_client_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
     auth = StaticBearerAuth("shared-token")
     client = PipefyClient(settings=settings, auth=auth)

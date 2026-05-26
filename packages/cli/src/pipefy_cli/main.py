@@ -51,10 +51,10 @@ def _print_version(value: bool) -> None:
 @app.callback()
 def main(
     ctx: typer.Context,
-    graphql_url: str | None = typer.Option(
+    base_url: str | None = typer.Option(
         None,
-        "--graphql-url",
-        help="Override PIPEFY_GRAPHQL_URL.",
+        "--base-url",
+        help="Override PIPEFY_BASE_URL (Pipefy API host root).",
     ),
     token: str | None = typer.Option(
         None,
@@ -78,7 +78,7 @@ def main(
     ctx.ensure_object(dict)
     try:
         cli_settings = resolve_cli_settings(
-            graphql_url_flag=graphql_url,
+            base_url_flag=base_url,
             allow_insecure_urls_flag=True if allow_insecure_urls else None,
         )
     except ValueError as exc:

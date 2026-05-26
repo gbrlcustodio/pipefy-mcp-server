@@ -47,13 +47,16 @@ class BasePipefyClient:
         settings: PipefySettings,
         *,
         auth: Auth,
+        url_override: str | None = None,
         on_graphql_error: Callable[[list[dict]], str] | None = None,
     ) -> None:
-        if settings.graphql_url is None:
-            raise ValueError("GraphQL URL must be provided in settings.")
-
+        # ``url_override`` lets callers point this client at a sibling endpoint
+        # (e.g. ``PortalService`` aims its interfaces client at
+        # ``settings.interfaces_graphql_url``) without mutating the shared
+        # settings object. Defaults to ``settings.graphql_url``.
         self.settings = settings
         self._auth = auth
+        self._graphql_url = url_override or settings.graphql_url
         # When set, ``TransportQueryError`` is converted to ``ValueError`` using the
         # formatter's output. Used by ``InternalApiClient`` to surface its
         # ``[code=…] [correlation_id=…]`` envelope; ``None`` leaves gql exceptions
@@ -74,7 +77,7 @@ class BasePipefyClient:
         once per client instance, caches the schema, and reuses it for local validation.
         """
         transport = HTTPXAsyncTransport(
-            url=self.settings.graphql_url,
+            url=self._graphql_url,
             auth=self._auth,
             timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
         )

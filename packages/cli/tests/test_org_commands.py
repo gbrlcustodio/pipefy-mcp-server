@@ -11,18 +11,6 @@ from pipefy_cli.main import app
 def test_org_get_uses_pipefy_org_id_when_argument_omitted(
     runner, clean_pipefy_env, saved_cwd, monkeypatch
 ):
-    monkeypatch.setenv(
-        "PIPEFY_GRAPHQL_URL",
-        "https://cli-org-env.example.com/graphql",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_INTERNAL_API_URL",
-        "https://cli-org-env.example.com/internal_api",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL",
-        "https://cli-org-env.example.com/oauth/token",
-    )
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
     monkeypatch.setenv("PIPEFY_ORG_ID", "302398434")
@@ -44,18 +32,6 @@ def test_org_get_uses_pipefy_org_id_when_argument_omitted(
 def test_org_get_positional_overrides_pipefy_org_id(
     runner, clean_pipefy_env, saved_cwd, monkeypatch
 ):
-    monkeypatch.setenv(
-        "PIPEFY_GRAPHQL_URL",
-        "https://cli-org-pos.example.com/graphql",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_INTERNAL_API_URL",
-        "https://cli-org-pos.example.com/internal_api",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL",
-        "https://cli-org-pos.example.com/oauth/token",
-    )
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
     monkeypatch.setenv("PIPEFY_ORG_ID", "111")
@@ -76,18 +52,6 @@ def test_org_get_positional_overrides_pipefy_org_id(
 def test_org_get_missing_id_and_env_exits_2(
     runner, clean_pipefy_env, saved_cwd, monkeypatch
 ):
-    monkeypatch.setenv(
-        "PIPEFY_GRAPHQL_URL",
-        "https://cli-org-miss.example.com/graphql",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_INTERNAL_API_URL",
-        "https://cli-org-miss.example.com/internal_api",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL",
-        "https://cli-org-miss.example.com/oauth/token",
-    )
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 

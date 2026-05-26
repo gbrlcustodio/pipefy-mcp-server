@@ -55,7 +55,9 @@ class ServicesContainer:
                 f"{missing_auth_message()} "
                 f"See {DOCS_SETUP_REF} for host-specific install steps."
             )
-        if oidc_client is not None and tier_for(resolved) == STORED_SESSION_TIER:
+        # ``oidc_client`` is always non-None (``auth_url`` defaults to prod IdP);
+        # tier check gates warmup — only stored-session needs it.
+        if tier_for(resolved) == STORED_SESSION_TIER:
             try:
                 await asyncio.to_thread(
                     ensure_fresh_session,
@@ -73,13 +75,12 @@ class ServicesContainer:
                 raise
             logger.info("Pipefy stored session warmed up at startup")
         self.pipefy_client = PipefyClient(settings=pipefy, auth=resolved)
-        if pipefy.internal_api_url:
-            internal_client = InternalApiClient(
-                url=pipefy.internal_api_url,
-                auth=resolved,
-                allow_insecure_urls=pipefy.allow_insecure_urls,
-            )
-            self.pipefy_client.set_internal_api_client(internal_client)
-            self.pipefy_client.set_ai_automation_service(
-                AiAutomationService(client=internal_client)
-            )
+        internal_client = InternalApiClient(
+            url=pipefy.internal_api_url,
+            auth=resolved,
+            allow_insecure_urls=pipefy.allow_insecure_urls,
+        )
+        self.pipefy_client.set_internal_api_client(internal_client)
+        self.pipefy_client.set_ai_automation_service(
+            AiAutomationService(client=internal_client)
+        )

@@ -25,12 +25,8 @@ def client_session():
 
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
-    pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
-    auth=AuthSettings(
-        service_account_url="https://api.pipefy.com/oauth/token",
-        service_account_client_id="test-client",
-        service_account_client_secret="test-secret",
-    ),
+    pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+    auth=AuthSettings(),
 )
 
 

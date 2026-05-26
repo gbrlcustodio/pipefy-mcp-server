@@ -51,7 +51,7 @@ AI_AUTOMATION_UPDATE_FAILED = (
 
 AI_AUTOMATION_NOT_CONFIGURED = (
     "AI Automation requires service-account credentials "
-    "(PIPEFY_SERVICE_ACCOUNT_URL, PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
+    "(PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
     "Check .env.example for the required variables."
 )

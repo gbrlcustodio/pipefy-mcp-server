@@ -8,12 +8,11 @@ from pipefy_mcp.settings import Settings
 
 
 @pytest.mark.unit
-def test_internal_api_url_overridden_via_env(monkeypatch):
-    """Test that internal_api_url can be overridden via PIPEFY_INTERNAL_API_URL."""
-    custom_url = "https://custom.pipefy.com/internal_api"
-    monkeypatch.setenv("PIPEFY_INTERNAL_API_URL", custom_url)
+def test_internal_api_url_derived_from_base_url(monkeypatch):
+    """``PIPEFY_BASE_URL`` flows into the computed ``internal_api_url``."""
+    monkeypatch.setenv("PIPEFY_BASE_URL", "https://custom.pipefy.com")
     settings = Settings()
-    assert settings.pipefy.internal_api_url == custom_url
+    assert settings.pipefy.internal_api_url == "https://custom.pipefy.com/internal_api"
 
 
 @pytest.mark.unit
@@ -48,34 +47,23 @@ def test_service_account_ids_empty_env_is_empty_list(monkeypatch):
 
 
 @pytest.mark.unit
-def test_pipefy_settings_rejects_http_graphql_when_secure():
-    with pytest.raises(ValueError, match="graphql_url.*HTTPS"):
-        PipefySettings(
-            graphql_url="http://app.pipefy.com/graphql",
-            service_account_url="https://auth.pipefy.com/oauth/token",
-            internal_api_url="https://app.pipefy.com/internal_api",
-        )
+def test_pipefy_settings_rejects_http_base_when_secure():
+    with pytest.raises(ValueError, match="base_url.*HTTPS"):
+        PipefySettings(base_url="http://app.pipefy.com")
 
 
 @pytest.mark.unit
-def test_pipefy_settings_rejects_loopback_graphql():
-    with pytest.raises(ValueError, match="graphql_url.*localhost|127"):
-        PipefySettings(
-            graphql_url="https://127.0.0.1/graphql",
-            service_account_url="https://auth.pipefy.com/oauth/token",
-            internal_api_url="https://app.pipefy.com/internal_api",
-        )
+def test_pipefy_settings_rejects_loopback_base():
+    with pytest.raises(ValueError, match="base_url.*localhost|127"):
+        PipefySettings(base_url="https://127.0.0.1")
 
 
 @pytest.mark.unit
 def test_pipefy_settings_allow_insecure_urls_permits_http_localhost():
-    s = PipefySettings(
-        allow_insecure_urls=True,
-        graphql_url="http://localhost/graphql",
-        service_account_url="http://localhost/oauth/token",
-        internal_api_url="http://localhost/internal_api",
-    )
+    s = PipefySettings(allow_insecure_urls=True, base_url="http://localhost")
+    assert s.base_url == "http://localhost"
     assert s.graphql_url == "http://localhost/graphql"
+    assert s.internal_api_url == "http://localhost/internal_api"
 
 
 @pytest.mark.unit
@@ -134,11 +122,9 @@ def test_default_webhook_name_rejects_empty_string():
 
 
 @pytest.mark.unit
-def test_settings_rejects_link_local_service_account_url(monkeypatch):
-    """Settings load must SSRF-check ``AuthSettings`` URLs (regression: MCP forgot this after the split)."""
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL", "https://169.254.169.254/oauth/token"
-    )
+def test_settings_rejects_link_local_base_url(monkeypatch):
+    """Settings load must SSRF-check ``base_url`` (which drives the OAuth token endpoint)."""
+    monkeypatch.setenv("PIPEFY_BASE_URL", "https://169.254.169.254")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "csecret")
     with pytest.raises(ValidationError, match="link-local|private|loopback"):
@@ -148,12 +134,9 @@ def test_settings_rejects_link_local_service_account_url(monkeypatch):
 @pytest.mark.unit
 def test_settings_picks_up_pipefy_token_from_env(monkeypatch):
     """``PIPEFY_TOKEN`` must populate ``auth.static_token`` so MCP boots from ``.env``-only setups."""
-    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", "https://api.pipefy.com/graphql")
     monkeypatch.setenv("PIPEFY_TOKEN", "env-bearer")
-    monkeypatch.delenv("PIPEFY_SERVICE_ACCOUNT_URL", raising=False)
     monkeypatch.delenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", raising=False)
     monkeypatch.delenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", raising=False)
-    monkeypatch.delenv("PIPEFY_OAUTH_URL", raising=False)
     monkeypatch.delenv("PIPEFY_OAUTH_CLIENT", raising=False)
     monkeypatch.delenv("PIPEFY_OAUTH_SECRET", raising=False)
     assert Settings().auth.static_token == "env-bearer"

@@ -28,18 +28,6 @@ def _patch_get_client(card_payload: dict):
 
 
 def test_card_get_json_stdout(runner, clean_pipefy_env, saved_cwd, monkeypatch):
-    monkeypatch.setenv(
-        "PIPEFY_GRAPHQL_URL",
-        "https://cli-card-json.example.com/graphql",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_INTERNAL_API_URL",
-        "https://cli-card-json.example.com/internal_api",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL",
-        "https://cli-card-json.example.com/oauth/token",
-    )
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
@@ -57,18 +45,6 @@ def test_card_get_json_stdout(runner, clean_pipefy_env, saved_cwd, monkeypatch):
 
 
 def test_card_get_rich_stdout(runner, clean_pipefy_env, saved_cwd, monkeypatch):
-    monkeypatch.setenv(
-        "PIPEFY_GRAPHQL_URL",
-        "https://cli-card-rich.example.com/graphql",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_INTERNAL_API_URL",
-        "https://cli-card-rich.example.com/internal_api",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL",
-        "https://cli-card-rich.example.com/oauth/token",
-    )
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
@@ -84,18 +60,6 @@ def test_card_get_rich_stdout(runner, clean_pipefy_env, saved_cwd, monkeypatch):
 def test_card_get_sdk_error_stderr_exit_1(
     runner, clean_pipefy_env, saved_cwd, monkeypatch
 ):
-    monkeypatch.setenv(
-        "PIPEFY_GRAPHQL_URL",
-        "https://cli-card-err.example.com/graphql",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_INTERNAL_API_URL",
-        "https://cli-card-err.example.com/internal_api",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL",
-        "https://cli-card-err.example.com/oauth/token",
-    )
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
@@ -113,18 +77,6 @@ def test_card_get_sdk_error_stderr_exit_1(
 def test_card_get_permission_denied_hint_on_stderr(
     runner, clean_pipefy_env, saved_cwd, monkeypatch
 ):
-    monkeypatch.setenv(
-        "PIPEFY_GRAPHQL_URL",
-        "https://cli-card-pd.example.com/graphql",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_INTERNAL_API_URL",
-        "https://cli-card-pd.example.com/internal_api",
-    )
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL",
-        "https://cli-card-pd.example.com/oauth/token",
-    )
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
@@ -146,16 +98,10 @@ def test_card_get_permission_denied_hint_on_stderr(
 
 
 def _apply_settings_to_env(monkeypatch: pytest.MonkeyPatch, s: PipefySettings) -> None:
-    monkeypatch.setenv("PIPEFY_GRAPHQL_URL", str(s.graphql_url))
-    monkeypatch.setenv("PIPEFY_INTERNAL_API_URL", str(s.internal_api_url))
-    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_URL", str(s.service_account_url))
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", str(s.service_account_client_id)
-    )
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-        str(s.service_account_client_secret),
-    )
+    # Service-account credentials live on AuthSettings; the live test inherits
+    # them from the operator's existing shell env. Only the API host needs to
+    # flow into the subprocess CLI invocation.
+    monkeypatch.setenv("PIPEFY_BASE_URL", str(s.base_url))
     if s.allow_insecure_urls:
         monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
 

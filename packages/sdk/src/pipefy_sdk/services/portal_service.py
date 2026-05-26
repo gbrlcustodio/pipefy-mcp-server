@@ -111,12 +111,10 @@ class PortalService:
             auth: Shared OAuth or bearer auth for GraphQL transports.
             internal_api_client: Client for sub-portal element wiring mutations.
         """
-        interfaces_settings = settings.model_copy(
-            update={"graphql_url": settings.interfaces_graphql_url}
-        )
         self._interfaces_client = BasePipefyClient(
-            settings=interfaces_settings,
+            settings=settings,
             auth=auth,
+            url_override=settings.interfaces_graphql_url,
         )
         self._graphql_client = BasePipefyClient(
             settings=settings,

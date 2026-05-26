@@ -1,8 +1,14 @@
-"""Back-compat coverage for the ``PIPEFY_OAUTH_*`` → ``PIPEFY_SERVICE_ACCOUNT_*`` rename.
+"""Back-compat coverage for the ``PIPEFY_OAUTH_*`` → ``PIPEFY_SERVICE_ACCOUNT_*`` rename
+and the ``PIPEFY_BASE_URL`` rewrite (issue #238).
 
-The rename ships an ``AliasChoices`` shim on ``AuthSettings`` plus a one-shot
-stderr deprecation warning. These tests pin both behaviors so the eventual
-PR that drops the aliases (and the warning) has a clear regression surface.
+The legacy ``PIPEFY_OAUTH_CLIENT`` / ``PIPEFY_OAUTH_SECRET`` env vars and
+``oauth_client`` / ``oauth_secret`` TOML keys are still honored via an
+``AliasChoices`` shim plus a one-shot stderr deprecation warning. These
+tests pin both behaviors so the eventual PR that drops the aliases (and
+the warning) has a clear regression surface.
+
+The ``PIPEFY_OAUTH_URL`` legacy alias was dropped — the OAuth token
+endpoint now derives from ``PIPEFY_BASE_URL``.
 """
 
 from __future__ import annotations
@@ -24,32 +30,45 @@ def _reset_warning_dedup(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(key, raising=False)
     for key in _LEGACY_ENV_KEYS_TO_NEW.values():
         monkeypatch.delenv(key, raising=False)
+    monkeypatch.delenv("PIPEFY_OAUTH_URL", raising=False)
+    monkeypatch.delenv("PIPEFY_SERVICE_ACCOUNT_URL", raising=False)
+    monkeypatch.delenv("PIPEFY_BASE_URL", raising=False)
+    monkeypatch.delenv("PIPEFY_AUTH_URL", raising=False)
     _reset_legacy_oauth_warning_state()
     yield
     _reset_legacy_oauth_warning_state()
 
 
 @pytest.mark.unit
-def test_legacy_kwargs_populate_new_fields():
-    """``AuthSettings(oauth_url=...)`` still validates and binds to ``service_account_url``."""
-    s = AuthSettings(
-        oauth_url="https://legacy.example.com/oauth/token",
-        oauth_client="legacy-client",
-        oauth_secret="legacy-secret",
-    )
-    assert s.service_account_url == "https://legacy.example.com/oauth/token"
-    assert s.service_account_client_id == "legacy-client"
-    assert s.service_account_client_secret == "legacy-secret"
+def test_bare_name_env_vars_do_not_leak_into_auth_settings(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Unprefixed env vars (``BASE_URL``, ``STATIC_TOKEN``, ``OAUTH_CLIENT``, ...) must not be honored.
+
+    pydantic-settings env loading is case-insensitive by default, so an
+    unprefixed alias on ``AliasChoices`` would let any bare-name env var
+    on the host bleed into Pipefy auth settings — an auth-redirect /
+    credential-leak primitive.
+    """
+    monkeypatch.setenv("BASE_URL", "https://evil.example.com")
+    monkeypatch.setenv("STATIC_TOKEN", "leaked")
+    monkeypatch.setenv("OAUTH_CLIENT", "leaked-client")
+    monkeypatch.setenv("OAUTH_SECRET", "leaked-secret")
+    monkeypatch.setenv("ALLOW_INSECURE_URLS", "true")
+    settings = AuthSettings()
+    assert settings.base_url == "https://app.pipefy.com"  # default, not leaked
+    assert settings.static_token is None
+    assert settings.service_account_client_id is None
+    assert settings.service_account_client_secret is None
+    assert settings.allow_insecure_urls is False
 
 
 @pytest.mark.unit
 def test_new_kwargs_populate_new_fields():
     s = AuthSettings(
-        service_account_url="https://new.example.com/oauth/token",
         service_account_client_id="new-client",
         service_account_client_secret="new-secret",
     )
-    assert s.service_account_url == "https://new.example.com/oauth/token"
     assert s.service_account_client_id == "new-client"
     assert s.service_account_client_secret == "new-secret"
 
@@ -59,13 +78,11 @@ def test_legacy_env_var_emits_deprecation_warning(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ):
-    monkeypatch.setenv("PIPEFY_OAUTH_URL", "https://shell.example.com/oauth/token")
+    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "legacy-client")
     _warn_once_for_legacy_oauth_env_keys()
     err = capsys.readouterr().err
-    assert "PIPEFY_OAUTH_URL is deprecated" in err
-    assert "rename to PIPEFY_SERVICE_ACCOUNT_URL" in err
-    assert "PIPEFY_OAUTH_CLIENT" not in err
-    assert "PIPEFY_OAUTH_SECRET" not in err
+    assert "PIPEFY_OAUTH_CLIENT is deprecated" in err
+    assert "rename to PIPEFY_SERVICE_ACCOUNT_CLIENT_ID" in err
 
 
 @pytest.mark.unit
@@ -73,12 +90,12 @@ def test_deprecation_warning_dedups_within_process(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ):
-    monkeypatch.setenv("PIPEFY_OAUTH_URL", "https://shell.example.com/oauth/token")
+    monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "legacy-client")
     _warn_once_for_legacy_oauth_env_keys()
     _warn_once_for_legacy_oauth_env_keys()
     _warn_once_for_legacy_oauth_env_keys()
     err = capsys.readouterr().err
-    assert err.count("PIPEFY_OAUTH_URL is deprecated") == 1
+    assert err.count("PIPEFY_OAUTH_CLIENT is deprecated") == 1
 
 
 @pytest.mark.unit
@@ -86,9 +103,6 @@ def test_no_deprecation_warning_when_only_new_env_keys_set(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ):
-    monkeypatch.setenv(
-        "PIPEFY_SERVICE_ACCOUNT_URL", "https://new.example.com/oauth/token"
-    )
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "new-client")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "new-secret")
     _warn_once_for_legacy_oauth_env_keys()
@@ -97,30 +111,78 @@ def test_no_deprecation_warning_when_only_new_env_keys_set(
 
 
 @pytest.mark.unit
-def test_auth_url_defaults_to_pipefy_prod_idp(monkeypatch: pytest.MonkeyPatch):
-    """``AuthSettings()`` with no ``PIPEFY_AUTH_URL`` set defaults to the prod IdP."""
-    from pipefy_auth.identity import DEFAULT_AUTH_URL
-
-    monkeypatch.delenv("PIPEFY_AUTH_URL", raising=False)
+def test_base_url_defaults_to_prod():
+    """``AuthSettings()`` with no env defaults to the Pipefy prod API host."""
     settings = AuthSettings()
-    assert settings.auth_url == DEFAULT_AUTH_URL
-    assert DEFAULT_AUTH_URL == "https://signin.pipefy.com/realms/pipefy"
-    oidc = settings.to_oidc_client()
-    assert oidc is not None
-    assert oidc.issuer_url == DEFAULT_AUTH_URL
+    assert settings.base_url == "https://app.pipefy.com"
+    assert settings.service_account_url == "https://app.pipefy.com/oauth/token"
 
 
 @pytest.mark.unit
-def test_auth_url_env_override_wins_over_default(monkeypatch: pytest.MonkeyPatch):
-    """Setting ``PIPEFY_AUTH_URL`` in env still overrides the default."""
+def test_auth_url_defaults_to_pipefy_prod_idp():
+    """``AuthSettings()`` with no env defaults to the Pipefy prod IdP."""
+    settings = AuthSettings()
+    assert settings.auth_url == "https://signin.pipefy.com/realms/pipefy"
+    oidc = settings.to_oidc_client()
+    assert oidc.issuer_url == "https://signin.pipefy.com/realms/pipefy"
+
+
+@pytest.mark.unit
+def test_pipefy_base_url_env_drives_service_account_url(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``PIPEFY_BASE_URL`` flows into the ``service_account_url`` computed field."""
+    monkeypatch.setenv("PIPEFY_BASE_URL", "https://staging.example.com")
+    settings = AuthSettings()
+    assert settings.base_url == "https://staging.example.com"
+    assert settings.service_account_url == "https://staging.example.com/oauth/token"
+
+
+@pytest.mark.unit
+def test_pipefy_auth_url_env_overrides_default(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``PIPEFY_AUTH_URL`` overrides the default issuer URL."""
     monkeypatch.setenv("PIPEFY_AUTH_URL", "https://other.example.com/realms/x")
     settings = AuthSettings()
     assert settings.auth_url == "https://other.example.com/realms/x"
 
 
 @pytest.mark.unit
-def test_empty_auth_url_disables_stored_session_tier(monkeypatch: pytest.MonkeyPatch):
-    """Setting ``PIPEFY_AUTH_URL`` to an empty string opts out of the default."""
-    monkeypatch.setenv("PIPEFY_AUTH_URL", "")
+@pytest.mark.parametrize(
+    "env_key",
+    ["PIPEFY_BASE_URL", "PIPEFY_AUTH_URL"],
+)
+def test_empty_url_env_raises(monkeypatch: pytest.MonkeyPatch, env_key: str):
+    """Empty URL env values are rejected at construction (no opt-out overload)."""
+    from pydantic import ValidationError
+
+    monkeypatch.setenv(env_key, "")
+    with pytest.raises(ValidationError, match="should match pattern"):
+        AuthSettings()
+
+
+@pytest.mark.unit
+def test_base_url_strips_surrounding_whitespace(monkeypatch: pytest.MonkeyPatch):
+    """Whitespace-padded env values from copy-paste are stripped before pattern."""
+    monkeypatch.setenv("PIPEFY_BASE_URL", "  https://staging.example.com\t")
     settings = AuthSettings()
-    assert settings.to_oidc_client() is None
+    assert settings.base_url == "https://staging.example.com"
+
+
+@pytest.mark.unit
+def test_base_url_accepts_uppercase_scheme(monkeypatch: pytest.MonkeyPatch):
+    """RFC 3986 §3.1: URL scheme is case-insensitive."""
+    monkeypatch.setenv("PIPEFY_BASE_URL", "HTTPS://staging.example.com")
+    settings = AuthSettings()
+    assert settings.base_url == "HTTPS://staging.example.com"
+
+
+@pytest.mark.unit
+def test_service_account_url_strips_trailing_slash_on_base(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """A trailing slash on ``PIPEFY_BASE_URL`` doesn't double the joiner."""
+    monkeypatch.setenv("PIPEFY_BASE_URL", "https://staging.example.com/")
+    settings = AuthSettings()
+    assert settings.service_account_url == "https://staging.example.com/oauth/token"

@@ -68,10 +68,7 @@ def _make_action_dict(name="Move card", action_type="move_card"):
 
 
 _MOCK_SETTINGS = PipefySettings(
-    graphql_url="https://api.pipefy.com/graphql",
-    oauth_url="https://auth.pipefy.com/oauth/token",
-    oauth_client="test-client",
-    oauth_secret="test-secret",
+    base_url="https://api.pipefy.com",
 )
 _TEST_AUTH = StaticBearerAuth("test-bearer-token")
 

@@ -156,11 +156,11 @@ CLI-specific guides: **[`docs/cli/`](docs/cli/README.md)** (including [introspec
 
 The [`skills/`](skills/) directory holds workflow playbooks: prerequisites, tool tables (MCP + CLI), steps, and success criteria. Compatible with any agent that reads Markdown (Cursor, Claude Code, Codex, and others).
 
-**Starter pack** (bundled in the CLI):
+**Install via [`skills.sh`](https://github.com/vercel-labs/skills)** (55+ agent targets):
 
 ```sh
-pipefy skills list
-pipefy skills show pipes-and-cards
+npx skills add gbrlcustodio/pipefy-mcp-server                           # all skills
+npx skills add gbrlcustodio/pipefy-mcp-server --skill pipefy-pipes-and-cards
 ```
 
 Full catalog: [`skills/README.md`](skills/README.md). Authoring: [`skills/AGENTS.md`](skills/AGENTS.md). Contributions: [`CONTRIBUTING.md`](CONTRIBUTING.md).

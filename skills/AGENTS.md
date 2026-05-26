@@ -132,10 +132,9 @@ When a skill needs stable URLs into this repo’s Markdown:
 Skills and tools live in the same monorepo. When a CLI command or MCP tool is renamed:
 
 1. Update the skill reference in the same PR (or a paired PR opened in the same review window).
-2. The `skills-lint.yml` CI job validates frontmatter, starter-pack bundle drift against
-   `packages/cli/src/pipefy_cli/skills/`, MCP tool names and `pipefy` CLI references in
-   each `skills/**/SKILL.md`, and smoke-runs `pipefy skills list`. A rename that doesn't
-   update the skill fails the build.
+2. The `skills-lint.yml` CI job validates frontmatter on every `skills/**/SKILL.md`
+   and lints MCP tool names + `pipefy` CLI references in each file. A rename that
+   doesn't update the skill fails the build.
 
 ---
 
@@ -144,4 +143,3 @@ Skills and tools live in the same monorepo. When a CLI command or MCP tool is re
 - **Keep skills short.** If a skill exceeds 500 lines, split it by sub-domain.
 - **Link, don't duplicate.** Reference related skills with `See also: skills/...`.
 - **Test before shipping.** Run the skill end-to-end against a real Pipefy org before opening a PR.
-- **Starter pack eligibility.** High-impact skills (covering many tools or common workflows) are candidates for the CLI starter pack. See `scripts/sync_starter_pack.py` and `RELEASE.md`.

@@ -4,17 +4,13 @@ on:
   push:
     paths:
       - "skills/**"
-      - "packages/cli/src/pipefy_cli/skills/**"
       - "packages/mcp/src/pipefy_mcp/tools/registry.py"
-      - "scripts/sync_starter_pack.py"
       - ".github/workflows/skills-lint.yml"
       - ".github/workflows/scripts/**"
   pull_request:
     paths:
       - "skills/**"
-      - "packages/cli/src/pipefy_cli/skills/**"
       - "packages/mcp/src/pipefy_mcp/tools/registry.py"
-      - "scripts/sync_starter_pack.py"
       - ".github/workflows/skills-lint.yml"
       - ".github/workflows/scripts/**"
 
@@ -94,15 +90,7 @@ jobs:
               print(f"Skills validation passed — {count} skill(s) validated.")
           EOF
 
-      - name: Starter pack bundle matches canonical
-        run: uv run python scripts/sync_starter_pack.py --check
-
       - name: Validate MCP and CLI references in skills
         run: |
           uv sync --quiet
           uv run python .github/workflows/scripts/lint_skill_refs.py
-
-      - name: Smoke test bundled skills CLI
-        run: |
-          uv sync --quiet
-          uv run pipefy skills list

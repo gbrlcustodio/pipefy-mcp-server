@@ -35,7 +35,6 @@ PIPEFY_CLI_ROOT_COMMANDS = frozenset(
         "relation",
         "report-org",
         "report-pipe",
-        "skills",
         "table",
         "usage",
         "webhook",

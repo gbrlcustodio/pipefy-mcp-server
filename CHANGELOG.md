@@ -43,6 +43,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **HARD BREAK** — user TOML config file `~/.config/pipefy/config.toml` is no longer read by either the CLI or the MCP server. Operators who relied on it must move credentials and `base_url` into shell environment variables, a `.env` file at the working directory, or their MCP client's `env` block. Two config surfaces (env + `.env`) instead of three; persistent global config is shell-rc territory.
 - `PIPEFY_TENANT` / `PIPEFY_AUTH_REALM` env vars (never shipped in a release; existed only on intermediate commits of this branch).
 - **Auth**: `pipefy_auth.DEFAULT_AUTH_URL` constant (and its re-export from the package root). Callers should consult the resolved `AuthSettings.auth_url` instead.
+- **CLI**: `pipefy skills list` / `pipefy skills show` Typer subcommands and the bundled `packages/cli/src/pipefy_cli/skills/*.md` starter pack. Install the full catalog via [`skills.sh`](https://github.com/vercel-labs/skills) (`npx skills add gbrlcustodio/pipefy-mcp-server`) or reference the canonical files under `skills/<domain>/<skill>/SKILL.md` directly. Closes #230.
+- **Tooling**: `scripts/sync_starter_pack.py` (canonical files at `skills/<domain>/<skill>/SKILL.md` are now the only source).
+- **CLI**: `pyyaml` dependency of `pipefy-cli` (only consumer was the deleted `skills` command).
 
 ## [0.2.0-beta.1] - 2026-05-18
 

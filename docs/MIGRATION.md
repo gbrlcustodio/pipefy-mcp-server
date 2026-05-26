@@ -62,13 +62,13 @@ These are new additions — all optional to adopt:
 ```sh
 uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-cli
 pipefy card get 12345
-pipefy skills list
 ```
 
-**`skills/` catalog** — Anthropic Skills-format playbooks for common Pipefy workflows, consumable by any LLM agent.
+**`skills/` catalog** — Anthropic Skills-format playbooks for common Pipefy workflows, consumable by any LLM agent. Install via [`skills.sh`](https://github.com/vercel-labs/skills):
 
 ```sh
-pipefy skills show pipes-and-cards | pbcopy   # paste into agent context
+npx skills add gbrlcustodio/pipefy-mcp-server                           # all skills
+npx skills add gbrlcustodio/pipefy-mcp-server --skill pipefy-pipes-and-cards
 ```
 
 ---

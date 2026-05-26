@@ -58,6 +58,12 @@ def _validate_sort_page_id_item(value: object) -> str:
     return cleaned
 
 
+def _reject_duplicate_sort_page_ids(page_ids: list[str]) -> None:
+    """Reject duplicate page identifiers before ``sortPages``."""
+    if len(set(page_ids)) != len(page_ids):
+        raise typer.BadParameter("Page UUID list must not contain duplicates.")
+
+
 def _parse_page_ids_for_sort(
     page_ids_csv: str | None,
     ids_json: str | None,
@@ -67,14 +73,18 @@ def _parse_page_ids_for_sort(
         parts = [p.strip() for p in page_ids_csv.split(",") if p.strip()]
         if not parts:
             raise typer.BadParameter("--page-ids must list at least one page UUID.")
-        return [_validate_sort_page_id_item(part) for part in parts]
+        ordered = [_validate_sort_page_id_item(part) for part in parts]
+        _reject_duplicate_sort_page_ids(ordered)
+        return ordered
     if ids_json is not None and ids_json.strip():
         parsed = parse_json_value(ids_json, "--ids-json")
         if not isinstance(parsed, list):
             raise typer.BadParameter("--ids-json must be a JSON array of page UUIDs.")
         if not parsed:
             raise typer.BadParameter("--ids-json must list at least one page UUID.")
-        return [_validate_sort_page_id_item(item) for item in parsed]
+        ordered = [_validate_sort_page_id_item(item) for item in parsed]
+        _reject_duplicate_sort_page_ids(ordered)
+        return ordered
     raise typer.BadParameter(
         "Provide --page-ids or --ids-json with at least one page UUID."
     )
@@ -252,7 +262,8 @@ def portal_page_create(
     index: int | None = typer.Option(
         None,
         "--index",
-        help="Optional sort index.",
+        min=0,
+        help="Optional sort index (non-negative).",
     ),
     json_out: bool = typer.Option(
         False,
@@ -289,7 +300,12 @@ def portal_page_update(
         "--description",
         help="New page description.",
     ),
-    index: int | None = typer.Option(None, "--index", help="New sort index."),
+    index: int | None = typer.Option(
+        None,
+        "--index",
+        min=0,
+        help="New sort index (non-negative).",
+    ),
     json_out: bool = typer.Option(
         False,
         "--json",

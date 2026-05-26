@@ -700,6 +700,24 @@ async def test_create_portal_page_permission_denied_returns_actionable_error(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_create_portal_page_rejects_negative_index(
+    portal_session, mock_portal_client, extract_payload
+):
+    async with portal_session as session:
+        result = await session.call_tool(
+            "create_portal_page",
+            {"portal_uuid": _PORTAL_UUID, "title": _PAGE_TITLE, "index": -1},
+        )
+
+    mock_portal_client.create_portal_page.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "index" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_create_portal_page_rejects_empty_portal_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -742,6 +760,28 @@ async def test_update_portal_page_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["title"] == "Renamed Page"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_update_portal_page_rejects_negative_index(
+    portal_session, mock_portal_client, extract_payload
+):
+    async with portal_session as session:
+        result = await session.call_tool(
+            "update_portal_page",
+            {
+                "portal_uuid": _PORTAL_UUID,
+                "page_id": _PAGE_UUID,
+                "index": -1,
+            },
+        )
+
+    mock_portal_client.update_portal_page.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "index" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio
@@ -893,6 +933,24 @@ async def test_sort_portal_pages_rejects_empty_page_ids(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_sort_portal_pages_rejects_duplicate_page_ids(
+    portal_session, mock_portal_client, extract_payload
+):
+    async with portal_session as session:
+        result = await session.call_tool(
+            "sort_portal_pages",
+            {"portal_uuid": _PORTAL_UUID, "page_ids": [_PAGE_UUID, _PAGE_UUID]},
+        )
+
+    mock_portal_client.sort_portal_pages.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "duplicate" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
 @pytest.mark.parametrize(
     "invalid_page_ids",
     [
@@ -991,6 +1049,28 @@ async def test_update_portal_page_layout_fails_when_success_false(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "failed to update layout" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_update_portal_page_layout_permission_denied_returns_actionable_error(
+    portal_session, mock_portal_client, extract_payload
+):
+    exc = TransportQueryError("forbidden")
+    exc.errors = [{"extensions": {"code": "PERMISSION_DENIED"}}]
+    mock_portal_client.update_portal_page_layout = AsyncMock(side_effect=exc)
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "update_portal_page_layout",
+            {"page_id": _PAGE_UUID, "layout": _PAGE_LAYOUT},
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload).lower()
+    assert "create_portal" in message or "manage_portals" in message
 
 
 @pytest.mark.anyio

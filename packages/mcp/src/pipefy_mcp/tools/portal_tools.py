@@ -17,6 +17,8 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
 from pipefy_mcp.tools.portal_tool_helpers import (
     map_portal_error_to_message,
     validate_portal_optional_string,
+    validate_portal_page_index,
+    validate_sort_page_ids_no_duplicates,
 )
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
@@ -275,6 +277,9 @@ class PortalTools:
             )
             if desc_err is not None:
                 return desc_err
+            index_err = validate_portal_page_index(index)
+            if index_err is not None:
+                return index_err
             await ctx.debug(
                 f"create_portal_page: portal_uuid={portal_uuid}, title={title}"
             )
@@ -338,6 +343,9 @@ class PortalTools:
                 return desc_err
             if cleaned_description is not None:
                 update_kwargs["description"] = cleaned_description
+            index_err = validate_portal_page_index(index)
+            if index_err is not None:
+                return index_err
             if index is not None:
                 update_kwargs["index"] = index
             try:
@@ -432,6 +440,9 @@ class PortalTools:
                 if id_err is not None:
                     return id_err
                 cleaned_page_ids.append(cleaned_id)
+            dup_err = validate_sort_page_ids_no_duplicates(cleaned_page_ids)
+            if dup_err is not None:
+                return dup_err
             await ctx.debug(
                 f"sort_portal_pages: portal_uuid={portal_uuid}, "
                 f"page_ids_count={len(cleaned_page_ids)}"
@@ -470,7 +481,7 @@ class PortalTools:
             try:
                 result = await client.update_portal_page_layout(page_id, layout)
             except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                return build_error_payload(map_portal_error_to_message(exc))
             if result.get("updatePageLayout", {}).get("success"):
                 return build_success_payload(result, include_parsed=True)
             return build_error_payload(

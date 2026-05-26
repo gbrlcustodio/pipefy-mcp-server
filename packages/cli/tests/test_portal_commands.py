@@ -470,6 +470,86 @@ def test_portal_page_sort_ids_json_json(runner, clean_pipefy_env, saved_cwd, oau
     mock_client.sort_portal_pages.assert_awaited_once_with(_PORTAL_UUID, page_ids)
 
 
+def test_portal_page_sort_page_ids_csv_rejects_duplicate_ids(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-sort-dup-csv")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "sort",
+                "--portal-uuid",
+                _PORTAL_UUID,
+                "--page-ids",
+                f"{_PAGE_UUID},{_PAGE_UUID}",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.sort_portal_pages.assert_not_called()
+
+
+def test_portal_page_sort_ids_json_rejects_duplicate_ids(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-sort-dup-json")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "sort",
+                "--portal-uuid",
+                _PORTAL_UUID,
+                "--ids-json",
+                json.dumps([_PAGE_UUID, _PAGE_UUID]),
+                "--json",
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.sort_portal_pages.assert_not_called()
+
+
+def test_portal_page_create_rejects_negative_index(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("portal-page-create-bad-index")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "portal",
+                "page",
+                "create",
+                "--portal-uuid",
+                _PORTAL_UUID,
+                "--title",
+                "Home",
+                "--index",
+                "-1",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.create_portal_page.assert_not_called()
+
+
 def test_portal_page_sort_page_ids_csv_rejects_invalid_items(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):

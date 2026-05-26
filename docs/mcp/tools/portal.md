@@ -58,6 +58,9 @@ If GraphQL returns `deleteInterface.success: false`, the tool responds with `{ s
 | `portal_uuid` on `get_portal`, `update_portal`, `delete_portal` | Non-empty string (whitespace-only rejected at the MCP boundary). |
 | `name`, `color`, `icon` on `update_portal` | When provided, must be non-empty after trimming (whitespace-only rejected). |
 | `update_portal` fields | At least one of `name`, `visibility`, `color`, `icon`, `display_pipefy_header` must be set. |
+| `page_id`, `page_ids[*]` on page tools | Non-empty string or positive integer (same `validate_tool_id` rules as `portal_uuid` on other portal tools — not a strict UUID regex). |
+| `page_ids` on `sort_portal_pages` | Non-empty list; no duplicate entries after cleaning. |
+| `index` on `create_portal_page`, `update_portal_page` | When provided, non-negative integer (`>= 0`). |
 
 ---
 

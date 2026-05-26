@@ -222,8 +222,6 @@ class TestRefreshableBearerAuthAsync:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_retry_also_401_does_not_loop(self) -> None:
-        # Async-generator yield semantics differ from sync; pin that the
-        # second ``yield request`` fires at most once even when it also 401s.
         seen: list[str] = []
         transport = httpx.MockTransport(_scripted_handler([401, 401], seen))
         auth = RefreshableBearerAuth(

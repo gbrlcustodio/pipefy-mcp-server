@@ -159,8 +159,6 @@ def test_tier_for_raises_on_foreign_auth_class():
 
 @pytest.mark.unit
 def test_tier_for_recognises_callable_bearer_auth_as_stored_session():
-    # Regression guard: ``CallableBearerAuth`` is still public — direct
-    # construction must keep resolving to the stored-session tier.
     auth = CallableBearerAuth(lambda: "TOKEN")
     assert tier_for(auth) == STORED_SESSION_TIER
 

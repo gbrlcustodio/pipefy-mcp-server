@@ -486,6 +486,11 @@ def _assert_interfaces_mutation_query(query_used: object, constant_name: str) ->
             "FIND_OR_CREATE_PORTAL_MUTATION": "findOrCreateInterfaceByTemplate",
             "UPDATE_INTERFACE_MUTATION": "updateInterface",
             "DELETE_INTERFACE_MUTATION": "deleteInterface",
+            "CREATE_PAGE_MUTATION": "createPage",
+            "UPDATE_PAGE_MUTATION": "updatePage",
+            "DELETE_PAGE_MUTATION": "deletePage",
+            "SORT_PAGES_MUTATION": "sortPages",
+            "UPDATE_PAGE_LAYOUT_MUTATION": "updatePageLayout",
         }
         assert operation_snippets[constant_name] in str(query_used)
 
@@ -793,3 +798,231 @@ async def test_delete_portal_permission_denied_surfaces_actionable_message(
 
     with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
         await service.delete_portal("portal-to-delete")
+
+
+_INTERFACE_UUID = "portal-uuid-1"
+_PAGE_ID = "page-uuid-1"
+_PAGE_ID_2 = "page-uuid-2"
+_PAGE_TITLE = "Portal Home"
+
+_CREATE_PAGE_GRAPHQL = {
+    "id": _PAGE_ID,
+    "title": _PAGE_TITLE,
+    "elements": [{"id": "el-1", "type": "text"}],
+}
+
+_CREATE_PAGE_RESPONSE = {
+    "createPage": {"page": _CREATE_PAGE_GRAPHQL},
+}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_page_calls_create_page_with_interface_uuid_and_title(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """create_portal_page uses createPage with interface_uuid and title."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_PAGE_RESPONSE,
+    )
+
+    result = await service.create_portal_page(_INTERFACE_UUID, _PAGE_TITLE)
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "CREATE_PAGE_MUTATION")
+    assert variables == {
+        "input": {"interface_uuid": _INTERFACE_UUID, "title": _PAGE_TITLE}
+    }
+    assert result["uuid"] == _PAGE_ID
+    assert result["title"] == _PAGE_TITLE
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_page_forwards_optional_fields(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Optional createPage fields are included when provided."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_PAGE_RESPONSE,
+    )
+
+    await service.create_portal_page(
+        _INTERFACE_UUID,
+        _PAGE_TITLE,
+        description="Landing copy",
+        index=1,
+    )
+
+    _, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables == {
+        "input": {
+            "interface_uuid": _INTERFACE_UUID,
+            "title": _PAGE_TITLE,
+            "description": "Landing copy",
+            "index": 1,
+        }
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_page_calls_update_page_with_required_ids(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """update_portal_page uses updatePage with interface_uuid and page_id."""
+    update_response = {
+        "updatePage": {
+            "page": {**_CREATE_PAGE_GRAPHQL, "title": "Renamed Page"},
+        }
+    }
+    service = _make_interfaces_service(mock_settings, mock_auth, update_response)
+
+    result = await service.update_portal_page(
+        _INTERFACE_UUID,
+        _PAGE_ID,
+        title="Renamed Page",
+    )
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "UPDATE_PAGE_MUTATION")
+    assert variables == {
+        "input": {
+            "interface_uuid": _INTERFACE_UUID,
+            "page_id": _PAGE_ID,
+            "title": "Renamed Page",
+        }
+    }
+    assert result["title"] == "Renamed Page"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_page_omits_unset_optional_fields(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Unset optional updatePage fields are not sent to GraphQL."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"updatePage": {"page": _CREATE_PAGE_GRAPHQL}},
+    )
+
+    await service.update_portal_page(
+        _INTERFACE_UUID,
+        _PAGE_ID,
+        description="Only description changed",
+    )
+
+    _, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables == {
+        "input": {
+            "interface_uuid": _INTERFACE_UUID,
+            "page_id": _PAGE_ID,
+            "description": "Only description changed",
+        }
+    }
+    assert "title" not in variables["input"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_portal_page_calls_delete_page_with_interface_and_page_ids(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """delete_portal_page uses deletePage with interface_uuid and page_id."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"deletePage": {"success": True}},
+    )
+
+    result = await service.delete_portal_page(_INTERFACE_UUID, _PAGE_ID)
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "DELETE_PAGE_MUTATION")
+    assert variables == {
+        "input": {"interface_uuid": _INTERFACE_UUID, "page_id": _PAGE_ID}
+    }
+    assert result == {"deletePage": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sort_portal_pages_calls_sort_pages_with_page_ids_list(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """sort_portal_pages uses sortPages with interface_uuid and page_ids."""
+    page_ids = [_PAGE_ID_2, _PAGE_ID]
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"sortPages": {"success": True}},
+    )
+
+    result = await service.sort_portal_pages(_INTERFACE_UUID, page_ids)
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "SORT_PAGES_MUTATION")
+    assert variables == {
+        "input": {"interface_uuid": _INTERFACE_UUID, "page_ids": page_ids}
+    }
+    assert result == {"sortPages": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_page_layout_does_not_send_interface_uuid(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """update_portal_page_layout uses updatePageLayout with page_id and layout only."""
+    layout = {"rows": [{"columns": [{"width": 12}]}]}
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"updatePageLayout": {"success": True}},
+    )
+
+    result = await service.update_portal_page_layout(_PAGE_ID, layout)
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "UPDATE_PAGE_LAYOUT_MUTATION")
+    assert variables == {"input": {"page_id": _PAGE_ID, "layout": layout}}
+    assert "interface_uuid" not in variables["input"]
+    assert result == {"updatePageLayout": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_page_permission_denied_surfaces_actionable_message(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """PERMISSION_DENIED on createPage maps to portal permission guidance."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_PAGE_RESPONSE,
+    )
+    service._interfaces_client.execute_query = AsyncMock(
+        side_effect=_PERMISSION_DENIED_ERROR
+    )
+
+    with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
+        await service.create_portal_page(_INTERFACE_UUID, _PAGE_TITLE)

@@ -96,10 +96,79 @@ DELETE_INTERFACE_MUTATION = gql(
     """
 )
 
+CREATE_PAGE_MUTATION = gql(
+    """
+    mutation CreatePortalPage($input: InterfacePageCreateMutationInput!) {
+        createPage(input: $input) {
+            page {
+                id
+                title
+                elements {
+                    id
+                    type
+                }
+            }
+        }
+    }
+    """
+)
+
+UPDATE_PAGE_MUTATION = gql(
+    """
+    mutation UpdatePortalPage($input: InterfacePageUpdateMutationInput!) {
+        updatePage(input: $input) {
+            page {
+                id
+                title
+                elements {
+                    id
+                    type
+                }
+            }
+        }
+    }
+    """
+)
+
+DELETE_PAGE_MUTATION = gql(
+    """
+    mutation DeletePortalPage($input: InterfacePageDeleteMutationInput!) {
+        deletePage(input: $input) {
+            success
+        }
+    }
+    """
+)
+
+SORT_PAGES_MUTATION = gql(
+    """
+    mutation SortPortalPages($input: InterfacePageSortMutationInput!) {
+        sortPages(input: $input) {
+            success
+        }
+    }
+    """
+)
+
+UPDATE_PAGE_LAYOUT_MUTATION = gql(
+    """
+    mutation UpdatePortalPageLayout($input: InterfacePageLayoutUpdateMutationInput!) {
+        updatePageLayout(input: $input) {
+            success
+        }
+    }
+    """
+)
+
 __all__ = [
+    "CREATE_PAGE_MUTATION",
     "DELETE_INTERFACE_MUTATION",
+    "DELETE_PAGE_MUTATION",
     "FIND_OR_CREATE_PORTAL_MUTATION",
     "GET_PORTAL_QUERY",
     "LIST_PORTALS_QUERY",
+    "SORT_PAGES_MUTATION",
     "UPDATE_INTERFACE_MUTATION",
+    "UPDATE_PAGE_LAYOUT_MUTATION",
+    "UPDATE_PAGE_MUTATION",
 ]

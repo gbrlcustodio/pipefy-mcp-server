@@ -1,6 +1,6 @@
 # Portal
 
-Read and manage Pipefy portals (Interfaces schema): list org portals, fetch detail, and create/update/delete portal metadata. **5 tools.**
+Read and manage Pipefy portals (Interfaces schema): list org portals, fetch detail, create/update/delete portal metadata, and manage pages (create, update, delete, sort, layout). **10 tools.**
 
 Portal tools call the **Interfaces** GraphQL endpoint (`PIPEFY_INTERFACES_GRAPHQL_URL`, default `https://app.pipefy.com/graphql/interfaces`), not the public `/graphql` schema used by most pipe/card tools.
 
@@ -32,6 +32,11 @@ Each organization has **at most one main portal** (`subType: portal`). Additiona
 | `create_portal` | No | Create or fetch the org's main portal (**idempotent**). Uses `findOrCreateInterfaceByTemplate`; a second call returns the same portal UUID. Requires `create_portal` or `manage_portals` permission. |
 | `update_portal` | No | Update portal metadata: pass only fields to change (`name`, `visibility`, `color`, `icon`, `display_pipefy_header`). `visibility` must be `internal`, `private`, or `public`. |
 | `delete_portal` | No | Delete a portal interface (**irreversible**). `destructiveHint=True`. Two-step MCP flow: call with default `confirm=false` for a preview (`requires_confirmation: true`), then `confirm=true` after explicit approval. CLI uses `--yes` or interactive prompt. |
+| `create_portal_page` | No | Create a page on a portal (`interface_uuid` + `title`). Omitting `elements` on the API may bootstrap a templated page with default widgets. |
+| `update_portal_page` | No | Update page metadata (`title`, `description`, `index`); pass only fields to change. |
+| `delete_portal_page` | No | Delete a page (**irreversible**). `destructiveHint=True`; CLI requires `--yes`. |
+| `sort_portal_pages` | No | Reorder pages via `page_ids` list. |
+| `update_portal_page_layout` | No | Replace the page grid layout JSON (`page_id` + `layout` only — no portal UUID). |
 
 ---
 
@@ -53,6 +58,9 @@ If GraphQL returns `deleteInterface.success: false`, the tool responds with `{ s
 | `portal_uuid` on `get_portal`, `update_portal`, `delete_portal` | Non-empty string (whitespace-only rejected at the MCP boundary). |
 | `name`, `color`, `icon` on `update_portal` | When provided, must be non-empty after trimming (whitespace-only rejected). |
 | `update_portal` fields | At least one of `name`, `visibility`, `color`, `icon`, `display_pipefy_header` must be set. |
+| `page_id`, `page_ids[*]` on page tools | Non-empty string or positive integer (same `validate_tool_id` rules as `portal_uuid` on other portal tools — not a strict UUID regex). |
+| `page_ids` on `sort_portal_pages` | Non-empty list; no duplicate entries after cleaning. |
+| `index` on `create_portal_page`, `update_portal_page` | When provided, non-negative integer (`>= 0`). |
 
 ---
 
@@ -83,6 +91,11 @@ Additional element types may appear; treat unknown keys as opaque JSON.
 | `create_portal` | `pipefy portal create --organization-uuid <id>` |
 | `update_portal` | `pipefy portal update <uuid> [--name …] [--visibility …]` |
 | `delete_portal` | `pipefy portal delete <uuid> --yes` |
+| `create_portal_page` | `pipefy portal page create --portal-uuid <uuid> --title <title>` |
+| `update_portal_page` | `pipefy portal page update <portal-uuid> <page-uuid> [--title …]` |
+| `delete_portal_page` | `pipefy portal page delete <portal-uuid> <page-uuid> --yes` |
+| `sort_portal_pages` | `pipefy portal page sort --portal-uuid <uuid> --page-ids id1,id2` |
+| `update_portal_page_layout` | `pipefy portal page layout update --page-id <uuid> --layout '{…}'` |
 
 ---
 

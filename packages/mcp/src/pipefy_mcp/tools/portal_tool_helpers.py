@@ -73,7 +73,49 @@ def validate_portal_optional_string(
     return value.strip(), None
 
 
+def validate_portal_page_index(
+    index: int | None,
+) -> dict[str, object] | None:
+    """Reject negative or non-integer sort index at the MCP tool boundary.
+
+    Args:
+        index: Optional page sort index from the tool parameter.
+
+    Returns:
+        ``None`` when valid or omitted; otherwise an ``INVALID_ARGUMENTS`` envelope.
+    """
+    if index is None:
+        return None
+    if isinstance(index, bool) or not isinstance(index, int) or index < 0:
+        return tool_error(
+            "Invalid 'index': must be a non-negative integer.",
+            code="INVALID_ARGUMENTS",
+        )
+    return None
+
+
+def validate_sort_page_ids_no_duplicates(
+    page_ids: list[str],
+) -> dict[str, object] | None:
+    """Reject duplicate entries in an ordered ``page_ids`` list.
+
+    Args:
+        page_ids: Cleaned page identifiers after per-item validation.
+
+    Returns:
+        ``None`` when all entries are unique; otherwise an ``INVALID_ARGUMENTS`` envelope.
+    """
+    if len(set(page_ids)) != len(page_ids):
+        return tool_error(
+            "Invalid 'page_ids': must not contain duplicate page UUIDs.",
+            code="INVALID_ARGUMENTS",
+        )
+    return None
+
+
 __all__ = [
     "map_portal_error_to_message",
     "validate_portal_optional_string",
+    "validate_portal_page_index",
+    "validate_sort_page_ids_no_duplicates",
 ]

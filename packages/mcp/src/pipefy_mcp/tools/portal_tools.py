@@ -17,6 +17,8 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
 from pipefy_mcp.tools.portal_tool_helpers import (
     map_portal_error_to_message,
     validate_portal_optional_string,
+    validate_portal_page_index,
+    validate_sort_page_ids_no_duplicates,
 )
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
@@ -25,7 +27,7 @@ PortalVisibility = Literal["internal", "private", "public"]
 
 
 class PortalTools:
-    """Registers MCP tools for portal read and metadata CRUD operations."""
+    """Registers MCP tools for portal read, metadata CRUD, and page operations."""
 
     @staticmethod
     def register(mcp: FastMCP, client: PipefyClient) -> None:
@@ -236,5 +238,253 @@ class PortalTools:
                 return build_success_payload(result, include_parsed=True)
             return build_error_payload(
                 f"Failed to delete portal '{portal_uuid}'. "
+                "Please try again or contact support."
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def create_portal_page(
+            ctx: Context[ServerSession, None],
+            portal_uuid: str,
+            title: str,
+            description: str | None = None,
+            index: int | None = None,
+        ) -> dict[str, Any]:
+            """Create a portal page on the Interfaces schema.
+
+            On an empty main portal skeleton, ``createPage`` without an ``elements``
+            array often auto-provisions a templated page with multiple elements — the
+            supported way to bootstrap a landing page when template create was skipped.
+
+            Args:
+                portal_uuid: Parent portal interface UUID.
+                title: Page title.
+                description: Optional page description.
+                index: Optional sort index.
+            """
+            portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
+            if err is not None:
+                return err
+            if not isinstance(title, str) or not title.strip():
+                return tool_error(
+                    "Invalid 'title': must be a non-empty string.",
+                    code="INVALID_ARGUMENTS",
+                )
+            title = title.strip()
+            description, desc_err = validate_portal_optional_string(
+                description, "description"
+            )
+            if desc_err is not None:
+                return desc_err
+            index_err = validate_portal_page_index(index)
+            if index_err is not None:
+                return index_err
+            await ctx.debug(
+                f"create_portal_page: portal_uuid={portal_uuid}, title={title}"
+            )
+            try:
+                page = await client.create_portal_page(
+                    portal_uuid,
+                    title,
+                    description=description,
+                    index=index,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(map_portal_error_to_message(exc))
+            return build_success_payload(page, include_parsed=True)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def update_portal_page(
+            ctx: Context[ServerSession, None],
+            portal_uuid: str,
+            page_id: str,
+            title: str | None = None,
+            description: str | None = None,
+            index: int | None = None,
+        ) -> dict[str, Any]:
+            """Update portal page metadata (title, description, sort index).
+
+            Pass only fields you want to change.
+
+            Args:
+                portal_uuid: Parent portal interface UUID.
+                page_id: Page UUID.
+                title: Optional new title.
+                description: Optional new description.
+                index: Optional sort index.
+            """
+            portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
+            if err is not None:
+                return err
+            page_id, err = validate_tool_id(page_id, "page_id")
+            if err is not None:
+                return err
+            await ctx.debug(
+                f"update_portal_page: portal_uuid={portal_uuid}, page_id={page_id}"
+            )
+            if all(x is None for x in (title, description, index)):
+                return tool_error(
+                    "Provide at least one of: title, description, index.",
+                    code="INVALID_ARGUMENTS",
+                )
+            update_kwargs: dict[str, Any] = {}
+            cleaned_title, title_err = validate_portal_optional_string(title, "title")
+            if title_err is not None:
+                return title_err
+            if cleaned_title is not None:
+                update_kwargs["title"] = cleaned_title
+            cleaned_description, desc_err = validate_portal_optional_string(
+                description, "description"
+            )
+            if desc_err is not None:
+                return desc_err
+            if cleaned_description is not None:
+                update_kwargs["description"] = cleaned_description
+            index_err = validate_portal_page_index(index)
+            if index_err is not None:
+                return index_err
+            if index is not None:
+                update_kwargs["index"] = index
+            try:
+                page = await client.update_portal_page(
+                    portal_uuid,
+                    page_id,
+                    **update_kwargs,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(map_portal_error_to_message(exc))
+            return build_success_payload(page, include_parsed=True)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=True,
+            ),
+        )
+        async def delete_portal_page(
+            ctx: Context[ServerSession, None],
+            portal_uuid: str,
+            page_id: str,
+            confirm: bool = False,
+        ) -> dict[str, Any]:
+            """Delete a portal page (irreversible).
+
+            Two-step operation: preview with ``confirm=False`` (default), then execute with
+            ``confirm=True`` after explicit human approval.
+
+            Args:
+                portal_uuid: Parent portal interface UUID.
+                page_id: Page UUID to delete.
+                confirm: Set to True to execute the deletion (step 2).
+            """
+            portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
+            if err is not None:
+                return err
+            page_id, err = validate_tool_id(page_id, "page_id")
+            if err is not None:
+                return err
+            await ctx.debug(
+                f"delete_portal_page: portal_uuid={portal_uuid}, page_id={page_id}"
+            )
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=(
+                    f"portal page (UUID: {page_id}) in portal (UUID: {portal_uuid})"
+                ),
+            )
+            if guard is not None:
+                return guard
+
+            try:
+                result = await client.delete_portal_page(portal_uuid, page_id)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(map_portal_error_to_message(exc))
+
+            delete_data = result.get("deletePage", {})
+            if delete_data.get("success"):
+                return build_success_payload(result, include_parsed=True)
+            return build_error_payload(
+                f"Failed to delete portal page '{page_id}'. "
+                "Please try again or contact support."
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def sort_portal_pages(
+            ctx: Context[ServerSession, None],
+            portal_uuid: str,
+            page_ids: list[str],
+        ) -> dict[str, Any]:
+            """Reorder portal pages.
+
+            Args:
+                portal_uuid: Parent portal interface UUID.
+                page_ids: Ordered list of page UUIDs (new sort order).
+            """
+            portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
+            if err is not None:
+                return err
+            if not page_ids:
+                return tool_error(
+                    "Invalid 'page_ids': must be a non-empty list of page UUIDs.",
+                    code="INVALID_ARGUMENTS",
+                )
+            cleaned_page_ids: list[str] = []
+            for page_id in page_ids:
+                cleaned_id, id_err = validate_tool_id(page_id, "page_ids")
+                if id_err is not None:
+                    return id_err
+                cleaned_page_ids.append(cleaned_id)
+            dup_err = validate_sort_page_ids_no_duplicates(cleaned_page_ids)
+            if dup_err is not None:
+                return dup_err
+            await ctx.debug(
+                f"sort_portal_pages: portal_uuid={portal_uuid}, "
+                f"page_ids_count={len(cleaned_page_ids)}"
+            )
+            try:
+                result = await client.sort_portal_pages(portal_uuid, cleaned_page_ids)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(map_portal_error_to_message(exc))
+            if result.get("sortPages", {}).get("success"):
+                return build_success_payload(result, include_parsed=True)
+            return build_error_payload(
+                "Failed to reorder portal pages. Please try again or contact support."
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def update_portal_page_layout(
+            ctx: Context[ServerSession, None],
+            page_id: str,
+            layout: dict[str, Any],
+        ) -> dict[str, Any]:
+            """Update a portal page grid layout.
+
+            Uses ``updatePageLayout`` on the Interfaces schema. Does not require the
+            parent portal UUID — only ``page_id`` and ``layout``.
+
+            Args:
+                page_id: Page UUID.
+                layout: Layout JSON (full layout object for the page).
+            """
+            page_id, err = validate_tool_id(page_id, "page_id")
+            if err is not None:
+                return err
+            await ctx.debug(f"update_portal_page_layout: page_id={page_id}")
+            try:
+                result = await client.update_portal_page_layout(page_id, layout)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(map_portal_error_to_message(exc))
+            if result.get("updatePageLayout", {}).get("success"):
+                return build_success_payload(result, include_parsed=True)
+            return build_error_payload(
+                f"Failed to update layout for portal page '{page_id}'. "
                 "Please try again or contact support."
             )

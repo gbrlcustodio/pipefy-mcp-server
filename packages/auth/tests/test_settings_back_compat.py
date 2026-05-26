@@ -94,3 +94,33 @@ def test_no_deprecation_warning_when_only_new_env_keys_set(
     _warn_once_for_legacy_oauth_env_keys()
     err = capsys.readouterr().err
     assert "deprecated" not in err
+
+
+@pytest.mark.unit
+def test_auth_url_defaults_to_pipefy_prod_idp(monkeypatch: pytest.MonkeyPatch):
+    """``AuthSettings()`` with no ``PIPEFY_AUTH_URL`` set defaults to the prod IdP."""
+    from pipefy_auth.identity import DEFAULT_AUTH_URL
+
+    monkeypatch.delenv("PIPEFY_AUTH_URL", raising=False)
+    settings = AuthSettings()
+    assert settings.auth_url == DEFAULT_AUTH_URL
+    assert DEFAULT_AUTH_URL == "https://signin.pipefy.com/realms/pipefy"
+    oidc = settings.to_oidc_client()
+    assert oidc is not None
+    assert oidc.issuer_url == DEFAULT_AUTH_URL
+
+
+@pytest.mark.unit
+def test_auth_url_env_override_wins_over_default(monkeypatch: pytest.MonkeyPatch):
+    """Setting ``PIPEFY_AUTH_URL`` in env still overrides the default."""
+    monkeypatch.setenv("PIPEFY_AUTH_URL", "https://other.example.com/realms/x")
+    settings = AuthSettings()
+    assert settings.auth_url == "https://other.example.com/realms/x"
+
+
+@pytest.mark.unit
+def test_empty_auth_url_disables_stored_session_tier(monkeypatch: pytest.MonkeyPatch):
+    """Setting ``PIPEFY_AUTH_URL`` to an empty string opts out of the default."""
+    monkeypatch.setenv("PIPEFY_AUTH_URL", "")
+    settings = AuthSettings()
+    assert settings.to_oidc_client() is None

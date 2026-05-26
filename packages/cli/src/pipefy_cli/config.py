@@ -128,7 +128,11 @@ def _fill_if_missing_str(
     key: str,
     patch: dict[str, Any],
 ) -> None:
-    if _is_missing(getattr(model, field)) and blob.get(key):
+    if not blob.get(key):
+        return
+    # ``model_fields_set`` check: fields with a non-None default
+    # (e.g. ``AuthSettings.auth_url``) would otherwise shadow TOML overrides.
+    if _is_missing(getattr(model, field)) or field not in model.model_fields_set:
         patch[field] = str(blob[key]).strip()
 
 

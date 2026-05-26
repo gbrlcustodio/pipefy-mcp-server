@@ -8,6 +8,11 @@ from dataclasses import dataclass
 # is fixed across consumers (CLI, MCP, …) and not user-configurable.
 DEFAULT_AUTH_CLIENT_ID = "pipefy-cli"
 
+# Canonical Pipefy production OIDC issuer URL. Used as the default when
+# ``PIPEFY_AUTH_URL`` is not set in the environment — override by setting
+# the env var (or passing ``auth_url`` explicitly to ``AuthSettings``).
+DEFAULT_AUTH_URL = "https://signin.pipefy.com/realms/pipefy"
+
 
 @dataclass(frozen=True)
 class OidcClient:
@@ -23,5 +28,6 @@ class OidcClient:
 
 __all__ = [
     "DEFAULT_AUTH_CLIENT_ID",
+    "DEFAULT_AUTH_URL",
     "OidcClient",
 ]

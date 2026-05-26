@@ -550,13 +550,15 @@ def cli_runner():
 
 
 class TestAuthLoginCommand:
-    def test_missing_auth_url_exits_2(
+    def test_empty_auth_url_exits_2(
         self,
         cli_runner,
         monkeypatch: pytest.MonkeyPatch,
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
+        """Explicit empty ``PIPEFY_AUTH_URL`` opts out of the stored-session tier."""
+        monkeypatch.setenv("PIPEFY_AUTH_URL", "")
         result = cli_runner.invoke(cli_app, ["auth", "login"])
         assert result.exit_code == 2
         assert "PIPEFY_AUTH_URL is required" in result.stderr

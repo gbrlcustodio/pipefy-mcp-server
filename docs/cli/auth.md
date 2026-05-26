@@ -91,7 +91,7 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | Tier 3 | Service-account client id. |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | Tier 3 | Service-account client secret. |
 | `PIPEFY_INTERNAL_API_URL` | Tier 3 | Internal GraphQL endpoint for AI automations / some relation flows. Required for those tools only. |
-| `PIPEFY_AUTH_URL` | Tier 4 | **OIDC issuer URL** for interactive login. The CLI appends `/.well-known/openid-configuration` to discover the authorization and token endpoints. Required for `pipefy auth login`. |
+| `PIPEFY_AUTH_URL` | Tier 4 | **OIDC issuer URL** for interactive login. The CLI appends `/.well-known/openid-configuration` to discover the authorization and token endpoints. **Defaults to `https://signin.pipefy.com/realms/pipefy` (Pipefy production IdP)**; set to an empty string (`PIPEFY_AUTH_URL=`) to disable the stored-session tier, or override to point at a non-prod IdP. |
 | `PIPEFY_AUTH_CLIENT_ID` | Tier 4 | Public client id registered for the CLI. Defaults to `pipefy-cli`. |
 
 `PIPEFY_SERVICE_ACCOUNT_URL` and `PIPEFY_AUTH_URL` are **not** interchangeable: the first is a token URL for client-credentials, the second is an OIDC issuer URL for the user-login flow.
@@ -171,7 +171,7 @@ When no session is stored, `pipefy auth logout` prints `Not signed in. Nothing t
 
 | Case | Exit |
 |------|------|
-| `PIPEFY_AUTH_URL` is unset | **2** — same gate as `pipefy auth login`. |
+| `PIPEFY_AUTH_URL` explicitly disabled (`PIPEFY_AUTH_URL=`) | **2** — same gate as `pipefy auth login`. With the var unset, the prod issuer default applies and this case does not trigger. |
 | No session stored (no-op) | **0** |
 | Session cleared (revoke succeeded, failed, or unsupported) | **0** |
 
@@ -208,7 +208,7 @@ The keychain has a session but its refresh token won't exchange. Most common cau
 
 ### `PIPEFY_AUTH_URL is required for pipefy auth login`
 
-You haven't set the issuer URL. Use the value from [Pipefy issuer URLs](#pipefy-issuer-urls). The same env var also gates whether tier 4 can fire from any other command — without it, the CLI never consults the keychain.
+The stored-session tier is explicitly disabled. With `PIPEFY_AUTH_URL` unset the CLI falls back to the Pipefy production issuer default, so this message means the var is set to an empty string (`PIPEFY_AUTH_URL=`) — usually to opt out of the stored-session tier on a host that can't reach prod. Unset the variable to restore the default, or set it to a valid issuer URL (see [Pipefy issuer URLs](#pipefy-issuer-urls)) if you need a non-prod IdP.
 
 ### `Login succeeded but the session could not be stored in your OS keychain (<backend>)`
 

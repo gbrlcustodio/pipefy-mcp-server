@@ -181,6 +181,10 @@ class TestServicesContainer:
             mock_ai_automation_service_class.return_value
         )
 
+    # Patch ``load_session``: ``auth_url``'s prod default makes the stored-session
+    # tier always reachable, so a host with a real keychain entry would otherwise
+    # satisfy resolution and break the assertion.
+    @patch("pipefy_auth.resolver.load_session", lambda **_: None)
     @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.PipefyClient")

@@ -12,22 +12,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **CLI**: `pipefy auth status [--json|-j]` — reports auth source, identity, session expiry, and exit codes.
 - **CLI**: `pipefy auth logout` — revokes the refresh token at the IdP and clears the stored session.
-- **Auth**: `AuthSettings.auth_url` now defaults to `https://signin.pipefy.com/realms/pipefy` (Pipefy production IdP) when `PIPEFY_AUTH_URL` is unset — removes the previous `PIPEFY_AUTH_URL is required` exit-2 friction on `pipefy auth login` / `pipefy auth logout` and wires the MCP stored-session tier automatically after `pipefy auth login`. Override by setting `PIPEFY_AUTH_URL=<url>` to a non-prod IdP; explicit-empty `PIPEFY_AUTH_URL=` disables the stored-session tier on hosts that need it. User-level `~/.config/pipefy/config.toml` `auth_url` keys still override the default via the existing TOML fallback. Closes #233.
+- **Auth**: `AuthSettings.auth_url` now defaults to the Pipefy production IdP when `PIPEFY_AUTH_URL` is unset — removes the previous `PIPEFY_AUTH_URL is required` exit-2 friction on `pipefy auth login` / `pipefy auth logout` and wires the MCP stored-session tier automatically after `pipefy auth login`. Override by setting `PIPEFY_AUTH_URL=<url>` to a non-prod IdP. Closes #233.
+- **SDK / Auth**: introduced `PIPEFY_BASE_URL` (default `https://app.pipefy.com`) that drives the four API endpoints (`graphql_url`, `internal_api_url`, `interfaces_graphql_url`, `service_account_url`) as pydantic `@computed_field` properties. Operators on non-prod environments set `PIPEFY_BASE_URL=<host>` once and all four endpoints follow. The OIDC issuer (`PIPEFY_AUTH_URL`, default `https://signin.pipefy.com/realms/pipefy`) remains a separate full-URL field because non-prod realm names don't follow a derivable convention. Closes #238.
 - **MCP**: stored-session tier wired into `ServicesContainer`; setting `PIPEFY_AUTH_URL` after `pipefy auth login` now lets the MCP server reuse the keychain-backed session, with the refresh pre-warmed at startup so a stale or revoked session surfaces before the first tool call.
 
 ### Changed
 
-- **SDK / MCP / CLI**: renamed the three service-account credential env vars for clarity and to remove the one-letter footgun against `PIPEFY_AUTH_URL` (interactive user-login issuer): `PIPEFY_OAUTH_URL` → `PIPEFY_SERVICE_ACCOUNT_URL`, `PIPEFY_OAUTH_CLIENT` → `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`, `PIPEFY_OAUTH_SECRET` → `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`. Closes #127.
+- **SDK / MCP / CLI**: renamed the two service-account credential env vars for clarity and to remove the one-letter footgun against `PIPEFY_AUTH_URL` (interactive user-login issuer): `PIPEFY_OAUTH_CLIENT` → `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`, `PIPEFY_OAUTH_SECRET` → `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`. `PIPEFY_OAUTH_URL` is dropped without a renamed counterpart — the OAuth token endpoint now derives from `PIPEFY_BASE_URL` (see the **Removed** section). Closes #127.
+- **Auth / SDK**: every `PIPEFY_*` env var is validated against a semantically meaningful pattern at settings construction. URL env vars (`PIPEFY_BASE_URL`, `PIPEFY_AUTH_URL`) require `https?://` plus non-whitespace; credential fields (`PIPEFY_TOKEN`, `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`, `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`, `PIPEFY_AUTH_CLIENT_ID`) reject leading / trailing whitespace; `PIPEFY_ORG_ID` must be an ASCII numeric string. There is no longer an empty-string opt-out for any tier — unset the variable to fall back to the default (kill-switch tracked separately in #237).
+- **SDK / MCP / CLI**: renamed `--graphql-url` CLI flag to `--base-url` to match the new env-var shape.
 
 ### Deprecated
 
-- **SDK**: legacy `PIPEFY_OAUTH_*` env vars and `oauth_*` keys in `~/.config/pipefy/config.toml` still resolve to the new `service_account_*` fields via an alias shim, with a one-shot stderr deprecation warning per legacy key. The aliases will be removed in a later `0.2.0-beta.x` release (carrying an explicit breaking-change callout). See [`docs/MIGRATION.md`](docs/MIGRATION.md#service-account-env-var-rename).
+- **SDK**: legacy `PIPEFY_OAUTH_*` env vars still resolve to the new `service_account_*` fields via an alias shim, with a one-shot stderr deprecation warning per legacy key. The aliases will be removed in a later `0.2.0-beta.x` release (carrying an explicit breaking-change callout). See [`docs/MIGRATION.md`](docs/MIGRATION.md#service-account-env-var-rename).
 
 ### Fixed
 
 - **CLI**: concurrent `pipefy` invocations near token expiry no longer surface `invalid_grant` errors; the refresh-token grant is now serialized across processes via a filesystem lock at `~/.config/pipefy/refresh.lock` (`%APPDATA%/pipefy/refresh.lock` on Windows). Closes #133.
 
 ### Removed
+
+- **HARD BREAK** — per-URL env vars dropped in favor of `PIPEFY_BASE_URL` + `PIPEFY_AUTH_URL`. The following env vars are no longer recognized; `PipefySettings` / `AuthSettings` are configured with `extra="ignore"`, so settings construction silently drops them with no exception or warning — stale `.env` keys look configured but the prod defaults still apply. Same wording as `docs/MIGRATION.md`. Audit `.env`, MCP client JSON, and CI secrets before upgrading:
+  - `PIPEFY_GRAPHQL_URL` — set `PIPEFY_BASE_URL` to your API host (graphql_url derives as `<base>/graphql`).
+  - `PIPEFY_INTERNAL_API_URL` — derives as `<base>/internal_api`.
+  - `PIPEFY_INTERFACES_GRAPHQL_URL` — derives as `<base>/graphql/interfaces`.
+  - `PIPEFY_SERVICE_ACCOUNT_URL` — derives as `<base>/oauth/token`.
+  - `PIPEFY_OAUTH_URL` (legacy alias for `PIPEFY_SERVICE_ACCOUNT_URL`) — no replacement; same derivation path.
+
+  Migration: replace the five per-URL env vars with a single `PIPEFY_BASE_URL` (default `https://app.pipefy.com`). If you need a non-prod OIDC issuer, also set `PIPEFY_AUTH_URL` to the full issuer URL.
+- **HARD BREAK** — user TOML config file `~/.config/pipefy/config.toml` is no longer read by either the CLI or the MCP server. Operators who relied on it must move credentials and `base_url` into shell environment variables, a `.env` file at the working directory, or their MCP client's `env` block. Two config surfaces (env + `.env`) instead of three; persistent global config is shell-rc territory.
+- `PIPEFY_TENANT` / `PIPEFY_AUTH_REALM` env vars (never shipped in a release; existed only on intermediate commits of this branch).
+- **Auth**: `pipefy_auth.DEFAULT_AUTH_URL` constant (and its re-export from the package root). Callers should consult the resolved `AuthSettings.auth_url` instead.
 
 ## [0.2.0-beta.1] - 2026-05-18
 

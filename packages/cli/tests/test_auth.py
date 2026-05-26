@@ -26,10 +26,7 @@ from pipefy_cli.main import app
 
 
 def _minimal_settings() -> PipefySettings:
-    return PipefySettings(
-        graphql_url="https://unit.example.com/graphql",
-        internal_api_url="https://unit.example.com/internal_api",
-    )
+    return PipefySettings(base_url="https://unit.example.com")
 
 
 def _service_account() -> ServiceAccount:
@@ -126,17 +123,28 @@ def test_cache_returns_same_instance_for_identical_service_account_settings(
         assert mock_pc.call_count == 1
 
 
-def test_missing_graphql_exits_2_cli(clean_pipefy_env, saved_cwd, runner):
+def test_empty_base_url_exits_2_cli(clean_pipefy_env, saved_cwd, monkeypatch, runner):
+    """``PIPEFY_BASE_URL=""`` is rejected at settings load and surfaces as exit 2."""
+    monkeypatch.setenv("PIPEFY_BASE_URL", "")
     result = runner.invoke(app, ["card", "get", "123"])
     assert result.exit_code == 2
     combined = (result.stderr or "") + (result.stdout or "")
-    assert "docs/setup.md" in combined
+    # Pydantic error references the field name ``base_url`` (mapped from
+    # ``PIPEFY_BASE_URL`` via ``env_prefix``).
+    assert "base_url" in combined
+    assert "should match pattern" in combined
 
 
-def test_missing_oauth_exits_2_cli(clean_pipefy_env, saved_cwd, monkeypatch, runner):
+def test_missing_oauth_exits_2_cli(
+    clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
+):
+    # ``fake_keyring`` isolates the stored-session tier from the host's real
+    # OS keychain. Without it, the prod-default ``auth_url`` would let a
+    # developer's actual stored session bypass the missing-oauth exit and
+    # fail this test with a stale-refresh error.
     monkeypatch.setenv(
-        "PIPEFY_GRAPHQL_URL",
-        "https://oauth-missing.example.com/graphql",
+        "PIPEFY_BASE_URL",
+        "https://oauth-missing.example.com",
     )
     result = runner.invoke(app, ["card", "get", "123"])
     assert result.exit_code == 2
@@ -148,8 +156,8 @@ def test_cli_uses_pipefy_token_env_when_no_flag(
     clean_pipefy_env, saved_cwd, monkeypatch, runner
 ):
     monkeypatch.setenv(
-        "PIPEFY_GRAPHQL_URL",
-        "https://token-env.example.com/graphql",
+        "PIPEFY_BASE_URL",
+        "https://token-env.example.com",
     )
     monkeypatch.setenv("PIPEFY_TOKEN", "secret-from-env")
     mock_client = MagicMock()
@@ -208,7 +216,7 @@ def _fresh_stored_session(*, access_token: str = "SESSION_ACCESS") -> StoredSess
 
 def _public_only_settings() -> PipefySettings:
     """``PIPEFY_SERVICE_ACCOUNT_*`` triple absent → service-account tier unavailable, stored session wins."""
-    return PipefySettings(graphql_url="https://unit.example.com/graphql")
+    return PipefySettings(base_url="https://unit.example.com")
 
 
 def _public_only_auth(

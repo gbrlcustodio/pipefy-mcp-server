@@ -13,19 +13,17 @@ from pipefy_mcp.settings import Settings
 
 _AUTH_ENV_KEYS = (
     "PIPEFY_TOKEN",
-    "PIPEFY_SERVICE_ACCOUNT_URL",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-    "PIPEFY_OAUTH_URL",
     "PIPEFY_OAUTH_CLIENT",
     "PIPEFY_OAUTH_SECRET",
     "PIPEFY_AUTH_URL",
+    "PIPEFY_BASE_URL",
 )
 
 
 def _service_account_auth_settings() -> AuthSettings:
     return AuthSettings(
-        service_account_url="https://auth.pipefy.com/oauth/token",
         service_account_client_id="client_id",
         service_account_client_secret="client_secret",
     )
@@ -105,7 +103,7 @@ class TestServicesContainer:
         mock_pipefy_client_class.return_value = mock_client
 
         settings = Settings(
-            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
             auth=_service_account_auth_settings(),
         )
 
@@ -132,7 +130,7 @@ class TestServicesContainer:
         mock_pipefy_client_class.return_value = mock_client
 
         settings = Settings(
-            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
             auth=_service_account_auth_settings(),
         )
 
@@ -164,12 +162,9 @@ class TestServicesContainer:
         mock_client.client = Mock()
         mock_pipefy_client_class.return_value = mock_client
         settings = Settings(
-            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
             auth=AuthSettings(
                 static_token="env-bearer",
-                service_account_url="https://auth.pipefy.com/oauth/token",
-                service_account_client_id="client_id",
-                service_account_client_secret="client_secret",
             ),
         )
         await ServicesContainer().initialize_services(settings)
@@ -197,7 +192,7 @@ class TestServicesContainer:
     ):
         """No PIPEFY_TOKEN and no service-account triple → runtime error."""
         settings = Settings(
-            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
             auth=AuthSettings(),
         )
         with pytest.raises(
@@ -216,7 +211,7 @@ class TestServicesContainer:
         """When the resolved tier is the stored session, the refresh is pre-warmed."""
         mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
         settings = Settings(
-            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
             auth=_stored_session_auth_settings(),
         )
         with patch(
@@ -242,7 +237,7 @@ class TestServicesContainer:
         """A configured ``PIPEFY_AUTH_URL`` is ignored at warm-up when a higher tier wins."""
         mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
         settings = Settings(
-            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
             auth=AuthSettings(
                 static_token="env-bearer",
                 auth_url="https://signin.pipefy.com/realms/pipefy",
@@ -268,7 +263,7 @@ class TestServicesContainer:
         """A failed warm-up logs the ``pipefy auth login`` hint and surfaces ``RefreshError`` *before* ``PipefyClient`` is constructed."""
         mock_ensure_fresh_session.side_effect = RefreshError("invalid_grant")
         settings = Settings(
-            pipefy=PipefySettings(graphql_url="https://api.pipefy.com/graphql"),
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
             auth=_stored_session_auth_settings(),
         )
         with patch(

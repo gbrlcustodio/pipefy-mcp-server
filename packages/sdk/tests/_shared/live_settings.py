@@ -11,8 +11,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pipefy_sdk.settings import PipefySettings
 
 _MISSING_CREDS_MESSAGE = (
-    "Pipefy credentials not configured: PIPEFY_GRAPHQL_URL required; "
-    + missing_auth_message()
+    "Pipefy credentials not configured: set PIPEFY_BASE_URL to your "
+    "Pipefy API host (or leave unset for prod); " + missing_auth_message()
 )
 
 
@@ -63,16 +63,14 @@ def live_resolved_auth() -> Auth:
 
 
 def pipefy_live_configured() -> bool:
-    """Return True when GraphQL URL plus a resolvable auth tier is configured.
+    """Return True when a Pipefy host and a resolvable auth tier are both configured."""
+    # ``PipefySettings.base_url`` carries a prod default; consulting the
+    # resolved field would flip live tests on for every dev machine that
+    # has *any* auth tier configured. Gate on the env var instead so live
+    # tests stay opt-in.
+    import os
 
-    Auth detection delegates to :func:`pipefy_auth.resolve_pipefy_auth` so a
-    setup that names a stored-session tier but has no keychain entry is
-    reported as unconfigured (matches what ``live_resolved_auth`` would do).
-    """
-    p = _resolved_pipefy()
-    has_url = bool(
-        p.graphql_url and str(p.graphql_url).startswith(("http://", "https://"))
-    )
+    has_url = bool(os.environ.get("PIPEFY_BASE_URL", "").strip())
     return has_url and _try_resolve_live_auth() is not None
 
 

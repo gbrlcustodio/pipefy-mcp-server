@@ -17,10 +17,10 @@ from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.services.portal_service import PortalService
 from pipefy_sdk.settings import PipefySettings
 
+BASE_URL = "https://app.pipefy.com"
 INTERFACES_URL = "https://app.pipefy.com/graphql/interfaces"
 MAIN_GRAPHQL_URL = "https://app.pipefy.com/graphql"
-INTERNAL_API_URL = "https://app.pipefy.com/internal_api"
-OAUTH_URL = "https://auth.pipefy.com/oauth/token"
+OAUTH_URL = "https://app.pipefy.com/oauth/token"
 _ORG_UUID_FOR_TESTS = "341c1327-261c-4766-bb96-7953e4c3970d"
 _OTHER_ORG_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 _NUMERIC_ORG_ID = "302398434"
@@ -28,14 +28,7 @@ _NUMERIC_ORG_ID = "302398434"
 
 @pytest.fixture
 def mock_settings() -> PipefySettings:
-    return PipefySettings(
-        graphql_url=MAIN_GRAPHQL_URL,
-        interfaces_graphql_url=INTERFACES_URL,
-        internal_api_url=INTERNAL_API_URL,
-        oauth_url=OAUTH_URL,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
-    )
+    return PipefySettings(base_url=BASE_URL)
 
 
 @pytest.fixture
@@ -64,9 +57,9 @@ def test_portal_service_interfaces_client_uses_interfaces_graphql_url(
         auth=mock_auth,
         internal_api_client=_mock_internal_api_client(),
     )
-    assert service._interfaces_client.settings.graphql_url == INTERFACES_URL
-    assert service._interfaces_client.settings.graphql_url != MAIN_GRAPHQL_URL
-    assert service._graphql_client.settings.graphql_url == MAIN_GRAPHQL_URL
+    assert service._interfaces_client._graphql_url == INTERFACES_URL
+    assert service._interfaces_client._graphql_url != MAIN_GRAPHQL_URL
+    assert service._graphql_client._graphql_url == MAIN_GRAPHQL_URL
 
 
 @pytest.mark.unit

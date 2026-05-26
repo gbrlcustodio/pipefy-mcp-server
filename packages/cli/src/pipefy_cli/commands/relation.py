@@ -163,7 +163,7 @@ def relation_card_delete(
     if not client.internal_api_available:
         typer.echo(
             "delete_card_relation requires service-account credentials "
-            "(PIPEFY_SERVICE_ACCOUNT_URL, PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
+            "(PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
             "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
             "The deleteCardRelation mutation is only available on the internal API.",
             err=True,

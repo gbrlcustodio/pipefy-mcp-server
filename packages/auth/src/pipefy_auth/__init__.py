@@ -18,7 +18,7 @@ from pipefy_auth.discovery import (
     fetch_provider_metadata,
 )
 from pipefy_auth.flow import LoginError, LoginResult, run_login
-from pipefy_auth.identity import DEFAULT_AUTH_CLIENT_ID, DEFAULT_AUTH_URL, OidcClient
+from pipefy_auth.identity import DEFAULT_AUTH_CLIENT_ID, OidcClient
 from pipefy_auth.refresh import (
     RefreshError,
     ensure_fresh_session,
@@ -54,7 +54,6 @@ __all__ = [
     "AuthSettings",
     "CallableBearerAuth",
     "DEFAULT_AUTH_CLIENT_ID",
-    "DEFAULT_AUTH_URL",
     "DiscoveryPolicy",
     "LoginError",
     "LoginResult",

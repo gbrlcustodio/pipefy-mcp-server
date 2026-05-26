@@ -54,12 +54,15 @@ class InternalApiClient(BasePipefyClient):
         validate_https_service_endpoint_url(
             url.strip(), "internal_api URL", allow_insecure=allow_insecure_urls
         )
-        # SSRF is already enforced above with the right error label; pass
-        # ``allow_insecure_urls=True`` here so ``PipefySettings`` does not re-validate
-        # the same URL under the misleading ``graphql_url`` label.
-        settings = PipefySettings(graphql_url=url, allow_insecure_urls=True)
+        # ``url`` already SSRF-validated above; ``allow_insecure_urls=True`` on
+        # the throwaway settings skips a redundant re-check. ``url_override``
+        # ships the URL without building a full purpose-specific ``PipefySettings``.
+        settings = PipefySettings(allow_insecure_urls=True)
         super().__init__(
-            settings, auth=auth, on_graphql_error=_format_internal_api_error
+            settings,
+            auth=auth,
+            url_override=url.strip(),
+            on_graphql_error=_format_internal_api_error,
         )
 
     async def execute_query(  # type: ignore[override]

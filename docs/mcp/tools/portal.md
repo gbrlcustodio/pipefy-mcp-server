@@ -2,7 +2,7 @@
 
 Read and manage Pipefy portals (Interfaces schema): list org portals, fetch detail, create/update/delete portal metadata, and manage pages (create, update, delete, sort, layout). **10 tools.**
 
-Portal tools call the **Interfaces** GraphQL endpoint (`PIPEFY_INTERFACES_GRAPHQL_URL`, default `https://app.pipefy.com/graphql/interfaces`), not the public `/graphql` schema used by most pipe/card tools.
+Portal tools call the **Interfaces** GraphQL endpoint (`<PIPEFY_BASE_URL>/graphql/interfaces`, default `https://app.pipefy.com/graphql/interfaces`), not the public `/graphql` schema used by most pipe/card tools.
 
 ---
 

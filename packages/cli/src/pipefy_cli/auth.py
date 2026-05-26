@@ -36,7 +36,6 @@ from pipefy_sdk import (
 )
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
-from pipefy_cli.config import ensure_public_graphql_configured
 
 # Display labels for ``pipefy auth status``. The resolver knows the
 # static-token tier; the CLI restores the flag-vs-env distinction here.
@@ -60,11 +59,15 @@ class AuthContext:
     stored-session). Built once at startup from the loaded
     :class:`pipefy_auth.AuthSettings` plus the per-invocation ``--token`` /
     ``PIPEFY_TOKEN`` resolution.
+
+    ``oidc_client`` is non-Optional: ``AuthSettings.to_oidc_client()`` always
+    returns a real client because ``auth_url`` defaults to the prod IdP.
+    Bypassing requires ``model_construct``.
     """
 
     bearer_token: BearerToken | None
     service_account: ServiceAccount | None
-    oidc_client: OidcClient | None
+    oidc_client: OidcClient
 
 
 _cached_signature: str | None = None
@@ -146,12 +149,6 @@ def get_authenticated_client(
     """
     global _cached_signature, _cached_client
 
-    try:
-        ensure_public_graphql_configured(pipefy_settings)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(2) from exc
-
     resolved = _resolve(auth)
     if resolved is None:
         typer.echo(f"{missing_auth_message()} See {DOCS_CLI_AUTH_REF}.", err=True)
@@ -163,10 +160,6 @@ def get_authenticated_client(
     # out as a transport error on the first GraphQL call. ``CallableBearerAuth``
     # observes the rotated token on subsequent requests.
     if tier == STORED_SESSION_TIER:
-        if auth.oidc_client is None:
-            # Unreachable per the resolver contract; guard kept so the
-            # invariant holds under ``python -O``.
-            raise typer.Exit(2)
         try:
             ensure_fresh_session(
                 issuer=auth.oidc_client.issuer_url,
@@ -185,14 +178,13 @@ def get_authenticated_client(
         return _cached_client
 
     client = PipefyClient(pipefy_settings, auth=resolved)
-    if pipefy_settings.internal_api_url:
-        internal_client = InternalApiClient(
-            url=pipefy_settings.internal_api_url,
-            auth=resolved,
-            allow_insecure_urls=pipefy_settings.allow_insecure_urls,
-        )
-        client.set_internal_api_client(internal_client)
-        client.set_ai_automation_service(AiAutomationService(client=internal_client))
+    internal_client = InternalApiClient(
+        url=pipefy_settings.internal_api_url,
+        auth=resolved,
+        allow_insecure_urls=pipefy_settings.allow_insecure_urls,
+    )
+    client.set_internal_api_client(internal_client)
+    client.set_ai_automation_service(AiAutomationService(client=internal_client))
     _cached_signature = key
     _cached_client = client
     return client

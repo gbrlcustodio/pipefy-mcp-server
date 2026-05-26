@@ -151,11 +151,12 @@ class TestAuthLogoutCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        """Explicit empty ``PIPEFY_AUTH_URL`` opts out of the stored-session tier."""
+        """``PIPEFY_AUTH_URL=""`` is rejected at settings load and surfaces as exit 2."""
         monkeypatch.setenv("PIPEFY_AUTH_URL", "")
         result = runner.invoke(cli_app, ["auth", "logout"])
         assert result.exit_code == 2
-        assert "PIPEFY_AUTH_URL is required" in result.stderr
+        assert "auth_url" in result.stderr
+        assert "should match pattern" in result.stderr
 
     def test_no_session_is_idempotent(
         self,

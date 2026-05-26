@@ -33,10 +33,12 @@ Same `PIPEFY_*` environment variables as `pipefy-mcp-server` (`.env` in CWD is l
 ```env
 PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=your_client_id
 PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=your_client_secret
-PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql
-PIPEFY_SERVICE_ACCOUNT_URL=https://app.pipefy.com/oauth/token
-PIPEFY_INTERNAL_API_URL=https://app.pipefy.com/internal_api
+# Non-prod environments only:
+# PIPEFY_BASE_URL=https://<your-api-host>
+# PIPEFY_AUTH_URL=https://<your-signin-host>/realms/<realm>
 ```
+
+`PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Set them only for non-prod environments.
 
 Full guide: [`docs/setup.md`](../../docs/setup.md). CLI-focused docs: [`docs/cli/`](../../docs/cli/README.md).
 

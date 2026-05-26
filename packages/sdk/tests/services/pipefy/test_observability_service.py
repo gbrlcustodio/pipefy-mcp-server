@@ -33,10 +33,7 @@ _ORG_UUID_FOR_TESTS = "341c1327-261c-4766-bb96-7953e4c3970d"
 @pytest.fixture
 def mock_settings():
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 

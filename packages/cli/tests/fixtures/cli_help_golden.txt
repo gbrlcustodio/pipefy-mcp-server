@@ -1906,12 +1906,16 @@ Usage: pipefy portal page create [OPTIONS]
  Create a portal page (bootstrap template when elements omitted on the API).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --portal-uuid          TEXT     Parent portal interface UUID. [required]  │
-│ *  --title                TEXT     Page title. [required]                    │
-│    --description          TEXT     Optional page description.                │
-│    --index                INTEGER  Optional sort index (non-negative).       │
-│    --json         -j               Print machine-readable JSON to stdout.    │
-│    --help                          Show this message and exit.               │
+│ *  --portal-uuid          TEXT                  Parent portal interface      │
+│                                                 UUID.                        │
+│                                                 [required]                   │
+│ *  --title                TEXT                  Page title. [required]       │
+│    --description          TEXT                  Optional page description.   │
+│    --index                INTEGER RANGE [x>=0]  Optional sort index          │
+│                                                 (non-negative).              │
+│    --json         -j                            Print machine-readable JSON  │
+│                                                 to stdout.                   │
+│    --help                                       Show this message and exit.  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/page/delete
@@ -1976,11 +1980,12 @@ Usage: pipefy portal page update [OPTIONS] PORTAL_UUID PAGE_UUID
 │ *    page_uuid        TEXT  Page UUID. [required]                            │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --title                TEXT     New page title.                              │
-│ --description          TEXT     New page description.                        │
-│ --index                INTEGER  New sort index (non-negative).               │
-│ --json         -j               Print machine-readable JSON to stdout.       │
-│ --help                          Show this message and exit.                  │
+│ --title                TEXT                  New page title.                 │
+│ --description          TEXT                  New page description.           │
+│ --index                INTEGER RANGE [x>=0]  New sort index (non-negative).  │
+│ --json         -j                            Print machine-readable JSON to  │
+│                                              stdout.                         │
+│ --help                                       Show this message and exit.     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/update

@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable, Generator
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable, Generator
 
 from httpx import Auth, Request, Response
-
-from pipefy_auth.refresh import RefreshError
 
 
 class StaticBearerAuth(Auth):
@@ -54,9 +51,10 @@ class RefreshableBearerAuth(Auth):
     Pairs the per-request token rotation behaviour of :class:`CallableBearerAuth`
     with a 401 safety net: when an API call returns 401, ``force_refresh`` is
     invoked to obtain a new bearer and the request is retried exactly once. If
-    the refresh fails (raises) or returns ``None`` / the same token, the 401
-    propagates so callers surface a "session expired, re-login" error instead
-    of looping.
+    it returns ``None`` or the same token, the 401 propagates so callers surface
+    a "session expired, re-login" error instead of looping. ``force_refresh`` is
+    trusted to return ``str | None`` — translating an IdP failure (``RefreshError``)
+    into ``None`` is the wiring's job, not this class's.
 
     The eager refresh path (``token_provider`` calling
     :func:`pipefy_auth.refresh.ensure_fresh_session`) still handles the common
@@ -88,7 +86,7 @@ class RefreshableBearerAuth(Auth):
         response = yield request
         if response.status_code != 401:
             return
-        new_token = self._safe_force_refresh()
+        new_token = self._force_refresh()
         if new_token is None or new_token == token:
             return
         request.headers["Authorization"] = f"Bearer {new_token}"
@@ -104,17 +102,11 @@ class RefreshableBearerAuth(Auth):
         if response.status_code != 401:
             return
         async with self._async_lock:
-            new_token = await asyncio.to_thread(self._safe_force_refresh)
+            new_token = await asyncio.to_thread(self._force_refresh)
         if new_token is None or new_token == token:
             return
         request.headers["Authorization"] = f"Bearer {new_token}"
         yield request
-
-    def _safe_force_refresh(self) -> str | None:
-        try:
-            return self._force_refresh()
-        except RefreshError:
-            return None
 
 
 __all__ = [

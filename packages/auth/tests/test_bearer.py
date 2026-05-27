@@ -116,7 +116,7 @@ class TestRefreshableBearerAuthSync:
         assert refresh_calls == []
 
     @pytest.mark.unit
-    def test_refresh_raises_lets_401_propagate(self) -> None:
+    def test_force_refresh_exception_is_not_swallowed(self) -> None:
         seen: list[str] = []
 
         def force_refresh() -> str | None:
@@ -129,9 +129,8 @@ class TestRefreshableBearerAuthSync:
             token_provider=lambda: "OLD", force_refresh=force_refresh
         )
 
-        response = client.get("https://example.test/", auth=auth)
-
-        assert response.status_code == 401
+        with pytest.raises(RefreshError):
+            client.get("https://example.test/", auth=auth)
         assert seen == ["Bearer OLD"]
 
     @pytest.mark.unit
@@ -202,7 +201,7 @@ class TestRefreshableBearerAuthAsync:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_refresh_error_lets_401_propagate(self) -> None:
+    async def test_force_refresh_exception_is_not_swallowed(self) -> None:
         seen: list[str] = []
         transport = httpx.MockTransport(_scripted_handler([401], seen))
 
@@ -214,9 +213,8 @@ class TestRefreshableBearerAuthAsync:
         )
 
         async with httpx.AsyncClient(transport=transport) as client:
-            response = await client.get("https://example.test/", auth=auth)
-
-        assert response.status_code == 401
+            with pytest.raises(RefreshError):
+                await client.get("https://example.test/", auth=auth)
         assert seen == ["Bearer OLD"]
 
     @pytest.mark.unit

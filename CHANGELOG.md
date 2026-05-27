@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **SDK / Auth**: shared filesystem-backed configuration via `~/.config/pipefy/config.toml` (`%APPDATA%\pipefy\config.toml` on Windows; honours `XDG_CONFIG_HOME` and a `PIPEFY_CONFIG_FILE=<path>` override). Top-level TOML keys map to pydantic field names on `AuthSettings` and `PipefySettings`; precedence is `init kwargs > env > .env > config.toml > defaults`. The new `pipefy-config` workspace package owns the loader (a schema-agnostic `PydanticBaseSettingsSource` subclass) and the path-discovery helpers; SDK and Auth depend on it symmetrically — neither imports the other. See [`docs/config.md`](docs/config.md) for the schema.
 - **CLI**: `pipefy auth status [--json|-j]` — reports auth source, identity, session expiry, and exit codes.
 - **CLI**: `pipefy auth logout` — revokes the refresh token at the IdP and clears the stored session.
 - **Auth**: `AuthSettings.auth_url` now defaults to the Pipefy production IdP when `PIPEFY_AUTH_URL` is unset — removes the previous `PIPEFY_AUTH_URL is required` exit-2 friction on `pipefy auth login` / `pipefy auth logout` and wires the MCP stored-session tier automatically after `pipefy auth login`. Override by setting `PIPEFY_AUTH_URL=<url>` to a non-prod IdP. Closes #233.
@@ -40,7 +41,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `PIPEFY_OAUTH_URL` (legacy alias for `PIPEFY_SERVICE_ACCOUNT_URL`) — no replacement; same derivation path.
 
   Migration: replace the five per-URL env vars with a single `PIPEFY_BASE_URL` (default `https://app.pipefy.com`). If you need a non-prod OIDC issuer, also set `PIPEFY_AUTH_URL` to the full issuer URL.
-- **HARD BREAK** — user TOML config file `~/.config/pipefy/config.toml` is no longer read by either the CLI or the MCP server. Operators who relied on it must move credentials and `base_url` into shell environment variables, a `.env` file at the working directory, or their MCP client's `env` block. Two config surfaces (env + `.env`) instead of three; persistent global config is shell-rc territory.
 - `PIPEFY_TENANT` / `PIPEFY_AUTH_REALM` env vars (never shipped in a release; existed only on intermediate commits of this branch).
 - **Auth**: `pipefy_auth.DEFAULT_AUTH_URL` constant (and its re-export from the package root). Callers should consult the resolved `AuthSettings.auth_url` instead.
 

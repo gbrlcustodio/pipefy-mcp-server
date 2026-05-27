@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
+from pipefy_config import PipefyTomlConfigSource
 from pydantic import Field, computed_field, field_validator, model_validator
-from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    NoDecode,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 # Canonical Pipefy production API host root.
 DEFAULT_BASE_URL = "https://app.pipefy.com"
@@ -45,6 +51,26 @@ class PipefySettings(BaseSettings):
         extra="ignore",
         populate_by_name=True,
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
+        # TOML keys are bare pydantic field names; the ``PIPEFY_`` env prefix
+        # does not apply to TOML lookups.
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            PipefyTomlConfigSource(settings_cls),
+            file_secret_settings,
+        )
 
     allow_insecure_urls: bool = Field(
         default=False,

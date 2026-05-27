@@ -65,6 +65,16 @@ def test_env_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     assert AuthSettings().base_url == "https://from-env.example"
 
 
+def test_dotenv_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # chdir so ``env_file=".env"`` resolves to tmp_path. ``test_env_wins_over_toml``
+    # does NOT cover this tier: a reorder sliding TOML between env and dotenv
+    # would keep it green while silently flipping dotenv > toml.
+    monkeypatch.chdir(tmp_path)
+    _write(tmp_path / ".env", "PIPEFY_BASE_URL=https://from-dotenv.example\n")
+    _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
+    assert AuthSettings().base_url == "https://from-dotenv.example"
+
+
 def test_init_kwargs_win_over_toml(tmp_path: Path) -> None:
     _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
     assert (

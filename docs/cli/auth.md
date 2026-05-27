@@ -1,6 +1,6 @@
 # CLI authentication
 
-See also the **[CLI docs index](README.md)** and **[`docs/setup.md`](../setup.md)** for the broader `PIPEFY_*` env-var story.
+See also the **[CLI docs index](README.md)** and **[`docs/setup.md`](../setup.md)** for the broader `PIPEFY_*` env-var story, and **[`docs/config.md`](../config.md)** for the optional `~/.config/pipefy/config.toml` file that pins defaults across CLI and MCP invocations.
 
 The `pipefy` CLI accepts authentication from four sources. This page covers all of them, how the CLI picks one, and how to recover when something goes wrong.
 

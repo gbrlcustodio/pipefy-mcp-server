@@ -109,6 +109,10 @@ def test_refresh_lock_path_is_pure(
     """``refresh_lock_path()`` resolves the path without touching the filesystem."""
     fake_home = tmp_path / "home"
     monkeypatch.setenv("HOME", str(fake_home))
+    # ``config_dir()`` honours ``XDG_CONFIG_HOME`` per XDG Base Dir Spec; CI
+    # runners (GitHub Actions, GitLab) preset it, so clear it explicitly to
+    # exercise the fallback to ``~/.config``.
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setattr(Path, "home", classmethod(lambda cls: fake_home))
 
     expected_dir = fake_home / ".config" / "pipefy"

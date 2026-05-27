@@ -27,6 +27,7 @@ import os
 import sys
 from typing import Self
 
+from pipefy_infra import PipefyTomlConfigSource
 from pydantic import (
     AliasChoices,
     Field,
@@ -34,7 +35,11 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 from pipefy_auth.identity import (
     DEFAULT_AUTH_CLIENT_ID,
@@ -143,6 +148,27 @@ class AuthSettings(BaseSettings):
         # the aliases, and ``PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`` would be ignored).
         populate_by_name=True,
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
+        # TOML keys are bare pydantic field names (e.g. ``static_token``); the
+        # ``PIPEFY_`` env prefix and the ``AliasChoices`` env-only aliases on
+        # individual fields do not apply to TOML lookups.
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            PipefyTomlConfigSource(settings_cls),
+            file_secret_settings,
+        )
 
     @model_validator(mode="before")
     @classmethod

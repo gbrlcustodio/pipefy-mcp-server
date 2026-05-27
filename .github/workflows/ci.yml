@@ -68,6 +68,7 @@ jobs:
             "mcp": Path("packages/mcp/src/pipefy_mcp/__init__.py"),
             "cli": Path("packages/cli/src/pipefy_cli/__init__.py"),
             "auth": Path("packages/auth/src/pipefy_auth/__init__.py"),
+            "infra": Path("packages/infra/src/pipefy_infra/__init__.py"),
         }
         rx = re.compile(r'^__version__\s*=\s*["\']([^"\']+)["\']', re.M)
         found = {}
@@ -82,13 +83,15 @@ jobs:
             raise SystemExit(f"version mismatch across packages: {found}")
         PY
     - name: Lint (full tree)
-      run: uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src packages/auth/src
+      run: uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src packages/auth/src packages/infra/src
     - name: Check formatting
-      run: uv run ruff format --check packages/sdk/src packages/mcp/src packages/cli/src packages/auth/src
+      run: uv run ruff format --check packages/sdk/src packages/mcp/src packages/cli/src packages/auth/src packages/infra/src
     - name: Lint SDK (banned upward imports)
       run: cd packages/sdk && uv run ruff check src
     - name: Lint auth (banned upward imports)
       run: cd packages/auth && uv run ruff check src
+    - name: Lint infra (banned upward imports)
+      run: cd packages/infra && uv run ruff check src
     - name: Build MCP wheel (packaging smoke)
       run: uv build packages/mcp -o packages/mcp/dist
     - name: Run tests

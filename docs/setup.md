@@ -39,7 +39,19 @@ Single entry point for **first-time install**, **environment variables**, and **
    uv run pytest -m "not integration"
    ```
 
-6. **Register the server in your IDE** — [MCP client setup](#mcp-client-setup) below. Prefer pointing the client’s `cwd` at this repo and keeping secrets in **`.env`** so you do not duplicate them in JSON.
+   Unit tests use **fictional** org/pipe ids from [`packages/sdk/tests/_shared/fixture_ids.py`](../packages/sdk/tests/_shared/fixture_ids.py). Do not paste production org UUIDs into test source.
+
+6. **Live integration tests (optional)** — require `PIPEFY_*` in **`.env`** at the repo root (same file as MCP/CLI). Example for portal SDK smoke:
+
+   ```bash
+   # In .env (local only — do not commit)
+   PIPEFY_PORTAL_ORG_UUID=<your-org-uuid-or-numeric-id>
+   uv run pytest packages/sdk/tests/services/pipefy/test_portal_service_integration.py -m integration -v
+   ```
+
+   CI skips these when credentials or `PIPEFY_PORTAL_ORG_UUID` are unset. See [`.env.example`](../.env.example) for optional keys.
+
+7. **Register the server in your IDE** — [MCP client setup](#mcp-client-setup) below. Prefer pointing the client’s `cwd` at this repo and keeping secrets in **`.env`** so you do not duplicate them in JSON.
 
 On Windows, use the same commands in **PowerShell** or **Git Bash** (where `uv` is on `PATH`).
 

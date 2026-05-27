@@ -447,3 +447,26 @@ def test_status_none_text_mentions_onboarding(
     assert "pipefy auth login" in result.stdout
     assert "PIPEFY_TOKEN" in result.stdout
     assert "PIPEFY_SERVICE_ACCOUNT_*" in result.stdout
+
+
+def test_status_with_disable_stored_session_omits_tier(
+    clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
+):
+    """``PIPEFY_DISABLE_STORED_SESSION=1`` keeps stored-session out of ``detected_sources``.
+
+    Higher tiers still resolve normally; only the keychain probe is skipped.
+    """
+    monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", "1")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "csecret")
+    # Seed a session that would otherwise be detected; the kill-switch must
+    # prevent the keychain probe even when an entry exists.
+    _seed_session(monkeypatch)
+    client = _mock_client_with_me()
+    with _patch_command_client(client):
+        result = _invoke_status(runner, ["--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert "stored-session" not in payload["detected_sources"]
+    assert payload["auth_source"] == "service-account"

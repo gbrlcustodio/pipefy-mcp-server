@@ -564,6 +564,29 @@ class TestAuthLoginCommand:
         assert "auth_url" in result.stderr
         assert "should match pattern" in result.stderr
 
+    def test_disable_stored_session_refuses_with_exit_2(
+        self,
+        cli_runner,
+        monkeypatch: pytest.MonkeyPatch,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """``PIPEFY_DISABLE_STORED_SESSION=1`` short-circuits login before any OAuth work."""
+        monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", "1")
+
+        from pipefy_cli.commands import auth as auth_module
+
+        def _poison(**_kwargs: object):
+            raise AssertionError(
+                "run_login must not be called when sessions are disabled"
+            )
+
+        monkeypatch.setattr(auth_module, "run_login", _poison)
+
+        result = cli_runner.invoke(cli_app, ["auth", "login"])
+        assert result.exit_code == 2
+        assert "Stored sessions are disabled" in result.stderr
+
     def test_happy_path(
         self,
         cli_runner,
@@ -737,3 +760,80 @@ class TestAuthLoginCommand:
         assert result.exit_code == 1
         assert "Login failed" in result.stderr
         assert "invalid_grant" in result.stderr
+
+    def test_store_failure_default_backend_hints_at_secret_service(
+        self,
+        cli_runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """A keychain write failure on the default OS backend surfaces the
+        Secret Service hint and the file-backend escape hatch."""
+        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+
+        from keyring.errors import KeyringError
+
+        from pipefy_cli.commands import auth as auth_module
+
+        monkeypatch.setattr(
+            auth_module,
+            "run_login",
+            lambda **_k: flow.LoginResult(
+                issuer="https://x.test/realms/foo",
+                token_response={"access_token": "A", "refresh_token": "R"},
+            ),
+        )
+
+        def _boom(**_kwargs: object) -> None:
+            raise KeyringError("backend rejected the write")
+
+        monkeypatch.setattr(auth_module, "store_session", _boom)
+
+        result = cli_runner.invoke(cli_app, ["auth", "login"])
+        assert result.exit_code == 1
+        assert "could not be stored in your keychain" in result.stderr
+        assert "Secret Service" in result.stderr
+        assert "PIPEFY_KEYCHAIN_BACKEND=file" in result.stderr
+
+    def test_store_failure_file_backend_hints_at_config_dir(
+        self,
+        cli_runner,
+        monkeypatch: pytest.MonkeyPatch,
+        fake_keyring: InMemoryKeyring,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """With the file backend active, a store failure surfaces a config-dir
+        writability hint instead of the Secret Service one."""
+        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+
+        from pipefy_cli.commands import auth as auth_module
+
+        monkeypatch.setattr(
+            auth_module,
+            "run_login",
+            lambda **_k: flow.LoginResult(
+                issuer="https://x.test/realms/foo",
+                token_response={"access_token": "A", "refresh_token": "R"},
+            ),
+        )
+        monkeypatch.setattr(
+            auth_module,
+            "keychain_backend_name",
+            lambda: "PlaintextKeyring",
+        )
+
+        def _boom(**_kwargs: object) -> None:
+            raise PermissionError("config dir is read-only")
+
+        monkeypatch.setattr(auth_module, "store_session", _boom)
+
+        result = cli_runner.invoke(cli_app, ["auth", "login"])
+        assert result.exit_code == 1
+        assert (
+            "could not be stored in your keychain (PlaintextKeyring)" in result.stderr
+        )
+        assert "config directory is writable" in result.stderr
+        assert "Secret Service" not in result.stderr

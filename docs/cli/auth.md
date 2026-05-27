@@ -90,6 +90,8 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | Tier 3 | Service-account client id. |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | Tier 3 | Service-account client secret. |
 | `PIPEFY_AUTH_CLIENT_ID` | Tier 4 | Public client id registered for the CLI. Defaults to `pipefy-cli`. |
+| `PIPEFY_DISABLE_STORED_SESSION` | Tier 4 | When `1` / `true`, the stored-session tier is skipped end-to-end: tier resolution never probes the keychain, and `pipefy auth login` / `pipefy auth logout` refuse with exit code 2. Use to avoid the keyring backend-discovery cost on cold start (headless Linux, CI) or to opt out of OS-keychain storage entirely. TOML key: `disable_stored_session`. |
+| `PIPEFY_KEYCHAIN_BACKEND` | Tier 4 | Active `keyring` backend. `auto` (default) uses OS-keyring discovery; `file` swaps to a plaintext on-disk keyring under `~/.config/pipefy/keyring.cfg` (POSIX) / `%APPDATA%/pipefy/keyring.cfg` (Windows). TOML key: `keychain_backend`. |
 
 The service-account OAuth token URL (Tier 3) and the OIDC issuer URL (Tier 4) are **not** interchangeable: the first is `<base>/oauth/token` for client-credentials, the second is the full OIDC discovery root for the user-login flow.
 
@@ -202,7 +204,7 @@ The keychain has a session but its refresh token won't exchange. Most common cau
 
 ### `String should match pattern '<regex>'` (any `PIPEFY_*` env var)
 
-Every `PIPEFY_*` env var is validated against a semantically meaningful regex at settings load — URL env vars (`PIPEFY_BASE_URL`, `PIPEFY_AUTH_URL`) must start with `http(s)://`, credentials must not begin/end with whitespace, `PIPEFY_ORG_ID` must be a numeric string. Empty / blank / specially-charactered values are rejected at construction — there's no overload of `PIPEFY_<NAME>=""` for opt-out semantics (a separate kill-switch mechanism is tracked in [#237](https://github.com/gbrlcustodio/pipefy-mcp-server/issues/237)). Unset the variable to fall back to the prod default (for URLs) or to leave the tier unconfigured (for credentials). The error message names the offending field plus the violated pattern.
+Every `PIPEFY_*` env var is validated against a semantically meaningful regex at settings load — URL env vars (`PIPEFY_BASE_URL`, `PIPEFY_AUTH_URL`) must start with `http(s)://`, credentials must not begin/end with whitespace, `PIPEFY_ORG_ID` must be a numeric string. Empty / blank / specially-charactered values are rejected at construction — there's no overload of `PIPEFY_<NAME>=""` for opt-out semantics. To turn the stored-session tier off without unsetting `PIPEFY_AUTH_URL`, use `PIPEFY_DISABLE_STORED_SESSION=1` (see [Keychain backends](#keychain-backends)). Otherwise unset the variable to fall back to the prod default (for URLs) or to leave the tier unconfigured (for credentials). The error message names the offending field plus the violated pattern.
 
 > **`VAR= command` is not "unset".** A shell command-prefix assignment (`PIPEFY_AUTH_URL= pipefy auth status`) sets the variable to the empty string for the child process; it does **not** unset it. Pydantic then rejects the empty value and the command exits with a `ValidationError`. To actually unset a variable for a single command, use `env -u VAR command` (POSIX one-shot, leaves the parent shell untouched):
 >
@@ -212,9 +214,11 @@ Every `PIPEFY_*` env var is validated against a semantically meaningful regex at
 >
 > To unset for the remainder of the current shell session, `unset PIPEFY_AUTH_URL` (bash / zsh) or `set -e PIPEFY_AUTH_URL` (fish).
 
-### `Login succeeded but the session could not be stored in your OS keychain (<backend>)`
+### `Login succeeded but the session could not be stored in your keychain (<backend>)`
 
-The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running — install `gnome-keyring` or `kwallet`, or fall back to a static `PIPEFY_TOKEN`.
+The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running — install `gnome-keyring` or `kwallet`, set `PIPEFY_KEYCHAIN_BACKEND=file` to use a plaintext file backend under the Pipefy config directory, or fall back to a static `PIPEFY_TOKEN`.
+
+When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory).
 
 ### `Missing Pipefy authentication. Set PIPEFY_TOKEN, configure PIPEFY_SERVICE_ACCOUNT_*, or run \`pipefy auth login\`.`
 
@@ -255,4 +259,14 @@ Reactive refresh-on-401 (for tokens revoked mid-session) is a separate slice, tr
 
 ### Keychain backends
 
-`keyring` selects an OS backend automatically: macOS Keychain on Darwin, Credential Manager on Windows, Secret Service (gnome-keyring / kwallet) on Linux. `pipefy auth login` prints the resolved backend name on success so you can confirm where the entry landed.
+`keyring` selects an OS backend automatically: macOS Keychain on Darwin, Credential Manager on Windows, Secret Service (gnome-keyring / kwallet) on Linux. `pipefy auth login` prints the resolved backend name on success so you can confirm where the entry landed; `pipefy auth status` reports it as `Keychain: <BackendName>`.
+
+#### Opting out of the OS keychain
+
+Two env vars (mirrored as TOML keys) override the default behaviour:
+
+- `PIPEFY_DISABLE_STORED_SESSION=1` skips the keychain entirely. `pipefy auth login` refuses with exit 2, tier resolution never probes the backend, and `pipefy auth status` omits the `stored-session` tier. Use when only `PIPEFY_TOKEN` / `PIPEFY_SERVICE_ACCOUNT_*` matter (CI runners, automation) and the cold-start keyring backend-discovery cost (~30-80 ms on Darwin, more on a Linux box with no Secret Service daemon) is undesirable.
+
+- `PIPEFY_KEYCHAIN_BACKEND=file` swaps the active backend to a plaintext on-disk keyring under `config_dir() / "keyring.cfg"` (`~/.config/pipefy/keyring.cfg` on POSIX, `%APPDATA%/pipefy/keyring.cfg` on Windows). Unblocks headless Linux without Secret Service. **The file is plaintext, not OS-secured**: anyone with read access to the file (including a co-tenant on a shared CI runner) reads the refresh token. Opt-in only.
+
+These are independent: `PIPEFY_DISABLE_STORED_SESSION=1` takes precedence (the file backend is never read or written). `pipefy auth status` will reflect the active backend name regardless (`Keyring`, `PlaintextKeyring`, etc.).

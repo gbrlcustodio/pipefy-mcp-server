@@ -186,3 +186,60 @@ def test_service_account_url_strips_trailing_slash_on_base(
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://staging.example.com/")
     settings = AuthSettings()
     assert settings.service_account_url == "https://staging.example.com/oauth/token"
+
+
+@pytest.mark.unit
+def test_disable_stored_session_env_var_parses_true(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """``PIPEFY_DISABLE_STORED_SESSION=1`` flips the kill-switch on."""
+    monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", "1")
+    settings = AuthSettings()
+    assert settings.disable_stored_session is True
+    assert settings.to_oidc_client() is None
+
+
+@pytest.mark.unit
+def test_disable_stored_session_defaults_to_false_with_oidc_client_present():
+    """Default settings leave the stored-session tier enabled."""
+    settings = AuthSettings()
+    assert settings.disable_stored_session is False
+    assert settings.to_oidc_client() is not None
+
+
+@pytest.mark.unit
+def test_keychain_backend_env_var_parses_file(monkeypatch: pytest.MonkeyPatch):
+    """``PIPEFY_KEYCHAIN_BACKEND=file`` picks the file backend choice."""
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", "file")
+    settings = AuthSettings()
+    assert settings.keychain_backend == "file"
+
+
+@pytest.mark.unit
+def test_keychain_backend_defaults_to_auto():
+    """Default settings preserve the OS-keyring auto-discovery."""
+    assert AuthSettings().keychain_backend == "auto"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad", ["plaintext", "", "   "])
+def test_keychain_backend_rejects_unknown_value(
+    monkeypatch: pytest.MonkeyPatch, bad: str
+):
+    """Only ``auto`` and ``file`` are valid; anything else (including empty / whitespace-only) raises."""
+    from pydantic import ValidationError
+
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", bad)
+    with pytest.raises(ValidationError):
+        AuthSettings()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("padded", [" 1 ", " true ", "\tfalse\n"])
+def test_keychain_backend_and_kill_switch_strip_whitespace(
+    monkeypatch: pytest.MonkeyPatch, padded: str
+):
+    """Stray whitespace on env values is stripped before Literal / bool parsing."""
+    monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", padded)
+    # No raise: bool parser sees the stripped value.
+    AuthSettings()

@@ -60,14 +60,15 @@ class AuthContext:
     :class:`pipefy_auth.AuthSettings` plus the per-invocation ``--token`` /
     ``PIPEFY_TOKEN`` resolution.
 
-    ``oidc_client`` is non-Optional: ``AuthSettings.to_oidc_client()`` always
-    returns a real client because ``auth_url`` defaults to the prod IdP.
-    Bypassing requires ``model_construct``.
+    ``oidc_client`` is ``None`` only when ``AuthSettings.disable_stored_session``
+    is set (env: PIPEFY_DISABLE_STORED_SESSION); the stored-session tier is
+    then skipped end-to-end. Otherwise ``auth_url`` defaults to the prod IdP
+    and the client is always present.
     """
 
     bearer_token: BearerToken | None
     service_account: ServiceAccount | None
-    oidc_client: OidcClient
+    oidc_client: OidcClient | None
 
 
 _cached_signature: str | None = None
@@ -159,10 +160,18 @@ def get_authenticated_client(
     # exit(2) with a "run `pipefy auth login` again" hint instead of leaking
     # out as a transport error on the first GraphQL call.
     if tier == STORED_SESSION_TIER:
+        oidc = auth.oidc_client
+        if oidc is None:
+            # Resolver only picks STORED_SESSION_TIER when oidc_client is non-None;
+            # reaching here means that invariant is broken.
+            raise RuntimeError(
+                "STORED_SESSION_TIER resolved without an OIDC client "
+                "(resolver invariant broken)."
+            )
         try:
             ensure_fresh_session(
-                issuer=auth.oidc_client.issuer_url,
-                client_id=auth.oidc_client.client_id,
+                issuer=oidc.issuer_url,
+                client_id=oidc.client_id,
             )
         except RefreshError as exc:
             typer.echo(

@@ -107,6 +107,32 @@ def test_unknown_keys_ignored(tmp_path: Path) -> None:
     assert AuthSettings().base_url == "https://staging.pipefy.com"
 
 
+def test_kill_switch_and_backend_load_from_toml(tmp_path: Path) -> None:
+    """Both new fields populate from bare TOML keys."""
+    _write(
+        tmp_path / "config.toml",
+        """
+        disable_stored_session = true
+        keychain_backend = "file"
+        """,
+    )
+    settings = AuthSettings()
+    assert settings.disable_stored_session is True
+    assert settings.keychain_backend == "file"
+    assert settings.to_oidc_client() is None
+
+
+def test_env_wins_over_toml_for_kill_switch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``PIPEFY_DISABLE_STORED_SESSION=0`` flips the TOML-set ``true`` back off."""
+    _write(tmp_path / "config.toml", "disable_stored_session = true\n")
+    monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", "0")
+    settings = AuthSettings()
+    assert settings.disable_stored_session is False
+    assert settings.to_oidc_client() is not None
+
+
 def test_legacy_env_var_names_not_picked_up_from_toml(tmp_path: Path) -> None:
     # ``AliasChoices`` lists env-only names (PIPEFY_TOKEN, PIPEFY_OAUTH_CLIENT).
     # TOML uses field names. Pasting the env-shaped key into TOML must NOT

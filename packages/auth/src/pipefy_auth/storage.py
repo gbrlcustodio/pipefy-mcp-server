@@ -15,9 +15,36 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import asdict, dataclass
+from typing import Literal
 from urllib.parse import urlparse
 
 _SERVICE = "pipefy"
+_KEYRING_FILENAME = "keyring.cfg"
+
+
+def configure_keychain_backend(choice: Literal["auto", "file"]) -> None:
+    """Apply the requested keyring backend before any session read or write.
+
+    Idempotent: safe to call multiple times; the second ``"file"`` call
+    replaces the previous file backend with one pointing at the same path.
+
+    Args:
+        choice: ``"auto"`` is a no-op and preserves ``keyring``'s built-in
+            backend-discovery default. ``"file"`` swaps to
+            :class:`keyrings.alt.file.PlaintextKeyring` writing under
+            ``pipefy_infra.config_dir() / "keyring.cfg"``; the file stores
+            credentials in plaintext on disk and is intended for headless
+            Linux or CI runners where the OS keychain is unavailable.
+    """
+    if choice == "auto":
+        return
+    import keyring
+    from keyrings.alt.file import PlaintextKeyring
+    from pipefy_infra import config_dir
+
+    backend = PlaintextKeyring()
+    backend.file_path = str(config_dir() / _KEYRING_FILENAME)
+    keyring.set_keyring(backend)
 
 
 class SessionDeleteError(RuntimeError):
@@ -167,6 +194,7 @@ def _optional_str(value: object) -> str | None:
 __all__ = [
     "SessionDeleteError",
     "StoredSession",
+    "configure_keychain_backend",
     "delete_session",
     "keychain_backend_name",
     "keychain_key",

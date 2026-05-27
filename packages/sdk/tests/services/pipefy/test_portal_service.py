@@ -236,7 +236,10 @@ async def test_list_portals_passes_org_uuid_and_portal_filter(
     service._interfaces_client.execute_query.assert_called_once()
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     assert query_used is LIST_PORTALS_QUERY
-    assert variables == {"org_uuid": EXAMPLE_OTHER_ORG_UUID, "filterBySubType": "portal"}
+    assert variables == {
+        "org_uuid": EXAMPLE_OTHER_ORG_UUID,
+        "filterBySubType": "portal",
+    }
 
 
 @pytest.mark.unit

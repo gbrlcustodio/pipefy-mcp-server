@@ -206,11 +206,24 @@ def auth_login(
         # ``config_dir()`` (e.g. CI runner without write perms, NFS mount
         # without ownership) surfaces as ``PermissionError`` from
         # ``os.makedirs`` inside the backend, which is not a ``KeyringError``.
+        backend = keychain_backend_name()
+        if backend == "PlaintextKeyring":
+            from pipefy_infra import config_dir
+
+            hint = (
+                f"Ensure the config directory is writable ({config_dir()}), "
+                "or use a static PIPEFY_TOKEN."
+            )
+        else:
+            hint = (
+                "On headless Linux, ensure a Secret Service daemon "
+                "(gnome-keyring, kwallet) is running, set "
+                "PIPEFY_KEYCHAIN_BACKEND=file to use a plaintext file backend, "
+                "or use a static PIPEFY_TOKEN."
+            )
         typer.echo(
-            f"Login succeeded but the session could not be stored in your OS "
-            f"keychain ({keychain_backend_name()}): {exc}. "
-            "On headless Linux, ensure a Secret Service daemon (gnome-keyring, "
-            "kwallet) is running, or use a static PIPEFY_TOKEN.",
+            f"Login succeeded but the session could not be stored in your "
+            f"keychain ({backend}): {exc}. {hint}",
             err=True,
         )
         raise typer.Exit(1) from exc

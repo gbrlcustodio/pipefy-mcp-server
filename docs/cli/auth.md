@@ -214,9 +214,11 @@ Every `PIPEFY_*` env var is validated against a semantically meaningful regex at
 >
 > To unset for the remainder of the current shell session, `unset PIPEFY_AUTH_URL` (bash / zsh) or `set -e PIPEFY_AUTH_URL` (fish).
 
-### `Login succeeded but the session could not be stored in your OS keychain (<backend>)`
+### `Login succeeded but the session could not be stored in your keychain (<backend>)`
 
-The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running — install `gnome-keyring` or `kwallet`, or fall back to a static `PIPEFY_TOKEN`.
+The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running — install `gnome-keyring` or `kwallet`, set `PIPEFY_KEYCHAIN_BACKEND=file` to use a plaintext file backend under the Pipefy config directory, or fall back to a static `PIPEFY_TOKEN`.
+
+When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory).
 
 ### `Missing Pipefy authentication. Set PIPEFY_TOKEN, configure PIPEFY_SERVICE_ACCOUNT_*, or run \`pipefy auth login\`.`
 

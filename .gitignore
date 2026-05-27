@@ -34,6 +34,10 @@ env.bak/
 venv.bak/
 .mise.toml
 
+# Ralph Wiggum (local autonomous runs; state must not land in git)
+.ralph/
+RALPH_TASK.md
+
 # IDEs and editors
 .cursor/
 .claude/

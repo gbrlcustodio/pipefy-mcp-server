@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ def _write(path: Path, content: str) -> Path:
 @pytest.fixture(autouse=True)
 def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Point PIPEFY_CONFIG_FILE at the test tmpdir + clear all PIPEFY_* env."""
-    for key in list(__import__("os").environ):
+    for key in list(os.environ):
         if key.startswith("PIPEFY_") or key in {"XDG_CONFIG_HOME", "APPDATA"}:
             monkeypatch.delenv(key, raising=False)
     # PIPEFY_CONFIG_FILE points at a tmp file even when the test doesn't write

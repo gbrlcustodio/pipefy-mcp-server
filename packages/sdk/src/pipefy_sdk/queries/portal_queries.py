@@ -160,14 +160,66 @@ UPDATE_PAGE_LAYOUT_MUTATION = gql(
     """
 )
 
+CREATE_ELEMENT_MUTATION = gql(
+    """
+    mutation CreatePortalElement($input: InterfacePageElementCreateMutationInput!) {
+        createElement(input: $input) {
+            element {
+                id
+                type
+                metadata
+            }
+        }
+    }
+    """
+)
+
+UPDATE_ELEMENT_MUTATION = gql(
+    """
+    mutation UpdatePortalElement($input: InterfacePageElementUpdateMutationInput!) {
+        updateElement(input: $input) {
+            success
+        }
+    }
+    """
+)
+
+DELETE_ELEMENT_MUTATION = gql(
+    """
+    mutation DeletePortalElement($input: InterfacePageElementDeleteMutationInput!) {
+        deleteElement(input: $input) {
+            success
+        }
+    }
+    """
+)
+
+DUPLICATE_ELEMENT_MUTATION = gql(
+    """
+    mutation DuplicatePortalElement($input: DuplicateInterfaceElementInput!) {
+        duplicateElement(input: $input) {
+            element {
+                id
+                type
+                metadata
+            }
+        }
+    }
+    """
+)
+
 __all__ = [
+    "CREATE_ELEMENT_MUTATION",
     "CREATE_PAGE_MUTATION",
+    "DELETE_ELEMENT_MUTATION",
     "DELETE_INTERFACE_MUTATION",
     "DELETE_PAGE_MUTATION",
+    "DUPLICATE_ELEMENT_MUTATION",
     "FIND_OR_CREATE_PORTAL_MUTATION",
     "GET_PORTAL_QUERY",
     "LIST_PORTALS_QUERY",
     "SORT_PAGES_MUTATION",
+    "UPDATE_ELEMENT_MUTATION",
     "UPDATE_INTERFACE_MUTATION",
     "UPDATE_PAGE_LAYOUT_MUTATION",
     "UPDATE_PAGE_MUTATION",

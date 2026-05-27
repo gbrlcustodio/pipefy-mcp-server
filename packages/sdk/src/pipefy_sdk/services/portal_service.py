@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from typing import Any
 
 from gql.transport.exceptions import TransportQueryError
@@ -9,15 +11,25 @@ from httpx import Auth
 
 from pipefy_sdk.base_client import BasePipefyClient, unwrap_relay_connection_nodes
 from pipefy_sdk.exceptions import PortalPermissionError
-from pipefy_sdk.models.portal import CreatePortalInput, UpdatePortalInput
+from pipefy_sdk.models.portal import (
+    CreatePortalElementInput,
+    CreatePortalInput,
+    PortalElementType,
+    UpdatePortalElementInput,
+    UpdatePortalInput,
+)
 from pipefy_sdk.queries.portal_queries import (
+    CREATE_ELEMENT_MUTATION,
     CREATE_PAGE_MUTATION,
+    DELETE_ELEMENT_MUTATION,
     DELETE_INTERFACE_MUTATION,
     DELETE_PAGE_MUTATION,
+    DUPLICATE_ELEMENT_MUTATION,
     FIND_OR_CREATE_PORTAL_MUTATION,
     GET_PORTAL_QUERY,
     LIST_PORTALS_QUERY,
     SORT_PAGES_MUTATION,
+    UPDATE_ELEMENT_MUTATION,
     UPDATE_INTERFACE_MUTATION,
     UPDATE_PAGE_LAYOUT_MUTATION,
     UPDATE_PAGE_MUTATION,
@@ -25,6 +37,8 @@ from pipefy_sdk.queries.portal_queries import (
 from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.settings import PipefySettings
 from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
+
+logger = logging.getLogger(__name__)
 
 
 def _with_uuid_alias(record: dict[str, Any]) -> dict[str, Any]:
@@ -40,15 +54,59 @@ _PORTAL_PERMISSION_MESSAGE = (
 )
 
 
-def _map_portal_permission_error(exc: TransportQueryError) -> PortalPermissionError:
-    """Turn PERMISSION_DENIED GraphQL errors into actionable portal guidance."""
+def _map_portal_permission_error(
+    exc: TransportQueryError,
+) -> PortalPermissionError | None:
+    """Return ``PortalPermissionError`` only for PERMISSION_DENIED; else ``None``."""
     for err in exc.errors or []:
         if not isinstance(err, dict):
             continue
         extensions = err.get("extensions") or {}
         if extensions.get("code") == "PERMISSION_DENIED":
             return PortalPermissionError(_PORTAL_PERMISSION_MESSAGE)
-    return PortalPermissionError(str(exc))
+    return None
+
+
+def _serialize_interfaces_json(value: dict[str, Any] | list[Any]) -> str:
+    """Encode Json scalars for the Interfaces GraphQL endpoint (gql expects strings)."""
+    return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
+
+
+def _normalize_portal_data_sources(
+    sources: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Map agent-friendly keys to Interfaces ``DataSourceInput`` (``repoId``, ``fieldKeys``).
+
+    Accepts ``repoId``, ``repo_uuid``, or ``repoUuid`` per entry. Invalid entries are
+    skipped and logged at warning level.
+    """
+    normalized: list[dict[str, Any]] = []
+    for index, source in enumerate(sources):
+        if not isinstance(source, dict):
+            logger.warning(
+                "Skipping portal data_sources[%s]: expected object, got %s",
+                index,
+                type(source).__name__,
+            )
+            continue
+        repo_id = (
+            source.get("repoId") or source.get("repo_uuid") or source.get("repoUuid")
+        )
+        if not isinstance(repo_id, str) or not repo_id.strip():
+            logger.warning(
+                "Skipping portal data_sources[%s]: missing repo id "
+                "(use repoId, repo_uuid, or repoUuid); keys=%s",
+                index,
+                sorted(source.keys()),
+            )
+            continue
+        field_keys = source.get("fieldKeys")
+        if field_keys is None:
+            field_keys = source.get("field_keys", [])
+        if not isinstance(field_keys, list):
+            field_keys = []
+        normalized.append({"repoId": repo_id.strip(), "fieldKeys": field_keys})
+    return normalized
 
 
 async def _execute_interfaces_query_with_portal_errors(
@@ -60,7 +118,51 @@ async def _execute_interfaces_query_with_portal_errors(
     try:
         return await execute(query, variables)
     except TransportQueryError as exc:
-        raise _map_portal_permission_error(exc) from exc
+        permission_error = _map_portal_permission_error(exc)
+        if permission_error is not None:
+            raise permission_error from exc
+        raise
+
+
+def _graphql_create_element_input(
+    validated: CreatePortalElementInput,
+) -> dict[str, Any]:
+    """Map validated create input to Interfaces ``createElement`` variables."""
+    payload: dict[str, Any] = {
+        "page_id": validated.page_id,
+        "type": validated.type,
+        "metadata": _serialize_interfaces_json(validated.metadata),
+    }
+    # Always send data_sources (even []) — omitting it makes Pipefy pass nil and crash
+    # in UpdateElement#authorized? / CreateDependencies (pipefy-core).
+    payload["data_sources"] = _normalize_portal_data_sources(validated.data_sources)
+    if validated.element_id is not None:
+        payload["id"] = validated.element_id
+    if validated.editable is not None:
+        payload["editable"] = validated.editable
+    if validated.layout is not None:
+        payload["layout"] = _serialize_interfaces_json(validated.layout)
+    return payload
+
+
+def _graphql_update_element_input(
+    validated: UpdatePortalElementInput,
+) -> dict[str, Any]:
+    """Map validated update input to Interfaces ``updateElement`` variables."""
+    payload: dict[str, Any] = {
+        "element_id": validated.element_id,
+        "page_id": validated.page_id,
+        "metadata": _serialize_interfaces_json(validated.metadata),
+    }
+    payload["data_sources"] = _normalize_portal_data_sources(validated.data_sources)
+    if validated.editable is not None:
+        payload["editable"] = validated.editable
+    return payload
+
+
+def _normalize_portal_element(element: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a portal page element with ``uuid`` alias for ``id``."""
+    return _with_uuid_alias(element)
 
 
 def _normalize_portal_page(page: dict[str, Any]) -> dict[str, Any]:
@@ -401,5 +503,157 @@ class PortalService:
         return await _execute_interfaces_query_with_portal_errors(
             self.execute_interfaces_query,
             UPDATE_PAGE_LAYOUT_MUTATION,
-            {"input": {"page_id": page_id, "layout": layout}},
+            {
+                "input": {
+                    "page_id": page_id,
+                    "layout": _serialize_interfaces_json(layout),
+                }
+            },
         )
+
+    async def create_portal_element(
+        self,
+        page_id: str,
+        *,
+        type: PortalElementType,
+        metadata: dict[str, Any],
+        data_sources: list[dict[str, Any]] | None = None,
+        element_id: str | None = None,
+        editable: bool | None = None,
+        layout: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create a portal page element on the Interfaces schema.
+
+        Args:
+            page_id: Parent page UUID.
+            type: One of the 15 ``InterfacePageElementType`` values.
+            metadata: Element metadata JSON (validated per ``type``).
+            data_sources: Optional data source bindings (e.g. for ``forms``).
+            element_id: Optional client-provided element UUID (GraphQL ``id``).
+            editable: Optional editable flag.
+            layout: Optional layout JSON.
+        """
+        validated = CreatePortalElementInput.model_validate(
+            {
+                "page_id": page_id,
+                "type": type,
+                "metadata": metadata,
+                "data_sources": data_sources if data_sources is not None else [],
+                "element_id": element_id,
+                "editable": editable,
+                "layout": layout,
+            }
+        )
+        data = await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            CREATE_ELEMENT_MUTATION,
+            {"input": _graphql_create_element_input(validated)},
+        )
+        element = (data.get("createElement") or {}).get("element")
+        if not isinstance(element, dict):
+            msg = "createElement returned no element."
+            raise ValueError(msg)
+        return _normalize_portal_element(element)
+
+    async def update_portal_element(
+        self,
+        element_id: str,
+        page_id: str,
+        *,
+        type: PortalElementType,
+        metadata: dict[str, Any],
+        data_sources: list[dict[str, Any]] | None = None,
+        editable: bool | None = None,
+    ) -> dict[str, Any]:
+        """Update a portal page element (full ``metadata`` replace).
+
+        The returned ``metadata`` is the validated input echo: ``updateElement`` only
+        returns ``success``, not the stored element. Use ``get_portal`` for a
+        read-after-write view of what Pipefy persisted.
+
+        Args:
+            element_id: Element UUID.
+            page_id: Parent page UUID.
+            type: Element type for client-side metadata validation only.
+            metadata: Complete metadata blob (Pipefy replaces the whole object).
+            data_sources: Optional data source bindings.
+            editable: Optional editable flag.
+        """
+        validated = UpdatePortalElementInput.model_validate(
+            {
+                "element_id": element_id,
+                "page_id": page_id,
+                "type": type,
+                "metadata": metadata,
+                "data_sources": data_sources if data_sources is not None else [],
+                "editable": editable,
+            }
+        )
+        data = await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            UPDATE_ELEMENT_MUTATION,
+            {"input": _graphql_update_element_input(validated)},
+        )
+        update_payload = data.get("updateElement") or {}
+        if not update_payload.get("success"):
+            msg = (
+                f"updateElement returned success=false for element_id={element_id!r} "
+                f"on page_id={page_id!r}."
+            )
+            raise ValueError(msg)
+        return _normalize_portal_element(
+            {
+                "id": validated.element_id,
+                "type": validated.type,
+                "metadata": validated.metadata,
+            }
+        )
+
+    async def delete_portal_element(
+        self, element_id: str, page_id: str
+    ) -> dict[str, Any]:
+        """Delete a portal page element (irreversible).
+
+        Args:
+            element_id: Element UUID.
+            page_id: Parent page UUID.
+        """
+        return await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            DELETE_ELEMENT_MUTATION,
+            {"input": {"element_id": element_id, "page_id": page_id}},
+        )
+
+    async def duplicate_portal_element(
+        self,
+        *,
+        element_uuid: str,
+        interface_uuid: str,
+        page_uuid: str,
+    ) -> dict[str, Any]:
+        """Duplicate a portal page element on the same portal page.
+
+        ``interface_uuid`` and ``page_uuid`` identify where the source element lives
+        (not a cross-page destination). Pipefy appends a copy on that page.
+
+        Args:
+            element_uuid: Element UUID to duplicate.
+            interface_uuid: Portal interface UUID that owns the page.
+            page_uuid: Page UUID that contains the element.
+        """
+        data = await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            DUPLICATE_ELEMENT_MUTATION,
+            {
+                "input": {
+                    "elementUuid": element_uuid,
+                    "interfaceUuid": interface_uuid,
+                    "pageUuid": page_uuid,
+                }
+            },
+        )
+        element = (data.get("duplicateElement") or {}).get("element")
+        if not isinstance(element, dict):
+            msg = "duplicateElement returned no element."
+            raise ValueError(msg)
+        return _normalize_portal_element(element)

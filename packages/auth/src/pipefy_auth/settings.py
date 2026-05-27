@@ -27,7 +27,9 @@ import os
 import sys
 from typing import Literal, Self
 
-from pipefy_infra import PipefyTomlConfigSource, validate_https_service_endpoint_url
+from pipefy_infra import security
+from pipefy_infra.config import PipefyTomlConfigSource
+from pipefy_infra.strings import strip_str
 from pydantic import (
     AliasChoices,
     Field,
@@ -54,13 +56,6 @@ DEFAULT_BASE_URL = "https://app.pipefy.com"
 # Opaque secret / identifier strings: reject leading / trailing whitespace and
 # blank values. Anything in between is opaque to us (the IdP defines the format).
 _OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
-
-# URL-shape gate. ``pipefy_infra.validate_https_service_endpoint_url``
-# does the deeper SSRF + scheme check after settings construction. The
-# scheme part is case-insensitive (RFC 3986 §3.1) so `HTTPS://...` from
-# operator copy-paste passes the shape gate; httpx + gql normalize the
-# scheme downstream.
-_URL_SHAPE_PATTERN = r"^(?i:https?)://\S+$"
 
 # Legacy ``PIPEFY_OAUTH_*`` env vars still resolve to the new
 # ``PIPEFY_SERVICE_ACCOUNT_*`` fields. The mapping is exported for
@@ -191,13 +186,7 @@ class AuthSettings(BaseSettings):
     )
     @classmethod
     def _strip_str(cls, value: object) -> object:
-        # Strip surrounding whitespace on every env-loaded string so a stray
-        # leading / trailing space from copy-paste does not trip the per-field
-        # ``pattern`` / ``Literal`` / bool-parsing constraint. Empty-after-strip
-        # still fails downstream (the "empty raises" contract).
-        if isinstance(value, str):
-            return value.strip()
-        return value
+        return strip_str(value)
 
     # ``AliasChoices`` lists ONLY fully-prefixed env-var names. Unprefixed
     # entries would let pydantic-settings pick up bare-name env vars
@@ -244,7 +233,7 @@ class AuthSettings(BaseSettings):
 
     auth_url: str = Field(
         default=DEFAULT_AUTH_URL,
-        pattern=_URL_SHAPE_PATTERN,
+        pattern=security.URL_SHAPE_PATTERN,
         description=(
             "OIDC issuer URL for the stored-session tier "
             "(env: PIPEFY_AUTH_URL). Defaults to "
@@ -268,7 +257,7 @@ class AuthSettings(BaseSettings):
     # env on the source chain, matching the natural call site.
     base_url: str = Field(
         default=DEFAULT_BASE_URL,
-        pattern=_URL_SHAPE_PATTERN,
+        pattern=security.URL_SHAPE_PATTERN,
         description=(
             "Pipefy API host root (env: PIPEFY_BASE_URL). Drives the "
             "service-account OAuth token endpoint via the "
@@ -366,12 +355,12 @@ class AuthSettings(BaseSettings):
                 "``<base_url>/oauth/token``."
             )
             raise ValueError(msg)
-        validate_https_service_endpoint_url(
+        security.validate_https_url(
             stripped_base,
             "base_url",
             allow_insecure=self.allow_insecure_urls,
         )
-        validate_https_service_endpoint_url(
+        security.validate_https_url(
             self.auth_url.strip(),
             "auth_url",
             allow_insecure=self.allow_insecure_urls,

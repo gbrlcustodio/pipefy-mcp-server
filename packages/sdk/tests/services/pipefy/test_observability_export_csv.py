@@ -18,13 +18,13 @@ from pipefy_sdk.services.observability_export_csv import (
 
 @pytest.fixture(autouse=True)
 def _skip_real_dns_for_download_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Avoid real DNS in download_bytes tests; url_ssrf is covered separately."""
+    """Avoid real DNS in download_bytes tests; security is covered separately."""
 
     async def _ok(_hostname: str) -> None:
         return None
 
     monkeypatch.setattr(
-        "pipefy_sdk.services.observability_export_csv.assert_hostname_resolves_to_public_ips",
+        "pipefy_sdk.services.observability_export_csv.security.assert_hostname_resolves_to_public_ips",
         _ok,
     )
 

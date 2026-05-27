@@ -1,14 +1,22 @@
-"""SSRF-related URL checks shared by ``pipefy_sdk`` and ``pipefy_auth``.
+"""SSRF defenses on URLs destined for outbound HTTP.
 
-Validates URL scheme + hostname before any outbound HTTP. Two surfaces:
+Three layered gates against server-side request forgery:
 
-* :func:`validate_https_service_endpoint_url` — synchronous shape gate used
-  at settings construction (and at every webhook / internal-API URL accepted
-  from user input). Rejects literal IPs in private/loopback/link-local ranges
-  via :func:`assert_hostname_is_not_internal`.
-* :func:`assert_hostname_resolves_to_public_ips` — asynchronous DNS gate used
-  right before issuing a request, so a DNS-rebinding attacker cannot point a
-  public name at an internal IP between validation and connection.
+* :data:`URL_SHAPE_PATTERN`: regex used in ``Field(..., pattern=...)`` on
+  settings fields that carry an https URL. Rejects malformed inputs (no
+  scheme, wrong scheme, whitespace) before any deeper check can run.
+* :func:`validate_https_url`: synchronous gate used at settings
+  construction (and on every webhook / internal-API URL accepted from user
+  input). Rejects literal IPs in private/loopback/link-local ranges via
+  :func:`assert_hostname_is_not_internal`.
+* :func:`assert_hostname_resolves_to_public_ips`: asynchronous DNS gate
+  used right before issuing a request, so a DNS-rebinding attacker cannot
+  point a public name at an internal IP between validation and connection.
+
+Import the module itself (``from pipefy_infra import security``) and call
+through it (``security.validate_https_url(...)``); the ``security.``
+prefix at every call site keeps the SSRF surface trivially greppable for
+audits.
 """
 
 from __future__ import annotations
@@ -18,6 +26,14 @@ import ipaddress
 import socket
 from typing import Final
 from urllib.parse import urlparse
+
+# URL-shape gate for ``Field(..., pattern=URL_SHAPE_PATTERN)`` on settings
+# fields that carry an https URL. The deeper SSRF + scheme check
+# (:func:`validate_https_url`) runs after settings construction. The
+# scheme part is case-insensitive (RFC 3986 §3.1) so
+# ``HTTPS://...`` from operator copy-paste passes the shape gate; httpx and
+# gql normalize the scheme downstream.
+URL_SHAPE_PATTERN = r"^(?i:https?)://\S+$"
 
 _PRIVATE_NETWORKS: Final = (
     ipaddress.ip_network("10.0.0.0/8"),
@@ -62,16 +78,18 @@ def assert_hostname_is_not_internal(hostname: str, *, context: str) -> None:
             raise ValueError(msg)
 
 
-def validate_https_service_endpoint_url(
+def validate_https_url(
     url: str,
     field_label: str,
     *,
     allow_insecure: bool = False,
 ) -> None:
-    """Validate URLs used for GraphQL, OAuth, internal API, or HTTPS webhooks.
+    """Validate a URL destined for outbound HTTP.
 
-    When ``allow_insecure`` is True (``PIPEFY_ALLOW_INSECURE_URLS``), only scheme and
-    hostname are required so local development can use ``http`` and internal hosts.
+    Enforces HTTPS and rejects literal private / loopback / link-local IPs in
+    the host slot. When ``allow_insecure`` is True
+    (``PIPEFY_ALLOW_INSECURE_URLS``), only scheme and hostname are required so
+    local development can use ``http`` and internal hosts.
 
     Raises:
         ValueError: When the URL is missing parts or violates policy.
@@ -131,7 +149,8 @@ async def assert_hostname_resolves_to_public_ips(hostname: str) -> None:
 
 
 __all__ = [
+    "URL_SHAPE_PATTERN",
     "assert_hostname_is_not_internal",
     "assert_hostname_resolves_to_public_ips",
-    "validate_https_service_endpoint_url",
+    "validate_https_url",
 ]

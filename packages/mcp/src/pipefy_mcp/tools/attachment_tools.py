@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import binascii
-import ipaddress
-import socket
 from collections.abc import Awaitable, Callable
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -15,6 +12,7 @@ import httpx
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
+from pipefy_infra import security
 from pipefy_sdk import (
     PipefyClient,
     PipefyId,
@@ -38,23 +36,13 @@ _FILE_DOWNLOAD_TIMEOUT_SEC = 60.0
 _MAX_DOWNLOAD_SIZE_BYTES = 100 * 1024 * 1024  # 100 MiB
 
 
-_PRIVATE_NETWORKS = (
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fd00::/8"),
-    ipaddress.ip_network("fe80::/10"),
-)
-
-
 async def _validate_url_safe(url: str) -> None:
     """Reject URLs that target private/internal networks or non-HTTP schemes.
 
-    DNS resolution is offloaded to a thread executor so it does not block the
-    async event loop.
+    Scheme check is inline (this caller deliberately allows both http and
+    https; `security.validate_https_url` requires https unless
+    `allow_insecure=True`). DNS gating delegates to the shared `security`
+    namespace so every SSRF call site is greppable for audits.
 
     Raises:
         ValueError: When the URL is unsafe for server-side fetch.
@@ -69,21 +57,7 @@ async def _validate_url_safe(url: str) -> None:
         msg = "URL has no hostname."
         raise ValueError(msg)
 
-    try:
-        loop = asyncio.get_event_loop()
-        addr_info = await loop.run_in_executor(
-            None, socket.getaddrinfo, hostname, None, 0, socket.SOCK_STREAM
-        )
-    except socket.gaierror as exc:
-        msg = f"Could not resolve hostname '{hostname}': {exc}"
-        raise ValueError(msg) from exc
-
-    for _, _, _, _, sockaddr in addr_info:
-        ip = ipaddress.ip_address(sockaddr[0])
-        for net in _PRIVATE_NETWORKS:
-            if ip in net:
-                msg = f"URL resolves to a private/internal address ({ip}). Request blocked."
-                raise ValueError(msg)
+    await security.assert_hostname_resolves_to_public_ips(hostname)
 
 
 _MAX_REDIRECTS = 3

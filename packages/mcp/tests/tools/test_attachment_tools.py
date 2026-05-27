@@ -123,13 +123,13 @@ class TestValidateUrlSafe:
         with pytest.raises(ValueError, match="no hostname"):
             await _validate_url_safe("https://")
 
-    @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
+    @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_localhost(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("127.0.0.1", 0))]
         with pytest.raises(ValueError, match="private/internal"):
             await _validate_url_safe("https://localhost/secret")
 
-    @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
+    @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_metadata_endpoint(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [
             (None, None, None, None, ("169.254.169.254", 0))
@@ -137,36 +137,36 @@ class TestValidateUrlSafe:
         with pytest.raises(ValueError, match="private/internal"):
             await _validate_url_safe("http://169.254.169.254/latest/meta-data/")
 
-    @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
+    @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_private_10_range(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("10.0.0.1", 0))]
         with pytest.raises(ValueError, match="private/internal"):
             await _validate_url_safe("https://internal.corp/file.pdf")
 
-    @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
+    @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_private_172_range(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("172.16.0.1", 0))]
         with pytest.raises(ValueError, match="private/internal"):
             await _validate_url_safe("https://internal.corp/file.pdf")
 
-    @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
+    @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_private_192_range(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("192.168.1.1", 0))]
         with pytest.raises(ValueError, match="private/internal"):
             await _validate_url_safe("https://home.lan/file.pdf")
 
-    @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
+    @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_ipv6_loopback(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("::1", 0, 0, 0))]
         with pytest.raises(ValueError, match="private/internal"):
             await _validate_url_safe("https://[::1]/file.pdf")
 
-    @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
+    @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_accepts_public_ip(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("93.184.216.34", 0))]
         await _validate_url_safe("https://example.com/file.pdf")  # should not raise
 
-    @patch("pipefy_mcp.tools.attachment_tools.socket.getaddrinfo")
+    @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_unresolvable_hostname(self, mock_getaddrinfo):
         mock_getaddrinfo.side_effect = socket.gaierror("DNS resolution failed")
         with pytest.raises(ValueError, match="Could not resolve hostname"):
@@ -671,7 +671,7 @@ async def test_upload_attachment_to_card_rejects_ssrf_url(
 ):
     """Private IP URL should fail at file_download step, never reaching presigned URL."""
     with patch(
-        "pipefy_mcp.tools.attachment_tools.socket.getaddrinfo",
+        "pipefy_infra.security.socket.getaddrinfo",
         return_value=[(None, None, None, None, ("169.254.169.254", 0))],
     ):
         async with attachment_session as session:

@@ -10,7 +10,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from openpyxl import load_workbook
-from pipefy_infra import assert_hostname_resolves_to_public_ips
+from pipefy_infra import security
 
 _ALLOWED_HOST_SUFFIX: Final[str] = ".pipefy.com"
 
@@ -26,7 +26,7 @@ async def _validate_export_download_url_before_fetch(url: str) -> None:
     hostname = parsed.hostname
     if not hostname:
         raise ValueError("Download URL has no hostname.")
-    await assert_hostname_resolves_to_public_ips(hostname)
+    await security.assert_hostname_resolves_to_public_ips(hostname)
 
 
 def is_allowed_pipefy_export_download_url(url: str) -> bool:

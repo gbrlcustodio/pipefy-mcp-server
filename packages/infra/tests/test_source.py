@@ -1,4 +1,4 @@
-"""Tests for ``pipefy_config.source.PipefyTomlConfigSource``."""
+"""Tests for ``pipefy_infra.source.PipefyTomlConfigSource``."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import pytest
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from pipefy_config.source import PipefyTomlConfigSource
+from pipefy_infra.source import PipefyTomlConfigSource
 
 
 class _Settings(BaseSettings):

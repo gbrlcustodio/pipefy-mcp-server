@@ -27,7 +27,7 @@ import os
 import sys
 from typing import Self
 
-from pipefy_config import PipefyTomlConfigSource
+from pipefy_infra import PipefyTomlConfigSource
 from pydantic import (
     AliasChoices,
     Field,

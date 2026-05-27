@@ -1,4 +1,4 @@
-"""Tests for ``pipefy_config.paths``."""
+"""Tests for ``pipefy_infra.paths``."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from pipefy_config.paths import config_dir, config_file_path
+from pipefy_infra.paths import config_dir, config_file_path
 
 
 def test_config_dir_posix_default(

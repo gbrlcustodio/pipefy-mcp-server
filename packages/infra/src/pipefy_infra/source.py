@@ -15,7 +15,7 @@ from typing import Any
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
 
-from pipefy_config.paths import config_file_path
+from pipefy_infra.paths import config_file_path
 
 
 class PipefyTomlConfigSource(PydanticBaseSettingsSource):

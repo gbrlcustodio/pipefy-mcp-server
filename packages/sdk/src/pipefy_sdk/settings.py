@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pipefy_config import PipefyTomlConfigSource
+from pipefy_infra import PipefyTomlConfigSource
 from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,

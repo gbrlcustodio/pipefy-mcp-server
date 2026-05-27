@@ -11,8 +11,8 @@ from __future__ import annotations
 
 __version__ = "0.2.0-beta.1"
 
-from pipefy_config.paths import config_dir, config_file_path
-from pipefy_config.source import PipefyTomlConfigSource
+from pipefy_infra.paths import config_dir, config_file_path
+from pipefy_infra.source import PipefyTomlConfigSource
 
 __all__ = [
     "PipefyTomlConfigSource",

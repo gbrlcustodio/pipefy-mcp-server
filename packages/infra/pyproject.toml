@@ -1,7 +1,7 @@
 [project]
 name = "pipefy-infra"
 dynamic = ["version"]
-description = "Shared filesystem-backed configuration helpers (TOML loader, path discovery) for Pipefy SDK and Auth."
+description = "Shared infra (TOML config loader, path discovery, URL SSRF gates) for Pipefy SDK and Auth."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -12,6 +12,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
     "ruff>=0.11.4",
 ]
 
@@ -28,6 +29,8 @@ path = "src/pipefy_infra/__init__.py"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
 markers = [
     "unit: marks a test as a unit test",
 ]

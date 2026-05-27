@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **CLI**: `pipefy skills list` / `pipefy skills show` Typer subcommands and the bundled `packages/cli/src/pipefy_cli/skills/*.md` starter pack. Install the full catalog via [`skills.sh`](https://github.com/vercel-labs/skills) (`npx skills add gbrlcustodio/pipefy-mcp-server`) or reference the canonical files under `skills/<domain>/<skill>/SKILL.md` directly. Closes #230.
 - **Tooling**: `scripts/sync_starter_pack.py` (canonical files at `skills/<domain>/<skill>/SKILL.md` are now the only source).
 - **CLI**: `pyyaml` dependency of `pipefy-cli` (only consumer was the deleted `skills` command).
+- **SDK**: dropped the `pipefy_sdk.utils.url_ssrf` module and its `pipefy_sdk.utils` re-exports (`validate_https_service_endpoint_url`, `assert_hostname_is_not_internal`, `assert_hostname_resolves_to_public_ips`). The shared implementation now lives in `pipefy_infra`; import directly from there (`from pipefy_infra import validate_https_service_endpoint_url`).
 
 ## [0.2.0-beta.1] - 2026-05-18
 

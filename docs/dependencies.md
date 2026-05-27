@@ -14,7 +14,7 @@ This document explains **why** the main third-party packages exist across the **
 | `rapidfuzz` | Fuzzy matching helpers used in domain logic where the SDK mirrors MCP/CLI behavior. |
 | `openpyxl` | Reads `.xlsx` exports and converts sheet data to text (CSV-like) when the API returns Excel. |
 
-**Security:** GraphQL and export URLs are validated against SSRF rules in SDK services; do not bypass host checks when adding download paths.
+**Security:** GraphQL and export URLs are validated against SSRF rules in `pipefy-infra` (invoked from SDK services and `AuthSettings`); do not bypass host checks when adding download paths.
 
 ## pipefy-mcp-server (`packages/mcp`)
 

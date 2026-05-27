@@ -7,6 +7,7 @@ from typing import Any
 
 from gql.transport.exceptions import TransportQueryError
 from httpx import Auth
+from pipefy_infra import validate_https_service_endpoint_url
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.queries.webhook_queries import (
@@ -21,9 +22,6 @@ from pipefy_sdk.queries.webhook_queries import (
 )
 from pipefy_sdk.services.card_service import CardService
 from pipefy_sdk.settings import PipefySettings
-from pipefy_sdk.utils.url_ssrf import (
-    validate_https_service_endpoint_url,
-)
 
 logger = logging.getLogger(__name__)
 

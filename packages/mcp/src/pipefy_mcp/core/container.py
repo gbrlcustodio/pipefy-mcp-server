@@ -60,9 +60,13 @@ class ServicesContainer:
             )
         # ``oidc_client`` is None only when ``disable_stored_session`` is set;
         # the resolver then can't return STORED_SESSION_TIER, so this branch is
-        # unreachable in that case (assert narrows the type for callers below).
+        # unreachable in that case.
         if tier_for(resolved) == STORED_SESSION_TIER:
-            assert oidc_client is not None  # noqa: S101
+            if oidc_client is None:
+                raise RuntimeError(
+                    "STORED_SESSION_TIER resolved without an OIDC client "
+                    "(resolver invariant broken)."
+                )
             try:
                 await asyncio.to_thread(
                     ensure_fresh_session,

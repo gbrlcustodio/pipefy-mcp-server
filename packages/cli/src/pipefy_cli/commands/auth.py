@@ -438,10 +438,14 @@ def auth_status(
         if source == "none":
             raise _StatusExit(report=report, exit_code=2)
         if source == "stored-session":
-            # ``stored-session`` only enters ``detected`` when ``oidc_client``
-            # is non-None (resolver gates the tier on it); narrow for the type
-            # checker.
-            assert auth.oidc_client is not None  # noqa: S101
+            if auth.oidc_client is None:
+                # ``stored-session`` only enters ``detected`` when ``oidc_client``
+                # is non-None (resolver gates the tier on it); reaching here
+                # means that invariant is broken.
+                raise RuntimeError(
+                    "stored-session detected without an OIDC client "
+                    "(resolver invariant broken)."
+                )
             _populate_stored_session(report, auth.oidc_client)
         _fetch_identity(report, settings, auth)
     except _StatusExit as exit_:

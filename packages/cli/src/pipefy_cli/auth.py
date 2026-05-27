@@ -160,12 +160,18 @@ def get_authenticated_client(
     # exit(2) with a "run `pipefy auth login` again" hint instead of leaking
     # out as a transport error on the first GraphQL call.
     if tier == STORED_SESSION_TIER:
-        # Resolver only picks STORED_SESSION_TIER when oidc_client is non-None.
-        assert auth.oidc_client is not None  # noqa: S101
+        oidc = auth.oidc_client
+        if oidc is None:
+            # Resolver only picks STORED_SESSION_TIER when oidc_client is non-None;
+            # reaching here means that invariant is broken.
+            raise RuntimeError(
+                "STORED_SESSION_TIER resolved without an OIDC client "
+                "(resolver invariant broken)."
+            )
         try:
             ensure_fresh_session(
-                issuer=auth.oidc_client.issuer_url,
-                client_id=auth.oidc_client.client_id,
+                issuer=oidc.issuer_url,
+                client_id=oidc.client_id,
             )
         except RefreshError as exc:
             typer.echo(

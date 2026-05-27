@@ -27,7 +27,7 @@ import os
 import sys
 from typing import Self
 
-from pipefy_infra import PipefyTomlConfigSource
+from pipefy_infra import PipefyTomlConfigSource, validate_https_service_endpoint_url
 from pydantic import (
     AliasChoices,
     Field,
@@ -319,8 +319,6 @@ class AuthSettings(BaseSettings):
         # Self-validate so direct ``AuthSettings()`` construction (outside
         # ``CliSettings`` / ``Settings``) is safe.
         from urllib.parse import urlparse
-
-        from pipefy_infra import validate_https_service_endpoint_url
 
         stripped_base = self.base_url.strip()
         parsed_base = urlparse(stripped_base)

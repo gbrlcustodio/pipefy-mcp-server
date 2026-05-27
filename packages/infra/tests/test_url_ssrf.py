@@ -4,6 +4,7 @@ import socket
 from unittest.mock import patch
 
 import pytest
+
 from pipefy_infra import (
     assert_hostname_is_not_internal,
     assert_hostname_resolves_to_public_ips,

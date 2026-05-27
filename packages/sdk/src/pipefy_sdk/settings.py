@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pipefy_infra import PipefyTomlConfigSource
+from pipefy_infra import PipefyTomlConfigSource, validate_https_service_endpoint_url
 from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
@@ -198,8 +198,6 @@ class PipefySettings(BaseSettings):
     @model_validator(mode="after")
     def _validate_pipefy_endpoint_urls(self) -> Self:
         from urllib.parse import urlparse
-
-        from pipefy_infra import validate_https_service_endpoint_url
 
         stripped = self.base_url.strip()
         parsed = urlparse(stripped)

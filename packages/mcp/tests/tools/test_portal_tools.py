@@ -6,6 +6,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_PIPE_REPO_ID
 from gql.transport.exceptions import TransportQueryError
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
@@ -15,7 +16,6 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.portal_tools import PortalTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_PIPE_REPO_ID
 from tools.conftest import assert_invalid_arguments_envelope
 
 _PORTAL_LIST_NODE = {

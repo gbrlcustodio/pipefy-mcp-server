@@ -6,6 +6,7 @@ import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from _shared.fixture_ids import EXAMPLE_PIPE_REPO_ID
+
 from pipefy_cli.main import app
 
 _PORTAL_LIST_NODE = {

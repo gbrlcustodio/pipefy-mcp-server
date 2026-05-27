@@ -1,4 +1,15 @@
-"""SSRF-related URL checks shared across download and HTTP clients."""
+"""SSRF-related URL checks shared by ``pipefy_sdk`` and ``pipefy_auth``.
+
+Validates URL scheme + hostname before any outbound HTTP. Two surfaces:
+
+* :func:`validate_https_service_endpoint_url` — synchronous shape gate used
+  at settings construction (and at every webhook / internal-API URL accepted
+  from user input). Rejects literal IPs in private/loopback/link-local ranges
+  via :func:`assert_hostname_is_not_internal`.
+* :func:`assert_hostname_resolves_to_public_ips` — asynchronous DNS gate used
+  right before issuing a request, so a DNS-rebinding attacker cannot point a
+  public name at an internal IP between validation and connection.
+"""
 
 from __future__ import annotations
 

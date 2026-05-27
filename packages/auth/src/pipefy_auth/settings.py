@@ -55,7 +55,7 @@ DEFAULT_BASE_URL = "https://app.pipefy.com"
 # blank values. Anything in between is opaque to us (the IdP defines the format).
 _OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
 
-# URL-shape gate. ``pipefy_auth._url_ssrf.validate_https_service_endpoint_url``
+# URL-shape gate. ``pipefy_infra.validate_https_service_endpoint_url``
 # does the deeper SSRF + scheme check after settings construction. The
 # scheme part is case-insensitive (RFC 3986 §3.1) so `HTTPS://...` from
 # operator copy-paste passes the shape gate; httpx + gql normalize the
@@ -320,7 +320,7 @@ class AuthSettings(BaseSettings):
         # ``CliSettings`` / ``Settings``) is safe.
         from urllib.parse import urlparse
 
-        from pipefy_auth._url_ssrf import validate_https_service_endpoint_url
+        from pipefy_infra import validate_https_service_endpoint_url
 
         stripped_base = self.base_url.strip()
         parsed_base = urlparse(stripped_base)

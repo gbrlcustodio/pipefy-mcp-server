@@ -4,8 +4,7 @@ import socket
 from unittest.mock import patch
 
 import pytest
-
-from pipefy_sdk.utils.url_ssrf import (
+from pipefy_infra import (
     assert_hostname_is_not_internal,
     assert_hostname_resolves_to_public_ips,
     validate_https_service_endpoint_url,
@@ -15,7 +14,7 @@ from pipefy_sdk.utils.url_ssrf import (
 @pytest.mark.asyncio
 async def test_assert_hostname_resolves_to_public_ips_rejects_loopback():
     with patch(
-        "pipefy_sdk.utils.url_ssrf.socket.getaddrinfo",
+        "pipefy_infra.url_ssrf.socket.getaddrinfo",
         return_value=[
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0)),
         ],
@@ -48,7 +47,7 @@ def test_assert_hostname_is_not_internal_rejects_localhost_name():
 @pytest.mark.asyncio
 async def test_assert_hostname_resolves_to_public_ips_rejects_aws_imds():
     with patch(
-        "pipefy_sdk.utils.url_ssrf.socket.getaddrinfo",
+        "pipefy_infra.url_ssrf.socket.getaddrinfo",
         return_value=[
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("169.254.169.254", 0)),
         ],

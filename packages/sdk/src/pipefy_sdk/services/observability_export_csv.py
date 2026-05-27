@@ -10,10 +10,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 from openpyxl import load_workbook
-
-from pipefy_sdk.utils.url_ssrf import (
-    assert_hostname_resolves_to_public_ips,
-)
+from pipefy_infra import assert_hostname_resolves_to_public_ips
 
 _ALLOWED_HOST_SUFFIX: Final[str] = ".pipefy.com"
 

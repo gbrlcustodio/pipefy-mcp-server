@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import httpx
+from pipefy_infra import validate_https_service_endpoint_url
 
 from pipefy_auth import _http
-from pipefy_auth._url_ssrf import validate_https_service_endpoint_url
 
 DISCOVERY_PATH = "/.well-known/openid-configuration"
 _DEFAULT_TIMEOUT = 10.0

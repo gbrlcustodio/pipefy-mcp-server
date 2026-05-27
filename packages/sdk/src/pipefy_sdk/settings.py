@@ -197,10 +197,9 @@ class PipefySettings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_pipefy_endpoint_urls(self) -> Self:
-        # Deferred import: ``url_ssrf`` validates URLs that may reference settings types (cycle if top-level).
         from urllib.parse import urlparse
 
-        from pipefy_sdk.utils.url_ssrf import validate_https_service_endpoint_url
+        from pipefy_infra import validate_https_service_endpoint_url
 
         stripped = self.base_url.strip()
         parsed = urlparse(stripped)

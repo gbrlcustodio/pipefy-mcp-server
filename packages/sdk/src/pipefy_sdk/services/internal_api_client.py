@@ -15,10 +15,10 @@ from typing import Any
 
 from gql import gql as parse_gql
 from httpx import Auth
+from pipefy_infra import validate_https_service_endpoint_url
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.settings import PipefySettings
-from pipefy_sdk.utils.url_ssrf import validate_https_service_endpoint_url
 
 
 def _format_internal_api_error(errors: list[dict]) -> str:

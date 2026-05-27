@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from _shared.fixture_ids import EXAMPLE_PIPE_REPO_ID
 from pydantic import ValidationError
 
 from pipefy_sdk.models.portal import (
@@ -14,10 +15,9 @@ from pipefy_sdk.models.portal import (
 _PORTAL_UUID = "portal-created-uuid"
 _PAGE_ID = "page-uuid-1"
 _ELEMENT_ID = "el-uuid-1"
-_EXAMPLE_PIPE_REPO_ID = "987654321"
 
 _VALID_FORMS_METADATA = {"name": "Request form", "defaultValues": {}}
-_VALID_FORMS_DATA_SOURCES = [{"repo_uuid": _EXAMPLE_PIPE_REPO_ID}]
+_VALID_FORMS_DATA_SOURCES = [{"repo_uuid": EXAMPLE_PIPE_REPO_ID}]
 _VALID_LINK_METADATA = {
     "linkName": "Open Pipefy",
     "linkUrl": "https://example.com/pipefy",

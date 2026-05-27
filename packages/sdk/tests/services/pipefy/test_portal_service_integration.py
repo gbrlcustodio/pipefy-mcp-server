@@ -1,12 +1,13 @@
 """Live portal read scenarios for PortalService.
 
-Requires valid Pipefy credentials (``.env`` with ``PIPEFY_*``). All tests in this
-module require ``PIPEFY_PORTAL_ORG_UUID`` (an org where the token has
-``manage_portals``). Skips when credentials or that env var are missing so CI stays green.
+Requires valid Pipefy credentials in repo-root **``.env``** (``PIPEFY_*``). All tests
+require ``PIPEFY_PORTAL_ORG_UUID`` (org where the token has ``manage_portals``).
+Unit tests use fictional ids in ``_shared.fixture_ids`` — never commit real org ids
+into test source. See ``docs/setup.md`` and ``.env.example``.
 
 Optional smoke:
 
-    export PIPEFY_PORTAL_ORG_UUID=<org-id>
+    # PIPEFY_PORTAL_ORG_UUID in .env (local only)
     uv run pytest packages/sdk/tests/services/pipefy/test_portal_service_integration.py -m integration -v
 
     uv run pytest packages/sdk/tests/services/pipefy/test_portal_service_integration.py -m integration -k portal_element -v

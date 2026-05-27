@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID
+
 from pipefy_cli.main import app
 
 
@@ -13,9 +15,9 @@ def test_org_get_uses_pipefy_org_id_when_argument_omitted(
 ):
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
-    monkeypatch.setenv("PIPEFY_ORG_ID", "302398434")
+    monkeypatch.setenv("PIPEFY_ORG_ID", EXAMPLE_NUMERIC_ORG_ID)
 
-    payload = {"id": "302398434", "name": "Test Org"}
+    payload = {"id": EXAMPLE_NUMERIC_ORG_ID, "name": "Test Org"}
     mock_client = MagicMock()
     mock_client.get_organization = AsyncMock(return_value=payload)
 
@@ -26,7 +28,7 @@ def test_org_get_uses_pipefy_org_id_when_argument_omitted(
         result = runner.invoke(app, ["org", "get", "--json"])
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
     assert json.loads(result.stdout) == payload
-    mock_client.get_organization.assert_awaited_once_with("302398434")
+    mock_client.get_organization.assert_awaited_once_with(EXAMPLE_NUMERIC_ORG_ID)
 
 
 def test_org_get_positional_overrides_pipefy_org_id(

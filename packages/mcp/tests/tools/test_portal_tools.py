@@ -15,6 +15,7 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.portal_tools import PortalTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_PIPE_REPO_ID
 from tools.conftest import assert_invalid_arguments_envelope
 
 _PORTAL_LIST_NODE = {
@@ -77,9 +78,8 @@ _CREATED_PAGE = {
 _PAGE_LAYOUT = {"rows": [{"columns": [{"width": 12}]}]}
 
 _ELEMENT_UUID = "el-uuid-1"
-_EXAMPLE_PIPE_REPO_ID = "987654321"
 _FORMS_METADATA = {"name": "Request form"}
-_FORMS_DATA_SOURCES = [{"repo_uuid": _EXAMPLE_PIPE_REPO_ID}]
+_FORMS_DATA_SOURCES = [{"repo_uuid": EXAMPLE_PIPE_REPO_ID}]
 
 _CREATED_ELEMENT = {
     "id": _ELEMENT_UUID,
@@ -161,12 +161,12 @@ async def test_list_portals_coerces_int_organization_uuid(
     async with portal_session as session:
         result = await session.call_tool(
             "list_portals",
-            {"organization_uuid": 302398434},
+            {"organization_uuid": int(EXAMPLE_NUMERIC_ORG_ID)},
         )
 
     assert result.isError is False
     mock_portal_client.list_portals.assert_awaited_once_with(
-        "302398434", search_term=None
+        EXAMPLE_NUMERIC_ORG_ID, search_term=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -344,11 +344,11 @@ async def test_create_portal_coerces_int_organization_uuid(
     async with portal_session as session:
         result = await session.call_tool(
             "create_portal",
-            {"organization_uuid": 302398434},
+            {"organization_uuid": int(EXAMPLE_NUMERIC_ORG_ID)},
         )
 
     assert result.isError is False
-    mock_portal_client.create_portal.assert_awaited_once_with("302398434")
+    mock_portal_client.create_portal.assert_awaited_once_with(EXAMPLE_NUMERIC_ORG_ID)
     payload = extract_payload(result)
     assert payload["success"] is True
 
@@ -362,11 +362,11 @@ async def test_create_portal_success(
 
     async with portal_session as session:
         result = await session.call_tool(
-            "create_portal", {"organization_uuid": "302398434"}
+            "create_portal", {"organization_uuid": EXAMPLE_NUMERIC_ORG_ID}
         )
 
     assert result.isError is False
-    mock_portal_client.create_portal.assert_awaited_once_with("302398434")
+    mock_portal_client.create_portal.assert_awaited_once_with(EXAMPLE_NUMERIC_ORG_ID)
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["uuid"] == "portal-created-uuid"

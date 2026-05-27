@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from _shared.fixture_ids import EXAMPLE_PIPE_REPO_ID
 from pipefy_cli.main import app
 
 _PORTAL_LIST_NODE = {
@@ -654,9 +655,8 @@ def test_portal_page_layout_update_json(runner, clean_pipefy_env, saved_cwd, oau
 # ---------------------------------------------------------------------------
 
 _ELEMENT_UUID = "el-uuid-1"
-_EXAMPLE_PIPE_REPO_ID = "987654321"
 _FORMS_METADATA = {"name": "Request form"}
-_FORMS_DATA_SOURCES = [{"repo_uuid": _EXAMPLE_PIPE_REPO_ID}]
+_FORMS_DATA_SOURCES = [{"repo_uuid": EXAMPLE_PIPE_REPO_ID}]
 
 _CREATED_ELEMENT = {
     "id": _ELEMENT_UUID,

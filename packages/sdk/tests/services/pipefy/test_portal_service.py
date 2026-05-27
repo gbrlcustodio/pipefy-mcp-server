@@ -8,6 +8,12 @@ import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _shared.fixture_ids import (
+    EXAMPLE_NUMERIC_ORG_ID,
+    EXAMPLE_ORG_UUID,
+    EXAMPLE_OTHER_ORG_UUID,
+    EXAMPLE_PIPE_REPO_ID,
+)
 from gql.transport.exceptions import TransportQueryError
 from httpx_auth import OAuth2ClientCredentials
 from pydantic import ValidationError
@@ -23,9 +29,6 @@ BASE_URL = "https://app.pipefy.com"
 INTERFACES_URL = "https://app.pipefy.com/graphql/interfaces"
 MAIN_GRAPHQL_URL = "https://app.pipefy.com/graphql"
 OAUTH_URL = "https://app.pipefy.com/oauth/token"
-_ORG_UUID_FOR_TESTS = "341c1327-261c-4766-bb96-7953e4c3970d"
-_OTHER_ORG_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-_EXAMPLE_NUMERIC_ORG_ID = "123456789"
 
 
 @pytest.fixture
@@ -210,7 +213,7 @@ async def test_list_portals_returns_portal_nodes(
     }
     service = _make_interfaces_service(mock_settings, mock_auth, response)
 
-    result = await service.list_portals(_ORG_UUID_FOR_TESTS)
+    result = await service.list_portals(EXAMPLE_ORG_UUID)
 
     assert result == [_PORTAL_LIST_NODE]
 
@@ -228,12 +231,12 @@ async def test_list_portals_passes_org_uuid_and_portal_filter(
         {"interfaces": {"edges": []}},
     )
 
-    await service.list_portals(_OTHER_ORG_UUID)
+    await service.list_portals(EXAMPLE_OTHER_ORG_UUID)
 
     service._interfaces_client.execute_query.assert_called_once()
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     assert query_used is LIST_PORTALS_QUERY
-    assert variables == {"org_uuid": _OTHER_ORG_UUID, "filterBySubType": "portal"}
+    assert variables == {"org_uuid": EXAMPLE_OTHER_ORG_UUID, "filterBySubType": "portal"}
 
 
 @pytest.mark.unit
@@ -249,12 +252,12 @@ async def test_list_portals_passes_search_term_when_provided(
         {"interfaces": {"edges": []}},
     )
 
-    await service.list_portals(_ORG_UUID_FOR_TESTS, search_term="intake")
+    await service.list_portals(EXAMPLE_ORG_UUID, search_term="intake")
 
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     assert query_used is LIST_PORTALS_QUERY
     assert variables == {
-        "org_uuid": _ORG_UUID_FOR_TESTS,
+        "org_uuid": EXAMPLE_ORG_UUID,
         "filterBySubType": "portal",
         "searchTerm": "intake",
     }
@@ -273,7 +276,7 @@ async def test_list_portals_empty_returns_empty_list(
         {"interfaces": {"edges": []}},
     )
 
-    result = await service.list_portals(_ORG_UUID_FOR_TESTS)
+    result = await service.list_portals(EXAMPLE_ORG_UUID)
 
     assert result == []
 
@@ -292,11 +295,11 @@ async def test_list_portals_uuid_org_identifier_passes_through_unchanged(
     )
     service._graphql_client.execute_query = AsyncMock()
 
-    await service.list_portals(_ORG_UUID_FOR_TESTS)
+    await service.list_portals(EXAMPLE_ORG_UUID)
 
     service._graphql_client.execute_query.assert_not_called()
     _, variables = service._interfaces_client.execute_query.call_args[0]
-    assert variables["org_uuid"] == _ORG_UUID_FOR_TESTS
+    assert variables["org_uuid"] == EXAMPLE_ORG_UUID
 
 
 @pytest.mark.unit
@@ -312,17 +315,17 @@ async def test_list_portals_numeric_org_id_resolves_via_main_graphql_client(
         {"interfaces": {"edges": []}},
     )
     service._graphql_client.execute_query = AsyncMock(
-        return_value={"organization": {"uuid": _ORG_UUID_FOR_TESTS}}
+        return_value={"organization": {"uuid": EXAMPLE_ORG_UUID}}
     )
 
-    await service.list_portals(_EXAMPLE_NUMERIC_ORG_ID)
+    await service.list_portals(EXAMPLE_NUMERIC_ORG_ID)
 
     service._graphql_client.execute_query.assert_called_once_with(
         RESOLVE_ORGANIZATION_UUID_QUERY,
-        {"id": _EXAMPLE_NUMERIC_ORG_ID},
+        {"id": EXAMPLE_NUMERIC_ORG_ID},
     )
     _, variables = service._interfaces_client.execute_query.call_args[0]
-    assert variables["org_uuid"] == _ORG_UUID_FOR_TESTS
+    assert variables["org_uuid"] == EXAMPLE_ORG_UUID
 
 
 @pytest.mark.unit
@@ -338,17 +341,17 @@ async def test_list_portals_accepts_int_org_id(
         {"interfaces": {"edges": []}},
     )
     service._graphql_client.execute_query = AsyncMock(
-        return_value={"organization": {"uuid": _ORG_UUID_FOR_TESTS}}
+        return_value={"organization": {"uuid": EXAMPLE_ORG_UUID}}
     )
 
-    await service.list_portals(int(_EXAMPLE_NUMERIC_ORG_ID))
+    await service.list_portals(int(EXAMPLE_NUMERIC_ORG_ID))
 
     service._graphql_client.execute_query.assert_called_once_with(
         RESOLVE_ORGANIZATION_UUID_QUERY,
-        {"id": _EXAMPLE_NUMERIC_ORG_ID},
+        {"id": EXAMPLE_NUMERIC_ORG_ID},
     )
     _, variables = service._interfaces_client.execute_query.call_args[0]
-    assert variables["org_uuid"] == _ORG_UUID_FOR_TESTS
+    assert variables["org_uuid"] == EXAMPLE_ORG_UUID
 
 
 @pytest.mark.unit
@@ -402,7 +405,7 @@ async def test_list_portals_org_not_found_on_resolve_raises_value_error(
     )
 
     with pytest.raises(ValueError, match="Organization not found"):
-        await service.list_portals(_EXAMPLE_NUMERIC_ORG_ID)
+        await service.list_portals(EXAMPLE_NUMERIC_ORG_ID)
 
 
 @pytest.mark.unit
@@ -531,19 +534,19 @@ async def test_create_portal_resolves_numeric_org_and_calls_find_or_create_templ
         _CREATE_PORTAL_RESPONSE,
     )
     service._graphql_client.execute_query = AsyncMock(
-        return_value={"organization": {"uuid": _ORG_UUID_FOR_TESTS}}
+        return_value={"organization": {"uuid": EXAMPLE_ORG_UUID}}
     )
 
-    result = await service.create_portal(_EXAMPLE_NUMERIC_ORG_ID)
+    result = await service.create_portal(EXAMPLE_NUMERIC_ORG_ID)
 
     service._graphql_client.execute_query.assert_called_once_with(
         RESOLVE_ORGANIZATION_UUID_QUERY,
-        {"id": _EXAMPLE_NUMERIC_ORG_ID},
+        {"id": EXAMPLE_NUMERIC_ORG_ID},
     )
     service._interfaces_client.execute_query.assert_called_once()
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "FIND_OR_CREATE_PORTAL_MUTATION")
-    assert variables == {"input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}}
+    assert variables == {"input": {"orgUuid": EXAMPLE_ORG_UUID, "subType": "portal"}}
     assert result["uuid"] == "portal-created-uuid"
 
 
@@ -561,11 +564,11 @@ async def test_create_portal_uuid_org_skips_resolve(
     )
     service._graphql_client.execute_query = AsyncMock()
 
-    await service.create_portal(_ORG_UUID_FOR_TESTS)
+    await service.create_portal(EXAMPLE_ORG_UUID)
 
     service._graphql_client.execute_query.assert_not_called()
     _, variables = service._interfaces_client.execute_query.call_args[0]
-    assert variables == {"input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}}
+    assert variables == {"input": {"orgUuid": EXAMPLE_ORG_UUID, "subType": "portal"}}
 
 
 @pytest.mark.unit
@@ -581,15 +584,15 @@ async def test_create_portal_idempotent_returns_same_interface_uuid(
         _CREATE_PORTAL_RESPONSE,
     )
 
-    first = await service.create_portal(_ORG_UUID_FOR_TESTS)
-    second = await service.create_portal(_ORG_UUID_FOR_TESTS)
+    first = await service.create_portal(EXAMPLE_ORG_UUID)
+    second = await service.create_portal(EXAMPLE_ORG_UUID)
 
     assert first["uuid"] == second["uuid"] == "portal-created-uuid"
     assert service._interfaces_client.execute_query.call_count == 2
     for call in service._interfaces_client.execute_query.call_args_list:
         _, variables = call[0]
         assert variables == {
-            "input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}
+            "input": {"orgUuid": EXAMPLE_ORG_UUID, "subType": "portal"}
         }
 
 
@@ -756,7 +759,7 @@ async def test_create_portal_permission_denied_surfaces_actionable_message(
     )
 
     with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
-        await service.create_portal(_ORG_UUID_FOR_TESTS)
+        await service.create_portal(EXAMPLE_ORG_UUID)
 
 
 @pytest.mark.unit
@@ -1033,9 +1036,8 @@ async def test_create_portal_page_permission_denied_surfaces_actionable_message(
 
 
 _ELEMENT_ID = "el-uuid-1"
-_EXAMPLE_PIPE_REPO_ID = "987654321"
 _FORMS_METADATA = {"name": "Request form"}
-_FORMS_DATA_SOURCES = [{"repo_uuid": _EXAMPLE_PIPE_REPO_ID}]
+_FORMS_DATA_SOURCES = [{"repo_uuid": EXAMPLE_PIPE_REPO_ID}]
 
 _CREATE_ELEMENT_GRAPHQL = {
     "id": _ELEMENT_ID,
@@ -1078,7 +1080,7 @@ async def test_create_portal_element_calls_create_element_with_validated_input(
             "metadata": json.dumps(
                 _FORMS_METADATA, separators=(",", ":"), ensure_ascii=False
             ),
-            "data_sources": [{"repoId": _EXAMPLE_PIPE_REPO_ID, "fieldKeys": []}],
+            "data_sources": [{"repoId": EXAMPLE_PIPE_REPO_ID, "fieldKeys": []}],
         }
     }
 

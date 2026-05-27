@@ -108,6 +108,56 @@ def test_stored_session_tier_requires_keychain_entry(monkeypatch):
 
 
 @pytest.mark.unit
+def test_resolver_skips_stored_session_when_oidc_client_is_none(monkeypatch):
+    """``oidc_client=None`` (kill-switch path) skips the keychain entirely."""
+
+    def _poison(**_kwargs):
+        raise AssertionError("load_session must not be called when oidc_client is None")
+
+    monkeypatch.setattr("pipefy_auth.resolver.load_session", _poison)
+    assert resolve_pipefy_auth(oidc_client=None) is None
+
+
+@pytest.mark.unit
+def test_detect_omits_stored_session_when_oidc_client_is_none(monkeypatch):
+    """``detect_pipefy_tiers`` skips the stored-session probe with no client."""
+
+    def _poison(**_kwargs):
+        raise AssertionError("load_session must not be called when oidc_client is None")
+
+    monkeypatch.setattr("pipefy_auth.resolver.load_session", _poison)
+    tiers = detect_pipefy_tiers(
+        static_token="T",
+        service_account=_service_account(),
+        oidc_client=None,
+    )
+    assert tiers == [STATIC_TOKEN_TIER, SERVICE_ACCOUNT_TIER]
+
+
+@pytest.mark.unit
+def test_auth_settings_kill_switch_returns_none_oidc_client(
+    monkeypatch: "pytest.MonkeyPatch",
+):
+    """``disable_stored_session=True`` makes ``to_oidc_client()`` return ``None``.
+
+    Resolver tests above already cover that ``oidc_client=None`` skips
+    ``load_session``; this asserts the settings → resolver hand-off contract.
+    """
+    # Clear every ``PIPEFY_*`` env var so the model loads from defaults only.
+    # Same pattern as ``_isolate_env`` in ``test_settings_toml_source.py``.
+    import os as _os
+
+    for key in list(_os.environ):
+        if key.startswith("PIPEFY_"):
+            monkeypatch.delenv(key, raising=False)
+
+    from pipefy_auth.settings import AuthSettings
+
+    settings = AuthSettings(disable_stored_session=True)
+    assert settings.to_oidc_client() is None
+
+
+@pytest.mark.unit
 def test_detect_lists_every_configured_tier_in_precedence_order(monkeypatch):
     monkeypatch.setattr(
         "pipefy_auth.resolver.load_session", lambda **_: _stored_session()

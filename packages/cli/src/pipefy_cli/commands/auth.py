@@ -142,6 +142,14 @@ def auth_login(
     from keyring.errors import KeyringError
 
     settings, auth = settings_and_auth_from_ctx(ctx)
+    if auth.oidc_client is None:
+        typer.echo(
+            "Stored sessions are disabled (PIPEFY_DISABLE_STORED_SESSION=1 or "
+            "disable_stored_session=true in config.toml). Unset to log in, or "
+            "use PIPEFY_TOKEN / PIPEFY_SERVICE_ACCOUNT_* for non-interactive auth.",
+            err=True,
+        )
+        raise typer.Exit(2)
     issuer_url = auth.oidc_client.issuer_url
     client_id = auth.oidc_client.client_id
     typer.echo(f"Signing in to Pipefy at {issuer_url} ...")
@@ -193,7 +201,11 @@ def auth_login(
             f"Login succeeded but the token response was malformed: {exc}", err=True
         )
         raise typer.Exit(1) from exc
-    except KeyringError as exc:
+    except (KeyringError, OSError) as exc:
+        # ``OSError`` covers the file-backed PlaintextKeyring path: a read-only
+        # ``config_dir()`` (e.g. CI runner without write perms, NFS mount
+        # without ownership) surfaces as ``PermissionError`` from
+        # ``os.makedirs`` inside the backend, which is not a ``KeyringError``.
         typer.echo(
             f"Login succeeded but the session could not be stored in your OS "
             f"keychain ({keychain_backend_name()}): {exc}. "
@@ -426,6 +438,10 @@ def auth_status(
         if source == "none":
             raise _StatusExit(report=report, exit_code=2)
         if source == "stored-session":
+            # ``stored-session`` only enters ``detected`` when ``oidc_client``
+            # is non-None (resolver gates the tier on it); narrow for the type
+            # checker.
+            assert auth.oidc_client is not None  # noqa: S101
             _populate_stored_session(report, auth.oidc_client)
         _fetch_identity(report, settings, auth)
     except _StatusExit as exit_:
@@ -441,6 +457,13 @@ def auth_status(
 def auth_logout(ctx: typer.Context) -> None:
     """Revoke the stored refresh token at the IdP and clear the local session."""
     settings, auth = settings_and_auth_from_ctx(ctx)
+    if auth.oidc_client is None:
+        typer.echo(
+            "Stored sessions are disabled (PIPEFY_DISABLE_STORED_SESSION=1 or "
+            "disable_stored_session=true in config.toml). Nothing to do.",
+            err=True,
+        )
+        raise typer.Exit(2)
     issuer = auth.oidc_client.issuer_url
     client_id = auth.oidc_client.client_id
 

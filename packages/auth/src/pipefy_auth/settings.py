@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Self
+from typing import Literal, Self
 
 from pipefy_infra import PipefyTomlConfigSource
 from pydantic import (
@@ -185,14 +185,16 @@ class AuthSettings(BaseSettings):
         "auth_url",
         "auth_client_id",
         "base_url",
+        "disable_stored_session",
+        "keychain_backend",
         mode="before",
     )
     @classmethod
     def _strip_str(cls, value: object) -> object:
         # Strip surrounding whitespace on every env-loaded string so a stray
         # leading / trailing space from copy-paste does not trip the per-field
-        # ``pattern`` constraint. Empty-after-strip still fails the pattern
-        # (the "empty raises" contract).
+        # ``pattern`` / ``Literal`` / bool-parsing constraint. Empty-after-strip
+        # still fails downstream (the "empty raises" contract).
         if isinstance(value, str):
             return value.strip()
         return value
@@ -287,6 +289,29 @@ class AuthSettings(BaseSettings):
         ),
     )
 
+    disable_stored_session: bool = Field(
+        default=False,
+        description=(
+            "When true (env: PIPEFY_DISABLE_STORED_SESSION), the stored-session "
+            "tier is never probed: ``to_oidc_client()`` returns None, tier "
+            "resolution skips the keychain, and ``pipefy auth login`` refuses. "
+            "Use to avoid the keychain backend-discovery cost on cold start "
+            "(headless Linux, CI) or to opt out of OS-keychain storage entirely."
+        ),
+    )
+
+    keychain_backend: Literal["auto", "file"] = Field(
+        default="auto",
+        description=(
+            "Active ``keyring`` backend (env: PIPEFY_KEYCHAIN_BACKEND). ``auto`` "
+            "uses the default OS keyring discovery; ``file`` swaps to "
+            "``keyrings.alt.file.PlaintextKeyring`` writing under "
+            "``config_dir()/keyring.cfg``. The file backend stores credentials "
+            "in plaintext on disk; opt-in only, intended for headless Linux "
+            "without Secret Service or for CI runners."
+        ),
+    )
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def service_account_url(self) -> str:
@@ -307,8 +332,16 @@ class AuthSettings(BaseSettings):
             )
         return None
 
-    def to_oidc_client(self) -> OidcClient:
-        """Project the OIDC fields into an :class:`OidcClient` (never returns None)."""
+    def to_oidc_client(self) -> OidcClient | None:
+        """Project the OIDC fields into an :class:`OidcClient`.
+
+        Returns ``None`` when :attr:`disable_stored_session` is set: callers
+        treat that as "the stored-session tier is off" without inspecting any
+        OIDC field. Otherwise returns a real client because ``auth_url`` has
+        a non-empty default.
+        """
+        if self.disable_stored_session:
+            return None
         return OidcClient(
             issuer_url=self.auth_url.strip(),
             client_id=self.auth_client_id.strip(),

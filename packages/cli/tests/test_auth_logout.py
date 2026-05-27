@@ -158,6 +158,27 @@ class TestAuthLogoutCommand:
         assert "auth_url" in result.stderr
         assert "should match pattern" in result.stderr
 
+    def test_disable_stored_session_refuses_with_exit_2(
+        self,
+        runner,
+        monkeypatch: pytest.MonkeyPatch,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """``PIPEFY_DISABLE_STORED_SESSION=1`` makes logout refuse before any keychain probe."""
+        monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", "1")
+
+        def _poison(**_kwargs: object):
+            raise AssertionError(
+                "revoke_session must not be called when sessions are disabled"
+            )
+
+        monkeypatch.setattr(auth_module, "revoke_session", _poison)
+
+        result = runner.invoke(cli_app, ["auth", "logout"])
+        assert result.exit_code == 2
+        assert "Stored sessions are disabled" in result.stderr
+
     def test_no_session_is_idempotent(
         self,
         runner,

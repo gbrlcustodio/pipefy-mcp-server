@@ -564,6 +564,29 @@ class TestAuthLoginCommand:
         assert "auth_url" in result.stderr
         assert "should match pattern" in result.stderr
 
+    def test_disable_stored_session_refuses_with_exit_2(
+        self,
+        cli_runner,
+        monkeypatch: pytest.MonkeyPatch,
+        clean_pipefy_env,
+        saved_cwd,
+    ) -> None:
+        """``PIPEFY_DISABLE_STORED_SESSION=1`` short-circuits login before any OAuth work."""
+        monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", "1")
+
+        from pipefy_cli.commands import auth as auth_module
+
+        def _poison(**_kwargs: object):
+            raise AssertionError(
+                "run_login must not be called when sessions are disabled"
+            )
+
+        monkeypatch.setattr(auth_module, "run_login", _poison)
+
+        result = cli_runner.invoke(cli_app, ["auth", "login"])
+        assert result.exit_code == 2
+        assert "Stored sessions are disabled" in result.stderr
+
     def test_happy_path(
         self,
         cli_runner,

@@ -7,6 +7,7 @@ from typing import Self
 from pipefy_auth import (
     STORED_SESSION_TIER,
     RefreshError,
+    configure_keychain_backend,
     ensure_fresh_session,
     missing_auth_message,
     resolve_pipefy_auth,
@@ -44,6 +45,8 @@ class ServicesContainer:
             settings: Application settings with Pipefy credentials.
         """
         pipefy = settings.pipefy
+        # Swap the keyring backend before any keychain probe (no-op when ``auto``).
+        configure_keychain_backend(settings.auth.keychain_backend)
         oidc_client = settings.auth.to_oidc_client()
         resolved = resolve_pipefy_auth(
             static_token=settings.auth.static_token,
@@ -55,9 +58,11 @@ class ServicesContainer:
                 f"{missing_auth_message()} "
                 f"See {DOCS_SETUP_REF} for host-specific install steps."
             )
-        # ``oidc_client`` is always non-None (``auth_url`` defaults to prod IdP);
-        # tier check gates warmup — only stored-session needs it.
+        # ``oidc_client`` is None only when ``disable_stored_session`` is set;
+        # the resolver then can't return STORED_SESSION_TIER, so this branch is
+        # unreachable in that case (assert narrows the type for callers below).
         if tier_for(resolved) == STORED_SESSION_TIER:
+            assert oidc_client is not None  # noqa: S101
             try:
                 await asyncio.to_thread(
                     ensure_fresh_session,

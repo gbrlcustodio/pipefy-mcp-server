@@ -47,6 +47,7 @@ from pipefy_auth.settings import AuthSettings
 from pipefy_auth.storage import (
     SessionDeleteError,
     StoredSession,
+    configure_keychain_backend,
     delete_session,
     keychain_backend_name,
     keychain_key,
@@ -75,6 +76,7 @@ __all__ = [
     "StaticBearerAuth",
     "StoredSession",
     "__version__",
+    "configure_keychain_backend",
     "delete_session",
     "detect_pipefy_tiers",
     "ensure_fresh_session",

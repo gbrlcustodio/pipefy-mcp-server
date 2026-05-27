@@ -1838,12 +1838,13 @@ Usage: pipefy portal [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list     List portals for an organization.                                   │
-│ get      Fetch a portal by UUID.                                             │
-│ create   Create or fetch the organization's main portal (idempotent).        │
-│ update   Update portal metadata (pass at least one attribute).               │
-│ delete   Delete a portal permanently.                                        │
-│ page     Portal page operations.                                             │
+│ list      List portals for an organization.                                  │
+│ get       Fetch a portal by UUID.                                            │
+│ create    Create or fetch the organization's main portal (idempotent).       │
+│ update    Update portal metadata (pass at least one attribute).              │
+│ delete    Delete a portal permanently.                                       │
+│ page      Portal page operations.                                            │
+│ element   Portal page elements (widgets / tools in the Pipefy UI).           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/create
@@ -1871,6 +1872,91 @@ Usage: pipefy portal delete [OPTIONS] PORTAL_UUID
 │ --yes   -y        Skip interactive confirmation.                             │
 │ --json  -j        Print machine-readable JSON to stdout.                     │
 │ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/element
+Usage: pipefy portal element [OPTIONS] COMMAND [ARGS]...
+
+ Portal page elements (widgets / tools in the Pipefy UI).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create      Create a portal page element.                                    │
+│ update      Update a portal page element (send the full metadata blob).      │
+│ delete      Delete a portal page element permanently.                        │
+│ duplicate   Duplicate a portal page element on the same page (source portal  │
+│             + page UUIDs).                                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/element/create
+Usage: pipefy portal element create [OPTIONS]
+
+ Create a portal page element.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --page-id               TEXT  Parent page UUID. [required]                │
+│ *  --type                  TEXT  InterfacePageElementType value (e.g. forms, │
+│                                  link).                                      │
+│                                  [required]                                  │
+│    --metadata              TEXT  Element metadata JSON (required; full shape │
+│                                  depends on --type).                         │
+│    --data-sources          TEXT  Optional JSON array of data source bindings │
+│                                  (forms elements).                           │
+│    --json          -j            Print machine-readable JSON to stdout.      │
+│    --help                        Show this message and exit.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/element/delete
+Usage: pipefy portal element delete [OPTIONS] ELEMENT_ID PAGE_ID
+
+ Delete a portal page element permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    element_id      TEXT  Element UUID. [required]                          │
+│ *    page_id         TEXT  Parent page UUID. [required]                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/element/duplicate
+Usage: pipefy portal element duplicate [OPTIONS]
+
+ Duplicate a portal page element on the same page (source portal + page UUIDs).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --element-uuid            TEXT  Element UUID to duplicate. [required]     │
+│ *  --interface-uuid          TEXT  Portal interface UUID that owns the page. │
+│                                    [required]                                │
+│ *  --page-uuid               TEXT  Page UUID that contains the element.      │
+│                                    [required]                                │
+│    --json            -j            Print machine-readable JSON to stdout.    │
+│    --help                          Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/element/update
+Usage: pipefy portal element update [OPTIONS] ELEMENT_ID PAGE_ID
+
+ Update a portal page element (send the full metadata blob).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    element_id      TEXT  Element UUID. [required]                          │
+│ *    page_id         TEXT  Parent page UUID. [required]                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --type                  TEXT  Element type for metadata validation (full  │
+│                                  metadata replace on API).                   │
+│                                  [required]                                  │
+│    --metadata              TEXT  Complete element metadata JSON (Pipefy      │
+│                                  replaces the whole blob).                   │
+│    --data-sources          TEXT  Optional JSON array of data source          │
+│                                  bindings.                                   │
+│    --json          -j            Print machine-readable JSON to stdout.      │
+│    --help                        Show this message and exit.                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/get

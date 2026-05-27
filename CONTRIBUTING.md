@@ -19,8 +19,8 @@ Skills are Markdown-only — no Python, no `uv`, no test infrastructure required
    uv run python .github/workflows/scripts/lint_skill_refs.py
    ```
 
-5. Open a PR. CI validates frontmatter, starter-pack bundle drift, MCP tool names, and
-   `pipefy` CLI subcommands referenced in each `SKILL.md`.
+5. Open a PR. CI validates frontmatter, MCP tool names, and `pipefy` CLI
+   subcommands referenced in each `SKILL.md`.
 
 ### Frontmatter requirements
 

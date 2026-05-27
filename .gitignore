@@ -47,7 +47,6 @@ CLAUDE.md
 # Tracked release tooling only (ignore ad-hoc local scripts and smoke artifacts)
 scripts/*
 !scripts/bump_version.py
-!scripts/sync_starter_pack.py
 
 # macOS
 .DS_Store

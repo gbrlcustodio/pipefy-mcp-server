@@ -55,7 +55,6 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │ webhook           Pipe webhook operations.                                   │
 │ relation          Pipe and card relations.                                   │
 │ member            Pipe member operations.                                    │
-│ skills            Browse bundled agent skill playbooks.                      │
 │ graphql           Execute arbitrary GraphQL (mutations require --yes). See   │
 │                   docs/cli/self-healing.md.                                  │
 │ introspect        Discover GraphQL types and operations (JSON default).      │
@@ -2528,44 +2527,6 @@ Usage: pipefy report-pipe update [OPTIONS] REPORT_ID
 │ --featured-field          TEXT                                               │
 │ --json            -j            Print machine-readable JSON to stdout.       │
 │ --help                          Show this message and exit.                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-### HELP skills
-Usage: pipefy skills [OPTIONS] COMMAND [ARGS]...
-
- Browse bundled agent skill playbooks.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list   List all bundled skills with their one-line descriptions.             │
-│ show   Print the full content of a bundled skill to stdout.                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-### HELP skills/list
-Usage: pipefy skills list [OPTIONS]
-
- List all bundled skills with their one-line descriptions.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-### HELP skills/show
-Usage: pipefy skills show [OPTIONS] NAME
-
- Print the full content of a bundled skill to stdout.
-
- Args:     name: Skill name matching the 'name' frontmatter field, the filename
- stem,         or the slug without the ``pipefy-`` prefix (e.g.
- ``pipes-and-cards``).
-
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    name      TEXT  Skill name (e.g. pipefy-pipes-and-cards). [required]    │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP table

@@ -20,11 +20,9 @@ pipefy --help
 pipefy card get 12345 --json
 pipefy card list --pipe 67890
 pipefy card create --pipe 67890 --title "New card"
-
-# Skills catalog
-pipefy skills list
-pipefy skills show pipes-and-cards | pbcopy
 ```
+
+Agent skills are installed separately via [`skills.sh`](https://github.com/vercel-labs/skills); see [`skills/README.md`](../../skills/README.md).
 
 ## Configuration
 

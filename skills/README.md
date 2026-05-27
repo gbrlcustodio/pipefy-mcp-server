@@ -4,15 +4,17 @@ Markdown playbooks in **Anthropic Skills** format: each file describes a Pipefy 
 
 ## Using the catalog
 
-**Starter pack** (shipped inside `pipefy-cli`):
+**Install via [`skills.sh`](https://github.com/vercel-labs/skills)** (55+ agent targets — Claude Code, Cursor, Codex, OpenCode, …):
 
 ```bash
-pipefy skills list
-pipefy skills show pipes-and-cards
-pipefy skills show pipes-and-cards | pbcopy   # copy into agent context
+npx skills add gbrlcustodio/pipefy-mcp-server                           # all skills
+npx skills add gbrlcustodio/pipefy-mcp-server --skill pipefy-pipes-and-cards
+npx skills add gbrlcustodio/pipefy-mcp-server -g -a claude-code -y      # CI-friendly
 ```
 
-**Full catalog from source:**
+`skills.sh` reads canonical `skills/**/SKILL.md` files directly from this repo; no install or wheel needed.
+
+**Reference from source (no install):**
 
 ```bash
 git clone https://github.com/gbrlcustodio/pipefy-mcp-server.git

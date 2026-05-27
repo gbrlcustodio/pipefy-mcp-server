@@ -33,7 +33,6 @@ This document explains **why** the main third-party packages exist across the **
 | `typer` | Command groups, options, and exit-code mapping. |
 | `rich` | Human-readable tables and summaries when `--json` is not used. |
 | `pydantic-settings` | Loads `PIPEFY_*` the same way as MCP/SDK. |
-| `pyyaml` | Parsing bundled skill frontmatter (`pipefy skills list` / `show`). |
 
 ## Supply-chain notes
 

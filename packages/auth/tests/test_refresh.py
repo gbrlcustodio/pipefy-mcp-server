@@ -289,6 +289,92 @@ class TestEnsureFreshSession:
         # Session is still present (user can retry / re-login).
         assert storage.load_session(issuer=_ISSUER, client_id=_CLIENT_ID) is not None
 
+    def test_force_true_refreshes_even_when_fresh(
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _seed_session(monkeypatch, obtained_at=int(time.time()), expires_in=300)
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                _build_handler(
+                    token_payload={
+                        "access_token": "FORCED",
+                        "refresh_token": "FORCED_R",
+                    }
+                )
+            )
+        )
+        result = refresh.ensure_fresh_session(
+            issuer=_ISSUER,
+            client_id=_CLIENT_ID,
+            force=True,
+            http_client=client,
+        )
+        assert result is not None
+        assert result.access_token == "FORCED"
+        assert result.refresh_token == "FORCED_R"
+
+    def test_force_true_persists_rotated_session(
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _seed_session(monkeypatch, obtained_at=int(time.time()), expires_in=300)
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                _build_handler(
+                    token_payload={
+                        "access_token": "FORCED",
+                        "refresh_token": "FORCED_R",
+                    }
+                )
+            )
+        )
+        refresh.ensure_fresh_session(
+            issuer=_ISSUER,
+            client_id=_CLIENT_ID,
+            force=True,
+            http_client=client,
+        )
+        reloaded = storage.load_session(issuer=_ISSUER, client_id=_CLIENT_ID)
+        assert reloaded is not None
+        assert reloaded.access_token == "FORCED"
+        assert reloaded.refresh_token == "FORCED_R"
+
+    def test_force_true_returns_none_when_no_session_stored(
+        self, fake_keyring: InMemoryKeyring
+    ) -> None:
+        assert (
+            refresh.ensure_fresh_session(
+                issuer=_ISSUER, client_id=_CLIENT_ID, force=True
+            )
+            is None
+        )
+
+    def test_force_true_raises_refresh_error_on_idp_failure(
+        self,
+        fake_keyring: InMemoryKeyring,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _seed_session(monkeypatch, obtained_at=int(time.time()), expires_in=300)
+        client = httpx.Client(
+            transport=httpx.MockTransport(
+                _build_handler(
+                    token_status=400,
+                    token_payload={"error": "invalid_grant"},
+                )
+            )
+        )
+        with pytest.raises(refresh.RefreshError) as exc_info:
+            refresh.ensure_fresh_session(
+                issuer=_ISSUER,
+                client_id=_CLIENT_ID,
+                force=True,
+                http_client=client,
+            )
+        assert exc_info.value.error_code == "invalid_grant"
+
 
 # --------------------------------------------------------------------------- #
 # refresh_access_token (low-level)                                            #

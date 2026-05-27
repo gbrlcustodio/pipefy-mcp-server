@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import typer
 from pipefy_auth import (
-    CallableBearerAuth,
     OidcClient,
+    RefreshableBearerAuth,
     ServiceAccount,
     StaticBearerAuth,
     StoredSession,
@@ -295,7 +295,7 @@ def test_stored_session_used_when_no_other_source(clean_pipefy_env):
             _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         mock_pc.assert_called_once()
-        assert isinstance(mock_pc.call_args.kwargs["auth"], CallableBearerAuth)
+        assert isinstance(mock_pc.call_args.kwargs["auth"], RefreshableBearerAuth)
 
 
 def test_cache_reuses_resolved_auth_for_stored_session(clean_pipefy_env):
@@ -335,10 +335,12 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
             side_effect=RefreshError("invalid_grant"),
         ),
     ):
-        # ``resolve_pipefy_auth`` now returns the ``httpx.Auth`` directly;
-        # use a real ``CallableBearerAuth`` so ``tier_for`` recognises it as
+        # Use a real ``RefreshableBearerAuth`` so ``tier_for`` recognises it as
         # the stored-session tier and triggers the eager warmup.
-        mock_resolve.return_value = CallableBearerAuth(lambda: "ACCESS")
+        mock_resolve.return_value = RefreshableBearerAuth(
+            token_provider=lambda: "ACCESS",
+            force_refresh=lambda: None,
+        )
         with pytest.raises(typer.Exit) as excinfo:
             get_authenticated_client(
                 settings,

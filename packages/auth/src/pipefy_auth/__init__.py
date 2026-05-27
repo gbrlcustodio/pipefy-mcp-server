@@ -11,7 +11,11 @@ from __future__ import annotations
 
 __version__ = "0.2.0-beta.1"
 
-from pipefy_auth.bearer import CallableBearerAuth, StaticBearerAuth
+from pipefy_auth.bearer import (
+    CallableBearerAuth,
+    RefreshableBearerAuth,
+    StaticBearerAuth,
+)
 from pipefy_auth.discovery import (
     DiscoveryPolicy,
     ProviderMetadata,
@@ -60,6 +64,7 @@ __all__ = [
     "OidcClient",
     "ProviderMetadata",
     "RefreshError",
+    "RefreshableBearerAuth",
     "RevocationError",
     "RevocationUnsupportedError",
     "SERVICE_ACCOUNT_TIER",

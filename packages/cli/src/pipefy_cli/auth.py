@@ -157,8 +157,7 @@ def get_authenticated_client(
 
     # Stored-session: warm up eagerly so refresh failures surface as a clean
     # exit(2) with a "run `pipefy auth login` again" hint instead of leaking
-    # out as a transport error on the first GraphQL call. ``CallableBearerAuth``
-    # observes the rotated token on subsequent requests.
+    # out as a transport error on the first GraphQL call.
     if tier == STORED_SESSION_TIER:
         try:
             ensure_fresh_session(

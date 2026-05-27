@@ -3,7 +3,12 @@ import time
 from unittest.mock import Mock, patch
 
 import pytest
-from pipefy_auth import AuthSettings, CallableBearerAuth, RefreshError, StaticBearerAuth
+from pipefy_auth import (
+    AuthSettings,
+    RefreshableBearerAuth,
+    RefreshError,
+    StaticBearerAuth,
+)
 from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefyClient, PipefySettings
 
@@ -221,7 +226,7 @@ class TestServicesContainer:
             await ServicesContainer().initialize_services(settings)
 
         pc_auth = mock_pipefy_client_class.call_args.kwargs["auth"]
-        assert isinstance(pc_auth, CallableBearerAuth)
+        assert isinstance(pc_auth, RefreshableBearerAuth)
         mock_ensure_fresh_session.assert_called_once_with(
             issuer="https://signin.pipefy.com/realms/pipefy",
             client_id=settings.auth.auth_client_id,

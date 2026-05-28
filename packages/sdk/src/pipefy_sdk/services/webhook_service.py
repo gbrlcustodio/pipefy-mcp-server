@@ -7,7 +7,7 @@ from typing import Any
 
 from gql.transport.exceptions import TransportQueryError
 from httpx import Auth
-from pipefy_infra import validate_https_service_endpoint_url
+from pipefy_infra import security
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.queries.webhook_queries import (
@@ -217,7 +217,7 @@ class WebhookService(BasePipefyClient):
             actions: List of event action strings (e.g. ['card.create', 'card.move']).
             **attrs: Extra CreateWebhookInput fields (name, filters, headers, etc.).
         """
-        validate_https_service_endpoint_url(
+        security.validate_https_url(
             url, "url", allow_insecure=self.settings.allow_insecure_urls
         )
         input_obj: dict[str, Any] = {
@@ -261,7 +261,7 @@ class WebhookService(BasePipefyClient):
         input_obj: dict[str, Any] = {"id": str(webhook_id)}
         url_val = attrs.get("url")
         if url_val is not None:
-            validate_https_service_endpoint_url(
+            security.validate_https_url(
                 str(url_val),
                 "url",
                 allow_insecure=self.settings.allow_insecure_urls,

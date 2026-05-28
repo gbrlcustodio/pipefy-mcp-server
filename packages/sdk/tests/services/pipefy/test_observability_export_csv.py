@@ -8,6 +8,7 @@ import httpx
 import pytest
 from openpyxl import Workbook
 
+from pipefy_sdk.services import observability_export_csv
 from pipefy_sdk.services.observability_export_csv import (
     download_bytes,
     is_allowed_pipefy_export_download_url,
@@ -18,13 +19,21 @@ from pipefy_sdk.services.observability_export_csv import (
 
 @pytest.fixture(autouse=True)
 def _skip_real_dns_for_download_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Avoid real DNS in download_bytes tests; url_ssrf is covered separately."""
+    """Avoid real DNS in download_bytes tests; security is covered separately.
+
+    Patches the single function on the importing module's `security`
+    namespace rather than swapping the whole namespace; any future
+    `security.X` reference added to ``observability_export_csv`` keeps
+    working under this fixture instead of AttributeError-ing on a stub
+    that only carries the one method.
+    """
 
     async def _ok(_hostname: str) -> None:
         return None
 
     monkeypatch.setattr(
-        "pipefy_sdk.services.observability_export_csv.assert_hostname_resolves_to_public_ips",
+        observability_export_csv.security,
+        "assert_hostname_resolves_to_public_ips",
         _ok,
     )
 

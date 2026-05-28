@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import httpx
-from pipefy_infra import validate_https_service_endpoint_url
+from pipefy_infra import security
 
 from pipefy_auth import _http
 
@@ -119,7 +119,7 @@ def fetch_provider_metadata(
         endpoints.append(("end_session_endpoint", end_session_endpoint))
     for field, value in endpoints:
         try:
-            validate_https_service_endpoint_url(
+            security.validate_https_url(
                 value, field, allow_insecure=policy.allow_insecure_urls
             )
         except ValueError as exc:

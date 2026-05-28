@@ -1,7 +1,7 @@
 [project]
 name = "pipefy-infra"
 dynamic = ["version"]
-description = "Shared infra (TOML config loader, path discovery, URL SSRF gates) for Pipefy SDK and Auth."
+description = "Shared infra (TOML config loader, path discovery, SSRF defenses, string helpers) for Pipefy SDK and Auth."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

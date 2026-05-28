@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import binascii
-import ipaddress
-import socket
 from collections.abc import Awaitable, Callable
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
+from pipefy_infra import security
 from pipefy_sdk import (
     PipefyClient,
     PipefyId,
+    PipefySettings,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
 )
@@ -38,58 +37,28 @@ _FILE_DOWNLOAD_TIMEOUT_SEC = 60.0
 _MAX_DOWNLOAD_SIZE_BYTES = 100 * 1024 * 1024  # 100 MiB
 
 
-_PRIVATE_NETWORKS = (
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fd00::/8"),
-    ipaddress.ip_network("fe80::/10"),
-)
-
-
-async def _validate_url_safe(url: str) -> None:
+async def _validate_url_safe(url: str, *, allow_insecure: bool) -> None:
     """Reject URLs that target private/internal networks or non-HTTP schemes.
 
-    DNS resolution is offloaded to a thread executor so it does not block the
-    async event loop.
+    Delegates to :func:`security.validate_and_assert_public_url`, which runs
+    the sync gate (scheme + literal-IP) and the async DNS gate together.
+    ``allow_insecure`` is wired from ``PipefySettings.allow_insecure_urls``
+    (``PIPEFY_ALLOW_INSECURE_URLS``) so the attachment surface honours the
+    same policy switch as ``base_url`` / ``auth_url``: HTTPS-only in
+    production, http + internal hosts permitted only in dev mode.
 
     Raises:
         ValueError: When the URL is unsafe for server-side fetch.
     """
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        msg = f"Only http and https URLs are allowed, got '{parsed.scheme}'."
-        raise ValueError(msg)
-
-    hostname = parsed.hostname
-    if not hostname:
-        msg = "URL has no hostname."
-        raise ValueError(msg)
-
-    try:
-        loop = asyncio.get_event_loop()
-        addr_info = await loop.run_in_executor(
-            None, socket.getaddrinfo, hostname, None, 0, socket.SOCK_STREAM
-        )
-    except socket.gaierror as exc:
-        msg = f"Could not resolve hostname '{hostname}': {exc}"
-        raise ValueError(msg) from exc
-
-    for _, _, _, _, sockaddr in addr_info:
-        ip = ipaddress.ip_address(sockaddr[0])
-        for net in _PRIVATE_NETWORKS:
-            if ip in net:
-                msg = f"URL resolves to a private/internal address ({ip}). Request blocked."
-                raise ValueError(msg)
+    await security.validate_and_assert_public_url(
+        url, field_label="url", allow_insecure=allow_insecure
+    )
 
 
 _MAX_REDIRECTS = 3
 
 
-async def _download_file_bytes(url: str) -> bytes:
+async def _download_file_bytes(url: str, *, allow_insecure: bool) -> bytes:
     """Fetch file body from an HTTP(S) URL with SSRF protection and size limit.
 
     Redirects are followed manually (up to ``_MAX_REDIRECTS``) so that each
@@ -104,7 +73,7 @@ async def _download_file_bytes(url: str) -> bytes:
             or the redirect chain is too long.
         httpx.HTTPError: On transport/HTTP failures.
     """
-    await _validate_url_safe(url)
+    await _validate_url_safe(url, allow_insecure=allow_insecure)
     current_url = url
 
     async with httpx.AsyncClient() as http:
@@ -120,7 +89,7 @@ async def _download_file_bytes(url: str) -> bytes:
                     if not location:
                         raise ValueError("Redirect without Location header")
                     resolved = urljoin(current_url, location.strip())
-                    await _validate_url_safe(resolved)
+                    await _validate_url_safe(resolved, allow_insecure=allow_insecure)
                     current_url = resolved
                     continue
 
@@ -168,6 +137,20 @@ class AttachmentTools:
 
     @staticmethod
     def register(mcp: FastMCP, client: PipefyClient) -> None:
+        # Read the policy switch once at registration: HTTPS-only by default,
+        # http + internal hosts permitted only when ``PIPEFY_ALLOW_INSECURE_URLS``
+        # is set. Matches the same toggle that gates ``base_url`` / ``auth_url``
+        # in ``PipefySettings`` / ``AuthSettings`` so the attachment surface
+        # does not silently accept plain http on a tightened deployment.
+        #
+        # Caveat: instantiating ``PipefySettings()`` afresh reads env directly,
+        # so programmatic callers that build ``Settings(pipefy=PipefySettings(
+        # allow_insecure_urls=True))`` without setting the env var would see
+        # the attachment gate disagree with the ``PipefyClient`` they built.
+        # Issue #253 tracks the proper fix (move URL-to-bytes resolution into
+        # the SDK so ``PipefyClient`` becomes the only consumer of the flag).
+        allow_insecure_urls = PipefySettings().allow_insecure_urls
+
         async def _resolve_file_bytes(
             ctx: Context[ServerSession, None],
             *,
@@ -183,7 +166,12 @@ class AttachmentTools:
             try:
                 if file_url:
                     await ctx.debug(f"{debug_prefix}: downloading file_url")
-                    return await _download_file_bytes(file_url.strip()), None
+                    return (
+                        await _download_file_bytes(
+                            file_url.strip(), allow_insecure=allow_insecure_urls
+                        ),
+                        None,
+                    )
                 await ctx.debug(f"{debug_prefix}: decoding base64 payload")
                 return _decode_base64_file(file_content_base64 or ""), None
             except (httpx.HTTPError, binascii.Error, ValueError) as exc:

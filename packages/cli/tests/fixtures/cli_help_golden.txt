@@ -1838,13 +1838,14 @@ Usage: pipefy portal [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list      List portals for an organization.                                  │
-│ get       Fetch a portal by UUID.                                            │
-│ create    Create or fetch the organization's main portal (idempotent).       │
-│ update    Update portal metadata (pass at least one attribute).              │
-│ delete    Delete a portal permanently.                                       │
-│ page      Portal page operations.                                            │
-│ element   Portal page elements (widgets / tools in the Pipefy UI).           │
+│ list         List portals for an organization.                               │
+│ get          Fetch a portal by UUID.                                         │
+│ create       Create or fetch the organization's main portal (idempotent).    │
+│ update       Update portal metadata (pass at least one attribute).           │
+│ delete       Delete a portal permanently.                                    │
+│ page         Portal page operations.                                         │
+│ element      Portal page elements (widgets / tools in the Pipefy UI).        │
+│ sub-portal   Sub-portal create, attach, publish, and delete.                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/create
@@ -2089,6 +2090,111 @@ Usage: pipefy portal page update [OPTIONS] PORTAL_UUID PAGE_UUID
 │ --json         -j                            Print machine-readable JSON to  │
 │                                              stdout.                         │
 │ --help                                       Show this message and exit.     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal
+Usage: pipefy portal sub-portal [OPTIONS] COMMAND [ARGS]...
+
+ Sub-portal create, attach, publish, and delete.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create      Create a sub-portal on a main portal.                            │
+│ attach      Attach a sub-portal to a portal page element.                    │
+│ detach      Detach a sub-portal from a portal page element.                  │
+│ publish     Publish a sub-portal on a portal page element.                   │
+│ unpublish   Unpublish a sub-portal from a portal page element.               │
+│ delete      Delete a sub-portal permanently.                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/attach
+Usage: pipefy portal sub-portal attach [OPTIONS] PORTAL_UUID ELEMENT_ID
+                                        SUB_PORTAL_UUID
+
+ Attach a sub-portal to a portal page element.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid          TEXT  Main portal interface UUID. [required]       │
+│ *    element_id           TEXT  Page element UUID. [required]                │
+│ *    sub_portal_uuid      TEXT  Sub-portal UUID. [required]                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/create
+Usage: pipefy portal sub-portal create [OPTIONS]
+
+ Create a sub-portal on a main portal.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --main-portal-uuid          TEXT  Parent main portal interface UUID.      │
+│                                      [required]                              │
+│    --name                      TEXT  Optional sub-portal name.               │
+│    --json              -j            Print machine-readable JSON to stdout.  │
+│    --help                            Show this message and exit.             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/delete
+Usage: pipefy portal sub-portal delete [OPTIONS] SUB_PORTAL_UUID
+
+ Delete a sub-portal permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    sub_portal_uuid      TEXT  Sub-portal UUID. [required]                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/detach
+Usage: pipefy portal sub-portal detach [OPTIONS] PORTAL_UUID ELEMENT_ID
+
+ Detach a sub-portal from a portal page element.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Main portal interface UUID. [required]           │
+│ *    element_id       TEXT  Page element UUID. [required]                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/publish
+Usage: pipefy portal sub-portal publish [OPTIONS] PORTAL_UUID ELEMENT_ID
+                                         SUB_PORTAL_UUID
+
+ Publish a sub-portal on a portal page element.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid          TEXT  Main portal interface UUID. [required]       │
+│ *    element_id           TEXT  Page element UUID. [required]                │
+│ *    sub_portal_uuid      TEXT  Sub-portal UUID. [required]                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/unpublish
+Usage: pipefy portal sub-portal unpublish [OPTIONS] PORTAL_UUID ELEMENT_ID
+
+ Unpublish a sub-portal from a portal page element.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Main portal interface UUID. [required]           │
+│ *    element_id       TEXT  Page element UUID. [required]                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/update

@@ -209,6 +209,10 @@ class ToolRegistry:
         """Register tools with the MCP server."""
         if self.services_container.pipefy_client is None:
             raise ValueError("Pipefy client is not initialized in services container")
+        if self.services_container.pipefy_settings is None:
+            raise ValueError(
+                "Pipefy settings are not initialized in services container"
+            )
 
         PipeTools.register(self.mcp, self.services_container.pipefy_client)
         PipeConfigTools.register(self.mcp, self.services_container.pipefy_client)
@@ -216,7 +220,11 @@ class ToolRegistry:
         TableTools.register(self.mcp, self.services_container.pipefy_client)
         RelationTools.register(self.mcp, self.services_container.pipefy_client)
         ReportTools.register(self.mcp, self.services_container.pipefy_client)
-        AttachmentTools.register(self.mcp, self.services_container.pipefy_client)
+        AttachmentTools.register(
+            self.mcp,
+            self.services_container.pipefy_client,
+            self.services_container.pipefy_settings,
+        )
         MemberTools.register(self.mcp, self.services_container.pipefy_client)
         WebhookTools.register(self.mcp, self.services_container.pipefy_client)
         AutomationTools.register(self.mcp, self.services_container.pipefy_client)

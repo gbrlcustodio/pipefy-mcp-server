@@ -84,7 +84,7 @@ def live_pipefy_client():
 @pytest.fixture
 def live_attachment_mcp(live_pipefy_client):
     mcp = FastMCP("Attachment tools live")
-    AttachmentTools.register(mcp, live_pipefy_client)
+    AttachmentTools.register(mcp, live_pipefy_client, settings.pipefy)
     return mcp
 
 

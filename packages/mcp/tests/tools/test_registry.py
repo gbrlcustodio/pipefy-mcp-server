@@ -51,8 +51,10 @@ class TestToolRegistry:
         """Test that register_tools calls Pipe, PipeConfig, FieldCondition, Table, Relation, Report, Member, Webhook, Introspection, and Observability tools."""
         mock_mcp = Mock(spec=FastMCP)
         mock_client = Mock()
+        mock_settings = Mock()
         mock_container = Mock(spec=ServicesContainer)
         mock_container.pipefy_client = mock_client
+        mock_container.pipefy_settings = mock_settings
 
         registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
         result = registry.register_tools()
@@ -65,7 +67,9 @@ class TestToolRegistry:
         mock_table_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_relation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_report_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_attachment_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_attachment_tools_register.assert_called_once_with(
+            mock_mcp, mock_client, mock_settings
+        )
         mock_member_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_webhook_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
@@ -122,8 +126,10 @@ class TestToolRegistry:
     ):
         mock_mcp = Mock(spec=FastMCP)
         mock_client = Mock()
+        mock_settings = Mock()
         mock_container = Mock(spec=ServicesContainer)
         mock_container.pipefy_client = mock_client
+        mock_container.pipefy_settings = mock_settings
 
         registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
         registry.register_tools()
@@ -136,7 +142,9 @@ class TestToolRegistry:
         mock_table_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_relation_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_report_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_attachment_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        mock_attachment_tools_register.assert_called_once_with(
+            mock_mcp, mock_client, mock_settings
+        )
         mock_member_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_webhook_tools_register.assert_called_once_with(mock_mcp, mock_client)
         mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)

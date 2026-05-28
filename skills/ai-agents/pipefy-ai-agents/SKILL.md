@@ -96,17 +96,28 @@ For `card_moved` and `field_updated`, you MUST include `event_params`. Omitting 
 - `inputMode: "fill_with_ai"` lets the AI decide the value. Omit `inputMode` and set `value` for fixed values.
 - For `update_card`: set `destinationPhaseId: ""` when not moving the card.
 
+#### Example identifiers (fictional)
+
+Use real values from `get_pipe` / `get_start_form_fields` for your org. Placeholders below match unit-test fixtures in this repo. **The syntax matters** (`pipeId`, `fieldId`, `%{field:<internal_id>}`, `inputMode`) — **the example digits do not**; substitute each pipe's numeric `internal_id` and phase id.
+
+| Role | Example value |
+|------|----------------|
+| Pipe (numeric repo id) | `987654321` |
+| Field `internal_id` | `900000101` |
+| Destination phase (`move_card`) | `900000201` |
+| Target pipe (`create_card`) | `900000301` |
+
 #### Metadata examples
 
 ```json
 // update_card
-{ "pipeId": "306996636", "destinationPhaseId": "", "fieldsAttributes": [{ "fieldId": "425829426", "inputMode": "fill_with_ai", "value": "" }] }
+{ "pipeId": "987654321", "destinationPhaseId": "", "fieldsAttributes": [{ "fieldId": "900000101", "inputMode": "fill_with_ai", "value": "" }] }
 
 // move_card
-{ "destinationPhaseId": "342688850", "pipeId": "", "fieldsAttributes": [] }
+{ "destinationPhaseId": "900000201", "pipeId": "", "fieldsAttributes": [] }
 
 // create_card
-{ "pipeId": "307077065", "fieldsAttributes": [{ "fieldId": "title", "inputMode": "fill_with_ai", "value": "" }] }
+{ "pipeId": "900000301", "fieldsAttributes": [{ "fieldId": "title", "inputMode": "fill_with_ai", "value": "" }] }
 ```
 
 ### 6 — Validate (recommended for complex behaviors)
@@ -118,11 +129,13 @@ For `card_moved` and `field_updated`, you MUST include `event_params`. Omitting 
 - Action types are valid
 - Behavior structure passes Pydantic validation
 - Service-account membership on cross-pipe targets when `PIPEFY_SERVICE_ACCOUNT_IDS` is set
-- Slug `fieldId` values resolve to numeric `internal_id`, `%{field:<slug>}` is rewritten to `%{field:<internal_id>}`, and `referencedFieldIds` is auto-populated when applicable.
+- Field IDs are checked against start-form and phase fields, accepting both slug `id` and numeric `internal_id`. Placeholders like `%{field:<slug>}` or `%{field:<internal_id>}` are validated but **not rewritten** at this step.
 
 ### 7 — Create the agent
 
 `create_ai_agent` with `name`, `repo_uuid`, `instruction`, and `behaviors`. One-call creation is preferred — avoids partial agent shells. Agents are **active by default**.
+
+On create/update, slug `fieldId` values are resolved to numeric `internal_id`, `%{field:<slug>}` is rewritten to `%{field:<internal_id>}`, and `referencedFieldIds` is auto-populated when applicable.
 
 ### 8 — Handle responses
 
@@ -161,7 +174,7 @@ Per behavior you can pass `template_params` (or `placeholders`) with `str → st
   "name": "Classify card",
   "event_id": "card_created",
   "instruction_template": "Read {{field_ref}} and classify the card.",
-  "template_params": { "field_ref": "%{field:425829426}" },
+  "template_params": { "field_ref": "%{field:900000101}" },
   "actionParams": {
     "aiBehaviorParams": {
       "actionsAttributes": [
@@ -173,7 +186,7 @@ Per behavior you can pass `template_params` (or `placeholders`) with `str → st
       ]
     }
   },
-  "placeholders": { "pipe": "306996636", "class_field": "425829426" }
+  "placeholders": { "pipe": "987654321", "class_field": "900000101" }
 }
 ```
 

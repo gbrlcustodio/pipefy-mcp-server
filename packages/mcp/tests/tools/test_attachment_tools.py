@@ -1,9 +1,9 @@
 """Tests for attachment MCP tools (mocked PipefyClient)."""
 
 import base64
-import socket
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
@@ -14,15 +14,8 @@ from mcp.shared.memory import (
 from pipefy_sdk import PipefyClient
 from pipefy_sdk.attachment_upload import AttachmentUploadError
 
-from pipefy_mcp.tools.attachment_tools import (
-    AttachmentTools,
-    _download_file_bytes,
-    _validate_url_safe,
-)
+from pipefy_mcp.tools.attachment_tools import AttachmentTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-
-# Patch target for SSRF validation (bypassed in tool-level tests that use mocked httpx)
-_VALIDATE_PATCH = "pipefy_mcp.tools.attachment_tools._validate_url_safe"
 
 
 @pytest.fixture
@@ -80,285 +73,31 @@ def attachment_session(attachment_mcp_server):
     )
 
 
-def _httpx_stream_cm_mock(content=b"hello-bytes", headers=None):
-    """Build a mock that mimics httpx streaming (AsyncClient → stream → aiter_bytes)."""
-    mock_response = MagicMock()
-    mock_response.raise_for_status = MagicMock()
-    mock_response.headers = headers or {}
-
-    async def _aiter_bytes():
-        yield content
-
-    mock_response.aiter_bytes = _aiter_bytes
-
-    stream_cm = MagicMock()
-    stream_cm.__aenter__ = AsyncMock(return_value=mock_response)
-    stream_cm.__aexit__ = AsyncMock(return_value=False)
-
-    mock_inner = MagicMock()
-    mock_inner.stream = MagicMock(return_value=stream_cm)
-
-    mock_cm = MagicMock()
-    mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
-    mock_cm.__aexit__ = AsyncMock(return_value=False)
-    return mock_cm
-
-
 # ---------------------------------------------------------------------------
-# _validate_url_safe unit tests (RF-01: SSRF protection)
+# file_path: happy paths
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
-class TestValidateUrlSafe:
-    """HTTPS-only by default; ``allow_insecure=True`` mirrors PIPEFY_ALLOW_INSECURE_URLS."""
-
-    async def test_rejects_file_scheme(self):
-        with pytest.raises(ValueError, match="must use HTTPS"):
-            await _validate_url_safe("file:///etc/passwd", allow_insecure=False)
-
-    async def test_rejects_ftp_scheme(self):
-        with pytest.raises(ValueError, match="must use HTTPS"):
-            await _validate_url_safe("ftp://internal/data", allow_insecure=False)
-
-    async def test_rejects_http_scheme_by_default(self):
-        # HTTPS-only is the production default; PIPEFY_ALLOW_INSECURE_URLS
-        # opts in to http for local development only.
-        with pytest.raises(ValueError, match="must use HTTPS"):
-            await _validate_url_safe(
-                "http://example.com/file.pdf", allow_insecure=False
-            )
-
-    async def test_rejects_no_hostname(self):
-        with pytest.raises(ValueError, match="must include a hostname"):
-            await _validate_url_safe("https://", allow_insecure=False)
-
-    @patch("pipefy_infra.security.socket.getaddrinfo")
-    async def test_rejects_localhost(self, mock_getaddrinfo):
-        mock_getaddrinfo.return_value = [(None, None, None, None, ("127.0.0.1", 0))]
-        with pytest.raises(ValueError, match="(blocked|localhost)"):
-            await _validate_url_safe("https://localhost/secret", allow_insecure=False)
-
-    @patch("pipefy_infra.security.socket.getaddrinfo")
-    async def test_rejects_metadata_endpoint(self, mock_getaddrinfo):
-        mock_getaddrinfo.return_value = [
-            (None, None, None, None, ("169.254.169.254", 0))
-        ]
-        # With allow_insecure=True the sync gate skips the literal-IP
-        # check; the async DNS gate is what rejects the IMDS address.
-        with pytest.raises(ValueError, match="blocked"):
-            await _validate_url_safe(
-                "http://169.254.169.254/latest/meta-data/", allow_insecure=True
-            )
-
-    @patch("pipefy_infra.security.socket.getaddrinfo")
-    async def test_rejects_private_10_range(self, mock_getaddrinfo):
-        mock_getaddrinfo.return_value = [(None, None, None, None, ("10.0.0.1", 0))]
-        with pytest.raises(ValueError, match="blocked"):
-            await _validate_url_safe(
-                "https://internal.corp/file.pdf", allow_insecure=False
-            )
-
-    @patch("pipefy_infra.security.socket.getaddrinfo")
-    async def test_rejects_private_172_range(self, mock_getaddrinfo):
-        mock_getaddrinfo.return_value = [(None, None, None, None, ("172.16.0.1", 0))]
-        with pytest.raises(ValueError, match="blocked"):
-            await _validate_url_safe(
-                "https://internal.corp/file.pdf", allow_insecure=False
-            )
-
-    @patch("pipefy_infra.security.socket.getaddrinfo")
-    async def test_rejects_private_192_range(self, mock_getaddrinfo):
-        mock_getaddrinfo.return_value = [(None, None, None, None, ("192.168.1.1", 0))]
-        with pytest.raises(ValueError, match="blocked"):
-            await _validate_url_safe("https://home.lan/file.pdf", allow_insecure=False)
-
-    @patch("pipefy_infra.security.socket.getaddrinfo")
-    async def test_rejects_ipv6_loopback(self, mock_getaddrinfo):
-        mock_getaddrinfo.return_value = [(None, None, None, None, ("::1", 0, 0, 0))]
-        # ``urlparse`` strips brackets, so the literal-IP sync gate fires
-        # before any DNS call; mocking getaddrinfo is just defensive.
-        with pytest.raises(ValueError, match="blocked"):
-            await _validate_url_safe("https://[::1]/file.pdf", allow_insecure=False)
-
-    @patch("pipefy_infra.security.socket.getaddrinfo")
-    async def test_accepts_public_ip(self, mock_getaddrinfo):
-        mock_getaddrinfo.return_value = [(None, None, None, None, ("93.184.216.34", 0))]
-        await _validate_url_safe("https://example.com/file.pdf", allow_insecure=False)
-
-    @patch("pipefy_infra.security.socket.getaddrinfo")
-    async def test_rejects_unresolvable_hostname(self, mock_getaddrinfo):
-        mock_getaddrinfo.side_effect = socket.gaierror("DNS resolution failed")
-        with pytest.raises(ValueError, match="Could not resolve hostname"):
-            await _validate_url_safe(
-                "https://nope.invalid/file.pdf", allow_insecure=False
-            )
-
-
-# ---------------------------------------------------------------------------
-# _download_file_bytes redirect + streaming-size protections
-# ---------------------------------------------------------------------------
-
-
-def _httpx_multi_response_cm_mock(*responses):
-    """Build an AsyncClient mock whose .stream() yields the supplied responses in order."""
-    mock_inner = MagicMock()
-    iter_ = iter(responses)
-
-    def _next_stream(*_args, **_kwargs):
-        resp = next(iter_)
-        stream_cm = MagicMock()
-        stream_cm.__aenter__ = AsyncMock(return_value=resp)
-        stream_cm.__aexit__ = AsyncMock(return_value=False)
-        return stream_cm
-
-    mock_inner.stream = MagicMock(side_effect=_next_stream)
-
-    mock_cm = MagicMock()
-    mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
-    mock_cm.__aexit__ = AsyncMock(return_value=False)
-    return mock_cm
-
-
-def _make_response(*, status_code=200, headers=None, body=b"hello"):
-    resp = MagicMock()
-    resp.status_code = status_code
-    resp.headers = headers or {}
-    resp.raise_for_status = MagicMock()
-
-    async def _aiter():
-        yield body
-
-    resp.aiter_bytes = _aiter
-    return resp
-
-
-@pytest.mark.anyio
-async def test_download_rejects_redirect_without_location_header():
-    """A 302 without a Location header is treated as unsafe."""
-    resp = _make_response(status_code=302, headers={})
-    mock_cm = _httpx_multi_response_cm_mock(resp)
-    with (
-        patch(
-            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
-        ),
-        patch(_VALIDATE_PATCH),
-    ):
-        with pytest.raises(ValueError, match="Redirect without Location header"):
-            await _download_file_bytes("https://example.com/a", allow_insecure=False)
-
-
-@pytest.mark.anyio
-async def test_download_follows_safe_redirect_chain():
-    """Redirects are followed up to the limit and intermediate hops are SSRF-validated."""
-    r1 = _make_response(status_code=301, headers={"location": "https://example.com/b"})
-    r2 = _make_response(status_code=200, headers={}, body=b"final-bytes")
-    mock_cm = _httpx_multi_response_cm_mock(r1, r2)
-    with (
-        patch(
-            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
-        ),
-        patch(_VALIDATE_PATCH) as mock_validate,
-    ):
-        result = await _download_file_bytes(
-            "https://example.com/a", allow_insecure=False
-        )
-    assert result == b"final-bytes"
-    # Both the initial URL and the redirect target must go through _validate_url_safe.
-    assert mock_validate.await_count == 2
-
-
-@pytest.mark.anyio
-async def test_download_follows_relative_redirect_resolving_against_current_url():
-    """Relative ``Location`` headers are resolved with ``urljoin`` before SSRF validation."""
-    r1 = _make_response(status_code=302, headers={"location": "/files/a.pdf"})
-    r2 = _make_response(status_code=200, headers={}, body=b"relative-ok")
-    mock_cm = _httpx_multi_response_cm_mock(r1, r2)
-    with (
-        patch(
-            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
-        ),
-        patch(_VALIDATE_PATCH) as mock_validate,
-    ):
-        result = await _download_file_bytes(
-            "https://example.com/start/here", allow_insecure=False
-        )
-    assert result == b"relative-ok"
-    assert mock_validate.await_count == 2
-
-
-@pytest.mark.anyio
-async def test_download_rejects_too_many_redirects():
-    """Redirect loop / chain longer than _MAX_REDIRECTS is rejected."""
-    # 5 redirects, all pointing forward — exceeds _MAX_REDIRECTS = 3.
-    redirects = [
-        _make_response(
-            status_code=302, headers={"location": f"https://example.com/hop{i}"}
-        )
-        for i in range(5)
-    ]
-    mock_cm = _httpx_multi_response_cm_mock(*redirects)
-    with (
-        patch(
-            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
-        ),
-        patch(_VALIDATE_PATCH),
-    ):
-        with pytest.raises(ValueError, match="Too many redirects"):
-            await _download_file_bytes("https://example.com/a", allow_insecure=False)
-
-
-@pytest.mark.anyio
-async def test_download_rejects_streaming_body_exceeding_size_limit():
-    """Body size is enforced during streaming even when Content-Length is absent."""
-    large_chunk = b"x" * (101 * 1024 * 1024)  # 101 MiB > 100 MiB limit
-
-    resp = MagicMock()
-    resp.status_code = 200
-    resp.headers = {}  # no Content-Length → must rely on streaming accumulator
-    resp.raise_for_status = MagicMock()
-
-    async def _aiter():
-        yield large_chunk
-
-    resp.aiter_bytes = _aiter
-    mock_cm = _httpx_multi_response_cm_mock(resp)
-    with (
-        patch(
-            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
-        ),
-        patch(_VALIDATE_PATCH),
-    ):
-        with pytest.raises(ValueError, match="File too large"):
-            await _download_file_bytes(
-                "https://example.com/huge.bin", allow_insecure=False
-            )
-
-
-@pytest.mark.anyio
-async def test_upload_attachment_to_card_file_url_success(
+async def test_upload_attachment_to_card_file_path_success(
     attachment_session,
     mock_attachment_client,
     extract_payload,
+    tmp_path: Path,
 ):
-    mock_cm = _httpx_stream_cm_mock()
-    with (
-        patch(
-            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
-        ),
-        patch(_VALIDATE_PATCH),
-    ):
-        async with attachment_session as session:
-            result = await session.call_tool(
-                "upload_attachment_to_card",
-                {
-                    "organization_id": "42",
-                    "card_id": 7,
-                    "field_id": "field-uuid",
-                    "file_name": "report.pdf",
-                    "file_url": "https://files.example.com/report.pdf",
-                },
-            )
+    f = tmp_path / "report.pdf"
+    f.write_bytes(b"pdf-bytes")
+
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_card",
+            {
+                "organization_id": "42",
+                "card_id": 7,
+                "field_id": "field-uuid",
+                "file_path": str(f),
+            },
+        )
 
     assert result.isError is False
     payload = extract_payload(result)
@@ -367,16 +106,165 @@ async def test_upload_attachment_to_card_file_url_success(
     assert payload["field_id"] == "field-uuid"
     assert payload["file_name"] == "report.pdf"
     assert payload["content_type"] == "application/pdf"
-    assert payload["file_size"] == len(b"hello-bytes")
+    assert payload["file_size"] == len(b"pdf-bytes")
     assert "download_url" in payload
 
     mock_attachment_client.upload_attachment_to_card_field.assert_awaited_once()
     call_kw = mock_attachment_client.upload_attachment_to_card_field.await_args.kwargs
-    assert call_kw["organization_id"] == "42"
-    assert call_kw["card_id"] == "7"
-    assert call_kw["field_id"] == "field-uuid"
     assert call_kw["file_name"] == "report.pdf"
-    assert call_kw["file_bytes"] == b"hello-bytes"
+    assert call_kw["file_bytes"] == b"pdf-bytes"
+
+
+@pytest.mark.anyio
+async def test_upload_attachment_to_card_file_path_explicit_file_name_overrides(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+    tmp_path: Path,
+):
+    f = tmp_path / "abc123.pdf"
+    f.write_bytes(b"data")
+
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_card",
+            {
+                "organization_id": "42",
+                "card_id": 7,
+                "field_id": "f",
+                "file_name": "Invoice 2026.pdf",
+                "file_path": str(f),
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["file_name"] == "Invoice 2026.pdf"
+
+
+@pytest.mark.anyio
+async def test_upload_attachment_to_card_file_path_expands_tilde(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+    tmp_path: Path,
+    monkeypatch,
+):
+    """``~`` in file_path resolves against HOME so programmatic callers work."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    f = tmp_path / "tilde.bin"
+    f.write_bytes(b"home-bytes")
+
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_card",
+            {
+                "organization_id": "1",
+                "card_id": 1,
+                "field_id": "f",
+                "file_path": "~/tilde.bin",
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["file_name"] == "tilde.bin"
+    call_kw = mock_attachment_client.upload_attachment_to_card_field.await_args.kwargs
+    assert call_kw["file_bytes"] == b"home-bytes"
+
+
+@pytest.mark.anyio
+async def test_upload_attachment_to_table_record_file_path_success(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+    tmp_path: Path,
+):
+    f = tmp_path / "data.csv"
+    f.write_bytes(b"id,name\n1,foo\n")
+
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_table_record",
+            {
+                "organization_id": "42",
+                "table_record_id": "999",
+                "field_id": "tf",
+                "file_path": str(f),
+            },
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["table_record_id"] == "999"
+    assert payload["content_type"] == "text/csv"
+    assert payload["file_name"] == "data.csv"
+    call_kw = (
+        mock_attachment_client.upload_attachment_to_table_record_field.await_args.kwargs
+    )
+    assert call_kw["table_record_id"] == "999"
+    assert call_kw["file_bytes"] == b"id,name\n1,foo\n"
+
+
+# ---------------------------------------------------------------------------
+# file_path: failure modes
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_upload_attachment_to_card_file_path_missing(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+    tmp_path: Path,
+):
+    """A non-existent path fails at file_read step, never reaches presigned URL."""
+    missing = tmp_path / "does-not-exist.pdf"
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_card",
+            {
+                "organization_id": "42",
+                "card_id": 1,
+                "field_id": "f",
+                "file_path": str(missing),
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["step"] == "file_read"
+    assert "not found" in tool_error_message(payload).lower()
+    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_upload_attachment_to_card_file_path_is_directory(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+    tmp_path: Path,
+):
+    """A directory is not a regular file — same file_read failure."""
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_card",
+            {
+                "organization_id": "42",
+                "card_id": 1,
+                "field_id": "f",
+                "file_path": str(tmp_path),
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["step"] == "file_read"
+    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Base64 path: behavior unchanged by the file_path refactor
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -409,6 +297,34 @@ async def test_upload_attachment_to_card_base64_success(
     assert call_kw["organization_id"] == "42"
     assert call_kw["file_name"] == "note.txt"
     assert call_kw["file_bytes"] == raw
+
+
+@pytest.mark.anyio
+async def test_upload_attachment_to_card_base64_requires_file_name(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+):
+    """base64 source has no path to infer file_name from; validator should fail."""
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_card",
+            {
+                "organization_id": "42",
+                "card_id": 1,
+                "field_id": "f",
+                "file_content_base64": base64.b64encode(b"x").decode("ascii"),
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["step"] == "validation"
+    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# SDK pipeline failures propagate as step-aware envelopes
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio
@@ -543,7 +459,10 @@ async def test_upload_attachment_to_card_validation_both_sources(
     attachment_session,
     mock_attachment_client,
     extract_payload,
+    tmp_path: Path,
 ):
+    f = tmp_path / "x.bin"
+    f.write_bytes(b"x")
     async with attachment_session as session:
         result = await session.call_tool(
             "upload_attachment_to_card",
@@ -552,7 +471,7 @@ async def test_upload_attachment_to_card_validation_both_sources(
                 "card_id": 1,
                 "field_id": "f",
                 "file_name": "a.bin",
-                "file_url": "https://x",
+                "file_path": str(f),
                 "file_content_base64": base64.b64encode(b"x").decode("ascii"),
             },
         )
@@ -560,44 +479,6 @@ async def test_upload_attachment_to_card_validation_both_sources(
     assert payload["success"] is False
     assert payload["step"] == "validation"
     mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
-
-
-@pytest.mark.anyio
-async def test_upload_attachment_to_table_record_file_url_success(
-    attachment_session,
-    mock_attachment_client,
-    extract_payload,
-):
-    mock_cm = _httpx_stream_cm_mock(b"tbl")
-    with (
-        patch(
-            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
-        ),
-        patch(_VALIDATE_PATCH),
-    ):
-        async with attachment_session as session:
-            result = await session.call_tool(
-                "upload_attachment_to_table_record",
-                {
-                    "organization_id": "42",
-                    "table_record_id": "999",
-                    "field_id": "tf",
-                    "file_name": "data.csv",
-                    "file_url": "https://files.example.com/data.csv",
-                },
-            )
-
-    payload = extract_payload(result)
-    assert payload["success"] is True
-    assert payload["table_record_id"] == "999"
-    assert payload["content_type"] == "text/csv"
-    mock_attachment_client.upload_attachment_to_table_record_field.assert_awaited_once()
-    call_kw = (
-        mock_attachment_client.upload_attachment_to_table_record_field.await_args.kwargs
-    )
-    assert call_kw["table_record_id"] == "999"
-    assert call_kw["field_id"] == "tf"
-    assert call_kw["file_bytes"] == b"tbl"
 
 
 @pytest.mark.anyio
@@ -687,114 +568,8 @@ async def test_upload_attachment_to_table_field_update_failure(
 
 
 # ---------------------------------------------------------------------------
-# RF-01: SSRF rejection at tool level
+# PipefyId coercion: int → str through MCP transport (mcporter mitigation)
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.anyio
-async def test_upload_attachment_to_card_rejects_ssrf_url(
-    attachment_session,
-    mock_attachment_client,
-    extract_payload,
-):
-    """Private IP URL should fail at file_download step, never reaching presigned URL."""
-    with patch(
-        "pipefy_infra.security.socket.getaddrinfo",
-        return_value=[(None, None, None, None, ("169.254.169.254", 0))],
-    ):
-        async with attachment_session as session:
-            result = await session.call_tool(
-                "upload_attachment_to_card",
-                {
-                    "organization_id": "42",
-                    "card_id": 1,
-                    "field_id": "f",
-                    "file_name": "secret.txt",
-                    "file_url": "http://169.254.169.254/latest/meta-data/",
-                },
-            )
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert payload["step"] == "file_download"
-    # HTTPS-only is the production default; the http:// IMDS URL is
-    # rejected by the scheme check before the DNS gate runs. ``blocked``
-    # would appear if ``PIPEFY_ALLOW_INSECURE_URLS`` were set and the
-    # async DNS gate caught the literal IP instead.
-    assert "https" in tool_error_message(payload).lower()
-    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
-
-
-@pytest.mark.anyio
-async def test_upload_attachment_to_card_rejects_file_scheme(
-    attachment_session,
-    mock_attachment_client,
-    extract_payload,
-):
-    async with attachment_session as session:
-        result = await session.call_tool(
-            "upload_attachment_to_card",
-            {
-                "organization_id": "42",
-                "card_id": 1,
-                "field_id": "f",
-                "file_name": "passwd.txt",
-                "file_url": "file:///etc/passwd",
-            },
-        )
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert payload["step"] == "file_download"
-    assert "http" in tool_error_message(payload).lower()
-    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
-# RF-02: File size limit
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.anyio
-async def test_upload_attachment_to_card_rejects_oversized_content_length(
-    attachment_session,
-    mock_attachment_client,
-    extract_payload,
-):
-    """Content-Length header exceeding limit should fail before downloading body."""
-    oversized = str(200 * 1024 * 1024)  # 200 MiB
-    mock_cm = _httpx_stream_cm_mock(
-        content=b"small",
-        headers={"content-length": oversized},
-    )
-    with (
-        patch(
-            "pipefy_mcp.tools.attachment_tools.httpx.AsyncClient", return_value=mock_cm
-        ),
-        patch(_VALIDATE_PATCH),
-    ):
-        async with attachment_session as session:
-            result = await session.call_tool(
-                "upload_attachment_to_card",
-                {
-                    "organization_id": "42",
-                    "card_id": 1,
-                    "field_id": "f",
-                    "file_name": "huge.bin",
-                    "file_url": "https://files.example.com/huge.bin",
-                },
-            )
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert payload["step"] == "file_download"
-    assert (
-        "too large" in tool_error_message(payload).lower()
-        or "limit" in tool_error_message(payload).lower()
-    )
-    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
-
-
-## ---------------------------------------------------------------------------
-## PipefyId coercion: int → str through MCP transport (mcporter mitigation)
-## ---------------------------------------------------------------------------
 
 
 @pytest.mark.anyio

@@ -15,21 +15,33 @@ attachment_app = typer.Typer(
 )
 
 
-def _read_local_file_bytes(path: Path) -> bytes:
+def _read_local_file_bytes(path: Path) -> tuple[Path, bytes]:
     """Read file content for upload (S3 PUT requires the full body).
 
+    ``~`` is expanded so programmatic invocations
+    (``subprocess.run([..., "--file", "~/foo.pdf"])``) work the same as
+    shell-expanded paths and mirror the MCP tool's ``file_path`` behavior.
+
     Args:
-        path: Readable file path.
+        path: File path to read.
 
     Returns:
-        Raw bytes of the file.
+        ``(expanded_path, file_bytes)``. The expanded path is returned so
+        callers can derive ``file_name`` from the same value that was read.
 
     Raises:
-        typer.BadParameter: When the path is not a readable file.
+        typer.BadParameter: When the (expanded) path is not a readable file.
     """
-    if not path.is_file():
-        raise typer.BadParameter(f"Not a file: {path}")
-    return path.read_bytes()
+    expanded = path.expanduser()
+    if not expanded.is_file():
+        raise typer.BadParameter(f"Not a file: {expanded}")
+    try:
+        data = expanded.read_bytes()
+    except PermissionError as exc:
+        raise typer.BadParameter(f"Cannot read {expanded}: {exc.strerror}") from exc
+    except OSError as exc:
+        raise typer.BadParameter(f"Cannot read {expanded}: {exc}") from exc
+    return expanded, data
 
 
 @attachment_app.command("upload")
@@ -39,10 +51,7 @@ def attachment_upload(
         ...,
         "--file",
         "-f",
-        help="Local file path to upload.",
-        exists=True,
-        readable=True,
-        dir_okay=False,
+        help="Local file path to upload. Supports ~ expansion.",
     ),
     card: str | None = typer.Option(
         None,
@@ -84,8 +93,8 @@ def attachment_upload(
     """
     if (card is None) == (record is None):
         raise typer.BadParameter("Provide exactly one of --card or --record.")
-    file_name = file.name
-    file_bytes = _read_local_file_bytes(file)
+    expanded_file, file_bytes = _read_local_file_bytes(file)
+    file_name = expanded_file.name
     org_str = str(organization).strip()
     field_str = str(field).strip()
     if not org_str or not field_str:

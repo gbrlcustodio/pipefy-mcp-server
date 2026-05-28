@@ -50,24 +50,49 @@ def _source_nonempty(value: str | None) -> bool:
 
 
 def _raise_unless_exactly_one_file_source(
-    file_url: str | None,
+    file_path: str | None,
     file_content_base64: str | None,
 ) -> None:
-    """Ensure exactly one of URL or base64 payload is non-empty.
+    """Ensure exactly one of file path or base64 payload is non-empty.
 
     Raises:
         ValueError: When both or neither source is provided with non-empty content.
     """
-    has_url = _source_nonempty(file_url)
+    has_path = _source_nonempty(file_path)
     has_b64 = _source_nonempty(file_content_base64)
-    if has_url and has_b64:
+    if has_path and has_b64:
         raise ValueError(
-            "Provide exactly one of file_url or file_content_base64, not both."
+            "Provide exactly one of file_path or file_content_base64, not both."
         )
-    if not has_url and not has_b64:
+    if not has_path and not has_b64:
         raise ValueError(
-            "Provide exactly one of file_url or file_content_base64 (non-empty)."
+            "Provide exactly one of file_path or file_content_base64 (non-empty)."
         )
+
+
+def _resolve_file_name(file_name: str | None, file_path: str | None) -> str:
+    """Return ``file_name`` (stripped) or the basename of ``file_path``.
+
+    Raises:
+        ValueError: When neither input yields a non-empty name. Reachable when
+            ``file_content_base64`` is the source and ``file_name`` is missing
+            (the source validator catches the no-source case earlier), or when
+            ``file_path`` has no usable basename (``"/"``, ``"."``, ``"~/"``).
+    """
+    if file_name and file_name.strip():
+        return file_name.strip()
+    if file_path and file_path.strip():
+        basename = Path(file_path.strip()).name
+        if basename:
+            return basename
+        raise ValueError(
+            f"file_path {file_path!r} has no basename to use as file_name; "
+            "pass file_name explicitly."
+        )
+    raise ValueError(
+        "file_name is required when file_content_base64 is the source "
+        "(no file_path to infer it from)."
+    )
 
 
 class UploadAttachmentToCardInput(BaseModel):
@@ -78,15 +103,16 @@ class UploadAttachmentToCardInput(BaseModel):
     organization_id: PipefyId
     card_id: PipefyId
     field_id: PipefyId
-    file_name: str
-    file_url: str | None = None
+    file_name: str | None = None
+    file_path: str | None = None
     file_content_base64: str | None = None
     content_type: str | None = None
 
     @model_validator(mode="after")
     def exactly_one_file_source(self) -> Self:
-        """Require exactly one of ``file_url`` or ``file_content_base64`` with non-empty value."""
-        _raise_unless_exactly_one_file_source(self.file_url, self.file_content_base64)
+        """Require exactly one source; derive file_name from path when omitted."""
+        _raise_unless_exactly_one_file_source(self.file_path, self.file_content_base64)
+        self.file_name = _resolve_file_name(self.file_name, self.file_path)
         return self
 
 
@@ -98,13 +124,14 @@ class UploadAttachmentToTableRecordInput(BaseModel):
     organization_id: PipefyId
     table_record_id: PipefyId
     field_id: PipefyId
-    file_name: str
-    file_url: str | None = None
+    file_name: str | None = None
+    file_path: str | None = None
     file_content_base64: str | None = None
     content_type: str | None = None
 
     @model_validator(mode="after")
     def exactly_one_file_source(self) -> Self:
-        """Require exactly one of ``file_url`` or ``file_content_base64`` with non-empty value."""
-        _raise_unless_exactly_one_file_source(self.file_url, self.file_content_base64)
+        """Require exactly one source; derive file_name from path when omitted."""
+        _raise_unless_exactly_one_file_source(self.file_path, self.file_content_base64)
+        self.file_name = _resolve_file_name(self.file_name, self.file_path)
         return self

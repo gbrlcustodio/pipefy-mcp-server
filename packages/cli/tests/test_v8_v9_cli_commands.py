@@ -39,6 +39,64 @@ def test_attachment_upload_requires_card_xor_record(
     mock_client.create_presigned_url.assert_not_called()
 
 
+def test_attachment_upload_card_file_path_expands_tilde(
+    runner: CliRunner,
+    clean_pipefy_env,
+    saved_cwd,
+    oauth_env,
+    tmp_path: Path,
+    monkeypatch,
+):
+    """``--file ~/<name>`` resolves against HOME for programmatic callers."""
+    from pipefy_sdk.attachment_upload import (
+        upload_attachment_to_card_field as _real_upload_card,
+    )
+
+    oauth_env("att-tilde")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / "tilde.bin").write_bytes(b"home-bytes")
+
+    mock_client = MagicMock()
+    mock_client.create_presigned_url = AsyncMock(
+        return_value={"url": "https://bucket.s3/x?y=1", "download_url": "https://dl"}
+    )
+    mock_client.upload_file_to_s3 = AsyncMock(return_value={"status_code": 200})
+    mock_client.extract_storage_path = MagicMock(return_value="org/x/key")
+    mock_client.update_card_field = AsyncMock(return_value={})
+
+    async def _facade_proxy(**kwargs):
+        return await _real_upload_card(mock_client, **kwargs)
+
+    mock_client.upload_attachment_to_card_field = AsyncMock(side_effect=_facade_proxy)
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "attachment",
+                "upload",
+                "--card",
+                "10",
+                "--organization",
+                "1",
+                "--field",
+                "doc",
+                "--file",
+                "~/tilde.bin",
+                "--json",
+            ],
+        )
+    assert r.exit_code == 0, r.stdout + (r.stderr or "")
+    out = json.loads(r.stdout)
+    assert out["success"] is True
+    call_kw = mock_client.upload_attachment_to_card_field.await_args.kwargs
+    assert call_kw["file_bytes"] == b"home-bytes"
+    assert call_kw["file_name"] == "tilde.bin"
+
+
 def test_attachment_upload_card_happy_path_json(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env, tmp_path: Path
 ):

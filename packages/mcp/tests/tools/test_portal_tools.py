@@ -64,6 +64,11 @@ _PORTAL_PERMISSION_DENIED_MSG = (
     "`create_portal` or `manage_portals` from your admin."
 )
 
+_INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR = ValueError(
+    "User does not have permission to manage portals "
+    "[code=PERMISSION_DENIED] [correlation_id=abc-123]"
+)
+
 _PORTAL_UUID = "portal-uuid-1"
 _PAGE_UUID = "page-uuid-1"
 _PAGE_UUID_2 = "page-uuid-2"
@@ -1780,6 +1785,68 @@ async def test_publish_sub_portal_permission_denied_returns_actionable_error(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("portal_session", [None], indirect=True)
+@pytest.mark.parametrize(
+    ("tool_name", "client_method", "tool_args"),
+    [
+        (
+            "publish_sub_portal",
+            "publish_sub_portal",
+            {
+                "portal_uuid": _MAIN_PORTAL_UUID,
+                "element_id": _FORMS_ELEMENT_ID,
+                "sub_portal_uuid": _SUB_PORTAL_UUID,
+            },
+        ),
+        (
+            "unpublish_sub_portal",
+            "unpublish_sub_portal",
+            {
+                "portal_uuid": _MAIN_PORTAL_UUID,
+                "element_id": _FORMS_ELEMENT_ID,
+            },
+        ),
+        (
+            "delete_sub_portal_element",
+            "delete_sub_portal_element",
+            {
+                "portal_uuid": _MAIN_PORTAL_UUID,
+                "element_id": _FORMS_ELEMENT_ID,
+                "confirm": True,
+            },
+        ),
+        (
+            "delete_sub_portal",
+            "delete_sub_portal",
+            {"sub_portal_uuid": _SUB_PORTAL_UUID, "confirm": True},
+        ),
+    ],
+)
+async def test_sub_portal_internal_api_permission_denied_returns_actionable_error(
+    portal_session,
+    mock_portal_client,
+    extract_payload,
+    tool_name: str,
+    client_method: str,
+    tool_args: dict[str, object],
+):
+    setattr(
+        mock_portal_client,
+        client_method,
+        AsyncMock(side_effect=_INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR),
+    )
+
+    async with portal_session as session:
+        result = await session.call_tool(tool_name, tool_args)
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload).lower()
+    assert "create_portal" in message or "manage_portals" in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
 async def test_unpublish_sub_portal_success(
     portal_session, mock_portal_client, extract_payload
 ):
@@ -2017,6 +2084,169 @@ async def test_delete_sub_portal_rejects_blank_sub_portal_uuid(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "sub_portal_uuid" in tool_error_message(payload).lower()
+
+
+_INVALID_SUB_PORTAL_ID_VALUES = ["", "   ", True, False]
+
+_SUB_PORTAL_PORTAL_UUID_CASES = [
+    (
+        "create_sub_portal",
+        "main_portal_uuid",
+        {"name": _SUB_PORTAL_NAME},
+        "create_sub_portal",
+    ),
+    (
+        "update_sub_portal_element",
+        "portal_uuid",
+        {
+            "element_id": _FORMS_ELEMENT_ID,
+            "sub_portal_uuid": _SUB_PORTAL_UUID,
+        },
+        "update_sub_portal_element",
+    ),
+    (
+        "publish_sub_portal",
+        "portal_uuid",
+        {
+            "element_id": _FORMS_ELEMENT_ID,
+            "sub_portal_uuid": _SUB_PORTAL_UUID,
+        },
+        "publish_sub_portal",
+    ),
+    (
+        "unpublish_sub_portal",
+        "portal_uuid",
+        {"element_id": _FORMS_ELEMENT_ID},
+        "unpublish_sub_portal",
+    ),
+    (
+        "delete_sub_portal_element",
+        "portal_uuid",
+        {"element_id": _FORMS_ELEMENT_ID, "confirm": True},
+        "delete_sub_portal_element",
+    ),
+]
+
+_SUB_PORTAL_ELEMENT_OR_SUB_UUID_CASES = [
+    (
+        "update_sub_portal_element",
+        "element_id",
+        {
+            "portal_uuid": _MAIN_PORTAL_UUID,
+            "sub_portal_uuid": _SUB_PORTAL_UUID,
+        },
+        "update_sub_portal_element",
+    ),
+    (
+        "update_sub_portal_element",
+        "sub_portal_uuid",
+        {
+            "portal_uuid": _MAIN_PORTAL_UUID,
+            "element_id": _FORMS_ELEMENT_ID,
+        },
+        "update_sub_portal_element",
+    ),
+    (
+        "publish_sub_portal",
+        "element_id",
+        {
+            "portal_uuid": _MAIN_PORTAL_UUID,
+            "sub_portal_uuid": _SUB_PORTAL_UUID,
+        },
+        "publish_sub_portal",
+    ),
+    (
+        "publish_sub_portal",
+        "sub_portal_uuid",
+        {
+            "portal_uuid": _MAIN_PORTAL_UUID,
+            "element_id": _FORMS_ELEMENT_ID,
+        },
+        "publish_sub_portal",
+    ),
+    (
+        "unpublish_sub_portal",
+        "element_id",
+        {"portal_uuid": _MAIN_PORTAL_UUID},
+        "unpublish_sub_portal",
+    ),
+    (
+        "delete_sub_portal_element",
+        "element_id",
+        {"portal_uuid": _MAIN_PORTAL_UUID, "confirm": True},
+        "delete_sub_portal_element",
+    ),
+    (
+        "delete_sub_portal",
+        "sub_portal_uuid",
+        {"confirm": True},
+        "delete_sub_portal",
+    ),
+]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+@pytest.mark.parametrize("invalid_id", _INVALID_SUB_PORTAL_ID_VALUES)
+@pytest.mark.parametrize(
+    ("tool_name", "id_field", "base_args", "client_method"),
+    _SUB_PORTAL_PORTAL_UUID_CASES,
+    ids=[case[0] for case in _SUB_PORTAL_PORTAL_UUID_CASES],
+)
+async def test_sub_portal_write_tools_reject_invalid_portal_uuid(
+    portal_session,
+    mock_portal_client,
+    extract_payload,
+    invalid_id: object,
+    tool_name: str,
+    id_field: str,
+    base_args: dict[str, object],
+    client_method: str,
+):
+    tool_args = {**base_args, id_field: invalid_id}
+
+    async with portal_session as session:
+        result = await session.call_tool(tool_name, tool_args)
+
+    getattr(mock_portal_client, client_method).assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    if isinstance(invalid_id, bool):
+        assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    else:
+        assert tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+@pytest.mark.parametrize("invalid_id", _INVALID_SUB_PORTAL_ID_VALUES)
+@pytest.mark.parametrize(
+    ("tool_name", "id_field", "base_args", "client_method"),
+    _SUB_PORTAL_ELEMENT_OR_SUB_UUID_CASES,
+    ids=[f"{case[0]}-{case[1]}" for case in _SUB_PORTAL_ELEMENT_OR_SUB_UUID_CASES],
+)
+async def test_sub_portal_write_tools_reject_invalid_element_or_sub_portal_id(
+    portal_session,
+    mock_portal_client,
+    extract_payload,
+    invalid_id: object,
+    tool_name: str,
+    id_field: str,
+    base_args: dict[str, object],
+    client_method: str,
+):
+    tool_args = {**base_args, id_field: invalid_id}
+
+    async with portal_session as session:
+        result = await session.call_tool(tool_name, tool_args)
+
+    getattr(mock_portal_client, client_method).assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    if isinstance(invalid_id, bool):
+        assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    else:
+        assert tool_error_message(payload)
 
 
 @pytest.mark.anyio

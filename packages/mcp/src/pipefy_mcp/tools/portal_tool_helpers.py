@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     extract_graphql_error_codes,
+    strip_internal_api_diagnostic_markers,
 )
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 
@@ -40,9 +41,7 @@ def map_portal_error_to_message(exc: BaseException) -> str:
     text = str(exc).strip()
     lowered = text.lower()
 
-    codes: list[str] = []
-    if isinstance(exc, TransportQueryError):
-        codes = extract_graphql_error_codes(exc)
+    codes = extract_graphql_error_codes(exc)
     errors = getattr(exc, "errors", None)
     if isinstance(errors, list):
         for err in errors:
@@ -59,9 +58,13 @@ def map_portal_error_to_message(exc: BaseException) -> str:
     if isinstance(exc, TransportQueryError):
         messages = extract_error_strings(exc)
         if messages:
-            return "; ".join(messages)
+            return strip_internal_api_diagnostic_markers("; ".join(messages))
 
-    return text if text else "Portal operation failed. Try again or contact support."
+    return (
+        strip_internal_api_diagnostic_markers(text)
+        if text
+        else "Portal operation failed. Try again or contact support."
+    )
 
 
 def validate_portal_optional_string(

@@ -2,6 +2,7 @@
 
 import pytest
 from _shared.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
+from _shared.fixture_ids import EXAMPLE_FIELD_INTERNAL_ID, EXAMPLE_PIPE_REPO_ID
 from pydantic import ValidationError
 
 from pipefy_sdk.models.ai_agent import (
@@ -305,9 +306,9 @@ def test_update_ai_agent_input_accepts_instruction_and_data_source_ids():
 @pytest.mark.unit
 def test_behavior_input_accepts_event_params_with_trigger_field_ids():
     payload = minimal_behavior_dict(event_id="field_updated")
-    payload["eventParams"] = {"triggerFieldIds": ["425829426"]}
+    payload["eventParams"] = {"triggerFieldIds": [EXAMPLE_FIELD_INTERNAL_ID]}
     inp = BehaviorInput.model_validate(payload)
-    assert inp.event_params == {"triggerFieldIds": ["425829426"]}
+    assert inp.event_params == {"triggerFieldIds": [EXAMPLE_FIELD_INTERNAL_ID]}
 
 
 @pytest.mark.unit
@@ -321,10 +322,10 @@ def test_behavior_input_accepts_event_params_with_to_phase_id():
 @pytest.mark.unit
 def test_behavior_input_event_params_included_in_alias_dump():
     payload = minimal_behavior_dict(event_id="field_updated")
-    payload["eventParams"] = {"triggerFieldIds": ["425829426"]}
+    payload["eventParams"] = {"triggerFieldIds": [EXAMPLE_FIELD_INTERNAL_ID]}
     inp = BehaviorInput.model_validate(payload)
     dumped = inp.model_dump(by_alias=True, exclude_none=True)
-    assert dumped["eventParams"] == {"triggerFieldIds": ["425829426"]}
+    assert dumped["eventParams"] == {"triggerFieldIds": [EXAMPLE_FIELD_INTERNAL_ID]}
     assert "event_params" not in dumped
 
 
@@ -339,7 +340,11 @@ def test_behavior_input_event_params_defaults_none():
 
 # --- metadata validation per actionType ---
 
-VALID_FIELDS_ATTR = {"fieldId": "425829426", "inputMode": "fill_with_ai", "value": ""}
+VALID_FIELDS_ATTR = {
+    "fieldId": EXAMPLE_FIELD_INTERNAL_ID,
+    "inputMode": "fill_with_ai",
+    "value": "",
+}
 
 
 @pytest.mark.unit
@@ -348,13 +353,13 @@ VALID_FIELDS_ATTR = {"fieldId": "425829426", "inputMode": "fill_with_ai", "value
 )
 def test_metadata_valid_for_card_field_actions(action_type):
     metadata = {
-        "pipeId": "306996636",
+        "pipeId": EXAMPLE_PIPE_REPO_ID,
         "fieldsAttributes": [VALID_FIELDS_ATTR],
     }
     payload = behavior_with_action(action_type, metadata)
     inp = BehaviorInput.model_validate(payload)
     action = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]
-    assert action["metadata"]["pipeId"] == "306996636"
+    assert action["metadata"]["pipeId"] == EXAMPLE_PIPE_REPO_ID
 
 
 @pytest.mark.unit
@@ -410,7 +415,7 @@ def test_metadata_rejects_field_entry_missing_field_id(action_type):
 def test_metadata_rejects_field_entry_missing_input_mode(action_type):
     metadata = {
         "pipeId": "123",
-        "fieldsAttributes": [{"fieldId": "425829426", "value": ""}],
+        "fieldsAttributes": [{"fieldId": EXAMPLE_FIELD_INTERNAL_ID, "value": ""}],
     }
     payload = behavior_with_action(action_type, metadata)
     with pytest.raises(ValidationError, match="inputMode"):

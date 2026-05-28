@@ -1,5 +1,12 @@
 """Minimal valid AI agent behavior dicts for unit tests (matches Pipefy API constraints)."""
 
+from _shared.fixture_ids import (
+    EXAMPLE_AI_ACTION_REFERENCE_UUID,
+    EXAMPLE_AI_ACTION_REFERENCE_UUID_EMAIL,
+    EXAMPLE_FIELD_INTERNAL_ID,
+    EXAMPLE_PIPE_REPO_ID,
+)
+
 
 def minimal_behavior_dict(name="Test Behavior", event_id="card_created"):
     """One behavior with actionParams.aiBehaviorParams.actionsAttributes (required by live API).
@@ -19,10 +26,10 @@ def minimal_behavior_dict(name="Test Behavior", event_id="card_created"):
                         "actionType": "update_card",
                         "metadata": {
                             "destinationPhaseId": "",
-                            "pipeId": "306996636",
+                            "pipeId": EXAMPLE_PIPE_REPO_ID,
                             "fieldsAttributes": [
                                 {
-                                    "fieldId": "425829426",
+                                    "fieldId": EXAMPLE_FIELD_INTERNAL_ID,
                                     "inputMode": "fill_with_ai",
                                     "value": "",
                                 },
@@ -87,16 +94,16 @@ def mock_api_behavior_response():
                         "id": "456",
                         "name": "Update card fields",
                         "actionType": "update_card",
-                        "referenceId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                        "referenceId": EXAMPLE_AI_ACTION_REFERENCE_UUID,
                         "metadata": {
                             "destinationPhaseId": None,
-                            "pipeId": "306996636",
+                            "pipeId": EXAMPLE_PIPE_REPO_ID,
                             "tableId": None,
                             "emailTemplateId": None,
                             "allowTemplateModifications": None,
                             "fieldsAttributes": [
                                 {
-                                    "fieldId": "425829426",
+                                    "fieldId": EXAMPLE_FIELD_INTERNAL_ID,
                                     "inputMode": "fill_with_ai",
                                     "value": "",
                                 },
@@ -120,7 +127,7 @@ def mock_api_behavior_response_send_email_template():
     attrs = base["actionParams"]["aiBehaviorParams"]["actionsAttributes"][0]
     attrs["name"] = "Send notification email"
     attrs["actionType"] = "send_email_template"
-    attrs["referenceId"] = "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+    attrs["referenceId"] = EXAMPLE_AI_ACTION_REFERENCE_UUID_EMAIL
     attrs["metadata"] = {
         "destinationPhaseId": None,
         "pipeId": None,

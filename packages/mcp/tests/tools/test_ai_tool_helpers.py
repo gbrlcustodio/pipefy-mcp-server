@@ -1,6 +1,7 @@
 """Tests for AI tool helper functions (error enrichment, validation, payload builders)."""
 
 import pytest
+from _shared.fixture_ids import EXAMPLE_PIPE_REPO_ID
 from gql.transport.exceptions import TransportQueryError
 
 from pipefy_mcp.tools.ai_tool_helpers import (
@@ -743,8 +744,8 @@ def test_summarize_behaviors_missing_action_params():
 def test_extract_pipe_id_from_update_card_behavior():
     from pipefy_mcp.tools.ai_agent_tools import _extract_pipe_id_from_behaviors
 
-    behaviors = [_update_card_behavior(pipe_id="306996636")]
-    assert _extract_pipe_id_from_behaviors(behaviors) == "306996636"
+    behaviors = [_update_card_behavior(pipe_id=EXAMPLE_PIPE_REPO_ID)]
+    assert _extract_pipe_id_from_behaviors(behaviors) == EXAMPLE_PIPE_REPO_ID
 
 
 @pytest.mark.unit

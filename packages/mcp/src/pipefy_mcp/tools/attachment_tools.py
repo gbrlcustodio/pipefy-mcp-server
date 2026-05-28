@@ -39,25 +39,19 @@ _MAX_DOWNLOAD_SIZE_BYTES = 100 * 1024 * 1024  # 100 MiB
 async def _validate_url_safe(url: str) -> None:
     """Reject URLs that target private/internal networks or non-HTTP schemes.
 
-    Scheme check is inline (this caller deliberately allows both http and
-    https; `security.validate_https_url` requires https unless
-    `allow_insecure=True`). DNS gating delegates to the shared `security`
-    namespace so every SSRF call site is greppable for audits.
+    Delegates the sync gate (scheme + literal-IP check) to
+    `security.validate_https_url` with `allow_insecure=True` so both http and
+    https are allowed (attachment downloads happen against operator-provided
+    URLs that may be plain http). DNS gating delegates to
+    `security.assert_hostname_resolves_to_public_ips`, which also enforces
+    the non-empty hostname contract.
 
     Raises:
         ValueError: When the URL is unsafe for server-side fetch.
     """
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        msg = f"Only http and https URLs are allowed, got '{parsed.scheme}'."
-        raise ValueError(msg)
-
-    hostname = parsed.hostname
-    if not hostname:
-        msg = "URL has no hostname."
-        raise ValueError(msg)
-
-    await security.assert_hostname_resolves_to_public_ips(hostname)
+    security.validate_https_url(url, "url", allow_insecure=True)
+    hostname = urlparse(url).hostname
+    await security.assert_hostname_resolves_to_public_ips(hostname or "")
 
 
 _MAX_REDIRECTS = 3

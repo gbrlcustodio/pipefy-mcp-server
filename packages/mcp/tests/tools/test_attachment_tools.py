@@ -112,15 +112,15 @@ def _httpx_stream_cm_mock(content=b"hello-bytes", headers=None):
 @pytest.mark.anyio
 class TestValidateUrlSafe:
     async def test_rejects_file_scheme(self):
-        with pytest.raises(ValueError, match="Only http and https"):
+        with pytest.raises(ValueError, match="must use http or https"):
             await _validate_url_safe("file:///etc/passwd")
 
     async def test_rejects_ftp_scheme(self):
-        with pytest.raises(ValueError, match="Only http and https"):
+        with pytest.raises(ValueError, match="must use http or https"):
             await _validate_url_safe("ftp://internal/data")
 
     async def test_rejects_no_hostname(self):
-        with pytest.raises(ValueError, match="no hostname"):
+        with pytest.raises(ValueError, match="must include a hostname"):
             await _validate_url_safe("https://")
 
     @patch("pipefy_infra.security.socket.getaddrinfo")

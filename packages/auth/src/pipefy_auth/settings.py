@@ -181,12 +181,23 @@ class AuthSettings(BaseSettings):
         "auth_client_id",
         "base_url",
         "disable_stored_session",
-        "keychain_backend",
         mode="before",
     )
     @classmethod
     def _strip_str(cls, value: object) -> object:
         return strip_str(value)
+
+    @field_validator("keychain_backend", mode="before")
+    @classmethod
+    def _normalize_keychain_backend(cls, value: object) -> object:
+        # ``keychain_backend`` is ``Literal["auto", "file"]``; copy-pasted env
+        # values like ``PIPEFY_KEYCHAIN_BACKEND=' AUTO '`` should normalize to
+        # ``"auto"`` rather than fail Literal validation with a cryptic enum
+        # error. Case is meaningful for credential fields (kept strict via
+        # ``_strip_str``), so the lowering applies only here.
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
     # ``AliasChoices`` lists ONLY fully-prefixed env-var names. Unprefixed
     # entries would let pydantic-settings pick up bare-name env vars
@@ -340,21 +351,14 @@ class AuthSettings(BaseSettings):
     def _validate_endpoint_urls(self) -> Self:
         # Self-validate so direct ``AuthSettings()`` construction (outside
         # ``CliSettings`` / ``Settings``) is safe.
-        from urllib.parse import urlparse
-
         stripped_base = self.base_url.strip()
-        parsed_base = urlparse(stripped_base)
-        # ``base_url`` must be a host root: ``service_account_url`` appends
-        # ``/oauth/token`` via f-string. A query / fragment / non-root path
-        # would land inside the resulting URL's query slot rather than as a
-        # path component, producing silently-malformed token endpoints.
-        if parsed_base.path.strip("/") or parsed_base.query or parsed_base.fragment:
-            msg = (
-                f"base_url must be a host root with no path, query, or fragment "
-                f"(got {self.base_url!r}); the OAuth token endpoint derives via "
-                "``<base_url>/oauth/token``."
-            )
-            raise ValueError(msg)
+        security.assert_url_is_host_root(
+            stripped_base,
+            field_label="base_url",
+            derived_paths_hint=(
+                "the OAuth token endpoint derives via ``<base_url>/oauth/token``"
+            ),
+        )
         security.validate_https_url(
             stripped_base,
             "base_url",

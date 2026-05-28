@@ -24,7 +24,6 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import socket
-from typing import Final
 from urllib.parse import urlparse
 
 # URL-shape gate for ``Field(..., pattern=URL_SHAPE_PATTERN)`` on settings
@@ -35,16 +34,23 @@ from urllib.parse import urlparse
 # gql normalize the scheme downstream.
 URL_SHAPE_PATTERN = r"^(?i:https?)://\S+$"
 
-_PRIVATE_NETWORKS: Final = (
-    ipaddress.ip_network("10.0.0.0/8"),
-    ipaddress.ip_network("172.16.0.0/12"),
-    ipaddress.ip_network("192.168.0.0/16"),
-    ipaddress.ip_network("169.254.0.0/16"),
-    ipaddress.ip_network("127.0.0.0/8"),
-    ipaddress.ip_network("::1/128"),
-    ipaddress.ip_network("fd00::/8"),
-    ipaddress.ip_network("fe80::/10"),
-)
+
+def _is_blocked_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    # Use the stdlib ``is_*`` properties instead of a hand-rolled
+    # ``_PRIVATE_NETWORKS`` tuple: an IPv4-mapped IPv6 literal like
+    # ``::ffff:127.0.0.1`` is an ``IPv6Address`` that is in none of the
+    # v4 networks listed in such a tuple, but its ``is_loopback`` /
+    # ``is_private`` properties correctly cross the address-family boundary
+    # via the embedded v4 portion. Listing the properties explicitly (rather
+    # than ``not ip.is_global``) keeps the blocked set intent-explicit.
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
 
 
 def assert_hostname_is_not_internal(hostname: str, *, context: str) -> None:
@@ -69,13 +75,12 @@ def assert_hostname_is_not_internal(hostname: str, *, context: str) -> None:
     except ValueError:
         return
 
-    for net in _PRIVATE_NETWORKS:
-        if ip in net:
-            msg = (
-                f"{context}: {hostname!r} is a private, loopback, or link-local address "
-                "and is not allowed."
-            )
-            raise ValueError(msg)
+    if _is_blocked_ip(ip):
+        msg = (
+            f"{context}: {hostname!r} is a private, loopback, or link-local address "
+            "and is not allowed."
+        )
+        raise ValueError(msg)
 
 
 def validate_https_url(
@@ -99,21 +104,58 @@ def validate_https_url(
     if not parsed.scheme:
         msg = f"{field_label}: URL must include a scheme."
         raise ValueError(msg)
-    if not parsed.hostname:
-        msg = f"{field_label}: URL must include a hostname."
-        raise ValueError(msg)
 
+    # Scheme validation runs before the hostname check so an unsupported
+    # scheme (file://, ftp://, ...) raises a clear "wrong scheme" error
+    # rather than the misleading "missing hostname" one that urlparse would
+    # otherwise trigger for URLs whose netloc parses as empty.
     if allow_insecure:
         if parsed.scheme.lower() not in ("http", "https"):
             msg = f"{field_label}: must use http or https."
             raise ValueError(msg)
-        return
-
-    if parsed.scheme.lower() != "https":
+    elif parsed.scheme.lower() != "https":
         msg = f"{field_label}: must use HTTPS (http is not allowed)."
         raise ValueError(msg)
 
-    assert_hostname_is_not_internal(parsed.hostname, context=field_label)
+    if not parsed.hostname:
+        msg = f"{field_label}: URL must include a hostname."
+        raise ValueError(msg)
+
+    if not allow_insecure:
+        assert_hostname_is_not_internal(parsed.hostname, context=field_label)
+
+
+def assert_url_is_host_root(
+    url: str,
+    *,
+    field_label: str,
+    derived_paths_hint: str = "",
+) -> None:
+    """Assert ``url`` is a host root: empty path or ``/``, no query, no fragment.
+
+    Repeated-slash paths (``//``, ``///``) are rejected: they pass a naive
+    ``path.strip('/')`` check but lead downstream f-string concatenation to
+    emit double-slash URLs that route inconsistently. ``parsed.path`` must
+    be exactly ``''`` or ``'/'``.
+
+    Args:
+        url: URL to check (already-stripped is fine).
+        field_label: Settings field name for the error message.
+        derived_paths_hint: Optional context appended to the error (e.g. the
+            paths that callers append to this base URL).
+
+    Raises:
+        ValueError: When the URL has a non-root path, query, or fragment.
+    """
+    parsed = urlparse(url)
+    if parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        msg = (
+            f"{field_label} must be a host root with no path, query, or fragment "
+            f"(got {url!r})"
+        )
+        if derived_paths_hint:
+            msg = f"{msg}; {derived_paths_hint}"
+        raise ValueError(f"{msg}.")
 
 
 async def assert_hostname_resolves_to_public_ips(hostname: str) -> None:
@@ -122,14 +164,14 @@ async def assert_hostname_resolves_to_public_ips(hostname: str) -> None:
     DNS resolution runs in a thread pool to avoid blocking the event loop.
 
     Raises:
-        ValueError: When resolution fails or any resolved IP is blocked.
+        ValueError: When resolution fails, returns no addresses, or any resolved IP is blocked.
     """
     if not hostname:
         msg = "URL has no hostname."
         raise ValueError(msg)
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         addr_info = await loop.run_in_executor(
             None, socket.getaddrinfo, hostname, None, 0, socket.SOCK_STREAM
         )
@@ -137,20 +179,24 @@ async def assert_hostname_resolves_to_public_ips(hostname: str) -> None:
         msg = f"Could not resolve hostname {hostname!r}: {exc}"
         raise ValueError(msg) from exc
 
+    if not addr_info:
+        msg = f"Could not resolve hostname {hostname!r}: no addresses returned."
+        raise ValueError(msg)
+
     for _family, _type, _proto, _canonname, sockaddr in addr_info:
         ip = ipaddress.ip_address(sockaddr[0])
-        for net in _PRIVATE_NETWORKS:
-            if ip in net:
-                msg = (
-                    f"Host {hostname!r} resolves to a private/internal address ({ip}). "
-                    "Request blocked."
-                )
-                raise ValueError(msg)
+        if _is_blocked_ip(ip):
+            msg = (
+                f"Host {hostname!r} resolves to a private/internal address ({ip}). "
+                "Request blocked."
+            )
+            raise ValueError(msg)
 
 
 __all__ = [
     "URL_SHAPE_PATTERN",
     "assert_hostname_is_not_internal",
     "assert_hostname_resolves_to_public_ips",
+    "assert_url_is_host_root",
     "validate_https_url",
 ]

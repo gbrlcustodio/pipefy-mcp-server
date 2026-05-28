@@ -186,22 +186,15 @@ class PipefySettings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_pipefy_endpoint_urls(self) -> Self:
-        from urllib.parse import urlparse
-
         stripped = self.base_url.strip()
-        parsed = urlparse(stripped)
-        # ``base_url`` must be a host root: derived endpoints (``graphql_url``,
-        # ``internal_api_url``, ``interfaces_graphql_url``) append fixed paths to
-        # it via f-strings. A query / fragment / non-root path would land inside
-        # the resulting URL's query slot or as a path prefix, producing
-        # silently-malformed endpoints rather than a loud validation error.
-        if parsed.path.strip("/") or parsed.query or parsed.fragment:
-            msg = (
-                f"base_url must be a host root with no path, query, or fragment "
-                f"(got {self.base_url!r}); the SDK appends "
-                "``/graphql`` / ``/internal_api`` / ``/graphql/interfaces`` to it."
-            )
-            raise ValueError(msg)
+        security.assert_url_is_host_root(
+            stripped,
+            field_label="base_url",
+            derived_paths_hint=(
+                "the SDK appends ``/graphql`` / ``/internal_api`` / "
+                "``/graphql/interfaces`` to it"
+            ),
+        )
         security.validate_https_url(
             stripped, "base_url", allow_insecure=self.allow_insecure_urls
         )

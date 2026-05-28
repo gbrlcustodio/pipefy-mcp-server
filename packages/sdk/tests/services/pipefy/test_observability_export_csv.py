@@ -8,6 +8,7 @@ import httpx
 import pytest
 from openpyxl import Workbook
 
+from pipefy_sdk.services import observability_export_csv
 from pipefy_sdk.services.observability_export_csv import (
     download_bytes,
     is_allowed_pipefy_export_download_url,
@@ -18,15 +19,20 @@ from pipefy_sdk.services.observability_export_csv import (
 
 @pytest.fixture(autouse=True)
 def _skip_real_dns_for_download_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Avoid real DNS in download_bytes tests; security is covered separately."""
+    """Avoid real DNS in download_bytes tests; security is covered separately.
 
-    async def _ok(_hostname: str) -> None:
-        return None
+    Rebinds the helper on the importing module rather than mutating
+    ``pipefy_infra.security.assert_hostname_resolves_to_public_ips`` directly
+    (the latter is a shared singleton and would leak the no-op to any
+    cross-package caller invoked within the same test).
+    """
 
-    monkeypatch.setattr(
-        "pipefy_sdk.services.observability_export_csv.security.assert_hostname_resolves_to_public_ips",
-        _ok,
-    )
+    class _Namespace:
+        @staticmethod
+        async def assert_hostname_resolves_to_public_ips(_hostname: str) -> None:
+            return None
+
+    monkeypatch.setattr(observability_export_csv, "security", _Namespace)
 
 
 def _minimal_xlsx_bytes() -> bytes:

@@ -22,11 +22,8 @@ _MAX_REDIRECTS: Final[int] = 3
 async def _validate_export_download_url_before_fetch(url: str) -> None:
     if not is_allowed_pipefy_export_download_url(url):
         raise ValueError("Download URL is not an allowed Pipefy https URL.")
-    parsed = urlparse(url.strip())
-    hostname = parsed.hostname
-    if not hostname:
-        raise ValueError("Download URL has no hostname.")
-    await security.assert_hostname_resolves_to_public_ips(hostname)
+    hostname = urlparse(url.strip()).hostname
+    await security.assert_hostname_resolves_to_public_ips(hostname or "")
 
 
 def is_allowed_pipefy_export_download_url(url: str) -> bool:

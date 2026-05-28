@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import typer
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import (
+    CreatePortalElementInput,
+    PipefyClient,
+    UpdatePortalElementInput,
+)
+from pydantic import ValidationError
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
@@ -17,6 +24,10 @@ from pipefy_cli.commands._common import (
 portal_app = typer.Typer(help="Portal operations.", no_args_is_help=True)
 page_app = typer.Typer(help="Portal page operations.", no_args_is_help=True)
 layout_app = typer.Typer(help="Portal page layout.", no_args_is_help=True)
+element_app = typer.Typer(
+    help="Portal page elements (widgets / tools in the Pipefy UI).",
+    no_args_is_help=True,
+)
 
 
 def _require_non_empty_portal_uuid(portal_uuid: str) -> str:
@@ -88,6 +99,56 @@ def _parse_page_ids_for_sort(
     raise typer.BadParameter(
         "Provide --page-ids or --ids-json with at least one page UUID."
     )
+
+
+def _parse_required_metadata_json(raw: str | None, option_name: str) -> dict[str, Any]:
+    """Parse a required JSON object for element metadata."""
+    metadata_obj = parse_json_object(raw, option_name)
+    if metadata_obj is None:
+        raise typer.BadParameter(f"{option_name} is required.")
+    return metadata_obj
+
+
+def _parse_optional_data_sources_json(raw: str | None) -> list[dict[str, Any]] | None:
+    """Parse optional ``--data-sources`` as a JSON array of objects."""
+    if raw is None or not raw.strip():
+        return None
+    parsed = parse_json_value(raw, "--data-sources")
+    if not isinstance(parsed, list):
+        raise typer.BadParameter("--data-sources must be a JSON array.")
+    return parsed
+
+
+def _portal_element_create_kwargs(
+    validated: CreatePortalElementInput,
+) -> dict[str, Any]:
+    """Build kwargs for ``PipefyClient.create_portal_element`` after validation."""
+    kwargs: dict[str, Any] = {
+        "type": validated.type,
+        "metadata": validated.metadata,
+        "data_sources": validated.data_sources,
+    }
+    if validated.element_id is not None:
+        kwargs["element_id"] = validated.element_id
+    if validated.editable is not None:
+        kwargs["editable"] = validated.editable
+    if validated.layout is not None:
+        kwargs["layout"] = validated.layout
+    return kwargs
+
+
+def _portal_element_update_kwargs(
+    validated: UpdatePortalElementInput,
+) -> dict[str, Any]:
+    """Build kwargs for ``PipefyClient.update_portal_element`` after validation."""
+    kwargs: dict[str, Any] = {
+        "type": validated.type,
+        "metadata": validated.metadata,
+        "data_sources": validated.data_sources,
+    }
+    if validated.editable is not None:
+        kwargs["editable"] = validated.editable
+    return kwargs
 
 
 @portal_app.command("list")
@@ -441,5 +502,191 @@ def portal_page_layout_update(
     run_cli_command(ctx, json_out, factory)
 
 
+@element_app.command("create")
+def portal_element_create(
+    ctx: typer.Context,
+    page_id: str = typer.Option(..., "--page-id", help="Parent page UUID."),
+    type: str = typer.Option(
+        ...,
+        "--type",
+        help="InterfacePageElementType value (e.g. forms, link).",
+    ),
+    metadata: str = typer.Option(
+        None,
+        "--metadata",
+        help="Element metadata JSON (required; full shape depends on --type).",
+    ),
+    data_sources: str | None = typer.Option(
+        None,
+        "--data-sources",
+        help="Optional JSON array of data source bindings (forms elements).",
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Create a portal page element."""
+
+    page_id = _require_non_empty_portal_uuid(page_id)
+    metadata_obj = _parse_required_metadata_json(metadata, "--metadata")
+    data_sources_list = _parse_optional_data_sources_json(data_sources)
+
+    try:
+        validated = CreatePortalElementInput.model_validate(
+            {
+                "page_id": page_id,
+                "type": type,
+                "metadata": metadata_obj,
+                "data_sources": data_sources_list or [],
+            }
+        )
+    except ValidationError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    create_kwargs = _portal_element_create_kwargs(validated)
+
+    async def factory(client: PipefyClient):
+        return await client.create_portal_element(validated.page_id, **create_kwargs)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@element_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def portal_element_update(
+    ctx: typer.Context,
+    element_id: str = resource_id_argument(help="Element UUID."),
+    page_id: str = resource_id_argument(help="Parent page UUID."),
+    type: str = typer.Option(
+        ...,
+        "--type",
+        help="Element type for metadata validation (full metadata replace on API).",
+    ),
+    metadata: str = typer.Option(
+        None,
+        "--metadata",
+        help="Complete element metadata JSON (Pipefy replaces the whole blob).",
+    ),
+    data_sources: str | None = typer.Option(
+        None,
+        "--data-sources",
+        help="Optional JSON array of data source bindings.",
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Update a portal page element (send the full metadata blob)."""
+
+    element_id = _require_non_empty_portal_uuid(element_id)
+    page_id = _require_non_empty_portal_uuid(page_id)
+    metadata_obj = _parse_required_metadata_json(metadata, "--metadata")
+    data_sources_list = _parse_optional_data_sources_json(data_sources)
+
+    try:
+        validated = UpdatePortalElementInput.model_validate(
+            {
+                "element_id": element_id,
+                "page_id": page_id,
+                "type": type,
+                "metadata": metadata_obj,
+                "data_sources": data_sources_list or [],
+            }
+        )
+    except ValidationError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    update_kwargs = _portal_element_update_kwargs(validated)
+
+    async def factory(client: PipefyClient):
+        return await client.update_portal_element(
+            validated.element_id,
+            validated.page_id,
+            **update_kwargs,
+        )
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@element_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def portal_element_delete(
+    ctx: typer.Context,
+    element_id: str = resource_id_argument(help="Element UUID."),
+    page_id: str = resource_id_argument(help="Parent page UUID."),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip interactive confirmation.",
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Delete a portal page element permanently."""
+
+    element_id = _require_non_empty_portal_uuid(element_id)
+    page_id = _require_non_empty_portal_uuid(page_id)
+    confirm_destructive(
+        yes=yes,
+        description=f"element {element_id} on page {page_id}",
+    )
+
+    async def factory(client: PipefyClient):
+        return await client.delete_portal_element(element_id, page_id)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@element_app.command("duplicate")
+def portal_element_duplicate(
+    ctx: typer.Context,
+    element_id: str = typer.Option(
+        ...,
+        "--element-id",
+        help="Element UUID to duplicate.",
+    ),
+    portal_uuid: str = typer.Option(
+        ...,
+        "--portal-uuid",
+        help="Portal interface UUID that owns the page.",
+    ),
+    page_id: str = typer.Option(
+        ...,
+        "--page-id",
+        help="Page UUID that contains the element.",
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Duplicate a portal page element on the same page (source portal + page UUIDs)."""
+
+    element_id = _require_non_empty_portal_uuid(element_id)
+    portal_uuid = _require_non_empty_portal_uuid(portal_uuid)
+    page_id = _require_non_empty_portal_uuid(page_id)
+
+    async def factory(client: PipefyClient):
+        return await client.duplicate_portal_element(
+            element_id=element_id,
+            portal_uuid=portal_uuid,
+            page_id=page_id,
+        )
+
+    run_cli_command(ctx, json_out, factory)
+
+
 page_app.add_typer(layout_app, name="layout")
 portal_app.add_typer(page_app, name="page")
+portal_app.add_typer(element_app, name="element")

@@ -6,6 +6,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_PIPE_REPO_ID
 from gql.transport.exceptions import TransportQueryError
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
@@ -41,7 +42,7 @@ _PORTAL_DETAIL = {
                     "id": "el-1",
                     "uuid": "el-1",
                     "type": "forms",
-                    "metadata": {"formId": "123"},
+                    "metadata": {"name": "Request form"},
                 }
             ],
         }
@@ -76,6 +77,17 @@ _CREATED_PAGE = {
 
 _PAGE_LAYOUT = {"rows": [{"columns": [{"width": 12}]}]}
 
+_ELEMENT_UUID = "el-uuid-1"
+_FORMS_METADATA = {"name": "Request form"}
+_FORMS_DATA_SOURCES = [{"repo_uuid": EXAMPLE_PIPE_REPO_ID}]
+
+_CREATED_ELEMENT = {
+    "id": _ELEMENT_UUID,
+    "uuid": _ELEMENT_UUID,
+    "type": "forms",
+    "metadata": _FORMS_METADATA,
+}
+
 
 @pytest.fixture
 def mock_portal_client():
@@ -90,6 +102,10 @@ def mock_portal_client():
     client.delete_portal_page = AsyncMock()
     client.sort_portal_pages = AsyncMock()
     client.update_portal_page_layout = AsyncMock()
+    client.create_portal_element = AsyncMock()
+    client.update_portal_element = AsyncMock()
+    client.delete_portal_element = AsyncMock()
+    client.duplicate_portal_element = AsyncMock()
     return client
 
 
@@ -145,12 +161,12 @@ async def test_list_portals_coerces_int_organization_uuid(
     async with portal_session as session:
         result = await session.call_tool(
             "list_portals",
-            {"organization_uuid": 302398434},
+            {"organization_uuid": int(EXAMPLE_NUMERIC_ORG_ID)},
         )
 
     assert result.isError is False
     mock_portal_client.list_portals.assert_awaited_once_with(
-        "302398434", search_term=None
+        EXAMPLE_NUMERIC_ORG_ID, search_term=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -313,7 +329,7 @@ async def test_read_tools_have_readonly_hint(portal_session):
 
 
 # ---------------------------------------------------------------------------
-# Portal metadata CRUD write tools (task 3.3 RED)
+# Portal metadata CRUD write tools
 # ---------------------------------------------------------------------------
 
 
@@ -328,11 +344,11 @@ async def test_create_portal_coerces_int_organization_uuid(
     async with portal_session as session:
         result = await session.call_tool(
             "create_portal",
-            {"organization_uuid": 302398434},
+            {"organization_uuid": int(EXAMPLE_NUMERIC_ORG_ID)},
         )
 
     assert result.isError is False
-    mock_portal_client.create_portal.assert_awaited_once_with("302398434")
+    mock_portal_client.create_portal.assert_awaited_once_with(EXAMPLE_NUMERIC_ORG_ID)
     payload = extract_payload(result)
     assert payload["success"] is True
 
@@ -346,11 +362,11 @@ async def test_create_portal_success(
 
     async with portal_session as session:
         result = await session.call_tool(
-            "create_portal", {"organization_uuid": "302398434"}
+            "create_portal", {"organization_uuid": EXAMPLE_NUMERIC_ORG_ID}
         )
 
     assert result.isError is False
-    mock_portal_client.create_portal.assert_awaited_once_with("302398434")
+    mock_portal_client.create_portal.assert_awaited_once_with(EXAMPLE_NUMERIC_ORG_ID)
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["uuid"] == "portal-created-uuid"
@@ -617,7 +633,7 @@ async def test_delete_portal_has_destructive_hint(portal_session):
 
 
 # ---------------------------------------------------------------------------
-# Portal page write tools (task 4.3 RED)
+# Portal page write tools
 # ---------------------------------------------------------------------------
 
 
@@ -1111,6 +1127,373 @@ async def test_page_write_tools_are_not_readonly(portal_session):
 
     tool_map = {t.name: t for t in listed.tools}
     for name in write_tool_names:
+        tool = tool_map[name]
+        assert tool.annotations is not None, f"{name} missing annotations"
+        assert tool.annotations.readOnlyHint is not True, (
+            f"{name} should not be readOnlyHint=True"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Portal element write tools
+# ---------------------------------------------------------------------------
+
+_ELEMENT_WRITE_TOOL_NAMES = [
+    "create_portal_element",
+    "update_portal_element",
+    "delete_portal_element",
+    "duplicate_portal_element",
+]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_create_portal_element_success(
+    portal_session, mock_portal_client, extract_payload
+):
+    mock_portal_client.create_portal_element = AsyncMock(return_value=_CREATED_ELEMENT)
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "create_portal_element",
+            {
+                "page_id": _PAGE_UUID,
+                "type": "forms",
+                "metadata": _FORMS_METADATA,
+                "data_sources": _FORMS_DATA_SOURCES,
+            },
+        )
+
+    assert result.isError is False
+    mock_portal_client.create_portal_element.assert_awaited_once_with(
+        _PAGE_UUID,
+        type="forms",
+        metadata=_FORMS_METADATA,
+        data_sources=_FORMS_DATA_SOURCES,
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"]["uuid"] == _ELEMENT_UUID
+    assert payload["data"]["type"] == "forms"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_create_portal_element_rejects_invalid_metadata_before_client(
+    portal_session, mock_portal_client, extract_payload
+):
+    async with portal_session as session:
+        result = await session.call_tool(
+            "create_portal_element",
+            {
+                "page_id": _PAGE_UUID,
+                "type": "forms",
+                "metadata": {},
+            },
+        )
+
+    mock_portal_client.create_portal_element.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    message = tool_error_message(payload).lower()
+    assert "name" in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_create_portal_element_rejects_unknown_type_before_client(
+    portal_session, mock_portal_client, extract_payload
+):
+    async with portal_session as session:
+        result = await session.call_tool(
+            "create_portal_element",
+            {
+                "page_id": _PAGE_UUID,
+                "type": "not_a_portal_element_type",
+                "metadata": {},
+            },
+        )
+
+    mock_portal_client.create_portal_element.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_create_portal_element_rejects_blank_page_id(
+    portal_session, mock_portal_client, extract_payload
+):
+    async with portal_session as session:
+        result = await session.call_tool(
+            "create_portal_element",
+            {
+                "page_id": "  ",
+                "type": "forms",
+                "metadata": _FORMS_METADATA,
+            },
+        )
+
+    mock_portal_client.create_portal_element.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "page_id" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_create_portal_element_permission_denied_returns_actionable_error(
+    portal_session, mock_portal_client, extract_payload
+):
+    mock_portal_client.create_portal_element = AsyncMock(
+        side_effect=ValueError(_PORTAL_PERMISSION_DENIED_MSG)
+    )
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "create_portal_element",
+            {
+                "page_id": _PAGE_UUID,
+                "type": "forms",
+                "metadata": _FORMS_METADATA,
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload).lower()
+    assert "create_portal" in message or "manage_portals" in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_create_portal_element_docstring_mentions_portal_tool_in_ui(
+    portal_session,
+):
+    async with portal_session as session:
+        listed = await session.list_tools()
+
+    tool_map = {t.name: t for t in listed.tools}
+    create_tool = tool_map["create_portal_element"]
+    description = (create_tool.description or "").lower()
+    assert "tool" in description or "widget" in description
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_update_portal_element_success(
+    portal_session, mock_portal_client, extract_payload
+):
+    link_metadata = {
+        "linkUrl": "https://example.com/pipefy",
+        "linkName": "Open",
+    }
+    updated_element = {
+        **_CREATED_ELEMENT,
+        "type": "link",
+        "metadata": link_metadata,
+    }
+    mock_portal_client.update_portal_element = AsyncMock(return_value=updated_element)
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "update_portal_element",
+            {
+                "element_id": _ELEMENT_UUID,
+                "page_id": _PAGE_UUID,
+                "type": "link",
+                "metadata": link_metadata,
+            },
+        )
+
+    assert result.isError is False
+    mock_portal_client.update_portal_element.assert_awaited_once_with(
+        _ELEMENT_UUID,
+        _PAGE_UUID,
+        type="link",
+        metadata=link_metadata,
+        data_sources=[],
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"]["metadata"]["linkUrl"] == "https://example.com/pipefy"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_update_portal_element_rejects_invalid_metadata_before_client(
+    portal_session, mock_portal_client, extract_payload
+):
+    async with portal_session as session:
+        result = await session.call_tool(
+            "update_portal_element",
+            {
+                "element_id": _ELEMENT_UUID,
+                "page_id": _PAGE_UUID,
+                "type": "link",
+                "metadata": {},
+            },
+        )
+
+    mock_portal_client.update_portal_element.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "linkname" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_delete_portal_element_preview_does_not_delete(
+    portal_session, mock_portal_client, extract_payload
+):
+    async with portal_session as session:
+        result = await session.call_tool(
+            "delete_portal_element",
+            {"element_id": _ELEMENT_UUID, "page_id": _PAGE_UUID},
+        )
+
+    assert result.isError is False
+    mock_portal_client.delete_portal_element.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["requires_confirmation"] is True
+    assert _ELEMENT_UUID in payload["resource"]
+    assert "confirm=True" in payload["message"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_delete_portal_element_success(
+    portal_session, mock_portal_client, extract_payload
+):
+    mock_portal_client.delete_portal_element = AsyncMock(
+        return_value={"deleteElement": {"success": True}}
+    )
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "delete_portal_element",
+            {
+                "element_id": _ELEMENT_UUID,
+                "page_id": _PAGE_UUID,
+                "confirm": True,
+            },
+        )
+
+    assert result.isError is False
+    mock_portal_client.delete_portal_element.assert_awaited_once_with(
+        _ELEMENT_UUID, _PAGE_UUID
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"]["deleteElement"]["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_delete_portal_element_fails_when_success_false(
+    portal_session, mock_portal_client, extract_payload
+):
+    mock_portal_client.delete_portal_element = AsyncMock(
+        return_value={"deleteElement": {"success": False}}
+    )
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "delete_portal_element",
+            {
+                "element_id": _ELEMENT_UUID,
+                "page_id": _PAGE_UUID,
+                "confirm": True,
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "failed to delete" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_delete_portal_element_has_destructive_hint(portal_session):
+    async with portal_session as session:
+        listed = await session.list_tools()
+
+    tool_map = {t.name: t for t in listed.tools}
+    delete_tool = tool_map["delete_portal_element"]
+    assert delete_tool.annotations is not None
+    assert delete_tool.annotations.destructiveHint is True
+    assert delete_tool.annotations.readOnlyHint is not True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_duplicate_portal_element_success(
+    portal_session, mock_portal_client, extract_payload
+):
+    duplicated = {
+        "id": "el-copy",
+        "uuid": "el-copy",
+        "type": "text",
+        "metadata": {},
+    }
+    mock_portal_client.duplicate_portal_element = AsyncMock(return_value=duplicated)
+
+    async with portal_session as session:
+        result = await session.call_tool(
+            "duplicate_portal_element",
+            {
+                "element_id": _ELEMENT_UUID,
+                "portal_uuid": _PORTAL_UUID,
+                "page_id": _PAGE_UUID,
+            },
+        )
+
+    assert result.isError is False
+    mock_portal_client.duplicate_portal_element.assert_awaited_once_with(
+        element_id=_ELEMENT_UUID,
+        portal_uuid=_PORTAL_UUID,
+        page_id=_PAGE_UUID,
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"]["uuid"] == "el-copy"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_duplicate_portal_element_rejects_blank_portal_uuid(
+    portal_session, mock_portal_client, extract_payload
+):
+    async with portal_session as session:
+        result = await session.call_tool(
+            "duplicate_portal_element",
+            {
+                "element_id": _ELEMENT_UUID,
+                "portal_uuid": "  ",
+                "page_id": _PAGE_UUID,
+            },
+        )
+
+    mock_portal_client.duplicate_portal_element.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "portal_uuid" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("portal_session", [None], indirect=True)
+async def test_element_write_tools_are_not_readonly(portal_session):
+    async with portal_session as session:
+        listed = await session.list_tools()
+
+    tool_map = {t.name: t for t in listed.tools}
+    for name in _ELEMENT_WRITE_TOOL_NAMES:
         tool = tool_map[name]
         assert tool.annotations is not None, f"{name} missing annotations"
         assert tool.annotations.readOnlyHint is not True, (

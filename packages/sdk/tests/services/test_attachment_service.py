@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID
 from graphql import print_ast
 from pipefy_auth import StaticBearerAuth
 
@@ -221,14 +222,14 @@ async def test_pipefy_client_create_presigned_url_delegates_to_attachment_servic
     client._attachment_service = attachment
 
     result = await client.create_presigned_url(
-        "302398434",
+        EXAMPLE_NUMERIC_ORG_ID,
         "doc.pdf",
         content_type="application/pdf",
         content_length=128,
     )
 
     attachment.create_presigned_url.assert_awaited_once_with(
-        "302398434",
+        EXAMPLE_NUMERIC_ORG_ID,
         "doc.pdf",
         content_type="application/pdf",
         content_length=128,

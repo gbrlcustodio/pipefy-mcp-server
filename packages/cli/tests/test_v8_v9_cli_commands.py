@@ -1,4 +1,4 @@
-"""Tests for v0.2/v0.3 CLI domains (tasks 8.1-8.4, 9.1-9.3)."""
+"""CLI tests for audit, automation, export, graphql, and introspect commands."""
 
 from __future__ import annotations
 

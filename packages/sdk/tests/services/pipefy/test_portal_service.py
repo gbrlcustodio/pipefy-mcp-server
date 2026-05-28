@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import importlib
+import json
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _shared.fixture_ids import (
+    EXAMPLE_NUMERIC_ORG_ID,
+    EXAMPLE_ORG_UUID,
+    EXAMPLE_OTHER_ORG_UUID,
+    EXAMPLE_PIPE_REPO_ID,
+)
 from gql.transport.exceptions import TransportQueryError
 from httpx_auth import OAuth2ClientCredentials
 from pydantic import ValidationError
@@ -21,9 +29,6 @@ BASE_URL = "https://app.pipefy.com"
 INTERFACES_URL = "https://app.pipefy.com/graphql/interfaces"
 MAIN_GRAPHQL_URL = "https://app.pipefy.com/graphql"
 OAUTH_URL = "https://app.pipefy.com/oauth/token"
-_ORG_UUID_FOR_TESTS = "341c1327-261c-4766-bb96-7953e4c3970d"
-_OTHER_ORG_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-_NUMERIC_ORG_ID = "302398434"
 
 
 @pytest.fixture
@@ -162,7 +167,7 @@ _PORTAL_DETAIL_GRAPHQL = {
                 {
                     "id": "el-1",
                     "type": "forms",
-                    "metadata": {"formId": "123"},
+                    "metadata": {"name": "Request form"},
                 }
             ],
         }
@@ -183,7 +188,7 @@ _PORTAL_DETAIL = {
                     "id": "el-1",
                     "uuid": "el-1",
                     "type": "forms",
-                    "metadata": {"formId": "123"},
+                    "metadata": {"name": "Request form"},
                 }
             ],
         }
@@ -208,7 +213,7 @@ async def test_list_portals_returns_portal_nodes(
     }
     service = _make_interfaces_service(mock_settings, mock_auth, response)
 
-    result = await service.list_portals(_ORG_UUID_FOR_TESTS)
+    result = await service.list_portals(EXAMPLE_ORG_UUID)
 
     assert result == [_PORTAL_LIST_NODE]
 
@@ -226,12 +231,15 @@ async def test_list_portals_passes_org_uuid_and_portal_filter(
         {"interfaces": {"edges": []}},
     )
 
-    await service.list_portals(_OTHER_ORG_UUID)
+    await service.list_portals(EXAMPLE_OTHER_ORG_UUID)
 
     service._interfaces_client.execute_query.assert_called_once()
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     assert query_used is LIST_PORTALS_QUERY
-    assert variables == {"org_uuid": _OTHER_ORG_UUID, "filterBySubType": "portal"}
+    assert variables == {
+        "org_uuid": EXAMPLE_OTHER_ORG_UUID,
+        "filterBySubType": "portal",
+    }
 
 
 @pytest.mark.unit
@@ -247,12 +255,12 @@ async def test_list_portals_passes_search_term_when_provided(
         {"interfaces": {"edges": []}},
     )
 
-    await service.list_portals(_ORG_UUID_FOR_TESTS, search_term="intake")
+    await service.list_portals(EXAMPLE_ORG_UUID, search_term="intake")
 
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     assert query_used is LIST_PORTALS_QUERY
     assert variables == {
-        "org_uuid": _ORG_UUID_FOR_TESTS,
+        "org_uuid": EXAMPLE_ORG_UUID,
         "filterBySubType": "portal",
         "searchTerm": "intake",
     }
@@ -271,7 +279,7 @@ async def test_list_portals_empty_returns_empty_list(
         {"interfaces": {"edges": []}},
     )
 
-    result = await service.list_portals(_ORG_UUID_FOR_TESTS)
+    result = await service.list_portals(EXAMPLE_ORG_UUID)
 
     assert result == []
 
@@ -290,11 +298,11 @@ async def test_list_portals_uuid_org_identifier_passes_through_unchanged(
     )
     service._graphql_client.execute_query = AsyncMock()
 
-    await service.list_portals(_ORG_UUID_FOR_TESTS)
+    await service.list_portals(EXAMPLE_ORG_UUID)
 
     service._graphql_client.execute_query.assert_not_called()
     _, variables = service._interfaces_client.execute_query.call_args[0]
-    assert variables["org_uuid"] == _ORG_UUID_FOR_TESTS
+    assert variables["org_uuid"] == EXAMPLE_ORG_UUID
 
 
 @pytest.mark.unit
@@ -310,17 +318,17 @@ async def test_list_portals_numeric_org_id_resolves_via_main_graphql_client(
         {"interfaces": {"edges": []}},
     )
     service._graphql_client.execute_query = AsyncMock(
-        return_value={"organization": {"uuid": _ORG_UUID_FOR_TESTS}}
+        return_value={"organization": {"uuid": EXAMPLE_ORG_UUID}}
     )
 
-    await service.list_portals(_NUMERIC_ORG_ID)
+    await service.list_portals(EXAMPLE_NUMERIC_ORG_ID)
 
     service._graphql_client.execute_query.assert_called_once_with(
         RESOLVE_ORGANIZATION_UUID_QUERY,
-        {"id": _NUMERIC_ORG_ID},
+        {"id": EXAMPLE_NUMERIC_ORG_ID},
     )
     _, variables = service._interfaces_client.execute_query.call_args[0]
-    assert variables["org_uuid"] == _ORG_UUID_FOR_TESTS
+    assert variables["org_uuid"] == EXAMPLE_ORG_UUID
 
 
 @pytest.mark.unit
@@ -336,17 +344,17 @@ async def test_list_portals_accepts_int_org_id(
         {"interfaces": {"edges": []}},
     )
     service._graphql_client.execute_query = AsyncMock(
-        return_value={"organization": {"uuid": _ORG_UUID_FOR_TESTS}}
+        return_value={"organization": {"uuid": EXAMPLE_ORG_UUID}}
     )
 
-    await service.list_portals(int(_NUMERIC_ORG_ID))
+    await service.list_portals(int(EXAMPLE_NUMERIC_ORG_ID))
 
     service._graphql_client.execute_query.assert_called_once_with(
         RESOLVE_ORGANIZATION_UUID_QUERY,
-        {"id": _NUMERIC_ORG_ID},
+        {"id": EXAMPLE_NUMERIC_ORG_ID},
     )
     _, variables = service._interfaces_client.execute_query.call_args[0]
-    assert variables["org_uuid"] == _ORG_UUID_FOR_TESTS
+    assert variables["org_uuid"] == EXAMPLE_ORG_UUID
 
 
 @pytest.mark.unit
@@ -400,7 +408,7 @@ async def test_list_portals_org_not_found_on_resolve_raises_value_error(
     )
 
     with pytest.raises(ValueError, match="Organization not found"):
-        await service.list_portals(_NUMERIC_ORG_ID)
+        await service.list_portals(EXAMPLE_NUMERIC_ORG_ID)
 
 
 @pytest.mark.unit
@@ -465,7 +473,7 @@ _portal_queries_module = importlib.import_module("pipefy_sdk.queries.portal_quer
 
 
 def _portal_mutation_constant(name: str):
-    """Resolve portal mutation constant when present (GREEN); else None for RED."""
+    """Return the portal mutation constant when exported; else None (TDD placeholder)."""
     return getattr(_portal_queries_module, name, None)
 
 
@@ -484,6 +492,10 @@ def _assert_interfaces_mutation_query(query_used: object, constant_name: str) ->
             "DELETE_PAGE_MUTATION": "deletePage",
             "SORT_PAGES_MUTATION": "sortPages",
             "UPDATE_PAGE_LAYOUT_MUTATION": "updatePageLayout",
+            "CREATE_ELEMENT_MUTATION": "createElement",
+            "UPDATE_ELEMENT_MUTATION": "updateElement",
+            "DELETE_ELEMENT_MUTATION": "deleteElement",
+            "DUPLICATE_ELEMENT_MUTATION": "duplicateElement",
         }
         assert operation_snippets[constant_name] in str(query_used)
 
@@ -525,19 +537,19 @@ async def test_create_portal_resolves_numeric_org_and_calls_find_or_create_templ
         _CREATE_PORTAL_RESPONSE,
     )
     service._graphql_client.execute_query = AsyncMock(
-        return_value={"organization": {"uuid": _ORG_UUID_FOR_TESTS}}
+        return_value={"organization": {"uuid": EXAMPLE_ORG_UUID}}
     )
 
-    result = await service.create_portal(_NUMERIC_ORG_ID)
+    result = await service.create_portal(EXAMPLE_NUMERIC_ORG_ID)
 
     service._graphql_client.execute_query.assert_called_once_with(
         RESOLVE_ORGANIZATION_UUID_QUERY,
-        {"id": _NUMERIC_ORG_ID},
+        {"id": EXAMPLE_NUMERIC_ORG_ID},
     )
     service._interfaces_client.execute_query.assert_called_once()
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "FIND_OR_CREATE_PORTAL_MUTATION")
-    assert variables == {"input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}}
+    assert variables == {"input": {"orgUuid": EXAMPLE_ORG_UUID, "subType": "portal"}}
     assert result["uuid"] == "portal-created-uuid"
 
 
@@ -555,11 +567,11 @@ async def test_create_portal_uuid_org_skips_resolve(
     )
     service._graphql_client.execute_query = AsyncMock()
 
-    await service.create_portal(_ORG_UUID_FOR_TESTS)
+    await service.create_portal(EXAMPLE_ORG_UUID)
 
     service._graphql_client.execute_query.assert_not_called()
     _, variables = service._interfaces_client.execute_query.call_args[0]
-    assert variables == {"input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}}
+    assert variables == {"input": {"orgUuid": EXAMPLE_ORG_UUID, "subType": "portal"}}
 
 
 @pytest.mark.unit
@@ -575,15 +587,15 @@ async def test_create_portal_idempotent_returns_same_interface_uuid(
         _CREATE_PORTAL_RESPONSE,
     )
 
-    first = await service.create_portal(_ORG_UUID_FOR_TESTS)
-    second = await service.create_portal(_ORG_UUID_FOR_TESTS)
+    first = await service.create_portal(EXAMPLE_ORG_UUID)
+    second = await service.create_portal(EXAMPLE_ORG_UUID)
 
     assert first["uuid"] == second["uuid"] == "portal-created-uuid"
     assert service._interfaces_client.execute_query.call_count == 2
     for call in service._interfaces_client.execute_query.call_args_list:
         _, variables = call[0]
         assert variables == {
-            "input": {"orgUuid": _ORG_UUID_FOR_TESTS, "subType": "portal"}
+            "input": {"orgUuid": EXAMPLE_ORG_UUID, "subType": "portal"}
         }
 
 
@@ -750,7 +762,7 @@ async def test_create_portal_permission_denied_surfaces_actionable_message(
     )
 
     with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
-        await service.create_portal(_ORG_UUID_FOR_TESTS)
+        await service.create_portal(EXAMPLE_ORG_UUID)
 
 
 @pytest.mark.unit
@@ -996,7 +1008,12 @@ async def test_update_portal_page_layout_does_not_send_interface_uuid(
     service._interfaces_client.execute_query.assert_called_once()
     query_used, variables = service._interfaces_client.execute_query.call_args[0]
     _assert_interfaces_mutation_query(query_used, "UPDATE_PAGE_LAYOUT_MUTATION")
-    assert variables == {"input": {"page_id": _PAGE_ID, "layout": layout}}
+    assert variables == {
+        "input": {
+            "page_id": _PAGE_ID,
+            "layout": json.dumps(layout, separators=(",", ":"), ensure_ascii=False),
+        }
+    }
     assert "interface_uuid" not in variables["input"]
     assert result == {"updatePageLayout": {"success": True}}
 
@@ -1019,3 +1036,244 @@ async def test_create_portal_page_permission_denied_surfaces_actionable_message(
 
     with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
         await service.create_portal_page(_INTERFACE_UUID, _PAGE_TITLE)
+
+
+_ELEMENT_ID = "el-uuid-1"
+_FORMS_METADATA = {"name": "Request form"}
+_FORMS_DATA_SOURCES = [{"repo_uuid": EXAMPLE_PIPE_REPO_ID}]
+
+_CREATE_ELEMENT_GRAPHQL = {
+    "id": _ELEMENT_ID,
+    "type": "forms",
+    "metadata": _FORMS_METADATA,
+}
+
+_CREATE_ELEMENT_RESPONSE = {
+    "createElement": {"element": _CREATE_ELEMENT_GRAPHQL},
+}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_element_calls_create_element_with_validated_input(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """create_portal_element validates via CreatePortalElementInput then createElement."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_ELEMENT_RESPONSE,
+    )
+
+    await service.create_portal_element(
+        _PAGE_ID,
+        type="forms",
+        metadata=_FORMS_METADATA,
+        data_sources=_FORMS_DATA_SOURCES,
+    )
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "CREATE_ELEMENT_MUTATION")
+    assert variables == {
+        "input": {
+            "page_id": _PAGE_ID,
+            "type": "forms",
+            "metadata": json.dumps(
+                _FORMS_METADATA, separators=(",", ":"), ensure_ascii=False
+            ),
+            "data_sources": [{"repoId": EXAMPLE_PIPE_REPO_ID, "fieldKeys": []}],
+        }
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_element_always_sends_empty_data_sources_for_link(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Link creates must send data_sources: [] so Pipefy does not receive null."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_ELEMENT_RESPONSE,
+    )
+    link_metadata = {"linkName": "Test", "linkUrl": "https://example.com"}
+
+    await service.create_portal_element(_PAGE_ID, type="link", metadata=link_metadata)
+
+    _query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables["input"]["data_sources"] == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_element_logs_warning_for_unrecognized_data_source_keys(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Invalid data_sources entries are skipped with a warning (e.g. LLM-guessed pipe_id)."""
+    caplog.set_level(logging.WARNING, logger="pipefy_sdk.services.portal_service")
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_ELEMENT_RESPONSE,
+    )
+
+    await service.create_portal_element(
+        _PAGE_ID,
+        type="forms",
+        metadata=_FORMS_METADATA,
+        data_sources=[{"pipe_id": "123"}],
+    )
+
+    assert any("Skipping portal data_sources" in r.message for r in caplog.records)
+    _query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    assert variables["input"]["data_sources"] == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_element_graphql_error_is_not_portal_permission_error(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Non-permission Interfaces failures must not be wrapped as PortalPermissionError."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_ELEMENT_RESPONSE,
+    )
+    service._interfaces_client.execute_query = AsyncMock(
+        side_effect=TransportQueryError(
+            "invalid",
+            errors=[{"message": "Variable $input was provided invalid value"}],
+        )
+    )
+
+    with pytest.raises(TransportQueryError):
+        await service.create_portal_element(
+            _PAGE_ID,
+            type="link",
+            metadata={"linkName": "Test", "linkUrl": "https://example.com"},
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_portal_element_rejects_invalid_metadata_before_graphql(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """CreatePortalElementInput validation must run before execute_query."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        _CREATE_ELEMENT_RESPONSE,
+    )
+
+    with pytest.raises(ValidationError, match="name"):
+        await service.create_portal_element(
+            _PAGE_ID,
+            type="forms",
+            metadata={},
+        )
+
+    service._interfaces_client.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_portal_element_calls_update_element_with_full_metadata(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """update_portal_element sends element_id, page_id, and full metadata replace."""
+    link_metadata = {
+        "linkUrl": "https://example.com/pipefy",
+        "linkName": "Open",
+    }
+    update_response = {"updateElement": {"success": True}}
+    service = _make_interfaces_service(mock_settings, mock_auth, update_response)
+
+    result = await service.update_portal_element(
+        _ELEMENT_ID,
+        _PAGE_ID,
+        type="link",
+        metadata=link_metadata,
+    )
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "UPDATE_ELEMENT_MUTATION")
+    assert variables == {
+        "input": {
+            "element_id": _ELEMENT_ID,
+            "page_id": _PAGE_ID,
+            "metadata": json.dumps(
+                link_metadata, separators=(",", ":"), ensure_ascii=False
+            ),
+            "data_sources": [],
+        }
+    }
+    assert result["metadata"]["linkUrl"] == "https://example.com/pipefy"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_portal_element_calls_delete_element_with_ids(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """delete_portal_element uses deleteElement with element_id and page_id."""
+    service = _make_interfaces_service(
+        mock_settings,
+        mock_auth,
+        {"deleteElement": {"success": True}},
+    )
+
+    result = await service.delete_portal_element(_ELEMENT_ID, _PAGE_ID)
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "DELETE_ELEMENT_MUTATION")
+    assert variables == {
+        "input": {"element_id": _ELEMENT_ID, "page_id": _PAGE_ID},
+    }
+    assert result == {"deleteElement": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_duplicate_portal_element_sends_camel_case_duplicate_input(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """duplicateElement input uses elementUuid, interfaceUuid, pageUuid (camelCase)."""
+    dup_response = {
+        "duplicateElement": {
+            "element": {"id": "el-copy", "type": "text", "metadata": {}},
+        }
+    }
+    service = _make_interfaces_service(mock_settings, mock_auth, dup_response)
+
+    result = await service.duplicate_portal_element(
+        element_id=_ELEMENT_ID,
+        portal_uuid=_INTERFACE_UUID,
+        page_id=_PAGE_ID,
+    )
+
+    service._interfaces_client.execute_query.assert_called_once()
+    query_used, variables = service._interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "DUPLICATE_ELEMENT_MUTATION")
+    assert variables == {
+        "input": {
+            "elementUuid": _ELEMENT_ID,
+            "interfaceUuid": _INTERFACE_UUID,
+            "pageUuid": _PAGE_ID,
+        }
+    }
+    assert result["uuid"] == "el-copy"

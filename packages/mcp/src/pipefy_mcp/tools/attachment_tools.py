@@ -6,7 +6,7 @@ import base64
 import binascii
 from collections.abc import Awaitable, Callable
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import httpx
 from mcp.server.fastmcp import Context, FastMCP
@@ -16,6 +16,7 @@ from pipefy_infra import security
 from pipefy_sdk import (
     PipefyClient,
     PipefyId,
+    PipefySettings,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
 )
@@ -36,28 +37,28 @@ _FILE_DOWNLOAD_TIMEOUT_SEC = 60.0
 _MAX_DOWNLOAD_SIZE_BYTES = 100 * 1024 * 1024  # 100 MiB
 
 
-async def _validate_url_safe(url: str) -> None:
+async def _validate_url_safe(url: str, *, allow_insecure: bool) -> None:
     """Reject URLs that target private/internal networks or non-HTTP schemes.
 
-    Delegates the sync gate (scheme + literal-IP check) to
-    `security.validate_https_url` with `allow_insecure=True` so both http and
-    https are allowed (attachment downloads happen against operator-provided
-    URLs that may be plain http). DNS gating delegates to
-    `security.assert_hostname_resolves_to_public_ips`, which also enforces
-    the non-empty hostname contract.
+    Delegates to :func:`security.validate_and_assert_public_url`, which runs
+    the sync gate (scheme + literal-IP) and the async DNS gate together.
+    ``allow_insecure`` is wired from ``PipefySettings.allow_insecure_urls``
+    (``PIPEFY_ALLOW_INSECURE_URLS``) so the attachment surface honours the
+    same policy switch as ``base_url`` / ``auth_url``: HTTPS-only in
+    production, http + internal hosts permitted only in dev mode.
 
     Raises:
         ValueError: When the URL is unsafe for server-side fetch.
     """
-    security.validate_https_url(url, "url", allow_insecure=True)
-    hostname = urlparse(url).hostname
-    await security.assert_hostname_resolves_to_public_ips(hostname or "")
+    await security.validate_and_assert_public_url(
+        url, field_label="url", allow_insecure=allow_insecure
+    )
 
 
 _MAX_REDIRECTS = 3
 
 
-async def _download_file_bytes(url: str) -> bytes:
+async def _download_file_bytes(url: str, *, allow_insecure: bool) -> bytes:
     """Fetch file body from an HTTP(S) URL with SSRF protection and size limit.
 
     Redirects are followed manually (up to ``_MAX_REDIRECTS``) so that each
@@ -72,7 +73,7 @@ async def _download_file_bytes(url: str) -> bytes:
             or the redirect chain is too long.
         httpx.HTTPError: On transport/HTTP failures.
     """
-    await _validate_url_safe(url)
+    await _validate_url_safe(url, allow_insecure=allow_insecure)
     current_url = url
 
     async with httpx.AsyncClient() as http:
@@ -88,7 +89,7 @@ async def _download_file_bytes(url: str) -> bytes:
                     if not location:
                         raise ValueError("Redirect without Location header")
                     resolved = urljoin(current_url, location.strip())
-                    await _validate_url_safe(resolved)
+                    await _validate_url_safe(resolved, allow_insecure=allow_insecure)
                     current_url = resolved
                     continue
 
@@ -136,6 +137,13 @@ class AttachmentTools:
 
     @staticmethod
     def register(mcp: FastMCP, client: PipefyClient) -> None:
+        # Read the policy switch once at registration: HTTPS-only by default,
+        # http + internal hosts permitted only when ``PIPEFY_ALLOW_INSECURE_URLS``
+        # is set. Matches the same toggle that gates ``base_url`` / ``auth_url``
+        # in ``PipefySettings`` / ``AuthSettings`` so the attachment surface
+        # does not silently accept plain http on a tightened deployment.
+        allow_insecure_urls = PipefySettings().allow_insecure_urls
+
         async def _resolve_file_bytes(
             ctx: Context[ServerSession, None],
             *,
@@ -151,7 +159,12 @@ class AttachmentTools:
             try:
                 if file_url:
                     await ctx.debug(f"{debug_prefix}: downloading file_url")
-                    return await _download_file_bytes(file_url.strip()), None
+                    return (
+                        await _download_file_bytes(
+                            file_url.strip(), allow_insecure=allow_insecure_urls
+                        ),
+                        None,
+                    )
                 await ctx.debug(f"{debug_prefix}: decoding base64 payload")
                 return _decode_base64_file(file_content_base64 or ""), None
             except (httpx.HTTPError, binascii.Error, ValueError) as exc:

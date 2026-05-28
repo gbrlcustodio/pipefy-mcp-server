@@ -2,12 +2,12 @@
 
 The package root exposes only ``__version__``. Consumers import from the
 submodule that names the concern: :mod:`pipefy_infra.config` (on-disk
-configuration: path discovery + TOML source), :mod:`pipefy_infra.security`
+configuration: path discovery + TOML source) and :mod:`pipefy_infra.security`
 (SSRF defenses, imported as ``from pipefy_infra import security`` so every
-call site is greppable for audits), :mod:`pipefy_infra.strings` (generic
-string helpers). See each submodule docstring and ``README.md`` for the
-detailed surface. The package sits at the bottom of the workspace
-dependency graph: stdlib + ``pydantic`` / ``pydantic-settings`` only.
+call site is greppable for audits). See each submodule docstring and
+``README.md`` for the detailed surface. The package sits at the bottom of
+the workspace dependency graph: stdlib + ``pydantic`` /
+``pydantic-settings`` only.
 """
 
 from __future__ import annotations

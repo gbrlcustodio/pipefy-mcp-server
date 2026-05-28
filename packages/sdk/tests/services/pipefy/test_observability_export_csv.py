@@ -21,18 +21,21 @@ from pipefy_sdk.services.observability_export_csv import (
 def _skip_real_dns_for_download_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
     """Avoid real DNS in download_bytes tests; security is covered separately.
 
-    Rebinds the helper on the importing module rather than mutating
-    ``pipefy_infra.security.assert_hostname_resolves_to_public_ips`` directly
-    (the latter is a shared singleton and would leak the no-op to any
-    cross-package caller invoked within the same test).
+    Patches the single function on the importing module's `security`
+    namespace rather than swapping the whole namespace; any future
+    `security.X` reference added to ``observability_export_csv`` keeps
+    working under this fixture instead of AttributeError-ing on a stub
+    that only carries the one method.
     """
 
-    class _Namespace:
-        @staticmethod
-        async def assert_hostname_resolves_to_public_ips(_hostname: str) -> None:
-            return None
+    async def _ok(_hostname: str) -> None:
+        return None
 
-    monkeypatch.setattr(observability_export_csv, "security", _Namespace)
+    monkeypatch.setattr(
+        observability_export_csv.security,
+        "assert_hostname_resolves_to_public_ips",
+        _ok,
+    )
 
 
 def _minimal_xlsx_bytes() -> bytes:

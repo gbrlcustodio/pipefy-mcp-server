@@ -29,7 +29,6 @@ from typing import Literal, Self
 
 from pipefy_infra import security
 from pipefy_infra.config import PipefyTomlConfigSource
-from pipefy_infra.strings import strip_str
 from pydantic import (
     AliasChoices,
     Field,
@@ -185,7 +184,9 @@ class AuthSettings(BaseSettings):
     )
     @classmethod
     def _strip_str(cls, value: object) -> object:
-        return strip_str(value)
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
     @field_validator("keychain_backend", mode="before")
     @classmethod
@@ -350,22 +351,24 @@ class AuthSettings(BaseSettings):
     @model_validator(mode="after")
     def _validate_endpoint_urls(self) -> Self:
         # Self-validate so direct ``AuthSettings()`` construction (outside
-        # ``CliSettings`` / ``Settings``) is safe.
+        # ``CliSettings`` / ``Settings``) is safe. ``base_url`` derives the
+        # OAuth token endpoint via ``<base_url>/oauth/token`` so it must be
+        # a host root; ``auth_url`` is the OIDC issuer and may carry a
+        # realm path (Keycloak-style), but a stray query or fragment would
+        # corrupt the ``.well-known/openid-configuration`` concatenation.
         stripped_base = self.base_url.strip()
-        security.assert_url_is_host_root(
-            stripped_base,
-            field_label="base_url",
-            derived_paths_hint=(
-                "the OAuth token endpoint derives via ``<base_url>/oauth/token``"
-            ),
-        )
+        security.assert_url_is_host_root(stripped_base, field_label="base_url")
         security.validate_https_url(
             stripped_base,
             "base_url",
             allow_insecure=self.allow_insecure_urls,
         )
+        stripped_auth = self.auth_url.strip()
+        security.assert_url_has_no_query_or_fragment(
+            stripped_auth, field_label="auth_url"
+        )
         security.validate_https_url(
-            self.auth_url.strip(),
+            stripped_auth,
             "auth_url",
             allow_insecure=self.allow_insecure_urls,
         )

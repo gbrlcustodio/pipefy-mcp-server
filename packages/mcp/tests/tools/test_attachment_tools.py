@@ -111,66 +111,88 @@ def _httpx_stream_cm_mock(content=b"hello-bytes", headers=None):
 
 @pytest.mark.anyio
 class TestValidateUrlSafe:
+    """HTTPS-only by default; ``allow_insecure=True`` mirrors PIPEFY_ALLOW_INSECURE_URLS."""
+
     async def test_rejects_file_scheme(self):
-        with pytest.raises(ValueError, match="must use http or https"):
-            await _validate_url_safe("file:///etc/passwd")
+        with pytest.raises(ValueError, match="must use HTTPS"):
+            await _validate_url_safe("file:///etc/passwd", allow_insecure=False)
 
     async def test_rejects_ftp_scheme(self):
-        with pytest.raises(ValueError, match="must use http or https"):
-            await _validate_url_safe("ftp://internal/data")
+        with pytest.raises(ValueError, match="must use HTTPS"):
+            await _validate_url_safe("ftp://internal/data", allow_insecure=False)
+
+    async def test_rejects_http_scheme_by_default(self):
+        # HTTPS-only is the production default; PIPEFY_ALLOW_INSECURE_URLS
+        # opts in to http for local development only.
+        with pytest.raises(ValueError, match="must use HTTPS"):
+            await _validate_url_safe(
+                "http://example.com/file.pdf", allow_insecure=False
+            )
 
     async def test_rejects_no_hostname(self):
         with pytest.raises(ValueError, match="must include a hostname"):
-            await _validate_url_safe("https://")
+            await _validate_url_safe("https://", allow_insecure=False)
 
     @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_localhost(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("127.0.0.1", 0))]
-        with pytest.raises(ValueError, match="private/internal"):
-            await _validate_url_safe("https://localhost/secret")
+        with pytest.raises(ValueError, match="(blocked|localhost)"):
+            await _validate_url_safe("https://localhost/secret", allow_insecure=False)
 
     @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_metadata_endpoint(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [
             (None, None, None, None, ("169.254.169.254", 0))
         ]
-        with pytest.raises(ValueError, match="private/internal"):
-            await _validate_url_safe("http://169.254.169.254/latest/meta-data/")
+        # With allow_insecure=True the sync gate skips the literal-IP
+        # check; the async DNS gate is what rejects the IMDS address.
+        with pytest.raises(ValueError, match="blocked"):
+            await _validate_url_safe(
+                "http://169.254.169.254/latest/meta-data/", allow_insecure=True
+            )
 
     @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_private_10_range(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("10.0.0.1", 0))]
-        with pytest.raises(ValueError, match="private/internal"):
-            await _validate_url_safe("https://internal.corp/file.pdf")
+        with pytest.raises(ValueError, match="blocked"):
+            await _validate_url_safe(
+                "https://internal.corp/file.pdf", allow_insecure=False
+            )
 
     @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_private_172_range(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("172.16.0.1", 0))]
-        with pytest.raises(ValueError, match="private/internal"):
-            await _validate_url_safe("https://internal.corp/file.pdf")
+        with pytest.raises(ValueError, match="blocked"):
+            await _validate_url_safe(
+                "https://internal.corp/file.pdf", allow_insecure=False
+            )
 
     @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_private_192_range(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("192.168.1.1", 0))]
-        with pytest.raises(ValueError, match="private/internal"):
-            await _validate_url_safe("https://home.lan/file.pdf")
+        with pytest.raises(ValueError, match="blocked"):
+            await _validate_url_safe("https://home.lan/file.pdf", allow_insecure=False)
 
     @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_ipv6_loopback(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("::1", 0, 0, 0))]
-        with pytest.raises(ValueError, match="private/internal"):
-            await _validate_url_safe("https://[::1]/file.pdf")
+        # ``urlparse`` strips brackets, so the literal-IP sync gate fires
+        # before any DNS call; mocking getaddrinfo is just defensive.
+        with pytest.raises(ValueError, match="blocked"):
+            await _validate_url_safe("https://[::1]/file.pdf", allow_insecure=False)
 
     @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_accepts_public_ip(self, mock_getaddrinfo):
         mock_getaddrinfo.return_value = [(None, None, None, None, ("93.184.216.34", 0))]
-        await _validate_url_safe("https://example.com/file.pdf")  # should not raise
+        await _validate_url_safe("https://example.com/file.pdf", allow_insecure=False)
 
     @patch("pipefy_infra.security.socket.getaddrinfo")
     async def test_rejects_unresolvable_hostname(self, mock_getaddrinfo):
         mock_getaddrinfo.side_effect = socket.gaierror("DNS resolution failed")
         with pytest.raises(ValueError, match="Could not resolve hostname"):
-            await _validate_url_safe("https://nope.invalid/file.pdf")
+            await _validate_url_safe(
+                "https://nope.invalid/file.pdf", allow_insecure=False
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +245,7 @@ async def test_download_rejects_redirect_without_location_header():
         patch(_VALIDATE_PATCH),
     ):
         with pytest.raises(ValueError, match="Redirect without Location header"):
-            await _download_file_bytes("https://example.com/a")
+            await _download_file_bytes("https://example.com/a", allow_insecure=False)
 
 
 @pytest.mark.anyio
@@ -238,7 +260,9 @@ async def test_download_follows_safe_redirect_chain():
         ),
         patch(_VALIDATE_PATCH) as mock_validate,
     ):
-        result = await _download_file_bytes("https://example.com/a")
+        result = await _download_file_bytes(
+            "https://example.com/a", allow_insecure=False
+        )
     assert result == b"final-bytes"
     # Both the initial URL and the redirect target must go through _validate_url_safe.
     assert mock_validate.await_count == 2
@@ -256,7 +280,9 @@ async def test_download_follows_relative_redirect_resolving_against_current_url(
         ),
         patch(_VALIDATE_PATCH) as mock_validate,
     ):
-        result = await _download_file_bytes("https://example.com/start/here")
+        result = await _download_file_bytes(
+            "https://example.com/start/here", allow_insecure=False
+        )
     assert result == b"relative-ok"
     assert mock_validate.await_count == 2
 
@@ -279,7 +305,7 @@ async def test_download_rejects_too_many_redirects():
         patch(_VALIDATE_PATCH),
     ):
         with pytest.raises(ValueError, match="Too many redirects"):
-            await _download_file_bytes("https://example.com/a")
+            await _download_file_bytes("https://example.com/a", allow_insecure=False)
 
 
 @pytest.mark.anyio
@@ -304,7 +330,9 @@ async def test_download_rejects_streaming_body_exceeding_size_limit():
         patch(_VALIDATE_PATCH),
     ):
         with pytest.raises(ValueError, match="File too large"):
-            await _download_file_bytes("https://example.com/huge.bin")
+            await _download_file_bytes(
+                "https://example.com/huge.bin", allow_insecure=False
+            )
 
 
 @pytest.mark.anyio
@@ -688,10 +716,11 @@ async def test_upload_attachment_to_card_rejects_ssrf_url(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload["step"] == "file_download"
-    assert (
-        "private" in tool_error_message(payload).lower()
-        or "internal" in tool_error_message(payload).lower()
-    )
+    # HTTPS-only is the production default; the http:// IMDS URL is
+    # rejected by the scheme check before the DNS gate runs. ``blocked``
+    # would appear if ``PIPEFY_ALLOW_INSECURE_URLS`` were set and the
+    # async DNS gate caught the literal IP instead.
+    assert "https" in tool_error_message(payload).lower()
     mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
 
 

@@ -4,7 +4,6 @@ from typing import Annotated, Self
 
 from pipefy_infra import security
 from pipefy_infra.config import PipefyTomlConfigSource
-from pipefy_infra.strings import strip_str
 from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
@@ -152,7 +151,9 @@ class PipefySettings(BaseSettings):
     @field_validator("base_url", "org_id", mode="before")
     @classmethod
     def _strip_str(cls, value: object) -> object:
-        return strip_str(value)
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
     @field_validator("service_account_ids", mode="before")
     @classmethod
@@ -186,15 +187,12 @@ class PipefySettings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_pipefy_endpoint_urls(self) -> Self:
+        # ``base_url`` is the host root that drives ``/graphql``,
+        # ``/internal_api``, ``/graphql/interfaces`` via the computed
+        # properties above; any non-root path/query/fragment would corrupt
+        # the f-string concatenation.
         stripped = self.base_url.strip()
-        security.assert_url_is_host_root(
-            stripped,
-            field_label="base_url",
-            derived_paths_hint=(
-                "the SDK appends ``/graphql`` / ``/internal_api`` / "
-                "``/graphql/interfaces`` to it"
-            ),
-        )
+        security.assert_url_is_host_root(stripped, field_label="base_url")
         security.validate_https_url(
             stripped, "base_url", allow_insecure=self.allow_insecure_urls
         )

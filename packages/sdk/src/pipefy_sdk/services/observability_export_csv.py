@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 from collections.abc import AsyncIterator
-from typing import Final
+from typing import Final, cast
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -22,8 +22,12 @@ _MAX_REDIRECTS: Final[int] = 3
 async def _validate_export_download_url_before_fetch(url: str) -> None:
     if not is_allowed_pipefy_export_download_url(url):
         raise ValueError("Download URL is not an allowed Pipefy https URL.")
-    hostname = urlparse(url.strip()).hostname
-    await security.assert_hostname_resolves_to_public_ips(hostname or "")
+    # ``is_allowed_pipefy_export_download_url`` returned True, so
+    # ``parsed.hostname`` is guaranteed non-empty (the allowlist requires
+    # a host ending in ``.pipefy.com``). ``cast`` documents the invariant
+    # at the call site without an unreachable runtime check.
+    hostname = cast(str, urlparse(url.strip()).hostname)
+    await security.assert_hostname_resolves_to_public_ips(hostname)
 
 
 def is_allowed_pipefy_export_download_url(url: str) -> bool:

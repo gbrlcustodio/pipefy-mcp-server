@@ -13,6 +13,10 @@ GET_PIPE_QUERY = gql(
             phases {
                 id
                 name
+                fields {
+                    id
+                    internal_id
+                }
             }
             labels {
                 id

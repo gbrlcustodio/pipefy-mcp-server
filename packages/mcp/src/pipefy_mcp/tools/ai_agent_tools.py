@@ -117,6 +117,7 @@ class AiAgentTools:
                     field_ids,
                     phase_ids,
                     related_pipe_ids,
+                    _fetch_warnings,
                 ) = await fetch_pipe_validation_context(
                     client,
                     pipe_id,

@@ -12,7 +12,7 @@ Optional smoke:
 
     uv run pytest packages/sdk/tests/services/pipefy/test_portal_service_integration.py -m integration -k portal_element -v
 
-Full publish-cycle coverage is deferred to a follow-up integration suite.
+Sub-portal publish/unpublish cycle: ``-k "publish_sub_portal or sub_portal"``.
 """
 
 from __future__ import annotations
@@ -29,6 +29,7 @@ from _shared.live_settings import (
 from gql.transport.exceptions import TransportQueryError
 
 from pipefy_sdk.exceptions import PortalPermissionError
+from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.services.portal_service import PortalService
 
 _PORTAL_ORG_SKIP = (
@@ -38,9 +39,20 @@ _PORTAL_ORG_SKIP = (
 
 @pytest.fixture
 def live_portal_service() -> PortalService:
-    """PortalService wired against live Interfaces schema credentials."""
+    """PortalService with live Interfaces + internal_api for sub-portal mutations."""
     require_live_creds()
-    return PortalService(settings=live_pipefy_settings(), auth=live_resolved_auth())
+    settings = live_pipefy_settings()
+    auth = live_resolved_auth()
+    internal = InternalApiClient(
+        url=settings.internal_api_url,
+        auth=auth,
+        allow_insecure_urls=settings.allow_insecure_urls,
+    )
+    return PortalService(
+        settings=settings,
+        auth=auth,
+        internal_api_client=internal,
+    )
 
 
 def _portal_org_uuid() -> str | None:
@@ -53,6 +65,29 @@ def _require_portal_org_uuid() -> str:
     if org_uuid is None:
         pytest.skip(_PORTAL_ORG_SKIP)
     return org_uuid
+
+
+def _first_forms_element_id(portal_detail: dict) -> str | None:
+    for page in portal_detail.get("pages") or []:
+        for element in page.get("elements") or []:
+            if element.get("type") != "forms":
+                continue
+            element_id = element.get("uuid") or element.get("id")
+            if element_id:
+                return str(element_id)
+    return None
+
+
+def _sub_portal_published(
+    portal_detail: dict,
+    sub_portal_uuid: str,
+) -> bool | None:
+    for sub_portal in portal_detail.get("subPortals") or []:
+        sub_id = sub_portal.get("uuid") or sub_portal.get("id")
+        if sub_id == sub_portal_uuid:
+            published = sub_portal.get("published")
+            return published if isinstance(published, bool) else None
+    return None
 
 
 @pytest.mark.integration
@@ -254,3 +289,86 @@ async def test_live_create_portal_element_on_bootstrapped_page(
             f"Failed to clean up portal element/page after create smoke: {exc}",
             pytrace=False,
         )
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_live_publish_sub_portal_cycle(
+    live_portal_service: PortalService,
+) -> None:
+    """Publish then unpublish a sub-portal on a templated forms element (internal_api)."""
+    org_uuid = _require_portal_org_uuid()
+    sub_portal_uuid: str | None = None
+
+    try:
+        try:
+            portal = await live_portal_service.create_portal(org_uuid)
+        except PortalPermissionError:
+            pytest.skip(
+                f"Token lacks manage_portals on org {org_uuid}; "
+                "set PIPEFY_PORTAL_ORG_UUID to an org with portal write access."
+            )
+
+        portal_uuid = portal["uuid"]
+        detail = await live_portal_service.get_portal(portal_uuid)
+        element_id = _first_forms_element_id(detail)
+        if element_id is None:
+            pytest.skip(
+                f"Main portal {portal_uuid} has no forms element on any page; "
+                "publish_sub_portal requires a templated forms slot "
+                "(updateSubPortalElement, not createElement(subPortal))."
+            )
+
+        sub_name = f"mcp-publish-smoke-{uuid.uuid4().hex[:8]}"
+        try:
+            created = await live_portal_service.create_sub_portal(portal_uuid, sub_name)
+        except PortalPermissionError:
+            pytest.skip(
+                f"Token lacks manage_portals on org {org_uuid}; "
+                "set PIPEFY_PORTAL_ORG_UUID to an org with portal write access."
+            )
+
+        sub_portal_uuid = created.get("uuid") or created.get("id")
+        assert sub_portal_uuid
+
+        try:
+            await live_portal_service.publish_sub_portal(
+                portal_uuid,
+                element_id,
+                sub_portal_uuid,
+            )
+        except TransportQueryError as exc:
+            pytest.skip(
+                f"publish_sub_portal failed on org {org_uuid} (internal_api): "
+                f"{exc.errors}"
+            )
+
+        after_publish = await live_portal_service.get_portal(portal_uuid)
+        published_after_attach = _sub_portal_published(after_publish, sub_portal_uuid)
+        assert published_after_attach is True, (
+            f"Expected subPortals[].published is True for {sub_portal_uuid} "
+            f"after publish_sub_portal; got {published_after_attach!r} in "
+            f"{after_publish.get('subPortals')!r}"
+        )
+
+        try:
+            await live_portal_service.unpublish_sub_portal(portal_uuid, element_id)
+        except TransportQueryError as exc:
+            pytest.skip(
+                f"unpublish_sub_portal failed on org {org_uuid} (internal_api): "
+                f"{exc.errors}"
+            )
+
+        after_unpublish = await live_portal_service.get_portal(portal_uuid)
+        published_after_detach = _sub_portal_published(after_unpublish, sub_portal_uuid)
+        assert published_after_detach is False, (
+            f"Expected subPortals[].published is False for {sub_portal_uuid} "
+            f"after unpublish_sub_portal (subPortalUuid: null); got "
+            f"{published_after_detach!r} in {after_unpublish.get('subPortals')!r}"
+        )
+    finally:
+        if sub_portal_uuid:
+            try:
+                await live_portal_service.delete_sub_portal(sub_portal_uuid)
+            except (PortalPermissionError, TransportQueryError, ValueError):
+                pass

@@ -1,4 +1,10 @@
-"""Payload builders and error mappers for portal MCP tools."""
+"""Payload builders and error mappers for portal MCP tools.
+
+``unpublish_sub_portal`` uses internal_api ``updateSubPortalElement`` with
+``subPortalUuid: null`` (not ``deleteSubPortalElement``): live integration
+confirms ``get_portal`` -> ``subPortals[].published`` flips to false. CLI
+``sub-portal detach`` calls ``deleteSubPortalElement`` to remove wiring only.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +12,10 @@ from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk.exceptions import PortalPermissionError
 from pydantic import ValidationError
 
-from pipefy_mcp.tools.graphql_error_helpers import extract_graphql_error_codes
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_error_strings,
+    extract_graphql_error_codes,
+)
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 _PORTAL_PERMISSION_GUIDANCE = (
@@ -46,6 +55,11 @@ def map_portal_error_to_message(exc: BaseException) -> str:
 
     if "PERMISSION_DENIED" in codes or "permission denied" in lowered:
         return _PORTAL_PERMISSION_GUIDANCE
+
+    if isinstance(exc, TransportQueryError):
+        messages = extract_error_strings(exc)
+        if messages:
+            return "; ".join(messages)
 
     return text if text else "Portal operation failed. Try again or contact support."
 

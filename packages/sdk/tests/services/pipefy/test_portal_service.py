@@ -496,8 +496,61 @@ def _assert_interfaces_mutation_query(query_used: object, constant_name: str) ->
             "UPDATE_ELEMENT_MUTATION": "updateElement",
             "DELETE_ELEMENT_MUTATION": "deleteElement",
             "DUPLICATE_ELEMENT_MUTATION": "duplicateElement",
+            "CREATE_SUB_PORTAL_MUTATION": "createSubPortal",
         }
         assert operation_snippets[constant_name] in str(query_used)
+
+
+try:
+    _portal_internal_queries_module = importlib.import_module(
+        "pipefy_sdk.queries.portal_internal_queries"
+    )
+except ModuleNotFoundError:
+    _portal_internal_queries_module = None
+
+
+def _portal_internal_mutation_constant(name: str):
+    """Return the internal_api mutation constant when exported; else None (TDD)."""
+    if _portal_internal_queries_module is None:
+        return None
+    return getattr(_portal_internal_queries_module, name, None)
+
+
+def _assert_internal_mutation_query(query_used: object, constant_name: str) -> None:
+    """Assert internal_api mutation document matches the expected constant."""
+    expected = _portal_internal_mutation_constant(constant_name)
+    if expected is not None:
+        assert query_used is expected
+    else:
+        operation_snippets = {
+            "UPDATE_SUB_PORTAL_ELEMENT_MUTATION": "updateSubPortalElement",
+            "DELETE_SUB_PORTAL_ELEMENT_MUTATION": "deleteSubPortalElement",
+            "DELETE_SUB_PORTAL_INTERFACE_MUTATION": "deleteSubPortalInterface",
+        }
+        assert operation_snippets[constant_name] in str(query_used)
+
+
+def _make_portal_service_with_clients(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+    *,
+    interfaces_return: dict | None = None,
+    internal_return: dict | None = None,
+) -> tuple[PortalService, MagicMock, MagicMock]:
+    """PortalService with mocked Interfaces and internal_api clients."""
+    mock_internal = _mock_internal_api_client()
+    if internal_return is not None:
+        mock_internal.execute_query = AsyncMock(return_value=internal_return)
+    service = PortalService(
+        settings=mock_settings,
+        auth=mock_auth,
+        internal_api_client=mock_internal,
+    )
+    interfaces_execute = AsyncMock()
+    if interfaces_return is not None:
+        interfaces_execute.return_value = interfaces_return
+    service._interfaces_client.execute_query = interfaces_execute
+    return service, service._interfaces_client, mock_internal
 
 
 _CREATE_PORTAL_GRAPHQL_INTERFACE = {
@@ -1277,3 +1330,211 @@ async def test_duplicate_portal_element_sends_camel_case_duplicate_input(
         }
     }
     assert result["uuid"] == "el-copy"
+
+
+_MAIN_PORTAL_UUID = "portal-main-uuid"
+_SUB_PORTAL_UUID = "sub-portal-uuid"
+_FORMS_ELEMENT_ID = "forms-element-uuid"
+_SUB_PORTAL_NAME = "Intake sub-portal"
+
+_CREATE_SUB_PORTAL_GRAPHQL = {
+    "id": _SUB_PORTAL_UUID,
+    "name": _SUB_PORTAL_NAME,
+}
+
+_CREATE_SUB_PORTAL_RESPONSE = {
+    "createSubPortal": {"subPortal": _CREATE_SUB_PORTAL_GRAPHQL},
+}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_sub_portal_calls_create_sub_portal_on_interfaces(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """create_sub_portal uses Interfaces createSubPortal with mainPortalUuid."""
+    service, interfaces_client, internal_client = _make_portal_service_with_clients(
+        mock_settings,
+        mock_auth,
+        interfaces_return=_CREATE_SUB_PORTAL_RESPONSE,
+    )
+
+    result = await service.create_sub_portal(_MAIN_PORTAL_UUID, name=_SUB_PORTAL_NAME)
+
+    interfaces_client.execute_query.assert_called_once()
+    internal_client.execute_query.assert_not_called()
+    query_used, variables = interfaces_client.execute_query.call_args[0]
+    _assert_interfaces_mutation_query(query_used, "CREATE_SUB_PORTAL_MUTATION")
+    assert variables == {
+        "input": {
+            "mainPortalUuid": _MAIN_PORTAL_UUID,
+            "name": _SUB_PORTAL_NAME,
+        }
+    }
+    assert result["uuid"] == _SUB_PORTAL_UUID
+    assert result["name"] == _SUB_PORTAL_NAME
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_sub_portal_omits_name_when_not_provided(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Optional name is omitted from createSubPortal input when None."""
+    service, interfaces_client, _internal_client = _make_portal_service_with_clients(
+        mock_settings,
+        mock_auth,
+        interfaces_return=_CREATE_SUB_PORTAL_RESPONSE,
+    )
+
+    await service.create_sub_portal(_MAIN_PORTAL_UUID)
+
+    _, variables = interfaces_client.execute_query.call_args[0]
+    assert variables == {"input": {"mainPortalUuid": _MAIN_PORTAL_UUID}}
+    assert "name" not in variables["input"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_sub_portal_element_routes_through_internal_api(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """update_sub_portal_element uses internal_api updateSubPortalElement."""
+    internal_response = {"updateSubPortalElement": {"success": True}}
+    service, interfaces_client, internal_client = _make_portal_service_with_clients(
+        mock_settings,
+        mock_auth,
+        internal_return=internal_response,
+    )
+
+    result = await service.update_sub_portal_element(
+        _MAIN_PORTAL_UUID,
+        _FORMS_ELEMENT_ID,
+        _SUB_PORTAL_UUID,
+    )
+
+    interfaces_client.execute_query.assert_not_called()
+    internal_client.execute_query.assert_called_once()
+    query_used, variables = internal_client.execute_query.call_args[0]
+    _assert_internal_mutation_query(query_used, "UPDATE_SUB_PORTAL_ELEMENT_MUTATION")
+    assert variables == {
+        "input": {
+            "portalUuid": _MAIN_PORTAL_UUID,
+            "elementId": _FORMS_ELEMENT_ID,
+            "subPortalUuid": _SUB_PORTAL_UUID,
+        }
+    }
+    assert result == internal_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_publish_sub_portal_delegates_to_update_sub_portal_element(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """publish_sub_portal wires subPortalUuid via updateSubPortalElement (not createElement)."""
+    internal_response = {"updateSubPortalElement": {"success": True}}
+    service, interfaces_client, internal_client = _make_portal_service_with_clients(
+        mock_settings,
+        mock_auth,
+        internal_return=internal_response,
+    )
+
+    result = await service.publish_sub_portal(
+        _MAIN_PORTAL_UUID,
+        _FORMS_ELEMENT_ID,
+        _SUB_PORTAL_UUID,
+    )
+
+    interfaces_client.execute_query.assert_not_called()
+    internal_client.execute_query.assert_called_once()
+    _, variables = internal_client.execute_query.call_args[0]
+    assert variables["input"]["subPortalUuid"] == _SUB_PORTAL_UUID
+    assert result == internal_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_unpublish_sub_portal_sends_null_sub_portal_uuid(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """unpublish_sub_portal clears subPortalUuid (null); 6.7 integration confirms detach."""
+    service, interfaces_client, internal_client = _make_portal_service_with_clients(
+        mock_settings,
+        mock_auth,
+        internal_return={"updateSubPortalElement": {"success": True}},
+    )
+
+    await service.unpublish_sub_portal(_MAIN_PORTAL_UUID, _FORMS_ELEMENT_ID)
+
+    interfaces_client.execute_query.assert_not_called()
+    internal_client.execute_query.assert_called_once()
+    _, variables = internal_client.execute_query.call_args[0]
+    assert variables == {
+        "input": {
+            "portalUuid": _MAIN_PORTAL_UUID,
+            "elementId": _FORMS_ELEMENT_ID,
+            "subPortalUuid": None,
+        }
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_sub_portal_element_routes_through_internal_api(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """delete_sub_portal_element uses internal_api deleteSubPortalElement."""
+    internal_response = {"deleteSubPortalElement": {"success": True}}
+    service, interfaces_client, internal_client = _make_portal_service_with_clients(
+        mock_settings,
+        mock_auth,
+        internal_return=internal_response,
+    )
+
+    result = await service.delete_sub_portal_element(
+        _MAIN_PORTAL_UUID,
+        _FORMS_ELEMENT_ID,
+    )
+
+    interfaces_client.execute_query.assert_not_called()
+    internal_client.execute_query.assert_called_once()
+    query_used, variables = internal_client.execute_query.call_args[0]
+    _assert_internal_mutation_query(query_used, "DELETE_SUB_PORTAL_ELEMENT_MUTATION")
+    assert variables == {
+        "input": {
+            "portalUuid": _MAIN_PORTAL_UUID,
+            "elementId": _FORMS_ELEMENT_ID,
+        }
+    }
+    assert result == internal_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_sub_portal_calls_delete_sub_portal_interface(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """delete_sub_portal removes the sub-portal entity via deleteSubPortalInterface."""
+    internal_response = {"deleteSubPortalInterface": {"success": True}}
+    service, interfaces_client, internal_client = _make_portal_service_with_clients(
+        mock_settings,
+        mock_auth,
+        internal_return=internal_response,
+    )
+
+    result = await service.delete_sub_portal(_SUB_PORTAL_UUID)
+
+    interfaces_client.execute_query.assert_not_called()
+    internal_client.execute_query.assert_called_once()
+    query_used, variables = internal_client.execute_query.call_args[0]
+    _assert_internal_mutation_query(query_used, "DELETE_SUB_PORTAL_INTERFACE_MUTATION")
+    assert variables == {"input": {"uuid": _SUB_PORTAL_UUID}}
+    assert result == internal_response

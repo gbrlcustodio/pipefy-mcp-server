@@ -12,7 +12,7 @@ Optional smoke:
 
     uv run pytest packages/sdk/tests/services/pipefy/test_portal_service_integration.py -m integration -k portal_element -v
 
-Full publish-cycle coverage is deferred to task 6.7.
+Full publish-cycle coverage is deferred to a follow-up integration suite.
 """
 
 from __future__ import annotations

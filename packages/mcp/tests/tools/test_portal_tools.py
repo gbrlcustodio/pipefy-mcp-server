@@ -329,7 +329,7 @@ async def test_read_tools_have_readonly_hint(portal_session):
 
 
 # ---------------------------------------------------------------------------
-# Portal metadata CRUD write tools (task 3.3 RED)
+# Portal metadata CRUD write tools
 # ---------------------------------------------------------------------------
 
 
@@ -633,7 +633,7 @@ async def test_delete_portal_has_destructive_hint(portal_session):
 
 
 # ---------------------------------------------------------------------------
-# Portal page write tools (task 4.3 RED)
+# Portal page write tools
 # ---------------------------------------------------------------------------
 
 
@@ -1135,7 +1135,7 @@ async def test_page_write_tools_are_not_readonly(portal_session):
 
 
 # ---------------------------------------------------------------------------
-# Portal element write tools (task 5.5 RED)
+# Portal element write tools
 # ---------------------------------------------------------------------------
 
 _ELEMENT_WRITE_TOOL_NAMES = [
@@ -1448,17 +1448,17 @@ async def test_duplicate_portal_element_success(
         result = await session.call_tool(
             "duplicate_portal_element",
             {
-                "element_uuid": _ELEMENT_UUID,
-                "interface_uuid": _PORTAL_UUID,
-                "page_uuid": _PAGE_UUID,
+                "element_id": _ELEMENT_UUID,
+                "portal_uuid": _PORTAL_UUID,
+                "page_id": _PAGE_UUID,
             },
         )
 
     assert result.isError is False
     mock_portal_client.duplicate_portal_element.assert_awaited_once_with(
-        element_uuid=_ELEMENT_UUID,
-        interface_uuid=_PORTAL_UUID,
-        page_uuid=_PAGE_UUID,
+        element_id=_ELEMENT_UUID,
+        portal_uuid=_PORTAL_UUID,
+        page_id=_PAGE_UUID,
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -1467,23 +1467,23 @@ async def test_duplicate_portal_element_success(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("portal_session", [None], indirect=True)
-async def test_duplicate_portal_element_rejects_blank_interface_uuid(
+async def test_duplicate_portal_element_rejects_blank_portal_uuid(
     portal_session, mock_portal_client, extract_payload
 ):
     async with portal_session as session:
         result = await session.call_tool(
             "duplicate_portal_element",
             {
-                "element_uuid": _ELEMENT_UUID,
-                "interface_uuid": "  ",
-                "page_uuid": _PAGE_UUID,
+                "element_id": _ELEMENT_UUID,
+                "portal_uuid": "  ",
+                "page_id": _PAGE_UUID,
             },
         )
 
     mock_portal_client.duplicate_portal_element.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "interface_uuid" in tool_error_message(payload).lower()
+    assert "portal_uuid" in tool_error_message(payload).lower()
 
 
 @pytest.mark.anyio

@@ -473,7 +473,7 @@ _portal_queries_module = importlib.import_module("pipefy_sdk.queries.portal_quer
 
 
 def _portal_mutation_constant(name: str):
-    """Resolve portal mutation constant when present (GREEN); else None for RED."""
+    """Return the portal mutation constant when exported; else None (TDD placeholder)."""
     return getattr(_portal_queries_module, name, None)
 
 
@@ -1261,9 +1261,9 @@ async def test_duplicate_portal_element_sends_camel_case_duplicate_input(
     service = _make_interfaces_service(mock_settings, mock_auth, dup_response)
 
     result = await service.duplicate_portal_element(
-        element_uuid=_ELEMENT_ID,
-        interface_uuid=_INTERFACE_UUID,
-        page_uuid=_PAGE_ID,
+        element_id=_ELEMENT_ID,
+        portal_uuid=_INTERFACE_UUID,
+        page_id=_PAGE_ID,
     )
 
     service._interfaces_client.execute_query.assert_called_once()

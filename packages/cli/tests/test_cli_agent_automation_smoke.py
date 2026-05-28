@@ -1,4 +1,4 @@
-"""Smoke tests for CLI tasks 10.0 / 11.0 domains."""
+"""CLI smoke tests for agent, automation, and related v0.2 domains."""
 
 from __future__ import annotations
 

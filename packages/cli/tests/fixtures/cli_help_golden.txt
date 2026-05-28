@@ -1929,13 +1929,13 @@ Usage: pipefy portal element duplicate [OPTIONS]
  Duplicate a portal page element on the same page (source portal + page UUIDs).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --element-uuid            TEXT  Element UUID to duplicate. [required]     │
-│ *  --interface-uuid          TEXT  Portal interface UUID that owns the page. │
-│                                    [required]                                │
-│ *  --page-uuid               TEXT  Page UUID that contains the element.      │
-│                                    [required]                                │
-│    --json            -j            Print machine-readable JSON to stdout.    │
-│    --help                          Show this message and exit.               │
+│ *  --element-id           TEXT  Element UUID to duplicate. [required]        │
+│ *  --portal-uuid          TEXT  Portal interface UUID that owns the page.    │
+│                                 [required]                                   │
+│ *  --page-id              TEXT  Page UUID that contains the element.         │
+│                                 [required]                                   │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP portal/element/update

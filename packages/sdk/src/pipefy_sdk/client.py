@@ -1399,23 +1399,23 @@ class PipefyClient:
     async def duplicate_portal_element(
         self,
         *,
-        element_uuid: str,
-        interface_uuid: str,
-        page_uuid: str,
+        element_id: str,
+        portal_uuid: str,
+        page_id: str,
     ) -> dict[str, Any]:
         """Duplicate a portal page element on the same page.
 
-        ``interface_uuid`` and ``page_uuid`` identify where the source element lives.
+        ``portal_uuid`` and ``page_id`` identify where the source element lives.
 
         Args:
-            element_uuid: Element UUID to duplicate.
-            interface_uuid: Portal interface UUID that owns the page.
-            page_uuid: Page UUID that contains the element.
+            element_id: Element UUID to duplicate.
+            portal_uuid: Portal interface UUID that owns the page.
+            page_id: Page UUID that contains the element.
         """
         return await self._portal_service.duplicate_portal_element(
-            element_uuid=element_uuid,
-            interface_uuid=interface_uuid,
-            page_uuid=page_uuid,
+            element_id=element_id,
+            portal_uuid=portal_uuid,
+            page_id=page_id,
         )
 
     async def get_me(self) -> MePayload | None:

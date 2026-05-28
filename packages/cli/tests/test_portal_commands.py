@@ -230,7 +230,7 @@ def test_portal_update_blank_name_exit_2(
 
 
 # ---------------------------------------------------------------------------
-# Portal page subcommands (task 4.5 RED)
+# Portal page subcommands
 # ---------------------------------------------------------------------------
 
 _PORTAL_UUID = "portal-uuid-1"
@@ -652,7 +652,7 @@ def test_portal_page_layout_update_json(runner, clean_pipefy_env, saved_cwd, oau
 
 
 # ---------------------------------------------------------------------------
-# Portal element subcommands (task 5.7 RED)
+# Portal element subcommands
 # ---------------------------------------------------------------------------
 
 _ELEMENT_UUID = "el-uuid-1"
@@ -928,11 +928,11 @@ def test_portal_element_duplicate_json(runner, clean_pipefy_env, saved_cwd, oaut
                 "portal",
                 "element",
                 "duplicate",
-                "--element-uuid",
+                "--element-id",
                 _ELEMENT_UUID,
-                "--interface-uuid",
+                "--portal-uuid",
                 _PORTAL_UUID,
-                "--page-uuid",
+                "--page-id",
                 _PAGE_UUID,
                 "--json",
             ],
@@ -940,16 +940,16 @@ def test_portal_element_duplicate_json(runner, clean_pipefy_env, saved_cwd, oaut
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
     assert json.loads(result.stdout) == duplicated
     mock_client.duplicate_portal_element.assert_awaited_once_with(
-        element_uuid=_ELEMENT_UUID,
-        interface_uuid=_PORTAL_UUID,
-        page_uuid=_PAGE_UUID,
+        element_id=_ELEMENT_UUID,
+        portal_uuid=_PORTAL_UUID,
+        page_id=_PAGE_UUID,
     )
 
 
-def test_portal_element_duplicate_missing_interface_uuid_exit_2(
+def test_portal_element_duplicate_missing_portal_uuid_exit_2(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):
-    oauth_env("portal-element-dup-no-iface")
+    oauth_env("portal-element-dup-no-portal")
     mock_client = MagicMock()
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
@@ -961,9 +961,9 @@ def test_portal_element_duplicate_missing_interface_uuid_exit_2(
                 "portal",
                 "element",
                 "duplicate",
-                "--element-uuid",
+                "--element-id",
                 _ELEMENT_UUID,
-                "--page-uuid",
+                "--page-id",
                 _PAGE_UUID,
                 "--json",
             ],
@@ -972,7 +972,7 @@ def test_portal_element_duplicate_missing_interface_uuid_exit_2(
     mock_client.duplicate_portal_element.assert_not_called()
 
 
-def test_portal_element_duplicate_missing_page_uuid_exit_2(
+def test_portal_element_duplicate_missing_page_id_exit_2(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):
     oauth_env("portal-element-dup-no-page")
@@ -987,9 +987,9 @@ def test_portal_element_duplicate_missing_page_uuid_exit_2(
                 "portal",
                 "element",
                 "duplicate",
-                "--element-uuid",
+                "--element-id",
                 _ELEMENT_UUID,
-                "--interface-uuid",
+                "--portal-uuid",
                 _PORTAL_UUID,
                 "--json",
             ],

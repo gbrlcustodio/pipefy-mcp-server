@@ -40,7 +40,7 @@ Each organization has **at most one main portal** (`subType: portal`). Additiona
 | `create_portal_element` | No | Add a widget to a page (`page_id`, `type`, `metadata`; optional `data_sources`). Validates metadata before GraphQL. |
 | `update_portal_element` | No | Replace element metadata in full (`element_id`, `page_id`, `type`, complete `metadata`). |
 | `delete_portal_element` | No | Delete a page element (**irreversible**). `destructiveHint=True`; CLI `--yes`. |
-| `duplicate_portal_element` | No | Duplicate an element on the **same** page (`element_uuid`, `interface_uuid`, `page_uuid` = source portal/page). |
+| `duplicate_portal_element` | No | Duplicate an element on the **same** page (`element_id`, `portal_uuid`, `page_id` = source portal/page). |
 
 **Layout caveat (Pipefy UI):** `createElement` does not update the page grid; `duplicateElement` appends layout rows; `deleteElement` does not prune layout unless you pass an updated `layout`. Orphan layout references can crash the portal viewer (HTTP 500). Prefer smoke on disposable pages and delete them after tests.
 
@@ -109,7 +109,7 @@ Additional element types may appear; treat unknown keys as opaque JSON.
 | `create_portal_element` | `pipefy portal element create --page-id <uuid> --type forms --metadata '{…}'` |
 | `update_portal_element` | `pipefy portal element update <element-uuid> <page-uuid> --type link --metadata '{…}'` |
 | `delete_portal_element` | `pipefy portal element delete <element-uuid> <page-uuid> --yes` |
-| `duplicate_portal_element` | `pipefy portal element duplicate --element-uuid <uuid> --interface-uuid <uuid> --page-uuid <uuid>` |
+| `duplicate_portal_element` | `pipefy portal element duplicate --element-id <uuid> --portal-uuid <uuid> --page-id <uuid>` |
 
 ---
 

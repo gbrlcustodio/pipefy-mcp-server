@@ -649,19 +649,19 @@ def portal_element_delete(
 @element_app.command("duplicate")
 def portal_element_duplicate(
     ctx: typer.Context,
-    element_uuid: str = typer.Option(
+    element_id: str = typer.Option(
         ...,
-        "--element-uuid",
+        "--element-id",
         help="Element UUID to duplicate.",
     ),
-    interface_uuid: str = typer.Option(
+    portal_uuid: str = typer.Option(
         ...,
-        "--interface-uuid",
+        "--portal-uuid",
         help="Portal interface UUID that owns the page.",
     ),
-    page_uuid: str = typer.Option(
+    page_id: str = typer.Option(
         ...,
-        "--page-uuid",
+        "--page-id",
         help="Page UUID that contains the element.",
     ),
     json_out: bool = typer.Option(
@@ -673,15 +673,15 @@ def portal_element_duplicate(
 ) -> None:
     """Duplicate a portal page element on the same page (source portal + page UUIDs)."""
 
-    element_uuid = _require_non_empty_portal_uuid(element_uuid)
-    interface_uuid = _require_non_empty_portal_uuid(interface_uuid)
-    page_uuid = _require_non_empty_portal_uuid(page_uuid)
+    element_id = _require_non_empty_portal_uuid(element_id)
+    portal_uuid = _require_non_empty_portal_uuid(portal_uuid)
+    page_id = _require_non_empty_portal_uuid(page_id)
 
     async def factory(client: PipefyClient):
         return await client.duplicate_portal_element(
-            element_uuid=element_uuid,
-            interface_uuid=interface_uuid,
-            page_uuid=page_uuid,
+            element_id=element_id,
+            portal_uuid=portal_uuid,
+            page_id=page_id,
         )
 
     run_cli_command(ctx, json_out, factory)

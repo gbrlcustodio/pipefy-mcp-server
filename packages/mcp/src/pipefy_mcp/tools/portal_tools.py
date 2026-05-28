@@ -697,39 +697,39 @@ class PortalTools:
         )
         async def duplicate_portal_element(
             ctx: Context[ServerSession, None],
-            element_uuid: str,
-            interface_uuid: str,
-            page_uuid: str,
+            element_id: str,
+            portal_uuid: str,
+            page_id: str,
         ) -> dict[str, Any]:
             """Duplicate a portal page element on the same page.
 
             Uses ``duplicateElement`` on the Interfaces schema (camelCase input).
-            ``interface_uuid`` and ``page_uuid`` must be the portal/page where the
+            ``portal_uuid`` and ``page_id`` must be the portal/page where the
             source element already exists; Pipefy appends a copy on that page.
 
             Args:
-                element_uuid: Element UUID to duplicate.
-                interface_uuid: Portal interface UUID that owns the page.
-                page_uuid: Page UUID that contains the element.
+                element_id: Element UUID to duplicate.
+                portal_uuid: Portal interface UUID that owns the page.
+                page_id: Page UUID that contains the element.
             """
-            element_uuid, err = validate_tool_id(element_uuid, "element_uuid")
+            element_id, err = validate_tool_id(element_id, "element_id")
             if err is not None:
                 return err
-            interface_uuid, err = validate_tool_id(interface_uuid, "interface_uuid")
+            portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
             if err is not None:
                 return err
-            page_uuid, err = validate_tool_id(page_uuid, "page_uuid")
+            page_id, err = validate_tool_id(page_id, "page_id")
             if err is not None:
                 return err
             await ctx.debug(
-                f"duplicate_portal_element: element_uuid={element_uuid}, "
-                f"interface_uuid={interface_uuid}, page_uuid={page_uuid}"
+                f"duplicate_portal_element: element_id={element_id}, "
+                f"portal_uuid={portal_uuid}, page_id={page_id}"
             )
             try:
                 element = await client.duplicate_portal_element(
-                    element_uuid=element_uuid,
-                    interface_uuid=interface_uuid,
-                    page_uuid=page_uuid,
+                    element_id=element_id,
+                    portal_uuid=portal_uuid,
+                    page_id=page_id,
                 )
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(map_portal_error_to_message(exc))

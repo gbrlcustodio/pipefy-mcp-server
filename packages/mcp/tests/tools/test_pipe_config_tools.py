@@ -904,7 +904,7 @@ async def test_delete_phase_field_preview_lists_dependent_conditions(
     assert "delete_field_condition" in deps["hint"]
 
 
-# Smoke 2026-05-15 (probe 8: expression-only refs in field conditions)
+# delete_phase_field preview — expression-only field condition dependents
 @pytest.mark.anyio
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_delete_phase_field_preview_includes_conditions_with_expression_only_refs(
@@ -913,9 +913,9 @@ async def test_delete_phase_field_preview_includes_conditions_with_expression_on
     """Rule references ``priority`` in condition expressions.
 
     ``find_phase_field_dependents`` must treat expression ``field_address`` as a
-    dependency, not only ``actions[].phaseFieldId``. Until 1.3, this stays red:
-    preview omits ``dependents.field_conditions`` when the field is only used in
-    the ``when`` side of the rule (actions may target a different field).
+    dependency, not only ``actions[].phaseFieldId``. Preview must list
+    ``dependents.field_conditions`` when the field appears only in the rule
+    ``when`` expression (actions may target a different field).
     """
     pipe_uuid = "bddc2aff-9c0b-4ef8-bb6d-6bb9bd380a11"
     phase_id = 343162749
@@ -1918,8 +1918,8 @@ async def test_create_field_condition_slug_like_phase_field_id_carries_invalid_a
 ):
     """Pre-API arg validation must surface ``error.code = INVALID_ARGUMENTS``.
 
-    Hit by smoke Phase 6 Probe 5: a slug-looking ``phaseFieldId`` (e.g.
-    ``"nome_do_campo"``) triggers ``field_condition_actions_error_message``
+    A slug-looking ``phaseFieldId`` (e.g. ``"nome_do_campo"``) triggers
+    ``field_condition_actions_error_message``
     before any Pipefy call. The envelope must match the shape of coercion
     errors so agents can branch on ``error.code`` consistently.
     """

@@ -133,7 +133,7 @@ def _graphql_create_element_input(
         "type": validated.type,
         "metadata": _serialize_interfaces_json(validated.metadata),
     }
-    # Always send data_sources (even []) — omitting it makes Pipefy pass nil and crash
+    # Always send data_sources (even []). Omitting it makes Pipefy pass nil and crash
     # in UpdateElement#authorized? / CreateDependencies (pipefy-core).
     payload["data_sources"] = _normalize_portal_data_sources(validated.data_sources)
     if validated.element_id is not None:
@@ -158,11 +158,6 @@ def _graphql_update_element_input(
     if validated.editable is not None:
         payload["editable"] = validated.editable
     return payload
-
-
-def _normalize_portal_element(element: dict[str, Any]) -> dict[str, Any]:
-    """Normalize a portal page element with ``uuid`` alias for ``id``."""
-    return _with_uuid_alias(element)
 
 
 def _normalize_portal_page(page: dict[str, Any]) -> dict[str, Any]:
@@ -553,7 +548,7 @@ class PortalService:
         if not isinstance(element, dict):
             msg = "createElement returned no element."
             raise ValueError(msg)
-        return _normalize_portal_element(element)
+        return _with_uuid_alias(element)
 
     async def update_portal_element(
         self,
@@ -601,7 +596,7 @@ class PortalService:
                 f"on page_id={page_id!r}."
             )
             raise ValueError(msg)
-        return _normalize_portal_element(
+        return _with_uuid_alias(
             {
                 "id": validated.element_id,
                 "type": validated.type,
@@ -627,28 +622,28 @@ class PortalService:
     async def duplicate_portal_element(
         self,
         *,
-        element_uuid: str,
-        interface_uuid: str,
-        page_uuid: str,
+        element_id: str,
+        portal_uuid: str,
+        page_id: str,
     ) -> dict[str, Any]:
         """Duplicate a portal page element on the same portal page.
 
-        ``interface_uuid`` and ``page_uuid`` identify where the source element lives
+        ``portal_uuid`` and ``page_id`` identify where the source element lives
         (not a cross-page destination). Pipefy appends a copy on that page.
 
         Args:
-            element_uuid: Element UUID to duplicate.
-            interface_uuid: Portal interface UUID that owns the page.
-            page_uuid: Page UUID that contains the element.
+            element_id: Element UUID to duplicate.
+            portal_uuid: Portal interface UUID that owns the page.
+            page_id: Page UUID that contains the element.
         """
         data = await _execute_interfaces_query_with_portal_errors(
             self.execute_interfaces_query,
             DUPLICATE_ELEMENT_MUTATION,
             {
                 "input": {
-                    "elementUuid": element_uuid,
-                    "interfaceUuid": interface_uuid,
-                    "pageUuid": page_uuid,
+                    "elementUuid": element_id,
+                    "interfaceUuid": portal_uuid,
+                    "pageUuid": page_id,
                 }
             },
         )
@@ -656,4 +651,4 @@ class PortalService:
         if not isinstance(element, dict):
             msg = "duplicateElement returned no element."
             raise ValueError(msg)
-        return _normalize_portal_element(element)
+        return _with_uuid_alias(element)

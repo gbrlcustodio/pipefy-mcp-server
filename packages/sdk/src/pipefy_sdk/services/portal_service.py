@@ -130,6 +130,23 @@ async def _execute_interfaces_query_with_portal_errors(
         raise
 
 
+_INTERNAL_API_PERMISSION_DENIED_MARKER = "[code=PERMISSION_DENIED]"
+
+
+async def _execute_internal_api_query_with_portal_errors(
+    execute: Any,
+    query: str,
+    variables: dict[str, Any],
+) -> dict[str, Any]:
+    """Run an internal_api operation and map portal permission failures."""
+    try:
+        return await execute(query, variables)
+    except ValueError as exc:
+        if _INTERNAL_API_PERMISSION_DENIED_MARKER in str(exc):
+            raise PortalPermissionError(_PORTAL_PERMISSION_MESSAGE) from exc
+        raise
+
+
 def _graphql_create_element_input(
     validated: CreatePortalElementInput,
 ) -> dict[str, Any]:
@@ -697,7 +714,8 @@ class PortalService:
             element_id: Page element UUID (e.g. templated ``forms`` slot).
             sub_portal_uuid: Sub-portal UUID to wire to the element.
         """
-        return await self.execute_internal_api_query(
+        return await _execute_internal_api_query_with_portal_errors(
+            self.execute_internal_api_query,
             UPDATE_SUB_PORTAL_ELEMENT_MUTATION,
             {
                 "input": {
@@ -732,13 +750,18 @@ class PortalService:
         portal_uuid: str,
         element_id: str,
     ) -> dict[str, Any]:
-        """Detach a sub-portal from a page element (``subPortalUuid: null``).
+        """Unpublish a sub-portal from a page element via ``updateSubPortalElement``.
+
+        Sends ``subPortalUuid: null`` to clear the link. Distinct from
+        ``delete_sub_portal_element`` (removes the wiring slot) and
+        ``delete_sub_portal`` (deletes the sub-portal entity).
 
         Args:
             portal_uuid: Main portal interface UUID.
             element_id: Page element UUID.
         """
-        return await self.execute_internal_api_query(
+        return await _execute_internal_api_query_with_portal_errors(
+            self.execute_internal_api_query,
             UPDATE_SUB_PORTAL_ELEMENT_MUTATION,
             {
                 "input": {
@@ -760,7 +783,8 @@ class PortalService:
             portal_uuid: Main portal interface UUID.
             element_id: Page element UUID.
         """
-        return await self.execute_internal_api_query(
+        return await _execute_internal_api_query_with_portal_errors(
+            self.execute_internal_api_query,
             DELETE_SUB_PORTAL_ELEMENT_MUTATION,
             {"input": {"portalUuid": portal_uuid, "elementId": element_id}},
         )
@@ -771,7 +795,8 @@ class PortalService:
         Args:
             uuid: Sub-portal UUID.
         """
-        return await self.execute_internal_api_query(
+        return await _execute_internal_api_query_with_portal_errors(
+            self.execute_internal_api_query,
             DELETE_SUB_PORTAL_INTERFACE_MUTATION,
             {"input": {"uuid": uuid}},
         )

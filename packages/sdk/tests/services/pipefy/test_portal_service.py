@@ -1538,3 +1538,74 @@ async def test_delete_sub_portal_calls_delete_sub_portal_interface(
     _assert_internal_mutation_query(query_used, "DELETE_SUB_PORTAL_INTERFACE_MUTATION")
     assert variables == {"input": {"uuid": _SUB_PORTAL_UUID}}
     assert result == internal_response
+
+
+_INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR = ValueError(
+    "User does not have permission to manage portals "
+    "[code=PERMISSION_DENIED] [correlation_id=abc-123]"
+)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method_name", "call_args"),
+    [
+        (
+            "update_sub_portal_element",
+            (_MAIN_PORTAL_UUID, _FORMS_ELEMENT_ID, _SUB_PORTAL_UUID),
+        ),
+        (
+            "publish_sub_portal",
+            (_MAIN_PORTAL_UUID, _FORMS_ELEMENT_ID, _SUB_PORTAL_UUID),
+        ),
+        (
+            "unpublish_sub_portal",
+            (_MAIN_PORTAL_UUID, _FORMS_ELEMENT_ID),
+        ),
+        (
+            "delete_sub_portal_element",
+            (_MAIN_PORTAL_UUID, _FORMS_ELEMENT_ID),
+        ),
+        ("delete_sub_portal", (_SUB_PORTAL_UUID,)),
+    ],
+)
+async def test_sub_portal_internal_api_permission_denied_surfaces_actionable_message(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+    method_name: str,
+    call_args: tuple[str, ...],
+) -> None:
+    """PERMISSION_DENIED from internal_api maps to portal permission guidance."""
+    service, _interfaces_client, internal_client = _make_portal_service_with_clients(
+        mock_settings,
+        mock_auth,
+    )
+    internal_client.execute_query = AsyncMock(
+        side_effect=_INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR
+    )
+
+    with pytest.raises(PortalPermissionError, match=r"(create_portal|manage_portals)"):
+        await getattr(service, method_name)(*call_args)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_sub_portal_internal_api_non_permission_value_error_propagates(
+    mock_settings: PipefySettings,
+    mock_auth: OAuth2ClientCredentials,
+) -> None:
+    """Non-permission internal_api ValueError must not become PortalPermissionError."""
+    service, _interfaces_client, internal_client = _make_portal_service_with_clients(
+        mock_settings,
+        mock_auth,
+    )
+    bad_request = ValueError("Bad request [code=BAD_REQUEST] [correlation_id=abc-123]")
+    internal_client.execute_query = AsyncMock(side_effect=bad_request)
+
+    with pytest.raises(ValueError, match="Bad request"):
+        await service.update_sub_portal_element(
+            _MAIN_PORTAL_UUID,
+            _FORMS_ELEMENT_ID,
+            _SUB_PORTAL_UUID,
+        )

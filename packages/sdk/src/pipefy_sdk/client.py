@@ -1474,7 +1474,11 @@ class PipefyClient:
         portal_uuid: str,
         element_id: str,
     ) -> dict[str, Any]:
-        """Detach a sub-portal from a page element.
+        """Unpublish a sub-portal from a page element via ``updateSubPortalElement``.
+
+        Sends ``subPortalUuid: null`` to clear the link. Distinct from
+        ``delete_sub_portal_element`` (removes the wiring slot) and
+        ``delete_sub_portal`` (deletes the sub-portal entity).
 
         Args:
             portal_uuid: Main portal interface UUID.

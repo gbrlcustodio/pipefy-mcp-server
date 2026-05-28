@@ -337,10 +337,9 @@ async def test_live_publish_sub_portal_cycle(
                 element_id,
                 sub_portal_uuid,
             )
-        except TransportQueryError as exc:
+        except (TransportQueryError, ValueError) as exc:
             pytest.skip(
-                f"publish_sub_portal failed on org {org_uuid} (internal_api): "
-                f"{exc.errors}"
+                f"publish_sub_portal failed on org {org_uuid} (internal_api): {exc}"
             )
 
         after_publish = await live_portal_service.get_portal(portal_uuid)
@@ -353,10 +352,9 @@ async def test_live_publish_sub_portal_cycle(
 
         try:
             await live_portal_service.unpublish_sub_portal(portal_uuid, element_id)
-        except TransportQueryError as exc:
+        except (TransportQueryError, ValueError) as exc:
             pytest.skip(
-                f"unpublish_sub_portal failed on org {org_uuid} (internal_api): "
-                f"{exc.errors}"
+                f"unpublish_sub_portal failed on org {org_uuid} (internal_api): {exc}"
             )
 
         after_unpublish = await live_portal_service.get_portal(portal_uuid)

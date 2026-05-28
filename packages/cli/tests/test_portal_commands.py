@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from _shared.fixture_ids import EXAMPLE_PIPE_REPO_ID
 
 from pipefy_cli.main import app
@@ -1396,3 +1398,125 @@ def test_portal_sub_portal_delete_with_yes_json(
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
     assert json.loads(result.stdout) == _DELETE_SUB_PORTAL_RESULT
     mock_client.delete_sub_portal.assert_awaited_once_with(_SUB_PORTAL_UUID)
+
+
+_BLANK_SUB_PORTAL_CLI_ID_CASES: list[tuple[str, Callable[[str], list[str]], str]] = [
+    (
+        "create-main-portal",
+        lambda blank: [
+            "portal",
+            "sub-portal",
+            "create",
+            "--main-portal-uuid",
+            blank,
+            "--name",
+            _SUB_PORTAL_NAME,
+            "--json",
+        ],
+        "create_sub_portal",
+    ),
+    (
+        "detach-portal",
+        lambda blank: [
+            "portal",
+            "sub-portal",
+            "detach",
+            blank,
+            _FORMS_ELEMENT_ID,
+            "--yes",
+            "--json",
+        ],
+        "delete_sub_portal_element",
+    ),
+    (
+        "detach-element",
+        lambda blank: [
+            "portal",
+            "sub-portal",
+            "detach",
+            _MAIN_PORTAL_UUID,
+            blank,
+            "--yes",
+            "--json",
+        ],
+        "delete_sub_portal_element",
+    ),
+    (
+        "publish-portal",
+        lambda blank: [
+            "portal",
+            "sub-portal",
+            "publish",
+            blank,
+            _FORMS_ELEMENT_ID,
+            _SUB_PORTAL_UUID,
+            "--json",
+        ],
+        "publish_sub_portal",
+    ),
+    (
+        "publish-element",
+        lambda blank: [
+            "portal",
+            "sub-portal",
+            "publish",
+            _MAIN_PORTAL_UUID,
+            blank,
+            _SUB_PORTAL_UUID,
+            "--json",
+        ],
+        "publish_sub_portal",
+    ),
+    (
+        "unpublish-element",
+        lambda blank: [
+            "portal",
+            "sub-portal",
+            "unpublish",
+            _MAIN_PORTAL_UUID,
+            blank,
+            "--json",
+        ],
+        "unpublish_sub_portal",
+    ),
+    (
+        "delete-sub-portal",
+        lambda blank: [
+            "portal",
+            "sub-portal",
+            "delete",
+            blank,
+            "--yes",
+            "--json",
+        ],
+        "delete_sub_portal",
+    ),
+]
+
+
+@pytest.mark.parametrize("blank_id", ["", "   "])
+@pytest.mark.parametrize(
+    ("case_id", "build_args", "client_method"),
+    _BLANK_SUB_PORTAL_CLI_ID_CASES,
+    ids=[case[0] for case in _BLANK_SUB_PORTAL_CLI_ID_CASES],
+)
+def test_portal_sub_portal_rejects_blank_ids_exit_2(
+    runner,
+    clean_pipefy_env,
+    saved_cwd,
+    oauth_env,
+    blank_id: str,
+    case_id: str,
+    build_args: Callable[[str], list[str]],
+    client_method: str,
+):
+    oauth_env(f"portal-sub-portal-blank-{case_id}-{blank_id.strip() or 'empty'}")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(app, build_args(blank_id))
+    assert result.exit_code == 2
+    assert "non-empty" in _sub_portal_validation_stderr(result)
+    getattr(mock_client, client_method).assert_not_called()

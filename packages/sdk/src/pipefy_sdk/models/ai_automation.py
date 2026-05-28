@@ -65,8 +65,9 @@ def _require_field_reference(v: str) -> str:
     """Validate that the prompt contains at least one ``%{field_id}`` reference.
 
     Why: the Pipefy API requires the prompt to reference at least one pipe
-    field via ``%{internal_id}`` (e.g. ``%{425829426}``).  Without it the API
-    returns the opaque error ``"Input parameters are required"``.
+    field via ``%{internal_id}`` (e.g. ``%{900000101}`` — any numeric
+    internal_id from the target pipe; the digits are illustrative).  Without it
+    the API returns the opaque error ``"Input parameters are required"``.
     """
     stripped = v.strip()
     if not stripped:
@@ -74,7 +75,8 @@ def _require_field_reference(v: str) -> str:
     if not FIELD_REF_PATTERN.search(stripped):
         raise ValueError(
             "prompt must reference at least one pipe field using %{internal_id} "
-            "syntax (e.g. 'Summarize: %{425829426}'). "
+            "syntax (e.g. 'Summarize: %{900000101}' — use your field's "
+            "internal_id from get_start_form_fields / get_phase_fields). "
             "The Pipefy API rejects prompts without field references."
         )
     return stripped
@@ -92,7 +94,8 @@ _AiPrompt = Annotated[
     Field(
         description=(
             "AI prompt text. Must contain at least one field reference "
-            "using %{internal_id} syntax (e.g. 'Summarize: %{425829426}')."
+            "using %{internal_id} syntax (e.g. 'Summarize: %{900000101}'); "
+            "substitute the numeric internal_id from the target pipe."
         ),
     ),
 ]

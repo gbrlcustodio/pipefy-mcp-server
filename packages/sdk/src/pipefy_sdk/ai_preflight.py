@@ -13,6 +13,7 @@ from pipefy_sdk.ai_phase_transition_validation import (
     collect_ai_behavior_move_transition_problems,
 )
 from pipefy_sdk.ai_pipe_validation import (
+    collect_field_ids_for_pipe,
     fetch_pipe_validation_context,
     validate_behaviors_against_pipe,
 )
@@ -97,7 +98,8 @@ async def validate_ai_automation_prompt_sdk(
     if not prompt_tokens:
         problems.append(
             "Prompt must reference at least one pipe field using "
-            "%{internal_id} syntax (e.g. 'Summarize: %{425829426}')."
+            "%{internal_id} syntax (e.g. 'Summarize: %{900000101}' — use your "
+            "field's internal_id; the number is illustrative)."
         )
 
     try:
@@ -367,17 +369,11 @@ async def validate_ai_agent_behaviors_sdk(
                 continue
             target_data = result
             target_info = target_data.get("pipe", {})
-            target_fields: set[str] = set()
-            for phase in target_info.get("phases") or []:
-                for field in phase.get("fields") or []:
-                    fid = field.get("id") or field.get("internal_id")
-                    if fid:
-                        target_fields.add(str(fid))
-            for field in target_info.get("start_form_fields") or []:
-                fid = field.get("id") or field.get("internal_id")
-                if fid:
-                    target_fields.add(str(fid))
-            cross_pipe_field_ids[tpid] = target_fields
+            cross_pipe_field_ids[tpid] = await collect_field_ids_for_pipe(
+                client,
+                target_info,
+                timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
+            )
 
     membership_problems: list[str] = []
     sa_ids = service_account_ids or []

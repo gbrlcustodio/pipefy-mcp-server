@@ -7,6 +7,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from _shared.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
+from _shared.fixture_ids import (
+    EXAMPLE_FIELD_INTERNAL_ID,
+    EXAMPLE_FIELD_SLUG_BRIEFING,
+    EXAMPLE_PIPE_REPO_ID,
+)
 from gql.transport.exceptions import TransportQueryError
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
@@ -469,14 +474,14 @@ class TestUpdateAiAgent:
             "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
         )
         mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field(
-            field_id="425829426", phase_id="ph-1"
+            field_id=EXAMPLE_FIELD_INTERNAL_ID, phase_id="ph-1"
         )
         mock_pipefy_client.get_pipe_relations.return_value = {
             "children": [],
             "parents": [],
         }
         behavior = _behavior_update_card_on_pipe(
-            pipe_id="306996636", field_id="425829426"
+            pipe_id=EXAMPLE_PIPE_REPO_ID, field_id=EXAMPLE_FIELD_INTERNAL_ID
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -511,7 +516,9 @@ class TestUpdateAiAgent:
             "children": [],
             "parents": [],
         }
-        behavior = _behavior_update_card_on_pipe(pipe_id="306996636", field_id="999")
+        behavior = _behavior_update_card_on_pipe(
+            pipe_id=EXAMPLE_PIPE_REPO_ID, field_id="999"
+        )
         async with client_session as session:
             result = await session.call_tool(
                 "update_ai_agent",
@@ -546,21 +553,21 @@ class TestUpdateAiAgent:
                     meta = aa.get("metadata") or {}
                     for fa in meta.get("fieldsAttributes") or []:
                         if fa.get("fieldId") == "email_slug":
-                            fa["fieldId"] = "425829426"
+                            fa["fieldId"] = EXAMPLE_FIELD_INTERNAL_ID
             return out
 
         mock_pipefy_client.update_ai_agent.side_effect = TransportQueryError(
             "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
         )
         mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field(
-            field_id="425829426", phase_id="ph-1"
+            field_id=EXAMPLE_FIELD_INTERNAL_ID, phase_id="ph-1"
         )
         mock_pipefy_client.get_pipe_relations.return_value = {
             "children": [],
             "parents": [],
         }
         behavior = _behavior_update_card_on_pipe(
-            pipe_id="306996636", field_id="email_slug"
+            pipe_id=EXAMPLE_PIPE_REPO_ID, field_id="email_slug"
         )
         with patch(
             "pipefy_mcp.tools.ai_agent_tools.resolve_and_populate_field_refs",
@@ -1509,7 +1516,44 @@ class TestValidateAiAgentBehaviorsErrorPaths:
             "children": [],
             "parents": [],
         }
+        mock_pipefy_client.get_phase_fields = AsyncMock(return_value={"fields": []})
         behavior = _behavior_update_card_on_pipe(pipe_id="1", field_id="sf-1")
+        async with client_session as session:
+            result = await session.call_tool(
+                "validate_ai_agent_behaviors",
+                {"pipe_id": "1", "behaviors": [behavior]},
+            )
+        payload = extract_payload(result)
+        assert payload["success"] is True
+        assert payload["valid"] is True
+        assert payload["problems"] == []
+
+    async def test_validate_accepts_start_form_internal_id(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        """Regression: fieldId with numeric internal_id must pass when slug also exists."""
+        mock_pipefy_client.get_pipe.return_value = {
+            "pipe": {
+                "phases": [{"id": "ph-1"}],
+                "start_form_fields": [
+                    {
+                        "id": EXAMPLE_FIELD_SLUG_BRIEFING,
+                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID,
+                    },
+                ],
+            }
+        }
+        mock_pipefy_client.get_pipe_relations.return_value = {
+            "children": [],
+            "parents": [],
+        }
+        mock_pipefy_client.get_phase_fields = AsyncMock(return_value={"fields": []})
+        behavior = _behavior_update_card_on_pipe(
+            pipe_id="1", field_id=EXAMPLE_FIELD_INTERNAL_ID
+        )
         async with client_session as session:
             result = await session.call_tool(
                 "validate_ai_agent_behaviors",
@@ -2027,7 +2071,7 @@ class TestEnrichWithValidation:
         )
         mock_pipefy_client.get_pipe.side_effect = RuntimeError("unreachable")
         behavior = _behavior_update_card_on_pipe(
-            pipe_id="306996636", field_id="425829426"
+            pipe_id=EXAMPLE_PIPE_REPO_ID, field_id=EXAMPLE_FIELD_INTERNAL_ID
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -2067,7 +2111,9 @@ class TestEnrichWithValidation:
             "children": [{"child": {"id": "child-1"}}],
             "parents": [{"parent": {"id": "parent-1"}}],
         }
-        behavior = _behavior_update_card_on_pipe(pipe_id="306996636", field_id="sf-100")
+        behavior = _behavior_update_card_on_pipe(
+            pipe_id=EXAMPLE_PIPE_REPO_ID, field_id="sf-100"
+        )
         async with client_session as session:
             result = await session.call_tool(
                 "update_ai_agent",
@@ -2096,11 +2142,11 @@ class TestEnrichWithValidation:
             "RECORD_NOT_SAVED", errors=[{"message": "RECORD_NOT_SAVED"}]
         )
         mock_pipefy_client.get_pipe.return_value = _pipe_graph_with_field(
-            field_id="425829426", phase_id="ph-1"
+            field_id=EXAMPLE_FIELD_INTERNAL_ID, phase_id="ph-1"
         )
         mock_pipefy_client.get_pipe_relations.side_effect = RuntimeError("no relations")
         behavior = _behavior_update_card_on_pipe(
-            pipe_id="306996636", field_id="425829426"
+            pipe_id=EXAMPLE_PIPE_REPO_ID, field_id=EXAMPLE_FIELD_INTERNAL_ID
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -2157,6 +2203,12 @@ class TestFetchPipeValidationContext:
             "children": [{"child": {"id": "child-10"}}],
             "parents": [{"parent": {"id": "parent-20"}}],
         }
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            side_effect=[
+                {"fields": [{"id": "f3"}]},
+                {"fields": []},
+            ]
+        )
 
         field_ids, phase_ids, related_pipe_ids = await fetch_pipe_validation_context(
             mock_pipefy_client, "42"
@@ -2165,12 +2217,14 @@ class TestFetchPipeValidationContext:
         assert phase_ids == {"ph-1", "ph-2"}
         assert "f1" in field_ids
         assert "f2" in field_ids
+        assert "f2i" in field_ids
         assert "f3" in field_ids
         assert "sf-1" in field_ids
         assert "sf-2" in field_ids
         assert related_pipe_ids == {"child-10", "parent-20"}
         mock_pipefy_client.get_pipe.assert_awaited_once_with("42")
         mock_pipefy_client.get_pipe_relations.assert_awaited_once_with("42")
+        assert mock_pipefy_client.get_phase_fields.await_count == 2
 
     async def test_relations_failure_returns_none(self, mock_pipefy_client):
         from pipefy_mcp.tools.ai_tool_helpers import fetch_pipe_validation_context
@@ -2182,6 +2236,7 @@ class TestFetchPipeValidationContext:
             }
         }
         mock_pipefy_client.get_pipe_relations.side_effect = RuntimeError("denied")
+        mock_pipefy_client.get_phase_fields = AsyncMock(return_value={"fields": []})
 
         field_ids, phase_ids, related_pipe_ids = await fetch_pipe_validation_context(
             mock_pipefy_client, "99"

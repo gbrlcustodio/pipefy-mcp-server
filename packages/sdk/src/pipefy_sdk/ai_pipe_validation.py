@@ -45,7 +45,8 @@ def validate_behaviors_against_pipe(
     Args:
         behaviors: Raw behavior dicts (pre-validation format).
         pipe_id: Source pipe ID (used to decide whether fieldId checks apply).
-        pipe_field_ids: Set of valid field internal IDs for the source pipe.
+        pipe_field_ids: Set of valid field identifiers for the source pipe (slug
+            ``id`` and numeric ``internal_id``).
         pipe_phase_ids: Set of valid phase IDs (as strings) for the source pipe.
         related_pipe_ids: Pipe IDs related to the source pipe for
             ``create_connected_card`` validation; ``None`` skips that check
@@ -283,6 +284,8 @@ async def build_field_slug_map(
     pipe_info = pipe_data.get("pipe", {})
 
     for field in pipe_info.get("start_form_fields") or []:
+        if not isinstance(field, dict):
+            continue
         slug = str(field.get("id", ""))
         internal = str(field.get("internal_id", ""))
         if slug and internal and not slug.isdigit():
@@ -399,6 +402,56 @@ async def resolve_and_populate_field_refs(
     return resolved
 
 
+def add_field_identifiers(field_ids: set[str], field: Any) -> None:
+    """Add slug ``id`` and numeric ``internal_id`` when present on a field dict."""
+    if not isinstance(field, dict):
+        return
+    for key in ("id", "internal_id"):
+        fid = field.get(key)
+        if fid:
+            field_ids.add(str(fid))
+
+
+async def collect_field_ids_for_pipe(
+    client: PipefyClient,
+    pipe_info: dict[str, Any],
+    *,
+    timeout: float,
+) -> set[str]:
+    """Collect slug and internal_id values for start-form and phase fields.
+
+    Matches the field universe used by ``build_field_slug_map`` (start form plus
+    ``get_phase_fields`` per phase). Embedded ``phases[].fields`` from an expanded
+    ``get_pipe`` selection are included when present.
+    """
+    field_ids: set[str] = set()
+
+    for field in pipe_info.get("start_form_fields") or []:
+        add_field_identifiers(field_ids, field)
+
+    for phase in pipe_info.get("phases") or []:
+        for field in phase.get("fields") or []:
+            add_field_identifiers(field_ids, field)
+        phase_id = phase.get("id")
+        if not phase_id:
+            continue
+        try:
+            phase_data = await asyncio.wait_for(
+                client.get_phase_fields(phase_id),
+                timeout=timeout,
+            )
+            for field in phase_data.get("fields") or []:
+                add_field_identifiers(field_ids, field)
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "Failed to fetch fields for phase %s during validation context",
+                phase_id,
+                exc_info=True,
+            )
+
+    return field_ids
+
+
 async def fetch_pipe_validation_context(
     client: PipefyClient,
     pipe_id: str,
@@ -427,17 +480,12 @@ async def fetch_pipe_validation_context(
     pipe_info = pipe_data.get("pipe", {})
 
     phase_ids: set[str] = set()
-    field_ids: set[str] = set()
     for phase in pipe_info.get("phases") or []:
-        phase_ids.add(str(phase.get("id", "")))
-        for field in phase.get("fields") or []:
-            fid = field.get("id") or field.get("internal_id")
-            if fid:
-                field_ids.add(str(fid))
-    for field in pipe_info.get("start_form_fields") or []:
-        fid = field.get("id") or field.get("internal_id")
-        if fid:
-            field_ids.add(str(fid))
+        pid = phase.get("id")
+        if pid:
+            phase_ids.add(str(pid))
+
+    field_ids = await collect_field_ids_for_pipe(client, pipe_info, timeout=timeout)
 
     related_pipe_ids: set[str] | None
     try:
@@ -462,7 +510,9 @@ async def fetch_pipe_validation_context(
 
 __all__ = [
     "KNOWN_AI_ACTION_TYPES",
+    "add_field_identifiers",
     "build_field_slug_map",
+    "collect_field_ids_for_pipe",
     "collect_pipe_ids_from_behaviors",
     "fetch_pipe_validation_context",
     "pipe_ids_from_behavior",

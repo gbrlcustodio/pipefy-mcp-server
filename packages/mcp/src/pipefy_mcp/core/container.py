@@ -13,12 +13,7 @@ from pipefy_auth import (
     resolve_pipefy_auth,
     tier_for,
 )
-from pipefy_sdk import (
-    AiAutomationService,
-    InternalApiClient,
-    PipefyClient,
-    PipefySettings,
-)
+from pipefy_sdk import AiAutomationService, InternalApiClient, PipefyClient
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.settings import Settings
@@ -31,7 +26,6 @@ class ServicesContainer:
 
     _instance: Self | None = None
     pipefy_client: PipefyClient | None = None
-    pipefy_settings: PipefySettings | None = None
 
     @classmethod
     def get_instance(cls) -> Self:
@@ -89,7 +83,6 @@ class ServicesContainer:
                 )
                 raise
             logger.info("Pipefy stored session warmed up at startup")
-        self.pipefy_settings = pipefy
         self.pipefy_client = PipefyClient(settings=pipefy, auth=resolved)
         internal_client = InternalApiClient(
             url=pipefy.internal_api_url,

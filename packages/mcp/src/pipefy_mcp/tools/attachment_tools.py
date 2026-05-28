@@ -136,15 +136,20 @@ class AttachmentTools:
     """MCP tools for orchestrated attachment uploads (presigned URL, S3 PUT, field update)."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient, settings: PipefySettings) -> None:
-        # Pull the policy switch from the same ``PipefySettings`` instance that
-        # built ``client`` so the attachment gate can't drift from the client
-        # config when a caller constructs ``Settings`` programmatically instead
-        # of relying purely on env. Matches the toggle that gates ``base_url``
-        # / ``auth_url`` in ``PipefySettings`` / ``AuthSettings`` so the
-        # attachment surface does not silently accept plain http on a tightened
-        # deployment.
-        allow_insecure_urls = settings.allow_insecure_urls
+    def register(mcp: FastMCP, client: PipefyClient) -> None:
+        # Read the policy switch once at registration: HTTPS-only by default,
+        # http + internal hosts permitted only when ``PIPEFY_ALLOW_INSECURE_URLS``
+        # is set. Matches the same toggle that gates ``base_url`` / ``auth_url``
+        # in ``PipefySettings`` / ``AuthSettings`` so the attachment surface
+        # does not silently accept plain http on a tightened deployment.
+        #
+        # Caveat: instantiating ``PipefySettings()`` afresh reads env directly,
+        # so programmatic callers that build ``Settings(pipefy=PipefySettings(
+        # allow_insecure_urls=True))`` without setting the env var would see
+        # the attachment gate disagree with the ``PipefyClient`` they built.
+        # Issue #253 tracks the proper fix (move URL-to-bytes resolution into
+        # the SDK so ``PipefyClient`` becomes the only consumer of the flag).
+        allow_insecure_urls = PipefySettings().allow_insecure_urls
 
         async def _resolve_file_bytes(
             ctx: Context[ServerSession, None],

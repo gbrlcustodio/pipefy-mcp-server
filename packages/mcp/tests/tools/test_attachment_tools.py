@@ -11,7 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient, PipefySettings
+from pipefy_sdk import PipefyClient
 from pipefy_sdk.attachment_upload import AttachmentUploadError
 
 from pipefy_mcp.tools.attachment_tools import (
@@ -67,7 +67,7 @@ def mock_attachment_client():
 @pytest.fixture
 def attachment_mcp_server(mock_attachment_client):
     mcp = FastMCP("Attachment Tools Test")
-    AttachmentTools.register(mcp, mock_attachment_client, PipefySettings())
+    AttachmentTools.register(mcp, mock_attachment_client)
     return mcp
 
 

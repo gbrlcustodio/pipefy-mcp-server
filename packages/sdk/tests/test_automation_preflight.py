@@ -198,6 +198,28 @@ async def test_validate_raises_when_transition_not_allowed(mock_client):
 
 
 @pytest.mark.anyio
+async def test_validate_ai_automation_prompt_null_pipe_does_not_raise(mock_client):
+    from pipefy_sdk.ai_preflight import validate_ai_automation_prompt_sdk
+
+    mock_client.get_pipe_with_preferences = AsyncMock(return_value={"pipe": None})
+    mock_client.get_automation_events = AsyncMock(return_value=[])
+    mock_client.get_ai_credit_usage = AsyncMock(
+        return_value={"aiCreditUsageStats": {"active": True}}
+    )
+
+    out = await validate_ai_automation_prompt_sdk(
+        mock_client,
+        pipe_id="1",
+        prompt="Summarize %{900000101}",
+        field_ids=["900000101"],
+    )
+
+    assert out["success"] is True
+    assert out["valid"] is False
+    assert any("does not exist in pipe" in p for p in out["problems"])
+
+
+@pytest.mark.anyio
 async def test_validate_ai_automation_prompt_overlap_prompt_and_output(mock_client):
     from pipefy_sdk.ai_preflight import validate_ai_automation_prompt_sdk
 

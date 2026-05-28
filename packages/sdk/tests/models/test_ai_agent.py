@@ -2,7 +2,7 @@
 
 import pytest
 from _shared.ai_agent_test_payloads import behavior_with_action, minimal_behavior_dict
-from _shared.fixture_ids import EXAMPLE_FIELD_INTERNAL_ID, EXAMPLE_PIPE_REPO_ID
+from _shared.fixture_ids import EXAMPLE_FIELD_INTERNAL_ID, EXAMPLE_PIPE_ID
 from pydantic import ValidationError
 
 from pipefy_sdk.models.ai_agent import (
@@ -353,13 +353,13 @@ VALID_FIELDS_ATTR = {
 )
 def test_metadata_valid_for_card_field_actions(action_type):
     metadata = {
-        "pipeId": EXAMPLE_PIPE_REPO_ID,
+        "pipeId": EXAMPLE_PIPE_ID,
         "fieldsAttributes": [VALID_FIELDS_ATTR],
     }
     payload = behavior_with_action(action_type, metadata)
     inp = BehaviorInput.model_validate(payload)
     action = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]
-    assert action["metadata"]["pipeId"] == EXAMPLE_PIPE_REPO_ID
+    assert action["metadata"]["pipeId"] == EXAMPLE_PIPE_ID
 
 
 @pytest.mark.unit

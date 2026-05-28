@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _shared.fixture_ids import (
-    EXAMPLE_FIELD_INTERNAL_ID_ALT,
-    EXAMPLE_FIELD_INTERNAL_ID_ALT2,
-    EXAMPLE_MOCK_FIELD_INTERNAL_ID_APPROVAL_STATUS,
-    EXAMPLE_MOCK_FIELD_INTERNAL_ID_COMPANY_NAME,
-    EXAMPLE_MOCK_FIELD_INTERNAL_ID_EMAIL,
-    EXAMPLE_MOCK_FIELD_INTERNAL_IDS,
-    EXAMPLE_PIPE_REPO_ID,
+    EXAMPLE_FIELD_INTERNAL_ID_2,
+    EXAMPLE_FIELD_INTERNAL_ID_3,
+    EXAMPLE_FIELD_INTERNAL_ID_4,
+    EXAMPLE_FIELD_INTERNAL_ID_5,
+    EXAMPLE_FIELD_INTERNAL_ID_6,
+    EXAMPLE_FIELD_INTERNAL_IDS_BY_SLUG,
+    EXAMPLE_PIPE_ID,
 )
 
 from pipefy_mcp.tools.ai_tool_helpers import (
@@ -65,11 +65,11 @@ async def test_build_field_slug_map_from_start_form_and_phases():
                 "start_form_fields": [
                     {
                         "id": "company_name",
-                        "internal_id": EXAMPLE_MOCK_FIELD_INTERNAL_ID_COMPANY_NAME,
+                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_4,
                     },
                     {
                         "id": "email",
-                        "internal_id": EXAMPLE_MOCK_FIELD_INTERNAL_ID_EMAIL,
+                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_5,
                     },
                 ],
             }
@@ -82,11 +82,11 @@ async def test_build_field_slug_map_from_start_form_and_phases():
                 "fields": [
                     {
                         "id": "summary_field",
-                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_ALT,
+                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_2,
                     },
                     {
-                        "id": EXAMPLE_FIELD_INTERNAL_ID_ALT2,
-                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_ALT2,
+                        "id": EXAMPLE_FIELD_INTERNAL_ID_3,
+                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_3,
                     },
                 ],
             },
@@ -95,18 +95,48 @@ async def test_build_field_slug_map_from_start_form_and_phases():
                 "fields": [
                     {
                         "id": "approval_status",
-                        "internal_id": EXAMPLE_MOCK_FIELD_INTERNAL_ID_APPROVAL_STATUS,
+                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_6,
                     },
                 ],
             },
         ]
     )
 
-    slug_map = await build_field_slug_map(client, int(EXAMPLE_PIPE_REPO_ID))
+    slug_map = await build_field_slug_map(client, int(EXAMPLE_PIPE_ID))
 
-    assert slug_map == EXAMPLE_MOCK_FIELD_INTERNAL_IDS
+    assert slug_map == EXAMPLE_FIELD_INTERNAL_IDS_BY_SLUG
     # numeric-id field is NOT in the map (already numeric)
-    assert EXAMPLE_FIELD_INTERNAL_ID_ALT2 not in slug_map
+    assert EXAMPLE_FIELD_INTERNAL_ID_3 not in slug_map
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_build_field_slug_map_uses_embedded_phase_fields():
+    client = AsyncMock()
+    client.get_pipe = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [
+                    {
+                        "id": "100",
+                        "fields": [
+                            {
+                                "id": "summary_field",
+                                "internal_id": EXAMPLE_FIELD_INTERNAL_ID_2,
+                            }
+                        ],
+                    }
+                ],
+                "start_form_fields": [],
+            }
+        }
+    )
+    client.get_phase_fields = AsyncMock()
+
+    slug_map = await build_field_slug_map(client, int(EXAMPLE_PIPE_ID))
+
+    assert slug_map == {"summary_field": EXAMPLE_FIELD_INTERNAL_ID_2}
+    client.get_phase_fields.assert_not_awaited()
 
 
 @pytest.mark.unit
@@ -160,7 +190,7 @@ async def test_resolve_replaces_slug_with_numeric_id():
                 "start_form_fields": [
                     {
                         "id": "resumo_de_briefing_ia",
-                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_ALT,
+                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_2,
                     },
                 ],
             }
@@ -168,13 +198,13 @@ async def test_resolve_replaces_slug_with_numeric_id():
     )
     client.get_phase_fields = AsyncMock(return_value={"phase_id": "100", "fields": []})
 
-    behaviors = [_behavior_with_fields(EXAMPLE_PIPE_REPO_ID, ["resumo_de_briefing_ia"])]
+    behaviors = [_behavior_with_fields(EXAMPLE_PIPE_ID, ["resumo_de_briefing_ia"])]
     resolved = await resolve_field_slugs_to_numeric(client, behaviors)
 
     fa = resolved[0]["actionParams"]["aiBehaviorParams"]["actionsAttributes"][0][
         "metadata"
     ]["fieldsAttributes"]
-    assert fa[0]["fieldId"] == EXAMPLE_FIELD_INTERNAL_ID_ALT
+    assert fa[0]["fieldId"] == EXAMPLE_FIELD_INTERNAL_ID_2
 
 
 @pytest.mark.unit
@@ -185,7 +215,7 @@ async def test_resolve_leaves_numeric_ids_untouched():
     behaviors = [
         _behavior_with_fields(
             "100",
-            [EXAMPLE_FIELD_INTERNAL_ID_ALT, EXAMPLE_FIELD_INTERNAL_ID_ALT2],
+            [EXAMPLE_FIELD_INTERNAL_ID_2, EXAMPLE_FIELD_INTERNAL_ID_3],
         )
     ]
     resolved = await resolve_field_slugs_to_numeric(client, behaviors)
@@ -195,8 +225,8 @@ async def test_resolve_leaves_numeric_ids_untouched():
     fa = resolved[0]["actionParams"]["aiBehaviorParams"]["actionsAttributes"][0][
         "metadata"
     ]["fieldsAttributes"]
-    assert fa[0]["fieldId"] == EXAMPLE_FIELD_INTERNAL_ID_ALT
-    assert fa[1]["fieldId"] == EXAMPLE_FIELD_INTERNAL_ID_ALT2
+    assert fa[0]["fieldId"] == EXAMPLE_FIELD_INTERNAL_ID_2
+    assert fa[1]["fieldId"] == EXAMPLE_FIELD_INTERNAL_ID_3
 
 
 @pytest.mark.unit
@@ -371,14 +401,14 @@ async def test_resolve_rewrites_instruction_field_slug_to_numeric():
                 "start_form_fields": [
                     {
                         "id": "resumo_de_briefing_ia",
-                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_ALT,
+                        "internal_id": EXAMPLE_FIELD_INTERNAL_ID_2,
                     },
                 ],
             }
         }
     )
 
-    b = _behavior_with_fields(EXAMPLE_PIPE_REPO_ID, [EXAMPLE_FIELD_INTERNAL_ID_ALT])
+    b = _behavior_with_fields(EXAMPLE_PIPE_ID, [EXAMPLE_FIELD_INTERNAL_ID_2])
     b["actionParams"]["aiBehaviorParams"]["instruction"] = (
         "Read %{field:resumo_de_briefing_ia} then stop."
     )
@@ -386,7 +416,7 @@ async def test_resolve_rewrites_instruction_field_slug_to_numeric():
 
     assert (
         resolved[0]["actionParams"]["aiBehaviorParams"]["instruction"]
-        == f"Read %{{field:{EXAMPLE_FIELD_INTERNAL_ID_ALT}}} then stop."
+        == f"Read %{{field:{EXAMPLE_FIELD_INTERNAL_ID_2}}} then stop."
     )
 
 
@@ -428,7 +458,7 @@ async def test_resolve_skips_behaviors_without_pipe_id():
 async def test_resolve_and_populate_pure_numeric_instruction():
     client = AsyncMock()
 
-    b = _behavior_with_fields(EXAMPLE_PIPE_REPO_ID, [EXAMPLE_FIELD_INTERNAL_ID_ALT])
+    b = _behavior_with_fields(EXAMPLE_PIPE_ID, [EXAMPLE_FIELD_INTERNAL_ID_2])
     b["actionParams"]["aiBehaviorParams"]["instruction"] = (
         "Use %{field:111} and %{field:222}"
     )
@@ -457,7 +487,7 @@ async def test_resolve_and_populate_pure_slug_instruction():
         }
     )
 
-    b = _behavior_with_fields(EXAMPLE_PIPE_REPO_ID, ["111"])
+    b = _behavior_with_fields(EXAMPLE_PIPE_ID, ["111"])
     b["actionParams"]["aiBehaviorParams"]["instruction"] = "Read %{field:briefing}"
     resolved = await resolve_and_populate_field_refs(client, [b])
 
@@ -487,7 +517,7 @@ async def test_resolve_and_populate_mixed_numeric_and_slug_instruction():
         }
     )
 
-    b = _behavior_with_fields(EXAMPLE_PIPE_REPO_ID, ["222"])
+    b = _behavior_with_fields(EXAMPLE_PIPE_ID, ["222"])
     b["actionParams"]["aiBehaviorParams"]["instruction"] = (
         "Use %{field:111} and %{field:briefing}"
     )
@@ -503,7 +533,7 @@ async def test_resolve_and_populate_mixed_numeric_and_slug_instruction():
 async def test_resolve_and_populate_preserves_caller_supplied_refs():
     client = AsyncMock()
 
-    b = _behavior_with_fields(EXAMPLE_PIPE_REPO_ID, ["111"])
+    b = _behavior_with_fields(EXAMPLE_PIPE_ID, ["111"])
     b["actionParams"]["aiBehaviorParams"]["instruction"] = "Use %{field:111}"
     b["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] = ["999"]
     resolved = await resolve_and_populate_field_refs(client, [b])

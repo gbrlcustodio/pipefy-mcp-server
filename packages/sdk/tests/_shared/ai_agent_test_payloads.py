@@ -2,9 +2,9 @@
 
 from _shared.fixture_ids import (
     EXAMPLE_AI_ACTION_REFERENCE_UUID,
-    EXAMPLE_AI_ACTION_REFERENCE_UUID_EMAIL,
+    EXAMPLE_AI_ACTION_REFERENCE_UUID_2,
     EXAMPLE_FIELD_INTERNAL_ID,
-    EXAMPLE_PIPE_REPO_ID,
+    EXAMPLE_PIPE_ID,
 )
 
 
@@ -26,7 +26,7 @@ def minimal_behavior_dict(name="Test Behavior", event_id="card_created"):
                         "actionType": "update_card",
                         "metadata": {
                             "destinationPhaseId": "",
-                            "pipeId": EXAMPLE_PIPE_REPO_ID,
+                            "pipeId": EXAMPLE_PIPE_ID,
                             "fieldsAttributes": [
                                 {
                                     "fieldId": EXAMPLE_FIELD_INTERNAL_ID,
@@ -97,7 +97,7 @@ def mock_api_behavior_response():
                         "referenceId": EXAMPLE_AI_ACTION_REFERENCE_UUID,
                         "metadata": {
                             "destinationPhaseId": None,
-                            "pipeId": EXAMPLE_PIPE_REPO_ID,
+                            "pipeId": EXAMPLE_PIPE_ID,
                             "tableId": None,
                             "emailTemplateId": None,
                             "allowTemplateModifications": None,
@@ -127,7 +127,7 @@ def mock_api_behavior_response_send_email_template():
     attrs = base["actionParams"]["aiBehaviorParams"]["actionsAttributes"][0]
     attrs["name"] = "Send notification email"
     attrs["actionType"] = "send_email_template"
-    attrs["referenceId"] = EXAMPLE_AI_ACTION_REFERENCE_UUID_EMAIL
+    attrs["referenceId"] = EXAMPLE_AI_ACTION_REFERENCE_UUID_2
     attrs["metadata"] = {
         "destinationPhaseId": None,
         "pipeId": None,

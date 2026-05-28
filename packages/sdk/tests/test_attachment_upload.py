@@ -171,3 +171,27 @@ async def test_upload_table_record_uses_set_table_record_field_value(mock_client
     mock_client.set_table_record_field_value.assert_awaited_once_with(
         "tr-9", "att", ["bucket/key"]
     )
+
+
+@pytest.mark.asyncio
+async def test_upload_pipeline_rejects_oversize_bytes_before_presigned(
+    mock_client, monkeypatch
+):
+    """Direct SDK callers that skip surface pre-flight still hit the cap."""
+    monkeypatch.setattr(
+        "pipefy_sdk.models.attachment.MAX_ATTACHMENT_SIZE_BYTES",
+        10,
+    )
+    with pytest.raises(AttachmentUploadError) as exc_info:
+        await upload_attachment_to_card_field(
+            mock_client,
+            organization_id="org-1",
+            card_id="c1",
+            field_id="title",
+            file_name="big.pdf",
+            file_bytes=b"more-than-ten-bytes",
+        )
+    assert exc_info.value.step == "size_check"
+    assert "too large" in str(exc_info.value).lower()
+    mock_client.create_presigned_url.assert_not_called()
+    mock_client.upload_file_to_s3.assert_not_called()

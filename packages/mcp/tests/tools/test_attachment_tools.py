@@ -323,6 +323,73 @@ async def test_upload_attachment_to_card_base64_requires_file_name(
 
 
 @pytest.mark.anyio
+async def test_upload_attachment_to_card_rejects_oversize_file_path(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+    tmp_path: Path,
+    monkeypatch,
+):
+    """A file larger than the cap fails at file_read; SDK upload never runs."""
+    monkeypatch.setattr(
+        "pipefy_sdk.models.attachment.MAX_ATTACHMENT_SIZE_BYTES",
+        10,
+    )
+    f = tmp_path / "big.bin"
+    f.write_bytes(b"more-than-ten-bytes")
+
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_card",
+            {
+                "organization_id": "42",
+                "card_id": 1,
+                "field_id": "f",
+                "file_path": str(f),
+            },
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["step"] == "file_read"
+    assert "too large" in tool_error_message(payload).lower()
+    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_upload_attachment_to_card_rejects_oversize_base64(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+    monkeypatch,
+):
+    """Decoded base64 above the cap fails at file_read; SDK upload never runs."""
+    monkeypatch.setattr(
+        "pipefy_sdk.models.attachment.MAX_ATTACHMENT_SIZE_BYTES",
+        4,
+    )
+    b64 = base64.b64encode(b"more-than-four-bytes").decode("ascii")
+
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_card",
+            {
+                "organization_id": "42",
+                "card_id": 1,
+                "field_id": "f",
+                "file_name": "x.bin",
+                "file_content_base64": b64,
+            },
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["step"] == "file_read"
+    assert "too large" in tool_error_message(payload).lower()
+    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
+
+
+@pytest.mark.anyio
 async def test_upload_attachment_to_card_whitespace_file_path_falls_through_to_base64(
     attachment_session,
     mock_attachment_client,

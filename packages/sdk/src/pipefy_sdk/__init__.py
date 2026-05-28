@@ -7,6 +7,7 @@ __version__ = "0.2.0-beta.1"
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
 from pipefy_sdk.models import (
+    MAX_ATTACHMENT_SIZE_BYTES,
     AutomationConditionInput,
     AutomationEventParamsInput,
     BehaviorInput,
@@ -25,6 +26,7 @@ from pipefy_sdk.models import (
     UpdatePortalElementInput,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
+    assert_attachment_size_within_cap,
     infer_content_type,
 )
 from pipefy_sdk.models.form import create_form_model
@@ -75,6 +77,7 @@ __all__ = [
     "DeleteCommentInput",
     "download_bytes",
     "InternalApiClient",
+    "MAX_ATTACHMENT_SIZE_BYTES",
     "MePayload",
     "MemberInvite",
     "NonBlankStr",
@@ -89,6 +92,7 @@ __all__ = [
     "UpdatePortalElementInput",
     "UploadAttachmentToCardInput",
     "UploadAttachmentToTableRecordInput",
+    "assert_attachment_size_within_cap",
     "copy_card_search",
     "create_form_model",
     "format_service_account_removal_block_message",

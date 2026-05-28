@@ -17,6 +17,7 @@ from pipefy_sdk import (
     PipefyId,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
+    assert_attachment_size_within_cap,
 )
 from pipefy_sdk.attachment_upload import (
     AttachmentUploadError,
@@ -72,10 +73,13 @@ class AttachmentTools:
                     p = Path(file_path.strip()).expanduser()
                     if not p.is_file():
                         raise ValueError(f"File not found or not a regular file: {p}")
+                    assert_attachment_size_within_cap(p.stat().st_size, str(p))
                     data = await asyncio.to_thread(p.read_bytes)
                     return data, None
                 await ctx.debug(f"{debug_prefix}: decoding base64 payload")
-                return _decode_base64_file(file_content_base64 or ""), None
+                decoded = _decode_base64_file(file_content_base64 or "")
+                assert_attachment_size_within_cap(len(decoded), "file_content_base64")
+                return decoded, None
             except (OSError, binascii.Error, ValueError) as exc:
                 await ctx.debug(f"{debug_prefix}: file source error {exc!r}")
                 return b"", build_upload_error_payload(

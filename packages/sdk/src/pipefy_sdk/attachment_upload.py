@@ -17,13 +17,17 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from typing_extensions import TypedDict
 
-from pipefy_sdk.models.attachment import infer_content_type
+from pipefy_sdk.models.attachment import (
+    assert_attachment_size_within_cap,
+    infer_content_type,
+)
 
 if TYPE_CHECKING:
     from pipefy_sdk.client import PipefyClient
 
 
 AttachmentUploadStep = Literal[
+    "size_check",
     "presigned_url",
     "s3_upload",
     "field_update",
@@ -148,6 +152,14 @@ async def _upload_pipeline(
 ) -> AttachmentUploadResult:
     effective_type = content_type or infer_content_type(file_name)
     content_length = len(file_bytes)
+
+    # Backstop: surfaces (MCP, CLI) already pre-flight via
+    # assert_attachment_size_within_cap, but direct SDK callers should not be
+    # able to bypass the cap and waste a presigned URL on an oversized payload.
+    try:
+        assert_attachment_size_within_cap(content_length, file_name)
+    except ValueError as exc:
+        raise AttachmentUploadError(str(exc), step="size_check") from exc
 
     try:
         presigned = await client.create_presigned_url(

@@ -12,6 +12,34 @@ from pipefy_sdk.models.validators import PipefyId
 
 APPLICATION_OCTET_STREAM = "application/octet-stream"
 
+# Hard cap that mirrors the prior URL-download limit. Pipefy's direct-upload
+# size policy is not documented; failing fast at 100 MiB before issuing a
+# presigned URL avoids a confusing S3-side rejection for very large payloads.
+# Applies to both MCP and CLI surfaces.
+MAX_ATTACHMENT_SIZE_BYTES = 100 * 1024 * 1024
+
+
+def assert_attachment_size_within_cap(size: int, source: str) -> None:
+    """Raise :class:`ValueError` if ``size`` exceeds :data:`MAX_ATTACHMENT_SIZE_BYTES`.
+
+    Both attachment surfaces (MCP ``file_path`` / base64, CLI ``--file``) gate on
+    this cap before issuing a presigned URL. The helper centralizes the message
+    so the three callers stay aligned.
+
+    Args:
+        size: Resolved byte count (e.g. ``Path.stat().st_size`` or
+            ``len(decoded_bytes)``).
+        source: Short label for the error message, typically the file path
+            or ``"file_content_base64"``.
+    """
+    if size > MAX_ATTACHMENT_SIZE_BYTES:
+        cap_mib = MAX_ATTACHMENT_SIZE_BYTES // (1024 * 1024)
+        raise ValueError(
+            f"File too large: {source} is {size} bytes, exceeding the "
+            f"{cap_mib} MiB cap."
+        )
+
+
 # ``mimetypes`` maps ``.xyz`` to ``chemical/x-xyz`` on many systems; for generic uploads
 # we treat that as unknown binary content.
 _MIME_FALSE_POSITIVES_FOR_UPLOAD = frozenset({"chemical/x-xyz"})

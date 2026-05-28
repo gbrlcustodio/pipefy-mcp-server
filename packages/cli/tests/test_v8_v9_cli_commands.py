@@ -39,6 +39,47 @@ def test_attachment_upload_requires_card_xor_record(
     mock_client.create_presigned_url.assert_not_called()
 
 
+def test_attachment_upload_rejects_oversize_file(
+    runner: CliRunner,
+    clean_pipefy_env,
+    saved_cwd,
+    oauth_env,
+    tmp_path: Path,
+    monkeypatch,
+):
+    """Files over the cap are rejected as a BadParameter; no network call runs."""
+    monkeypatch.setattr(
+        "pipefy_sdk.models.attachment.MAX_ATTACHMENT_SIZE_BYTES",
+        10,
+    )
+    oauth_env("att-size")
+    f = tmp_path / "big.bin"
+    f.write_bytes(b"more-than-ten-bytes")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "attachment",
+                "upload",
+                "--file",
+                str(f),
+                "--card",
+                "10",
+                "--organization",
+                "1",
+                "--field",
+                "f",
+            ],
+        )
+    assert r.exit_code == 2
+    assert "too large" in (r.stdout + (r.stderr or "")).lower()
+    mock_client.create_presigned_url.assert_not_called()
+
+
 def test_attachment_upload_card_file_path_expands_tilde(
     runner: CliRunner,
     clean_pipefy_env,

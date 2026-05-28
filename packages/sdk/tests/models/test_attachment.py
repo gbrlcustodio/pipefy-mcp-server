@@ -4,8 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from pipefy_sdk.models.attachment import (
+    MAX_ATTACHMENT_SIZE_BYTES,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
+    assert_attachment_size_within_cap,
     infer_content_type,
 )
 
@@ -304,3 +306,21 @@ def test_models_exported_from_package():
     assert CardFromPkg is UploadAttachmentToCardInput
     assert TableFromPkg is UploadAttachmentToTableRecordInput
     assert infer_from_pkg is infer_content_type
+
+
+@pytest.mark.unit
+def test_assert_attachment_size_within_cap_accepts_at_or_below_cap():
+    """At-cap and below-cap sizes return without raising."""
+    assert_attachment_size_within_cap(0, "empty")
+    assert_attachment_size_within_cap(MAX_ATTACHMENT_SIZE_BYTES, "exact")
+    assert_attachment_size_within_cap(MAX_ATTACHMENT_SIZE_BYTES - 1, "just-below")
+
+
+@pytest.mark.unit
+def test_assert_attachment_size_within_cap_rejects_above_cap():
+    """Any size above the cap raises ValueError citing the source label."""
+    with pytest.raises(ValueError, match="too large") as exc_info:
+        assert_attachment_size_within_cap(MAX_ATTACHMENT_SIZE_BYTES + 1, "/tmp/big.bin")
+    msg = str(exc_info.value)
+    assert "/tmp/big.bin" in msg
+    assert "MiB" in msg

@@ -14,8 +14,10 @@ from pipefy_sdk.models.ai_automation import (
     UpdateAiAutomationInput,
 )
 from pipefy_sdk.models.attachment import (
+    MAX_ATTACHMENT_SIZE_BYTES,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
+    assert_attachment_size_within_cap,
     infer_content_type,
 )
 from pipefy_sdk.models.comment import (
@@ -40,6 +42,7 @@ __all__ = [
     "CreateAiAutomationInput",
     "CreatePortalElementInput",
     "CreateSendTaskAutomationInput",
+    "MAX_ATTACHMENT_SIZE_BYTES",
     "MemberInvite",
     "DeleteCommentInput",
     "NonBlankStr",
@@ -50,5 +53,6 @@ __all__ = [
     "UpdatePortalElementInput",
     "UploadAttachmentToCardInput",
     "UploadAttachmentToTableRecordInput",
+    "assert_attachment_size_within_cap",
     "infer_content_type",
 ]

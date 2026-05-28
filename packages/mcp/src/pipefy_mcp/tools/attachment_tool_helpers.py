@@ -13,6 +13,7 @@ from pipefy_mcp.tools.tool_error_envelope import tool_error
 UploadFlowStep = Literal[
     "validation",
     "file_read",
+    "size_check",
     "presigned_url",
     "s3_upload",
     "field_update",
@@ -64,7 +65,7 @@ def build_upload_error_payload(
 
     Args:
         message: Actionable reason for the caller.
-        step: Failed stage (``file_read``, ``presigned_url``, ``s3_upload``, ``field_update``).
+        step: Failed stage (``file_read``, ``size_check``, ``presigned_url``, ``s3_upload``, ``field_update``).
     """
     out: dict[str, Any] = tool_error(message)
     out["step"] = step

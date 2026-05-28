@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, assert_attachment_size_within_cap
 from pipefy_sdk.attachment_upload import AttachmentUploadError
 
 from pipefy_cli.commands._common import run_cli_command
@@ -35,6 +35,10 @@ def _read_local_file_bytes(path: Path) -> tuple[Path, bytes]:
     expanded = path.expanduser()
     if not expanded.is_file():
         raise typer.BadParameter(f"Not a file: {expanded}")
+    try:
+        assert_attachment_size_within_cap(expanded.stat().st_size, str(expanded))
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     try:
         data = expanded.read_bytes()
     except PermissionError as exc:

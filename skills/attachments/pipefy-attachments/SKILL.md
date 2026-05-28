@@ -127,7 +127,7 @@ the uploaded file.
 Each failure payload carries a `step` field. The possible values:
 
 - **`step=validation`.** Both `file_path` and `file_content_base64` provided, neither provided, or `file_name` missing with base64 source. Recovery: provide exactly one source, plus a file name when using base64.
-- **`step=file_read`.** `file_path` does not exist, points to a directory, or is unreadable; or the base64 string is malformed. Recovery: verify the path exists as a regular file the running user can read. For base64, check padding and that the alphabet is standard.
+- **`step=file_read`.** `file_path` does not exist, points to a directory, is unreadable, or is **larger than 100 MiB**; or the base64 string is malformed or decodes to more than 100 MiB. Recovery: verify the path exists as a regular file the running user can read and is under the cap. For base64, check padding and that the alphabet is standard.
 - **`step=presigned_url`.** Organization id rejected, field id not an attachment, or Pipefy refused the request. Recovery: confirm `organization_id` with `get_organization` and that the field is actually an attachment field on the target card or record.
 - **`step=s3_upload`.** The presigned URL expired before PUT, or content/headers did not match what was signed. Recovery: retry the tool to obtain a fresh presigned URL. For unusually large files, expect Pipefy's storage policy to enforce the cap.
 - **`step=field_update`.** The field rejected the new attachment list (wrong type, missing permission). Recovery: confirm the field accepts attachments and that the caller has write access to the card or record.

@@ -1,7 +1,7 @@
 """Live Pipefy GraphQL scenarios for SchemaIntrospectionService.
 
 Requires valid Pipefy credentials (e.g. `.env` with PIPEFY_*). Skips automatically
-when credentials are missing so CI stays green.
+when credentials are missing (skipped in CI without secrets).
 
 Run locally:
     uv run pytest packages/sdk/tests/services/pipefy/test_schema_introspection_integration.py -m integration -v

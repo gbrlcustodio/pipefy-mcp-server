@@ -8,7 +8,7 @@ Fetch organization details directly by ID. **1 tool.**
 |------|-----------|------|
 | `get_organization` | Yes | Fetches org details: `id`, `uuid`, `name`, `planName`, `role`, `membersCount`, `pipesCount`, `createdAt`. |
 
-**`organization_id`** matches GraphQL: use a **string** (e.g. `"302398434"` from the URL or `search_pipes`). Unquoted JSON integers are coerced to the same string form. See [Pipefy IDs in pipes & cards](pipes-and-cards.md#pipefy-ids-type-safety).
+**`organization_id`** matches GraphQL: use a **string** (e.g. `"123456789"` — numeric segment from `https://app.pipefy.com/organizations/<org_id>/...` or from `search_pipes`). Unquoted JSON integers are coerced to the same string form. See [Pipefy IDs in pipes & cards](pipes-and-cards.md#pipefy-ids-type-safety).
 
 ## Why a dedicated tool?
 

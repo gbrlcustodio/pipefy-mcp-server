@@ -1,4 +1,4 @@
-"""Golden ``--help`` output for the full Typer tree (task 12.4 UX consistency lock)."""
+"""Golden ``--help`` output for the full Typer tree."""
 
 from __future__ import annotations
 

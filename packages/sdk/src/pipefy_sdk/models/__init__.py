@@ -24,6 +24,10 @@ from pipefy_sdk.models.comment import (
     UpdateCommentInput,
 )
 from pipefy_sdk.models.member_invite import MemberInvite
+from pipefy_sdk.models.portal import (
+    CreatePortalElementInput,
+    UpdatePortalElementInput,
+)
 from pipefy_sdk.models.send_task_automation import CreateSendTaskAutomationInput
 from pipefy_sdk.models.validators import NonBlankStr, PipefyId
 
@@ -34,6 +38,7 @@ __all__ = [
     "CommentInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
+    "CreatePortalElementInput",
     "CreateSendTaskAutomationInput",
     "MemberInvite",
     "DeleteCommentInput",
@@ -42,6 +47,7 @@ __all__ = [
     "UpdateAiAgentInput",
     "UpdateAiAutomationInput",
     "UpdateCommentInput",
+    "UpdatePortalElementInput",
     "UploadAttachmentToCardInput",
     "UploadAttachmentToTableRecordInput",
     "infer_content_type",

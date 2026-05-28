@@ -58,4 +58,4 @@ Malformed `--vars` JSON also exits with code **2**.
 ## Related docs
 
 - Parity matrix: `docs/parity.md`
-- MCP introspection tools map 1:1 to `pipefy introspect` subcommands (task **9.2**).
+- MCP introspection tools map 1:1 to `pipefy introspect` subcommands (see [`docs/parity.md`](../parity.md)).

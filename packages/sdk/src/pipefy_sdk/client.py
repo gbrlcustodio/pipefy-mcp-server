@@ -1320,6 +1320,104 @@ class PipefyClient:
         """
         return await self._portal_service.update_portal_page_layout(page_id, layout)
 
+    async def create_portal_element(
+        self,
+        page_id: str,
+        *,
+        type: str,
+        metadata: dict[str, Any],
+        data_sources: list[dict[str, Any]] | None = None,
+        element_id: str | None = None,
+        editable: bool | None = None,
+        layout: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create a portal page element.
+
+        Args:
+            page_id: Parent page UUID.
+            type: ``InterfacePageElementType`` value (e.g. ``forms``, ``link``).
+            metadata: Element metadata JSON.
+            data_sources: Optional data source bindings.
+            element_id: Optional client-provided element UUID.
+            editable: Optional editable flag.
+            layout: Optional layout JSON.
+        """
+        return await self._portal_service.create_portal_element(
+            page_id,
+            type=type,
+            metadata=metadata,
+            data_sources=data_sources,
+            element_id=element_id,
+            editable=editable,
+            layout=layout,
+        )
+
+    async def update_portal_element(
+        self,
+        element_id: str,
+        page_id: str,
+        *,
+        type: str,
+        metadata: dict[str, Any],
+        data_sources: list[dict[str, Any]] | None = None,
+        editable: bool | None = None,
+    ) -> dict[str, Any]:
+        """Update a portal page element (full metadata replace).
+
+        Returned ``metadata`` is the validated input echo (``updateElement`` does not
+        return stored element data). Use ``get_portal`` after update when you need
+        server-side state.
+
+        Args:
+            element_id: Element UUID.
+            page_id: Parent page UUID.
+            type: Element type for metadata validation.
+            metadata: Complete metadata blob.
+            data_sources: Optional data source bindings.
+            editable: Optional editable flag.
+        """
+        return await self._portal_service.update_portal_element(
+            element_id,
+            page_id,
+            type=type,
+            metadata=metadata,
+            data_sources=data_sources,
+            editable=editable,
+        )
+
+    async def delete_portal_element(
+        self, element_id: str, page_id: str
+    ) -> dict[str, Any]:
+        """Delete a portal page element (irreversible).
+
+        Args:
+            element_id: Element UUID.
+            page_id: Parent page UUID.
+        """
+        return await self._portal_service.delete_portal_element(element_id, page_id)
+
+    async def duplicate_portal_element(
+        self,
+        *,
+        element_id: str,
+        portal_uuid: str,
+        page_id: str,
+    ) -> dict[str, Any]:
+        """Duplicate a portal page element on the same page.
+
+        ``portal_uuid`` and ``page_id`` identify where the source element lives.
+
+        Args:
+            element_id: Element UUID to duplicate.
+            portal_uuid: Portal interface UUID that owns the page.
+            page_id: Page UUID that contains the element.
+        """
+        return await self._portal_service.duplicate_portal_element(
+            element_id=element_id,
+            portal_uuid=portal_uuid,
+            page_id=page_id,
+        )
+
     async def get_me(self) -> MePayload | None:
         """Return the authenticated user's identity, or ``None`` when ``me`` resolves null."""
         return await self._user_service.get_me()

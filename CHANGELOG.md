@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **SDK**: portal Interfaces helpers map `TransportQueryError` to `PortalPermissionError` only when GraphQL `extensions.code` is `PERMISSION_DENIED`. Other Interfaces failures (validation, not found, etc.) now propagate as `TransportQueryError` instead of being mislabeled as permission errors. SDK callers that caught `PortalPermissionError` for all portal GraphQL errors should also handle `TransportQueryError`.
 - **CLI**: concurrent `pipefy` invocations near token expiry no longer surface `invalid_grant` errors; the refresh-token grant is now serialized across processes via a filesystem lock at `~/.config/pipefy/refresh.lock` (`%APPDATA%/pipefy/refresh.lock` on Windows). Closes #133.
 
 ### Removed

@@ -8,6 +8,12 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk.models.portal import (
+    CreatePortalElementInput,
+    PortalElementType,
+    UpdatePortalElementInput,
+)
+from pydantic import ValidationError
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.introspection_tool_helpers import (
@@ -16,6 +22,7 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
 )
 from pipefy_mcp.tools.portal_tool_helpers import (
     map_portal_error_to_message,
+    portal_element_validation_error,
     validate_portal_optional_string,
     validate_portal_page_index,
     validate_sort_page_ids_no_duplicates,
@@ -87,9 +94,9 @@ class PortalTools:
             Page elements include a ``metadata`` JSON object whose shape depends on
             ``type`` (non-exhaustive):
 
-            - ``forms`` -> ``{ formId: str }``
+            - ``forms`` -> ``{ name: str, defaultValues?: object, ... }``
             - ``pipe`` -> ``{ pipeId: str }``
-            - ``link`` -> ``{ url: str, label?: str }``
+            - ``link`` -> ``{ linkName: str, linkUrl?: str, gridMap?: object }``
 
             Additional element types may appear; treat unknown keys as opaque.
 
@@ -488,3 +495,242 @@ class PortalTools:
                 f"Failed to update layout for portal page '{page_id}'. "
                 "Please try again or contact support."
             )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def create_portal_element(
+            ctx: Context[ServerSession, None],
+            page_id: str,
+            type: PortalElementType,
+            metadata: dict[str, Any],
+            data_sources: list[dict[str, Any]] | None = None,
+            element_id: str | None = None,
+            editable: bool | None = None,
+            layout: dict[str, Any] | None = None,
+        ) -> dict[str, Any]:
+            """Create a portal page element (portal "tool" / widget in the Pipefy UI).
+
+            Validates ``type`` and ``metadata`` before calling the Interfaces API.
+            For ``forms`` elements, include ``metadata.name`` and optional
+            ``data_sources`` (``repoId`` + ``fieldKeys`` per Interfaces schema;
+            ``repo_uuid`` is accepted and normalized).
+
+            Args:
+                page_id: Parent page UUID.
+                type: ``InterfacePageElementType`` value (e.g. ``forms``, ``link``).
+                metadata: Element metadata JSON (shape depends on ``type``).
+                data_sources: Optional data source bindings for ``forms`` elements.
+                element_id: Optional client-provided element UUID.
+                editable: Optional editable flag.
+                layout: Optional layout JSON.
+            """
+            page_id, err = validate_tool_id(page_id, "page_id")
+            if err is not None:
+                return err
+            cleaned_element_id, element_id_err = validate_portal_optional_string(
+                element_id, "element_id"
+            )
+            if element_id_err is not None:
+                return element_id_err
+            await ctx.debug(f"create_portal_element: page_id={page_id}, type={type}")
+            try:
+                validated = CreatePortalElementInput.model_validate(
+                    {
+                        "page_id": page_id,
+                        "type": type,
+                        "metadata": metadata,
+                        "data_sources": data_sources or [],
+                        "element_id": cleaned_element_id,
+                        "editable": editable,
+                        "layout": layout,
+                    }
+                )
+            except ValidationError as exc:
+                return portal_element_validation_error(exc)
+            create_kwargs: dict[str, Any] = {
+                "type": validated.type,
+                "metadata": validated.metadata,
+                "data_sources": validated.data_sources,
+            }
+            if validated.element_id is not None:
+                create_kwargs["element_id"] = validated.element_id
+            if validated.editable is not None:
+                create_kwargs["editable"] = validated.editable
+            if validated.layout is not None:
+                create_kwargs["layout"] = validated.layout
+            try:
+                element = await client.create_portal_element(
+                    validated.page_id,
+                    **create_kwargs,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(map_portal_error_to_message(exc))
+            return build_success_payload(element, include_parsed=True)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def update_portal_element(
+            ctx: Context[ServerSession, None],
+            element_id: str,
+            page_id: str,
+            type: PortalElementType,
+            metadata: dict[str, Any],
+            data_sources: list[dict[str, Any]] | None = None,
+            editable: bool | None = None,
+        ) -> dict[str, Any]:
+            """Update a portal page element (full metadata replace).
+
+            Pipefy treats ``metadata`` as a **complete replacement** on every update —
+            send the full blob for the element type, not a partial patch. ``type`` is
+            used only for client-side metadata validation.
+
+            The success payload ``metadata`` is the input echo (Interfaces
+            ``updateElement`` returns only ``success``). Call ``get_portal`` for
+            read-after-write state from Pipefy.
+
+            Args:
+                element_id: Element UUID.
+                page_id: Parent page UUID.
+                type: Element type for metadata validation.
+                metadata: Complete metadata JSON for the element.
+                data_sources: Optional data source bindings.
+                editable: Optional editable flag.
+            """
+            element_id, err = validate_tool_id(element_id, "element_id")
+            if err is not None:
+                return err
+            page_id, err = validate_tool_id(page_id, "page_id")
+            if err is not None:
+                return err
+            await ctx.debug(
+                f"update_portal_element: element_id={element_id}, page_id={page_id}, "
+                f"type={type}"
+            )
+            try:
+                validated = UpdatePortalElementInput.model_validate(
+                    {
+                        "element_id": element_id,
+                        "page_id": page_id,
+                        "type": type,
+                        "metadata": metadata,
+                        "data_sources": data_sources or [],
+                        "editable": editable,
+                    }
+                )
+            except ValidationError as exc:
+                return portal_element_validation_error(exc)
+            update_kwargs: dict[str, Any] = {
+                "type": validated.type,
+                "metadata": validated.metadata,
+                "data_sources": validated.data_sources,
+            }
+            if validated.editable is not None:
+                update_kwargs["editable"] = validated.editable
+            try:
+                element = await client.update_portal_element(
+                    validated.element_id,
+                    validated.page_id,
+                    **update_kwargs,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(map_portal_error_to_message(exc))
+            return build_success_payload(element, include_parsed=True)
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=False,
+                destructiveHint=True,
+            ),
+        )
+        async def delete_portal_element(
+            ctx: Context[ServerSession, None],
+            element_id: str,
+            page_id: str,
+            confirm: bool = False,
+        ) -> dict[str, Any]:
+            """Delete a portal page element (irreversible).
+
+            Two-step operation: preview with ``confirm=False`` (default), then execute
+            with ``confirm=True`` after explicit human approval.
+
+            Args:
+                element_id: Element UUID to delete.
+                page_id: Parent page UUID.
+                confirm: Set to True to execute the deletion (step 2).
+            """
+            element_id, err = validate_tool_id(element_id, "element_id")
+            if err is not None:
+                return err
+            page_id, err = validate_tool_id(page_id, "page_id")
+            if err is not None:
+                return err
+            await ctx.debug(
+                f"delete_portal_element: element_id={element_id}, page_id={page_id}"
+            )
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=(
+                    f"portal element (UUID: {element_id}) on page (UUID: {page_id})"
+                ),
+            )
+            if guard is not None:
+                return guard
+
+            try:
+                result = await client.delete_portal_element(element_id, page_id)
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(map_portal_error_to_message(exc))
+
+            delete_data = result.get("deleteElement", {})
+            if delete_data.get("success"):
+                return build_success_payload(result, include_parsed=True)
+            return build_error_payload(
+                f"Failed to delete portal element '{element_id}'. "
+                "Please try again or contact support."
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False),
+        )
+        async def duplicate_portal_element(
+            ctx: Context[ServerSession, None],
+            element_id: str,
+            portal_uuid: str,
+            page_id: str,
+        ) -> dict[str, Any]:
+            """Duplicate a portal page element on the same page.
+
+            Uses ``duplicateElement`` on the Interfaces schema (camelCase input).
+            ``portal_uuid`` and ``page_id`` must be the portal/page where the
+            source element already exists; Pipefy appends a copy on that page.
+
+            Args:
+                element_id: Element UUID to duplicate.
+                portal_uuid: Portal interface UUID that owns the page.
+                page_id: Page UUID that contains the element.
+            """
+            element_id, err = validate_tool_id(element_id, "element_id")
+            if err is not None:
+                return err
+            portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
+            if err is not None:
+                return err
+            page_id, err = validate_tool_id(page_id, "page_id")
+            if err is not None:
+                return err
+            await ctx.debug(
+                f"duplicate_portal_element: element_id={element_id}, "
+                f"portal_uuid={portal_uuid}, page_id={page_id}"
+            )
+            try:
+                element = await client.duplicate_portal_element(
+                    element_id=element_id,
+                    portal_uuid=portal_uuid,
+                    page_id=page_id,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return build_error_payload(map_portal_error_to_message(exc))
+            return build_success_payload(element, include_parsed=True)

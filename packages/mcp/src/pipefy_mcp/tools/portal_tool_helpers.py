@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk.exceptions import PortalPermissionError
+from pydantic import ValidationError
 
 from pipefy_mcp.tools.graphql_error_helpers import extract_graphql_error_codes
 from pipefy_mcp.tools.tool_error_envelope import tool_error
@@ -113,8 +114,43 @@ def validate_sort_page_ids_no_duplicates(
     return None
 
 
+def portal_element_validation_error(exc: ValidationError) -> dict[str, object]:
+    """Map SDK portal element model validation to an MCP ``INVALID_ARGUMENTS`` envelope.
+
+    Args:
+        exc: Raised by ``CreatePortalElementInput`` or ``UpdatePortalElementInput``.
+
+    Returns:
+        Tool failure payload with an actionable ``error.message`` (no Pydantic URLs).
+    """
+    clauses: list[str] = []
+    for err in exc.errors():
+        err_type = err.get("type", "")
+        if err_type == "value_error":
+            ctx = err.get("ctx") or {}
+            inner = ctx.get("error")
+            if inner is not None:
+                clauses.append(str(inner))
+                continue
+        loc = ".".join(str(part) for part in err.get("loc", ()))
+        msg = str(err.get("msg", ""))
+        if loc == "type" and err_type == "literal_error":
+            clauses.append(
+                "Invalid 'type': must be a supported InterfacePageElementType value."
+            )
+        elif loc:
+            clauses.append(f"{loc}: {msg}")
+        elif msg:
+            clauses.append(msg)
+    message = "; ".join(clause for clause in clauses if clause)
+    if not message:
+        message = "Invalid portal element arguments."
+    return tool_error(message, code="INVALID_ARGUMENTS")
+
+
 __all__ = [
     "map_portal_error_to_message",
+    "portal_element_validation_error",
     "validate_portal_optional_string",
     "validate_portal_page_index",
     "validate_sort_page_ids_no_duplicates",

@@ -1,6 +1,6 @@
 # Portal
 
-Read and manage Pipefy portals (Interfaces schema): list org portals, fetch detail, create/update/delete portal metadata, and manage pages (create, update, delete, sort, layout). **10 tools.**
+Read and manage Pipefy portals (Interfaces schema): list org portals, fetch detail, create/update/delete portal metadata, manage pages (create, update, delete, sort, layout), and manage page elements (create, update, delete, duplicate). **14 tools.**
 
 Portal tools call the **Interfaces** GraphQL endpoint (`<PIPEFY_BASE_URL>/graphql/interfaces`, default `https://app.pipefy.com/graphql/interfaces`), not the public `/graphql` schema used by most pipe/card tools.
 
@@ -37,6 +37,12 @@ Each organization has **at most one main portal** (`subType: portal`). Additiona
 | `delete_portal_page` | No | Delete a page (**irreversible**). `destructiveHint=True`; CLI requires `--yes`. |
 | `sort_portal_pages` | No | Reorder pages via `page_ids` list. |
 | `update_portal_page_layout` | No | Replace the page grid layout JSON (`page_id` + `layout` only — no portal UUID). |
+| `create_portal_element` | No | Add a widget to a page (`page_id`, `type`, `metadata`; optional `data_sources`). Validates metadata before GraphQL. |
+| `update_portal_element` | No | Replace element metadata in full (`element_id`, `page_id`, `type`, complete `metadata`). |
+| `delete_portal_element` | No | Delete a page element (**irreversible**). `destructiveHint=True`; CLI `--yes`. |
+| `duplicate_portal_element` | No | Duplicate an element on the **same** page (`element_id`, `portal_uuid`, `page_id` = source portal/page). |
+
+**Layout caveat (Pipefy UI):** `createElement` does not update the page grid; `duplicateElement` appends layout rows; `deleteElement` does not prune layout unless you pass an updated `layout`. Orphan layout references can crash the portal viewer (HTTP 500). Prefer smoke on disposable pages and delete them after tests.
 
 ---
 
@@ -72,13 +78,17 @@ If GraphQL returns `deleteInterface.success: false`, the tool responds with `{ s
 
 | Element `type` | Typical `metadata` |
 |----------------|-------------------|
-| `forms` | `{ formId: str }` |
+| `forms` | `{ name: str, defaultValues?: object, emailCollector?: bool, connectedFieldsFilters?: array, ... }` |
 | `pipe` | `{ pipeId: str }` |
-| `link` | `{ url: str, label?: str }` |
+| `link` | `{ linkName: str, linkUrl?: str, gridMap?: object }` |
 
 Additional element types may appear; treat unknown keys as opaque JSON.
 
 **Permission errors** on write tools return `{ success: false }` with a message mentioning `create_portal` or `manage_portals` when the Interfaces API returns `PERMISSION_DENIED`.
+
+**`update_portal_element` metadata:** The tool success payload echoes the validated `metadata` you sent. Interfaces `updateElement` returns only `success`, not the stored element. Use `get_portal` for read-after-write state.
+
+**`data_sources` on create/update element:** Each entry must include a pipe repo id as `repoId`, `repo_uuid`, or `repoUuid` (plus optional `fieldKeys` / `field_keys`). Unrecognized keys (e.g. `pipe_id`) are skipped; the SDK logs a warning and sends no binding for that entry.
 
 ---
 
@@ -96,6 +106,19 @@ Additional element types may appear; treat unknown keys as opaque JSON.
 | `delete_portal_page` | `pipefy portal page delete <portal-uuid> <page-uuid> --yes` |
 | `sort_portal_pages` | `pipefy portal page sort --portal-uuid <uuid> --page-ids id1,id2` |
 | `update_portal_page_layout` | `pipefy portal page layout update --page-id <uuid> --layout '{…}'` |
+| `create_portal_element` | `pipefy portal element create --page-id <uuid> --type forms --metadata '{…}'` |
+| `update_portal_element` | `pipefy portal element update <element-uuid> <page-uuid> --type link --metadata '{…}'` |
+| `delete_portal_element` | `pipefy portal element delete <element-uuid> <page-uuid> --yes` |
+| `duplicate_portal_element` | `pipefy portal element duplicate --element-id <uuid> --portal-uuid <uuid> --page-id <uuid>` |
+
+---
+
+## Testing
+
+| Mode | Org / pipe identifiers |
+|------|-------------------------|
+| **Unit** (`pytest -m "not integration"`) | Fictional fixtures only — [`fixture_ids.py`](../../../packages/sdk/tests/_shared/fixture_ids.py). Never hardcode production org UUIDs in test code. |
+| **Integration** (`pytest -m integration`) | Set `PIPEFY_PORTAL_ORG_UUID` in local [`.env`](../../../.env.example) (org where the token has `manage_portals`). See [setup.md](../../setup.md#quick-start). |
 
 ---
 

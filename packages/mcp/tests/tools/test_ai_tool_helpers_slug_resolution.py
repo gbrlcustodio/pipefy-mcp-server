@@ -12,6 +12,7 @@ from _shared.fixture_ids import (
     EXAMPLE_FIELD_INTERNAL_ID_6,
     EXAMPLE_FIELD_INTERNAL_IDS_BY_SLUG,
     EXAMPLE_PIPE_ID,
+    make_pipe_id,
 )
 
 from pipefy_mcp.tools.ai_tool_helpers import (
@@ -198,7 +199,8 @@ async def test_resolve_replaces_slug_with_numeric_id():
     )
     client.get_phase_fields = AsyncMock(return_value={"phase_id": "100", "fields": []})
 
-    behaviors = [_behavior_with_fields(EXAMPLE_PIPE_ID, ["resumo_de_briefing_ia"])]
+    pipe_id = make_pipe_id()
+    behaviors = [_behavior_with_fields(pipe_id, ["resumo_de_briefing_ia"])]
     resolved = await resolve_field_slugs_to_numeric(client, behaviors)
 
     fa = resolved[0]["actionParams"]["aiBehaviorParams"]["actionsAttributes"][0][
@@ -408,7 +410,8 @@ async def test_resolve_rewrites_instruction_field_slug_to_numeric():
         }
     )
 
-    b = _behavior_with_fields(EXAMPLE_PIPE_ID, [EXAMPLE_FIELD_INTERNAL_ID_2])
+    pipe_id = make_pipe_id()
+    b = _behavior_with_fields(pipe_id, [EXAMPLE_FIELD_INTERNAL_ID_2])
     b["actionParams"]["aiBehaviorParams"]["instruction"] = (
         "Read %{field:resumo_de_briefing_ia} then stop."
     )
@@ -458,7 +461,7 @@ async def test_resolve_skips_behaviors_without_pipe_id():
 async def test_resolve_and_populate_pure_numeric_instruction():
     client = AsyncMock()
 
-    b = _behavior_with_fields(EXAMPLE_PIPE_ID, [EXAMPLE_FIELD_INTERNAL_ID_2])
+    b = _behavior_with_fields(make_pipe_id(), [EXAMPLE_FIELD_INTERNAL_ID_2])
     b["actionParams"]["aiBehaviorParams"]["instruction"] = (
         "Use %{field:111} and %{field:222}"
     )
@@ -487,7 +490,7 @@ async def test_resolve_and_populate_pure_slug_instruction():
         }
     )
 
-    b = _behavior_with_fields(EXAMPLE_PIPE_ID, ["111"])
+    b = _behavior_with_fields(make_pipe_id(), ["111"])
     b["actionParams"]["aiBehaviorParams"]["instruction"] = "Read %{field:briefing}"
     resolved = await resolve_and_populate_field_refs(client, [b])
 
@@ -517,7 +520,7 @@ async def test_resolve_and_populate_mixed_numeric_and_slug_instruction():
         }
     )
 
-    b = _behavior_with_fields(EXAMPLE_PIPE_ID, ["222"])
+    b = _behavior_with_fields(make_pipe_id(), ["222"])
     b["actionParams"]["aiBehaviorParams"]["instruction"] = (
         "Use %{field:111} and %{field:briefing}"
     )
@@ -533,7 +536,7 @@ async def test_resolve_and_populate_mixed_numeric_and_slug_instruction():
 async def test_resolve_and_populate_preserves_caller_supplied_refs():
     client = AsyncMock()
 
-    b = _behavior_with_fields(EXAMPLE_PIPE_ID, ["111"])
+    b = _behavior_with_fields(make_pipe_id(), ["111"])
     b["actionParams"]["aiBehaviorParams"]["instruction"] = "Use %{field:111}"
     b["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] = ["999"]
     resolved = await resolve_and_populate_field_refs(client, [b])

@@ -9,6 +9,22 @@ Live integration tests read real identifiers from repo-root ``.env`` (e.g.
 
 from __future__ import annotations
 
+import itertools
+
+_pipe_id_counter = itertools.count(900_000_400)
+_field_id_counter = itertools.count(900_000_500)
+
+
+def make_pipe_id() -> str:
+    """Unique fictional pipe id per call (avoids coincidental-pass with shared constants)."""
+    return str(next(_pipe_id_counter))
+
+
+def make_field_id() -> str:
+    """Unique fictional field internal id per call."""
+    return str(next(_field_id_counter))
+
+
 EXAMPLE_NUMERIC_ORG_ID = "123456789"
 EXAMPLE_ORG_UUID = "00000000-0000-4000-8000-000000000001"
 EXAMPLE_OTHER_ORG_UUID = "00000000-0000-4000-8000-000000000002"
@@ -29,9 +45,6 @@ EXAMPLE_FIELD_INTERNAL_ID_6 = "900000112"
 EXAMPLE_FIELD_SLUG = "resumo_de_briefing_ia"
 EXAMPLE_FIELD_SLUG_2 = "objetivo_da_demanda"
 EXAMPLE_FIELD_SLUG_3 = "phase_field_slug"
-
-EXAMPLE_AI_ACTION_REFERENCE_UUID = "00000000-0000-4000-8000-000000000010"
-EXAMPLE_AI_ACTION_REFERENCE_UUID_2 = "00000000-0000-4000-8000-000000000011"
 
 EXAMPLE_FIELD_INTERNAL_IDS_BY_SLUG: dict[str, str] = {
     "company_name": EXAMPLE_FIELD_INTERNAL_ID_4,

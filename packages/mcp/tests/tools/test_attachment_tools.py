@@ -322,6 +322,40 @@ async def test_upload_attachment_to_card_base64_requires_file_name(
     mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
 
 
+@pytest.mark.anyio
+async def test_upload_attachment_to_card_whitespace_file_path_falls_through_to_base64(
+    attachment_session,
+    mock_attachment_client,
+    extract_payload,
+):
+    """Whitespace-only file_path is treated as no path (matching SDK validator's
+    `_source_nonempty`), so the base64 source is used instead of failing with
+    a misleading file_read error.
+    """
+    raw = b"fallback-bytes"
+    b64 = base64.b64encode(raw).decode("ascii")
+
+    async with attachment_session as session:
+        result = await session.call_tool(
+            "upload_attachment_to_card",
+            {
+                "organization_id": "42",
+                "card_id": 1,
+                "field_id": "f",
+                "file_name": "note.txt",
+                "file_path": "  ",
+                "file_content_base64": b64,
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    call_kw = mock_attachment_client.upload_attachment_to_card_field.await_args.kwargs
+    assert call_kw["file_bytes"] == raw
+    assert call_kw["file_name"] == "note.txt"
+
+
 # ---------------------------------------------------------------------------
 # SDK pipeline failures propagate as step-aware envelopes
 # ---------------------------------------------------------------------------

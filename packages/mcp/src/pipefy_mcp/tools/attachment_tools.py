@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 from collections.abc import Awaitable, Callable
@@ -29,13 +30,6 @@ from pipefy_mcp.tools.attachment_tool_helpers import (
     format_s3_upload_failure,
     map_upload_error_to_message,
 )
-
-# GATED:SELF_HOSTED — URL ingestion (file_url + SSRF guard + redirect loop +
-# 100 MiB cap) lived here historically. Removed because this MCP runs in the
-# user's environment as a local subprocess; agents pass file_path directly.
-# If a self-hosted MCP profile is added, bring URL ingestion back behind a
-# capability flag rather than as unconditional behavior. Past code is in git
-# history; see packages/mcp/AGENTS.md for the GATED:<PROFILE> convention.
 
 
 def _decode_base64_file(payload: str) -> bytes:
@@ -70,12 +64,16 @@ class AttachmentTools:
             envelope.
             """
             try:
-                if file_path:
+                # Match the SDK validator's whitespace-aware source check
+                # (`_source_nonempty`): a whitespace-only `file_path` is treated
+                # as no path, so the base64 source takes over.
+                if file_path and file_path.strip():
                     await ctx.debug(f"{debug_prefix}: reading file_path")
                     p = Path(file_path.strip()).expanduser()
                     if not p.is_file():
                         raise ValueError(f"File not found or not a regular file: {p}")
-                    return p.read_bytes(), None
+                    data = await asyncio.to_thread(p.read_bytes)
+                    return data, None
                 await ctx.debug(f"{debug_prefix}: decoding base64 payload")
                 return _decode_base64_file(file_content_base64 or ""), None
             except (OSError, binascii.Error, ValueError) as exc:
@@ -88,6 +86,8 @@ class AttachmentTools:
         async def _upload_via_facade(
             ctx: Context[ServerSession, None],
             *,
+            field_id: str,
+            file_name: str,
             file_path: str | None,
             file_content_base64: str | None,
             upload_call: Callable[[bytes], Awaitable[AttachmentUploadResult]],
@@ -100,7 +100,9 @@ class AttachmentTools:
             off to the SDK facade method that runs presigned URL → S3 PUT →
             field update.
             """
-            await ctx.debug(f"{debug_prefix}: starting upload")
+            await ctx.debug(
+                f"{debug_prefix}: field_id={field_id!r} file_name={file_name!r}"
+            )
             file_bytes, error_payload = await _read_local_or_decode(
                 ctx,
                 file_path=file_path,
@@ -141,6 +143,11 @@ class AttachmentTools:
                 **success_extra,
             )
 
+        # GATED:SELF_HOSTED. This tool accepts only file_path / file_content_base64
+        # in the local-subprocess profile. Under a self-hosted profile it would
+        # also accept a file_url, behind a capability flag, with SSRF + size-cap
+        # guards initialized from injected settings (not from a fresh
+        # PipefySettings() env read).
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
         )
@@ -203,6 +210,8 @@ class AttachmentTools:
 
             return await _upload_via_facade(
                 ctx,
+                field_id=data.field_id,
+                file_name=resolved_file_name,
                 file_path=data.file_path,
                 file_content_base64=data.file_content_base64,
                 upload_call=_upload,
@@ -210,6 +219,8 @@ class AttachmentTools:
                 success_extra={"card_id": data.card_id},
             )
 
+        # GATED:SELF_HOSTED. Same gate as upload_attachment_to_card above;
+        # file_url support would land here too under a hosted profile.
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
         )
@@ -271,6 +282,8 @@ class AttachmentTools:
 
             return await _upload_via_facade(
                 ctx,
+                field_id=data.field_id,
+                file_name=resolved_file_name,
                 file_path=data.file_path,
                 file_content_base64=data.file_content_base64,
                 upload_call=_upload,

@@ -1,10 +1,10 @@
 """High-level attachment upload pipeline: presigned URL → S3 PUT → field update.
 
-The MCP and CLI surfaces both upload local file bytes to Pipefy attachment fields
-through the same 4-step sequence. This module centralizes the orchestration so
-that source-specific concerns (SSRF guards in MCP for remote URLs, ``Path.read_bytes``
-in CLI for local files) live where they belong while the core pipeline stays
-in one place.
+The MCP and CLI surfaces both upload file bytes to Pipefy attachment fields
+through the same sequence. This module centralizes the orchestration so that
+source-specific concerns (base64 decode in MCP for in-memory payloads,
+``Path.read_bytes`` for files on disk) live where they belong while the core
+pipeline stays in one place.
 
 Exceptions :class:`AttachmentUploadError` carry a ``step`` attribute so surfaces
 can map them to step-aware error envelopes (MCP) or typer messages (CLI).

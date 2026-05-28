@@ -26,29 +26,33 @@ See below.
 
 ## Greppable deployment-profile markers
 
-Convention: `GATED:<PROFILE>` in a code comment marks a code path that is
-intentionally absent or restricted in the current deployment but would be
-needed under a different profile. Uppercase profile name, no spaces.
+Convention: `GATED:<PROFILE>` is a code comment placed on a tool whose
+inputs or capabilities are restricted in the current deployment profile and
+would be broader under another. Uppercase profile name, no spaces. The
+marker annotates a tool that exists today; it is not a deletion changelog.
 
 Greppable as a family: `rg "GATED:" packages/mcp` lists every
 deployment-profile marker in the package.
 
 Today's markers:
 
-- `GATED:SELF_HOSTED` (`tools/attachment_tools.py`): URL-based attachment
-  ingestion (`file_url` parameter, SSRF guard, redirect loop, 100 MiB cap)
-  was removed because the local distribution doesn't need it. Past code is in
-  git history before the commit that introduced this marker. Under a
-  self-hosted MCP profile, bring URL ingestion back behind a capability flag
-  rather than as unconditional behavior, and read the SSRF policy from
-  injected settings (not from a fresh `PipefySettings()` env read).
+- `GATED:SELF_HOSTED` on `upload_attachment_to_card` and
+  `upload_attachment_to_table_record` in `tools/attachment_tools.py`. These
+  tools accept only `file_path` and `file_content_base64` in the
+  local-subprocess profile. Under a self-hosted profile they would also
+  accept a `file_url`, behind a capability flag, with SSRF and size-cap
+  guards initialized from injected settings (not from a fresh
+  `PipefySettings()` env read).
 
 ### When to add a new marker
 
-Add a new `GATED:<PROFILE>` marker when you deliberately delete or omit a
-code path that another deployment profile would need. Document the new
-profile in this file alongside the existing ones with the same shape:
-location, what was removed, when to bring it back, where to find past code.
+Add a `GATED:<PROFILE>` marker on a tool whose surface differs across
+deployment profiles. The comment lives next to the tool's registration (or
+the relevant restricted parameter) so it reads as an annotation on the tool,
+not a paragraph elsewhere in the file. Document the new profile in this
+file alongside the existing ones: which tools carry the marker, what they
+accept today, what they would accept under the other profile.
 
-Don't use `GATED:` for "TODO refactor later" or for incomplete work. Those
-belong in issues, not in greppable code markers.
+If you are merely deleting code that another profile might want later,
+that's git history and CHANGELOG territory, not a `GATED:` marker. Re-add
+the marker when the gated tool itself returns.

@@ -77,7 +77,7 @@ def _resolve_file_name(file_name: str | None, file_path: str | None) -> str:
         ValueError: When neither input yields a non-empty name. Reachable when
             ``file_content_base64`` is the source and ``file_name`` is missing
             (the source validator catches the no-source case earlier), or when
-            ``file_path`` has no usable basename (``"/"``, ``"."``, ``"~/"``).
+            ``file_path`` has no usable basename (``"/"``, ``"."``).
     """
     if file_name and file_name.strip():
         return file_name.strip()

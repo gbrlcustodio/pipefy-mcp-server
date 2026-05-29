@@ -5,9 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from pipefy_infra.filesystem import LocalFile, LocalFileError
-from pipefy_sdk import MAX_ATTACHMENT_SIZE_BYTES, Attachment, PipefyClient
-from pipefy_sdk.attachment_upload import AttachmentUploadError
+from pipefy_sdk import (
+    Attachment,
+    AttachmentUploadError,
+    CardTarget,
+    PipefyClient,
+    TableRecordTarget,
+)
 
 from pipefy_cli.commands._common import run_cli_command
 
@@ -66,17 +70,6 @@ def attachment_upload(
     if (card is None) == (record is None):
         raise typer.BadParameter("Provide exactly one of --card or --record.")
 
-    local_file = LocalFile(file, max_size_bytes=MAX_ATTACHMENT_SIZE_BYTES)
-    try:
-        local_file.read()
-    except LocalFileError as exc:
-        raise typer.BadParameter(str(exc)) from exc
-
-    try:
-        attachment = Attachment(local_file, content_type=content_type)
-    except ValueError as exc:
-        raise typer.BadParameter(str(exc)) from exc
-
     org_str = str(organization).strip()
     field_str = str(field).strip()
     if not org_str or not field_str:
@@ -85,25 +78,21 @@ def attachment_upload(
     card_id = str(card).strip() if card is not None else None
     record_id = str(record).strip() if record is not None else None
 
+    attachment = Attachment(path=file, content_type=content_type)
+    if card_id is not None:
+        target = CardTarget(card_id=card_id, field_id=field_str)
+    else:
+        target = TableRecordTarget(table_record_id=record_id or "", field_id=field_str)
+
     async def factory(client: PipefyClient) -> dict[str, object]:
         try:
-            if card_id is not None:
-                result = await attachment.upload_to_card_field(
-                    client,
-                    organization_id=org_str,
-                    card_id=card_id,
-                    field_id=field_str,
-                )
-                target: dict[str, object] = {"card_id": card_id}
-            else:
-                result = await attachment.upload_to_table_record_field(
-                    client,
-                    organization_id=org_str,
-                    table_record_id=record_id or "",
-                    field_id=field_str,
-                )
-                target = {"table_record_id": record_id}
+            result = await client.upload_attachment(
+                attachment, organization_id=org_str, target=target
+            )
         except AttachmentUploadError as exc:
+            if exc.step == "file_read":
+                message = str(exc.__cause__) if exc.__cause__ else str(exc)
+                raise typer.BadParameter(message) from exc
             out: dict[str, object] = {
                 "success": False,
                 "step": exc.step,
@@ -113,6 +102,12 @@ def attachment_upload(
                 out["body_snippet"] = exc.body_snippet
             return out
 
+        target_payload: dict[str, object]
+        if isinstance(target, CardTarget):
+            target_payload = {"card_id": target.card_id}
+        else:
+            target_payload = {"table_record_id": target.table_record_id}
+
         return {
             "success": True,
             "message": "Attachment uploaded.",
@@ -121,7 +116,7 @@ def attachment_upload(
             "file_size": result["file_size"],
             "field_id": result["field_id"],
             "download_url": result["download_url"],
-            **target,
+            **target_payload,
         }
 
     run_cli_command(ctx, json_out, factory)

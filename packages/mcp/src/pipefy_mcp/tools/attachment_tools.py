@@ -2,23 +2,23 @@
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_infra.filesystem import LocalFile, LocalFileError
 from pipefy_sdk import (
-    MAX_ATTACHMENT_SIZE_BYTES,
     Attachment,
+    AttachmentUploadError,
+    AttachmentUploadResult,
+    CardTarget,
     PipefyClient,
     PipefyId,
+    TableRecordTarget,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
 )
-from pipefy_sdk.attachment_upload import AttachmentUploadError, AttachmentUploadResult
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.attachment_tool_helpers import (
@@ -35,7 +35,11 @@ class AttachmentTools:
     @staticmethod
     def register(mcp: FastMCP, client: PipefyClient) -> None:
         def _upload_error_envelope(exc: AttachmentUploadError) -> dict[str, Any]:
-            if exc.step == "s3_upload" and exc.body_snippet:
+            if exc.step == "file_read":
+                # Preserve the original LocalFileError message (no type prefix or
+                # GraphQL mapper rewrite); the cause chain carries it verbatim.
+                message = str(exc.__cause__) if exc.__cause__ else str(exc)
+            elif exc.step == "s3_upload" and exc.body_snippet:
                 message = format_s3_upload_failure(
                     {
                         "status_code": exc.status_code,
@@ -115,25 +119,18 @@ class AttachmentTools:
                 f"upload_attachment_to_card: field_id={data.field_id!r} file_path={data.file_path!r}"
             )
 
-            file = LocalFile(
-                Path(data.file_path), max_size_bytes=MAX_ATTACHMENT_SIZE_BYTES
-            )
-            try:
-                await asyncio.to_thread(file.read)
-            except LocalFileError as exc:
-                await ctx.debug(f"upload_attachment_to_card: file source error {exc!r}")
-                return build_upload_error_payload(message=str(exc), step="file_read")
-
             attachment = Attachment(
-                file, name=data.file_name, content_type=data.content_type
+                path=Path(data.file_path),
+                name=data.file_name,
+                content_type=data.content_type,
             )
+            target = CardTarget(card_id=data.card_id, field_id=data.field_id)
 
             try:
-                result = await attachment.upload_to_card_field(
-                    client,
+                result = await client.upload_attachment(
+                    attachment,
                     organization_id=data.organization_id,
-                    card_id=data.card_id,
-                    field_id=data.field_id,
+                    target=target,
                 )
             except AttachmentUploadError as exc:
                 await ctx.debug(
@@ -193,27 +190,20 @@ class AttachmentTools:
                 f"upload_attachment_to_table_record: field_id={data.field_id!r} file_path={data.file_path!r}"
             )
 
-            file = LocalFile(
-                Path(data.file_path), max_size_bytes=MAX_ATTACHMENT_SIZE_BYTES
-            )
-            try:
-                await asyncio.to_thread(file.read)
-            except LocalFileError as exc:
-                await ctx.debug(
-                    f"upload_attachment_to_table_record: file source error {exc!r}"
-                )
-                return build_upload_error_payload(message=str(exc), step="file_read")
-
             attachment = Attachment(
-                file, name=data.file_name, content_type=data.content_type
+                path=Path(data.file_path),
+                name=data.file_name,
+                content_type=data.content_type,
+            )
+            target = TableRecordTarget(
+                table_record_id=data.table_record_id, field_id=data.field_id
             )
 
             try:
-                result = await attachment.upload_to_table_record_field(
-                    client,
+                result = await client.upload_attachment(
+                    attachment,
                     organization_id=data.organization_id,
-                    table_record_id=data.table_record_id,
-                    field_id=data.field_id,
+                    target=target,
                 )
             except AttachmentUploadError as exc:
                 await ctx.debug(

@@ -36,7 +36,7 @@ def test_attachment_upload_requires_card_xor_record(
             ],
         )
     assert r.exit_code == 2
-    mock_client.create_presigned_url.assert_not_called()
+    mock_client.upload_attachment.assert_not_called()
 
 
 def test_attachment_upload_rejects_oversize_file(
@@ -45,17 +45,20 @@ def test_attachment_upload_rejects_oversize_file(
     saved_cwd,
     oauth_env,
     tmp_path: Path,
-    monkeypatch,
 ):
-    """Files over the cap are rejected as a BadParameter; no network call runs."""
-    monkeypatch.setattr(
-        "pipefy_cli.commands.attachment.MAX_ATTACHMENT_SIZE_BYTES",
-        10,
-    )
+    """Files over the cap surface a BadParameter via step=file_read."""
+    from pipefy_infra.filesystem import LocalFileError
+    from pipefy_sdk import AttachmentUploadError
+
     oauth_env("att-size")
     f = tmp_path / "big.bin"
     f.write_bytes(b"more-than-ten-bytes")
     mock_client = MagicMock()
+    cause = LocalFileError(f"File too large: {f} is 19 bytes, exceeding the 0 MiB cap.")
+    exc = AttachmentUploadError(str(cause), step="file_read")
+    exc.__cause__ = cause
+    mock_client.upload_attachment = AsyncMock(side_effect=exc)
+
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -77,38 +80,37 @@ def test_attachment_upload_rejects_oversize_file(
         )
     assert r.exit_code == 2
     assert "too large" in (r.stdout + (r.stderr or "")).lower()
-    mock_client.create_presigned_url.assert_not_called()
 
 
-def test_attachment_upload_card_file_path_expands_tilde(
+def test_attachment_upload_card_file_path_passes_tilde_through(
     runner: CliRunner,
     clean_pipefy_env,
     saved_cwd,
     oauth_env,
     tmp_path: Path,
-    monkeypatch,
 ):
-    """``--file ~/<name>`` resolves against HOME for programmatic callers."""
-    from pipefy_sdk.attachment_upload import (
-        upload_attachment_to_card_field as _real_upload_card,
-    )
+    """``--file ~/<name>`` is passed to the service unmodified; expansion is the service's job."""
+    from pipefy_sdk import CardTarget
 
     oauth_env("att-tilde")
-    monkeypatch.setenv("HOME", str(tmp_path))
-    (tmp_path / "tilde.bin").write_bytes(b"home-bytes")
 
     mock_client = MagicMock()
-    mock_client.create_presigned_url = AsyncMock(
-        return_value={"url": "https://bucket.s3/x?y=1", "download_url": "https://dl"}
-    )
-    mock_client.upload_file_to_s3 = AsyncMock(return_value={"status_code": 200})
-    mock_client.extract_storage_path = MagicMock(return_value="org/x/key")
-    mock_client.update_card_field = AsyncMock(return_value={})
+    captured: dict = {}
 
-    async def _facade_proxy(**kwargs):
-        return await _real_upload_card(mock_client, **kwargs)
+    async def _capture(attachment, *, organization_id, target):
+        captured["attachment"] = attachment
+        captured["organization_id"] = organization_id
+        captured["target"] = target
+        return {
+            "file_name": "tilde.bin",
+            "content_type": "application/octet-stream",
+            "file_size": 10,
+            "field_id": target.field_id,
+            "storage_path": "org/x/key",
+            "download_url": "https://dl",
+        }
 
-    mock_client.upload_attachment_to_card_field = AsyncMock(side_effect=_facade_proxy)
+    mock_client.upload_attachment = AsyncMock(side_effect=_capture)
 
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
@@ -133,36 +135,34 @@ def test_attachment_upload_card_file_path_expands_tilde(
     assert r.exit_code == 0, r.stdout + (r.stderr or "")
     out = json.loads(r.stdout)
     assert out["success"] is True
-    call_kw = mock_client.upload_attachment_to_card_field.await_args.kwargs
-    assert call_kw["file_bytes"] == b"home-bytes"
-    assert call_kw["file_name"] == "tilde.bin"
+    assert str(captured["attachment"].path) == "~/tilde.bin"
+    assert isinstance(captured["target"], CardTarget)
 
 
 def test_attachment_upload_card_happy_path_json(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env, tmp_path: Path
 ):
-    from pipefy_sdk.attachment_upload import (
-        upload_attachment_to_card_field as _real_upload_card,
-    )
+    from pipefy_sdk import CardTarget
 
     oauth_env("att-up")
     p = tmp_path / "a.txt"
     p.write_text("hi", encoding="utf-8")
     mock_client = MagicMock()
-    mock_client.create_presigned_url = AsyncMock(
-        return_value={
-            "url": "https://bucket.s3.amazonaws.com/x?y=1",
+    captured: dict = {}
+
+    async def _capture(attachment, *, organization_id, target):
+        captured["attachment"] = attachment
+        captured["target"] = target
+        return {
+            "file_name": "a.txt",
+            "content_type": "text/plain",
+            "file_size": 2,
+            "field_id": target.field_id,
+            "storage_path": "org/x/key",
             "download_url": "https://dl",
         }
-    )
-    mock_client.upload_file_to_s3 = AsyncMock(return_value={"status_code": 200})
-    mock_client.extract_storage_path = MagicMock(return_value="org/x/key")
-    mock_client.update_card_field = AsyncMock(return_value={})
 
-    async def _facade_proxy(**kwargs):
-        return await _real_upload_card(mock_client, **kwargs)
-
-    mock_client.upload_attachment_to_card_field = AsyncMock(side_effect=_facade_proxy)
+    mock_client.upload_attachment = AsyncMock(side_effect=_capture)
 
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
@@ -187,7 +187,10 @@ def test_attachment_upload_card_happy_path_json(
     assert r.exit_code == 0
     out = json.loads(r.stdout)
     assert out["success"] is True
-    mock_client.update_card_field.assert_awaited_once()
+    assert captured["attachment"].path == p
+    assert isinstance(captured["target"], CardTarget)
+    assert captured["target"].card_id == "10"
+    assert captured["target"].field_id == "doc"
 
 
 def test_field_condition_list_json(

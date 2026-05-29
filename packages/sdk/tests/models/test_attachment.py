@@ -1,19 +1,19 @@
-"""Tests for attachment upload input models (Pydantic boundary only).
-
-Domain object tests (``LocalFile``, ``Attachment``) live in
-``packages/sdk/tests/test_attachment.py``.
-"""
+"""Tests for attachment domain types and Pydantic input DTOs."""
 
 from __future__ import annotations
+
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from pipefy_sdk.models.attachment import (
-    MAX_ATTACHMENT_SIZE_BYTES,
+    Attachment,
+    AttachmentTarget,
+    CardTarget,
+    TableRecordTarget,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
-    assert_attachment_size_within_cap,
     infer_content_type,
 )
 
@@ -201,19 +201,78 @@ def test_models_exported_from_package():
     assert infer_from_pkg is infer_content_type
 
 
-@pytest.mark.unit
-def test_assert_attachment_size_within_cap_accepts_at_or_below_cap():
-    """At-cap and below-cap sizes return without raising."""
-    assert_attachment_size_within_cap(0, "empty")
-    assert_attachment_size_within_cap(MAX_ATTACHMENT_SIZE_BYTES, "exact")
-    assert_attachment_size_within_cap(MAX_ATTACHMENT_SIZE_BYTES - 1, "just-below")
+# Attachment domain class
 
 
 @pytest.mark.unit
-def test_assert_attachment_size_within_cap_rejects_above_cap():
-    """Any size above the cap raises ValueError citing the source label."""
-    with pytest.raises(ValueError, match="too large") as exc_info:
-        assert_attachment_size_within_cap(MAX_ATTACHMENT_SIZE_BYTES + 1, "/tmp/big.bin")
-    msg = str(exc_info.value)
-    assert "/tmp/big.bin" in msg
-    assert "MiB" in msg
+def test_attachment_name_defaults_to_path_basename():
+    attachment = Attachment(path=Path("/tmp/report.pdf"))
+    assert attachment.name == "report.pdf"
+
+
+@pytest.mark.unit
+def test_attachment_explicit_name_wins():
+    attachment = Attachment(path=Path("/tmp/abc123.pdf"), name="Invoice 2026.pdf")
+    assert attachment.name == "Invoice 2026.pdf"
+
+
+@pytest.mark.unit
+def test_attachment_blank_explicit_name_falls_back_to_basename():
+    """Whitespace-only explicit name is treated as not provided."""
+    attachment = Attachment(path=Path("/tmp/report.pdf"), name="   ")
+    assert attachment.name == "report.pdf"
+
+
+@pytest.mark.unit
+def test_attachment_content_type_inferred_from_name():
+    attachment = Attachment(path=Path("/tmp/data.csv"))
+    assert attachment.content_type == "text/csv"
+
+
+@pytest.mark.unit
+def test_attachment_explicit_content_type_wins():
+    attachment = Attachment(
+        path=Path("/tmp/data.csv"),
+        content_type="application/octet-stream",
+    )
+    assert attachment.content_type == "application/octet-stream"
+
+
+@pytest.mark.unit
+def test_attachment_construction_stays_pure_for_missing_path():
+    """Construction does not touch the filesystem; the path is recorded as-is."""
+    attachment = Attachment(path=Path("/does/not/exist/anywhere.bin"))
+    assert attachment.path == Path("/does/not/exist/anywhere.bin")
+    assert attachment.name == "anywhere.bin"
+
+
+# Target value objects
+
+
+@pytest.mark.unit
+def test_card_target_is_frozen():
+    target = CardTarget(card_id="c1", field_id="f1")
+    assert target.card_id == "c1"
+    assert target.field_id == "f1"
+    with pytest.raises(Exception):
+        target.card_id = "c2"  # type: ignore[misc]
+
+
+@pytest.mark.unit
+def test_table_record_target_is_frozen():
+    target = TableRecordTarget(table_record_id="tr-1", field_id="f1")
+    assert target.table_record_id == "tr-1"
+    assert target.field_id == "f1"
+    with pytest.raises(Exception):
+        target.table_record_id = "tr-2"  # type: ignore[misc]
+
+
+@pytest.mark.unit
+def test_attachment_target_alias_includes_both_variants():
+    """The union alias holds both dataclasses; `match` can dispatch on either."""
+    cases: list[AttachmentTarget] = [
+        CardTarget(card_id="c", field_id="f"),
+        TableRecordTarget(table_record_id="r", field_id="f"),
+    ]
+    for case in cases:
+        assert case.field_id == "f"

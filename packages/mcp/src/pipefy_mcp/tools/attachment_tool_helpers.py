@@ -12,7 +12,6 @@ from pipefy_mcp.tools.tool_error_envelope import tool_error
 UploadFlowStep = Literal[
     "validation",
     "file_read",
-    "size_check",
     "presigned_url",
     "s3_upload",
     "field_update",
@@ -64,7 +63,7 @@ def build_upload_error_payload(
 
     Args:
         message: Actionable reason for the caller.
-        step: Failed stage (``file_read``, ``size_check``, ``presigned_url``, ``s3_upload``, ``field_update``).
+        step: Failed stage (``validation``, ``file_read``, ``presigned_url``, ``s3_upload``, ``field_update``).
     """
     out: dict[str, Any] = tool_error(message)
     out["step"] = step
@@ -72,7 +71,8 @@ def build_upload_error_payload(
 
 
 def format_s3_upload_failure(upload_result: dict[str, Any]) -> str:
-    """Build an agent-facing message from ``AttachmentService.upload_file_to_s3`` output.
+    """Build an agent-facing message from the S3 PUT outcome carried on an
+    :class:`AttachmentUploadError` for ``step="s3_upload"``.
 
     Args:
         upload_result: Dict containing at least ``status_code``; may include ``body_snippet``.
@@ -102,9 +102,10 @@ def format_s3_upload_failure(upload_result: dict[str, Any]) -> str:
 def map_upload_error_to_message(exc: BaseException) -> str:
     """Map a validation or transport/GraphQL exception to a short, actionable message.
 
-    File-read errors are handled separately via
-    :class:`pipefy_infra.filesystem.LocalFileError` and never flow through
-    this mapper.
+    File-read errors are short-circuited by
+    :func:`_upload_error_envelope` in :mod:`pipefy_mcp.tools.attachment_tools`
+    (the originating :class:`pipefy_infra.filesystem.LocalFileError` carries
+    user-facing text directly), so they do not flow through this mapper.
 
     Args:
         exc: Failure from input validation, transport, or GraphQL.

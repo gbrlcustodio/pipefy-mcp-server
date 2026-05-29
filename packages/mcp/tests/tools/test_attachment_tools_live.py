@@ -5,26 +5,16 @@ IDs are unset. Use a disposable sandbox card/record and attachment fields.
 
 Run card + table end-to-end (requires all IDs for each test):
     uv run pytest tests/tools/test_attachment_tools_live.py -m integration -v
-
-Run S3 error matrix subset (requires org only + live test flag):
-    PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 \\
-    uv run pytest tests/tools/test_attachment_tools_live.py -m integration -k s3_put -v
-
-Optional long-run expired-URL check (waits for ``PIPE_ATTACHMENT_S3_EXPIRY_WAIT_SECONDS``):
-    PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 PIPE_ATTACHMENT_S3_EXPIRY_WAIT_SECONDS=310 \\
-    uv run pytest tests/tools/test_attachment_tools_live.py -m integration -k expired -v
 """
 
 from __future__ import annotations
 
-import asyncio
 import os
 import uuid
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
-import httpx
 import pytest
 from _shared.live_settings import live_resolved_auth, require_live_creds
 from mcp.server.fastmcp import FastMCP
@@ -228,121 +218,8 @@ async def test_live_pipeclaw_mcp_upload_attachment_to_card(
     assert payload.get("success") is True
 
 
-def _s3_matrix_enabled() -> bool:
-    return os.environ.get("PIPE_ATTACHMENT_LIVE_S3_MATRIX", "").strip() in (
-        "1",
-        "true",
-        "yes",
-    )
-
-
-@pytest.mark.integration
-@pytest.mark.anyio
-async def test_live_s3_put_mismatched_content_length():
-    """PUT body size must match ``contentLength`` given to createPresignedUrl."""
-    require_live_creds()
-    org = os.environ.get("PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not org:
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not _s3_matrix_enabled():
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 to run S3 PUT matrix tests")
-
-    client = _live_pipefy_client()
-    file_name = f"s3-mismatch-{uuid.uuid4().hex[:10]}.bin"
-    signed_len = 200
-    presigned = await client.create_presigned_url(
-        organization_id=org,
-        file_name=file_name,
-        content_type="application/octet-stream",
-        content_length=signed_len,
-    )
-    url = presigned.get("url")
-    assert isinstance(url, str) and url.strip(), "no presigned url"
-
-    wrong_body = b"x" * 3
-    result = await client.upload_file_to_s3(
-        presigned_url=url.strip(),
-        file_bytes=wrong_body,
-        content_type="application/octet-stream",
-    )
-    code = result.get("status_code", 0)
-    if code < 400:
-        pytest.skip(
-            "Presigned URL did not reject mismatched contentLength in this environment; "
-            "VD-6 still documents the usual AWS 4xx behavior."
-        )
-
-
-@pytest.mark.integration
-@pytest.mark.anyio
-async def test_live_s3_put_expired_presigned_url():
-    """After X-Amz-Expires, PUT should fail (403 typical). Long wait — opt-in."""
-    require_live_creds()
-    org = os.environ.get("PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not org:
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not _s3_matrix_enabled():
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 for S3 matrix tests")
-
-    wait_raw = os.environ.get("PIPE_ATTACHMENT_S3_EXPIRY_WAIT_SECONDS", "").strip()
-    if not wait_raw:
-        pytest.skip(
-            "Set PIPE_ATTACHMENT_S3_EXPIRY_WAIT_SECONDS "
-            "(e.g. 310) to wait past presigned expiry"
-        )
-    wait_sec = int(wait_raw)
-
-    client = _live_pipefy_client()
-    file_name = f"s3-expiry-{uuid.uuid4().hex[:10]}.txt"
-    presigned = await client.create_presigned_url(
-        organization_id=org,
-        file_name=file_name,
-        content_type="text/plain",
-        content_length=4,
-    )
-    url = presigned.get("url")
-    assert isinstance(url, str) and url.strip()
-
-    await asyncio.sleep(wait_sec)
-    result = await client.upload_file_to_s3(
-        presigned_url=url.strip(),
-        file_bytes=b"abcd",
-        content_type="text/plain",
-    )
-    code = result.get("status_code", 0)
-    if code < 400:
-        pytest.skip(
-            "PUT still succeeded after wait; increase PIPE_ATTACHMENT_S3_EXPIRY_WAIT_SECONDS "
-            "past X-Amz-Expires or confirm clock skew."
-        )
-
-
-@pytest.mark.integration
-@pytest.mark.anyio
-async def test_live_s3_put_omits_content_type_when_signed():
-    """If Content-Type is signed, omitting it on PUT should fail."""
-    require_live_creds()
-    org = os.environ.get("PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not org:
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not _s3_matrix_enabled():
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 for S3 matrix tests")
-
-    client = _live_pipefy_client()
-    file_name = f"s3-no-ctype-{uuid.uuid4().hex[:10]}.txt"
-    body = b"abcd"
-    presigned = await client.create_presigned_url(
-        organization_id=org,
-        file_name=file_name,
-        content_type="text/plain",
-        content_length=len(body),
-    )
-    url = presigned.get("url")
-    assert isinstance(url, str) and url.strip()
-
-    async with httpx.AsyncClient() as http:
-        response = await http.put(url.strip(), content=body)
-    if response.status_code < 400:
-        pytest.skip(
-            "Upload succeeded without Content-Type; signature may not bind it in this environment."
-        )
+# Note: S3 protocol matrix probes (mismatched content-length, expired URL,
+# omitted Content-Type) used to live here but are now unit tests in
+# packages/sdk/tests/services/test_attachment_service.py against a fake S3Uploader.
+# AWS S3 contract behavior is AWS's concern; our concern is how our code reacts
+# to 4xx responses, which the unit tests cover.

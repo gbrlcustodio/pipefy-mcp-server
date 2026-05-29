@@ -14,10 +14,15 @@ from pipefy_sdk.models.ai_automation import (
     UpdateAiAutomationInput,
 )
 from pipefy_sdk.models.attachment import (
-    MAX_ATTACHMENT_SIZE_BYTES,
+    Attachment,
+    AttachmentTarget,
+    AttachmentUploadError,
+    AttachmentUploadResult,
+    AttachmentUploadStep,
+    CardTarget,
+    TableRecordTarget,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
-    assert_attachment_size_within_cap,
     infer_content_type,
 )
 from pipefy_sdk.models.comment import (
@@ -34,25 +39,30 @@ from pipefy_sdk.models.send_task_automation import CreateSendTaskAutomationInput
 from pipefy_sdk.models.validators import NonBlankStr, PipefyId
 
 __all__ = [
+    "Attachment",
+    "AttachmentTarget",
+    "AttachmentUploadError",
+    "AttachmentUploadResult",
+    "AttachmentUploadStep",
     "AutomationConditionInput",
     "AutomationEventParamsInput",
     "BehaviorInput",
+    "CardTarget",
     "CommentInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
     "CreatePortalElementInput",
     "CreateSendTaskAutomationInput",
-    "MAX_ATTACHMENT_SIZE_BYTES",
-    "MemberInvite",
     "DeleteCommentInput",
+    "MemberInvite",
     "NonBlankStr",
     "PipefyId",
+    "TableRecordTarget",
     "UpdateAiAgentInput",
     "UpdateAiAutomationInput",
     "UpdateCommentInput",
     "UpdatePortalElementInput",
     "UploadAttachmentToCardInput",
     "UploadAttachmentToTableRecordInput",
-    "assert_attachment_size_within_cap",
     "infer_content_type",
 ]

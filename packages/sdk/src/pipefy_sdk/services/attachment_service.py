@@ -1,18 +1,32 @@
-"""Presigned URL creation, storage path parsing, and S3 upload via HTTP PUT."""
+"""Attachment uploads: file read, presigned URL, S3 PUT, field update."""
 
 from __future__ import annotations
 
+import asyncio
 import re
-from typing import Any
+from typing import Any, Protocol, assert_never
 from urllib.parse import unquote, urlparse
 
 import httpx
 from httpx import Auth, Timeout
+from pipefy_infra.filesystem import LocalFile, LocalFileError
 
 from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.models.attachment import (
+    _MAX_ATTACHMENT_SIZE_BYTES,
+    Attachment,
+    AttachmentTarget,
+    AttachmentUploadError,
+    AttachmentUploadResult,
+    CardTarget,
+    TableRecordTarget,
+    infer_content_type,
+)
 from pipefy_sdk.queries.attachment_queries import (
     CREATE_PRESIGNED_URL_MUTATION,
 )
+from pipefy_sdk.services.card_service import CardService
+from pipefy_sdk.services.table_service import TableService
 from pipefy_sdk.settings import PipefySettings
 
 _BODY_SNIPPET_MAX_CHARS = 500
@@ -21,32 +35,197 @@ _ALLOWED_UPLOAD_HOST_RE = re.compile(
 )
 
 
-class AttachmentService(BasePipefyClient):
-    """Create upload URLs and PUT file bytes to object storage."""
+class S3Uploader(Protocol):
+    """PUTs file bytes to a presigned URL and returns the HTTP outcome.
+
+    Implementations enforce whatever host policy they need; the service only
+    cares about ``status_code`` and the optional ``body_snippet`` on failure.
+    """
+
+    async def put(
+        self,
+        *,
+        url: str,
+        bytes_: bytes,
+        content_type: str | None,
+    ) -> dict[str, Any]: ...
+
+
+class HttpxS3Uploader:
+    """Default :class:`S3Uploader` backed by ``httpx.AsyncClient``.
+
+    Enforces a host allow-list before issuing the PUT so that a tampered
+    presigned URL cannot send file bytes to an arbitrary host.
+    """
 
     def __init__(
         self,
-        settings: PipefySettings,
         *,
+        allowed_host_pattern: re.Pattern[str],
+        timeout_seconds: int = 60,
+    ) -> None:
+        self._allowed_host_pattern = allowed_host_pattern
+        self._timeout_seconds = timeout_seconds
+
+    async def put(
+        self,
+        *,
+        url: str,
+        bytes_: bytes,
+        content_type: str | None,
+    ) -> dict[str, Any]:
+        host = urlparse(url).hostname or ""
+        if not self._allowed_host_pattern.match(host):
+            raise ValueError(
+                f"Upload URL host '{host}' is not in the allow-list "
+                "(*.amazonaws.com, *.pipefy.com)."
+            )
+        headers: dict[str, str] = {}
+        if content_type is not None:
+            headers["Content-Type"] = content_type
+        async with httpx.AsyncClient(
+            timeout=Timeout(timeout=self._timeout_seconds),
+        ) as client:
+            response = await client.put(url, content=bytes_, headers=headers)
+        result: dict[str, Any] = {"status_code": response.status_code}
+        if response.status_code >= 400:
+            result["body_snippet"] = response.text[:_BODY_SNIPPET_MAX_CHARS]
+        return result
+
+
+class AttachmentService(BasePipefyClient):
+    """Run the full attachment upload pipeline.
+
+    The pipeline reads the local file (enforcing the size cap), requests a
+    presigned URL from Pipefy, PUTs the bytes through an injected
+    :class:`S3Uploader`, parses the storage path, and updates the destination
+    field on either a card or a table record.
+
+    Failures across every step surface as :class:`AttachmentUploadError`
+    carrying ``step`` so surfaces can map to step-aware envelopes.
+    """
+
+    def __init__(
+        self,
+        *,
+        settings: PipefySettings,
         auth: Auth,
+        card_service: CardService,
+        table_service: TableService,
+        s3_uploader: S3Uploader | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
+        self._card_service = card_service
+        self._table_service = table_service
+        self._s3_uploader: S3Uploader = s3_uploader or HttpxS3Uploader(
+            allowed_host_pattern=_ALLOWED_UPLOAD_HOST_RE
+        )
 
-    async def create_presigned_url(
+    async def upload_attachment(
+        self,
+        attachment: Attachment,
+        *,
+        organization_id: str,
+        target: AttachmentTarget,
+    ) -> AttachmentUploadResult:
+        """Upload ``attachment`` to ``target`` via the standard pipeline.
+
+        Raises:
+            AttachmentUploadError: On any pipeline failure (``step`` identifies
+                which stage).
+        """
+        file = LocalFile(attachment.path, max_size_bytes=_MAX_ATTACHMENT_SIZE_BYTES)
+        try:
+            await asyncio.to_thread(file.read)
+        except LocalFileError as exc:
+            raise AttachmentUploadError(str(exc), step="file_read") from exc
+
+        effective_type = attachment.content_type
+        file_name = attachment.name
+        content_length = file.size
+
+        try:
+            presigned = await self._create_presigned_url(
+                organization_id,
+                file_name,
+                effective_type,
+                content_length,
+            )
+        except Exception as exc:
+            raise AttachmentUploadError(
+                f"Presigned URL request failed: {exc}",
+                step="presigned_url",
+            ) from exc
+
+        upload_url = presigned.get("url")
+        download_url = presigned.get("download_url")
+        if not isinstance(upload_url, str) or not upload_url.strip():
+            raise AttachmentUploadError(
+                "Pipefy did not return a presigned upload URL. "
+                "Check organization_id and file_name, then retry.",
+                step="presigned_url",
+            )
+        upload_url = upload_url.strip()
+
+        put_result = await self._s3_uploader.put(
+            url=upload_url,
+            bytes_=file.bytes,
+            content_type=effective_type,
+        )
+        status = put_result.get("status_code", 0)
+        if not isinstance(status, int) or status >= 400:
+            body_snippet = put_result.get("body_snippet")
+            raise AttachmentUploadError(
+                f"S3 upload failed with HTTP {status}.",
+                step="s3_upload",
+                body_snippet=body_snippet if isinstance(body_snippet, str) else None,
+                status_code=status if isinstance(status, int) else None,
+            )
+
+        try:
+            storage_path = self._extract_storage_path(upload_url)
+        except ValueError as exc:
+            raise AttachmentUploadError(str(exc), step="s3_upload") from exc
+
+        try:
+            match target:
+                case CardTarget(card_id=card_id, field_id=field_id):
+                    await self._card_service.update_card_field(
+                        card_id, field_id, [storage_path]
+                    )
+                case TableRecordTarget(
+                    table_record_id=table_record_id, field_id=field_id
+                ):
+                    await self._table_service.set_table_record_field_value(
+                        table_record_id, field_id, [storage_path]
+                    )
+                case _:
+                    assert_never(target)
+        except AttachmentUploadError:
+            raise
+        except Exception as exc:
+            raise AttachmentUploadError(
+                f"Field update failed: {exc}",
+                step="field_update",
+            ) from exc
+
+        return AttachmentUploadResult(
+            file_name=file_name,
+            content_type=effective_type,
+            file_size=content_length,
+            field_id=target.field_id,
+            storage_path=storage_path,
+            download_url=download_url if isinstance(download_url, str) else None,
+        )
+
+    async def _create_presigned_url(
         self,
         organization_id: str,
         file_name: str,
         content_type: str | None = None,
         content_length: int | None = None,
     ) -> dict[str, Any]:
-        """Request a presigned upload URL from Pipefy.
-
-        Args:
-            organization_id: Organization ID.
-            file_name: Target file name for the upload.
-            content_type: Optional MIME type for the object.
-            content_length: Optional size in bytes.
-        """
+        """Request a presigned upload URL from Pipefy."""
         payload = await self.execute_query(
             CREATE_PRESIGNED_URL_MUTATION,
             {
@@ -65,11 +244,8 @@ class AttachmentService(BasePipefyClient):
         }
 
     @staticmethod
-    def extract_storage_path(presigned_url: str) -> str:
-        """Return the object key path from a presigned URL (no host, query, or leading slash).
-
-        Args:
-            presigned_url: Full HTTPS URL including path and optional query string.
+    def _extract_storage_path(presigned_url: str) -> str:
+        """Return the object key path from a presigned URL.
 
         Raises:
             ValueError: If the URL has no non-empty path.
@@ -80,35 +256,13 @@ class AttachmentService(BasePipefyClient):
             raise ValueError("Presigned URL has no object path.")
         return path
 
-    async def upload_file_to_s3(
-        self,
-        presigned_url: str,
-        file_bytes: bytes,
-        content_type: str | None = None,
-    ) -> dict[str, Any]:
-        """PUT file bytes to the given presigned URL.
 
-        Args:
-            presigned_url: Destination URL (not echoed back on failure).
-            file_bytes: Raw file content.
-            content_type: Optional ``Content-Type`` header for the request.
-        """
-        host = urlparse(presigned_url).hostname or ""
-        if not _ALLOWED_UPLOAD_HOST_RE.match(host):
-            raise ValueError(
-                f"Upload URL host '{host}' is not in the allow-list "
-                "(*.amazonaws.com, *.pipefy.com)."
-            )
-        headers: dict[str, str] = {}
-        if content_type is not None:
-            headers["Content-Type"] = content_type
-        async with httpx.AsyncClient(
-            timeout=Timeout(timeout=60),
-        ) as client:
-            response = await client.put(
-                presigned_url, content=file_bytes, headers=headers
-            )
-        result: dict[str, Any] = {"status_code": response.status_code}
-        if response.status_code >= 400:
-            result["body_snippet"] = response.text[:_BODY_SNIPPET_MAX_CHARS]
-        return result
+# ``infer_content_type`` is re-exported here for callers that previously imported it
+# from ``pipefy_sdk.services.attachment_service``; the canonical location is
+# ``pipefy_sdk.models.attachment``.
+__all__ = [
+    "AttachmentService",
+    "HttpxS3Uploader",
+    "S3Uploader",
+    "infer_content_type",
+]

@@ -4,14 +4,18 @@ from __future__ import annotations
 
 __version__ = "0.2.0-beta.1"
 
-from pipefy_sdk.attachment import Attachment
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
 from pipefy_sdk.models import (
-    MAX_ATTACHMENT_SIZE_BYTES,
+    Attachment,
+    AttachmentTarget,
+    AttachmentUploadError,
+    AttachmentUploadResult,
+    AttachmentUploadStep,
     AutomationConditionInput,
     AutomationEventParamsInput,
     BehaviorInput,
+    CardTarget,
     CommentInput,
     CreateAiAgentInput,
     CreateAiAutomationInput,
@@ -21,13 +25,13 @@ from pipefy_sdk.models import (
     MemberInvite,
     NonBlankStr,
     PipefyId,
+    TableRecordTarget,
     UpdateAiAgentInput,
     UpdateAiAutomationInput,
     UpdateCommentInput,
     UpdatePortalElementInput,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
-    assert_attachment_size_within_cap,
     infer_content_type,
 )
 from pipefy_sdk.models.form import create_form_model
@@ -61,6 +65,10 @@ __all__ = [
     "AiAgentGraphPayload",
     "AiAutomationService",
     "Attachment",
+    "AttachmentTarget",
+    "AttachmentUploadError",
+    "AttachmentUploadResult",
+    "AttachmentUploadStep",
     "UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS",
     "UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE",
     "AutomationActionRow",
@@ -71,6 +79,7 @@ __all__ = [
     "AutomationRuleSummary",
     "BehaviorInput",
     "CardSearch",
+    "CardTarget",
     "CommentInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
@@ -79,7 +88,6 @@ __all__ = [
     "DeleteCommentInput",
     "download_bytes",
     "InternalApiClient",
-    "MAX_ATTACHMENT_SIZE_BYTES",
     "MePayload",
     "MemberInvite",
     "NonBlankStr",
@@ -88,13 +96,13 @@ __all__ = [
     "PipefyError",
     "PipefyId",
     "PipefySettings",
+    "TableRecordTarget",
     "UpdateAiAgentInput",
     "UpdateAiAutomationInput",
     "UpdateCommentInput",
     "UpdatePortalElementInput",
     "UploadAttachmentToCardInput",
     "UploadAttachmentToTableRecordInput",
-    "assert_attachment_size_within_cap",
     "copy_card_search",
     "create_form_model",
     "format_service_account_removal_block_message",

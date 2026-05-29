@@ -111,12 +111,11 @@ If internal_api returns nested `success: false` (e.g. `updateSubPortalElement.su
 
 ### Integration testing
 
-`@pytest.mark.integration` sub-portal tests need a token with **`manage_portals`** on the target org. Default org **28** often returns `PERMISSION_DENIED` on portal writes.
+`@pytest.mark.integration` sub-portal tests need a token with **`manage_portals`** on the target org. Use an org where your token has portal write access — the default org on many tokens often returns `PERMISSION_DENIED` on portal writes.
 
-| Setting | PipeClaw smoke org |
-|---------|-------------------|
-| Numeric org id | **`302398434`** |
-| `PIPEFY_PORTAL_ORG_UUID` | `396b6bb2-8d01-4bc6-aed9-14442a7a03ef` (example; set in local `.env`) |
+| Setting | Notes |
+|---------|--------|
+| `PIPEFY_PORTAL_ORG_UUID` | Organization UUID for portal SDK smoke (set in local `.env` only — do not commit real ids). |
 | `PIPEFY_BASE_URL` | e.g. `https://app.pipefy.com` (drives Interfaces + internal_api URLs) |
 
 See [setup.md](../../setup.md#quick-start) and [Testing](#testing) below.
@@ -190,7 +189,7 @@ Additional element types may appear; treat unknown keys as opaque JSON.
 | Mode | Org / pipe identifiers |
 |------|-------------------------|
 | **Unit** (`pytest -m "not integration"`) | Fictional fixtures only — [`fixture_ids.py`](../../../packages/sdk/tests/_shared/fixture_ids.py). Never hardcode production org UUIDs in test code. |
-| **Integration** (`pytest -m integration`) | Set `PIPEFY_PORTAL_ORG_UUID` in local [`.env`](../../../.env.example) (org where the token has `manage_portals` — e.g. PipeClaw org **`302398434`**, not default org **28**). Set `PIPEFY_BASE_URL` for live smoke. See [setup.md](../../setup.md#quick-start). |
+| **Integration** (`pytest -m integration`) | Set `PIPEFY_PORTAL_ORG_UUID` in local [`.env`](../../../.env.example) (org where the token has `manage_portals`). Set `PIPEFY_BASE_URL` for live smoke. See [setup.md](../../setup.md#quick-start). |
 
 ---
 

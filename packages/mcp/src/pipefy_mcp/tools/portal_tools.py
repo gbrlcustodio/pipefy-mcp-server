@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
@@ -11,6 +11,7 @@ from pipefy_sdk import PipefyClient, PipefyId
 from pipefy_sdk.models.portal import (
     CreatePortalElementInput,
     PortalElementType,
+    PortalVisibility,
     UpdatePortalElementInput,
 )
 from pydantic import ValidationError
@@ -21,16 +22,17 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
     build_success_payload,
 )
 from pipefy_mcp.tools.portal_tool_helpers import (
+    finalize_internal_api_mutation,
     map_portal_error_to_message,
     portal_element_validation_error,
+    run_sub_portal_internal_api_tool,
     validate_portal_optional_string,
     validate_portal_page_index,
     validate_sort_page_ids_no_duplicates,
+    validate_tool_ids,
 )
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
-
-PortalVisibility = Literal["internal", "private", "public"]
 
 
 class PortalTools:
@@ -794,32 +796,27 @@ class PortalTools:
                 element_id: Page element UUID (e.g. templated ``forms`` slot).
                 sub_portal_uuid: Sub-portal UUID to attach.
             """
-            portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
-            if err is not None:
-                return err
-            element_id, err = validate_tool_id(element_id, "element_id")
-            if err is not None:
-                return err
-            sub_portal_uuid, err = validate_tool_id(sub_portal_uuid, "sub_portal_uuid")
-            if err is not None:
-                return err
-            await ctx.debug(
-                f"update_sub_portal_element: portal_uuid={portal_uuid}, "
-                f"element_id={element_id}, sub_portal_uuid={sub_portal_uuid}"
-            )
-            try:
-                result = await client.update_sub_portal_element(
-                    portal_uuid,
-                    element_id,
-                    sub_portal_uuid,
-                )
-            except Exception as exc:  # noqa: BLE001
-                return build_error_payload(map_portal_error_to_message(exc))
-            if result.get("updateSubPortalElement", {}).get("success"):
-                return build_success_payload(result, include_parsed=True)
-            return build_error_payload(
-                f"Failed to attach sub-portal '{sub_portal_uuid}' to element "
-                f"'{element_id}'. Please try again or contact support."
+            return await run_sub_portal_internal_api_tool(
+                ids={
+                    "portal_uuid": portal_uuid,
+                    "element_id": element_id,
+                    "sub_portal_uuid": sub_portal_uuid,
+                },
+                debug_message=(
+                    "update_sub_portal_element: portal_uuid={portal_uuid}, "
+                    "element_id={element_id}, sub_portal_uuid={sub_portal_uuid}"
+                ),
+                ctx_debug=ctx.debug,
+                invoke=lambda ids: client.update_sub_portal_element(
+                    ids["portal_uuid"],
+                    ids["element_id"],
+                    ids["sub_portal_uuid"],
+                ),
+                mutation_key="updateSubPortalElement",
+                failure_message=(
+                    "Failed to attach sub-portal '{sub_portal_uuid}' to element "
+                    "'{element_id}'. Please try again or contact support."
+                ),
             )
 
         @mcp.tool(
@@ -842,32 +839,27 @@ class PortalTools:
                 element_id: Page element UUID (e.g. templated ``forms`` slot).
                 sub_portal_uuid: Sub-portal UUID to publish on the element.
             """
-            portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
-            if err is not None:
-                return err
-            element_id, err = validate_tool_id(element_id, "element_id")
-            if err is not None:
-                return err
-            sub_portal_uuid, err = validate_tool_id(sub_portal_uuid, "sub_portal_uuid")
-            if err is not None:
-                return err
-            await ctx.debug(
-                f"publish_sub_portal: portal_uuid={portal_uuid}, "
-                f"element_id={element_id}, sub_portal_uuid={sub_portal_uuid}"
-            )
-            try:
-                result = await client.publish_sub_portal(
-                    portal_uuid,
-                    element_id,
-                    sub_portal_uuid,
-                )
-            except Exception as exc:  # noqa: BLE001
-                return build_error_payload(map_portal_error_to_message(exc))
-            if result.get("updateSubPortalElement", {}).get("success"):
-                return build_success_payload(result, include_parsed=True)
-            return build_error_payload(
-                f"Failed to publish sub-portal '{sub_portal_uuid}' on element "
-                f"'{element_id}'. Please try again or contact support."
+            return await run_sub_portal_internal_api_tool(
+                ids={
+                    "portal_uuid": portal_uuid,
+                    "element_id": element_id,
+                    "sub_portal_uuid": sub_portal_uuid,
+                },
+                debug_message=(
+                    "publish_sub_portal: portal_uuid={portal_uuid}, "
+                    "element_id={element_id}, sub_portal_uuid={sub_portal_uuid}"
+                ),
+                ctx_debug=ctx.debug,
+                invoke=lambda ids: client.publish_sub_portal(
+                    ids["portal_uuid"],
+                    ids["element_id"],
+                    ids["sub_portal_uuid"],
+                ),
+                mutation_key="updateSubPortalElement",
+                failure_message=(
+                    "Failed to publish sub-portal '{sub_portal_uuid}' on element "
+                    "'{element_id}'. Please try again or contact support."
+                ),
             )
 
         @mcp.tool(
@@ -888,28 +880,25 @@ class PortalTools:
                 portal_uuid: Main portal interface UUID.
                 element_id: Page element UUID to unpublish.
             """
-            portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
-            if err is not None:
-                return err
-            element_id, err = validate_tool_id(element_id, "element_id")
-            if err is not None:
-                return err
-            await ctx.debug(
-                f"unpublish_sub_portal: portal_uuid={portal_uuid}, "
-                f"element_id={element_id}"
-            )
-            try:
-                result = await client.unpublish_sub_portal(
-                    portal_uuid,
-                    element_id,
-                )
-            except Exception as exc:  # noqa: BLE001
-                return build_error_payload(map_portal_error_to_message(exc))
-            if result.get("updateSubPortalElement", {}).get("success"):
-                return build_success_payload(result, include_parsed=True)
-            return build_error_payload(
-                f"Failed to unpublish sub-portal on element '{element_id}'. "
-                "Please try again or contact support."
+            return await run_sub_portal_internal_api_tool(
+                ids={
+                    "portal_uuid": portal_uuid,
+                    "element_id": element_id,
+                },
+                debug_message=(
+                    "unpublish_sub_portal: portal_uuid={portal_uuid}, "
+                    "element_id={element_id}"
+                ),
+                ctx_debug=ctx.debug,
+                invoke=lambda ids: client.unpublish_sub_portal(
+                    ids["portal_uuid"],
+                    ids["element_id"],
+                ),
+                mutation_key="updateSubPortalElement",
+                failure_message=(
+                    "Failed to unpublish sub-portal on element '{element_id}'. "
+                    "Please try again or contact support."
+                ),
             )
 
         @mcp.tool(
@@ -935,22 +924,21 @@ class PortalTools:
                 element_id: Page element UUID to detach.
                 confirm: Set to True to execute the detach (step 2).
             """
-            portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
-            if err is not None:
-                return err
-            element_id, err = validate_tool_id(element_id, "element_id")
-            if err is not None:
-                return err
+            ids, err = validate_tool_ids(
+                {"portal_uuid": portal_uuid, "element_id": element_id}
+            )
+            if err is not None or ids is None:
+                return err or build_error_payload("Invalid tool IDs.")
             await ctx.debug(
-                f"delete_sub_portal_element: portal_uuid={portal_uuid}, "
-                f"element_id={element_id}"
+                "delete_sub_portal_element: portal_uuid={portal_uuid}, "
+                "element_id={element_id}".format(**ids)
             )
             guard = await check_destructive_confirmation(
                 ctx,
                 confirm=confirm,
                 resource_descriptor=(
-                    f"sub-portal element link (element UUID: {element_id}) "
-                    f"in portal (UUID: {portal_uuid})"
+                    f"sub-portal element link (element UUID: {ids['element_id']}) "
+                    f"in portal (UUID: {ids['portal_uuid']})"
                 ),
             )
             if guard is not None:
@@ -958,17 +946,19 @@ class PortalTools:
 
             try:
                 result = await client.delete_sub_portal_element(
-                    portal_uuid,
-                    element_id,
+                    ids["portal_uuid"],
+                    ids["element_id"],
                 )
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(map_portal_error_to_message(exc))
 
-            if result.get("deleteSubPortalElement", {}).get("success"):
-                return build_success_payload(result, include_parsed=True)
-            return build_error_payload(
-                f"Failed to detach sub-portal from element '{element_id}'. "
-                "Please try again or contact support."
+            return finalize_internal_api_mutation(
+                result,
+                "deleteSubPortalElement",
+                (
+                    "Failed to detach sub-portal from element '{element_id}'. "
+                    "Please try again or contact support."
+                ).format(**ids),
             )
 
         @mcp.tool(
@@ -992,26 +982,30 @@ class PortalTools:
                 sub_portal_uuid: Sub-portal UUID to delete permanently.
                 confirm: Set to True to execute the deletion (step 2).
             """
-            sub_portal_uuid, err = validate_tool_id(sub_portal_uuid, "sub_portal_uuid")
-            if err is not None:
-                return err
-            await ctx.debug(f"delete_sub_portal: sub_portal_uuid={sub_portal_uuid}")
+            ids, err = validate_tool_ids({"sub_portal_uuid": sub_portal_uuid})
+            if err is not None or ids is None:
+                return err or build_error_payload("Invalid tool IDs.")
+            await ctx.debug(
+                "delete_sub_portal: sub_portal_uuid={sub_portal_uuid}".format(**ids)
+            )
             guard = await check_destructive_confirmation(
                 ctx,
                 confirm=confirm,
-                resource_descriptor=f"sub-portal (UUID: {sub_portal_uuid})",
+                resource_descriptor=f"sub-portal (UUID: {ids['sub_portal_uuid']})",
             )
             if guard is not None:
                 return guard
 
             try:
-                result = await client.delete_sub_portal(sub_portal_uuid)
+                result = await client.delete_sub_portal(ids["sub_portal_uuid"])
             except Exception as exc:  # noqa: BLE001
                 return build_error_payload(map_portal_error_to_message(exc))
 
-            if result.get("deleteSubPortalInterface", {}).get("success"):
-                return build_success_payload(result, include_parsed=True)
-            return build_error_payload(
-                f"Failed to delete sub-portal '{sub_portal_uuid}'. "
-                "Please try again or contact support."
+            return finalize_internal_api_mutation(
+                result,
+                "deleteSubPortalInterface",
+                (
+                    "Failed to delete sub-portal '{sub_portal_uuid}'. "
+                    "Please try again or contact support."
+                ).format(**ids),
             )

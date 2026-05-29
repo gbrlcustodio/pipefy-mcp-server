@@ -30,7 +30,24 @@ from gql.transport.exceptions import TransportQueryError
 
 from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.services.internal_api_client import InternalApiClient
-from pipefy_sdk.services.portal_service import PortalService
+from pipefy_sdk.services.portal_service import (
+    INTERNAL_API_CLIENT_NOT_CONFIGURED,
+    PortalService,
+)
+
+
+def _skip_or_fail_internal_api_error(exc: BaseException, *, context: str) -> None:
+    """Skip live API flakes; fail when internal_api was never wired."""
+    if isinstance(exc, ValueError) and str(exc) == INTERNAL_API_CLIENT_NOT_CONFIGURED:
+        pytest.fail(
+            f"{context}: PortalService internal_api client was not wired "
+            "(PipefyClient.set_internal_api_client must forward to PortalService).",
+            pytrace=False,
+        )
+    if isinstance(exc, ValueError):
+        pytest.skip(f"{context} (internal_api): {exc}")
+    pytest.skip(f"{context} (internal_api): {exc}")
+
 
 _PORTAL_ORG_SKIP = (
     "Set PIPEFY_PORTAL_ORG_UUID to an org where the token has manage_portals."
@@ -337,9 +354,14 @@ async def test_live_publish_sub_portal_cycle(
                 element_id,
                 sub_portal_uuid,
             )
-        except (TransportQueryError, ValueError) as exc:
+        except TransportQueryError as exc:
             pytest.skip(
                 f"publish_sub_portal failed on org {org_uuid} (internal_api): {exc}"
+            )
+        except ValueError as exc:
+            _skip_or_fail_internal_api_error(
+                exc,
+                context=f"publish_sub_portal failed on org {org_uuid}",
             )
 
         after_publish = await live_portal_service.get_portal(portal_uuid)
@@ -352,9 +374,14 @@ async def test_live_publish_sub_portal_cycle(
 
         try:
             await live_portal_service.unpublish_sub_portal(portal_uuid, element_id)
-        except (TransportQueryError, ValueError) as exc:
+        except TransportQueryError as exc:
             pytest.skip(
                 f"unpublish_sub_portal failed on org {org_uuid} (internal_api): {exc}"
+            )
+        except ValueError as exc:
+            _skip_or_fail_internal_api_error(
+                exc,
+                context=f"unpublish_sub_portal failed on org {org_uuid}",
             )
 
         after_unpublish = await live_portal_service.get_portal(portal_uuid)

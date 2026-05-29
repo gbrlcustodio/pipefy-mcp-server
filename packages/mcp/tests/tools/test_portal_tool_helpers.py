@@ -7,6 +7,7 @@ from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk.exceptions import PortalPermissionError
 
 from pipefy_mcp.tools.portal_tool_helpers import (
+    finalize_internal_api_mutation,
     map_portal_error_to_message,
     validate_portal_page_index,
     validate_sort_page_ids_no_duplicates,
@@ -64,6 +65,18 @@ def test_validate_portal_page_index_rejects_invalid(index: int | bool) -> None:
 def test_validate_portal_page_index_accepts_zero_and_none() -> None:
     assert validate_portal_page_index(None) is None
     assert validate_portal_page_index(0) is None
+
+
+@pytest.mark.unit
+def test_finalize_internal_api_mutation_treats_explicit_null_as_failure() -> None:
+    """Explicit null mutation payloads must not raise AttributeError on .get('success')."""
+    payload = finalize_internal_api_mutation(
+        {"updateSubPortalElement": None},
+        "updateSubPortalElement",
+        "mutation failed",
+    )
+    assert payload["success"] is False
+    assert "mutation failed" in str(payload["error"]["message"])
 
 
 @pytest.mark.unit

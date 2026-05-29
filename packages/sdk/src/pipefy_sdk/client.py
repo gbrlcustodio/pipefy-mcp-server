@@ -147,6 +147,7 @@ class PipefyClient:
             client: Configured :class:`InternalApiClient` instance.
         """
         self._internal_api_client = client
+        self._portal_service.set_internal_api_client(client)
 
     async def get_pipe(self, pipe_id: str | int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""

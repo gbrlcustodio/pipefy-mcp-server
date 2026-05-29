@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID
 from graphql import print_ast
 from pipefy_auth import StaticBearerAuth
 

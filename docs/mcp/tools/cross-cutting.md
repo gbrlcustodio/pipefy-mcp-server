@@ -32,7 +32,7 @@ On cross-pipe operations (relations, AI agents), errors carrying `extensions.cod
 
 ### Card reads and `PERMISSION_DENIED`
 
-Pipefy often returns **`PERMISSION_DENIED`** for `card(id: …)` when the card was **deleted** or the token cannot see it — the API does not always distinguish those cases. After a successful `delete_card`, `pipefy card get` may still surface `PIPEFY_GRAPHQL_URL` errors with that code; treat it as “inaccessible or removed,” not necessarily a failed delete. The CLI adds a short hint on `pipefy card get` when this code appears.
+Pipefy often returns **`PERMISSION_DENIED`** for `card(id: …)` when the card was **deleted** or the token cannot see it — the API does not always distinguish those cases. After a successful `delete_card`, `pipefy card get` may still surface `PERMISSION_DENIED` for that id; treat it as “inaccessible or removed,” not necessarily a failed delete. The CLI adds a short hint on `pipefy card get` when this code appears.
 
 ## Service account protection
 

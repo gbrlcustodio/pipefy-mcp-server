@@ -15,7 +15,7 @@ from typing import Any
 
 from gql import gql as parse_gql
 from httpx import Auth
-from pipefy_infra import validate_https_service_endpoint_url
+from pipefy_infra import security
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.settings import PipefySettings
@@ -51,7 +51,7 @@ class InternalApiClient(BasePipefyClient):
             auth: Pre-constructed ``httpx.Auth`` (e.g. from ``pipefy_auth.resolve``).
             allow_insecure_urls: When True, allow http and internal hosts.
         """
-        validate_https_service_endpoint_url(
+        security.validate_https_url(
             url.strip(), "internal_api URL", allow_insecure=allow_insecure_urls
         )
         # ``url`` already SSRF-validated above; ``allow_insecure_urls=True`` on

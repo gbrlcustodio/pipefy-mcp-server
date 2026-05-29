@@ -742,9 +742,30 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_pipefy_client_upload_attachment_methods_delegate_to_sdk_helpers():
-    """Facade forwards upload helpers to ``attachment_upload`` module functions."""
-    from unittest.mock import patch
+async def test_set_internal_api_client_forwards_to_portal_service(mock_settings):
+    """Sub-portal mutations on PortalService use the same internal_api client as the facade."""
+    from pipefy_sdk.services.internal_api_client import InternalApiClient
+
+    client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
+    internal = MagicMock(spec=InternalApiClient)
+    internal.execute_query = AsyncMock(
+        return_value={"updateSubPortalElement": {"success": True}}
+    )
+    client.set_internal_api_client(internal)
+
+    result = await client.publish_sub_portal("portal-1", "element-2", "sub-3")
+
+    internal.execute_query.assert_awaited()
+    assert result == {"updateSubPortalElement": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_pipefy_client_upload_attachment_delegates_to_attachment_service():
+    """``client.upload_attachment`` forwards to ``AttachmentService.upload_attachment``."""
+    from pathlib import Path
+
+    from pipefy_sdk import Attachment, CardTarget
 
     sample = {
         "file_name": "x.txt",
@@ -755,42 +776,29 @@ async def test_pipefy_client_upload_attachment_methods_delegate_to_sdk_helpers()
         "download_url": None,
     }
 
-    with (
-        patch(
-            "pipefy_sdk.client.upload_attachment_to_card_field",
-            new_callable=AsyncMock,
-            return_value=sample,
-        ) as card_m,
-        patch(
-            "pipefy_sdk.client.upload_attachment_to_table_record_field",
-            new_callable=AsyncMock,
-            return_value=sample,
-        ) as rec_m,
-    ):
-        client = PipefyClient.__new__(PipefyClient)
-        out_card = await client.upload_attachment_to_card_field(
-            organization_id="o",
-            card_id="c",
-            field_id="f1",
-            file_name="x.txt",
-            file_bytes=b"abc",
-        )
-        assert out_card == sample
-        card_m.assert_awaited_once()
-        assert card_m.await_args.kwargs["organization_id"] == "o"
-        assert card_m.await_args.kwargs["card_id"] == "c"
-        assert card_m.await_args.kwargs["file_bytes"] == b"abc"
+    attachment_service = AsyncMock()
+    attachment_service.upload_attachment = AsyncMock(return_value=sample)
 
-        out_rec = await client.upload_attachment_to_table_record_field(
-            organization_id="o",
-            table_record_id="t1",
-            field_id="f1",
-            file_name="x.txt",
-            file_bytes=b"abc",
-        )
-        assert out_rec == sample
-        rec_m.assert_awaited_once()
-        assert rec_m.await_args.kwargs["table_record_id"] == "t1"
+    client = PipefyClient.__new__(PipefyClient)
+    client._attachment_service = attachment_service
+
+    attachment = Attachment(path=Path("/tmp/x.txt"))
+    target = CardTarget(card_id="c", field_id="f1")
+    out = await client.upload_attachment(attachment, organization_id="o", target=target)
+
+    assert out == sample
+    attachment_service.upload_attachment.assert_awaited_once_with(
+        attachment, organization_id="o", target=target
+    )
+
+
+@pytest.mark.unit
+def test_attachment_service_receives_card_and_table_services_from_facade():
+    """PipefyClient wires its own card_service and table_service into AttachmentService."""
+    settings = PipefySettings(base_url="https://api.pipefy.com")
+    client = PipefyClient(settings=settings, auth=StaticBearerAuth("t"))
+    assert client._attachment_service._card_service is client._card_service
+    assert client._attachment_service._table_service is client._table_service
 
 
 @pytest.mark.unit

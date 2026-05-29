@@ -235,6 +235,26 @@ def test_keychain_backend_rejects_unknown_value(
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("env_value", "expected"),
+    [
+        ("AUTO", "auto"),
+        (" AUTO ", "auto"),
+        ("File", "file"),
+        ("FILE", "file"),
+        ("\tauto\n", "auto"),
+    ],
+)
+def test_keychain_backend_normalizes_case_and_whitespace(
+    monkeypatch: pytest.MonkeyPatch, env_value: str, expected: str
+):
+    """``_normalize_keychain_backend`` strip+lowers so copy-paste env values still match the Literal."""
+    monkeypatch.setenv("PIPEFY_KEYCHAIN_BACKEND", env_value)
+    settings = AuthSettings()
+    assert settings.keychain_backend == expected
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize("padded", [" 1 ", " true ", "\tfalse\n"])
 def test_keychain_backend_and_kill_switch_strip_whitespace(
     monkeypatch: pytest.MonkeyPatch, padded: str

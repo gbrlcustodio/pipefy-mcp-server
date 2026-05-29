@@ -1,8 +1,8 @@
 # Portal
 
-Read and manage Pipefy portals (Interfaces schema): list org portals, fetch detail, create/update/delete portal metadata, manage pages (create, update, delete, sort, layout), and manage page elements (create, update, delete, duplicate). **14 tools.**
+Read and manage Pipefy portals (Interfaces schema): list org portals, fetch detail, create/update/delete portal metadata, manage pages (create, update, delete, sort, layout), manage page elements (create, update, delete, duplicate), and manage sub-portals (create, attach, publish, unpublish, detach, delete). **20 tools.**
 
-Portal tools call the **Interfaces** GraphQL endpoint (`<PIPEFY_BASE_URL>/graphql/interfaces`, default `https://app.pipefy.com/graphql/interfaces`), not the public `/graphql` schema used by most pipe/card tools.
+Most portal tools call the **Interfaces** GraphQL endpoint (`<PIPEFY_BASE_URL>/graphql/interfaces`, default `https://app.pipefy.com/graphql/interfaces`), not the public `/graphql` schema used by most pipe/card tools. Sub-portal **attach**, **publish**, **unpublish**, **detach**, and **delete** use the **internal_api** endpoint (`<PIPEFY_BASE_URL>/internal_api`); only **`create_sub_portal`** uses Interfaces (`createSubPortal`).
 
 ---
 
@@ -19,7 +19,14 @@ See [Pipefy IDs in pipes & cards](pipes-and-cards.md#pipefy-ids-type-safety) for
 
 ## Main vs sub-portals
 
-Each organization has **at most one main portal** (`subType: portal`). Additional entries in `list_portals` may be **sub-portals**. Use `get_portal` for page layout, elements, `published`, and nested `subPortals`.
+Each organization has **at most one main portal** (`subType: portal`). Additional entries in `list_portals` may be **sub-portals**. Use `get_portal` for page layout, elements, and nested `subPortals`.
+
+| Surface | `published` meaning |
+|---------|---------------------|
+| **Main portal** | Always `true` on `get_portal` (Interfaces invariant). **Public** hub access is **`update_portal(visibility="public")`**, not the `published` flag. |
+| **Sub-portal** | Visibility is **`get_portal` → `subPortals[].published`** after attach/publish on a main-portal page element. |
+
+Do **not** use `createElement(type: subPortal)` to publish — live API expects wiring an existing **`forms`** slot via **`updateSubPortalElement`** (internal_api). See [Sub-portals](#sub-portals) below.
 
 ---
 
@@ -41,6 +48,12 @@ Each organization has **at most one main portal** (`subType: portal`). Additiona
 | `update_portal_element` | No | Replace element metadata in full (`element_id`, `page_id`, `type`, complete `metadata`). |
 | `delete_portal_element` | No | Delete a page element (**irreversible**). `destructiveHint=True`; CLI `--yes`. |
 | `duplicate_portal_element` | No | Duplicate an element on the **same** page (`element_id`, `portal_uuid`, `page_id` = source portal/page). |
+| `create_sub_portal` | No | Create a sub-portal under a main portal (`main_portal_uuid`, optional `name`). Interfaces `createSubPortal`. |
+| `update_sub_portal_element` | No | Attach a sub-portal to a main-portal page element (`portal_uuid`, `element_id`, `sub_portal_uuid`). internal_api `updateSubPortalElement`. |
+| `publish_sub_portal` | No | Publish on a templated **`forms`** element (`portal_uuid`, `element_id`, `sub_portal_uuid`). Same mutation as attach with `subPortalUuid` set. |
+| `unpublish_sub_portal` | No | Unpublish from an element (`portal_uuid`, `element_id`). internal_api `updateSubPortalElement(subPortalUuid: null)`. |
+| `delete_sub_portal_element` | No | Detach element wiring (**irreversible** for the link). `destructiveHint=True`; CLI `sub-portal detach --yes`. |
+| `delete_sub_portal` | No | Delete the sub-portal interface (**irreversible**). `destructiveHint=True`; CLI `sub-portal delete --yes`. |
 
 **Layout caveat (Pipefy UI):** `createElement` does not update the page grid; `duplicateElement` appends layout rows; `deleteElement` does not prune layout unless you pass an updated `layout`. Orphan layout references can crash the portal viewer (HTTP 500). Prefer smoke on disposable pages and delete them after tests.
 
@@ -54,6 +67,58 @@ MCP agents must use the same two-step pattern as other `delete_*` tools:
 2. **Execute:** `delete_portal(portal_uuid="…", confirm=true)` — only after human approval.
 
 If GraphQL returns `deleteInterface.success: false`, the tool responds with `{ success: false }` (not a success envelope).
+
+---
+
+## Sub-portals
+
+Six write tools (+ read via `get_portal` / `list_portals`) cover sub-portal lifecycle on a main portal.
+
+### Endpoints
+
+| MCP tool | GraphQL / API | Endpoint |
+|----------|---------------|----------|
+| `create_sub_portal` | `createSubPortal` | Interfaces `/graphql/interfaces` |
+| `update_sub_portal_element` | `updateSubPortalElement` | internal_api |
+| `publish_sub_portal` | `updateSubPortalElement` (with `subPortalUuid`) | internal_api |
+| `unpublish_sub_portal` | `updateSubPortalElement` (`subPortalUuid: null`) | internal_api |
+| `delete_sub_portal_element` | `deleteSubPortalElement` | internal_api |
+| `delete_sub_portal` | `deleteSubPortalInterface` | internal_api |
+
+Variables on internal_api mutations use camelCase: `portalUuid`, `elementId`, `subPortalUuid`.
+
+### Publish workflow
+
+1. **`create_sub_portal(main_portal_uuid, name=…)`** — obtain sub-portal UUID (`subPortal { id name }` in the response).
+2. **`get_portal(portal_uuid=…)`** — find a templated main-portal page with **`forms`** elements; note `element_id`.
+3. **`update_sub_portal_element`** (attach) or **`publish_sub_portal`** — both call `updateSubPortalElement` with `subPortalUuid` set on that element.
+4. **`get_portal`** again — assert target entry in **`subPortals[].published`** is `true`.
+
+**Unpublish:** **`unpublish_sub_portal(portal_uuid, element_id)`** sends `subPortalUuid: null` on `updateSubPortalElement`. Integration tests confirm **`subPortals[].published`** becomes `false` without deleting the sub-portal entity.
+
+**Detach vs unpublish:** MCP **`delete_sub_portal_element`** (CLI **`pipefy portal sub-portal detach --yes`**) calls **`deleteSubPortalElement`** and removes element wiring entirely — use when you need to clear the slot, not only hide the sub-portal. Unpublish keeps the sub-portal and only clears the published link on the element.
+
+### Destructive MCP (`delete_sub_portal`, `delete_sub_portal_element`)
+
+Same two-step pattern as `delete_portal`:
+
+1. **Preview:** call with default `confirm=false` — returns `requires_confirmation: true`; **no** API call.
+2. **Execute:** `confirm=true` after explicit approval.
+
+CLI uses **`--yes`** (`confirm_destructive`) on **`sub-portal delete`** and **`sub-portal detach`**.
+
+If internal_api returns nested `success: false` (e.g. `updateSubPortalElement.success`), the MCP tool responds with top-level `{ success: false }` and an actionable `error.message`.
+
+### Integration testing
+
+`@pytest.mark.integration` sub-portal tests need a token with **`manage_portals`** on the target org. Use an org where your token has portal write access — the default org on many tokens often returns `PERMISSION_DENIED` on portal writes.
+
+| Setting | Notes |
+|---------|--------|
+| `PIPEFY_PORTAL_ORG_UUID` | Organization UUID for portal SDK smoke (set in local `.env` only — do not commit real ids). |
+| `PIPEFY_BASE_URL` | e.g. `https://app.pipefy.com` (drives Interfaces + internal_api URLs) |
+
+See [setup.md](../../setup.md#quick-start) and [Testing](#testing) below.
 
 ---
 
@@ -110,6 +175,12 @@ Additional element types may appear; treat unknown keys as opaque JSON.
 | `update_portal_element` | `pipefy portal element update <element-uuid> <page-uuid> --type link --metadata '{…}'` |
 | `delete_portal_element` | `pipefy portal element delete <element-uuid> <page-uuid> --yes` |
 | `duplicate_portal_element` | `pipefy portal element duplicate --element-id <uuid> --portal-uuid <uuid> --page-id <uuid>` |
+| `create_sub_portal` | `pipefy portal sub-portal create --portal-uuid <main-uuid> [--name …]` |
+| `update_sub_portal_element` | `pipefy portal sub-portal attach <portal-uuid> <element-id> <sub-portal-uuid>` |
+| `publish_sub_portal` | `pipefy portal sub-portal publish <portal-uuid> <element-id> <sub-portal-uuid>` |
+| `unpublish_sub_portal` | `pipefy portal sub-portal unpublish <portal-uuid> <element-id>` |
+| `delete_sub_portal_element` | `pipefy portal sub-portal detach <portal-uuid> <element-id> --yes` |
+| `delete_sub_portal` | `pipefy portal sub-portal delete <sub-portal-uuid> --yes` |
 
 ---
 
@@ -118,7 +189,7 @@ Additional element types may appear; treat unknown keys as opaque JSON.
 | Mode | Org / pipe identifiers |
 |------|-------------------------|
 | **Unit** (`pytest -m "not integration"`) | Fictional fixtures only — [`fixture_ids.py`](../../../packages/sdk/tests/_shared/fixture_ids.py). Never hardcode production org UUIDs in test code. |
-| **Integration** (`pytest -m integration`) | Set `PIPEFY_PORTAL_ORG_UUID` in local [`.env`](../../../.env.example) (org where the token has `manage_portals`). See [setup.md](../../setup.md#quick-start). |
+| **Integration** (`pytest -m integration`) | Set `PIPEFY_PORTAL_ORG_UUID` in local [`.env`](../../../.env.example) (org where the token has `manage_portals`). Set `PIPEFY_BASE_URL` for live smoke. See [setup.md](../../setup.md#quick-start) and the root [README.md#installation](../../../README.md#installation). |
 
 ---
 
@@ -129,3 +200,4 @@ Additional element types may appear; treat unknown keys as opaque JSON.
 3. `create_portal(organization_uuid=...)` — bootstrap the main portal when none exists (safe to call twice).
 4. `update_portal(portal_uuid=..., visibility="public")` — change metadata as needed.
 5. `delete_portal(portal_uuid=..., confirm=false)` — preview deletion; then `confirm=true` only after explicit approval.
+6. Sub-portals: `create_sub_portal` → pick a **`forms`** element on the main portal → `publish_sub_portal` → `get_portal` to confirm `subPortals[].published` → `unpublish_sub_portal` or `delete_sub_portal` / `detach` with confirmation when removing resources.

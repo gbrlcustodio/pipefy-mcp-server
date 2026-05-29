@@ -208,7 +208,7 @@ def auth_login(
         # ``os.makedirs`` inside the backend, which is not a ``KeyringError``.
         backend = keychain_backend_name()
         if backend == "PlaintextKeyring":
-            from pipefy_infra import config_dir
+            from pipefy_infra.config import config_dir
 
             hint = (
                 f"Ensure the config directory is writable ({config_dir()}), "

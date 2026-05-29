@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **142** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **148** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -43,6 +43,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_portal` | `pipefy portal create` | shipped | `--organization-uuid`; idempotent (find-or-create main portal). |
 | `create_portal_page` | `pipefy portal page create` | shipped | `--portal-uuid`, `--title`; optional `--description`, `--index`. Empty main portal may bootstrap a templated page when the API omits `elements`. |
 | `create_portal_element` | `pipefy portal element create` | shipped | `--page-id`, `--type`, `--metadata` JSON; optional `--data-sources` JSON array. SDK validates metadata before GraphQL. |
+| `create_sub_portal` | `pipefy portal sub-portal create` | shipped | `--main-portal-uuid`; optional `--name`. Interfaces `createSubPortal`. |
 | `create_send_task_automation` | `pipefy automation send-task create` | shipped | (task title + recipients; optional `--event-params` / `--condition` JSON). |
 | `create_table` | `pipefy table create` | shipped | — |
 | `create_table_field` | — | deferred | Table fields; not in initial launch list (table CRUD only). |
@@ -65,6 +66,8 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `delete_portal` | `pipefy portal delete` | shipped | destructive: `--yes` or confirm. |
 | `delete_portal_page` | `pipefy portal page delete` | shipped | destructive: `--yes` or confirm; positional portal + page UUIDs. |
 | `delete_portal_element` | `pipefy portal element delete` | shipped | destructive: `--yes` or confirm; positional element + page UUIDs. |
+| `delete_sub_portal` | `pipefy portal sub-portal delete` | shipped | destructive: `--yes` or MCP `confirm`; internal_api `deleteSubPortalInterface` (irreversible). |
+| `delete_sub_portal_element` | `pipefy portal sub-portal detach` | shipped | destructive: `--yes` or MCP `confirm`; internal_api `deleteSubPortalElement` (removes element wiring). |
 | `delete_table` | `pipefy table delete` | shipped | destructive: `--yes`. |
 | `delete_table_field` | — | deferred | Table fields; not in launch list. |
 | `delete_table_record` | `pipefy record delete` | shipped | destructive: `--yes`. |
@@ -130,6 +133,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `invite_members` | `pipefy member invite` | shipped | — |
 | `list_portals` | `pipefy portal list` | shipped | `--organization-uuid`; at most one main portal per org. |
 | `move_card_to_phase` | `pipefy card move` | shipped | (`--phase`). |
+| `publish_sub_portal` | `pipefy portal sub-portal publish` | shipped | internal_api `updateSubPortalElement` on a templated `forms` element; check `subPortals[].published` via `get_portal`. |
 | `remove_member_from_pipe` | `pipefy member remove` | shipped | ``PIPEFY_SERVICE_ACCOUNT_IDS`` guard like MCP. |
 | `search_pipes` | `pipefy pipe list` | shipped | (`--name`, `--max-per-org`). |
 | `search_schema` | `pipefy introspect schema search` | shipped | (optional `--kind`). |
@@ -141,6 +145,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `simulate_automation` | `pipefy automation simulate` | shipped | (`--pipe`, `--action-id`, `--sample-card`, optional JSON fragments). |
 | `sort_portal_pages` | `pipefy portal page sort` | shipped | `--portal-uuid` plus ordered ids via `--page-ids` or `--ids-json`. |
 | `toggle_ai_agent_status` | `pipefy agent toggle` | shipped | AI Agents domain. |
+| `unpublish_sub_portal` | `pipefy portal sub-portal unpublish` | shipped | internal_api `updateSubPortalElement(subPortalUuid: null)`; sets `subPortals[].published` to false. |
 | `update_ai_agent` | `pipefy agent update` | shipped | AI Agents domain. |
 | `update_ai_automation` | `pipefy ai-automation update` | shipped | AI Automations domain. |
 | `update_automation` | `pipefy automation update` | shipped | (`--extra` JSON). |
@@ -159,6 +164,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_portal_page` | `pipefy portal page update` | shipped | positional portal + page UUIDs; at least one of `--title`, `--description`, `--index`. |
 | `update_portal_page_layout` | `pipefy portal page layout update` | shipped | `--page-id` + `--layout` JSON only (no portal UUID on the wire). |
 | `update_portal_element` | `pipefy portal element update` | shipped | positional element + page UUIDs; `--type` + full `--metadata` JSON (API replace-all). |
+| `update_sub_portal_element` | `pipefy portal sub-portal attach` | shipped | positional portal, element, and sub-portal UUIDs; internal_api `updateSubPortalElement`. |
 | `update_table` | `pipefy table update` | shipped | — |
 | `update_table_field` | — | deferred | Table fields; not in launch list. |
 | `update_table_record` | `pipefy record update` | shipped | (``--fields`` JSON). |
@@ -179,6 +185,6 @@ for n in m.body:
             print(len(v.args[0].elts))"
 ```
 
-Expect **130** tool names in `PIPEFY_TOOL_NAMES` and **130** data rows in the parity table (excluding the header rows).
+Expect **148** tool names in `PIPEFY_TOOL_NAMES` and **148** data rows in the parity table (excluding the header rows).
 
 When adding or removing an MCP tool, update **this file** and `PIPEFY_TOOL_NAMES` in the same change set.

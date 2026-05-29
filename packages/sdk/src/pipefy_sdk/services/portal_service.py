@@ -18,9 +18,15 @@ from pipefy_sdk.models.portal import (
     UpdatePortalElementInput,
     UpdatePortalInput,
 )
+from pipefy_sdk.queries.portal_internal_queries import (
+    DELETE_SUB_PORTAL_ELEMENT_MUTATION,
+    DELETE_SUB_PORTAL_INTERFACE_MUTATION,
+    UPDATE_SUB_PORTAL_ELEMENT_MUTATION,
+)
 from pipefy_sdk.queries.portal_queries import (
     CREATE_ELEMENT_MUTATION,
     CREATE_PAGE_MUTATION,
+    CREATE_SUB_PORTAL_MUTATION,
     DELETE_ELEMENT_MUTATION,
     DELETE_INTERFACE_MUTATION,
     DELETE_PAGE_MUTATION,
@@ -39,6 +45,8 @@ from pipefy_sdk.settings import PipefySettings
 from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
 
 logger = logging.getLogger(__name__)
+
+INTERNAL_API_CLIENT_NOT_CONFIGURED = "Internal API client is not configured."
 
 
 def _with_uuid_alias(record: dict[str, Any]) -> dict[str, Any]:
@@ -121,6 +129,23 @@ async def _execute_interfaces_query_with_portal_errors(
         permission_error = _map_portal_permission_error(exc)
         if permission_error is not None:
             raise permission_error from exc
+        raise
+
+
+_INTERNAL_API_PERMISSION_DENIED_MARKER = "[code=PERMISSION_DENIED]"
+
+
+async def _execute_internal_api_query_with_portal_errors(
+    execute: Any,
+    query: str,
+    variables: dict[str, Any],
+) -> dict[str, Any]:
+    """Run an internal_api operation and map portal permission failures."""
+    try:
+        return await execute(query, variables)
+    except ValueError as exc:
+        if _INTERNAL_API_PERMISSION_DENIED_MARKER in str(exc):
+            raise PortalPermissionError(_PORTAL_PERMISSION_MESSAGE) from exc
         raise
 
 
@@ -247,9 +272,16 @@ class PortalService:
             ValueError: When no internal API client was injected.
         """
         if self._internal_api_client is None:
-            msg = "Internal API client is not configured."
-            raise ValueError(msg)
+            raise ValueError(INTERNAL_API_CLIENT_NOT_CONFIGURED)
         return await self._internal_api_client.execute_query(query, variables)
+
+    def set_internal_api_client(self, client: InternalApiClient) -> None:
+        """Attach the internal API client for sub-portal mutations.
+
+        Args:
+            client: Configured :class:`InternalApiClient` instance.
+        """
+        self._internal_api_client = client
 
     async def list_portals(
         self,
@@ -652,3 +684,128 @@ class PortalService:
             msg = "duplicateElement returned no element."
             raise ValueError(msg)
         return _with_uuid_alias(element)
+
+    async def create_sub_portal(
+        self,
+        main_portal_uuid: str,
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a sub-portal attached to a main portal (Interfaces schema).
+
+        Args:
+            main_portal_uuid: Parent main portal interface UUID.
+            name: Optional display name; omitted from the mutation when ``None``.
+        """
+        portal_input: dict[str, Any] = {"mainPortalUuid": main_portal_uuid}
+        if name is not None:
+            portal_input["name"] = name
+        data = await _execute_interfaces_query_with_portal_errors(
+            self.execute_interfaces_query,
+            CREATE_SUB_PORTAL_MUTATION,
+            {"input": portal_input},
+        )
+        sub_portal = (data.get("createSubPortal") or {}).get("subPortal")
+        if not isinstance(sub_portal, dict):
+            msg = "createSubPortal returned no subPortal."
+            raise ValueError(msg)
+        return _with_uuid_alias(sub_portal)
+
+    async def update_sub_portal_element(
+        self,
+        portal_uuid: str,
+        element_id: str,
+        sub_portal_uuid: str,
+    ) -> dict[str, Any]:
+        """Attach a sub-portal to a portal page element (internal_api).
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID (e.g. templated ``forms`` slot).
+            sub_portal_uuid: Sub-portal UUID to wire to the element.
+        """
+        return await _execute_internal_api_query_with_portal_errors(
+            self.execute_internal_api_query,
+            UPDATE_SUB_PORTAL_ELEMENT_MUTATION,
+            {
+                "input": {
+                    "portalUuid": portal_uuid,
+                    "elementId": element_id,
+                    "subPortalUuid": sub_portal_uuid,
+                }
+            },
+        )
+
+    async def publish_sub_portal(
+        self,
+        portal_uuid: str,
+        element_id: str,
+        sub_portal_uuid: str,
+    ) -> dict[str, Any]:
+        """Publish a sub-portal on a page element via ``updateSubPortalElement``.
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+            sub_portal_uuid: Sub-portal UUID to attach.
+        """
+        return await self.update_sub_portal_element(
+            portal_uuid,
+            element_id,
+            sub_portal_uuid,
+        )
+
+    async def unpublish_sub_portal(
+        self,
+        portal_uuid: str,
+        element_id: str,
+    ) -> dict[str, Any]:
+        """Unpublish a sub-portal from a page element via ``updateSubPortalElement``.
+
+        Sends ``subPortalUuid: null`` to clear the link. Distinct from
+        ``delete_sub_portal_element`` (removes the wiring slot) and
+        ``delete_sub_portal`` (deletes the sub-portal entity).
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+        """
+        return await _execute_internal_api_query_with_portal_errors(
+            self.execute_internal_api_query,
+            UPDATE_SUB_PORTAL_ELEMENT_MUTATION,
+            {
+                "input": {
+                    "portalUuid": portal_uuid,
+                    "elementId": element_id,
+                    "subPortalUuid": None,
+                }
+            },
+        )
+
+    async def delete_sub_portal_element(
+        self,
+        portal_uuid: str,
+        element_id: str,
+    ) -> dict[str, Any]:
+        """Remove sub-portal wiring from a page element (internal_api).
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+        """
+        return await _execute_internal_api_query_with_portal_errors(
+            self.execute_internal_api_query,
+            DELETE_SUB_PORTAL_ELEMENT_MUTATION,
+            {"input": {"portalUuid": portal_uuid, "elementId": element_id}},
+        )
+
+    async def delete_sub_portal(self, uuid: str) -> dict[str, Any]:
+        """Delete a sub-portal entity (irreversible; internal_api).
+
+        Args:
+            uuid: Sub-portal UUID.
+        """
+        return await _execute_internal_api_query_with_portal_errors(
+            self.execute_internal_api_query,
+            DELETE_SUB_PORTAL_INTERFACE_MUTATION,
+            {"input": {"uuid": uuid}},
+        )

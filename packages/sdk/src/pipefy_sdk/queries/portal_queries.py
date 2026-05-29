@@ -208,9 +208,23 @@ DUPLICATE_ELEMENT_MUTATION = gql(
     """
 )
 
+CREATE_SUB_PORTAL_MUTATION = gql(
+    """
+    mutation CreateSubPortal($input: CreateSubPortalInput!) {
+        createSubPortal(input: $input) {
+            subPortal {
+                id
+                name
+            }
+        }
+    }
+    """
+)
+
 __all__ = [
     "CREATE_ELEMENT_MUTATION",
     "CREATE_PAGE_MUTATION",
+    "CREATE_SUB_PORTAL_MUTATION",
     "DELETE_ELEMENT_MUTATION",
     "DELETE_INTERFACE_MUTATION",
     "DELETE_PAGE_MUTATION",

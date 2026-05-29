@@ -1,13 +1,31 @@
-"""Payload builders and error mappers for portal MCP tools."""
+"""Payload builders and error mappers for portal MCP tools.
+
+``unpublish_sub_portal`` uses internal_api ``updateSubPortalElement`` with
+``subPortalUuid: null`` (not ``deleteSubPortalElement``): live integration
+confirms ``get_portal`` -> ``subPortals[].published`` flips to false. CLI
+``sub-portal detach`` calls ``deleteSubPortalElement`` to remove wiring only.
+"""
 
 from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk.exceptions import PortalPermissionError
 from pydantic import ValidationError
 
-from pipefy_mcp.tools.graphql_error_helpers import extract_graphql_error_codes
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_error_strings,
+    extract_graphql_error_codes,
+    strip_internal_api_diagnostic_markers,
+)
+from pipefy_mcp.tools.introspection_tool_helpers import (
+    build_error_payload,
+    build_success_payload,
+)
 from pipefy_mcp.tools.tool_error_envelope import tool_error
+from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 _PORTAL_PERMISSION_GUIDANCE = (
     "Permission denied. Request organization permissions such as "
@@ -31,9 +49,7 @@ def map_portal_error_to_message(exc: BaseException) -> str:
     text = str(exc).strip()
     lowered = text.lower()
 
-    codes: list[str] = []
-    if isinstance(exc, TransportQueryError):
-        codes = extract_graphql_error_codes(exc)
+    codes = extract_graphql_error_codes(exc)
     errors = getattr(exc, "errors", None)
     if isinstance(errors, list):
         for err in errors:
@@ -47,7 +63,95 @@ def map_portal_error_to_message(exc: BaseException) -> str:
     if "PERMISSION_DENIED" in codes or "permission denied" in lowered:
         return _PORTAL_PERMISSION_GUIDANCE
 
-    return text if text else "Portal operation failed. Try again or contact support."
+    if isinstance(exc, TransportQueryError):
+        messages = extract_error_strings(exc)
+        if messages:
+            return strip_internal_api_diagnostic_markers("; ".join(messages))
+
+    return (
+        strip_internal_api_diagnostic_markers(text)
+        if text
+        else "Portal operation failed. Try again or contact support."
+    )
+
+
+def validate_tool_ids(
+    raw: dict[str, str],
+) -> tuple[dict[str, str] | None, dict[str, object] | None]:
+    """Validate multiple Pipefy IDs at the MCP tool boundary.
+
+    Args:
+        raw: Map of parameter name to raw ID string.
+
+    Returns:
+        ``(cleaned_ids, None)`` on success, or ``(None, error_payload)`` on the
+        first invalid ID.
+    """
+    cleaned: dict[str, str] = {}
+    for name, value in raw.items():
+        ok, err = validate_tool_id(value, name)
+        if err is not None:
+            return None, err
+        cleaned[name] = ok
+    return cleaned, None
+
+
+def finalize_internal_api_mutation(
+    result: dict[str, Any],
+    mutation_key: str,
+    failure_message: str,
+) -> dict[str, object]:
+    """Map an internal_api mutation result to MCP success or failure payloads.
+
+    Args:
+        result: Raw GraphQL response dict from the SDK.
+        mutation_key: Top-level mutation field name (e.g. ``updateSubPortalElement``).
+        failure_message: User-visible message when ``success`` is not true.
+
+    Returns:
+        Success or error envelope for the MCP tool caller.
+    """
+    payload = result.get(mutation_key) or {}
+    if payload.get("success"):
+        return build_success_payload(result, include_parsed=True)
+    return build_error_payload(failure_message)
+
+
+async def run_sub_portal_internal_api_tool(
+    *,
+    ids: dict[str, str],
+    debug_message: str,
+    ctx_debug: Callable[[str], Awaitable[None]],
+    invoke: Callable[[dict[str, str]], Awaitable[dict[str, Any]]],
+    mutation_key: str,
+    failure_message: str,
+) -> dict[str, object]:
+    """Shared shell for sub-portal internal_api write tools.
+
+    Args:
+        ids: Tool ID parameters to validate (name -> raw value).
+        debug_message: Message passed to ``ctx.debug``.
+        ctx_debug: Async debug hook from the MCP tool context.
+        invoke: Callable receiving validated IDs and calling ``PipefyClient``.
+        mutation_key: Top-level mutation field in the GraphQL response.
+        failure_message: User-visible message when ``success`` is not true.
+
+    Returns:
+        MCP tool result envelope.
+    """
+    cleaned, err = validate_tool_ids(ids)
+    if err is not None or cleaned is None:
+        return err or build_error_payload("Invalid tool IDs.")
+    await ctx_debug(debug_message.format(**cleaned))
+    try:
+        result = await invoke(cleaned)
+    except Exception as exc:  # noqa: BLE001
+        return build_error_payload(map_portal_error_to_message(exc))
+    return finalize_internal_api_mutation(
+        result,
+        mutation_key,
+        failure_message.format(**cleaned),
+    )
 
 
 def validate_portal_optional_string(
@@ -149,9 +253,12 @@ def portal_element_validation_error(exc: ValidationError) -> dict[str, object]:
 
 
 __all__ = [
+    "finalize_internal_api_mutation",
     "map_portal_error_to_message",
     "portal_element_validation_error",
+    "run_sub_portal_internal_api_tool",
     "validate_portal_optional_string",
     "validate_portal_page_index",
     "validate_sort_page_ids_no_duplicates",
+    "validate_tool_ids",
 ]

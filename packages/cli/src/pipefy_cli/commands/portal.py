@@ -28,6 +28,10 @@ element_app = typer.Typer(
     help="Portal page elements (widgets / tools in the Pipefy UI).",
     no_args_is_help=True,
 )
+sub_portal_app = typer.Typer(
+    help="Sub-portal create, attach, publish, and delete.",
+    no_args_is_help=True,
+)
 
 
 def _require_non_empty_portal_uuid(portal_uuid: str) -> str:
@@ -687,6 +691,181 @@ def portal_element_duplicate(
     run_cli_command(ctx, json_out, factory)
 
 
+@sub_portal_app.command("create")
+def portal_sub_portal_create(
+    ctx: typer.Context,
+    main_portal_uuid: str = typer.Option(
+        ...,
+        "--main-portal-uuid",
+        help="Parent main portal interface UUID.",
+    ),
+    name: str | None = typer.Option(None, "--name", help="Optional sub-portal name."),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Create a sub-portal on a main portal."""
+
+    main_portal_uuid = _require_non_empty_portal_uuid(main_portal_uuid)
+    _reject_blank_optional_string(name, "--name")
+
+    async def factory(client: PipefyClient):
+        return await client.create_sub_portal(
+            main_portal_uuid,
+            name=name.strip() if name is not None else None,
+        )
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@sub_portal_app.command("attach", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def portal_sub_portal_attach(
+    ctx: typer.Context,
+    portal_uuid: str = resource_id_argument(help="Main portal interface UUID."),
+    element_id: str = resource_id_argument(help="Page element UUID."),
+    sub_portal_uuid: str = resource_id_argument(help="Sub-portal UUID."),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Attach a sub-portal to a portal page element."""
+
+    portal_uuid = _require_non_empty_portal_uuid(portal_uuid)
+    element_id = _require_non_empty_portal_uuid(element_id)
+    sub_portal_uuid = _require_non_empty_portal_uuid(sub_portal_uuid)
+
+    async def factory(client: PipefyClient):
+        return await client.update_sub_portal_element(
+            portal_uuid,
+            element_id,
+            sub_portal_uuid,
+        )
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@sub_portal_app.command("detach", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def portal_sub_portal_detach(
+    ctx: typer.Context,
+    portal_uuid: str = resource_id_argument(help="Main portal interface UUID."),
+    element_id: str = resource_id_argument(help="Page element UUID."),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip interactive confirmation.",
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Detach a sub-portal from a portal page element."""
+
+    portal_uuid = _require_non_empty_portal_uuid(portal_uuid)
+    element_id = _require_non_empty_portal_uuid(element_id)
+    confirm_destructive(
+        yes=yes,
+        description=(
+            f"sub-portal wiring on element {element_id} on portal {portal_uuid}"
+        ),
+    )
+
+    async def factory(client: PipefyClient):
+        return await client.delete_sub_portal_element(portal_uuid, element_id)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@sub_portal_app.command("publish", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def portal_sub_portal_publish(
+    ctx: typer.Context,
+    portal_uuid: str = resource_id_argument(help="Main portal interface UUID."),
+    element_id: str = resource_id_argument(help="Page element UUID."),
+    sub_portal_uuid: str = resource_id_argument(help="Sub-portal UUID."),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Publish a sub-portal on a portal page element."""
+
+    portal_uuid = _require_non_empty_portal_uuid(portal_uuid)
+    element_id = _require_non_empty_portal_uuid(element_id)
+    sub_portal_uuid = _require_non_empty_portal_uuid(sub_portal_uuid)
+
+    async def factory(client: PipefyClient):
+        return await client.publish_sub_portal(
+            portal_uuid,
+            element_id,
+            sub_portal_uuid,
+        )
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@sub_portal_app.command("unpublish", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def portal_sub_portal_unpublish(
+    ctx: typer.Context,
+    portal_uuid: str = resource_id_argument(help="Main portal interface UUID."),
+    element_id: str = resource_id_argument(help="Page element UUID."),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Unpublish a sub-portal from a portal page element."""
+
+    portal_uuid = _require_non_empty_portal_uuid(portal_uuid)
+    element_id = _require_non_empty_portal_uuid(element_id)
+
+    async def factory(client: PipefyClient):
+        return await client.unpublish_sub_portal(portal_uuid, element_id)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@sub_portal_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def portal_sub_portal_delete(
+    ctx: typer.Context,
+    sub_portal_uuid: str = resource_id_argument(help="Sub-portal UUID."),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip interactive confirmation.",
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Delete a sub-portal permanently."""
+
+    sub_portal_uuid = _require_non_empty_portal_uuid(sub_portal_uuid)
+    confirm_destructive(yes=yes, description=f"sub-portal {sub_portal_uuid}")
+
+    async def factory(client: PipefyClient):
+        return await client.delete_sub_portal(sub_portal_uuid)
+
+    run_cli_command(ctx, json_out, factory)
+
+
 page_app.add_typer(layout_app, name="layout")
 portal_app.add_typer(page_app, name="page")
 portal_app.add_typer(element_app, name="element")
+portal_app.add_typer(sub_portal_app, name="sub-portal")

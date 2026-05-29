@@ -152,6 +152,7 @@ class PipefyClient:
             client: Configured :class:`InternalApiClient` instance.
         """
         self._internal_api_client = client
+        self._portal_service.set_internal_api_client(client)
 
     async def get_pipe(self, pipe_id: str | int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
@@ -1422,6 +1423,101 @@ class PipefyClient:
             portal_uuid=portal_uuid,
             page_id=page_id,
         )
+
+    async def create_sub_portal(
+        self,
+        main_portal_uuid: str,
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a sub-portal on a main portal.
+
+        Args:
+            main_portal_uuid: Parent main portal interface UUID.
+            name: Optional display name.
+        """
+        return await self._portal_service.create_sub_portal(main_portal_uuid, name)
+
+    async def update_sub_portal_element(
+        self,
+        portal_uuid: str,
+        element_id: str,
+        sub_portal_uuid: str,
+    ) -> dict[str, Any]:
+        """Attach a sub-portal to a portal page element.
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+            sub_portal_uuid: Sub-portal UUID.
+        """
+        return await self._portal_service.update_sub_portal_element(
+            portal_uuid,
+            element_id,
+            sub_portal_uuid,
+        )
+
+    async def publish_sub_portal(
+        self,
+        portal_uuid: str,
+        element_id: str,
+        sub_portal_uuid: str,
+    ) -> dict[str, Any]:
+        """Publish a sub-portal on a page element.
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+            sub_portal_uuid: Sub-portal UUID.
+        """
+        return await self._portal_service.publish_sub_portal(
+            portal_uuid,
+            element_id,
+            sub_portal_uuid,
+        )
+
+    async def unpublish_sub_portal(
+        self,
+        portal_uuid: str,
+        element_id: str,
+    ) -> dict[str, Any]:
+        """Unpublish a sub-portal from a page element via ``updateSubPortalElement``.
+
+        Sends ``subPortalUuid: null`` to clear the link. Distinct from
+        ``delete_sub_portal_element`` (removes the wiring slot) and
+        ``delete_sub_portal`` (deletes the sub-portal entity).
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+        """
+        return await self._portal_service.unpublish_sub_portal(
+            portal_uuid,
+            element_id,
+        )
+
+    async def delete_sub_portal_element(
+        self,
+        portal_uuid: str,
+        element_id: str,
+    ) -> dict[str, Any]:
+        """Remove sub-portal wiring from a page element.
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+        """
+        return await self._portal_service.delete_sub_portal_element(
+            portal_uuid,
+            element_id,
+        )
+
+    async def delete_sub_portal(self, uuid: str) -> dict[str, Any]:
+        """Delete a sub-portal entity (irreversible).
+
+        Args:
+            uuid: Sub-portal UUID.
+        """
+        return await self._portal_service.delete_sub_portal(uuid)
 
     async def get_me(self) -> MePayload | None:
         """Return the authenticated user's identity, or ``None`` when ``me`` resolves null."""

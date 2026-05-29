@@ -742,6 +742,25 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_set_internal_api_client_forwards_to_portal_service(mock_settings):
+    """Sub-portal mutations on PortalService use the same internal_api client as the facade."""
+    from pipefy_sdk.services.internal_api_client import InternalApiClient
+
+    client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
+    internal = MagicMock(spec=InternalApiClient)
+    internal.execute_query = AsyncMock(
+        return_value={"updateSubPortalElement": {"success": True}}
+    )
+    client.set_internal_api_client(internal)
+
+    result = await client.publish_sub_portal("portal-1", "element-2", "sub-3")
+
+    internal.execute_query.assert_awaited()
+    assert result == {"updateSubPortalElement": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_pipefy_client_upload_attachment_delegates_to_attachment_service():
     """``client.upload_attachment`` forwards to ``AttachmentService.upload_attachment``."""
     from pathlib import Path

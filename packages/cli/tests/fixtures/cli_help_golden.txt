@@ -1628,7 +1628,7 @@ Usage: pipefy org get [OPTIONS] [ORGANIZATION_ID]
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │   organization_id      [ORGANIZATION_ID]  Numeric organization id. Omit when │
 │                                           PIPEFY_ORG_ID is set (see          │
-│                                           docs/setup.md).                    │
+│                                           docs/config.md).                   │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --json  -j                                                                   │

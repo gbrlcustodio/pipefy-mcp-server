@@ -43,6 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
+- **Docs**: `docs/setup.md` deleted. Per-client MCP wiring (Cursor, Claude Desktop, Claude Code including the `/pipefy:install` + `/pipefy:login` plugin sequence, Codex) now lives in the root `README.md#installation`. `PIPEFY_*` environment variables, validation rules, and the legacy-alias notes move to a new `## Environment variables` section in [`docs/config.md`](docs/config.md). Edge cases (`errSecParam (-25244)` macOS keychain note, `.mcp.json` variants, local-clone alternative, `claude mcp add` form) move to [`packages/mcp/README.md`](packages/mcp/README.md). CLI auth tier breakdown moves to [`packages/cli/README.md`](packages/cli/README.md). Closes #246.
 - **HARD BREAK** — per-URL env vars dropped in favor of `PIPEFY_BASE_URL` + `PIPEFY_AUTH_URL`. The following env vars are no longer recognized; `PipefySettings` / `AuthSettings` are configured with `extra="ignore"`, so settings construction silently drops them with no exception or warning — stale `.env` keys look configured but the prod defaults still apply. Same wording as `docs/MIGRATION.md`. Audit `.env`, MCP client JSON, and CI secrets before upgrading:
   - `PIPEFY_GRAPHQL_URL` — set `PIPEFY_BASE_URL` to your API host (graphql_url derives as `<base>/graphql`).
   - `PIPEFY_INTERNAL_API_URL` — derives as `<base>/internal_api`.

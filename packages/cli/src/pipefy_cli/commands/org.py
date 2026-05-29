@@ -34,7 +34,7 @@ def org_get(
         None,
         help=(
             "Numeric organization id. Omit when PIPEFY_ORG_ID is set "
-            "(see docs/setup.md)."
+            "(see docs/config.md)."
         ),
         callback=_optional_org_id,
     ),

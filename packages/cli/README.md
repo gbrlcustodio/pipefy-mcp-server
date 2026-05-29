@@ -6,9 +6,9 @@ Typer-based CLI for Pipefy. Exposes all MCP tool capabilities as terminal comman
 
 ```sh
 uvx \
-  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/auth" \
-  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/cli" \
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli" \
   --refresh pipefy-cli
 ```
 
@@ -16,9 +16,9 @@ Or persistently:
 
 ```sh
 uv tool install \
-  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/auth" \
-  "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/cli"
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli"
 ```
 
 The `--with` flags are required pre-1.0 because the workspace members are not yet on PyPI. At v1.0 this collapses to `uv tool install pipefy-cli`.

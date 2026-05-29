@@ -49,13 +49,13 @@ Feedback and issues: [GitHub Issues](https://github.com/gbrlcustodio/pipefy-mcp-
 
 ## Installation
 
-> Pre-1.0 ships from this git repo via `uvx` and `uv tool install`. PyPI becomes the canonical source at **v1.0**. The current beta line is **`v0.2.0-beta.*`** (first tag: [`v0.2.0-beta.1`](https://github.com/gbrlcustodio/pipefy-mcp-server/releases/tag/v0.2.0-beta.1)). The snippets below track the default branch; for reproducibility, append `@v0.2.0-beta.1` to every `git+https://github.com/gbrlcustodio/pipefy-mcp-server` URL.
+> Pre-1.0 ships from this git repo via `uvx` and `uv tool install`. PyPI becomes the canonical source at **v1.0**. The current beta line is **`v0.2.0-beta.*`** (first tag: [`v0.2.0-beta.1`](https://github.com/gbrlcustodio/pipefy-mcp-server/releases/tag/v0.2.0-beta.1)). Every snippet below pins **`@latest`** — a moving git tag the release flow updates to point at the most recent release. To pin a specific version, swap `@latest` for a version tag (e.g. `@v0.2.0-beta.1`).
 >
 > The `--with pipefy-sdk @ ...#subdirectory=packages/sdk` / `pipefy-auth @ ...#subdirectory=packages/auth` flags are required pre-1.0: this repo is a uv workspace, and the workspace members are not yet published to PyPI, so uv needs them named explicitly. The flags go away at v1.0 (PyPI install).
 
 Service-account credentials (`PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` and `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`) are the unattended auth path used by the MCP server and CI scripts. The CLI additionally supports interactive `pipefy auth login` (browser OAuth, session in OS keychain). Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
 
-### MCP server
+### MCP client wiring
 
 #### Claude Code
 
@@ -79,11 +79,11 @@ Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per project):
       "command": "uvx",
       "args": [
         "--with",
-        "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/sdk",
+        "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk",
         "--with",
-        "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/auth",
+        "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth",
         "--from",
-        "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/mcp",
+        "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp",
         "pipefy-mcp-server"
       ],
       "env": {
@@ -111,11 +111,11 @@ Config file location:
       "command": "uvx",
       "args": [
         "--with",
-        "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/sdk",
+        "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk",
         "--with",
-        "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/auth",
+        "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth",
         "--from",
-        "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/mcp",
+        "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp",
         "pipefy-mcp-server"
       ],
       "env": {
@@ -135,9 +135,9 @@ Edit `~/.codex/config.toml`:
 [mcp_servers.pipefy]
 command = "uvx"
 args = [
-  "--with", "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/sdk",
-  "--with", "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/auth",
-  "--from", "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/mcp",
+  "--with", "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk",
+  "--with", "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth",
+  "--from", "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp",
   "pipefy-mcp-server",
 ]
 env = { PIPEFY_SERVICE_ACCOUNT_CLIENT_ID = "<CLIENT_ID>", PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET = "<CLIENT_SECRET>" }
@@ -153,9 +153,9 @@ Ad-hoc:
 
 ```sh
 uvx \
-  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/auth" \
-  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/cli" \
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli" \
   pipefy-cli --help
 ```
 
@@ -163,16 +163,16 @@ Permanent install:
 
 ```sh
 uv tool install \
-  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/auth" \
-  "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/cli"
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli"
 pipefy --install-completion bash    # or zsh, fish
 pipefy auth login                   # browser OAuth, session in OS keychain
 ```
 
 CLI deep-dives (auth precedence, `--token` / `PIPEFY_TOKEN`, parity matrix): [`packages/cli/README.md`](packages/cli/README.md) and [`docs/cli/`](docs/cli/README.md).
 
-### Agent skills
+### Skill catalog install
 
 ```sh
 npx skills add gbrlcustodio/pipefy-mcp-server                           # all skills

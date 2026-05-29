@@ -6,9 +6,9 @@ MCP server for Pipefy — **128 tools** for AI agents (Cursor, Claude Desktop, C
 
 ```sh
 uvx \
-  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/auth" \
-  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/mcp" \
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp" \
   --refresh pipefy-mcp-server
 ```
 
@@ -45,9 +45,9 @@ Useful when you want to wire the server without editing `~/.claude.json` by hand
 ```bash
 claude mcp add --scope project pipefy \
   -- uvx \
-       --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/sdk" \
-       --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/auth" \
-       --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server#subdirectory=packages/mcp" \
+       --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+       --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+       --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp" \
        pipefy-mcp-server
 ```
 
@@ -108,7 +108,7 @@ This form also works as a per-project `.mcp.json` if your team shares a clone. C
 
 ### Legacy environment variables
 
-`PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` still resolve to the new `PIPEFY_SERVICE_ACCOUNT_*` names with a one-shot stderr deprecation warning. The `PIPEFY_OAUTH_URL` alias was dropped — set `PIPEFY_BASE_URL` instead. Migration notes: [`docs/MIGRATION.md#service-account-env-var-rename`](../../docs/MIGRATION.md#service-account-env-var-rename).
+`PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` still resolve to the new `PIPEFY_SERVICE_ACCOUNT_*` names with a one-shot stderr deprecation warning. The aliases will be removed in a later `0.2.0-beta.x` release. The `PIPEFY_OAUTH_URL` alias was dropped — set `PIPEFY_BASE_URL` instead. Migration notes: [`docs/MIGRATION.md#service-account-env-var-rename`](../../docs/MIGRATION.md#service-account-env-var-rename).
 
 ## Tools
 

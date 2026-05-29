@@ -68,7 +68,8 @@ Credential variables reject leading and trailing whitespace; `PIPEFY_ORG_ID` (be
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `PIPEFY_ORG_ID` | unset | Convenience: pins a default org for CLI and MCP tools that take an optional `org_id` argument. |
-| `PIPEFY_SERVICE_ACCOUNT_IDS` | `[]` | Comma-separated list. Guards against accidentally treating service-account users as humans in member-management tools. |
+| `PIPEFY_SERVICE_ACCOUNT_IDS` | `[]` | Comma-separated list (env-var form) or native TOML array (`service_account_ids = ["42", "43"]`). Guards against accidentally treating service-account users as humans in member-management tools. |
+| `PIPEFY_PORTAL_ORG_UUID` | unset | SDK portal integration tests only (`pytest -m integration`). Set in local `.env` to an org UUID where the active token has the `manage_portals` scope. Never committed; production code paths don't read this. See [`mcp/tools/portal.md`](mcp/tools/portal.md) for scope and example values. |
 | `PIPEFY_DISABLE_STORED_SESSION` | `0` | Set to `1` (or `disable_stored_session = true` in TOML) to skip the keychain-backed stored-session tier entirely. `pipefy auth login` / `auth logout` refuse with exit code 2 when set. |
 | `PIPEFY_KEYCHAIN_BACKEND` | `auto` | Set to `file` (or `keychain_backend = "file"` in TOML) to use a file-backed plaintext keyring under `~/.config/pipefy/keyring.cfg` (`%APPDATA%\pipefy\keyring.cfg` on Windows). Unblocks headless Linux and CI runners. Plaintext on disk; opt-in only. |
 | `PIPEFY_ALLOW_INSECURE_URLS` | `false` | Disables the SSRF host check on URL variables. Local development only. |

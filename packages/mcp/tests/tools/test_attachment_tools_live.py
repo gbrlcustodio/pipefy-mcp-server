@@ -216,10 +216,3 @@ async def test_live_pipeclaw_mcp_upload_attachment_to_card(
     assert result.isError is False
     payload = extract_payload(result)
     assert payload.get("success") is True
-
-
-# Note: S3 protocol matrix probes (mismatched content-length, expired URL,
-# omitted Content-Type) used to live here but are now unit tests in
-# packages/sdk/tests/services/test_attachment_service.py against a fake S3Uploader.
-# AWS S3 contract behavior is AWS's concern; our concern is how our code reacts
-# to 4xx responses, which the unit tests cover.

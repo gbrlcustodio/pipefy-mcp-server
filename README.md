@@ -55,7 +55,7 @@ Feedback and issues: [GitHub Issues](https://github.com/gbrlcustodio/pipefy-mcp-
 
 Two auth paths:
 
-- **Human OAuth (interactive)**: `pipefy auth login` runs the browser flow and stores a session in your OS keychain. Available to any client with the `pipefy` CLI on PATH, or with the [skill catalog](skills/README.md) installed via `npx skills add gbrlcustodio/pipefy-mcp-server` (55+ agent targets, including Claude Code, Cursor, and Codex). Claude Code wraps it as `/pipefy:login`. Pipe membership is whatever the signed-in user already has.
+- **Human OAuth (interactive)**: `pipefy auth login` runs the browser flow and stores a session in your OS keychain. Works anywhere the `pipefy` CLI is on PATH (`uv tool install` once, any client can invoke it). Claude Code additionally exposes it as the `/pipefy:login` slash command via the plugin marketplace. Pipe membership is whatever the signed-in user already has.
 - **Service account (unattended / CI)**: provision a Service Account in [Pipefy Admin](https://app.pipefy.com/) (Admin → Service Accounts) and add that account to every pipe the tools should touch. Wire `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` and `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` into the client config below.
 
 Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).

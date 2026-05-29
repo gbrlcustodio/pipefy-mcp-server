@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from pipefy_sdk import PipefyClient, assert_attachment_size_within_cap
+from pipefy_infra.filesystem import LocalFile, LocalFileError
+from pipefy_sdk import MAX_ATTACHMENT_SIZE_BYTES, Attachment, PipefyClient
 from pipefy_sdk.attachment_upload import AttachmentUploadError
 
 from pipefy_cli.commands._common import run_cli_command
@@ -13,39 +14,6 @@ from pipefy_cli.commands._common import run_cli_command
 attachment_app = typer.Typer(
     help="Attachment uploads (presigned URL + field update).", no_args_is_help=True
 )
-
-
-def _read_local_file_bytes(path: Path) -> tuple[Path, bytes]:
-    """Read file content for upload (S3 PUT requires the full body).
-
-    ``~`` is expanded so programmatic invocations
-    (``subprocess.run([..., "--file", "~/foo.pdf"])``) work the same as
-    shell-expanded paths and mirror the MCP tool's ``file_path`` behavior.
-
-    Args:
-        path: File path to read.
-
-    Returns:
-        ``(expanded_path, file_bytes)``. The expanded path is returned so
-        callers can derive ``file_name`` from the same value that was read.
-
-    Raises:
-        typer.BadParameter: When the (expanded) path is not a readable file.
-    """
-    expanded = path.expanduser()
-    if not expanded.is_file():
-        raise typer.BadParameter(f"Not a file: {expanded}")
-    try:
-        assert_attachment_size_within_cap(expanded.stat().st_size, str(expanded))
-    except ValueError as exc:
-        raise typer.BadParameter(str(exc)) from exc
-    try:
-        data = expanded.read_bytes()
-    except PermissionError as exc:
-        raise typer.BadParameter(f"Cannot read {expanded}: {exc.strerror}") from exc
-    except OSError as exc:
-        raise typer.BadParameter(f"Cannot read {expanded}: {exc}") from exc
-    return expanded, data
 
 
 @attachment_app.command("upload")
@@ -97,8 +65,18 @@ def attachment_upload(
     """
     if (card is None) == (record is None):
         raise typer.BadParameter("Provide exactly one of --card or --record.")
-    expanded_file, file_bytes = _read_local_file_bytes(file)
-    file_name = expanded_file.name
+
+    local_file = LocalFile(file, max_size_bytes=MAX_ATTACHMENT_SIZE_BYTES)
+    try:
+        local_file.read()
+    except LocalFileError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    try:
+        attachment = Attachment(local_file, content_type=content_type)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
     org_str = str(organization).strip()
     field_str = str(field).strip()
     if not org_str or not field_str:
@@ -110,23 +88,19 @@ def attachment_upload(
     async def factory(client: PipefyClient) -> dict[str, object]:
         try:
             if card_id is not None:
-                result = await client.upload_attachment_to_card_field(
+                result = await attachment.upload_to_card_field(
+                    client,
                     organization_id=org_str,
                     card_id=card_id,
                     field_id=field_str,
-                    file_name=file_name,
-                    file_bytes=file_bytes,
-                    content_type=content_type,
                 )
                 target: dict[str, object] = {"card_id": card_id}
             else:
-                result = await client.upload_attachment_to_table_record_field(
+                result = await attachment.upload_to_table_record_field(
+                    client,
                     organization_id=org_str,
                     table_record_id=record_id or "",
                     field_id=field_str,
-                    file_name=file_name,
-                    file_bytes=file_bytes,
-                    content_type=content_type,
                 )
                 target = {"table_record_id": record_id}
         except AttachmentUploadError as exc:

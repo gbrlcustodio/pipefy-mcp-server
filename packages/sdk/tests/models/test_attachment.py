@@ -1,4 +1,10 @@
-"""Tests for attachment upload Pydantic models."""
+"""Tests for attachment upload input models (Pydantic boundary only).
+
+Domain object tests (``LocalFile``, ``Attachment``) live in
+``packages/sdk/tests/test_attachment.py``.
+"""
+
+from __future__ import annotations
 
 import pytest
 from pydantic import ValidationError
@@ -26,11 +32,9 @@ def test_upload_attachment_to_card_accepts_file_path():
         **_base_kwargs(),
         card_id=42,
         file_path="/tmp/f.pdf",
-        file_content_base64=None,
     )
     assert data.card_id == "42"
     assert data.file_path == "/tmp/f.pdf"
-    assert data.file_content_base64 is None
 
 
 @pytest.mark.unit
@@ -56,98 +60,34 @@ def test_upload_attachment_to_card_accepts_string_card_id():
 
 
 @pytest.mark.unit
-def test_upload_attachment_to_card_accepts_base64():
-    data = UploadAttachmentToCardInput(
-        **_base_kwargs(),
-        card_id=1,
-        file_path=None,
-        file_content_base64="YWFh",
-    )
-    assert data.file_path is None
-    assert data.file_content_base64 == "YWFh"
-
-
-@pytest.mark.unit
-def test_upload_attachment_to_card_rejects_both_sources():
-    with pytest.raises(ValueError, match="not both"):
+def test_upload_attachment_to_card_requires_file_path():
+    with pytest.raises(ValidationError):
         UploadAttachmentToCardInput(
             **_base_kwargs(),
             card_id=1,
-            file_path="/tmp/a",
-            file_content_base64="YWFh",
         )
 
 
 @pytest.mark.unit
-def test_upload_attachment_to_card_rejects_neither_source():
-    with pytest.raises(ValueError, match="exactly one"):
-        UploadAttachmentToCardInput(
-            **_base_kwargs(),
-            card_id=1,
-            file_path=None,
-            file_content_base64=None,
-        )
-
-
-@pytest.mark.unit
-def test_upload_attachment_to_card_rejects_both_empty_strings():
-    with pytest.raises(ValueError, match="exactly one"):
+def test_upload_attachment_to_card_rejects_blank_file_path():
+    """NonBlankStr rejects whitespace-only values."""
+    with pytest.raises(ValidationError):
         UploadAttachmentToCardInput(
             **_base_kwargs(),
             card_id=1,
             file_path="   ",
-            file_content_base64="",
         )
 
 
 @pytest.mark.unit
-def test_upload_attachment_to_card_derives_file_name_from_path():
-    """When file_name is omitted, the path's basename fills it in."""
+def test_upload_attachment_to_card_file_name_optional():
     data = UploadAttachmentToCardInput(
         organization_id="o",
         card_id=1,
         field_id="f",
-        file_path="/tmp/project/report-final.pdf",
+        file_path="/tmp/report.pdf",
     )
-    assert data.file_name == "report-final.pdf"
-
-
-@pytest.mark.unit
-def test_upload_attachment_to_card_explicit_file_name_overrides_basename():
-    """Explicit file_name wins over path basename."""
-    data = UploadAttachmentToCardInput(
-        organization_id="o",
-        card_id=1,
-        field_id="f",
-        file_name="Invoice 2026.pdf",
-        file_path="/tmp/abc123.pdf",
-    )
-    assert data.file_name == "Invoice 2026.pdf"
-
-
-@pytest.mark.unit
-def test_upload_attachment_to_card_base64_requires_explicit_file_name():
-    """base64 source carries no path to infer from; file_name must be provided."""
-    with pytest.raises(ValueError, match="file_name is required"):
-        UploadAttachmentToCardInput(
-            organization_id="o",
-            card_id=1,
-            field_id="f",
-            file_content_base64="YWFh",
-        )
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("path", ["/", "."])
-def test_upload_attachment_to_card_rejects_file_path_with_empty_basename(path):
-    """file_path that yields an empty basename must not silently set file_name=''."""
-    with pytest.raises(ValueError, match="no basename"):
-        UploadAttachmentToCardInput(
-            organization_id="o",
-            card_id=1,
-            field_id="f",
-            file_path=path,
-        )
+    assert data.file_name is None
 
 
 @pytest.mark.unit
@@ -155,7 +95,7 @@ def test_upload_attachment_to_card_content_type_optional_none():
     data = UploadAttachmentToCardInput(
         **_base_kwargs(),
         card_id=1,
-        file_path="/tmp/x",
+        file_path="/tmp/x.pdf",
         content_type=None,
     )
     assert data.content_type is None
@@ -168,57 +108,10 @@ def test_upload_attachment_to_table_record_uses_table_record_id_not_card_id():
         table_record_id="tr-999",
         field_id="f",
         file_name="n.csv",
-        file_path="/tmp/x",
+        file_path="/tmp/x.csv",
     )
     assert data.table_record_id == "tr-999"
     assert not hasattr(data, "card_id")
-
-
-@pytest.mark.unit
-def test_upload_attachment_to_table_record_accepts_base64():
-    data = UploadAttachmentToTableRecordInput(
-        organization_id="o",
-        table_record_id="tr-1",
-        field_id="f",
-        file_name="n.bin",
-        file_content_base64="QQ==",
-    )
-    assert data.file_content_base64 == "QQ=="
-
-
-@pytest.mark.unit
-def test_upload_attachment_to_table_record_rejects_both_sources():
-    with pytest.raises(ValueError, match="not both"):
-        UploadAttachmentToTableRecordInput(
-            organization_id="o",
-            table_record_id="tr-1",
-            field_id="f",
-            file_name="n",
-            file_path="/tmp/a",
-            file_content_base64="YQ==",
-        )
-
-
-@pytest.mark.unit
-def test_upload_attachment_to_table_record_rejects_neither_source():
-    with pytest.raises(ValueError, match="exactly one"):
-        UploadAttachmentToTableRecordInput(
-            organization_id="o",
-            table_record_id="tr-1",
-            field_id="f",
-            file_name="n",
-        )
-
-
-@pytest.mark.unit
-def test_upload_attachment_to_table_record_derives_file_name_from_path():
-    data = UploadAttachmentToTableRecordInput(
-        organization_id="o",
-        table_record_id="tr-1",
-        field_id="f",
-        file_path="/var/data/export.csv",
-    )
-    assert data.file_name == "export.csv"
 
 
 @pytest.mark.unit

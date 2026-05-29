@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import binascii
 from typing import Any, Literal
 
 from pydantic import ValidationError
@@ -101,10 +100,14 @@ def format_s3_upload_failure(upload_result: dict[str, Any]) -> str:
 
 
 def map_upload_error_to_message(exc: BaseException) -> str:
-    """Map an exception to a short, actionable message.
+    """Map a validation or transport/GraphQL exception to a short, actionable message.
+
+    File-read errors are handled separately via
+    :class:`pipefy_infra.filesystem.LocalFileError` and never flow through
+    this mapper.
 
     Args:
-        exc: Failure from transport, GraphQL, validation, or local file I/O.
+        exc: Failure from input validation, transport, or GraphQL.
     """
     if isinstance(exc, ValidationError):
         parts: list[str] = []
@@ -116,12 +119,6 @@ def map_upload_error_to_message(exc: BaseException) -> str:
             else:
                 parts.append(str(msg))
         return "; ".join(parts) if parts else "Invalid input."
-    if isinstance(exc, binascii.Error):
-        return "Invalid file_content_base64: could not decode base64 data."
-    if isinstance(exc, PermissionError):
-        return f"Permission denied reading file_path: {exc}."
-    if isinstance(exc, OSError):
-        return f"Could not read file_path: {exc}."
     if isinstance(exc, ValueError):
         return str(exc)
     msgs = extract_error_strings(exc)

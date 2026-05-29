@@ -18,10 +18,10 @@ Optional long-run expired-URL check (waits for ``PIPE_ATTACHMENT_S3_EXPIRY_WAIT_
 from __future__ import annotations
 
 import asyncio
-import base64
 import os
 import uuid
 from datetime import timedelta
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
@@ -93,6 +93,7 @@ def live_attachment_mcp(live_pipefy_client):
 async def test_live_upload_attachment_to_card_end_to_end(
     live_attachment_mcp,
     extract_payload,
+    tmp_path: Path,
 ):
     """Full MCP flow: presigned URL, S3 PUT, updateCardField, read-back on card."""
     require_live_creds()
@@ -106,7 +107,8 @@ async def test_live_upload_attachment_to_card_end_to_end(
     unique = uuid.uuid4().hex[:12]
     file_name = f"mcp-live-{unique}.txt"
     body = f"pipefy-mcp live attachment {unique}\n".encode()
-    b64 = base64.standard_b64encode(body).decode("ascii")
+    file_path = tmp_path / file_name
+    file_path.write_bytes(body)
 
     async with create_client_session(
         live_attachment_mcp,
@@ -119,8 +121,7 @@ async def test_live_upload_attachment_to_card_end_to_end(
                 "organization_id": org_id,
                 "card_id": card_id,
                 "field_id": field_id,
-                "file_name": file_name,
-                "file_content_base64": b64,
+                "file_path": str(file_path),
                 "content_type": "text/plain",
             },
         )
@@ -143,6 +144,7 @@ async def test_live_upload_attachment_to_card_end_to_end(
 async def test_live_upload_attachment_to_table_record_end_to_end(
     live_attachment_mcp,
     extract_payload,
+    tmp_path: Path,
 ):
     """Full MCP path for table records: setTableRecordFieldValue + read-back."""
     require_live_creds()
@@ -156,7 +158,8 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
     unique = uuid.uuid4().hex[:12]
     file_name = f"mcp-live-table-{unique}.txt"
     body = f"pipefy-mcp table live {unique}\n".encode()
-    b64 = base64.standard_b64encode(body).decode("ascii")
+    file_path = tmp_path / file_name
+    file_path.write_bytes(body)
 
     async with create_client_session(
         live_attachment_mcp,
@@ -169,8 +172,7 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
                 "organization_id": org_id,
                 "table_record_id": record_id,
                 "field_id": field_id,
-                "file_name": file_name,
-                "file_content_base64": b64,
+                "file_path": str(file_path),
                 "content_type": "text/plain",
             },
         )
@@ -188,7 +190,9 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
 
 @pytest.mark.integration
 @pytest.mark.anyio
-async def test_live_pipeclaw_mcp_upload_attachment_to_card(extract_payload):
+async def test_live_pipeclaw_mcp_upload_attachment_to_card(
+    extract_payload, tmp_path: Path
+):
     """Registers AttachmentTools via the production app (ToolRegistry wiring)."""
     require_live_creds()
     env = _card_upload_env()
@@ -201,7 +205,8 @@ async def test_live_pipeclaw_mcp_upload_attachment_to_card(extract_payload):
     unique = uuid.uuid4().hex[:12]
     file_name = f"mcp-app-live-{unique}.txt"
     body = f"app-registry {unique}\n".encode()
-    b64 = base64.standard_b64encode(body).decode("ascii")
+    file_path = tmp_path / file_name
+    file_path.write_bytes(body)
 
     with patch("pipefy_mcp.server.settings", settings):
         async with create_client_session(
@@ -215,8 +220,7 @@ async def test_live_pipeclaw_mcp_upload_attachment_to_card(extract_payload):
                     "organization_id": org_id,
                     "card_id": card_id,
                     "field_id": field_id,
-                    "file_name": file_name,
-                    "file_content_base64": b64,
+                    "file_path": str(file_path),
                 },
             )
     assert result.isError is False

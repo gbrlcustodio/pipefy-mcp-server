@@ -2,9 +2,8 @@
 
 The MCP and CLI surfaces both upload file bytes to Pipefy attachment fields
 through the same sequence. This module centralizes the orchestration so that
-source-specific concerns (base64 decode in MCP for in-memory payloads,
-``Path.read_bytes`` for files on disk) live where they belong while the core
-pipeline stays in one place.
+each surface only owns its own input-to-bytes step
+(:class:`pipefy_infra.filesystem.LocalFile`).
 
 Exceptions :class:`AttachmentUploadError` carry a ``step`` attribute so surfaces
 can map them to step-aware error envelopes (MCP) or typer messages (CLI).
@@ -153,9 +152,10 @@ async def _upload_pipeline(
     effective_type = content_type or infer_content_type(file_name)
     content_length = len(file_bytes)
 
-    # Backstop: surfaces (MCP, CLI) already pre-flight via
-    # assert_attachment_size_within_cap, but direct SDK callers should not be
-    # able to bypass the cap and waste a presigned URL on an oversized payload.
+    # Backstop: MCP and CLI pre-flight via LocalFile(max_size_bytes=...) in
+    # pipefy_infra.filesystem, but direct SDK callers (e.g. operators wiring
+    # the pipeline themselves) should not be able to bypass the cap and waste
+    # a presigned URL on an oversized payload.
     try:
         assert_attachment_size_within_cap(content_length, file_name)
     except ValueError as exc:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 __version__ = "0.2.0-beta.1"
 
+from pipefy_sdk.attachment import Attachment
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
 from pipefy_sdk.models import (
@@ -59,6 +60,7 @@ __all__ = [
     "__version__",
     "AiAgentGraphPayload",
     "AiAutomationService",
+    "Attachment",
     "UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS",
     "UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE",
     "AutomationActionRow",

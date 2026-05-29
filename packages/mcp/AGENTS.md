@@ -16,9 +16,6 @@ Implications for tool design:
 - SSRF guards, redirect loops, and download size caps that defend a hosted
   server are not appropriate here. They add maintenance cost without buying
   a security boundary.
-- Base64-over-MCP-transport is reserved for in-memory bytes the agent
-  generated and never wrote to disk. For anything on disk, prefer
-  `file_path` to avoid the ~33% transport inflation.
 
 If a future distribution profile (self-hosted, streaming, etc.) changes this
 trust model, deferred code paths are tagged with `GATED:<PROFILE>` markers.
@@ -38,11 +35,10 @@ Today's markers:
 
 - `GATED:SELF_HOSTED` on `upload_attachment_to_card` and
   `upload_attachment_to_table_record` in `tools/attachment_tools.py`. These
-  tools accept only `file_path` and `file_content_base64` in the
-  local-subprocess profile. Under a self-hosted profile they would also
-  accept a `file_url`, behind a capability flag, with SSRF and size-cap
-  guards initialized from injected settings (not from a fresh
-  `PipefySettings()` env read).
+  tools accept only `file_path` in the local-subprocess profile. Under a
+  self-hosted profile they would also accept a `file_url`, behind a
+  capability flag, with SSRF and size-cap guards initialized from injected
+  settings (not from a fresh `PipefySettings()` env read).
 
 ### When to add a new marker
 

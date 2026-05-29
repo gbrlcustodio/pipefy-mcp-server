@@ -49,7 +49,7 @@ def test_attachment_upload_rejects_oversize_file(
 ):
     """Files over the cap are rejected as a BadParameter; no network call runs."""
     monkeypatch.setattr(
-        "pipefy_sdk.models.attachment.MAX_ATTACHMENT_SIZE_BYTES",
+        "pipefy_cli.commands.attachment.MAX_ATTACHMENT_SIZE_BYTES",
         10,
     )
     oauth_env("att-size")

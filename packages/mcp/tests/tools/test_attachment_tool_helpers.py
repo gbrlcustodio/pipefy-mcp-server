@@ -1,7 +1,5 @@
 """Unit tests for attachment_tool_helpers."""
 
-import binascii
-
 import pytest
 from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk.models.attachment import UploadAttachmentToCardInput
@@ -98,39 +96,16 @@ def test_format_s3_upload_failure_signature_mismatch_hint():
 
 @pytest.mark.unit
 def test_map_upload_error_validation_error():
+    """Missing required file_path surfaces a per-field validation message."""
     with pytest.raises(ValidationError) as exc_info:
         UploadAttachmentToCardInput(
             organization_id="1",
             card_id=1,
             field_id="f",
             file_name="x",
-            file_path="/tmp/a",
-            file_content_base64="Ym9sZAo=",
         )
     text = map_upload_error_to_message(exc_info.value)
-    assert "file_path" in text or "file_content_base64" in text
-
-
-@pytest.mark.unit
-def test_map_upload_error_binascii():
-    exc = binascii.Error("incorrect padding")
-    text = map_upload_error_to_message(exc)
-    assert "base64" in text.lower()
-
-
-@pytest.mark.unit
-def test_map_upload_error_permission_error():
-    exc = PermissionError(13, "Permission denied", "/root/secret")
-    text = map_upload_error_to_message(exc)
-    assert "permission" in text.lower()
-    assert "file_path" in text.lower()
-
-
-@pytest.mark.unit
-def test_map_upload_error_os_error():
-    exc = FileNotFoundError(2, "No such file or directory", "/tmp/missing.pdf")
-    text = map_upload_error_to_message(exc)
-    assert "file_path" in text.lower() or "read" in text.lower()
+    assert "file_path" in text
 
 
 @pytest.mark.unit

@@ -1,6 +1,5 @@
 """Tests for attachment MCP tools (mocked PipefyClient)."""
 
-import base64
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -245,7 +244,7 @@ async def test_upload_attachment_to_card_file_path_is_directory(
     extract_payload,
     tmp_path: Path,
 ):
-    """A directory is not a regular file — same file_read failure."""
+    """A directory is not a regular file: same file_read failure."""
     async with attachment_session as session:
         result = await session.call_tool(
             "upload_attachment_to_card",
@@ -262,63 +261,27 @@ async def test_upload_attachment_to_card_file_path_is_directory(
     mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
 
 
-# ---------------------------------------------------------------------------
-# Base64 path: behavior unchanged by the file_path refactor
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.anyio
-async def test_upload_attachment_to_card_base64_success(
+async def test_upload_attachment_to_card_file_path_unknown_user(
     attachment_session,
     mock_attachment_client,
     extract_payload,
 ):
-    raw = b"hello"
-    b64 = base64.b64encode(raw).decode("ascii")
-
+    """``~unknownuser`` raises RuntimeError in expanduser; must surface as file_read envelope."""
     async with attachment_session as session:
         result = await session.call_tool(
             "upload_attachment_to_card",
             {
-                "organization_id": "42",
-                "card_id": 7,
-                "field_id": "f1",
-                "file_name": "note.txt",
-                "file_content_base64": b64,
-            },
-        )
-
-    assert result.isError is False
-    payload = extract_payload(result)
-    assert payload["success"] is True
-    assert payload["file_size"] == 5
-    mock_attachment_client.upload_attachment_to_card_field.assert_awaited_once()
-    call_kw = mock_attachment_client.upload_attachment_to_card_field.await_args.kwargs
-    assert call_kw["organization_id"] == "42"
-    assert call_kw["file_name"] == "note.txt"
-    assert call_kw["file_bytes"] == raw
-
-
-@pytest.mark.anyio
-async def test_upload_attachment_to_card_base64_requires_file_name(
-    attachment_session,
-    mock_attachment_client,
-    extract_payload,
-):
-    """base64 source has no path to infer file_name from; validator should fail."""
-    async with attachment_session as session:
-        result = await session.call_tool(
-            "upload_attachment_to_card",
-            {
-                "organization_id": "42",
+                "organization_id": "1",
                 "card_id": 1,
                 "field_id": "f",
-                "file_content_base64": base64.b64encode(b"x").decode("ascii"),
+                "file_path": "~ghost_user_does_not_exist_xyz/foo.bin",
             },
         )
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert payload["step"] == "validation"
+    assert payload["step"] == "file_read"
+    assert "expand" in tool_error_message(payload).lower()
     mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
 
 
@@ -332,7 +295,7 @@ async def test_upload_attachment_to_card_rejects_oversize_file_path(
 ):
     """A file larger than the cap fails at file_read; SDK upload never runs."""
     monkeypatch.setattr(
-        "pipefy_sdk.models.attachment.MAX_ATTACHMENT_SIZE_BYTES",
+        "pipefy_mcp.tools.attachment_tools.MAX_ATTACHMENT_SIZE_BYTES",
         10,
     )
     f = tmp_path / "big.bin"
@@ -357,19 +320,12 @@ async def test_upload_attachment_to_card_rejects_oversize_file_path(
 
 
 @pytest.mark.anyio
-async def test_upload_attachment_to_card_rejects_oversize_base64(
+async def test_upload_attachment_to_card_validation_blank_file_path(
     attachment_session,
     mock_attachment_client,
     extract_payload,
-    monkeypatch,
 ):
-    """Decoded base64 above the cap fails at file_read; SDK upload never runs."""
-    monkeypatch.setattr(
-        "pipefy_sdk.models.attachment.MAX_ATTACHMENT_SIZE_BYTES",
-        4,
-    )
-    b64 = base64.b64encode(b"more-than-four-bytes").decode("ascii")
-
+    """An empty file_path is a model-level validation error before any read."""
     async with attachment_session as session:
         result = await session.call_tool(
             "upload_attachment_to_card",
@@ -377,30 +333,28 @@ async def test_upload_attachment_to_card_rejects_oversize_base64(
                 "organization_id": "42",
                 "card_id": 1,
                 "field_id": "f",
-                "file_name": "x.bin",
-                "file_content_base64": b64,
+                "file_path": "  ",
             },
         )
-
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert payload["step"] == "file_read"
-    assert "too large" in tool_error_message(payload).lower()
+    assert payload["step"] == "validation"
     mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
 
 
 @pytest.mark.anyio
-async def test_upload_attachment_to_card_whitespace_file_path_falls_through_to_base64(
+async def test_upload_attachment_to_card_validation_missing_file_path(
     attachment_session,
     mock_attachment_client,
-    extract_payload,
 ):
-    """Whitespace-only file_path is treated as no path (matching SDK validator's
-    `_source_nonempty`), so the base64 source is used instead of failing with
-    a misleading file_read error.
+    """An omitted file_path surfaces the canonical INVALID_ARGUMENTS envelope.
+
+    This is the same shape every Pipefy tool returns for missing/blank required
+    args (produced by ``PipefyValidationTool`` from a FastMCP arg-coercion
+    error), separate from the in-body ``step=validation`` envelope used after
+    arg-coercion succeeds.
     """
-    raw = b"fallback-bytes"
-    b64 = base64.b64encode(raw).decode("ascii")
+    from tools.conftest import assert_invalid_arguments_envelope
 
     async with attachment_session as session:
         result = await session.call_tool(
@@ -409,18 +363,11 @@ async def test_upload_attachment_to_card_whitespace_file_path_falls_through_to_b
                 "organization_id": "42",
                 "card_id": 1,
                 "field_id": "f",
-                "file_name": "note.txt",
-                "file_path": "  ",
-                "file_content_base64": b64,
             },
         )
-
-    assert result.isError is False
-    payload = extract_payload(result)
-    assert payload["success"] is True
-    call_kw = mock_attachment_client.upload_attachment_to_card_field.await_args.kwargs
-    assert call_kw["file_bytes"] == raw
-    assert call_kw["file_name"] == "note.txt"
+    payload = assert_invalid_arguments_envelope(result)
+    assert "file_path" in payload["error"]["message"]
+    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -433,7 +380,10 @@ async def test_upload_attachment_to_card_presigned_url_missing(
     attachment_session,
     mock_attachment_client,
     extract_payload,
+    tmp_path: Path,
 ):
+    f = tmp_path / "a.bin"
+    f.write_bytes(b"a")
     mock_attachment_client.upload_attachment_to_card_field = AsyncMock(
         side_effect=AttachmentUploadError(
             "Pipefy did not return a presigned upload URL.",
@@ -447,8 +397,7 @@ async def test_upload_attachment_to_card_presigned_url_missing(
                 "organization_id": "42",
                 "card_id": 1,
                 "field_id": "f",
-                "file_name": "a.bin",
-                "file_content_base64": "YWIj",
+                "file_path": str(f),
             },
         )
     payload = extract_payload(result)
@@ -462,7 +411,11 @@ async def test_upload_attachment_to_card_presigned_graphql_error(
     attachment_session,
     mock_attachment_client,
     extract_payload,
+    tmp_path: Path,
 ):
+    f = tmp_path / "a.bin"
+    f.write_bytes(b"a")
+
     def _raise_upload(*_a, **_k):
         gql_exc = TransportQueryError("x", errors=[{"message": "org denied"}])
         raise AttachmentUploadError(
@@ -480,8 +433,7 @@ async def test_upload_attachment_to_card_presigned_graphql_error(
                 "organization_id": "42",
                 "card_id": 1,
                 "field_id": "f",
-                "file_name": "a.bin",
-                "file_content_base64": "YWIj",
+                "file_path": str(f),
             },
         )
     payload = extract_payload(result)
@@ -495,7 +447,10 @@ async def test_upload_attachment_to_card_s3_failure(
     attachment_session,
     mock_attachment_client,
     extract_payload,
+    tmp_path: Path,
 ):
+    f = tmp_path / "a.bin"
+    f.write_bytes(b"a")
     mock_attachment_client.upload_attachment_to_card_field = AsyncMock(
         side_effect=AttachmentUploadError(
             "S3 upload failed with HTTP 403.",
@@ -511,8 +466,7 @@ async def test_upload_attachment_to_card_s3_failure(
                 "organization_id": "42",
                 "card_id": 1,
                 "field_id": "f",
-                "file_name": "a.bin",
-                "file_content_base64": "YWIj",
+                "file_path": str(f),
             },
         )
     payload = extract_payload(result)
@@ -525,7 +479,11 @@ async def test_upload_attachment_to_card_field_update_failure(
     attachment_session,
     mock_attachment_client,
     extract_payload,
+    tmp_path: Path,
 ):
+    f = tmp_path / "a.bin"
+    f.write_bytes(b"a")
+
     def _raise_field(*_a, **_k):
         inner = TransportQueryError(
             "x", errors=[{"message": "field must be attachment"}]
@@ -545,8 +503,7 @@ async def test_upload_attachment_to_card_field_update_failure(
                 "organization_id": "42",
                 "card_id": 1,
                 "field_id": "f",
-                "file_name": "a.bin",
-                "file_content_base64": "YWIj",
+                "file_path": str(f),
             },
         )
     payload = extract_payload(result)
@@ -556,7 +513,7 @@ async def test_upload_attachment_to_card_field_update_failure(
 
 
 @pytest.mark.anyio
-async def test_upload_attachment_to_card_validation_both_sources(
+async def test_upload_attachment_to_table_record_presigned_error(
     attachment_session,
     mock_attachment_client,
     extract_payload,
@@ -564,30 +521,6 @@ async def test_upload_attachment_to_card_validation_both_sources(
 ):
     f = tmp_path / "x.bin"
     f.write_bytes(b"x")
-    async with attachment_session as session:
-        result = await session.call_tool(
-            "upload_attachment_to_card",
-            {
-                "organization_id": "42",
-                "card_id": 1,
-                "field_id": "f",
-                "file_name": "a.bin",
-                "file_path": str(f),
-                "file_content_base64": base64.b64encode(b"x").decode("ascii"),
-            },
-        )
-    payload = extract_payload(result)
-    assert payload["success"] is False
-    assert payload["step"] == "validation"
-    mock_attachment_client.upload_attachment_to_card_field.assert_not_called()
-
-
-@pytest.mark.anyio
-async def test_upload_attachment_to_table_record_base64_and_presigned_error(
-    attachment_session,
-    mock_attachment_client,
-    extract_payload,
-):
     mock_attachment_client.upload_attachment_to_table_record_field = AsyncMock(
         side_effect=AttachmentUploadError(
             "Pipefy did not return a presigned upload URL.",
@@ -601,8 +534,7 @@ async def test_upload_attachment_to_table_record_base64_and_presigned_error(
                 "organization_id": "42",
                 "table_record_id": "r1",
                 "field_id": "tf",
-                "file_name": "x.bin",
-                "file_content_base64": "QQ==",
+                "file_path": str(f),
             },
         )
     payload = extract_payload(result)
@@ -614,7 +546,10 @@ async def test_upload_attachment_to_table_record_s3_failure(
     attachment_session,
     mock_attachment_client,
     extract_payload,
+    tmp_path: Path,
 ):
+    f = tmp_path / "x.bin"
+    f.write_bytes(b"x")
     mock_attachment_client.upload_attachment_to_table_record_field = AsyncMock(
         side_effect=AttachmentUploadError(
             "S3 upload failed with HTTP 500.",
@@ -629,8 +564,7 @@ async def test_upload_attachment_to_table_record_s3_failure(
                 "organization_id": "42",
                 "table_record_id": "r1",
                 "field_id": "tf",
-                "file_name": "x.bin",
-                "file_content_base64": "QQ==",
+                "file_path": str(f),
             },
         )
     payload = extract_payload(result)
@@ -638,11 +572,15 @@ async def test_upload_attachment_to_table_record_s3_failure(
 
 
 @pytest.mark.anyio
-async def test_upload_attachment_to_table_field_update_failure(
+async def test_upload_attachment_to_table_record_field_update_failure(
     attachment_session,
     mock_attachment_client,
     extract_payload,
+    tmp_path: Path,
 ):
+    f = tmp_path / "x.bin"
+    f.write_bytes(b"x")
+
     def _raise_field(*_a, **_k):
         inner = TransportQueryError("e", errors=[{"message": "invalid field"}])
         raise AttachmentUploadError(
@@ -660,8 +598,7 @@ async def test_upload_attachment_to_table_field_update_failure(
                 "organization_id": "42",
                 "table_record_id": "r1",
                 "field_id": "tf",
-                "file_name": "x.bin",
-                "file_content_base64": "QQ==",
+                "file_path": str(f),
             },
         )
     payload = extract_payload(result)
@@ -678,9 +615,10 @@ async def test_upload_attachment_to_card_coerces_int_ids(
     attachment_session,
     mock_attachment_client,
     extract_payload,
+    tmp_path: Path,
 ):
-    raw = b"hello"
-    b64 = base64.b64encode(raw).decode("ascii")
+    f = tmp_path / "note.txt"
+    f.write_bytes(b"hello")
 
     async with attachment_session as session:
         result = await session.call_tool(
@@ -689,8 +627,7 @@ async def test_upload_attachment_to_card_coerces_int_ids(
                 "organization_id": 42,
                 "card_id": 7,
                 "field_id": 999,
-                "file_name": "note.txt",
-                "file_content_base64": b64,
+                "file_path": str(f),
             },
         )
 
@@ -702,7 +639,7 @@ async def test_upload_attachment_to_card_coerces_int_ids(
     assert call_kw["organization_id"] == "42"
     assert call_kw["card_id"] == "7"
     assert call_kw["field_id"] == "999"
-    assert call_kw["file_bytes"] == raw
+    assert call_kw["file_bytes"] == b"hello"
 
 
 @pytest.mark.anyio
@@ -710,9 +647,10 @@ async def test_upload_attachment_to_table_record_coerces_int_ids(
     attachment_session,
     mock_attachment_client,
     extract_payload,
+    tmp_path: Path,
 ):
-    raw = b"hello"
-    b64 = base64.b64encode(raw).decode("ascii")
+    f = tmp_path / "data.csv"
+    f.write_bytes(b"hello")
 
     async with attachment_session as session:
         result = await session.call_tool(
@@ -721,8 +659,7 @@ async def test_upload_attachment_to_table_record_coerces_int_ids(
                 "organization_id": 42,
                 "table_record_id": 200,
                 "field_id": 300,
-                "file_name": "data.csv",
-                "file_content_base64": b64,
+                "file_path": str(f),
             },
         )
 
@@ -736,4 +673,4 @@ async def test_upload_attachment_to_table_record_coerces_int_ids(
     assert call_kw["organization_id"] == "42"
     assert call_kw["table_record_id"] == "200"
     assert call_kw["field_id"] == "300"
-    assert call_kw["file_bytes"] == raw
+    assert call_kw["file_bytes"] == b"hello"

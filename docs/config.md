@@ -44,6 +44,45 @@ Keys use **bare pydantic field names**, not the upper-case `PIPEFY_<NAME>` envir
 
 Unknown keys are silently ignored — pasting both auth and SDK fields into one file is supported and expected.
 
+## Environment variables
+
+The same fields populate from environment variables in upper-case `PIPEFY_<NAME>` form. Env vars feed `pipefy_auth.AuthSettings` and `pipefy_sdk.PipefySettings` independently (both packages run their own SSRF gates and validation). Precedence over TOML and defaults is documented in the next section. A working sample with placeholders lives at [`../.env.example`](../.env.example).
+
+### URL and credential variables
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `PIPEFY_BASE_URL` | `https://app.pipefy.com` | Drives the four API endpoints (`graphql_url`, `internal_api_url`, `interfaces_graphql_url`, `service_account_url`) as computed properties. Set once for non-prod environments. |
+| `PIPEFY_AUTH_URL` | `https://signin.pipefy.com/realms/pipefy` | OIDC issuer for `pipefy auth login`. Non-prod realm names don't follow a derivable convention, so this stays a separate full URL. |
+| `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | unset | Service-account OAuth client id. Required for unattended (CI / MCP server) auth unless `PIPEFY_TOKEN` is set. |
+| `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | unset | Companion secret. Treat as sensitive. |
+| `PIPEFY_TOKEN` | unset | Static bearer token. Bypasses OAuth entirely. Intended for CI / scripted use; the CLI also accepts `--token`. |
+| `PIPEFY_AUTH_CLIENT_ID` | `pipefy-cli` | OIDC client id for the interactive `pipefy auth login` browser flow. Rarely set. |
+
+URL variables must match `https?://` plus non-whitespace and resolve to a public host. `localhost` and RFC1918 ranges are rejected at construction (SSRF policy). Override with `PIPEFY_ALLOW_INSECURE_URLS=true` for local development against non-public hosts.
+
+Credential variables reject leading and trailing whitespace; `PIPEFY_ORG_ID` (below) must be ASCII numeric.
+
+### Optional variables
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `PIPEFY_ORG_ID` | unset | Convenience: pins a default org for CLI and MCP tools that take an optional `org_id` argument. |
+| `PIPEFY_SERVICE_ACCOUNT_IDS` | `[]` | Comma-separated list (env-var form) or native TOML array (`service_account_ids = ["42", "43"]`). Guards against accidentally treating service-account users as humans in member-management tools. |
+| `PIPEFY_PORTAL_ORG_UUID` | unset | SDK portal integration tests only (`pytest -m integration`). Set in local `.env` to an org UUID where the active token has the `manage_portals` scope. Never committed; production code paths don't read this. See [`mcp/tools/portal.md`](mcp/tools/portal.md) for scope and example values. |
+| `PIPEFY_DISABLE_STORED_SESSION` | `0` | Set to `1` (or `disable_stored_session = true` in TOML) to skip the keychain-backed stored-session tier entirely. `pipefy auth login` / `auth logout` refuse with exit code 2 when set. |
+| `PIPEFY_KEYCHAIN_BACKEND` | `auto` | Set to `file` (or `keychain_backend = "file"` in TOML) to use a file-backed plaintext keyring under `~/.config/pipefy/keyring.cfg` (`%APPDATA%\pipefy\keyring.cfg` on Windows). Unblocks headless Linux and CI runners. Plaintext on disk; opt-in only. |
+| `PIPEFY_ALLOW_INSECURE_URLS` | `false` | Disables the SSRF host check on URL variables. Local development only. |
+| `PIPEFY_CONFIG_FILE` | unset | Overrides the default `config.toml` path. See [File path](#file-path) above. |
+
+### Legacy aliases
+
+`PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` resolve to `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` and `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` via an alias shim, with a one-shot stderr deprecation warning per legacy key. The aliases will be removed in a later `0.2.0-beta.x` release.
+
+`PIPEFY_OAUTH_URL` is dropped without a replacement. The OAuth token endpoint now derives from `PIPEFY_BASE_URL`.
+
+Full migration notes: [`MIGRATION.md#service-account-env-var-rename`](MIGRATION.md#service-account-env-var-rename).
+
 ## Precedence
 
 ```

@@ -2,7 +2,7 @@
 
 Do not copy production org UUIDs, numeric org ids, or pipe repo ids into test code.
 Live integration tests read real identifiers from repo-root ``.env`` (e.g.
-``PIPEFY_PORTAL_ORG_UUID`` for portal SDK smoke — see ``docs/setup.md`` and
+``PIPEFY_PORTAL_ORG_UUID`` for portal SDK smoke — see ``docs/config.md`` and
 ``.env.example``).
 """
 

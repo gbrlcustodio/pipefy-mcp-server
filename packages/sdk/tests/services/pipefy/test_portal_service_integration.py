@@ -3,7 +3,7 @@
 Requires valid Pipefy credentials in repo-root **``.env``** (``PIPEFY_*``). All tests
 require ``PIPEFY_PORTAL_ORG_UUID`` (org where the token has ``manage_portals``).
 Unit tests use fictional ids in ``_shared.fixture_ids`` — never commit real org ids
-into test source. See ``docs/setup.md`` and ``.env.example``.
+into test source. See ``docs/config.md`` and ``.env.example``.
 
 Optional smoke:
 

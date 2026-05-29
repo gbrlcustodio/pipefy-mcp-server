@@ -10,9 +10,9 @@ Otherwise prompt the user to confirm running:
 
 ```
 uv tool install --force \
-  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/auth" \
-  "git+https://github.com/gbrlcustodio/pipefy-mcp-server@dev#subdirectory=packages/cli"
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli"
 ```
 
 Verify with `pipefy --version`.

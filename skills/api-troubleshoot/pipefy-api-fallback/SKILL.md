@@ -65,7 +65,7 @@ PATs are deprecated for new integrations but may still exist in the environment.
 | Schema introspection only | `https://app.pipefy.com/graphql` |
 | OAuth2 token | `https://app.pipefy.com/oauth/token` |
 
-Real operations go to `api.pipefy.com`; introspection goes to `app.pipefy.com`. `$PIPEFY_GRAPHQL_URL` is already wired by the MCP/CLI, but raw-API users must distinguish the two.
+Real operations go to `api.pipefy.com`; introspection goes to `app.pipefy.com`. The MCP server and CLI route between the two automatically (both derived from `PIPEFY_BASE_URL`); raw-API users must distinguish them by hand.
 
 ---
 

@@ -49,7 +49,20 @@ Feedback and issues: [GitHub Issues](https://github.com/gbrlcustodio/pipefy-mcp-
 
 ## Installation
 
-### Plugin install (Claude Code)
+> Pre-1.0 ships from this git repo via `uvx` and `uv tool install`. PyPI becomes the canonical source at **v1.0**. The current beta line is **`v0.2.0-beta.*`** (first tag: [`v0.2.0-beta.1`](https://github.com/gbrlcustodio/pipefy-mcp-server/releases/tag/v0.2.0-beta.1)). Every snippet below pins **`@latest`** — a moving git tag the release flow updates to point at the most recent release. To pin a specific version, swap `@latest` for a version tag (e.g. `@v0.2.0-beta.2`).
+>
+> The `--with pipefy-sdk @ ...#subdirectory=packages/sdk` / `pipefy-auth @ ...#subdirectory=packages/auth` flags are required pre-1.0: this repo is a uv workspace, and the workspace members are not yet published to PyPI, so uv needs them named explicitly. The flags go away at v1.0 (PyPI install).
+
+Two auth paths:
+
+- **Human OAuth (interactive)**: `pipefy auth login` runs the browser flow and stores a session in your OS keychain. Works anywhere the `pipefy` CLI is on PATH (`uv tool install` once, any client can invoke it). Claude Code additionally exposes it as the `/pipefy:login` slash command via the plugin marketplace. Pipe membership is whatever the signed-in user already has.
+- **Service account (unattended / CI)**: provision a Service Account in [Pipefy Admin](https://app.pipefy.com/) (Admin → Service Accounts) and add that account to every pipe the tools should touch. Wire `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` and `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` into the client config below.
+
+Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
+
+### MCP client wiring
+
+#### Claude Code
 
 ```text
 /plugin marketplace add gbrlcustodio/pipefy-mcp-server
@@ -58,48 +71,129 @@ Feedback and issues: [GitHub Issues](https://github.com/gbrlcustodio/pipefy-mcp-
 /pipefy:login
 ```
 
-`/plugin install pipefy` registers the MCP server and the `/pipefy:install` and `/pipefy:login` slash commands. `/pipefy:install` is a one-shot that runs `uv tool install` to put a stable `pipefy` binary on PATH (idempotent; a subsequent invocation reports the existing version and exits). `/pipefy:login` runs the OAuth browser flow and stores the session in the OS keychain; it requires `pipefy` on PATH and will tell you to run `/pipefy:install` first if it isn't. Environment variables (`PIPEFY_GRAPHQL_URL`, `PIPEFY_AUTH_URL`, service-account credentials, etc.) are configured per **[`docs/setup.md`](docs/setup.md#claude-code)** — that file is the single source of truth so the names do not drift. Claude Code only; other hosts use the terminal flow below.
+`/plugin install pipefy` registers the MCP server and the `/pipefy:install` + `/pipefy:login` slash commands. `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent). `/pipefy:login` runs the OAuth browser flow. For terminal-driven setups or per-project `.mcp.json`, see [`packages/mcp/README.md`](packages/mcp/README.md).
 
-### Pre-1.0 (git)
+#### Cursor
 
-Installs from this repository use **`uvx`** or **`uv tool install`**. PyPI becomes the canonical source at **v1.0**.
+Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per project):
 
-The current public beta line is **`v0.2.0-beta.*`** (first tag: [`v0.2.0-beta.1`](https://github.com/gbrlcustodio/pipefy-mcp-server/releases/tag/v0.2.0-beta.1)), following the standalone [`v0.1.0-beta.1`](https://github.com/gbrlcustodio/pipefy-mcp-server/releases/tag/v0.1.0-beta.1). Pin a tag for reproducible installs:
-
-```sh
-uvx --from git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.2.0-beta.1 --refresh pipefy-mcp-server --help
-uvx --from git+https://github.com/gbrlcustodio/pipefy-mcp-server@v0.2.0-beta.1 --refresh pipefy-cli --version
+```json
+{
+  "mcpServers": {
+    "pipefy": {
+      "command": "uvx",
+      "args": [
+        "--with",
+        "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk",
+        "--with",
+        "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth",
+        "--from",
+        "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp",
+        "pipefy-mcp-server"
+      ],
+      "env": {
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<CLIENT_ID>",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<CLIENT_SECRET>"
+      }
+    }
+  }
+}
 ```
 
-**MCP server** (IDE integration):
+#### Claude Desktop
 
-```sh
-uvx --from git+https://github.com/gbrlcustodio/pipefy-mcp-server --refresh pipefy-mcp-server
+Config file location:
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+
+```json
+{
+  "mcpServers": {
+    "pipefy": {
+      "command": "uvx",
+      "args": [
+        "--with",
+        "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk",
+        "--with",
+        "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth",
+        "--from",
+        "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp",
+        "pipefy-mcp-server"
+      ],
+      "env": {
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<CLIENT_ID>",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<CLIENT_SECRET>"
+      }
+    }
+  }
+}
 ```
 
-**CLI** (scripts and automation):
+#### Codex
 
-```sh
-uvx --from git+https://github.com/gbrlcustodio/pipefy-mcp-server --refresh pipefy-cli
+Edit `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.pipefy]
+command = "uvx"
+args = [
+  "--with", "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk",
+  "--with", "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth",
+  "--from", "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp",
+  "pipefy-mcp-server",
+]
+env = { PIPEFY_SERVICE_ACCOUNT_CLIENT_ID = "<CLIENT_ID>", PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET = "<CLIENT_SECRET>" }
 ```
 
-Permanent install (both packages):
+#### Other MCP clients
+
+Most clients accept a project-root `.mcp.json` with the same shape as the Cursor block above. For `claude mcp add` per-project wiring, the macOS `errSecParam` keychain note, and the local-clone alternative for contributors, see [`packages/mcp/README.md`](packages/mcp/README.md).
+
+### CLI
+
+Ad-hoc:
 
 ```sh
-uv tool install "pipefy-mcp-server @ git+https://github.com/gbrlcustodio/pipefy-mcp-server"
-uv tool install "pipefy-cli @ git+https://github.com/gbrlcustodio/pipefy-mcp-server"
+uvx \
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli" \
+  pipefy-cli --help
 ```
 
-### Post-1.0 (PyPI)
+Permanent install:
+
+```sh
+uv tool install \
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli"
+pipefy --install-completion bash    # or zsh, fish
+pipefy auth login                   # browser OAuth, session in OS keychain
+```
+
+CLI deep-dives (auth precedence, `--token` / `PIPEFY_TOKEN`, parity matrix): [`packages/cli/README.md`](packages/cli/README.md) and [`docs/cli/`](docs/cli/README.md).
+
+### Skill catalog install
+
+```sh
+npx skills add gbrlcustodio/pipefy-mcp-server                           # all skills
+npx skills add gbrlcustodio/pipefy-mcp-server --skill pipefy-pipes-and-cards
+```
+
+Catalog and authoring guide: [`skills/README.md`](skills/README.md).
+
+### Post-1.0 (PyPI preview)
 
 ```sh
 uvx pipefy-mcp-server
 uv tool install pipefy-cli
 ```
 
-**Configuration:** environment variables, `.env`, and MCP client samples — **[`docs/setup.md`](docs/setup.md)**.
-
-**Deprecation and semver (post-1.0):** **[`docs/DEPRECATION.md`](docs/DEPRECATION.md)**.
+Deprecation and semver (post-1.0): [`docs/DEPRECATION.md`](docs/DEPRECATION.md).
 
 ---
 
@@ -154,14 +248,7 @@ CLI-specific guides: **[`docs/cli/`](docs/cli/README.md)** (including [introspec
 
 ## Agent skills
 
-The [`skills/`](skills/) directory holds workflow playbooks: prerequisites, tool tables (MCP + CLI), steps, and success criteria. Compatible with any agent that reads Markdown (Cursor, Claude Code, Codex, and others).
-
-**Install via [`skills.sh`](https://github.com/vercel-labs/skills)** (55+ agent targets):
-
-```sh
-npx skills add gbrlcustodio/pipefy-mcp-server                           # all skills
-npx skills add gbrlcustodio/pipefy-mcp-server --skill pipefy-pipes-and-cards
-```
+The [`skills/`](skills/) directory holds workflow playbooks: prerequisites, tool tables (MCP + CLI), steps, and success criteria. Compatible with any agent that reads Markdown (Cursor, Claude Code, Codex, and others). Distribution is via [`skills.sh`](https://github.com/vercel-labs/skills) (55+ agent targets); install commands are under [Installation](#installation) above.
 
 Full catalog: [`skills/README.md`](skills/README.md). Authoring: [`skills/AGENTS.md`](skills/AGENTS.md). Contributions: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
@@ -172,7 +259,7 @@ Full catalog: [`skills/README.md`](skills/README.md). Authoring: [`skills/AGENTS
 | Document | Description |
 |----------|-------------|
 | [`docs/README.md`](docs/README.md) | Index by surface (MCP, CLI, SDK). |
-| [`docs/setup.md`](docs/setup.md) | Install, `PIPEFY_*` variables, MCP client config. |
+| [`docs/config.md`](docs/config.md) | `PIPEFY_*` environment variables, `config.toml` schema and path, precedence chain. |
 | [`docs/parity.md`](docs/parity.md) | MCP tool ↔ CLI command matrix. |
 | [`docs/MIGRATION.md`](docs/MIGRATION.md) | Notes for existing MCP users. |
 | [`AGENTS.md`](AGENTS.md) | Repository guidelines for contributors and agents. |
@@ -182,10 +269,11 @@ Full catalog: [`skills/README.md`](skills/README.md). Authoring: [`skills/AGENTS
 
 ## Development
 
-From the repository root:
+Install [`uv`](https://docs.astral.sh/uv/getting-started/installation/) if you don't have it, then from the repository root:
 
 ```bash
 uv sync
+[[ -f .env ]] || cp .env.example .env   # first-time setup; then fill in PIPEFY_SERVICE_ACCOUNT_*
 uv run pytest -m "not integration"    # unit tests (no live API)
 uv run pytest -m integration -v     # live API (requires PIPEFY_*)
 uv run ruff check . && uv run ruff format .

@@ -75,7 +75,7 @@ npx skills add gbrlcustodio/pipefy-mcp-server --skill pipefy-pipes-and-cards
 
 ## Environment variables — mostly unchanged
 
-The same `PIPEFY_*` variables work for both MCP and CLI. A working `.env` for `pipefy-mcp-server` gives you `pipefy-cli` auth immediately. See [`docs/setup.md`](setup.md) for the full list.
+The same `PIPEFY_*` variables work for both MCP and CLI. A working `.env` for `pipefy-mcp-server` gives you `pipefy-cli` auth immediately. See [`docs/config.md#environment-variables`](config.md#environment-variables) for the full list.
 
 One rename in the upcoming `0.2.0-beta.x` line is covered below.
 

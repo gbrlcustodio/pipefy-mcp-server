@@ -20,7 +20,6 @@ from pipefy_sdk.models.attachment import (
     AttachmentUploadResult,
     CardTarget,
     TableRecordTarget,
-    infer_content_type,
 )
 from pipefy_sdk.queries.attachment_queries import (
     CREATE_PRESIGNED_URL_MUTATION,
@@ -201,8 +200,6 @@ class AttachmentService(BasePipefyClient):
                     )
                 case _:
                     assert_never(target)
-        except AttachmentUploadError:
-            raise
         except Exception as exc:
             raise AttachmentUploadError(
                 f"Field update failed: {exc}",
@@ -255,14 +252,3 @@ class AttachmentService(BasePipefyClient):
         if not path:
             raise ValueError("Presigned URL has no object path.")
         return path
-
-
-# ``infer_content_type`` is re-exported here for callers that previously imported it
-# from ``pipefy_sdk.services.attachment_service``; the canonical location is
-# ``pipefy_sdk.models.attachment``.
-__all__ = [
-    "AttachmentService",
-    "HttpxS3Uploader",
-    "S3Uploader",
-    "infer_content_type",
-]

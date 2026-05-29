@@ -32,7 +32,7 @@ def configure_keychain_backend(choice: Literal["auto", "file"]) -> None:
         choice: ``"auto"`` is a no-op and preserves ``keyring``'s built-in
             backend-discovery default. ``"file"`` swaps to
             :class:`keyrings.alt.file.PlaintextKeyring` writing under
-            ``pipefy_infra.config_dir() / "keyring.cfg"``; the file stores
+            ``pipefy_infra.config.config_dir() / "keyring.cfg"``; the file stores
             credentials in plaintext on disk and is intended for headless
             Linux or CI runners where the OS keychain is unavailable.
     """
@@ -40,7 +40,7 @@ def configure_keychain_backend(choice: Literal["auto", "file"]) -> None:
         return
     import keyring
     from keyrings.alt.file import PlaintextKeyring
-    from pipefy_infra import config_dir
+    from pipefy_infra.config import config_dir
 
     backend = PlaintextKeyring()
     backend.file_path = str(config_dir() / _KEYRING_FILENAME)

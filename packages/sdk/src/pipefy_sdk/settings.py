@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pipefy_infra import PipefyTomlConfigSource, validate_https_service_endpoint_url
+from pipefy_infra import security
+from pipefy_infra.config import PipefyTomlConfigSource
 from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
@@ -13,13 +14,6 @@ from pydantic_settings import (
 
 # Canonical Pipefy production API host root.
 DEFAULT_BASE_URL = "https://app.pipefy.com"
-
-# URL-shape gate. ``_validate_pipefy_endpoint_urls`` runs the deeper SSRF +
-# scheme check after settings construction. The scheme part is
-# case-insensitive (RFC 3986 §3.1) so `HTTPS://...` from operator
-# copy-paste passes the shape gate; httpx + gql normalize the scheme
-# downstream.
-_URL_SHAPE_PATTERN = r"^(?i:https?)://\S+$"
 
 # Pipefy organization IDs are ASCII numeric strings (matches the docstring).
 # ``\d`` is Unicode-aware in Python ``re`` (Arabic-Indic ١٢٣, Devanagari १२३,
@@ -82,7 +76,7 @@ class PipefySettings(BaseSettings):
 
     base_url: str = Field(
         default=DEFAULT_BASE_URL,
-        pattern=_URL_SHAPE_PATTERN,
+        pattern=security.URL_SHAPE_PATTERN,
         description=(
             "Pipefy API host root (env: PIPEFY_BASE_URL). Drives ``graphql_url`` / "
             "``internal_api_url`` / ``interfaces_graphql_url`` (and the OAuth "
@@ -157,10 +151,6 @@ class PipefySettings(BaseSettings):
     @field_validator("base_url", "org_id", mode="before")
     @classmethod
     def _strip_str(cls, value: object) -> object:
-        # Strip surrounding whitespace on every env-loaded string so a stray
-        # leading / trailing space from copy-paste does not trip the per-field
-        # ``pattern`` constraint. Empty-after-strip still fails the pattern
-        # (the "empty raises" contract).
         if isinstance(value, str):
             return value.strip()
         return value
@@ -197,23 +187,13 @@ class PipefySettings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_pipefy_endpoint_urls(self) -> Self:
-        from urllib.parse import urlparse
-
+        # ``base_url`` is the host root that drives ``/graphql``,
+        # ``/internal_api``, ``/graphql/interfaces`` via the computed
+        # properties above; any non-root path/query/fragment would corrupt
+        # the f-string concatenation.
         stripped = self.base_url.strip()
-        parsed = urlparse(stripped)
-        # ``base_url`` must be a host root: derived endpoints (``graphql_url``,
-        # ``internal_api_url``, ``interfaces_graphql_url``) append fixed paths to
-        # it via f-strings. A query / fragment / non-root path would land inside
-        # the resulting URL's query slot or as a path prefix, producing
-        # silently-malformed endpoints rather than a loud validation error.
-        if parsed.path.strip("/") or parsed.query or parsed.fragment:
-            msg = (
-                f"base_url must be a host root with no path, query, or fragment "
-                f"(got {self.base_url!r}); the SDK appends "
-                "``/graphql`` / ``/internal_api`` / ``/graphql/interfaces`` to it."
-            )
-            raise ValueError(msg)
-        validate_https_service_endpoint_url(
+        security.assert_url_is_host_root(stripped, field_label="base_url")
+        security.validate_https_url(
             stripped, "base_url", allow_insecure=self.allow_insecure_urls
         )
         return self

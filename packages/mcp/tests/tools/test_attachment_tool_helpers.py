@@ -1,8 +1,5 @@
 """Unit tests for attachment_tool_helpers."""
 
-import binascii
-
-import httpx
 import pytest
 from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk.models.attachment import UploadAttachmentToCardInput
@@ -99,50 +96,32 @@ def test_format_s3_upload_failure_signature_mismatch_hint():
 
 @pytest.mark.unit
 def test_map_upload_error_validation_error():
+    """Missing required file_path surfaces a per-field validation message."""
     with pytest.raises(ValidationError) as exc_info:
         UploadAttachmentToCardInput(
             organization_id="1",
             card_id=1,
             field_id="f",
             file_name="x",
-            file_url="http://a",
-            file_content_base64="Ym9sZAo=",
         )
-    text = map_upload_error_to_message(exc_info.value, "validation")
-    assert "file_url" in text or "file_content_base64" in text
-
-
-@pytest.mark.unit
-def test_map_upload_error_binascii():
-    exc = binascii.Error("incorrect padding")
-    text = map_upload_error_to_message(exc, "file_download")
-    assert "base64" in text.lower()
-
-
-@pytest.mark.unit
-def test_map_upload_error_http_status_file_download():
-    req = httpx.Request("GET", "https://example.com/f")
-    resp = httpx.Response(404, request=req)
-    exc = httpx.HTTPStatusError("x", request=req, response=resp)
-    text = map_upload_error_to_message(exc, "file_download")
-    assert "404" in text
-    assert "file_url" in text
+    text = map_upload_error_to_message(exc_info.value)
+    assert "file_path" in text
 
 
 @pytest.mark.unit
 def test_map_upload_error_transport_query():
     exc = TransportQueryError("q", errors=[{"message": "not allowed"}])
-    text = map_upload_error_to_message(exc, "field_update")
+    text = map_upload_error_to_message(exc)
     assert "not allowed" in text
 
 
 @pytest.mark.unit
 def test_map_upload_error_value_error():
-    text = map_upload_error_to_message(ValueError("bad path"), "presigned_url")
+    text = map_upload_error_to_message(ValueError("bad path"))
     assert text == "bad path"
 
 
 @pytest.mark.unit
 def test_map_upload_error_generic():
-    text = map_upload_error_to_message(RuntimeError("boom"), "presigned_url")
+    text = map_upload_error_to_message(RuntimeError("boom"))
     assert "boom" in text

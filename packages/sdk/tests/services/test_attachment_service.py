@@ -1,17 +1,28 @@
-"""Unit tests for AttachmentService and attachment GraphQL constants."""
+"""Unit tests for AttachmentService, HttpxS3Uploader, and the upload pipeline."""
 
+from __future__ import annotations
+
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID
 from graphql import print_ast
 from pipefy_auth import StaticBearerAuth
 
-from pipefy_sdk.client import PipefyClient
+from pipefy_sdk.models.attachment import (
+    Attachment,
+    AttachmentUploadError,
+    CardTarget,
+    TableRecordTarget,
+)
 from pipefy_sdk.queries.attachment_queries import (
     CREATE_PRESIGNED_URL_MUTATION,
 )
-from pipefy_sdk.services.attachment_service import AttachmentService
+from pipefy_sdk.services.attachment_service import (
+    _ALLOWED_UPLOAD_HOST_RE,
+    AttachmentService,
+    HttpxS3Uploader,
+)
 from pipefy_sdk.settings import PipefySettings
 
 _TEST_AUTH = StaticBearerAuth("test-bearer-token")
@@ -24,10 +35,59 @@ def mock_settings():
     )
 
 
-def _make_service(mock_settings, return_value):
-    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value=return_value)
+def _make_service(
+    mock_settings,
+    *,
+    presigned_payload: dict | None = None,
+    s3_status: int = 200,
+    s3_body_snippet: str | None = None,
+    card_service: MagicMock | None = None,
+    table_service: MagicMock | None = None,
+) -> AttachmentService:
+    """Build an AttachmentService with mocked collaborators.
+
+    Wires:
+    - ``execute_query`` to return ``presigned_payload`` if given.
+    - The injected ``S3Uploader`` to return ``status_code=s3_status``.
+    - ``card_service`` / ``table_service`` to ``AsyncMock`` defaults.
+    """
+    card = card_service or MagicMock()
+    if card_service is None:
+        card.update_card_field = AsyncMock(return_value={"ok": True})
+    table = table_service or MagicMock()
+    if table_service is None:
+        table.set_table_record_field_value = AsyncMock(return_value={"ok": True})
+
+    fake_uploader = MagicMock()
+    put_result: dict = {"status_code": s3_status}
+    if s3_body_snippet is not None:
+        put_result["body_snippet"] = s3_body_snippet
+    fake_uploader.put = AsyncMock(return_value=put_result)
+
+    service = AttachmentService(
+        settings=mock_settings,
+        auth=_TEST_AUTH,
+        card_service=card,
+        table_service=table,
+        s3_uploader=fake_uploader,
+    )
+    service.execute_query = AsyncMock(
+        return_value=presigned_payload
+        if presigned_payload is not None
+        else {
+            "createPresignedUrl": {
+                "url": "https://s3.amazonaws.com/bucket/key?sig=1",
+                "downloadUrl": "https://app.pipefy.com/dl/1",
+            }
+        }
+    )
     return service
+
+
+def _build_attachment(tmp_path: Path, *, name: str = "report.pdf") -> Attachment:
+    f = tmp_path / name
+    f.write_bytes(b"%PDF-1.4")
+    return Attachment(path=f)
 
 
 @pytest.mark.unit
@@ -56,7 +116,7 @@ def test_extract_storage_path_standard_presigned_url():
         "orgs/550e8400-e29b-41d4-a716-446655440000/"
         "uploads/660e8400-e29b-41d4-a716-446655440001/report.pdf"
     )
-    assert AttachmentService.extract_storage_path(url) == expected
+    assert AttachmentService._extract_storage_path(url) == expected
 
 
 @pytest.mark.unit
@@ -66,7 +126,7 @@ def test_extract_storage_path_special_characters_in_filename():
         "my%20file%20%C3%A9t%C3%A9.txt?signature=abc"
     )
     assert (
-        AttachmentService.extract_storage_path(url)
+        AttachmentService._extract_storage_path(url)
         == "orgs/u1/uploads/u2/my file été.txt"
     )
 
@@ -82,60 +142,15 @@ def test_extract_storage_path_special_characters_in_filename():
 )
 def test_extract_storage_path_empty_path_raises(bad_url):
     with pytest.raises(ValueError, match="no object path"):
-        AttachmentService.extract_storage_path(bad_url)
+        AttachmentService._extract_storage_path(bad_url)
+
+
+# HttpxS3Uploader
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_presigned_url_success(mock_settings):
-    payload = {
-        "createPresignedUrl": {
-            "url": "https://s3.example.com/put?sig=1",
-            "downloadUrl": "https://app.pipefy.com/files/dl/xyz",
-            "clientMutationId": "cm1",
-        }
-    }
-    service = _make_service(mock_settings, payload)
-    result = await service.create_presigned_url("42", "doc.pdf")
-
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
-    assert query is CREATE_PRESIGNED_URL_MUTATION
-    assert variables["organizationId"] == "42"
-    assert variables["fileName"] == "doc.pdf"
-    assert variables["contentType"] is None
-    assert variables["contentLength"] is None
-    assert result["url"] == "https://s3.example.com/put?sig=1"
-    assert result["download_url"] == "https://app.pipefy.com/files/dl/xyz"
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_create_presigned_url_with_optional_fields(mock_settings):
-    payload = {
-        "createPresignedUrl": {
-            "url": "https://s3.example.com/put",
-            "downloadUrl": "https://dl",
-            "clientMutationId": None,
-        }
-    }
-    service = _make_service(mock_settings, payload)
-    await service.create_presigned_url(
-        "99",
-        "a.bin",
-        content_type="application/octet-stream",
-        content_length=1024,
-    )
-    variables = service.execute_query.call_args[0][1]
-    assert variables["organizationId"] == "99"
-    assert variables["fileName"] == "a.bin"
-    assert variables["contentType"] == "application/octet-stream"
-    assert variables["contentLength"] == 1024
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_upload_file_to_s3_success(mock_settings):
+async def test_httpx_s3_uploader_success():
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.text = ""
@@ -145,11 +160,11 @@ async def test_upload_file_to_s3_success(mock_settings):
     mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
     mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
+    uploader = HttpxS3Uploader(allowed_host_pattern=_ALLOWED_UPLOAD_HOST_RE)
     with patch("httpx.AsyncClient", return_value=mock_cm):
-        result = await service.upload_file_to_s3(
-            "https://s3.us-east-1.amazonaws.com/presigned",
-            b"hello",
+        result = await uploader.put(
+            url="https://s3.us-east-1.amazonaws.com/presigned",
+            bytes_=b"hello",
             content_type=None,
         )
 
@@ -162,7 +177,7 @@ async def test_upload_file_to_s3_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_upload_file_to_s3_forbidden_includes_body_snippet(mock_settings):
+async def test_httpx_s3_uploader_forbidden_includes_body_snippet():
     mock_response = MagicMock()
     mock_response.status_code = 403
     mock_response.text = "<?xml version='1.0'?><Error><Code>AccessDenied</Code></Error>"
@@ -172,11 +187,11 @@ async def test_upload_file_to_s3_forbidden_includes_body_snippet(mock_settings):
     mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
     mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
+    uploader = HttpxS3Uploader(allowed_host_pattern=_ALLOWED_UPLOAD_HOST_RE)
     with patch("httpx.AsyncClient", return_value=mock_cm):
-        result = await service.upload_file_to_s3(
-            "https://s3.us-east-1.amazonaws.com/presigned",
-            b"x",
+        result = await uploader.put(
+            url="https://s3.us-east-1.amazonaws.com/presigned",
+            bytes_=b"x",
             content_type=None,
         )
 
@@ -189,7 +204,7 @@ async def test_upload_file_to_s3_forbidden_includes_body_snippet(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_upload_file_to_s3_sets_content_type_header(mock_settings):
+async def test_httpx_s3_uploader_sets_content_type_header():
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.text = ""
@@ -199,11 +214,11 @@ async def test_upload_file_to_s3_sets_content_type_header(mock_settings):
     mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
     mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
+    uploader = HttpxS3Uploader(allowed_host_pattern=_ALLOWED_UPLOAD_HOST_RE)
     with patch("httpx.AsyncClient", return_value=mock_cm):
-        await service.upload_file_to_s3(
-            "https://s3.us-east-1.amazonaws.com/presigned",
-            b"%PDF",
+        await uploader.put(
+            url="https://s3.us-east-1.amazonaws.com/presigned",
+            bytes_=b"%PDF",
             content_type="application/pdf",
         )
 
@@ -213,84 +228,19 @@ async def test_upload_file_to_s3_sets_content_type_header(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_pipefy_client_create_presigned_url_delegates_to_attachment_service():
-    attachment = AsyncMock()
-    attachment.create_presigned_url = AsyncMock(
-        return_value={"url": "https://s3/u", "download_url": "https://app/dl"}
-    )
-    client = PipefyClient.__new__(PipefyClient)
-    client._attachment_service = attachment
-
-    result = await client.create_presigned_url(
-        EXAMPLE_NUMERIC_ORG_ID,
-        "doc.pdf",
-        content_type="application/pdf",
-        content_length=128,
-    )
-
-    attachment.create_presigned_url.assert_awaited_once_with(
-        EXAMPLE_NUMERIC_ORG_ID,
-        "doc.pdf",
-        content_type="application/pdf",
-        content_length=128,
-    )
-    assert result == {"url": "https://s3/u", "download_url": "https://app/dl"}
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_pipefy_client_upload_file_to_s3_delegates_to_attachment_service():
-    attachment = AsyncMock()
-    attachment.upload_file_to_s3 = AsyncMock(return_value={"status_code": 200})
-    client = PipefyClient.__new__(PipefyClient)
-    client._attachment_service = attachment
-
-    result = await client.upload_file_to_s3(
-        "https://s3/presigned",
-        b"bytes",
-        content_type="text/plain",
-    )
-
-    attachment.upload_file_to_s3.assert_awaited_once_with(
-        "https://s3/presigned",
-        b"bytes",
-        content_type="text/plain",
-    )
-    assert result == {"status_code": 200}
-
-
-@pytest.mark.unit
-def test_pipefy_client_extract_storage_path_delegates_to_attachment_service():
-    attachment = MagicMock()
-    attachment.extract_storage_path = MagicMock(
-        return_value="orgs/o/uploads/u/file.pdf",
-    )
-    client = PipefyClient.__new__(PipefyClient)
-    client._attachment_service = attachment
-
-    assert (
-        client.extract_storage_path("https://bucket/file.pdf?x=1")
-        == "orgs/o/uploads/u/file.pdf"
-    )
-    attachment.extract_storage_path.assert_called_once_with(
-        "https://bucket/file.pdf?x=1",
-    )
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_upload_file_to_s3_rejects_non_allowed_host(mock_settings):
-    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
+async def test_httpx_s3_uploader_rejects_non_allowed_host():
+    uploader = HttpxS3Uploader(allowed_host_pattern=_ALLOWED_UPLOAD_HOST_RE)
     with pytest.raises(ValueError, match="not in the allow-list"):
-        await service.upload_file_to_s3(
-            "https://evil.example.com/upload",
-            b"data",
+        await uploader.put(
+            url="https://evil.example.com/upload",
+            bytes_=b"data",
+            content_type=None,
         )
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_upload_file_to_s3_accepts_pipefy_host(mock_settings):
+async def test_httpx_s3_uploader_accepts_pipefy_host():
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.text = ""
@@ -300,10 +250,265 @@ async def test_upload_file_to_s3_accepts_pipefy_host(mock_settings):
     mock_cm.__aenter__ = AsyncMock(return_value=mock_inner)
     mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-    service = AttachmentService(settings=mock_settings, auth=_TEST_AUTH)
+    uploader = HttpxS3Uploader(allowed_host_pattern=_ALLOWED_UPLOAD_HOST_RE)
     with patch("httpx.AsyncClient", return_value=mock_cm):
-        result = await service.upload_file_to_s3(
-            "https://uploads.pipefy.com/presigned",
-            b"ok",
+        result = await uploader.put(
+            url="https://uploads.pipefy.com/presigned",
+            bytes_=b"ok",
+            content_type=None,
         )
     assert result["status_code"] == 200
+
+
+# AttachmentService.upload_attachment
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_to_card_happy_path(mock_settings, tmp_path):
+    service = _make_service(mock_settings)
+    attachment = _build_attachment(tmp_path, name="report.pdf")
+    target = CardTarget(card_id="c1", field_id="title")
+
+    result = await service.upload_attachment(
+        attachment, organization_id="org-1", target=target
+    )
+
+    assert result["file_name"] == "report.pdf"
+    assert result["content_type"] == "application/pdf"
+    assert result["file_size"] == 8
+    assert result["field_id"] == "title"
+    assert result["storage_path"] == "bucket/key"
+    assert result["download_url"] == "https://app.pipefy.com/dl/1"
+    service.execute_query.assert_awaited_once()
+    service._card_service.update_card_field.assert_awaited_once_with(
+        "c1", "title", ["bucket/key"]
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_to_table_record_happy_path(mock_settings, tmp_path):
+    service = _make_service(mock_settings)
+    attachment = _build_attachment(tmp_path, name="data.csv")
+    target = TableRecordTarget(table_record_id="tr-9", field_id="att")
+
+    await service.upload_attachment(attachment, organization_id="org-1", target=target)
+
+    service._card_service.update_card_field.assert_not_called()
+    service._table_service.set_table_record_field_value.assert_awaited_once_with(
+        "tr-9", "att", ["bucket/key"]
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_respects_explicit_content_type(
+    mock_settings, tmp_path
+):
+    """When the attachment carries an explicit content type, it is passed to presigned."""
+    service = _make_service(mock_settings)
+    file = tmp_path / "x.bin"
+    file.write_bytes(b"a")
+    attachment = Attachment(path=file, content_type="application/octet-stream")
+
+    await service.upload_attachment(
+        attachment,
+        organization_id="org-1",
+        target=CardTarget(card_id="c1", field_id="f"),
+    )
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables["contentType"] == "application/octet-stream"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_file_read_error_when_path_missing(
+    mock_settings, tmp_path
+):
+    service = _make_service(mock_settings)
+    attachment = Attachment(path=tmp_path / "does-not-exist.bin")
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment,
+            organization_id="org-1",
+            target=CardTarget(card_id="c1", field_id="f"),
+        )
+    assert ctx.value.step == "file_read"
+    assert ctx.value.__cause__ is not None
+    assert "not found" in str(ctx.value).lower()
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_file_read_cause_chain_preserved(
+    mock_settings, tmp_path
+):
+    """LocalFileError lives at ``__cause__`` so surfaces can recover the raw text."""
+    from pipefy_infra.filesystem import LocalFileError
+
+    service = _make_service(mock_settings)
+    attachment = Attachment(path=tmp_path / "missing.bin")
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment,
+            organization_id="org-1",
+            target=CardTarget(card_id="c1", field_id="f"),
+        )
+    assert isinstance(ctx.value.__cause__, LocalFileError)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_oversize_file_yields_file_read_step(
+    mock_settings, tmp_path, monkeypatch
+):
+    """LocalFile's cap is the single enforcement point; cap breach maps to file_read."""
+    monkeypatch.setattr(
+        "pipefy_sdk.services.attachment_service._MAX_ATTACHMENT_SIZE_BYTES",
+        4,
+    )
+    service = _make_service(mock_settings)
+    big = tmp_path / "big.bin"
+    big.write_bytes(b"more-than-four-bytes")
+    attachment = Attachment(path=big)
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment,
+            organization_id="org-1",
+            target=CardTarget(card_id="c1", field_id="f"),
+        )
+    assert ctx.value.step == "file_read"
+    assert "too large" in str(ctx.value).lower()
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_presigned_failure_maps_to_presigned_step(
+    mock_settings, tmp_path
+):
+    from gql.transport.exceptions import TransportQueryError
+
+    service = _make_service(mock_settings)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("x", errors=[{"message": "denied"}])
+    )
+    attachment = _build_attachment(tmp_path, name="a.txt")
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment,
+            organization_id="org-1",
+            target=CardTarget(card_id="c1", field_id="f"),
+        )
+    assert ctx.value.step == "presigned_url"
+    assert ctx.value.__cause__ is not None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_missing_url_raises_presigned_step(
+    mock_settings, tmp_path
+):
+    service = _make_service(
+        mock_settings,
+        presigned_payload={"createPresignedUrl": {"url": "", "downloadUrl": None}},
+    )
+    attachment = _build_attachment(tmp_path, name="a.bin")
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment,
+            organization_id="org-1",
+            target=CardTarget(card_id="c1", field_id="f"),
+        )
+    assert ctx.value.step == "presigned_url"
+    assert ctx.value.__cause__ is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_s3_http_error_carries_snippet_and_status(
+    mock_settings, tmp_path
+):
+    service = _make_service(
+        mock_settings,
+        s3_status=403,
+        s3_body_snippet="<Error/>",
+    )
+    attachment = _build_attachment(tmp_path, name="a.bin")
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment,
+            organization_id="org-1",
+            target=CardTarget(card_id="c1", field_id="f"),
+        )
+    assert ctx.value.step == "s3_upload"
+    assert ctx.value.body_snippet == "<Error/>"
+    assert ctx.value.status_code == 403
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_extract_storage_path_failure_maps_to_s3_step(
+    mock_settings, tmp_path
+):
+    """A ValueError from path parsing is reported under ``step=s3_upload``."""
+    service = _make_service(
+        mock_settings,
+        presigned_payload={
+            "createPresignedUrl": {
+                "url": "https://s3.amazonaws.com/?query-only",
+                "downloadUrl": None,
+            }
+        },
+    )
+    attachment = _build_attachment(tmp_path, name="a.bin")
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment,
+            organization_id="org-1",
+            target=CardTarget(card_id="c1", field_id="f"),
+        )
+    assert ctx.value.step == "s3_upload"
+    assert isinstance(ctx.value.__cause__, ValueError)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_attachment_field_update_failure_maps_to_field_update_step(
+    mock_settings, tmp_path
+):
+    card_service = MagicMock()
+    card_service.update_card_field = AsyncMock(side_effect=RuntimeError("graphql boom"))
+    service = _make_service(mock_settings, card_service=card_service)
+    attachment = _build_attachment(tmp_path, name="a.bin")
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment,
+            organization_id="org-1",
+            target=CardTarget(card_id="c1", field_id="f"),
+        )
+    assert ctx.value.step == "field_update"
+    assert isinstance(ctx.value.__cause__, RuntimeError)
+
+
+@pytest.mark.unit
+def test_attachment_service_default_s3_uploader_is_httpx(mock_settings):
+    """When no s3_uploader is passed, HttpxS3Uploader is used as the default."""
+    service = AttachmentService(
+        settings=mock_settings,
+        auth=_TEST_AUTH,
+        card_service=MagicMock(),
+        table_service=MagicMock(),
+    )
+    assert isinstance(service._s3_uploader, HttpxS3Uploader)

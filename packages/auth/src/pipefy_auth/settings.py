@@ -27,7 +27,8 @@ import os
 import sys
 from typing import Literal, Self
 
-from pipefy_infra import PipefyTomlConfigSource, validate_https_service_endpoint_url
+from pipefy_infra import security
+from pipefy_infra.config import PipefyTomlConfigSource
 from pydantic import (
     AliasChoices,
     Field,
@@ -54,13 +55,6 @@ DEFAULT_BASE_URL = "https://app.pipefy.com"
 # Opaque secret / identifier strings: reject leading / trailing whitespace and
 # blank values. Anything in between is opaque to us (the IdP defines the format).
 _OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
-
-# URL-shape gate. ``pipefy_infra.validate_https_service_endpoint_url``
-# does the deeper SSRF + scheme check after settings construction. The
-# scheme part is case-insensitive (RFC 3986 §3.1) so `HTTPS://...` from
-# operator copy-paste passes the shape gate; httpx + gql normalize the
-# scheme downstream.
-_URL_SHAPE_PATTERN = r"^(?i:https?)://\S+$"
 
 # Legacy ``PIPEFY_OAUTH_*`` env vars still resolve to the new
 # ``PIPEFY_SERVICE_ACCOUNT_*`` fields. The mapping is exported for
@@ -186,17 +180,24 @@ class AuthSettings(BaseSettings):
         "auth_client_id",
         "base_url",
         "disable_stored_session",
-        "keychain_backend",
         mode="before",
     )
     @classmethod
     def _strip_str(cls, value: object) -> object:
-        # Strip surrounding whitespace on every env-loaded string so a stray
-        # leading / trailing space from copy-paste does not trip the per-field
-        # ``pattern`` / ``Literal`` / bool-parsing constraint. Empty-after-strip
-        # still fails downstream (the "empty raises" contract).
         if isinstance(value, str):
             return value.strip()
+        return value
+
+    @field_validator("keychain_backend", mode="before")
+    @classmethod
+    def _normalize_keychain_backend(cls, value: object) -> object:
+        # ``keychain_backend`` is ``Literal["auto", "file"]``; copy-pasted env
+        # values like ``PIPEFY_KEYCHAIN_BACKEND=' AUTO '`` should normalize to
+        # ``"auto"`` rather than fail Literal validation with a cryptic enum
+        # error. Case is meaningful for credential fields (kept strict via
+        # ``_strip_str``), so the lowering applies only here.
+        if isinstance(value, str):
+            return value.strip().lower()
         return value
 
     # ``AliasChoices`` lists ONLY fully-prefixed env-var names. Unprefixed
@@ -244,7 +245,7 @@ class AuthSettings(BaseSettings):
 
     auth_url: str = Field(
         default=DEFAULT_AUTH_URL,
-        pattern=_URL_SHAPE_PATTERN,
+        pattern=security.URL_SHAPE_PATTERN,
         description=(
             "OIDC issuer URL for the stored-session tier "
             "(env: PIPEFY_AUTH_URL). Defaults to "
@@ -268,7 +269,7 @@ class AuthSettings(BaseSettings):
     # env on the source chain, matching the natural call site.
     base_url: str = Field(
         default=DEFAULT_BASE_URL,
-        pattern=_URL_SHAPE_PATTERN,
+        pattern=security.URL_SHAPE_PATTERN,
         description=(
             "Pipefy API host root (env: PIPEFY_BASE_URL). Drives the "
             "service-account OAuth token endpoint via the "
@@ -350,29 +351,24 @@ class AuthSettings(BaseSettings):
     @model_validator(mode="after")
     def _validate_endpoint_urls(self) -> Self:
         # Self-validate so direct ``AuthSettings()`` construction (outside
-        # ``CliSettings`` / ``Settings``) is safe.
-        from urllib.parse import urlparse
-
+        # ``CliSettings`` / ``Settings``) is safe. ``base_url`` derives the
+        # OAuth token endpoint via ``<base_url>/oauth/token`` so it must be
+        # a host root; ``auth_url`` is the OIDC issuer and may carry a
+        # realm path (Keycloak-style), but a stray query or fragment would
+        # corrupt the ``.well-known/openid-configuration`` concatenation.
         stripped_base = self.base_url.strip()
-        parsed_base = urlparse(stripped_base)
-        # ``base_url`` must be a host root: ``service_account_url`` appends
-        # ``/oauth/token`` via f-string. A query / fragment / non-root path
-        # would land inside the resulting URL's query slot rather than as a
-        # path component, producing silently-malformed token endpoints.
-        if parsed_base.path.strip("/") or parsed_base.query or parsed_base.fragment:
-            msg = (
-                f"base_url must be a host root with no path, query, or fragment "
-                f"(got {self.base_url!r}); the OAuth token endpoint derives via "
-                "``<base_url>/oauth/token``."
-            )
-            raise ValueError(msg)
-        validate_https_service_endpoint_url(
+        security.assert_url_is_host_root(stripped_base, field_label="base_url")
+        security.validate_https_url(
             stripped_base,
             "base_url",
             allow_insecure=self.allow_insecure_urls,
         )
-        validate_https_service_endpoint_url(
-            self.auth_url.strip(),
+        stripped_auth = self.auth_url.strip()
+        security.assert_url_has_no_query_or_fragment(
+            stripped_auth, field_label="auth_url"
+        )
+        security.validate_https_url(
+            stripped_auth,
             "auth_url",
             allow_insecure=self.allow_insecure_urls,
         )

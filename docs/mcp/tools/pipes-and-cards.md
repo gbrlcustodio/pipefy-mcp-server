@@ -62,7 +62,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 | `update_card_field` | Single-field update (`updateCardField`). |
 | `update_card` | Metadata (title, assignees, labels, due date) and/or multiple custom fields via `field_updates`. |
 | `delete_card` | Two-step: default preview; `confirm=true` after explicit user confirmation. `card_id` is a **string** in the API; pass `"…"` or a coerced positive integer (see [Pipefy IDs](#pipefy-ids-type-safety)). |
-| `upload_attachment_to_card` | Presigned URL + S3 PUT + `updateCardField` for **attachment** fields. **One file per call** — to attach multiple files, call the tool once per file. Exactly one of `file_url` or `file_content_base64`; optional `content_type` (inferred from `file_name` if omitted). **`field_id` must be the field slug** (e.g. `document_upload`), not the uuid — using the uuid returns `RESOURCE_NOT_FOUND`. |
+| `upload_attachment_to_card` | Presigned URL + S3 PUT + `updateCardField` for **attachment** fields. **One file per call**: to attach multiple files, call the tool once per file. `file_path` is the local filesystem path the MCP server reads; supports `~` expansion. `file_name` is inferred from the path's basename when omitted. Optional `content_type` is inferred from `file_name` when omitted. Files larger than **100 MiB** are rejected locally before any network call. **`field_id` must be the field slug** (e.g. `document_upload`), not the uuid: using the uuid returns `RESOURCE_NOT_FOUND`. |
 
 **Choosing card updates:** `update_card_field` = one field, full replacement. `update_card` + `field_updates` = several custom fields at once. `update_card` with attribute args = metadata (combinable with `field_updates`).
 

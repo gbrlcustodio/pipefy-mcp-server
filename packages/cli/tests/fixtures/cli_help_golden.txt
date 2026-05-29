@@ -415,7 +415,9 @@ Usage: pipefy attachment upload [OPTIONS]
  update.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --file                -f      FILE  Local file path to upload. [required] │
+│ *  --file                -f      PATH  Local file path to upload. Supports ~ │
+│                                        expansion.                            │
+│                                        [required]                            │
 │    --card                        TEXT  Target card id (mutually exclusive    │
 │                                        with --record).                       │
 │    --record                      TEXT  Target table record id (mutually      │

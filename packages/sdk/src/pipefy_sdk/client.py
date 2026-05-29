@@ -7,11 +7,6 @@ from typing import Any
 from httpx import Auth
 
 from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
-from pipefy_sdk.attachment_upload import (
-    AttachmentUploadResult,
-    upload_attachment_to_card_field,
-    upload_attachment_to_table_record_field,
-)
 from pipefy_sdk.automation_preflight import (
     validate_traditional_automation_move_transition,
 )
@@ -23,6 +18,11 @@ from pipefy_sdk.models.ai_agent import (
 from pipefy_sdk.models.ai_automation import (
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
+)
+from pipefy_sdk.models.attachment import (
+    Attachment,
+    AttachmentTarget,
+    AttachmentUploadResult,
 )
 from pipefy_sdk.queries.card_queries import (
     INTERNAL_DELETE_CARD_RELATION_MUTATION,
@@ -114,7 +114,12 @@ class PipefyClient:
         self._report_service = ReportService(settings=settings, auth=auth)
         self._organization_service = OrganizationService(settings=settings, auth=auth)
         self._user_service = UserService(settings=settings, auth=auth)
-        self._attachment_service = AttachmentService(settings=settings, auth=auth)
+        self._attachment_service = AttachmentService(
+            settings=settings,
+            auth=auth,
+            card_service=self._card_service,
+            table_service=self._table_service,
+        )
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
@@ -1518,99 +1523,25 @@ class PipefyClient:
         """Return the authenticated user's identity, or ``None`` when ``me`` resolves null."""
         return await self._user_service.get_me()
 
-    async def create_presigned_url(
+    async def upload_attachment(
         self,
-        organization_id: str,
-        file_name: str,
-        content_type: str | None = None,
-        content_length: int | None = None,
-    ) -> dict[str, Any]:
-        """Request a presigned upload URL from Pipefy.
-
-        Args:
-            organization_id: Organization ID.
-            file_name: Target file name for the upload.
-            content_type: Optional MIME type for the object.
-            content_length: Optional size in bytes.
-        """
-        return await self._attachment_service.create_presigned_url(
-            organization_id,
-            file_name,
-            content_type=content_type,
-            content_length=content_length,
-        )
-
-    async def upload_file_to_s3(
-        self,
-        presigned_url: str,
-        file_bytes: bytes,
-        content_type: str | None = None,
-    ) -> dict[str, Any]:
-        """PUT file bytes to a presigned object storage URL.
-
-        Args:
-            presigned_url: Full presigned destination URL.
-            file_bytes: Raw file content.
-            content_type: Optional ``Content-Type`` header for the PUT.
-        """
-        return await self._attachment_service.upload_file_to_s3(
-            presigned_url, file_bytes, content_type=content_type
-        )
-
-    async def upload_attachment_to_card_field(
-        self,
+        attachment: Attachment,
         *,
         organization_id: str,
-        card_id: str,
-        field_id: str,
-        file_name: str,
-        file_bytes: bytes,
-        content_type: str | None = None,
+        target: AttachmentTarget,
     ) -> AttachmentUploadResult:
-        """Upload ``file_bytes`` to a card attachment field via the standard pipeline.
+        """Upload ``attachment`` to ``target`` via the standard Pipefy pipeline.
 
-        Wraps presigned URL → S3 PUT → ``update_card_field`` in one call so MCP
-        and CLI surfaces do not duplicate the orchestration. Raises
-        :class:`AttachmentUploadError` on any step failure (with ``step`` attribute).
+        Runs file read, presigned URL, S3 PUT, and field update in one call.
+        ``target`` is a :class:`CardTarget` or :class:`TableRecordTarget`.
+
+        Raises:
+            AttachmentUploadError: On any pipeline failure; ``step`` identifies
+                the failing stage.
         """
-        return await upload_attachment_to_card_field(
-            self,
-            organization_id=organization_id,
-            card_id=card_id,
-            field_id=field_id,
-            file_name=file_name,
-            file_bytes=file_bytes,
-            content_type=content_type,
+        return await self._attachment_service.upload_attachment(
+            attachment, organization_id=organization_id, target=target
         )
-
-    async def upload_attachment_to_table_record_field(
-        self,
-        *,
-        organization_id: str,
-        table_record_id: str,
-        field_id: str,
-        file_name: str,
-        file_bytes: bytes,
-        content_type: str | None = None,
-    ) -> AttachmentUploadResult:
-        """Upload ``file_bytes`` to a table record attachment field via the standard pipeline."""
-        return await upload_attachment_to_table_record_field(
-            self,
-            organization_id=organization_id,
-            table_record_id=table_record_id,
-            field_id=field_id,
-            file_name=file_name,
-            file_bytes=file_bytes,
-            content_type=content_type,
-        )
-
-    def extract_storage_path(self, presigned_url: str) -> str:
-        """Return the object key path embedded in a presigned URL (no host or query string).
-
-        Args:
-            presigned_url: Full HTTPS URL including path and optional query string.
-        """
-        return self._attachment_service.extract_storage_path(presigned_url)
 
     async def introspect_type(
         self, type_name: str, *, max_depth: int = 1

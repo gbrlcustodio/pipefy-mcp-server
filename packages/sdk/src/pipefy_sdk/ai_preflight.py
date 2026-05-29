@@ -13,7 +13,9 @@ from pipefy_sdk.ai_phase_transition_validation import (
     collect_ai_behavior_move_transition_problems,
 )
 from pipefy_sdk.ai_pipe_validation import (
+    collect_field_ids_for_pipe,
     fetch_pipe_validation_context,
+    phase_field_fetch_warning,
     validate_behaviors_against_pipe,
 )
 from pipefy_sdk.behavior_placeholders import expand_behaviors_placeholders
@@ -97,7 +99,8 @@ async def validate_ai_automation_prompt_sdk(
     if not prompt_tokens:
         problems.append(
             "Prompt must reference at least one pipe field using "
-            "%{internal_id} syntax (e.g. 'Summarize: %{425829426}')."
+            "%{internal_id} syntax (e.g. 'Summarize: %{900000101}' — use your "
+            "field's internal_id; the number is illustrative)."
         )
 
     try:
@@ -109,7 +112,7 @@ async def validate_ai_automation_prompt_sdk(
             "error": f"Failed to fetch pipe {pipe_id}: {exc}",
         }
 
-    pipe_info = pipe_data.get("pipe", {})
+    pipe_info = pipe_data.get("pipe") or {}
 
     all_field_ids: set[str] = set()
     readonly_field_ids: set[str] = set()
@@ -291,7 +294,12 @@ async def validate_ai_agent_behaviors_sdk(
     behaviors = behaviors_expanded
 
     try:
-        field_ids, phase_ids, related_pipe_ids = await fetch_pipe_validation_context(
+        (
+            field_ids,
+            phase_ids,
+            related_pipe_ids,
+            context_fetch_warnings,
+        ) = await fetch_pipe_validation_context(
             client, pid, timeout=VALIDATE_FETCH_TIMEOUT_SECONDS
         )
     except asyncio.TimeoutError:
@@ -313,7 +321,7 @@ async def validate_ai_agent_behaviors_sdk(
             "message": "Pipe fetch failed.",
         }
 
-    tool_warnings: list[str] = []
+    tool_warnings: list[str] = list(context_fetch_warnings)
     if related_pipe_ids is None:
         tool_warnings.append(
             "Could not load pipe relations; create_connected_card pipeId targets "
@@ -358,6 +366,7 @@ async def validate_ai_agent_behaviors_sdk(
             ),
             return_exceptions=True,
         )
+        targets_loaded: list[tuple[str, dict[str, Any]]] = []
         for tpid, result in zip(target_pipe_list, fetch_results, strict=True):
             if isinstance(result, BaseException):
                 tool_warnings.append(
@@ -365,19 +374,27 @@ async def validate_ai_agent_behaviors_sdk(
                     f"fieldIds targeting it were not verified."
                 )
                 continue
-            target_data = result
-            target_info = target_data.get("pipe", {})
-            target_fields: set[str] = set()
-            for phase in target_info.get("phases") or []:
-                for field in phase.get("fields") or []:
-                    fid = field.get("id") or field.get("internal_id")
-                    if fid:
-                        target_fields.add(str(fid))
-            for field in target_info.get("start_form_fields") or []:
-                fid = field.get("id") or field.get("internal_id")
-                if fid:
-                    target_fields.add(str(fid))
-            cross_pipe_field_ids[tpid] = target_fields
+            targets_loaded.append((tpid, (result.get("pipe") or {})))
+
+        if targets_loaded:
+            collect_results = await asyncio.gather(
+                *(
+                    collect_field_ids_for_pipe(
+                        client,
+                        target_info,
+                        timeout=VALIDATE_FETCH_TIMEOUT_SECONDS,
+                    )
+                    for _tpid, target_info in targets_loaded
+                )
+            )
+            for (tpid, _), (target_field_ids, failed_phases) in zip(
+                targets_loaded, collect_results, strict=True
+            ):
+                cross_pipe_field_ids[tpid] = target_field_ids
+                if failed_phases:
+                    tool_warnings.append(
+                        phase_field_fetch_warning(failed_phases, pipe_id=tpid)
+                    )
 
     membership_problems: list[str] = []
     sa_ids = service_account_ids or []
@@ -394,7 +411,7 @@ async def validate_ai_agent_behaviors_sdk(
             for tpid, mresult in zip(target_pipe_list, member_results):
                 if isinstance(mresult, BaseException):
                     continue
-                members = mresult.get("pipe", {}).get("members") or []
+                members = (mresult.get("pipe") or {}).get("members") or []
                 member_ids = {
                     str(m.get("user", {}).get("id", ""))
                     for m in members

@@ -60,10 +60,12 @@ For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipe
 
 2. **Build the prompt** with `%{<internal_id>}` references. Pipefy silently rejects prompts with no field reference (returns `"Input parameters are required."`).
 
+   **Important:** the `%{...}` wrapper and a **numeric** field `internal_id` from *your* pipe are required — the exact digits in examples below (e.g. `900000101`) are fictional placeholders. Discover real IDs via `get_phase_fields` / `get_start_form_fields`; do not copy example numbers from docs.
+
 3. **Validate the prompt:**
 
    ```
-   validate_ai_automation_prompt pipe_id=67890 prompt="Summarize %{425829426} and comment." field_ids=["425829426"]
+   validate_ai_automation_prompt pipe_id=67890 prompt="Summarize %{900000101} and comment." field_ids=["900000101"]
    ```
 
    Returns `valid:true|false`, `problems`, `warnings`, `field_map`. Catches mistakes in one read-only call vs 2–3 failed mutation roundtrips.
@@ -71,7 +73,7 @@ For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipe
 4. **Create the automation** (only if `valid:true`):
 
    ```
-   create_ai_automation pipe_id=67890 trigger_event="card_created" prompt="Summarize %{425829426} and comment." field_ids=["425829426"]
+   create_ai_automation pipe_id=67890 trigger_event="card_created" prompt="Summarize %{900000101} and comment." field_ids=["900000101"]
    ```
 
 ---

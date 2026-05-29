@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+PHASE_FIELD_FETCH_CONCURRENCY = 8
+
 KNOWN_AI_ACTION_TYPES = frozenset(
     {
         "create_card",
@@ -45,7 +47,8 @@ def validate_behaviors_against_pipe(
     Args:
         behaviors: Raw behavior dicts (pre-validation format).
         pipe_id: Source pipe ID (used to decide whether fieldId checks apply).
-        pipe_field_ids: Set of valid field internal IDs for the source pipe.
+        pipe_field_ids: Set of valid field identifiers for the source pipe (slug
+            ``id`` and numeric ``internal_id``).
         pipe_phase_ids: Set of valid phase IDs (as strings) for the source pipe.
         related_pipe_ids: Pipe IDs related to the source pipe for
             ``create_connected_card`` validation; ``None`` skips that check
@@ -125,7 +128,7 @@ def validate_behaviors_against_pipe(
                         if not isinstance(fa, dict):
                             continue
                         fid = fa.get("fieldId", "")
-                        if fid and check_fields and fid not in check_fields:
+                        if fid and fid not in check_fields:
                             pipe_label = (
                                 "pipe fields"
                                 if targets_source
@@ -260,14 +263,42 @@ def _rewrite_instruction_field_tokens(
     return _INSTRUCTION_FIELD_TOKEN_RE.sub(repl, instruction)
 
 
+def add_slug_from_field(slug_map: dict[str, str], field: Any) -> None:
+    """Map a non-numeric field slug to its numeric ``internal_id`` when both exist."""
+    if not isinstance(field, dict):
+        return
+    slug = str(field.get("id", ""))
+    internal = str(field.get("internal_id", ""))
+    if slug and internal and not slug.isdigit():
+        slug_map[slug] = internal
+
+
+async def _fetch_phase_slug_map(
+    client: PipefyClient,
+    phase_id: str,
+    *,
+    semaphore: asyncio.Semaphore,
+) -> dict[str, str]:
+    async with semaphore:
+        try:
+            phase_data = await client.get_phase_fields(phase_id)
+        except Exception:  # noqa: BLE001
+            logger.debug("Failed to fetch fields for phase %s", phase_id, exc_info=True)
+            return {}
+    partial: dict[str, str] = {}
+    for field in phase_data.get("fields") or []:
+        add_slug_from_field(partial, field)
+    return partial
+
+
 async def build_field_slug_map(
     client: PipefyClient,
     pipe_id: str | int,
 ) -> dict[str, str]:
     """Build a slug → numeric internal_id map for all fields in a pipe.
 
-    Fetches pipe info (for phase IDs and start form fields), then calls
-    ``get_phase_fields`` per phase to collect ``internal_id`` values.
+    Uses start-form fields and embedded ``phases[].fields`` from ``get_pipe`` when
+    present; otherwise calls ``get_phase_fields`` per phase (in parallel).
 
     Args:
         client: PipefyClient instance.
@@ -280,27 +311,32 @@ async def build_field_slug_map(
     slug_map: dict[str, str] = {}
 
     pipe_data = await client.get_pipe(pipe_id)
-    pipe_info = pipe_data.get("pipe", {})
+    pipe_info = pipe_data.get("pipe") or {}
 
     for field in pipe_info.get("start_form_fields") or []:
-        slug = str(field.get("id", ""))
-        internal = str(field.get("internal_id", ""))
-        if slug and internal and not slug.isdigit():
-            slug_map[slug] = internal
+        add_slug_from_field(slug_map, field)
 
+    phases_to_fetch: list[str] = []
     for phase in pipe_info.get("phases") or []:
+        embedded_fields = phase.get("fields")
+        if embedded_fields:
+            for field in embedded_fields:
+                add_slug_from_field(slug_map, field)
         phase_id = phase.get("id")
-        if not phase_id:
-            continue
-        try:
-            phase_data = await client.get_phase_fields(phase_id)
-            for field in phase_data.get("fields") or []:
-                slug = str(field.get("id", ""))
-                internal = str(field.get("internal_id", ""))
-                if slug and internal and not slug.isdigit():
-                    slug_map[slug] = internal
-        except Exception:  # noqa: BLE001
-            logger.debug("Failed to fetch fields for phase %s", phase_id, exc_info=True)
+        if phase_id and not embedded_fields:
+            phases_to_fetch.append(str(phase_id))
+
+    if phases_to_fetch:
+        semaphore = asyncio.Semaphore(PHASE_FIELD_FETCH_CONCURRENCY)
+        partial_maps = await asyncio.gather(
+            *(
+                _fetch_phase_slug_map(client, phase_id, semaphore=semaphore)
+                for phase_id in phases_to_fetch
+            )
+        )
+        for partial in partial_maps:
+            slug_map.update(partial)
+
     return slug_map
 
 
@@ -399,12 +435,107 @@ async def resolve_and_populate_field_refs(
     return resolved
 
 
+def add_field_identifiers(field_ids: set[str], field: Any) -> None:
+    """Add slug ``id`` and numeric ``internal_id`` when present on a field dict."""
+    if not isinstance(field, dict):
+        return
+    for key in ("id", "internal_id"):
+        fid = field.get(key)
+        if fid:
+            field_ids.add(str(fid))
+
+
+async def _fetch_phase_field_ids(
+    client: PipefyClient,
+    phase_id: str,
+    *,
+    timeout: float,
+    semaphore: asyncio.Semaphore,
+) -> tuple[set[str], str | None]:
+    async with semaphore:
+        try:
+            phase_data = await asyncio.wait_for(
+                client.get_phase_fields(phase_id),
+                timeout=timeout,
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "Failed to fetch fields for phase %s during validation context",
+                phase_id,
+                exc_info=True,
+            )
+            return set(), phase_id
+    field_ids: set[str] = set()
+    for field in phase_data.get("fields") or []:
+        add_field_identifiers(field_ids, field)
+    return field_ids, None
+
+
+async def collect_field_ids_for_pipe(
+    client: PipefyClient,
+    pipe_info: dict[str, Any],
+    *,
+    timeout: float,
+) -> tuple[set[str], list[str]]:
+    """Collect slug and internal_id values for start-form and phase fields.
+
+    Matches the field universe used by ``build_field_slug_map`` (start form plus
+    ``get_phase_fields`` per phase when ``phases[].fields`` is absent). Embedded
+    ``phases[].fields`` from ``GET_PIPE_QUERY`` are used without extra round-trips.
+
+    Returns:
+        Tuple of ``(field_ids, failed_phase_ids)``. ``failed_phase_ids`` lists
+        phases whose ``get_phase_fields`` call failed (timeouts, 5xx, etc.).
+    """
+    field_ids: set[str] = set()
+    phases_to_fetch: list[str] = []
+
+    for field in pipe_info.get("start_form_fields") or []:
+        add_field_identifiers(field_ids, field)
+
+    for phase in pipe_info.get("phases") or []:
+        embedded_fields = phase.get("fields")
+        if embedded_fields:
+            for field in embedded_fields:
+                add_field_identifiers(field_ids, field)
+        phase_id = phase.get("id")
+        if phase_id and not embedded_fields:
+            phases_to_fetch.append(str(phase_id))
+
+    failed_phase_ids: list[str] = []
+    if phases_to_fetch:
+        semaphore = asyncio.Semaphore(PHASE_FIELD_FETCH_CONCURRENCY)
+        results = await asyncio.gather(
+            *(
+                _fetch_phase_field_ids(
+                    client, phase_id, timeout=timeout, semaphore=semaphore
+                )
+                for phase_id in phases_to_fetch
+            )
+        )
+        for phase_field_ids, failed_id in results:
+            field_ids.update(phase_field_ids)
+            if failed_id is not None:
+                failed_phase_ids.append(failed_id)
+
+    return field_ids, failed_phase_ids
+
+
+def phase_field_fetch_warning(failed_phase_ids: list[str], *, pipe_id: str) -> str:
+    """Build a user-facing warning when phase field fetches were incomplete."""
+    phases = ", ".join(sorted(failed_phase_ids))
+    return (
+        f"Could not load fields for phase(s) {phases} in pipe {pipe_id}; "
+        "fieldId checks may be incomplete."
+    )
+
+
 async def fetch_pipe_validation_context(
     client: PipefyClient,
     pipe_id: str,
     *,
     timeout: float = 30,
-) -> tuple[set[str], set[str], set[str] | None]:
+) -> tuple[set[str], set[str], set[str] | None, list[str]]:
     """Fetch pipe phases, fields, and relations for behavior validation.
 
     Exceptions from ``get_pipe`` propagate to the caller (e.g. TimeoutError,
@@ -417,27 +548,30 @@ async def fetch_pipe_validation_context(
         timeout: Timeout in seconds for each API call.
 
     Returns:
-        Tuple of (field_ids, phase_ids, related_pipe_ids).
-        related_pipe_ids is None when relations could not be loaded.
+        Tuple of ``(field_ids, phase_ids, related_pipe_ids, fetch_warnings)``.
+        ``related_pipe_ids`` is None when relations could not be loaded.
+        ``fetch_warnings`` lists incomplete phase field loads for the source pipe.
     """
     pipe_data = await asyncio.wait_for(
         client.get_pipe(pipe_id),
         timeout=timeout,
     )
-    pipe_info = pipe_data.get("pipe", {})
+    pipe_info = pipe_data.get("pipe") or {}
 
     phase_ids: set[str] = set()
-    field_ids: set[str] = set()
     for phase in pipe_info.get("phases") or []:
-        phase_ids.add(str(phase.get("id", "")))
-        for field in phase.get("fields") or []:
-            fid = field.get("id") or field.get("internal_id")
-            if fid:
-                field_ids.add(str(fid))
-    for field in pipe_info.get("start_form_fields") or []:
-        fid = field.get("id") or field.get("internal_id")
-        if fid:
-            field_ids.add(str(fid))
+        pid = phase.get("id")
+        if pid:
+            phase_ids.add(str(pid))
+
+    field_ids, failed_phase_ids = await collect_field_ids_for_pipe(
+        client, pipe_info, timeout=timeout
+    )
+    fetch_warnings: list[str] = []
+    if failed_phase_ids:
+        fetch_warnings.append(
+            phase_field_fetch_warning(failed_phase_ids, pipe_id=pipe_id)
+        )
 
     related_pipe_ids: set[str] | None
     try:
@@ -457,14 +591,18 @@ async def fetch_pipe_validation_context(
     except Exception:  # noqa: BLE001
         related_pipe_ids = None
 
-    return field_ids, phase_ids, related_pipe_ids
+    return field_ids, phase_ids, related_pipe_ids, fetch_warnings
 
 
 __all__ = [
     "KNOWN_AI_ACTION_TYPES",
+    "add_field_identifiers",
+    "add_slug_from_field",
     "build_field_slug_map",
+    "collect_field_ids_for_pipe",
     "collect_pipe_ids_from_behaviors",
     "fetch_pipe_validation_context",
+    "phase_field_fetch_warning",
     "pipe_ids_from_behavior",
     "resolve_and_populate_field_refs",
     "resolve_field_slugs_to_numeric",

@@ -117,6 +117,7 @@ class AiAgentTools:
                     field_ids,
                     phase_ids,
                     related_pipe_ids,
+                    _fetch_warnings,
                 ) = await fetch_pipe_validation_context(
                     client,
                     pipe_id,
@@ -580,11 +581,11 @@ class AiAgentTools:
             Runs Pydantic model validation (same as the mutation tools) plus cross-references
             against live pipe data. Does not persist anything.
 
-            Note: this validation runs against the user-supplied behaviors verbatim. Slug
-            resolution (``%{field:<slug>}`` → ``%{field:<internal_id>}``) and
-            ``referencedFieldIds`` population happen only in ``create_ai_agent`` /
-            ``update_ai_agent``, so the persisted state may differ slightly from what is
-            checked here when behaviors include slug-form field references.
+            Field IDs are matched against start-form fields and phase fields (via
+            ``get_phase_fields`` per phase), accepting both slug ``id`` and numeric
+            ``internal_id``. Slug resolution (``%{field:<slug>}`` → ``%{field:<internal_id>}``)
+            and ``referencedFieldIds`` population still happen only in ``create_ai_agent`` /
+            ``update_ai_agent``.
 
             Response fields:
               - ``success``: the tool finished without an unexpected failure (same idea as other
@@ -608,7 +609,8 @@ class AiAgentTools:
                     include ``name``, ``event_id`` (or ``eventId``), and ``actionParams`` with
                     ``aiBehaviorParams`` (``instruction`` + ``actionsAttributes``).
                     Discover via: ``get_automation_events(pipe_id)`` for ``event_id`` and
-                    ``get_phase_fields(phase_id)`` for field references inside ``actionsAttributes``.
+                    ``get_start_form_fields(pipe_id)`` / ``get_phase_fields(phase_id)`` for
+                    ``fieldId`` values (slug or ``internal_id``).
                 strict_unknown_action_types: When ``True`` (default), unknown ``actionType`` values
                     are reported in ``problems``. When ``False``, they appear in ``warnings`` only.
             """

@@ -1,6 +1,7 @@
 """Tests for CreateAiAutomationInput and UpdateAiAutomationInput Pydantic models."""
 
 import pytest
+from _shared.fixture_ids import EXAMPLE_FIELD_INTERNAL_ID
 from pydantic import ValidationError
 
 from pipefy_sdk.models.ai_automation import (
@@ -18,13 +19,13 @@ def test_create_ai_automation_input_requires_name_event_id_pipe_id_prompt_field_
         name="My Automation",
         event_id="card_created",
         pipe_id="123",
-        prompt="Summarize the card %{425829426}",
+        prompt=f"Summarize the card %{{{EXAMPLE_FIELD_INTERNAL_ID}}}",
         field_ids=["133"],
     )
     assert inp.name == "My Automation"
     assert inp.event_id == "card_created"
     assert inp.pipe_id == "123"
-    assert inp.prompt == "Summarize the card %{425829426}"
+    assert inp.prompt == f"Summarize the card %{{{EXAMPLE_FIELD_INTERNAL_ID}}}"
     assert inp.field_ids == ["133"]
 
 
@@ -321,10 +322,10 @@ def test_create_ai_automation_input_accepts_prompt_with_field_reference():
         name="My Automation",
         event_id="card_created",
         pipe_id="123",
-        prompt="Summarize: %{425829426}",
+        prompt=f"Summarize: %{{{EXAMPLE_FIELD_INTERNAL_ID}}}",
         field_ids=["133"],
     )
-    assert "%{425829426}" in inp.prompt
+    assert f"%{{{EXAMPLE_FIELD_INTERNAL_ID}}}" in inp.prompt
 
 
 @pytest.mark.unit

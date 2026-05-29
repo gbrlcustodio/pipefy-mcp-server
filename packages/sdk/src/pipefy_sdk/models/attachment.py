@@ -1,16 +1,41 @@
-"""Pydantic models for attachment upload input validation."""
+"""Attachment domain types, target value objects, and upload result/error.
+
+This module owns the attachment side of the SDK's public surface:
+
+- :class:`Attachment`: domain entity binding a local file path to optional
+  explicit name and content type. Pure setup; the service runs the actual
+  read at upload time.
+- :class:`CardTarget` / :class:`TableRecordTarget`: bundled identifiers for
+  the two upload destinations Pipefy exposes today.
+- :class:`AttachmentUploadResult`: successful upload payload returned by
+  the service.
+- :class:`AttachmentUploadError`: single failure type carrying a ``step``
+  attribute for surface-side envelope mapping.
+- :class:`UploadAttachmentToCardInput` / :class:`UploadAttachmentToTableRecordInput`:
+  Pydantic input DTOs for the MCP/CLI surfaces.
+- :func:`infer_content_type`: utility used by both the domain object and
+  the service.
+"""
 
 from __future__ import annotations
 
 import mimetypes
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Self
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict
+from typing_extensions import TypedDict
 
-from pipefy_sdk.models.validators import PipefyId
+from pipefy_sdk.models.validators import NonBlankStr, PipefyId
 
 APPLICATION_OCTET_STREAM = "application/octet-stream"
+
+# Pipefy's direct-upload size policy is not documented; failing fast at 100 MiB
+# before issuing a presigned URL avoids a confusing S3-side rejection for very
+# large payloads. Enforced inside AttachmentService via LocalFile(max_size_bytes=...).
+_MAX_ATTACHMENT_SIZE_BYTES = 100 * 1024 * 1024
+
 
 # ``mimetypes`` maps ``.xyz`` to ``chemical/x-xyz`` on many systems; for generic uploads
 # we treat that as unknown binary content.
@@ -45,29 +70,105 @@ def infer_content_type(file_name: str) -> str:
     return mime
 
 
-def _source_nonempty(value: str | None) -> bool:
-    return bool(value and value.strip())
+class Attachment:
+    """A file path bound to an attachment, with lazy name and content type.
 
+    Construction is a pure setup step. The file is read by
+    :meth:`pipefy_sdk.PipefyClient.upload_attachment` (via the service);
+    callers do not pre-read or pass bytes.
 
-def _raise_unless_exactly_one_file_source(
-    file_url: str | None,
-    file_content_base64: str | None,
-) -> None:
-    """Ensure exactly one of URL or base64 payload is non-empty.
+    Name resolution: explicit ``name`` if provided (whitespace-only treated
+    as absent), otherwise the path's basename.
 
-    Raises:
-        ValueError: When both or neither source is provided with non-empty content.
+    Content-type resolution: explicit ``content_type`` if provided, otherwise
+    inferred from the resolved name via :func:`infer_content_type`.
     """
-    has_url = _source_nonempty(file_url)
-    has_b64 = _source_nonempty(file_content_base64)
-    if has_url and has_b64:
-        raise ValueError(
-            "Provide exactly one of file_url or file_content_base64, not both."
-        )
-    if not has_url and not has_b64:
-        raise ValueError(
-            "Provide exactly one of file_url or file_content_base64 (non-empty)."
-        )
+
+    def __init__(
+        self,
+        *,
+        path: Path,
+        name: str | None = None,
+        content_type: str | None = None,
+    ) -> None:
+        self._path = path
+        self._explicit_name = (name or "").strip() or None
+        self._explicit_content_type = content_type
+
+    @property
+    def path(self) -> Path:
+        """The local filesystem path. Not validated at construction."""
+        return self._path
+
+    @property
+    def name(self) -> str:
+        """Explicit name if provided, else the path's basename."""
+        return self._explicit_name or self._path.name
+
+    @property
+    def content_type(self) -> str:
+        """Explicit content type if provided, else inferred from :attr:`name`."""
+        return self._explicit_content_type or infer_content_type(self.name)
+
+
+@dataclass(frozen=True, slots=True)
+class CardTarget:
+    """Card attachment field destination."""
+
+    card_id: str
+    field_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class TableRecordTarget:
+    """Table record attachment field destination."""
+
+    table_record_id: str
+    field_id: str
+
+
+AttachmentTarget = CardTarget | TableRecordTarget
+
+
+AttachmentUploadStep = Literal[
+    "file_read",
+    "presigned_url",
+    "s3_upload",
+    "field_update",
+]
+
+
+class AttachmentUploadError(Exception):
+    """Raised on attachment upload pipeline failure.
+
+    The ``step`` attribute identifies which stage failed so surfaces can map
+    it to a step-aware error envelope (MCP) or typer message (CLI) without
+    parsing strings.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        step: AttachmentUploadStep,
+        body_snippet: str | None = None,
+        status_code: int | None = None,
+    ) -> None:
+        self.step = step
+        self.body_snippet = body_snippet
+        self.status_code = status_code
+        super().__init__(message)
+
+
+class AttachmentUploadResult(TypedDict):
+    """Successful upload outcome: everything callers need to render their response."""
+
+    file_name: str
+    content_type: str
+    file_size: int
+    field_id: str
+    storage_path: str
+    download_url: str | None
 
 
 class UploadAttachmentToCardInput(BaseModel):
@@ -78,16 +179,9 @@ class UploadAttachmentToCardInput(BaseModel):
     organization_id: PipefyId
     card_id: PipefyId
     field_id: PipefyId
-    file_name: str
-    file_url: str | None = None
-    file_content_base64: str | None = None
+    file_path: NonBlankStr
+    file_name: str | None = None
     content_type: str | None = None
-
-    @model_validator(mode="after")
-    def exactly_one_file_source(self) -> Self:
-        """Require exactly one of ``file_url`` or ``file_content_base64`` with non-empty value."""
-        _raise_unless_exactly_one_file_source(self.file_url, self.file_content_base64)
-        return self
 
 
 class UploadAttachmentToTableRecordInput(BaseModel):
@@ -98,13 +192,6 @@ class UploadAttachmentToTableRecordInput(BaseModel):
     organization_id: PipefyId
     table_record_id: PipefyId
     field_id: PipefyId
-    file_name: str
-    file_url: str | None = None
-    file_content_base64: str | None = None
+    file_path: NonBlankStr
+    file_name: str | None = None
     content_type: str | None = None
-
-    @model_validator(mode="after")
-    def exactly_one_file_source(self) -> Self:
-        """Require exactly one of ``file_url`` or ``file_content_base64`` with non-empty value."""
-        _raise_unless_exactly_one_file_source(self.file_url, self.file_content_base64)
-        return self

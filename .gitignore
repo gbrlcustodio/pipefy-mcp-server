@@ -41,7 +41,6 @@ RALPH_TASK.md
 # IDEs and editors
 .cursor/
 .claude/
-CLAUDE.md
 # Cursor MCP workspace config (machine-specific paths or local server entries).
 # Carve-out: repo-root .mcp.json is the Claude Code plugin's MCP server config
 # (auto-discovered at plugin root) and is intentionally tracked.

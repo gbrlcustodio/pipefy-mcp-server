@@ -36,8 +36,14 @@ The Release workflow requires the git tag (without leading `v`) to **exactly mat
    git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z
    ```
 
-6. Wait for the **Release** workflow (`.github/workflows/release.yml`) to finish.
-7. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, and `pipefy_sdk-*.whl` when produced). Optionally verify install from the tag, for example:
+6. Roll the `latest` moving tag to point at the same commit. The README install snippets and shipping `.mcp.json` pin `@latest`, so this is what makes new installs pick up the release:
+
+   ```bash
+   git tag -f latest vX.Y.Z && git push --force-with-lease origin latest
+   ```
+
+7. Wait for the **Release** workflow (`.github/workflows/release.yml`) to finish.
+8. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, and `pipefy_sdk-*.whl` when produced). Optionally verify install from the tag, for example:
 
    ```bash
    uvx --from git+https://github.com/<owner>/<repo>.git@vX.Y.Z --refresh pipefy-cli --version

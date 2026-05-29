@@ -25,4 +25,4 @@ uv run pytest packages/sdk/tests      # SDK unit tests in isolation
 uv run ruff check packages/sdk/src    # lint
 ```
 
-See the root [`README.md`](../../README.md), [`docs/setup.md`](../../docs/setup.md) for `PIPEFY_*` environment variables, and [`docs/sdk/README.md`](../../docs/sdk/README.md) for SDK-oriented notes.
+See the root [`README.md`](../../README.md), [`docs/config.md`](../../docs/config.md) for `PIPEFY_*` environment variables and `config.toml` schema, and [`docs/sdk/README.md`](../../docs/sdk/README.md) for SDK-oriented notes.

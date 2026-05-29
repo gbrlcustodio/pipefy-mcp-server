@@ -1,6 +1,6 @@
 # CLI authentication
 
-See also the **[CLI docs index](README.md)** and **[`docs/setup.md`](../setup.md)** for the broader `PIPEFY_*` env-var story, and **[`docs/config.md`](../config.md)** for the optional `~/.config/pipefy/config.toml` file that pins defaults across CLI and MCP invocations.
+See also the **[CLI docs index](README.md)** and **[`docs/config.md`](../config.md)** for the broader `PIPEFY_*` env-var story and the optional `~/.config/pipefy/config.toml` file that pins defaults across CLI and MCP invocations.
 
 The `pipefy` CLI accepts authentication from four sources. This page covers all of them, how the CLI picks one, and how to recover when something goes wrong.
 
@@ -60,7 +60,7 @@ PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=<SERVICE_ACCOUNT_CLIENT_SECRET>
 # PIPEFY_AUTH_URL=https://<your-signin-host>/realms/<realm>
 ```
 
-The CLI loads `.env` from the current working directory; see [`docs/setup.md`](../setup.md) for the full Pydantic precedence rules.
+The CLI loads `.env` from the current working directory; see [`docs/config.md#precedence`](../config.md#precedence) for the full pydantic-settings precedence rules.
 
 > **Legacy names:** `PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` are still honored (with a one-shot stderr deprecation warning) for back-compat. They will be removed in a future beta. `PIPEFY_OAUTH_URL` has no alias — the OAuth token endpoint now derives from `PIPEFY_BASE_URL`. See [`docs/MIGRATION.md`](../MIGRATION.md#service-account-env-var-rename).
 

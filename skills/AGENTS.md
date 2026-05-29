@@ -123,7 +123,7 @@ When a skill needs stable URLs into this repo’s Markdown:
 - **MCP tool semantics** — `docs/mcp/tools/<domain>.md` (cross-cutting rules: `docs/mcp/tools/cross-cutting.md`).
 - **CLI-only flows** — `docs/cli/` (e.g. `docs/cli/self-healing.md`).
 - **SDK usage** — `docs/sdk/README.md`.
-- **Install and `PIPEFY_*`** — always `docs/setup.md`; **MCP ↔ CLI matrix** — `docs/parity.md`.
+- **Install** — always root `README.md#installation`; **`PIPEFY_*` env vars and `config.toml`** — `docs/config.md`; **MCP ↔ CLI matrix** — `docs/parity.md`.
 
 ---
 

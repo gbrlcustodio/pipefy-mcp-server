@@ -5,10 +5,23 @@ Typer-based CLI for Pipefy. Exposes all MCP tool capabilities as terminal comman
 ## Install (pre-launch, v0.1 → v0.5)
 
 ```sh
-uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-cli
+uvx \
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli" \
+  --refresh pipefy-cli
 ```
 
-> At v1.0 this moves to `uv tool install pipefy-cli` from PyPI.
+Or persistently:
+
+```sh
+uv tool install \
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli"
+```
+
+The `--with` flags are required pre-1.0 because the workspace members are not yet on PyPI. At v1.0 this collapses to `uv tool install pipefy-cli`.
 
 ## Quick start
 
@@ -38,9 +51,15 @@ PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=your_client_secret
 
 `PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Set them only for non-prod environments.
 
-Full guide: [`docs/setup.md`](../../docs/setup.md). CLI-focused docs: [`docs/cli/`](../../docs/cli/README.md).
+### Authentication paths
 
-Use `PIPEFY_TOKEN` (or `--token`) for a direct bearer token instead of service-account credentials.
+Three credential sources, in CLI precedence order:
+
+1. **Interactive (`pipefy auth login`)** — browser OAuth flow, session stored in the OS keychain. Best for human developers. Status and revocation via `pipefy auth status` and `pipefy auth logout`.
+2. **Static bearer (`PIPEFY_TOKEN` or `--token`)** — direct bearer token, no OAuth. Intended for CI and scripted use. Overrides everything else.
+3. **Service-account OAuth (`PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` + `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`)** — unattended OAuth client-credentials grant. Used by the MCP server.
+
+Full env-var reference, validation rules, and `config.toml` precedence: [`docs/config.md`](../../docs/config.md). Auth deep-dive (precedence rules, troubleshooting, keychain backends): [`docs/cli/auth.md`](../../docs/cli/auth.md).
 
 ## Output modes
 

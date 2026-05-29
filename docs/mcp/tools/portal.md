@@ -189,7 +189,7 @@ Additional element types may appear; treat unknown keys as opaque JSON.
 | Mode | Org / pipe identifiers |
 |------|-------------------------|
 | **Unit** (`pytest -m "not integration"`) | Fictional fixtures only — [`fixture_ids.py`](../../../packages/sdk/tests/_shared/fixture_ids.py). Never hardcode production org UUIDs in test code. |
-| **Integration** (`pytest -m integration`) | Set `PIPEFY_PORTAL_ORG_UUID` in local [`.env`](../../../.env.example) (org where the token has `manage_portals`). Set `PIPEFY_BASE_URL` for live smoke. See [setup.md](../../setup.md#quick-start). |
+| **Integration** (`pytest -m integration`) | Set `PIPEFY_PORTAL_ORG_UUID` in local [`.env`](../../../.env.example) (org where the token has `manage_portals`). Set `PIPEFY_BASE_URL` for live smoke. See [setup.md](../../setup.md#quick-start) and the root [README.md#installation](../../../README.md#installation). |
 
 ---
 

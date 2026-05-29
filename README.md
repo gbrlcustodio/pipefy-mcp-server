@@ -53,7 +53,12 @@ Feedback and issues: [GitHub Issues](https://github.com/gbrlcustodio/pipefy-mcp-
 >
 > The `--with pipefy-sdk @ ...#subdirectory=packages/sdk` / `pipefy-auth @ ...#subdirectory=packages/auth` flags are required pre-1.0: this repo is a uv workspace, and the workspace members are not yet published to PyPI, so uv needs them named explicitly. The flags go away at v1.0 (PyPI install).
 
-Service-account credentials (`PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` and `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`) are the unattended auth path used by the MCP server and CI scripts. The CLI additionally supports interactive `pipefy auth login` (browser OAuth, session in OS keychain). Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
+Two auth paths, pick by client:
+
+- **Human OAuth (Claude Code)**: `/pipefy:login` or `pipefy auth login` runs the browser flow and stores a session in your OS keychain. Pipe membership is whatever the signed-in user already has.
+- **Service account (Cursor, Claude Desktop, Codex, CI)**: provision a Service Account in [Pipefy Admin](https://app.pipefy.com/) (Admin → Service Accounts) and add that account to every pipe the tools should touch. Wire `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` and `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` into the client config below.
+
+Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
 
 ### MCP client wiring
 

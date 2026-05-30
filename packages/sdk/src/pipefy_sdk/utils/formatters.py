@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from pipefy_infra.coerce import try_int
+
 
 def convert_fields_to_array(fields: Any) -> list[dict[str, Any]]:
     """Convert card fields input into Pipefy `FieldValueInput` array format.
@@ -66,12 +68,6 @@ def normalize_field_condition_payload(
         / ``updateFieldCondition``.
     """
 
-    def _coerce_int(value: Any) -> Any:
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            return value
-
     expressions = condition.get("expressions")
     if not isinstance(expressions, list):
         return dict(condition)
@@ -83,7 +79,7 @@ def normalize_field_condition_payload(
             continue
         row = {k: v for k, v in expr.items() if k != "id"}
         if "structure_id" in row and row["structure_id"] is not None:
-            row["structure_id"] = _coerce_int(row["structure_id"])
+            row["structure_id"] = try_int(row["structure_id"])
         cleaned_expressions.append(row)
 
     es = condition.get("expressions_structure")
@@ -91,9 +87,9 @@ def normalize_field_condition_payload(
         coerced_es: list[list[Any]] = []
         for group in es:
             if isinstance(group, list):
-                coerced_es.append([_coerce_int(v) for v in group])
+                coerced_es.append([try_int(v) for v in group])
             else:
-                coerced_es.append([_coerce_int(group)])
+                coerced_es.append([try_int(group)])
         return {
             **condition,
             "expressions": cleaned_expressions,

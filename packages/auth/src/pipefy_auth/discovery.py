@@ -27,6 +27,7 @@ class ProviderMetadata:
     authorization_endpoint: str
     token_endpoint: str
     end_session_endpoint: str | None = None
+    device_authorization_endpoint: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,10 +60,12 @@ def fetch_provider_metadata(
     """Fetch and parse the issuer's OIDC discovery document.
 
     Validates that ``metadata.issuer`` matches ``issuer_url`` (per OIDC
-    Discovery 1.0 §4.3) and that the returned ``authorization_endpoint`` and
-    ``token_endpoint`` aren't pointing at internal hosts or non-HTTPS URLs —
-    a tampered or misconfigured discovery doc must not be allowed to redirect
-    the browser dance or token exchange to an attacker-controlled target.
+    Discovery 1.0 §4.3) and that the returned ``authorization_endpoint``,
+    ``token_endpoint``, and (when present) ``device_authorization_endpoint``
+    aren't pointing at internal hosts or non-HTTPS URLs — a tampered or
+    misconfigured discovery doc must not be allowed to redirect the browser
+    dance, device authorization, or token exchange to an attacker-controlled
+    target.
 
     Raises:
         ValueError: When the discovery document is unreachable, malformed,
@@ -111,12 +114,19 @@ def fetch_provider_metadata(
     token_endpoint = str(data["token_endpoint"])
     end_session_endpoint = optional_str(data.get("end_session_endpoint"))
 
+    raw_device = data.get("device_authorization_endpoint")
+    device_authorization_endpoint = str(raw_device) if raw_device else None
+
     endpoints: list[tuple[str, str]] = [
         ("authorization_endpoint", authorization_endpoint),
         ("token_endpoint", token_endpoint),
     ]
     if end_session_endpoint is not None:
         endpoints.append(("end_session_endpoint", end_session_endpoint))
+    if device_authorization_endpoint is not None:
+        endpoints.append(
+            ("device_authorization_endpoint", device_authorization_endpoint)
+        )
     for field, value in endpoints:
         try:
             security.validate_https_url(
@@ -130,6 +140,7 @@ def fetch_provider_metadata(
         authorization_endpoint=authorization_endpoint,
         token_endpoint=token_endpoint,
         end_session_endpoint=end_session_endpoint,
+        device_authorization_endpoint=device_authorization_endpoint,
     )
 
 

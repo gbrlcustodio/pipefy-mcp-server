@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from httpx import Auth
+from pipefy_infra.coerce import optional_int
 from rapidfuzz import fuzz
 
 from pipefy_sdk.base_client import BasePipefyClient
@@ -23,16 +24,6 @@ SEARCH_PIPES_MAX_PER_ORG_MIN: int = 1
 
 def _clamp_max_pipes_per_org(value: int) -> int:
     return max(SEARCH_PIPES_MAX_PER_ORG_MIN, min(SEARCH_PIPES_MAX_PER_ORG_CAP, value))
-
-
-def _coerce_org_pipes_count(raw: object) -> int | None:
-    """Parse GraphQL ``Organization.pipesCount`` for truncation checks."""
-    if raw is None:
-        return None
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        return None
 
 
 class PipeService(BasePipefyClient):
@@ -156,7 +147,7 @@ class PipeService(BasePipefyClient):
             organizations: list[dict] = []
             for org in raw_orgs:
                 pipes = list(org.get("pipes") or [])
-                pipes_count = _coerce_org_pipes_count(org.get("pipesCount"))
+                pipes_count = optional_int(org.get("pipesCount"))
                 len_p = len(pipes)
                 over_cap = len_p > per_org_cap
                 fewer_than_reported_total = (

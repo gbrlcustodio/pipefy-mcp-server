@@ -18,6 +18,8 @@ from dataclasses import asdict, dataclass
 from typing import Literal
 from urllib.parse import urlparse
 
+from pipefy_infra.coerce import optional_int, optional_str
+
 _SERVICE = "pipefy"
 _KEYRING_FILENAME = "keyring.cfg"
 
@@ -110,10 +112,10 @@ def store_session(
         refresh_token=refresh_token,
         token_type=str(token_response.get("token_type") or "Bearer"),
         obtained_at=int(time.time()),
-        expires_in=_optional_int(token_response.get("expires_in")),
-        refresh_expires_in=_optional_int(token_response.get("refresh_expires_in")),
-        scope=_optional_str(token_response.get("scope")),
-        id_token=_optional_str(token_response.get("id_token")),
+        expires_in=optional_int(token_response.get("expires_in")),
+        refresh_expires_in=optional_int(token_response.get("refresh_expires_in")),
+        scope=optional_str(token_response.get("scope")),
+        id_token=optional_str(token_response.get("id_token")),
     )
     keyring.set_password(
         _SERVICE, keychain_key(issuer, client_id), json.dumps(asdict(session))
@@ -173,22 +175,6 @@ def keychain_backend_name() -> str:
     except KeyringError as exc:
         return f"unavailable ({exc})"
     return backend.__class__.__name__
-
-
-def _optional_int(value: object) -> int | None:
-    if value is None:
-        return None
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return None
-
-
-def _optional_str(value: object) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
 
 
 __all__ = [

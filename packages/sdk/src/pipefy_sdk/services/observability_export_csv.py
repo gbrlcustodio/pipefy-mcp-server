@@ -11,6 +11,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 from openpyxl import load_workbook
 from pipefy_infra import security
+from pipefy_infra.coerce import optional_int
 
 _ALLOWED_HOST_SUFFIX: Final[str] = ".pipefy.com"
 
@@ -125,17 +126,11 @@ async def stream_bytes(url: str, *, max_bytes: int) -> AsyncIterator[bytes]:
                     continue
 
                 response.raise_for_status()
-                cl = response.headers.get("content-length")
-                if cl is not None:
-                    try:
-                        declared = int(cl)
-                    except ValueError:
-                        pass
-                    else:
-                        if declared > max_bytes:
-                            raise ValueError(
-                                f"Export file exceeds max_download_bytes ({max_bytes} bytes)."
-                            )
+                declared = optional_int(response.headers.get("content-length"))
+                if declared is not None and declared > max_bytes:
+                    raise ValueError(
+                        f"Export file exceeds max_download_bytes ({max_bytes} bytes)."
+                    )
                 total = 0
                 async for chunk in response.aiter_bytes():
                     total += len(chunk)

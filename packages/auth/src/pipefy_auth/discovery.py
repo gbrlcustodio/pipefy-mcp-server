@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import httpx
 from pipefy_infra import security
+from pipefy_infra.coerce import optional_str
 
 from pipefy_auth import _http
 
@@ -108,8 +109,7 @@ def fetch_provider_metadata(
 
     authorization_endpoint = str(data["authorization_endpoint"])
     token_endpoint = str(data["token_endpoint"])
-    raw_end_session = data.get("end_session_endpoint")
-    end_session_endpoint = str(raw_end_session) if raw_end_session else None
+    end_session_endpoint = optional_str(data.get("end_session_endpoint"))
 
     endpoints: list[tuple[str, str]] = [
         ("authorization_endpoint", authorization_endpoint),

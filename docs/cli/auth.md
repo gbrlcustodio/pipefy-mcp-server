@@ -109,7 +109,7 @@ The service-account OAuth token URL (Tier 3) and the OIDC issuer URL (Tier 4) ar
 
 | Command | Status | Notes |
 |---------|--------|-------|
-| `pipefy auth login` | Available | Browser-based PKCE login; persists the session in the OS keychain. |
+| `pipefy auth login` | Available | Browser-based PKCE login (default) or device grant with `--device`; persists the session in the OS keychain. |
 | `pipefy auth status` | Available | Print which auth source is active, identity, and session expiry. |
 | `pipefy auth logout` | Available | Revoke the refresh token at the IdP and clear the stored session. |
 
@@ -117,8 +117,9 @@ The service-account OAuth token URL (Tier 3) and the OIDC issuer URL (Tier 4) ar
 
 | Flag | Default | Effect |
 |------|---------|--------|
-| `--no-browser` | _off_ | Print the authorization URL to stdout instead of trying to launch a browser. |
-| `--callback-timeout <s>` | `180.0` | Seconds to wait for the browser callback (minimum 5). |
+| `--device` | _off_ | Use the OAuth 2.0 device authorization grant (RFC 8628): prints a user code and verification URL instead of binding a loopback callback. |
+| `--no-browser` | _off_ | Print the authorization URL to stdout instead of trying to launch a browser (PKCE flow only). |
+| `--callback-timeout <s>` | `180.0` | Seconds to wait for the browser callback (minimum 5; PKCE flow only). |
 
 #### `pipefy auth status` flags
 
@@ -184,15 +185,15 @@ Production: `https://signin.pipefy.com/realms/pipefy` (the `PIPEFY_AUTH_URL` def
 
 ## Headless / SSH
 
-The PKCE flow needs a loopback HTTP server on `127.0.0.1:<ephemeral>` and a browser that can reach it. SSH sessions and headless boxes break both assumptions.
+The default PKCE flow needs a loopback HTTP server on `127.0.0.1:<ephemeral>` and a browser that can reach it. SSH sessions and headless boxes break both assumptions.
 
-Options today:
+**Device login:** run `pipefy auth login --device` when your IdP advertises `device_authorization_endpoint` in OIDC discovery. The CLI prints a **user code** and **verification URL** (and a one-shot link when the IdP provides `verification_uri_complete`). Open the URL on any machine with a browser, enter the code, and the CLI polls until tokens arrive — no loopback listener is required.
 
-1. **Run `pipefy auth login` on your laptop**, then copy `.env` plus the relevant secrets over. The keychain entry itself doesn't transfer between machines.
+Other options:
+
+1. **Run `pipefy auth login` on your laptop** (PKCE), then copy `.env` plus the relevant secrets over. The keychain entry itself doesn't transfer between machines.
 2. **Use a service account** (`PIPEFY_SERVICE_ACCOUNT_*`) on the headless box — this is the canonical answer for CI and servers.
 3. **Static bearer** via `PIPEFY_TOKEN` for short-lived debugging.
-
-Forthcoming: an OAuth 2.0 Device Authorization Grant (`pipefy auth login --device`) that swaps the loopback callback for a code you paste into a browser elsewhere. Tracked in issue #138.
 
 ---
 

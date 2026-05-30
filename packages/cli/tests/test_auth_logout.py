@@ -6,6 +6,7 @@ import httpx
 import pytest
 from conftest import InMemoryKeyring
 from pipefy_auth import revoke, storage
+from pipefy_auth.responses import TokenResponse
 
 from pipefy_cli.commands import auth as auth_module
 from pipefy_cli.main import app as cli_app
@@ -134,12 +135,11 @@ def _store_test_session(issuer: str = _ISSUER, client_id: str = "pipefy-cli") ->
     storage.store_session(
         issuer=issuer,
         client_id=client_id,
-        token_response={
-            "access_token": "AAA",
-            "refresh_token": "RRR",
-            "token_type": "Bearer",
-            "expires_in": 300,
-        },
+        token=TokenResponse(
+            access_token="AAA",
+            refresh_token="RRR",
+            expires_in=300,
+        ),
     )
 
 

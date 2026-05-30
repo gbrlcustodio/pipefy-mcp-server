@@ -9,6 +9,7 @@ import httpx
 from pipefy_auth import _http
 from pipefy_auth.discovery import fetch_provider_metadata
 from pipefy_auth.locks import RefreshLockTimeout, file_lock, refresh_lock_path
+from pipefy_auth.responses import OAuthErrorResponse, TokenResponse
 from pipefy_auth.storage import StoredSession, load_session, store_session
 
 _LEEWAY_S = 60
@@ -79,33 +80,20 @@ def _refresh_error_from(response: httpx.Response) -> RefreshError:
     """Render a non-200 refresh response as a structured ``RefreshError``.
 
     Only OAuth-standard ``error`` / ``error_description`` fields are surfaced;
-    raw bodies are never echoed (same threat model as the token-exchange scrub
-    in ``flow._format_token_error`` — a hostile IdP could echo submitted params
-    like ``refresh_token`` in error responses, and a ``[:N]`` window would be a
-    guaranteed leak channel).
+    raw bodies are never echoed (a hostile IdP could echo submitted params
+    like ``refresh_token`` in error responses, and a ``[:N]`` window would be
+    a guaranteed leak channel).
     """
-    generic = f"Refresh failed (HTTP {response.status_code})"
-    try:
-        payload = response.json()
-    except ValueError:
-        return RefreshError(generic)
-    if not isinstance(payload, dict):
-        return RefreshError(generic)
-    error_value = payload.get("error")
-    error_code = error_value if isinstance(error_value, str) else None
-    description_value = payload.get("error_description")
-    description = description_value if isinstance(description_value, str) else None
-    if not error_code:
-        return RefreshError(generic)
-    if description:
-        return RefreshError(
-            f"{generic}: {error_code}: {description}", error_code=error_code
-        )
-    return RefreshError(f"{generic}: {error_code}", error_code=error_code)
+    fallback = f"Refresh failed (HTTP {response.status_code})"
+    err = OAuthErrorResponse.from_response(response)
+    return RefreshError(
+        err.render(fallback=fallback, prefix="Refresh failed"),
+        error_code=err.error,
+    )
 
 
 def _is_stale(session: StoredSession, leeway_s: int) -> bool:
-    expires_in = session.expires_in or 0
+    expires_in = session.token.expires_in or 0
     deadline = session.obtained_at + expires_in - leeway_s
     return time.time() >= deadline
 
@@ -117,29 +105,34 @@ def _refresh_and_store(
     client_id: str,
     http_client: httpx.Client | None,
 ) -> StoredSession:
-    token_response = refresh_access_token(
+    prior = session.token
+    payload = refresh_access_token(
         issuer=issuer,
         client_id=client_id,
-        refresh_token=session.refresh_token,
+        refresh_token=prior.refresh_token,
         http_client=http_client,
     )
     # Carry forward fields the IdP may omit from a refresh response so the
     # rotated session keeps its full shape — without ``expires_in`` the next
     # freshness check treats the token as already expired and refreshes again
     # on the very next call.
-    token_response.setdefault("refresh_token", session.refresh_token)
-    if session.expires_in is not None:
-        token_response.setdefault("expires_in", session.expires_in)
-    if session.refresh_expires_in is not None:
-        token_response.setdefault("refresh_expires_in", session.refresh_expires_in)
-    if session.scope is not None:
-        token_response.setdefault("scope", session.scope)
-    if session.id_token is not None:
-        token_response.setdefault("id_token", session.id_token)
+    payload.setdefault("refresh_token", prior.refresh_token)
+    if prior.expires_in is not None:
+        payload.setdefault("expires_in", prior.expires_in)
+    if prior.refresh_expires_in is not None:
+        payload.setdefault("refresh_expires_in", prior.refresh_expires_in)
+    if prior.scope is not None:
+        payload.setdefault("scope", prior.scope)
+    if prior.id_token is not None:
+        payload.setdefault("id_token", prior.id_token)
+    try:
+        new_token = TokenResponse.from_payload(payload)
+    except ValueError as exc:
+        raise RefreshError(f"Refresh response malformed: {exc}") from exc
     return store_session(
         issuer=session.issuer,
         client_id=session.client_id,
-        token_response=token_response,
+        token=new_token,
     )
 
 

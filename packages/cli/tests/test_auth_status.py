@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pipefy_auth import RefreshError, StoredSession, storage
+from pipefy_auth.responses import TokenResponse
 
 from pipefy_cli.main import app
 
@@ -34,14 +35,13 @@ def _seed_session(
         storage.store_session(
             issuer=_ISSUER,
             client_id=_CLIENT_ID,
-            token_response={
-                "access_token": "AT",
-                "refresh_token": "RT",
-                "token_type": "Bearer",
-                "expires_in": expires_in,
-                "refresh_expires_in": refresh_expires_in,
-                "scope": "openid offline_access",
-            },
+            token=TokenResponse(
+                access_token="AT",
+                refresh_token="RT",
+                expires_in=expires_in,
+                refresh_expires_in=refresh_expires_in,
+                scope="openid offline_access",
+            ),
         )
 
 
@@ -133,14 +133,16 @@ def test_status_stored_session_rotates_via_refresh(
     rotated = storage.StoredSession(
         issuer=_ISSUER,
         client_id=_CLIENT_ID,
-        access_token="ROTATED",
-        refresh_token="RT",
-        token_type="Bearer",
         obtained_at=int(time.time()),
-        expires_in=3600,
-        refresh_expires_in=2592000,
-        scope="openid offline_access",
-        id_token=None,
+        token=TokenResponse(
+            access_token="ROTATED",
+            refresh_token="RT",
+            token_type="Bearer",
+            expires_in=3600,
+            refresh_expires_in=2592000,
+            scope="openid offline_access",
+            id_token=None,
+        ),
     )
     client = _mock_client_with_me()
     with _patch_fresh_session(rotated), _patch_command_client(client):

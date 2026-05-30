@@ -13,6 +13,7 @@ import pytest
 from conftest import InMemoryKeyring
 from pipefy_auth import discovery, flow, loopback, pkce, storage
 from pipefy_auth.discovery import ProviderMetadata
+from pipefy_auth.responses import TokenResponse
 
 from pipefy_cli.main import app as cli_app
 
@@ -280,30 +281,29 @@ class TestStorage:
         assert key == "signin.pipefy.com|pipefy-cli"
 
     def test_store_then_load_roundtrip(self, fake_keyring: InMemoryKeyring) -> None:
-        token = {
-            "access_token": "AAA",
-            "refresh_token": "RRR",
-            "token_type": "Bearer",
-            "expires_in": 300,
-            "refresh_expires_in": 3600,
-            "scope": "openid email",
-        }
+        token = TokenResponse(
+            access_token="AAA",
+            refresh_token="RRR",
+            expires_in=300,
+            refresh_expires_in=3600,
+            scope="openid email",
+        )
         before = int(time.time())
         stored = storage.store_session(
             issuer="https://x.test/realms/foo",
             client_id="pipefy-cli",
-            token_response=token,
+            token=token,
         )
-        assert stored.access_token == "AAA"
-        assert stored.refresh_token == "RRR"
+        assert stored.token.access_token == "AAA"
+        assert stored.token.refresh_token == "RRR"
         assert stored.obtained_at >= before
 
         loaded = storage.load_session(
             issuer="https://x.test/realms/foo", client_id="pipefy-cli"
         )
         assert loaded is not None
-        assert loaded.refresh_token == "RRR"
-        assert loaded.scope == "openid email"
+        assert loaded.token.refresh_token == "RRR"
+        assert loaded.token.scope == "openid email"
 
     def test_load_returns_none_when_absent(self, fake_keyring: InMemoryKeyring) -> None:
         assert (
@@ -315,7 +315,7 @@ class TestStorage:
         storage.store_session(
             issuer="https://x.test/realms/foo",
             client_id="cid",
-            token_response={"access_token": "a", "refresh_token": "r"},
+            token=TokenResponse(access_token="a", refresh_token="r"),
         )
         assert storage.delete_session(
             issuer="https://x.test/realms/foo", client_id="cid"
@@ -340,15 +340,9 @@ class TestStorage:
         with pytest.raises(storage.SessionDeleteError, match="backend locked"):
             storage.delete_session(issuer="https://x.test/realms/foo", client_id="cid")
 
-    def test_store_rejects_missing_required_field(
-        self, fake_keyring: InMemoryKeyring
-    ) -> None:
+    def test_token_response_from_payload_rejects_missing_field(self) -> None:
         with pytest.raises(ValueError, match="refresh_token"):
-            storage.store_session(
-                issuer="https://x.test/realms/foo",
-                client_id="cid",
-                token_response={"access_token": "a"},
-            )
+            TokenResponse.from_payload({"access_token": "a"})
 
 
 # --------------------------------------------------------------------------- #
@@ -402,7 +396,7 @@ class TestFlow:
         ):
             assert needle in url
 
-    def test_exchange_code_returns_token_dict(self) -> None:
+    def test_exchange_code_returns_token_response(self) -> None:
         token_payload = {
             "access_token": "AAA",
             "refresh_token": "RRR",
@@ -430,7 +424,7 @@ class TestFlow:
             code_verifier="ver1f1er",
             client=client,
         )
-        assert result == token_payload
+        assert result == TokenResponse.from_payload(token_payload)
 
     def test_exchange_code_non_200_raises_login_error(self) -> None:
         meta = ProviderMetadata(
@@ -603,12 +597,11 @@ class TestAuthLoginCommand:
         def _fake_run_login(**_kwargs: object) -> flow.LoginResult:
             return flow.LoginResult(
                 issuer="https://x.test/realms/foo",
-                token_response={
-                    "access_token": "AAA",
-                    "refresh_token": "RRR",
-                    "token_type": "Bearer",
-                    "expires_in": 300,
-                },
+                token=TokenResponse(
+                    access_token="AAA",
+                    refresh_token="RRR",
+                    expires_in=300,
+                ),
             )
 
         from pipefy_cli.commands import auth as auth_module
@@ -623,7 +616,7 @@ class TestAuthLoginCommand:
             issuer="https://x.test/realms/foo", client_id="pipefy-cli"
         )
         assert loaded is not None
-        assert loaded.refresh_token == "RRR"
+        assert loaded.token.refresh_token == "RRR"
 
     def test_masking_env_warning(
         self,
@@ -643,7 +636,7 @@ class TestAuthLoginCommand:
             "run_login",
             lambda **_k: flow.LoginResult(
                 issuer="https://x.test/realms/foo",
-                token_response={"access_token": "A", "refresh_token": "R"},
+                token=TokenResponse(access_token="A", refresh_token="R"),
             ),
         )
 
@@ -679,7 +672,7 @@ class TestAuthLoginCommand:
                 on_url(fake_auth_url)
             return flow.LoginResult(
                 issuer="https://x.test/realms/foo",
-                token_response={"access_token": "A", "refresh_token": "R"},
+                token=TokenResponse(access_token="A", refresh_token="R"),
             )
 
         monkeypatch.setattr(auth_module, "run_login", _spy_run_login)
@@ -728,7 +721,7 @@ class TestAuthLoginCommand:
             on_url(fake_auth_url)
             return flow.LoginResult(
                 issuer="https://x.test/realms/foo",
-                token_response={"access_token": "A", "refresh_token": "R"},
+                token=TokenResponse(access_token="A", refresh_token="R"),
             )
 
         monkeypatch.setattr(auth_module, "run_login", _spy_run_login)
@@ -782,7 +775,7 @@ class TestAuthLoginCommand:
             "run_login",
             lambda **_k: flow.LoginResult(
                 issuer="https://x.test/realms/foo",
-                token_response={"access_token": "A", "refresh_token": "R"},
+                token=TokenResponse(access_token="A", refresh_token="R"),
             ),
         )
 
@@ -816,7 +809,7 @@ class TestAuthLoginCommand:
             "run_login",
             lambda **_k: flow.LoginResult(
                 issuer="https://x.test/realms/foo",
-                token_response={"access_token": "A", "refresh_token": "R"},
+                token=TokenResponse(access_token="A", refresh_token="R"),
             ),
         )
         monkeypatch.setattr(

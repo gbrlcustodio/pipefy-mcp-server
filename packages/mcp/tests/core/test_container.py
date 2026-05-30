@@ -8,6 +8,7 @@ from pipefy_auth import (
     RefreshableBearerAuth,
     RefreshError,
     StaticBearerAuth,
+    TokenResponse,
 )
 from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefyClient, PipefySettings
@@ -44,14 +45,12 @@ def _fresh_stored_session() -> StoredSession:
     return StoredSession(
         issuer="https://signin.pipefy.com/realms/pipefy",
         client_id="pipefy-cli",
-        access_token="ACCESS",
-        refresh_token="REFRESH",
-        token_type="Bearer",
         obtained_at=int(time.time()),
-        expires_in=3600,
-        refresh_expires_in=None,
-        scope=None,
-        id_token=None,
+        token=TokenResponse(
+            access_token="ACCESS",
+            refresh_token="REFRESH",
+            expires_in=3600,
+        ),
     )
 
 

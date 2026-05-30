@@ -38,6 +38,7 @@ from pipefy_auth.resolver import (
     resolve_pipefy_auth,
     tier_for,
 )
+from pipefy_auth.responses import OAuthErrorResponse, TokenResponse
 from pipefy_auth.revoke import (
     RevocationError,
     RevocationUnsupportedError,
@@ -62,6 +63,7 @@ __all__ = [
     "DiscoveryPolicy",
     "LoginError",
     "LoginResult",
+    "OAuthErrorResponse",
     "OidcClient",
     "ProviderMetadata",
     "RefreshError",
@@ -75,6 +77,7 @@ __all__ = [
     "SessionDeleteError",
     "StaticBearerAuth",
     "StoredSession",
+    "TokenResponse",
     "__version__",
     "configure_keychain_backend",
     "delete_session",

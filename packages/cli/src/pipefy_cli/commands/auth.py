@@ -194,13 +194,8 @@ def auth_login(
         store_session(
             issuer=result.issuer,
             client_id=client_id,
-            token_response=result.token_response,
+            token=result.token,
         )
-    except ValueError as exc:
-        typer.echo(
-            f"Login succeeded but the token response was malformed: {exc}", err=True
-        )
-        raise typer.Exit(1) from exc
     except (KeyringError, OSError) as exc:
         # ``OSError`` covers the file-backed PlaintextKeyring path: a read-only
         # ``config_dir()`` (e.g. CI runner without write perms, NFS mount
@@ -369,9 +364,11 @@ def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None
         # Best-effort expiry from the pre-refresh blob so users see *why*.
         stale = load_session(issuer=oidc.issuer_url, client_id=oidc.client_id)
         if stale is not None:
-            report.access_expires_at = _iso_expiry(stale.obtained_at, stale.expires_in)
+            report.access_expires_at = _iso_expiry(
+                stale.obtained_at, stale.token.expires_in
+            )
             report.refresh_expires_at = _iso_expiry(
-                stale.obtained_at, stale.refresh_expires_in
+                stale.obtained_at, stale.token.refresh_expires_in
             )
         raise _StatusExit(
             report=report,
@@ -391,10 +388,10 @@ def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None
         )
     report.state = "active"
     report.access_expires_at = _iso_expiry(
-        fresh_session.obtained_at, fresh_session.expires_in
+        fresh_session.obtained_at, fresh_session.token.expires_in
     )
     report.refresh_expires_at = _iso_expiry(
-        fresh_session.obtained_at, fresh_session.refresh_expires_in
+        fresh_session.obtained_at, fresh_session.token.refresh_expires_in
     )
 
 
@@ -498,7 +495,7 @@ def auth_logout(ctx: typer.Context) -> None:
         revoke_session(
             issuer=issuer,
             client_id=client_id,
-            refresh_token=session.refresh_token,
+            refresh_token=session.token.refresh_token,
             policy=DiscoveryPolicy(allow_insecure_urls=settings.allow_insecure_urls),
         )
     except RevocationUnsupportedError:

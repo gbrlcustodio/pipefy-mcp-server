@@ -58,7 +58,7 @@ def revoke_session(
     # Keycloak returns 204; RFC treats any 2xx as success. No body echo on
     # failure — we just sent ``refresh_token`` in the POST body, so a ``[:N]``
     # window would be a guaranteed leak channel under a hostile IdP (same
-    # threat model as ``flow._format_token_error``).
+    # threat model as ``OAuthErrorResponse.render``).
     if response.status_code // 100 != 2:
         raise RevocationError(
             f"Revocation endpoint returned HTTP {response.status_code}"

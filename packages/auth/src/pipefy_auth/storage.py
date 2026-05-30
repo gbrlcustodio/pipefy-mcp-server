@@ -20,6 +20,8 @@ from urllib.parse import urlparse
 
 from pipefy_infra.coerce import optional_int, optional_str
 
+from pipefy_auth.responses import TokenResponse
+
 _SERVICE = "pipefy"
 _KEYRING_FILENAME = "keyring.cfg"
 
@@ -55,18 +57,18 @@ class SessionDeleteError(RuntimeError):
 
 @dataclass(frozen=True)
 class StoredSession:
-    """Persisted session shape (JSON-serialised under one keychain key)."""
+    """Persisted session: identity + write timestamp + the token response.
+
+    The token fields are bundled in :class:`TokenResponse` so there is one
+    source of truth for the OAuth wire shape. On-disk JSON destructures the
+    token attributes into the parent object (legacy flat shape) so existing
+    keychain entries continue to load.
+    """
 
     issuer: str
     client_id: str
-    access_token: str
-    refresh_token: str
-    token_type: str
     obtained_at: int
-    expires_in: int | None
-    refresh_expires_in: int | None
-    scope: str | None
-    id_token: str | None
+    token: TokenResponse
 
 
 def _issuer_host(issuer_url: str) -> str:
@@ -85,7 +87,7 @@ def store_session(
     *,
     issuer: str,
     client_id: str,
-    token_response: dict[str, object],
+    token: TokenResponse,
 ) -> StoredSession:
     """Persist a token response in the OS keychain. Returns the stored shape.
 
@@ -93,32 +95,17 @@ def store_session(
         KeyringError: When the keychain backend rejects the write. Caller should
             surface a user-facing message (e.g. headless Linux without a Secret
             Service daemon).
-        ValueError: When ``token_response`` is missing required fields.
     """
     import keyring
-
-    try:
-        access_token = str(token_response["access_token"])
-        refresh_token = str(token_response["refresh_token"])
-    except KeyError as exc:
-        raise ValueError(
-            f"Token response is missing required field: {exc.args[0]!r}"
-        ) from exc
 
     session = StoredSession(
         issuer=issuer,
         client_id=client_id,
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type=str(token_response.get("token_type") or "Bearer"),
         obtained_at=int(time.time()),
-        expires_in=optional_int(token_response.get("expires_in")),
-        refresh_expires_in=optional_int(token_response.get("refresh_expires_in")),
-        scope=optional_str(token_response.get("scope")),
-        id_token=optional_str(token_response.get("id_token")),
+        token=token,
     )
     keyring.set_password(
-        _SERVICE, keychain_key(issuer, client_id), json.dumps(asdict(session))
+        _SERVICE, keychain_key(issuer, client_id), json.dumps(_session_to_blob(session))
     )
     return session
 
@@ -138,10 +125,9 @@ def load_session(*, issuer: str, client_id: str) -> StoredSession | None:
         data = json.loads(blob)
     except json.JSONDecodeError:
         return None
-    try:
-        return StoredSession(**data)
-    except TypeError:
+    if not isinstance(data, dict):
         return None
+    return _session_from_blob(data)
 
 
 def delete_session(*, issuer: str, client_id: str) -> bool:
@@ -175,6 +161,43 @@ def keychain_backend_name() -> str:
     except KeyringError as exc:
         return f"unavailable ({exc})"
     return backend.__class__.__name__
+
+
+def _session_to_blob(session: StoredSession) -> dict[str, object]:
+    """Flatten a ``StoredSession`` into the on-disk JSON shape.
+
+    The token-response fields are destructured into the parent object so the
+    JSON layout matches the pre-bundle format. Legacy keychain entries written
+    under that layout continue to load via :func:`_session_from_blob`.
+    """
+    return {
+        "issuer": session.issuer,
+        "client_id": session.client_id,
+        "obtained_at": session.obtained_at,
+        **asdict(session.token),
+    }
+
+
+def _session_from_blob(data: dict[str, object]) -> StoredSession | None:
+    """Rebuild a ``StoredSession`` from the flat on-disk JSON shape."""
+    try:
+        token = TokenResponse(
+            access_token=str(data["access_token"]),
+            refresh_token=str(data["refresh_token"]),
+            token_type=str(data["token_type"]),
+            expires_in=optional_int(data.get("expires_in")),
+            refresh_expires_in=optional_int(data.get("refresh_expires_in")),
+            scope=optional_str(data.get("scope")),
+            id_token=optional_str(data.get("id_token")),
+        )
+        return StoredSession(
+            issuer=str(data["issuer"]),
+            client_id=str(data["client_id"]),
+            obtained_at=int(data["obtained_at"]),  # type: ignore[arg-type]
+            token=token,
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 __all__ = [

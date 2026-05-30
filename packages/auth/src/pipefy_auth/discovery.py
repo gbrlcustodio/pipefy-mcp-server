@@ -81,7 +81,7 @@ def fetch_provider_metadata(
     if response.status_code != 200:
         # Status-only; never echo the raw body. Discovery isn't OAuth so there's
         # no RFC 6749 ``error`` field to surface, and a `[:N]` window of the
-        # body is the same echo-channel class scrubbed in ``_format_token_error``.
+        # body is the same echo-channel class scrubbed in ``OAuthErrorResponse``.
         raise ValueError(f"OIDC discovery failed ({response.status_code}) at {url}")
 
     try:

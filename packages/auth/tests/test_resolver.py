@@ -24,6 +24,7 @@ from pipefy_auth.resolver import (
     resolve_pipefy_auth,
     tier_for,
 )
+from pipefy_auth.responses import TokenResponse
 from pipefy_auth.storage import StoredSession
 
 
@@ -31,14 +32,16 @@ def _stored_session() -> StoredSession:
     return StoredSession(
         issuer="https://issuer.test/realms/pipefy",
         client_id="pipefy-cli",
-        access_token="ACCESS",
-        refresh_token="REFRESH",
-        token_type="Bearer",
         obtained_at=int(time.time()),
-        expires_in=3600,
-        refresh_expires_in=None,
-        scope=None,
-        id_token=None,
+        token=TokenResponse(
+            access_token="ACCESS",
+            refresh_token="REFRESH",
+            token_type="Bearer",
+            expires_in=3600,
+            refresh_expires_in=None,
+            scope=None,
+            id_token=None,
+        ),
     )
 
 
@@ -240,14 +243,16 @@ def test_stored_session_force_refresh_calls_ensure_fresh_session_with_force(
         return StoredSession(
             issuer=rotated.issuer,
             client_id=rotated.client_id,
-            access_token="ROTATED",
-            refresh_token="ROTATED_R",
-            token_type="Bearer",
             obtained_at=int(time.time()),
-            expires_in=3600,
-            refresh_expires_in=None,
-            scope=None,
-            id_token=None,
+            token=TokenResponse(
+                access_token="ROTATED",
+                refresh_token="ROTATED_R",
+                token_type="Bearer",
+                expires_in=3600,
+                refresh_expires_in=None,
+                scope=None,
+                id_token=None,
+            ),
         )
 
     monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", fake_ensure)

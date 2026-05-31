@@ -9,6 +9,7 @@ from typing import Callable, cast
 from urllib.parse import urlencode
 
 import httpx
+from pydantic import ValidationError
 
 from pipefy_auth import _http
 from pipefy_auth.discovery import (
@@ -18,6 +19,11 @@ from pipefy_auth.discovery import (
 )
 from pipefy_auth.loopback import CallbackResult, LoopbackCapture
 from pipefy_auth.pkce import challenge_from_verifier, generate_verifier
+from pipefy_auth.responses import (
+    OAuthErrorResponse,
+    TokenResponse,
+    _format_validation_error,
+)
 
 _DEFAULT_SCOPES = ("openid", "profile", "email", "offline_access")
 _TOKEN_EXCHANGE_TIMEOUT_S = 30.0
@@ -29,10 +35,10 @@ class LoginError(RuntimeError):
 
 @dataclass(frozen=True)
 class LoginResult:
-    """The token response, plus the resolved issuer (post-discovery)."""
+    """The OAuth token, plus the resolved issuer (post-discovery)."""
 
     issuer: str
-    token_response: dict[str, object]
+    token: TokenResponse
 
 
 def build_authorization_url(
@@ -65,7 +71,7 @@ def exchange_code(
     redirect_uri: str,
     code_verifier: str,
     client: httpx.Client,
-) -> dict[str, object]:
+) -> TokenResponse:
     """Exchange an authorization code for tokens at the issuer's token endpoint."""
     try:
         response = client.post(
@@ -82,42 +88,28 @@ def exchange_code(
         raise LoginError(f"Token exchange request failed: {exc}") from exc
 
     if response.status_code != 200:
-        raise LoginError(_format_token_error(response))
+        # ``error_description`` is free-form per RFC 6749 §5.2 — its content
+        # reflects the IdP's framing, and surfacing it at all is part of trusting
+        # the IdP. A length cap wouldn't change that (an attacker can truncate
+        # to fit any cap, and a tight cap kills legitimate error context).
+        raise LoginError(
+            OAuthErrorResponse.from_response(response).render(
+                fallback=f"Token endpoint returned HTTP {response.status_code}",
+                prefix="Token exchange failed",
+            )
+        )
     try:
         payload = response.json()
     except ValueError as exc:
         raise LoginError(f"Token endpoint returned non-JSON response: {exc}") from exc
     if not isinstance(payload, dict):
         raise LoginError("Token endpoint returned a non-object JSON payload.")
-    return payload
-
-
-def _format_token_error(response: httpx.Response) -> str:
-    """Render a token-exchange non-200 as a user-safe message.
-
-    Only OAuth-standard ``error`` / ``error_description`` fields are surfaced;
-    raw bodies are never echoed (RFC 6749 doesn't forbid IdPs from including
-    submitted params like ``code_verifier`` in error responses, and a `[:N]`
-    snippet would be a guaranteed echo channel under a hostile IdP).
-    """
-    generic = f"Token endpoint returned HTTP {response.status_code}"
     try:
-        payload = response.json()
-    except ValueError:
-        return generic
-    if not isinstance(payload, dict):
-        return generic
-    error = payload.get("error")
-    if not error:
-        return generic
-    # ``error_description`` is free-form per RFC 6749 §5.2 — its content reflects
-    # the IdP's framing, and surfacing it at all is part of trusting the IdP. A
-    # length cap wouldn't change that (an attacker can truncate to fit any cap,
-    # and a tight cap kills legitimate error context).
-    description = payload.get("error_description")
-    if description:
-        return f"Token exchange failed: {error}: {description}"
-    return f"Token exchange failed: {error}"
+        return TokenResponse.from_payload(payload)
+    except ValidationError as exc:
+        raise LoginError(_format_validation_error(exc)) from exc
+    except ValueError as exc:
+        raise LoginError(str(exc)) from exc
 
 
 def run_login(
@@ -188,7 +180,7 @@ def run_login(
             _ensure_callback_ok(callback, expected_state=state)
             code = cast(str, callback.code)
 
-            token_response = exchange_code(
+            token = exchange_code(
                 metadata=metadata,
                 client_id=client_id,
                 code=code,
@@ -196,7 +188,7 @@ def run_login(
                 code_verifier=verifier,
                 client=http,
             )
-    return LoginResult(issuer=metadata.issuer, token_response=token_response)
+    return LoginResult(issuer=metadata.issuer, token=token)
 
 
 def _ensure_callback_ok(callback: CallbackResult, *, expected_state: str) -> None:

@@ -9,6 +9,7 @@ import pytest
 from conftest import InMemoryKeyring
 
 from pipefy_auth import refresh, storage
+from pipefy_auth.responses import TokenResponse
 
 _ISSUER = "https://signin.example.com/realms/pipefy"
 _CLIENT_ID = "pipefy-cli"
@@ -66,13 +67,12 @@ def _seed_session(
         storage.store_session(
             issuer=_ISSUER,
             client_id=_CLIENT_ID,
-            token_response={
-                "access_token": "OLD",
-                "refresh_token": "OLD_R",
-                "token_type": "Bearer",
-                "expires_in": expires_in,
-                "scope": "openid offline_access",
-            },
+            token=TokenResponse(
+                access_token="OLD",
+                refresh_token="OLD_R",
+                expires_in=expires_in,
+                scope="openid offline_access",
+            ),
         )
 
 
@@ -103,8 +103,8 @@ class TestEnsureFreshSession:
             http_client=client,
         )
         assert result is not None
-        assert result.access_token == "OLD"
-        assert result.refresh_token == "OLD_R"
+        assert result.token.access_token == "OLD"
+        assert result.token.refresh_token == "OLD_R"
 
     def test_refreshes_when_within_leeway(
         self,
@@ -132,8 +132,8 @@ class TestEnsureFreshSession:
             http_client=client,
         )
         assert result is not None
-        assert result.access_token == "NEW_A"
-        assert result.refresh_token == "NEW_R"
+        assert result.token.access_token == "NEW_A"
+        assert result.token.refresh_token == "NEW_R"
 
     def test_persists_rotated_session(
         self,
@@ -159,8 +159,8 @@ class TestEnsureFreshSession:
 
         reloaded = storage.load_session(issuer=_ISSUER, client_id=_CLIENT_ID)
         assert reloaded is not None
-        assert reloaded.access_token == "NEW_A"
-        assert reloaded.refresh_token == "NEW_R"
+        assert reloaded.token.access_token == "NEW_A"
+        assert reloaded.token.refresh_token == "NEW_R"
 
     def test_carries_forward_omitted_lifetime_fields(
         self,
@@ -187,8 +187,8 @@ class TestEnsureFreshSession:
             http_client=client,
         )
         assert result is not None
-        assert result.expires_in == 300  # carried forward
-        assert result.scope == "openid offline_access"  # carried forward
+        assert result.token.expires_in == 300  # carried forward
+        assert result.token.scope == "openid offline_access"  # carried forward
 
     def test_falls_back_to_old_refresh_token_when_idp_does_not_rotate(
         self,
@@ -210,7 +210,7 @@ class TestEnsureFreshSession:
             http_client=client,
         )
         assert result is not None
-        assert result.refresh_token == "OLD_R"  # unchanged
+        assert result.token.refresh_token == "OLD_R"  # unchanged
 
     def test_obtained_at_updated_after_refresh(
         self,
@@ -264,7 +264,7 @@ class TestEnsureFreshSession:
             http_client=client,
         )
         assert result is not None
-        assert result.access_token == "REFRESHED_BECAUSE_LEEWAY"
+        assert result.token.access_token == "REFRESHED_BECAUSE_LEEWAY"
 
     def test_refresh_failure_does_not_delete_stored_session(
         self,
@@ -312,8 +312,8 @@ class TestEnsureFreshSession:
             http_client=client,
         )
         assert result is not None
-        assert result.access_token == "FORCED"
-        assert result.refresh_token == "FORCED_R"
+        assert result.token.access_token == "FORCED"
+        assert result.token.refresh_token == "FORCED_R"
 
     def test_force_true_persists_rotated_session(
         self,
@@ -339,8 +339,8 @@ class TestEnsureFreshSession:
         )
         reloaded = storage.load_session(issuer=_ISSUER, client_id=_CLIENT_ID)
         assert reloaded is not None
-        assert reloaded.access_token == "FORCED"
-        assert reloaded.refresh_token == "FORCED_R"
+        assert reloaded.token.access_token == "FORCED"
+        assert reloaded.token.refresh_token == "FORCED_R"
 
     def test_force_true_returns_none_when_no_session_stored(
         self, fake_keyring: InMemoryKeyring

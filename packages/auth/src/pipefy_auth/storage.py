@@ -12,16 +12,27 @@ pay the ~30-80ms backend-discovery cost on every ``pipefy`` invocation.
 
 from __future__ import annotations
 
-import json
 import time
-from dataclasses import asdict, dataclass
-from typing import Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
-from pipefy_infra.coerce import optional_int, optional_str
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    StrictInt,
+    StrictStr,
+    ValidationError,
+    model_serializer,
+    model_validator,
+)
+
+from pipefy_auth.responses import TokenResponse
 
 _SERVICE = "pipefy"
 _KEYRING_FILENAME = "keyring.cfg"
+_TOKEN_FIELDS: frozenset[str] = frozenset(TokenResponse.model_fields.keys())
 
 
 def configure_keychain_backend(choice: Literal["auto", "file"]) -> None:
@@ -53,20 +64,59 @@ class SessionDeleteError(RuntimeError):
     """Keychain backend rejected the delete (distinct from "entry absent")."""
 
 
-@dataclass(frozen=True)
-class StoredSession:
-    """Persisted session shape (JSON-serialised under one keychain key)."""
+class StoredSession(BaseModel):
+    """Persisted session: identity + write timestamp + the token response.
 
-    issuer: str
-    client_id: str
-    access_token: str
-    refresh_token: str
-    token_type: str
-    obtained_at: int
-    expires_in: int | None
-    refresh_expires_in: int | None
-    scope: str | None
-    id_token: str | None
+    The token fields are bundled in :class:`TokenResponse` so there is one
+    source of truth for the OAuth wire shape. On-disk JSON destructures the
+    token attributes into the parent object (legacy flat shape) so existing
+    keychain entries continue to load.
+
+    ``extra="forbid"`` because both writer and reader live in this codebase:
+    an unknown key on disk indicates corruption or hand-editing, not an IdP
+    extension. Unknown keys nested under ``token`` are still ignored
+    (see :class:`TokenResponse`).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    issuer: Annotated[StrictStr, Field(min_length=1)]
+    client_id: Annotated[StrictStr, Field(min_length=1)]
+    obtained_at: StrictInt
+    token: TokenResponse
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_flat_blob(cls, data: Any) -> Any:
+        """Rebuild a nested ``token`` from a legacy flat on-disk shape.
+
+        Pre-pydantic blobs destructured the token attributes into the parent
+        object. If we receive that shape (``"token"`` absent, token-shaped
+        keys present), re-nest before field validation. Already-nested input
+        passes through untouched.
+        """
+        if not isinstance(data, dict):
+            return data
+        if "token" in data:
+            return data
+        if "access_token" not in data:
+            return data
+        nested: dict[str, Any] = {}
+        outer: dict[str, Any] = {}
+        for key, value in data.items():
+            if key in _TOKEN_FIELDS:
+                nested[key] = value
+            else:
+                outer[key] = value
+        outer["token"] = nested
+        return outer
+
+    @model_serializer(mode="wrap")
+    def _to_flat_blob(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """Always serialize to the flat on-disk shape (legacy readers stay green)."""
+        nested = handler(self)
+        token = nested.pop("token", {})
+        return {**nested, **token}
 
 
 def _issuer_host(issuer_url: str) -> str:
@@ -85,7 +135,7 @@ def store_session(
     *,
     issuer: str,
     client_id: str,
-    token_response: dict[str, object],
+    token: TokenResponse,
 ) -> StoredSession:
     """Persist a token response in the OS keychain. Returns the stored shape.
 
@@ -93,32 +143,17 @@ def store_session(
         KeyringError: When the keychain backend rejects the write. Caller should
             surface a user-facing message (e.g. headless Linux without a Secret
             Service daemon).
-        ValueError: When ``token_response`` is missing required fields.
     """
     import keyring
-
-    try:
-        access_token = str(token_response["access_token"])
-        refresh_token = str(token_response["refresh_token"])
-    except KeyError as exc:
-        raise ValueError(
-            f"Token response is missing required field: {exc.args[0]!r}"
-        ) from exc
 
     session = StoredSession(
         issuer=issuer,
         client_id=client_id,
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type=str(token_response.get("token_type") or "Bearer"),
         obtained_at=int(time.time()),
-        expires_in=optional_int(token_response.get("expires_in")),
-        refresh_expires_in=optional_int(token_response.get("refresh_expires_in")),
-        scope=optional_str(token_response.get("scope")),
-        id_token=optional_str(token_response.get("id_token")),
+        token=token,
     )
     keyring.set_password(
-        _SERVICE, keychain_key(issuer, client_id), json.dumps(asdict(session))
+        _SERVICE, keychain_key(issuer, client_id), session.model_dump_json()
     )
     return session
 
@@ -135,12 +170,8 @@ def load_session(*, issuer: str, client_id: str) -> StoredSession | None:
     if not blob:
         return None
     try:
-        data = json.loads(blob)
-    except json.JSONDecodeError:
-        return None
-    try:
-        return StoredSession(**data)
-    except TypeError:
+        return StoredSession.model_validate_json(blob)
+    except ValidationError:
         return None
 
 

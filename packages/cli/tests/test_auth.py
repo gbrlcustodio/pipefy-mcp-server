@@ -13,6 +13,7 @@ from pipefy_auth import (
     ServiceAccount,
     StaticBearerAuth,
     StoredSession,
+    TokenResponse,
 )
 from pipefy_sdk import PipefySettings
 
@@ -203,14 +204,13 @@ def _fresh_stored_session(*, access_token: str = "SESSION_ACCESS") -> StoredSess
     return StoredSession(
         issuer=_ISSUER,
         client_id="pipefy-cli",
-        access_token=access_token,
-        refresh_token="REFRESH",
-        token_type="Bearer",
         obtained_at=int(time.time()),
-        expires_in=_FAR_FUTURE_EXPIRES_IN,
-        refresh_expires_in=None,
-        scope="openid offline_access",
-        id_token=None,
+        token=TokenResponse(
+            access_token=access_token,
+            refresh_token="REFRESH",
+            expires_in=_FAR_FUTURE_EXPIRES_IN,
+            scope="openid offline_access",
+        ),
     )
 
 

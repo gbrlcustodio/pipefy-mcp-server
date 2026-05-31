@@ -19,6 +19,7 @@ import pytest
 
 from pipefy_auth import refresh as refresh_module
 from pipefy_auth.locks import RefreshLockTimeout
+from pipefy_auth.responses import TokenResponse
 from pipefy_auth.storage import StoredSession
 
 _ISSUER = "https://signin.example.com/realms/pipefy"
@@ -29,14 +30,16 @@ def _stored(*, obtained_at: int, expires_in: int = 30) -> StoredSession:
     return StoredSession(
         issuer=_ISSUER,
         client_id=_CLIENT_ID,
-        access_token="OLD",
-        refresh_token="OLD_R",
-        token_type="Bearer",
         obtained_at=obtained_at,
-        expires_in=expires_in,
-        refresh_expires_in=None,
-        scope=None,
-        id_token=None,
+        token=TokenResponse(
+            access_token="OLD",
+            refresh_token="OLD_R",
+            token_type="Bearer",
+            expires_in=expires_in,
+            refresh_expires_in=None,
+            scope=None,
+            id_token=None,
+        ),
     )
 
 
@@ -44,14 +47,16 @@ def _fresh(*, obtained_at: int) -> StoredSession:
     return StoredSession(
         issuer=_ISSUER,
         client_id=_CLIENT_ID,
-        access_token="NEW",
-        refresh_token="NEW_R",
-        token_type="Bearer",
         obtained_at=obtained_at,
-        expires_in=300,
-        refresh_expires_in=None,
-        scope=None,
-        id_token=None,
+        token=TokenResponse(
+            access_token="NEW",
+            refresh_token="NEW_R",
+            token_type="Bearer",
+            expires_in=300,
+            refresh_expires_in=None,
+            scope=None,
+            id_token=None,
+        ),
     )
 
 

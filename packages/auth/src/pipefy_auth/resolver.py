@@ -80,7 +80,7 @@ def _stored_session_provider(oidc_client: OidcClient) -> RefreshableBearerAuth:
             raise RuntimeError(
                 "Stored Pipefy session was removed; run `pipefy auth login` again."
             )
-        return session.access_token
+        return session.token.access_token
 
     def _force_refresh() -> str | None:
         try:
@@ -91,7 +91,7 @@ def _stored_session_provider(oidc_client: OidcClient) -> RefreshableBearerAuth:
             )
         except RefreshError:
             return None
-        return session.access_token if session is not None else None
+        return session.token.access_token if session is not None else None
 
     return RefreshableBearerAuth(token_provider=_token, force_refresh=_force_refresh)
 

@@ -5,11 +5,16 @@ from __future__ import annotations
 import time
 
 import httpx
+from pydantic import ValidationError
 
 from pipefy_auth import _http
 from pipefy_auth.discovery import fetch_provider_metadata
 from pipefy_auth.locks import RefreshLockTimeout, file_lock, refresh_lock_path
-from pipefy_auth.responses import OAuthErrorResponse, TokenResponse
+from pipefy_auth.responses import (
+    OAuthErrorResponse,
+    TokenResponse,
+    _format_validation_error,
+)
 from pipefy_auth.storage import StoredSession, load_session, store_session
 
 _LEEWAY_S = 60
@@ -127,6 +132,10 @@ def _refresh_and_store(
         payload.setdefault("id_token", prior.id_token)
     try:
         new_token = TokenResponse.from_payload(payload)
+    except ValidationError as exc:
+        raise RefreshError(
+            f"Refresh response malformed: {_format_validation_error(exc)}"
+        ) from exc
     except ValueError as exc:
         raise RefreshError(f"Refresh response malformed: {exc}") from exc
     return store_session(

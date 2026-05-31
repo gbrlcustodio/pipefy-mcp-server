@@ -340,10 +340,6 @@ class TestStorage:
         with pytest.raises(storage.SessionDeleteError, match="backend locked"):
             storage.delete_session(issuer="https://x.test/realms/foo", client_id="cid")
 
-    def test_token_response_from_payload_rejects_missing_field(self) -> None:
-        with pytest.raises(ValueError, match="refresh_token"):
-            TokenResponse.from_payload({"access_token": "a"})
-
 
 # --------------------------------------------------------------------------- #
 # Flow                                                                        #

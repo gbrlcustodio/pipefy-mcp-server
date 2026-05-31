@@ -12,18 +12,27 @@ pay the ~30-80ms backend-discovery cost on every ``pipefy`` invocation.
 
 from __future__ import annotations
 
-import json
 import time
-from dataclasses import asdict, dataclass
-from typing import Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
 
-from pipefy_infra.coerce import optional_int, optional_str
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    StrictInt,
+    StrictStr,
+    ValidationError,
+    model_serializer,
+    model_validator,
+)
 
 from pipefy_auth.responses import TokenResponse
 
 _SERVICE = "pipefy"
 _KEYRING_FILENAME = "keyring.cfg"
+_TOKEN_FIELDS: frozenset[str] = frozenset(TokenResponse.model_fields.keys())
 
 
 def configure_keychain_backend(choice: Literal["auto", "file"]) -> None:
@@ -55,20 +64,59 @@ class SessionDeleteError(RuntimeError):
     """Keychain backend rejected the delete (distinct from "entry absent")."""
 
 
-@dataclass(frozen=True)
-class StoredSession:
+class StoredSession(BaseModel):
     """Persisted session: identity + write timestamp + the token response.
 
     The token fields are bundled in :class:`TokenResponse` so there is one
     source of truth for the OAuth wire shape. On-disk JSON destructures the
     token attributes into the parent object (legacy flat shape) so existing
     keychain entries continue to load.
+
+    ``extra="forbid"`` because both writer and reader live in this codebase:
+    an unknown key on disk indicates corruption or hand-editing, not an IdP
+    extension. Unknown keys nested under ``token`` are still ignored
+    (see :class:`TokenResponse`).
     """
 
-    issuer: str
-    client_id: str
-    obtained_at: int
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    issuer: Annotated[StrictStr, Field(min_length=1)]
+    client_id: Annotated[StrictStr, Field(min_length=1)]
+    obtained_at: StrictInt
     token: TokenResponse
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_flat_blob(cls, data: Any) -> Any:
+        """Rebuild a nested ``token`` from a legacy flat on-disk shape.
+
+        Pre-pydantic blobs destructured the token attributes into the parent
+        object. If we receive that shape (``"token"`` absent, token-shaped
+        keys present), re-nest before field validation. Already-nested input
+        passes through untouched.
+        """
+        if not isinstance(data, dict):
+            return data
+        if "token" in data:
+            return data
+        if "access_token" not in data:
+            return data
+        nested: dict[str, Any] = {}
+        outer: dict[str, Any] = {}
+        for key, value in data.items():
+            if key in _TOKEN_FIELDS:
+                nested[key] = value
+            else:
+                outer[key] = value
+        outer["token"] = nested
+        return outer
+
+    @model_serializer(mode="wrap")
+    def _to_flat_blob(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """Always serialize to the flat on-disk shape (legacy readers stay green)."""
+        nested = handler(self)
+        token = nested.pop("token", {})
+        return {**nested, **token}
 
 
 def _issuer_host(issuer_url: str) -> str:
@@ -105,7 +153,7 @@ def store_session(
         token=token,
     )
     keyring.set_password(
-        _SERVICE, keychain_key(issuer, client_id), json.dumps(_session_to_blob(session))
+        _SERVICE, keychain_key(issuer, client_id), session.model_dump_json()
     )
     return session
 
@@ -122,12 +170,9 @@ def load_session(*, issuer: str, client_id: str) -> StoredSession | None:
     if not blob:
         return None
     try:
-        data = json.loads(blob)
-    except json.JSONDecodeError:
+        return StoredSession.model_validate_json(blob)
+    except ValidationError:
         return None
-    if not isinstance(data, dict):
-        return None
-    return _session_from_blob(data)
 
 
 def delete_session(*, issuer: str, client_id: str) -> bool:
@@ -161,43 +206,6 @@ def keychain_backend_name() -> str:
     except KeyringError as exc:
         return f"unavailable ({exc})"
     return backend.__class__.__name__
-
-
-def _session_to_blob(session: StoredSession) -> dict[str, object]:
-    """Flatten a ``StoredSession`` into the on-disk JSON shape.
-
-    The token-response fields are destructured into the parent object so the
-    JSON layout matches the pre-bundle format. Legacy keychain entries written
-    under that layout continue to load via :func:`_session_from_blob`.
-    """
-    return {
-        "issuer": session.issuer,
-        "client_id": session.client_id,
-        "obtained_at": session.obtained_at,
-        **asdict(session.token),
-    }
-
-
-def _session_from_blob(data: dict[str, object]) -> StoredSession | None:
-    """Rebuild a ``StoredSession`` from the flat on-disk JSON shape."""
-    try:
-        token = TokenResponse(
-            access_token=str(data["access_token"]),
-            refresh_token=str(data["refresh_token"]),
-            token_type=str(data["token_type"]),
-            expires_in=optional_int(data.get("expires_in")),
-            refresh_expires_in=optional_int(data.get("refresh_expires_in")),
-            scope=optional_str(data.get("scope")),
-            id_token=optional_str(data.get("id_token")),
-        )
-        return StoredSession(
-            issuer=str(data["issuer"]),
-            client_id=str(data["client_id"]),
-            obtained_at=int(data["obtained_at"]),  # type: ignore[arg-type]
-            token=token,
-        )
-    except (KeyError, TypeError, ValueError):
-        return None
 
 
 __all__ = [

@@ -8,51 +8,62 @@ fallback so endpoint context stays out of the wire-shape model.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from typing import Annotated
 
 import httpx
-from pipefy_infra.coerce import optional_int, optional_str
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictInt,
+    StrictStr,
+    ValidationError,
+)
 
 
-@dataclass(frozen=True)
-class TokenResponse:
+def _strip_or_none(value: object) -> str | None:
+    """Strip strings to ``None`` on empty; drop non-strings to ``None``.
+
+    Non-string drop is load-bearing for :meth:`OAuthErrorResponse.from_response`:
+    callers invoke ``.render(...)`` inline without a try, so a non-string
+    ``error`` field must fall through to the fallback rather than raise.
+    """
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+_OptionalStr = Annotated[str | None, BeforeValidator(_strip_or_none)]
+
+
+class TokenResponse(BaseModel):
     """Parsed OAuth 2.0 token-endpoint success response (RFC 6749 §5.1).
 
-    ``expires_in`` and ``refresh_expires_in`` silently coerce to ``None`` on
-    non-numeric values so an unparseable lifetime does not block the response
-    from being constructed.
+    Strict typing: ``StrictStr`` rejects bool/None coercion; ``StrictInt``
+    rejects bool (``isinstance(True, int)`` is ``True`` in Python, so plain
+    ``int`` would accept a boolean lifetime). Unknown fields are ignored
+    because IdPs (Keycloak) routinely add proprietary keys like
+    ``not-before-policy`` / ``session_state``.
     """
 
-    access_token: str
-    refresh_token: str
-    token_type: str = "Bearer"
-    expires_in: int | None = None
-    refresh_expires_in: int | None = None
-    scope: str | None = None
-    id_token: str | None = None
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    access_token: Annotated[StrictStr, Field(min_length=1)]
+    refresh_token: Annotated[StrictStr, Field(min_length=1)]
+    token_type: StrictStr = "Bearer"
+    expires_in: StrictInt | None = None
+    refresh_expires_in: StrictInt | None = None
+    scope: _OptionalStr = None
+    id_token: _OptionalStr = None
 
     @classmethod
     def from_payload(cls, payload: dict[str, object]) -> "TokenResponse":
-        try:
-            access_token = str(payload["access_token"])
-            refresh_token = str(payload["refresh_token"])
-        except KeyError as exc:
-            raise ValueError(
-                f"Token response is missing required field: {exc.args[0]!r}"
-            ) from exc
-        return cls(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            token_type=str(payload.get("token_type") or "Bearer"),
-            expires_in=optional_int(payload.get("expires_in")),
-            refresh_expires_in=optional_int(payload.get("refresh_expires_in")),
-            scope=optional_str(payload.get("scope")),
-            id_token=optional_str(payload.get("id_token")),
-        )
+        return cls.model_validate(payload)
 
 
-@dataclass(frozen=True)
-class OAuthErrorResponse:
+class OAuthErrorResponse(BaseModel):
     """Parsed OAuth error envelope (RFC 6749 §5.2 / RFC 8628 §3.5).
 
     ``error`` is ``None`` when the body wasn't OAuth-shaped (non-JSON,
@@ -60,25 +71,25 @@ class OAuthErrorResponse:
     ``fallback`` argument.
     """
 
-    status_code: int
-    error: str | None
-    error_description: str | None
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    status_code: StrictInt
+    error: _OptionalStr = None
+    error_description: _OptionalStr = None
 
     @classmethod
     def from_response(cls, response: httpx.Response) -> "OAuthErrorResponse":
-        error: str | None = None
-        description: str | None = None
         try:
             payload = response.json()
         except ValueError:
             payload = None
-        if isinstance(payload, dict):
-            error = optional_str(payload.get("error"))
-            description = optional_str(payload.get("error_description"))
-        return cls(
-            status_code=response.status_code,
-            error=error,
-            error_description=description,
+        body = payload if isinstance(payload, dict) else {}
+        return cls.model_validate(
+            {
+                "status_code": response.status_code,
+                "error": body.get("error"),
+                "error_description": body.get("error_description"),
+            }
         )
 
     def render(self, *, fallback: str, prefix: str) -> str:
@@ -92,6 +103,24 @@ class OAuthErrorResponse:
         if self.error_description:
             return f"{prefix}: {self.error}: {self.error_description}"
         return f"{prefix}: {self.error}"
+
+
+def _format_validation_error(exc: ValidationError) -> str:
+    """Render a pydantic ``ValidationError`` as a compact ``"loc: msg"`` list.
+
+    Mirrors :func:`pipefy_mcp.tools.portal_tool_helpers.portal_element_validation_error`
+    so auth-facing messages match the MCP-tool shape. Avoids pydantic's verbose
+    default ``str(exc)`` (which includes doc URLs) on user-facing surfaces.
+    """
+    clauses: list[str] = []
+    for err in exc.errors():
+        loc = ".".join(str(part) for part in err.get("loc", ()))
+        msg = str(err.get("msg", ""))
+        if loc and msg:
+            clauses.append(f"{loc}: {msg}")
+        elif msg:
+            clauses.append(msg)
+    return "; ".join(clauses) or "Response failed validation."
 
 
 __all__ = ["OAuthErrorResponse", "TokenResponse"]

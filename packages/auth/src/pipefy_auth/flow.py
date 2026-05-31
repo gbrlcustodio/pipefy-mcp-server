@@ -9,6 +9,7 @@ from typing import Callable, cast
 from urllib.parse import urlencode
 
 import httpx
+from pydantic import ValidationError
 
 from pipefy_auth import _http
 from pipefy_auth.discovery import (
@@ -18,7 +19,11 @@ from pipefy_auth.discovery import (
 )
 from pipefy_auth.loopback import CallbackResult, LoopbackCapture
 from pipefy_auth.pkce import challenge_from_verifier, generate_verifier
-from pipefy_auth.responses import OAuthErrorResponse, TokenResponse
+from pipefy_auth.responses import (
+    OAuthErrorResponse,
+    TokenResponse,
+    _format_validation_error,
+)
 
 _DEFAULT_SCOPES = ("openid", "profile", "email", "offline_access")
 _TOKEN_EXCHANGE_TIMEOUT_S = 30.0
@@ -101,6 +106,8 @@ def exchange_code(
         raise LoginError("Token endpoint returned a non-object JSON payload.")
     try:
         return TokenResponse.from_payload(payload)
+    except ValidationError as exc:
+        raise LoginError(_format_validation_error(exc)) from exc
     except ValueError as exc:
         raise LoginError(str(exc)) from exc
 

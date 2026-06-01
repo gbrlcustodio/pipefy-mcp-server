@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 from typing import Callable
 
 import httpx
-from pipefy_infra.coerce import optional_str
+from pydantic import ValidationError
 
 from pipefy_auth import _http
 from pipefy_auth.discovery import (
@@ -17,75 +16,22 @@ from pipefy_auth.discovery import (
 )
 from pipefy_auth.flow import LoginError, LoginResult
 from pipefy_auth.pkce import challenge_from_verifier, generate_verifier
-from pipefy_auth.responses import OAuthErrorResponse, TokenResponse
+from pipefy_auth.responses import (
+    DeviceAuthorization,
+    OAuthErrorResponse,
+    TokenResponse,
+    _format_validation_error,
+)
 
 _DEFAULT_SCOPES = ("openid", "profile", "email", "offline_access")
 _DEVICE_AUTH_TIMEOUT_S = 30.0
-_DEFAULT_POLL_INTERVAL_S = 5.0
-_SLOW_DOWN_INCREMENT_S = 5.0
+_SLOW_DOWN_INCREMENT_S = 5
 _DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
 
 _EXPIRED_TOKEN_MESSAGE = (
     "Sign-in didn't complete in time. Re-run `pipefy auth login --device` to try again."
 )
 _ACCESS_DENIED_MESSAGE = "Sign-in cancelled by the user."
-
-
-@dataclass(frozen=True)
-class DeviceAuthorization:
-    """The device-authorization response the user must act on (RFC 8628 §3.2)."""
-
-    device_code: str
-    user_code: str
-    verification_uri: str
-    verification_uri_complete: str | None
-    expires_in: float
-    interval: float
-
-    @classmethod
-    def from_payload(cls, payload: dict[str, object]) -> "DeviceAuthorization":
-        """Parse a device-authorization JSON body. Raises ``ValueError`` on malformed input."""
-        missing = [
-            key
-            for key in ("device_code", "user_code", "verification_uri")
-            if not payload.get(key)
-        ]
-        if "expires_in" not in payload or payload["expires_in"] is None:
-            missing.append("expires_in")
-        if missing:
-            raise ValueError(
-                "Device authorization response is missing required fields: "
-                + ", ".join(missing)
-            )
-
-        expires_in_raw = payload["expires_in"]
-        try:
-            expires_in = float(expires_in_raw)  # type: ignore[arg-type]
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"Device authorization response has invalid expires_in: {expires_in_raw!r}"
-            ) from exc
-
-        interval_raw = payload.get("interval", _DEFAULT_POLL_INTERVAL_S)
-        try:
-            interval = float(interval_raw)  # type: ignore[arg-type]
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                f"Device authorization response has invalid interval: {interval_raw!r}"
-            ) from exc
-        if interval <= 0:
-            interval = _DEFAULT_POLL_INTERVAL_S
-
-        return cls(
-            device_code=str(payload["device_code"]),
-            user_code=str(payload["user_code"]),
-            verification_uri=str(payload["verification_uri"]),
-            verification_uri_complete=optional_str(
-                payload.get("verification_uri_complete")
-            ),
-            expires_in=expires_in,
-            interval=interval,
-        )
 
 
 def request_device_authorization(
@@ -146,8 +92,8 @@ def request_device_authorization(
 
     try:
         return DeviceAuthorization.from_payload(payload)
-    except ValueError as exc:
-        raise LoginError(str(exc)) from exc
+    except ValidationError as exc:
+        raise LoginError(_format_validation_error(exc)) from exc
 
 
 def poll_device_token(
@@ -192,8 +138,8 @@ def poll_device_token(
                 raise LoginError("Token endpoint returned a non-object JSON payload.")
             try:
                 return TokenResponse.from_payload(payload)
-            except ValueError as exc:
-                raise LoginError(str(exc)) from exc
+            except ValidationError as exc:
+                raise LoginError(_format_validation_error(exc)) from exc
 
         err = OAuthErrorResponse.from_response(response)
         if err.error == "expired_token":

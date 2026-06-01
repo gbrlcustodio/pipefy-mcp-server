@@ -92,8 +92,8 @@ class TestDeviceAuthorizationFromPayload:
         dev = device.DeviceAuthorization.from_payload(_device_payload())
         assert dev.device_code == "dc"
         assert dev.user_code == "ABCD"
-        assert dev.expires_in == 60.0
-        assert dev.interval == 5.0  # default when absent
+        assert dev.expires_in == 60
+        assert dev.interval == 5  # default when absent
         assert dev.verification_uri_complete is None
 
     @pytest.mark.parametrize(
@@ -109,20 +109,20 @@ class TestDeviceAuthorizationFromPayload:
             device.DeviceAuthorization.from_payload(payload)
 
     def test_invalid_expires_in_raises_value_error(self) -> None:
-        with pytest.raises(ValueError, match="invalid expires_in"):
+        with pytest.raises(ValueError, match="expires_in"):
             device.DeviceAuthorization.from_payload(
                 _device_payload(expires_in="not-a-number")
             )
 
     def test_invalid_interval_raises_value_error(self) -> None:
-        with pytest.raises(ValueError, match="invalid interval"):
+        with pytest.raises(ValueError, match="interval"):
             device.DeviceAuthorization.from_payload(
                 _device_payload(interval="not-a-number")
             )
 
     def test_zero_interval_defaults_to_five(self) -> None:
         dev = device.DeviceAuthorization.from_payload(_device_payload(interval=0))
-        assert dev.interval == 5.0
+        assert dev.interval == 5
 
     def test_empty_verification_uri_complete_becomes_none(self) -> None:
         dev = device.DeviceAuthorization.from_payload(
@@ -184,7 +184,7 @@ class TestRequestDeviceAuthorization:
             return httpx.Response(200, json=_device_payload(expires_in="abc"))
 
         client = httpx.Client(transport=httpx.MockTransport(handler))
-        with pytest.raises(LoginError, match="invalid expires_in"):
+        with pytest.raises(LoginError, match="expires_in"):
             device.request_device_authorization(
                 metadata=_device_meta(),
                 client_id="pipefy-cli",
@@ -507,8 +507,8 @@ class TestAuthLoginDeviceCommand:
                         user_code="USER-CODE",
                         verification_uri="https://x.test/v",
                         verification_uri_complete="https://x.test/vc",
-                        expires_in=60.0,
-                        interval=1.0,
+                        expires_in=60,
+                        interval=1,
                     )
                 )
             return LoginResult(

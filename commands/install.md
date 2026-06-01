@@ -9,11 +9,10 @@ If `command -v pipefy` succeeds, surface `pipefy --version` and stop.
 Otherwise prompt the user to confirm running:
 
 ```
-uv tool install --force \
-  --with https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/v0.2.0-beta.2/pipefy_sdk-0.2.0b2-py3-none-any.whl \
-  --with https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/v0.2.0-beta.2/pipefy_auth-0.2.0b2-py3-none-any.whl \
-  --with https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/v0.2.0-beta.2/pipefy_infra-0.2.0b2-py3-none-any.whl \
-  https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/v0.2.0-beta.2/pipefy_cli-0.2.0b2-py3-none-any.whl
+curl -fsSL https://raw.githubusercontent.com/gbrlcustodio/pipefy-mcp-server/main/install.sh \
+  | sh -s -- --yes --no-skills --client none
 ```
+
+The installer resolves the latest GitHub Release at runtime and runs `uv tool install` with the discovered wheel URLs. `--client none` skips MCP-client config writes; the Claude Code plugin's `.mcp.json` already wires the MCP server.
 
 Verify with `pipefy --version`.

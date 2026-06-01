@@ -106,6 +106,90 @@ If you have a clone of this repo and want the MCP server to use it directly (wit
 
 This form also works as a per-project `.mcp.json` if your team shares a clone. Committing `.mcp.json` without secrets (placeholders or env injection) keeps team setups consistent.
 
+### Cursor / Claude Desktop / Codex: paste-into-config wiring
+
+The root `README.md`'s **Quick install** section is the recommended path (the curl installer writes these configs for you). The blocks below document the shape for users who prefer to wire by hand. Replace `<TAG>` with the latest release tag (e.g. `v0.2.0-beta.2`) and `<VERSION>` with its PEP 440 wheel form (e.g. `0.2.0b2`); see [Releases](https://github.com/gbrlcustodio/pipefy-mcp-server/releases) for current values.
+
+#### Cursor
+
+Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per project):
+
+```json
+{
+  "mcpServers": {
+    "pipefy": {
+      "command": "uvx",
+      "args": [
+        "--with",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_sdk-<VERSION>-py3-none-any.whl",
+        "--with",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_auth-<VERSION>-py3-none-any.whl",
+        "--with",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_infra-<VERSION>-py3-none-any.whl",
+        "--from",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_mcp_server-<VERSION>-py3-none-any.whl",
+        "pipefy-mcp-server"
+      ],
+      "env": {
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<CLIENT_ID>",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<CLIENT_SECRET>"
+      }
+    }
+  }
+}
+```
+
+#### Claude Desktop
+
+Config file location:
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+
+```json
+{
+  "mcpServers": {
+    "pipefy": {
+      "command": "uvx",
+      "args": [
+        "--with",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_sdk-<VERSION>-py3-none-any.whl",
+        "--with",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_auth-<VERSION>-py3-none-any.whl",
+        "--with",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_infra-<VERSION>-py3-none-any.whl",
+        "--from",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_mcp_server-<VERSION>-py3-none-any.whl",
+        "pipefy-mcp-server"
+      ],
+      "env": {
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<CLIENT_ID>",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<CLIENT_SECRET>"
+      }
+    }
+  }
+}
+```
+
+#### Codex
+
+Edit `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.pipefy]
+command = "uvx"
+args = [
+  "--with", "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_sdk-<VERSION>-py3-none-any.whl",
+  "--with", "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_auth-<VERSION>-py3-none-any.whl",
+  "--with", "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_infra-<VERSION>-py3-none-any.whl",
+  "--from", "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_mcp_server-<VERSION>-py3-none-any.whl",
+  "pipefy-mcp-server",
+]
+env = { PIPEFY_SERVICE_ACCOUNT_CLIENT_ID = "<CLIENT_ID>", PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET = "<CLIENT_SECRET>" }
+```
+
 ### Legacy environment variables
 
 `PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` still resolve to the new `PIPEFY_SERVICE_ACCOUNT_*` names with a one-shot stderr deprecation warning. The aliases will be removed in a later `0.2.0-beta.x` release. The `PIPEFY_OAUTH_URL` alias was dropped — set `PIPEFY_BASE_URL` instead. Migration notes: [`docs/MIGRATION.md#service-account-env-var-rename`](../../docs/MIGRATION.md#service-account-env-var-rename).

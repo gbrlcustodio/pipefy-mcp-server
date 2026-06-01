@@ -115,9 +115,8 @@ jobs:
               pkg = match.group(1)
               return f"{base}/{pkg}-{pep}-py3-none-any.whl"
 
-          for path in ("commands/install.md", ".mcp.json"):
-              p = Path(path)
-              p.write_text(url_pattern.sub(rewrite, p.read_text(encoding="utf-8")), encoding="utf-8")
+          mcp_json = Path(".mcp.json")
+          mcp_json.write_text(url_pattern.sub(rewrite, mcp_json.read_text(encoding="utf-8")), encoding="utf-8")
 
           for path, key_path in [
               (".claude-plugin/plugin.json", ("version",)),
@@ -131,7 +130,7 @@ jobs:
               obj[key_path[-1]] = ver
               p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
           PY
-          git add .mcp.json commands/install.md .claude-plugin/plugin.json .claude-plugin/marketplace.json
+          git add .mcp.json .claude-plugin/plugin.json .claude-plugin/marketplace.json
           if ! git diff --cached --quiet; then
             git commit -m "chore(release): point plugin manifests at ${GITHUB_REF_NAME} wheels"
             git push origin main

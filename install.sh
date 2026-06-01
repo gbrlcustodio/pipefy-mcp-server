@@ -240,11 +240,7 @@ install_skills() {
 }
 
 claude_desktop_config_path() {
-    case "$OS" in
-        Darwin) printf '%s\n' "$HOME/Library/Application Support/Claude/claude_desktop_config.json" ;;
-        Linux)  err "Claude Desktop has no Linux build. Use --client claude-code, --client cursor, or --client none (prints the snippet to paste into your own config)." ;;
-        *)      err "Unsupported OS for --client claude-desktop: $OS" ;;
-    esac
+    printf '%s\n' "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
 }
 
 require_python3() {
@@ -402,6 +398,10 @@ main() {
     parse_args "$@"
     refuse_root
     detect_platform
+    case "$CLIENT:$OS" in
+        claude-desktop:Linux)
+            err "Claude Desktop has no Linux build. Use --client claude-code, --client cursor, or --client none (prints the snippet to paste into your own config)." ;;
+    esac
     if [ -n "$PREFIX" ]; then
         UV_TOOL_DIR="$PREFIX"
         export UV_TOOL_DIR

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -14,6 +15,12 @@ from pipefy_auth.responses import TokenResponse
 from typer.testing import CliRunner
 
 from pipefy_cli.main import app as cli_app
+
+# Rich/Typer renders option names like ``--no-browser`` in bold by default,
+# splitting the dashes with ``\x1b[1m`` ANSI codes on Linux CI runners under
+# ``FORCE_COLOR=1``. Strip them before the substring assert so the test passes
+# on both macOS and Linux without depending on env vars.
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 @pytest.fixture
@@ -538,7 +545,7 @@ class TestAuthLoginDeviceCommand:
             cli_app, ["auth", "login", "--device", "--no-browser"]
         )
         assert result.exit_code != 0
-        assert "--no-browser is incompatible" in result.stderr
+        assert "--no-browser is incompatible" in _ANSI_ESCAPE_RE.sub("", result.stderr)
 
     def test_device_with_explicit_callback_timeout_errors(
         self,
@@ -553,7 +560,9 @@ class TestAuthLoginDeviceCommand:
             cli_app, ["auth", "login", "--device", "--callback-timeout", "60"]
         )
         assert result.exit_code != 0
-        assert "--callback-timeout is incompatible" in result.stderr
+        assert "--callback-timeout is incompatible" in _ANSI_ESCAPE_RE.sub(
+            "", result.stderr
+        )
 
     def test_device_with_default_callback_timeout_ok(
         self,

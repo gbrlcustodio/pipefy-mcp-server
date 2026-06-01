@@ -60,7 +60,26 @@ Two auth paths:
 
 Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
 
-### MCP client wiring
+### Quick install (recommended)
+
+One command installs the CLI + MCP server, optionally adds skills, and registers the MCP server in your client config:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/gbrlcustodio/pipefy-mcp-server/main/install.sh \
+  | sh -s -- --client cursor
+```
+
+Replace `--client cursor` with one of: `claude-code`, `claude-desktop`, `codex`, or `none` (prints the snippet to paste). Useful flags:
+
+- `--yes` skip all confirmation prompts.
+- `--no-skills` skip the `npx skills add` step.
+- `--version vX.Y.Z` pin a specific [GitHub Release](https://github.com/gbrlcustodio/pipefy-mcp-server/releases) tag (default: most recent prerelease or release).
+- `--dry-run` print every command without executing.
+- `--allow-root` opt-in for root execution (refused by default).
+
+After install, run `pipefy auth login` to authenticate (`--device` on headless systems). The installer puts `pipefy-mcp-server` on PATH, so each client's config collapses to `{"command": "pipefy-mcp-server"}`.
+
+### Manual MCP client wiring (advanced)
 
 #### Claude Code
 

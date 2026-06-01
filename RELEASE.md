@@ -49,6 +49,15 @@ The Release workflow requires the git tag (without leading `v`) to **exactly mat
    uvx --from git+https://github.com/<owner>/<repo>.git@vX.Y.Z --refresh pipefy-cli --version
    ```
 
+   Sanity-check that the curl installer on `main` resolves the just-cut tag (no per-release maintenance needed; it hits the GitHub API at runtime):
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/main/install.sh \
+     | sh -s -- --yes --no-skills --client none --dry-run
+   ```
+
+   The first line of output should read `Resolved tag: vX.Y.Z`.
+
 ## Verification (cross-platform smoke test)
 
 After tagging a release, run the following on macOS and a Linux machine (or CI runner) to confirm the wheels install correctly:

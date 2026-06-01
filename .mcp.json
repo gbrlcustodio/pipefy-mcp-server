@@ -4,11 +4,13 @@
       "command": "uvx",
       "args": [
         "--with",
-        "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/v0.2.0-beta.2/pipefy_sdk-0.2.0b2-py3-none-any.whl",
         "--with",
-        "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/v0.2.0-beta.2/pipefy_auth-0.2.0b2-py3-none-any.whl",
+        "--with",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/v0.2.0-beta.2/pipefy_infra-0.2.0b2-py3-none-any.whl",
         "--from",
-        "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp",
+        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/v0.2.0-beta.2/pipefy_mcp_server-0.2.0b2-py3-none-any.whl",
         "pipefy-mcp-server"
       ]
     }

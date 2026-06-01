@@ -87,6 +87,56 @@ jobs:
         with:
           files: dist/*.whl
           body_path: CHANGELOG_RELEASE_BODY.md
+      - name: Patch plugin manifests on main to new tag's wheel URLs
+        if: startsWith(github.ref_name, 'v')
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          python <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          ver = tag.removeprefix("v")
+          pep = ver.replace("-beta.", "b").replace("-rc.", "rc").replace("-alpha.", "a")
+          repo = os.environ["GITHUB_REPOSITORY"]
+          base = f"https://github.com/{repo}/releases/download/{tag}"
+
+          url_pattern = re.compile(
+              r"https://github\.com/[\w./-]+/releases/download/v[\w.+\-]+/(pipefy_\w+)-[\w.+]+-py3-none-any\.whl"
+          )
+
+          def rewrite(match: re.Match[str]) -> str:
+              pkg = match.group(1)
+              return f"{base}/{pkg}-{pep}-py3-none-any.whl"
+
+          for path in ("commands/install.md", ".mcp.json"):
+              p = Path(path)
+              p.write_text(url_pattern.sub(rewrite, p.read_text(encoding="utf-8")), encoding="utf-8")
+
+          for path, key_path in [
+              (".claude-plugin/plugin.json", ("version",)),
+              (".claude-plugin/marketplace.json", ("plugins", 0, "version")),
+          ]:
+              p = Path(path)
+              data = json.loads(p.read_text(encoding="utf-8"))
+              obj = data
+              for k in key_path[:-1]:
+                  obj = obj[k]
+              obj[key_path[-1]] = ver
+              p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+          PY
+          git add .mcp.json commands/install.md .claude-plugin/plugin.json .claude-plugin/marketplace.json
+          if git diff --cached --quiet; then
+            echo "No manifest changes to commit"
+            exit 0
+          fi
+          git commit -m "chore(release): point plugin manifests at ${GITHUB_REF_NAME} wheels"
+          git push origin main
       - name: Stage PyPI wheels (SDK + CLI + MCP + Auth + Infra)
         if: startsWith(github.ref_name, 'v1.') && !contains(github.ref_name, '-')
         run: |

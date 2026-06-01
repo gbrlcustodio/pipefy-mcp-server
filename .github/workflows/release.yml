@@ -9,6 +9,13 @@ permissions:
   contents: write
   id-token: write
 
+# Serialize tag-push runs so two near-simultaneous releases don't race the
+# `git push origin main` in the manifest-patch step (the loser would fail
+# non-fast-forward after the GitHub Release is already published).
+concurrency:
+  group: release-main-patch
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -97,13 +104,27 @@ jobs:
           import json
           import os
           import re
+          import sys
           from pathlib import Path
 
           tag = os.environ["GITHUB_REF_NAME"]
           ver = tag.removeprefix("v")
           # Tag-to-wheel-version normalization. Covers the prerelease forms used in RELEASE.md
-          # (`-beta.N`, `-rc.N`, `-alpha.N`); extend here if the release flow adopts others.
-          pep = ver.replace("-beta.", "b").replace("-rc.", "rc").replace("-alpha.", "a")
+          # (`-beta.N`, `-rc.N`, `-alpha.N`); any other shape fails loudly so a future
+          # tag form doesn't silently produce a URL that points at a non-existent wheel.
+          prerelease = {"beta": "b", "rc": "rc", "alpha": "a"}
+          stable = re.fullmatch(r"\d+(?:\.\d+)*", ver)
+          pre = re.fullmatch(r"(\d+(?:\.\d+)*)-(beta|rc|alpha)\.(\d+)", ver)
+          if stable:
+              pep = ver
+          elif pre:
+              pep = f"{pre.group(1)}{prerelease[pre.group(2)]}{pre.group(3)}"
+          else:
+              sys.exit(
+                  f"Tag {tag!r} not recognized: expected `vN.N.N` or `vN.N.N-{{beta,rc,alpha}}.N`. "
+                  "Extend the normalization in .github/workflows/release.yml if the release flow "
+                  "adopts a new prerelease form."
+              )
           repo = os.environ["GITHUB_REPOSITORY"]
           base = f"https://github.com/{repo}/releases/download/{tag}"
 
@@ -116,7 +137,15 @@ jobs:
               return f"{base}/{pkg}-{pep}-py3-none-any.whl"
 
           mcp_json = Path(".mcp.json")
-          mcp_json.write_text(url_pattern.sub(rewrite, mcp_json.read_text(encoding="utf-8")), encoding="utf-8")
+          old = mcp_json.read_text(encoding="utf-8")
+          new, n = url_pattern.subn(rewrite, old)
+          if n == 0:
+              sys.exit(
+                  f".mcp.json on main has no wheel URLs matching {url_pattern.pattern!r}; "
+                  "the release flow expects releases/download/v<tag>/pipefy_<pkg>-*.whl URLs "
+                  "already in place (a no-op rewrite would silently ship stale URLs)."
+              )
+          mcp_json.write_text(new, encoding="utf-8")
 
           for path, key_path in [
               (".claude-plugin/plugin.json", ("version",)),

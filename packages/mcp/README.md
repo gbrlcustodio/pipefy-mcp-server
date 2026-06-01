@@ -108,7 +108,7 @@ This form also works as a per-project `.mcp.json` if your team shares a clone. C
 
 ### Cursor / Claude Desktop / Codex: paste-into-config wiring
 
-The root `README.md`'s **Quick install** section is the recommended path (the curl installer writes these configs for you). The blocks below document the shape for users who prefer to wire by hand. Replace `<TAG>` with the latest release tag (e.g. `v0.2.0-beta.2`) and `<VERSION>` with its PEP 440 wheel form (e.g. `0.2.0b2`); see [Releases](https://github.com/gbrlcustodio/pipefy-mcp-server/releases) for current values.
+The [curl installer](https://github.com/gbrlcustodio/pipefy-mcp-server/issues/231) writes these configs for you. The blocks below document the shape for users who prefer to wire by hand. Replace `<TAG>` with the latest release tag (e.g. `v0.2.0-beta.2`) and `<VERSION>` with its PEP 440 wheel form (e.g. `0.2.0b2`); see [Releases](https://github.com/gbrlcustodio/pipefy-mcp-server/releases) for current values.
 
 #### Cursor
 

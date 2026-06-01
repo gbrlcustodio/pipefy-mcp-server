@@ -44,6 +44,7 @@ from pipefy_cli.auth import (
     to_display_source,
 )
 from pipefy_cli.commands._common import settings_and_auth_from_ctx
+from pipefy_cli.commands.auth_keychain_hints import keychain_store_failure_hint
 from pipefy_cli.output import render_json
 
 AuthSessionState = Literal["active", "refresh-expired", "needs-login", "n/a"]
@@ -193,20 +194,7 @@ def auth_login(
         # without ownership) surfaces as ``PermissionError`` from
         # ``os.makedirs`` inside the backend, which is not a ``KeyringError``.
         backend = keychain_backend_name()
-        if backend == "PlaintextKeyring":
-            from pipefy_infra.config import config_dir
-
-            hint = (
-                f"Ensure the config directory is writable ({config_dir()}), "
-                "or use a static PIPEFY_TOKEN."
-            )
-        else:
-            hint = (
-                "On headless Linux, ensure a Secret Service daemon "
-                "(gnome-keyring, kwallet) is running, set "
-                "PIPEFY_KEYCHAIN_BACKEND=file to use a plaintext file backend, "
-                "or use a static PIPEFY_TOKEN."
-            )
+        hint = keychain_store_failure_hint(backend=backend)
         typer.echo(
             f"Login succeeded but the session could not be stored in your "
             f"keychain ({backend}): {exc}. {hint}",

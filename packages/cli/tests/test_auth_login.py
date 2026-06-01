@@ -750,17 +750,31 @@ class TestAuthLoginCommand:
         assert "Login failed" in result.stderr
         assert "invalid_grant" in result.stderr
 
-    def test_store_failure_default_backend_hints_at_secret_service(
+    @pytest.mark.parametrize(
+        ("system", "expected_fragment", "forbidden_fragment"),
+        [
+            ("Linux", "Secret Service", "Terminal.app"),
+            ("Darwin", "errSecParam", "Secret Service"),
+            ("Windows", "Credential Manager", "Secret Service"),
+        ],
+    )
+    def test_store_failure_default_backend_hint_matches_platform(
         self,
         cli_runner,
         monkeypatch: pytest.MonkeyPatch,
         fake_keyring: InMemoryKeyring,
         clean_pipefy_env,
         saved_cwd,
+        system: str,
+        expected_fragment: str,
+        forbidden_fragment: str,
     ) -> None:
-        """A keychain write failure on the default OS backend surfaces the
-        Secret Service hint and the file-backend escape hatch."""
+        """A keychain write failure on the default OS backend surfaces a
+        platform-appropriate remediation hint."""
+        import platform
+
         monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+        monkeypatch.setattr(platform, "system", lambda: system)
 
         from keyring.errors import KeyringError
 
@@ -783,8 +797,10 @@ class TestAuthLoginCommand:
         result = cli_runner.invoke(cli_app, ["auth", "login"])
         assert result.exit_code == 1
         assert "could not be stored in your keychain" in result.stderr
-        assert "Secret Service" in result.stderr
-        assert "PIPEFY_KEYCHAIN_BACKEND=file" in result.stderr
+        assert expected_fragment in result.stderr
+        assert forbidden_fragment not in result.stderr
+        if system == "Linux":
+            assert "PIPEFY_KEYCHAIN_BACKEND=file" in result.stderr
 
     def test_store_failure_file_backend_hints_at_config_dir(
         self,

@@ -216,9 +216,19 @@ Every `PIPEFY_*` env var is validated against a semantically meaningful regex at
 
 ### `Login succeeded but the session could not be stored in your keychain (<backend>)`
 
-The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running — install `gnome-keyring` or `kwallet`, set `PIPEFY_KEYCHAIN_BACKEND=file` to use a plaintext file backend under the Pipefy config directory, or fall back to a static `PIPEFY_TOKEN`.
+The login worked but `keyring` couldn't write the entry.
 
-When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory).
+**macOS (Keychain / `Keyring` backend).** OAuth can succeed while persistence fails with `Can't store password on keychain: (-25244, 'Unknown Error')`. That code is `errSecParam` from Security.framework — common when the calling process cannot surface the new-item ACL dialog (IDE slash commands, agent hosts, and other non-TTY subprocesses that do not share an interactive Aqua session). The fix is independent of how `pipefy` was installed (`uvx`, `uv tool install`, or a wheel).
+
+1. Run `pipefy auth login` **once** from a regular **Terminal.app** session (not from inside the IDE).
+2. When macOS prompts for keychain access for the Python binary running `pipefy`, click **Always Allow**.
+3. Retry login from the IDE or agent integration — refresh writes should succeed without another prompt.
+
+**Linux (headless / CI).** Usually no Secret Service daemon — install `gnome-keyring` or `kwallet`, set `PIPEFY_KEYCHAIN_BACKEND=file` for a plaintext file backend under the Pipefy config directory, or use a static `PIPEFY_TOKEN`.
+
+**Windows.** Credential Manager may block non-interactive callers; run `pipefy auth login` once from an interactive Command Prompt or PowerShell window, or use `PIPEFY_KEYCHAIN_BACKEND=file` / `PIPEFY_TOKEN`.
+
+When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the CLI hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory).
 
 ### `Missing Pipefy authentication. Set PIPEFY_TOKEN, configure PIPEFY_SERVICE_ACCOUNT_*, or run \`pipefy auth login\`.`
 

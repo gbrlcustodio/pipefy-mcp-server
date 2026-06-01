@@ -250,4 +250,4 @@ When changing portal SDK/MCP/CLI behavior:
      -i "query { __type(name: \"Mutation\") { fields { name } } }"
    ```
 
-4. **Registry:** add tool names to `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` and keep the **149** count in `docs/parity.md` in sync.
+4. **Registry:** add tool names to `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` and keep the **148** count in `docs/parity.md` in sync.

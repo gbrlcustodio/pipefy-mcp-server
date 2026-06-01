@@ -37,21 +37,27 @@ run() {
 
 # Like `run`, but captures stdout+stderr; prints them only if the command
 # fails. Use for `uv tool install` and similar commands that produce a long
-# package-list summary on success that the user doesn't need to see.
+# package-list summary on success the user doesn't need to see (uv's own
+# --quiet flag doesn't suppress that summary on every uv version).
 run_quiet() {
     printf '+ %s\n' "$*" >&2
     if [ "$DRY_RUN" -eq 1 ]; then
         return 0
     fi
-    log=$(mktemp -t pipefy-install.XXXXXX) || err "mktemp failed"
-    if "$@" >"$log" 2>&1; then
-        rm -f "$log"
+    _rq_log=$(mktemp "${TMPDIR:-/tmp}/pipefy-install.XXXXXX") \
+        || err "mktemp failed (TMPDIR=${TMPDIR:-/tmp})"
+    # Clean up the tempfile even on signal (Ctrl-C between mktemp and rm).
+    trap 'rm -f "$_rq_log"' EXIT INT TERM
+    if "$@" >"$_rq_log" 2>&1; then
+        rm -f "$_rq_log"
+        trap - EXIT INT TERM
         return 0
     fi
-    rc=$?
-    cat "$log" >&2
-    rm -f "$log"
-    return "$rc"
+    _rq_rc=$?
+    cat "$_rq_log" >&2 || true
+    rm -f "$_rq_log"
+    trap - EXIT INT TERM
+    return "$_rq_rc"
 }
 
 print_help() {
@@ -147,6 +153,9 @@ detect_uv() {
     confirm "uv is not installed. Install from https://astral.sh/uv?" \
         || err "uv is required; aborting."
     printf '+ curl -LsSf https://astral.sh/uv/install.sh | sh -s -- -q\n' >&2
+    # Set the banner flag before any side effects, so the dry-run preview also
+    # shows what a real run would print at the end.
+    UV_INSTALLED_THIS_RUN=1
     if [ "$DRY_RUN" -eq 0 ]; then
         curl -LsSf https://astral.sh/uv/install.sh | sh -s -- -q
         if [ -d "$HOME/.local/bin" ]; then
@@ -156,7 +165,6 @@ detect_uv() {
         if ! command -v uv >/dev/null 2>&1; then
             err "uv install ran but 'uv' is not on PATH. Open a new shell and re-run install.sh."
         fi
-        UV_INSTALLED_THIS_RUN=1
     fi
 }
 
@@ -214,6 +222,7 @@ EOF
         err "Release $TAG does not ship a $pkg wheel"
     fi
     set -- "$@" "$main_url"
+    say "Installing $pkg (this may take a few seconds)..."
     run_quiet uv tool install --force "$@"
 }
 
@@ -376,7 +385,9 @@ print_next_steps() {
         say "        source \$HOME/.local/bin/env       (sh, bash, zsh)"
         say "        source \$HOME/.local/bin/env.fish  (fish)"
         say ""
-        say "    For future shells, uv has updated your shell rc; open a new terminal."
+        say "    For future shells, uv typically updates your shell rc (~/.bashrc,"
+        say "    ~/.zshrc, ~/.config/fish/conf.d/uv.fish). If a new terminal still"
+        say "    can't find 'pipefy', add \$HOME/.local/bin to PATH manually."
     fi
     say ""
     say "Next: authenticate with Pipefy."

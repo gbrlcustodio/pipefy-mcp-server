@@ -11,6 +11,10 @@ from pipefy_sdk import PipefyClient
 from pipefy_sdk.automation_preflight import (
     AutomationPreflightError,
     collect_automation_move_transition_error_message,
+    collect_field_map_field_id_error_message,
+    collect_internal_field_ids_from_pipe_info,
+    extract_field_map_destination_ids,
+    validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
 
@@ -19,6 +23,8 @@ from pipefy_sdk.automation_preflight import (
 def mock_client():
     client = MagicMock(PipefyClient)
     client.get_phase_allowed_move_targets = AsyncMock()
+    client.get_pipe = AsyncMock()
+    client.get_phase_fields = AsyncMock()
     return client
 
 
@@ -277,3 +283,197 @@ async def test_validate_resolves_dest_from_nested_phase_id(mock_client):
         )
     assert "id src" in str(excinfo.value)
     assert "id dest" in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# extract_field_map_destination_ids
+# ---------------------------------------------------------------------------
+
+
+def test_extract_field_map_ids_snake_case():
+    ids = extract_field_map_destination_ids(
+        {
+            "action_params": {
+                "field_map": [{"field_id": "429659044", "inputMode": "copy_from"}],
+            },
+        },
+    )
+    assert ids == ["429659044"]
+
+
+def test_extract_field_map_ids_camel_case():
+    ids = extract_field_map_destination_ids(
+        {
+            "actionParams": {
+                "fieldMap": [{"fieldId": "111", "value": "x"}],
+            },
+        },
+    )
+    assert ids == ["111"]
+
+
+def test_extract_field_map_ids_empty_when_missing():
+    assert extract_field_map_destination_ids(None) == []
+    assert extract_field_map_destination_ids({}) == []
+    assert extract_field_map_destination_ids({"action_params": {}}) == []
+
+
+def test_extract_field_map_skips_entries_without_field_id():
+    ids = extract_field_map_destination_ids(
+        {
+            "action_params": {
+                "field_map": [
+                    {"inputMode": "copy_from", "value": "%{id}"},
+                    {"fieldId": "42", "inputMode": "fixed_value", "value": "x"},
+                ],
+            },
+        },
+    )
+    assert ids == ["42"]
+
+
+def test_collect_internal_field_ids_from_pipe_info_pure():
+    pipe_info = {
+        "start_form_fields": [{"internal_id": "100"}],
+        "phases": [
+            {
+                "fields": [{"internal_id": "200"}],
+            },
+            {
+                "id": "phase-empty",
+                "fields": [],
+            },
+        ],
+    }
+    assert collect_internal_field_ids_from_pipe_info(pipe_info) == {"100", "200"}
+
+
+# ---------------------------------------------------------------------------
+# validate_automation_field_map_field_ids
+# ---------------------------------------------------------------------------
+
+
+def _pipe_with_internal_field(internal_id: str) -> dict:
+    return {
+        "pipe": {
+            "start_form_fields": [
+                {"internal_id": internal_id, "id": "slug_field"},
+            ],
+            "phases": [],
+        },
+    }
+
+
+@pytest.mark.anyio
+async def test_validate_field_map_skips_without_field_map(mock_client):
+    await validate_automation_field_map_field_ids(mock_client, "pipe-1", None)
+    mock_client.get_pipe.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_validate_field_map_passes_for_known_internal_id(mock_client):
+    mock_client.get_pipe.return_value = _pipe_with_internal_field("9001")
+    await validate_automation_field_map_field_ids(
+        mock_client,
+        "pipe-1",
+        {
+            "action_params": {
+                "field_map": [{"fieldId": "9001", "inputMode": "copy_from"}],
+            },
+        },
+    )
+
+
+@pytest.mark.anyio
+async def test_validate_field_map_raises_for_unknown_internal_id(mock_client):
+    mock_client.get_pipe.return_value = _pipe_with_internal_field("9001")
+    with pytest.raises(AutomationPreflightError) as excinfo:
+        await validate_automation_field_map_field_ids(
+            mock_client,
+            "pipe-1",
+            {
+                "action_params": {
+                    "field_map": [{"fieldId": "999999", "inputMode": "copy_from"}],
+                },
+            },
+        )
+    msg = str(excinfo.value)
+    assert "999999" in msg
+    assert "get_start_form_fields" in msg
+    assert "get_phase_fields" in msg
+
+
+@pytest.mark.anyio
+async def test_validate_field_map_raises_for_slug_field_id(mock_client):
+    mock_client.get_pipe.return_value = _pipe_with_internal_field("9001")
+    with pytest.raises(AutomationPreflightError) as excinfo:
+        await validate_automation_field_map_field_ids(
+            mock_client,
+            "pipe-1",
+            {
+                "action_params": {
+                    "field_map": [{"fieldId": "due_date", "inputMode": "copy_from"}],
+                },
+            },
+        )
+    assert "due_date" in str(excinfo.value)
+    assert "slug" in str(excinfo.value).lower()
+
+
+@pytest.mark.anyio
+async def test_validate_field_map_accepts_camel_case_keys(mock_client):
+    mock_client.get_pipe.return_value = _pipe_with_internal_field("42")
+    await validate_automation_field_map_field_ids(
+        mock_client,
+        "pipe-1",
+        {
+            "actionParams": {
+                "fieldMap": [
+                    {"fieldId": "42", "inputMode": "fixed_value", "value": "x"}
+                ],
+            },
+        },
+    )
+
+
+@pytest.mark.anyio
+async def test_validate_field_map_swallows_get_pipe_error(mock_client):
+    mock_client.get_pipe.side_effect = Exception("gql fail")
+    await validate_automation_field_map_field_ids(
+        mock_client,
+        "pipe-1",
+        {"action_params": {"field_map": [{"fieldId": "999999"}]}},
+    )
+
+
+@pytest.mark.anyio
+async def test_validate_field_map_lazy_loads_phase_fields(mock_client):
+    mock_client.get_pipe.return_value = {
+        "pipe": {
+            "start_form_fields": [],
+            "phases": [{"id": "phase-7", "fields": None}],
+        },
+    }
+    mock_client.get_phase_fields.return_value = {
+        "fields": [{"internal_id": "7001", "id": "slug_7"}],
+    }
+    await validate_automation_field_map_field_ids(
+        mock_client,
+        "pipe-1",
+        {
+            "action_params": {
+                "field_map": [{"fieldId": "7001", "inputMode": "copy_from"}],
+            },
+        },
+    )
+    mock_client.get_phase_fields.assert_awaited_once_with("phase-7")
+
+
+def test_collect_field_map_field_id_error_message_includes_discovery():
+    msg = collect_field_map_field_id_error_message(
+        field_id="123",
+        action_pipe_id="pipe-9",
+    )
+    assert "123" in msg
+    assert "pipe-9" in msg
+    assert "get_phase_fields" in msg

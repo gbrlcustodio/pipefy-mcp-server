@@ -116,6 +116,35 @@ def test_ai_automation_validate_prompt_json(
     assert body.get("valid") is True
 
 
+def test_automation_event_attributes_invokes_client(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("auto-evt-attr")
+    attributes = [
+        {
+            "id": "automation_event_execution_datetime",
+            "internal_id": "automation_event_execution_datetime",
+            "label": "Automation execution datetime",
+            "type": "datetime",
+            "value_token": "%{automation_event_execution_datetime}",
+        }
+    ]
+    mock_client = MagicMock()
+    mock_client.get_automation_event_attributes = AsyncMock(return_value=attributes)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            ["automation", "event-attributes", "--json"],
+        )
+    assert r.exit_code == 0, r.stderr
+    mock_client.get_automation_event_attributes.assert_awaited_once_with()
+    body = json.loads(r.stdout)
+    assert body == attributes
+
+
 def test_usage_credits_invokes_client(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
 ):
@@ -527,6 +556,56 @@ def test_ai_automation_create_requires_service_account(
     assert r.exit_code == 2
     assert "service-account credentials" in r.stderr
     mock_client.create_ai_automation.assert_not_called()
+
+
+def test_automation_create_exits_on_preflight_error(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``automation create`` exits 2 when SDK field_map preflight rejects the payload."""
+    from pipefy_sdk.automation_preflight import AutomationPreflightError
+
+    oauth_env("aut-preflight")
+    mock_client = MagicMock()
+    mock_client.create_automation = AsyncMock(
+        side_effect=AutomationPreflightError(
+            'field_map fieldId "999999" was not found on pipe pipe-1.'
+        ),
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation",
+                "create",
+                "--pipe",
+                "pipe-1",
+                "--name",
+                "Rule",
+                "--event-id",
+                "card_created",
+                "--action-id",
+                "update_card_field",
+                "--extra",
+                json.dumps(
+                    {
+                        "action_params": {
+                            "field_map": [
+                                {"fieldId": "999999", "inputMode": "copy_from"},
+                            ],
+                        },
+                    },
+                ),
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 2
+    assert "999999" in r.stderr
+    mock_client.create_automation.assert_awaited_once()
 
 
 @pytest.mark.parametrize("flag", ["--event-id", "--trigger-id"])

@@ -818,6 +818,12 @@ class PipeTools:
             Use this tool for simple, single-field updates. The entire field value
             will be replaced with the new value provided.
 
+            **Not for automations:** if/then rules that stamp or copy dynamic values on cards
+            (``%{id}``, ``%{created_at}``, ``%{automation_event_execution_datetime}``, etc.) belong in
+            ``create_automation`` with ``action_id: "update_card_field"`` and numeric ``fieldId`` in
+            ``extra_input.action_params.field_map``. This tool uses the field **slug** in
+            ``field_id`` for direct card updates, not automation ``field_map`` entries.
+
             Args:
                 card_id: The ID of the card containing the field to update.
                     Discover via: ``find_cards`` or ``get_cards(pipe_id)``.

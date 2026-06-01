@@ -1,12 +1,12 @@
 # Automations & AI
 
-Traditional automations (if/then rules) and AI-powered automations and agents. **22 tools.** (Execution logs, usage exports, and credit dashboards are in [Observability](observability.md).)
+Traditional automations (if/then rules) and AI-powered automations and agents. **23 tools.** (Execution logs, usage exports, and credit dashboards are in [Observability](observability.md).)
 
 ---
 
 ## Traditional automations (rules engine)
 
-Nine tools manage Pipefy traditional automations: if/then rules bound to a pipe via the standard GraphQL API.
+Ten tools manage Pipefy traditional automations: if/then rules bound to a pipe via the standard GraphQL API.
 
 **Tip:** For **send-a-task** rules (`send_a_task` action), use `create_send_task_automation` (pipe, trigger, task title, recipients) instead of hand-building `action_params.taskParams` on `create_automation`. For other actions, call `get_automation_events` (global event catalog) and `get_automation_actions` with the target pipe (`repoId`) before `create_automation` to pick valid `trigger_id` / `action_id` values. Writes accept optional `extra_input` (camelCase API keys) and `debug=true` on errors.
 
@@ -16,11 +16,89 @@ Nine tools manage Pipefy traditional automations: if/then rules bound to a pipe 
 | `get_automations` | Yes | Lists rules; optional `organization_id` and/or `pipe_id`. |
 | `get_automation_actions` | Yes | Catalog of action types for a pipe (IDs and field metadata). |
 | `get_automation_events` | Yes | Catalog of trigger event definitions (global list; tool still takes `pipe_id` for context). |
+| `get_automation_event_attributes` | Yes | Official event-attribute tokens for `field_map.value` (e.g. `%{automation_event_execution_datetime}`). |
 | `simulate_automation` | Yes | Runs a dry-run simulation for an automation with a payload (see tool docstring). |
 | `create_automation` | No | Creates a rule: `pipe_id`, `name`, `trigger_id`, `action_id`; `active` defaults to true. Set `active: false` to create disabled. |
 | `create_send_task_automation` | No | Creates a send-a-task automation (`pipe_id`, trigger, task title, recipients). Created active; disable via `update_automation`. |
 | `update_automation` | No | Patches a rule via `extra_input` (`UpdateAutomationInput` fields). |
 | `delete_automation` | No | Permanently deletes a rule (`destructiveHint=True` — confirm with the user first). |
+
+### Traditional automation: `field_map` and dynamic values
+
+Use action `update_card_field` when a rule should **stamp or copy values onto the triggering card** (for example, set a datetime field when a card is created). Do **not** use the MCP tool `update_card_field` for this — that tool updates one card field by **slug** in a single call. Automations use numeric `fieldId` values inside `extra_input.action_params.field_map`.
+
+**`get_automation_actions` catalog gap:** for action `update_card_field`, `acceptedParameters` lists only `fields_map_order` and `card_id`. The API still requires `field_map` in `action_params`; shape and tokens are documented here and in the `create_automation` tool docstring.
+
+#### Example: `card_created` → stamp execution datetime
+
+Discover the destination field’s `internal_id` with `get_start_form_fields(pipe_id)` and/or `get_phase_fields(phase_id)` (use digits only in `fieldId`, not slug).
+
+```json
+{
+  "pipe_id": "<pipe_id>",
+  "name": "Stamp execution time on new cards",
+  "trigger_id": "card_created",
+  "action_id": "update_card_field",
+  "active": false,
+  "extra_input": {
+    "action_params": {
+      "card_id": "%{id}",
+      "field_map": [
+        {
+          "fieldId": "<destination_internal_id>",
+          "inputMode": "copy_from",
+          "value": "%{automation_event_execution_datetime}"
+        }
+      ],
+      "fields_map_order": ["<destination_internal_id>"]
+    }
+  }
+}
+```
+
+| `field_map[]` key | Type | Meaning |
+| --- | --- | --- |
+| `fieldId` | string of digits | Destination field `internal_id` (`fields.id`) |
+| `inputMode` | `copy_from` \| `fixed_value` \| `fill_with_ai` | How `value` is interpreted |
+| `value` | string | Literal, or `%{…}` template when `inputMode` is `copy_from` |
+
+Also set `action_params.card_id` to `"%{id}"` for the triggering card. `fields_map_order` is an array of the same destination `internal_id` strings as in `field_map`.
+
+#### Common `value` tokens (`copy_from`)
+
+| Token | Meaning |
+| --- | --- |
+| `%{id}` | Triggering card id (use in `card_id`, not only in `value`) |
+| `%{created_at}` | Card creation timestamp |
+| `%{automation_event_execution_datetime}` | Automation run timestamp |
+| `%{<internal_id>}` | Copy value from another field on the card (digits only, e.g. `%{429659034}`) |
+
+Official catalog for event-scoped attributes: call `get_automation_event_attributes` (MCP) or `pipefy automation event-attributes` (CLI). See also [Automation Event Attributes](https://developers.pipefy.com/reference/automation-event-attributes). Tokens such as `%{created_at}` and `%{id}` work in `field_map.value` but are not returned by that catalog — see `create_automation` docstring and `get_automation` on an existing rule.
+
+#### Slug vs `internal_id`
+
+| Surface | Field identifier |
+| --- | --- |
+| MCP `update_card_field` (`field_id` arg) | **slug** (`id` on field rows from `get_phase_fields`) |
+| Traditional automation `field_map[].fieldId` | **numeric `internal_id`** |
+| AI automation prompt `%{…}` | **numeric `internal_id`** (separate feature) |
+
+Using a slug in `fieldId` typically yields `INTERNAL_SERVER_ERROR` on create; a wrong numeric id may fail silently at runtime (field not updated).
+
+#### `field_map` preflight on `create_automation`
+
+Before the GraphQL mutation, **`create_automation` only** validates each `field_map[].fieldId` against numeric `internal_id` values on the action pipe (`action_repo_id`, default `pipe_id`). Unknown ids and slug-shaped values return `success: false` with the offending `fieldId` and pointers to `get_start_form_fields` / `get_phase_fields`. `update_automation` does not run this check. Upstream field-load failures are skipped so transient API errors do not block creates.
+
+#### Move-transition preflight on `create_automation`
+
+For `card_moved` + `move_single_card`, when `extra_input` includes source and destination phase ids, `create_automation` rejects impossible transitions before GraphQL (same transition data as `move_card_to_phase`). The error is a **text** message listing allowed destination phases; there is no `valid_destinations` field on the automation error envelope. Recovery: parse allowed phases from the message or call `get_phase_allowed_move_targets` on the source phase id.
+
+#### Recommended workflow
+
+1. **Discover** — `get_automation_events(pipe_id)`, `get_automation_actions(pipe_id)`, `get_automation_event_attributes()` for official `field_map` tokens; field ids via `get_start_form_fields` / `get_phase_fields`.
+2. **Create disabled** — `create_automation` with `active: false` and the `extra_input` payload above.
+3. **Verify** — `get_automation(automation_id)` and confirm `action_params.field_map` round-trip.
+4. **Enable** — `update_automation` with `extra_input: { "active": true }` (or camelCase `active` per API).
 
 ---
 

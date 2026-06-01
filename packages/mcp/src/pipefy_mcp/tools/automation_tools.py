@@ -150,7 +150,17 @@ class AutomationTools:
             """List automation action types available on a pipe (labels, fields, IDs).
 
             Call this before ``create_automation`` or ``update_automation`` to choose valid
-            ``action_id`` values and required ``actionFields`` for the Pipefy API payload.
+            ``action_id`` values and ``acceptedParameters`` hints for the Pipefy API payload.
+
+            For action ``update_card_field``, ``acceptedParameters`` lists only
+            ``fields_map_order`` and ``card_id`` — it **does not** document ``field_map``.
+            Use the **Traditional ``update_card_field`` action** subsection in
+            ``create_automation`` (and skill ``pipefy-automations``) for the full
+            ``action_params.field_map`` shape. Inspect an existing rule with ``get_automation``.
+
+            Discover via: ``get_automation_events(pipe_id)`` before ``create_automation``;
+            ``field_map`` shape in ``create_automation`` docstring; existing rules via
+            ``get_automation(automation_id)``.
 
             Args:
                 pipe_id: Pipe ID.
@@ -204,6 +214,32 @@ class AutomationTools:
             return build_automation_read_success_payload(
                 rows,
                 "Automation events catalog retrieved.",
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+        )
+        async def get_automation_event_attributes(ctx: Context) -> dict[str, Any]:
+            """List official automation event attribute tokens for ``field_map.value``.
+
+            Returns attributes such as ``automation_event_execution_datetime`` with
+            ``internal_id``, ``label``, ``type``, and a ready-to-use ``value_token``
+            (for example ``%{automation_event_execution_datetime}``). Other tokens
+            (``%{created_at}``, ``%{id}``, ``%{<internal_id>}``) are valid in
+            ``field_map.value`` but are not listed here — see ``create_automation``
+            docstring and ``docs/mcp/tools/automations-and-ai.md``.
+            """
+            try:
+                rows = await client.get_automation_event_attributes()
+            except Exception as exc:  # noqa: BLE001
+                return await handle_automation_tool_graphql_error(
+                    exc,
+                    ctx,
+                    False,
+                )
+            return build_automation_read_success_payload(
+                rows,
+                "Automation event attributes catalog retrieved.",
             )
 
         @mcp.tool(
@@ -340,6 +376,34 @@ class AutomationTools:
             ``pipe_id`` (same-pipe automation). Cross-pipe actions typically require
             ``action_params`` inside ``extra_input`` — for example, ``create_connected_card`` needs
             ``{"action_params": {"pipeId": "<child_pipe_id>", "fieldsAttributes": [...]}}``.
+
+            **Traditional ``update_card_field`` action** — stamp or copy values on the triggering
+            card (not the MCP ``update_card_field`` tool, which uses field **slugs**). Pass
+            ``action_id: "update_card_field"`` and nest params under ``extra_input.action_params``.
+            Set ``active: false`` while testing, then ``get_automation`` to verify, then enable via
+            ``update_automation``.
+
+            Minimal ``extra_input`` fragment (replace ``DESTINATION_INTERNAL_ID`` with digits from
+            field discovery)::
+
+                {"action_params": {"card_id": "%{id}", "field_map": [{"fieldId": "DESTINATION_INTERNAL_ID", "inputMode": "copy_from", "value": "%{automation_event_execution_datetime}"}], "fields_map_order": ["DESTINATION_INTERNAL_ID"]}}
+
+            ``field_map[]`` keys: ``fieldId`` (numeric ``internal_id``, not slug),
+            ``inputMode`` (``copy_from`` | ``fixed_value`` | ``fill_with_ai``), ``value`` (literal or
+            ``%{…}`` template when ``copy_from``). ``card_id`` must be ``"%{id}"`` for the triggering
+            card.
+
+            Common ``value`` tokens when ``inputMode`` is ``copy_from``:
+
+            - ``%{id}`` — triggering card id (use in ``card_id``, not only ``value``)
+            - ``%{created_at}`` — card creation timestamp
+            - ``%{automation_event_execution_datetime}`` — automation run timestamp
+            - ``%{<internal_id>}`` — copy from another field (digits only, e.g. ``%{429659034}``)
+
+            Discover via: ``get_start_form_fields(pipe_id)``, ``get_phase_fields(phase_id)`` →
+            ``internal_id``; ``get_automation_events(pipe_id)`` and ``get_automation_actions(pipe_id)``
+            for trigger/action ids; ``get_automation_event_attributes`` for official ``field_map``
+            value tokens; ``get_automation`` on an existing rule to mirror ``action_params``.
 
             Args:
                 pipe_id: Pipe ID where the trigger event fires (source pipe).
@@ -509,8 +573,13 @@ class AutomationTools:
         ) -> dict[str, Any]:
             """Update an existing traditional automation (partial ``UpdateAutomationInput``).
 
-            Optional ``extra_input`` holds fields to change (camelCase keys). Discover current shape
-            with ``get_automation`` when unsure.
+            Optional ``extra_input`` holds fields to change (camelCase keys). Call ``get_automation``
+            first when patching ``action_params`` — especially ``field_map`` for
+            ``update_card_field`` rules (same shape as ``create_automation``: numeric ``fieldId``,
+            ``inputMode``, ``value``, ``card_id``, ``fields_map_order``).
+
+            ``field_map`` and move-transition preflight run on ``create_automation`` only, not on
+            this tool. Invalid ``fieldId`` or impossible phase transitions may still fail at the API.
 
             Args:
                 automation_id: Automation rule ID.

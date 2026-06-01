@@ -88,7 +88,6 @@ jobs:
           files: dist/*.whl
           body_path: CHANGELOG_RELEASE_BODY.md
       - name: Patch plugin manifests on main to new tag's wheel URLs
-        if: startsWith(github.ref_name, 'v')
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -102,6 +101,8 @@ jobs:
 
           tag = os.environ["GITHUB_REF_NAME"]
           ver = tag.removeprefix("v")
+          # Tag-to-wheel-version normalization. Covers the prerelease forms used in RELEASE.md
+          # (`-beta.N`, `-rc.N`, `-alpha.N`); extend here if the release flow adopts others.
           pep = ver.replace("-beta.", "b").replace("-rc.", "rc").replace("-alpha.", "a")
           repo = os.environ["GITHUB_REPOSITORY"]
           base = f"https://github.com/{repo}/releases/download/{tag}"
@@ -131,12 +132,15 @@ jobs:
               p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
           PY
           git add .mcp.json commands/install.md .claude-plugin/plugin.json .claude-plugin/marketplace.json
-          if git diff --cached --quiet; then
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): point plugin manifests at ${GITHUB_REF_NAME} wheels"
+            git push origin main
+          else
             echo "No manifest changes to commit"
-            exit 0
           fi
-          git commit -m "chore(release): point plugin manifests at ${GITHUB_REF_NAME} wheels"
-          git push origin main
+          # Restore the working tree to the tag SHA so any subsequent step that reads tracked
+          # files sees the release commit, not main's tip.
+          git checkout "${GITHUB_SHA}"
       - name: Stage PyPI wheels (SDK + CLI + MCP + Auth + Infra)
         if: startsWith(github.ref_name, 'v1.') && !contains(github.ref_name, '-')
         run: |

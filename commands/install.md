@@ -1,6 +1,6 @@
 ---
 name: install
-description: Install the Pipefy CLI (pipefy-cli + pipefy-auth + pipefy-infra + pipefy-sdk) as a persistent uv tool.
+description: Install the Pipefy CLI (pipefy-auth + pipefy-cli + pipefy-infra + pipefy-sdk) as a persistent uv tool.
 disable-model-invocation: true
 ---
 

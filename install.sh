@@ -402,9 +402,6 @@ main() {
     parse_args "$@"
     refuse_root
     detect_platform
-    case "$CLIENT" in
-        cursor|claude-desktop) require_python3 ;;
-    esac
     if [ -n "$PREFIX" ]; then
         UV_TOOL_DIR="$PREFIX"
         export UV_TOOL_DIR

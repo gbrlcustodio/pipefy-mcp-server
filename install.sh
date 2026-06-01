@@ -21,6 +21,7 @@ DRY_RUN=0
 
 OS=""
 WHEEL_URLS=""
+UV_INSTALLED_THIS_RUN=0
 
 say() { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
@@ -136,6 +137,7 @@ detect_uv() {
         if ! command -v uv >/dev/null 2>&1; then
             err "uv install ran but 'uv' is not on PATH. Open a new shell and re-run install.sh."
         fi
+        UV_INSTALLED_THIS_RUN=1
     fi
 }
 
@@ -344,6 +346,16 @@ print_next_steps() {
     say "Install complete."
     if [ "$DRY_RUN" -eq 0 ] && command -v pipefy >/dev/null 2>&1; then
         pipefy --version || true
+    fi
+    if [ "$UV_INSTALLED_THIS_RUN" -eq 1 ]; then
+        say ""
+        say "==> uv was installed during this run."
+        say "    'pipefy' and 'pipefy-mcp-server' live in \$HOME/.local/bin, which may"
+        say "    not be on this shell's PATH yet. To use the CLI in the CURRENT shell:"
+        say ""
+        say "        . \"\$HOME/.local/bin/env\""
+        say ""
+        say "    For future shells, uv has updated your shell rc; open a new terminal."
     fi
     say ""
     say "Next: authenticate with Pipefy."

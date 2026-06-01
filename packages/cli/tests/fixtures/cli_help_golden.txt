@@ -527,20 +527,23 @@ Usage: pipefy automation [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list        List automation rules (``get_automations``).                     │
-│ get         Load one automation (``get_automation``).                        │
-│ create      Create an automation rule (``create_automation``).               │
-│ update      Update an automation (``update_automation``).                    │
-│ delete      Delete an automation rule (``delete_automation``).               │
-│ simulate    Dry-run an automation against a card (``simulate_automation``).  │
-│ logs        List automation execution logs (``get_automation_logs`` or       │
-│             ``get_automation_logs_by_repo``).                                │
-│ usage       Automation usage for an org in a date range                      │
-│             (``get_automations_usage``).                                     │
-│ send-task   Send-a-task automation helper.                                   │
-│ export      Automation jobs export (async).                                  │
-│ events      Automation trigger catalog.                                      │
-│ actions     Automation action catalog.                                       │
+│ list               List automation rules (``get_automations``).              │
+│ get                Load one automation (``get_automation``).                 │
+│ create             Create an automation rule (``create_automation``).        │
+│ update             Update an automation (``update_automation``).             │
+│ delete             Delete an automation rule (``delete_automation``).        │
+│ simulate           Dry-run an automation against a card                      │
+│                    (``simulate_automation``).                                │
+│ logs               List automation execution logs (``get_automation_logs``   │
+│                    or ``get_automation_logs_by_repo``).                      │
+│ event-attributes   List official event-attribute tokens                      │
+│                    (``get_automation_event_attributes``).                    │
+│ usage              Automation usage for an org in a date range               │
+│                    (``get_automations_usage``).                              │
+│ send-task          Send-a-task automation helper.                            │
+│ export             Automation jobs export (async).                           │
+│ events             Automation trigger catalog.                               │
+│ actions            Automation action catalog.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP automation/actions
@@ -612,6 +615,16 @@ Usage: pipefy automation delete [OPTIONS] AUTOMATION_ID
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/event-attributes
+Usage: pipefy automation event-attributes [OPTIONS]
+
+ List official event-attribute tokens (``get_automation_event_attributes``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --json  -j        Print machine-readable JSON to stdout.                     │
 │ --help            Show this message and exit.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯

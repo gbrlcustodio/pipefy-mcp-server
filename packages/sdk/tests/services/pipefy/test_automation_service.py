@@ -12,6 +12,7 @@ from pipefy_sdk.queries.automation_queries import (
     CREATE_AUTOMATION_SIMULATION_MUTATION,
     DELETE_AUTOMATION_MUTATION,
     GET_AUTOMATION_ACTIONS_QUERY,
+    GET_AUTOMATION_EVENT_ATTRIBUTES_QUERY,
     GET_AUTOMATION_EVENTS_QUERY,
     GET_AUTOMATION_QUERY,
     GET_AUTOMATIONS_BY_ORG_QUERY,
@@ -22,6 +23,7 @@ from pipefy_sdk.queries.automation_queries import (
 from pipefy_sdk.services.automation_service import (
     AutomationService,
     _format_automation_error_details,
+    normalize_automation_event_attributes,
 )
 from pipefy_sdk.settings import PipefySettings
 
@@ -377,6 +379,80 @@ async def test_get_automation_events_transport_error(mock_settings):
     )
     with pytest.raises(TransportQueryError):
         await service.get_automation_events("y")
+
+
+@pytest.mark.unit
+class TestNormalizeAutomationEventAttributes:
+    def test_maps_execution_datetime_row(self):
+        raw = {
+            "automationEventExecutionDatetime": {
+                "internalId": "automation_event_execution_datetime",
+                "label": "Automation execution datetime",
+                "type": "datetime",
+            }
+        }
+        rows = normalize_automation_event_attributes(raw)
+        assert rows == [
+            {
+                "id": "automation_event_execution_datetime",
+                "internal_id": "automation_event_execution_datetime",
+                "label": "Automation execution datetime",
+                "type": "datetime",
+                "value_token": "%{automation_event_execution_datetime}",
+            }
+        ]
+
+    def test_none_or_empty_returns_empty(self):
+        assert normalize_automation_event_attributes(None) == []
+        assert normalize_automation_event_attributes({}) == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_event_attributes_null_returns_empty(mock_settings):
+    service = _make_service(mock_settings, {"automationEventAttributes": None})
+    result = await service.get_automation_event_attributes()
+    assert result == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_event_attributes_success(mock_settings):
+    graphql_payload = {
+        "automationEventAttributes": {
+            "automationEventExecutionDatetime": {
+                "internalId": "automation_event_execution_datetime",
+                "label": "Automation execution datetime",
+                "type": "datetime",
+            }
+        }
+    }
+    service = _make_service(mock_settings, graphql_payload)
+    result = await service.get_automation_event_attributes()
+
+    query, variables = service.execute_query.call_args[0]
+    assert query is GET_AUTOMATION_EVENT_ATTRIBUTES_QUERY
+    assert variables == {}
+    assert result == [
+        {
+            "id": "automation_event_execution_datetime",
+            "internal_id": "automation_event_execution_datetime",
+            "label": "Automation execution datetime",
+            "type": "datetime",
+            "value_token": "%{automation_event_execution_datetime}",
+        }
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_event_attributes_transport_error(mock_settings):
+    service = AutomationService(settings=mock_settings, auth=_TEST_AUTH)
+    service.execute_query = AsyncMock(
+        side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
+    )
+    with pytest.raises(TransportQueryError):
+        await service.get_automation_event_attributes()
 
 
 @pytest.mark.unit

@@ -198,6 +198,20 @@ GET_AUTOMATION_EVENTS_QUERY = gql(
     """
 )
 
+GET_AUTOMATION_EVENT_ATTRIBUTES_QUERY = gql(
+    """
+    query automationEventAttributes {
+        automationEventAttributes {
+            automationEventExecutionDatetime {
+                internalId
+                label
+                type
+            }
+        }
+    }
+    """
+)
+
 CREATE_AUTOMATION_MUTATION = gql(
     """
     mutation createAutomation($input: CreateAutomationInput!) {
@@ -278,6 +292,7 @@ __all__ = [
     "CREATE_AUTOMATION_SIMULATION_MUTATION",
     "DELETE_AUTOMATION_MUTATION",
     "GET_AUTOMATION_ACTIONS_QUERY",
+    "GET_AUTOMATION_EVENT_ATTRIBUTES_QUERY",
     "GET_AUTOMATION_EVENTS_QUERY",
     "GET_AUTOMATION_QUERY",
     "GET_AUTOMATIONS_BY_ORG_QUERY",

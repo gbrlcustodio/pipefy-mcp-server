@@ -35,6 +35,25 @@ run() {
     "$@"
 }
 
+# Like `run`, but captures stdout+stderr; prints them only if the command
+# fails. Use for `uv tool install` and similar commands that produce a long
+# package-list summary on success that the user doesn't need to see.
+run_quiet() {
+    printf '+ %s\n' "$*" >&2
+    if [ "$DRY_RUN" -eq 1 ]; then
+        return 0
+    fi
+    log=$(mktemp -t pipefy-install.XXXXXX) || err "mktemp failed"
+    if "$@" >"$log" 2>&1; then
+        rm -f "$log"
+        return 0
+    fi
+    rc=$?
+    cat "$log" >&2
+    rm -f "$log"
+    return "$rc"
+}
+
 print_help() {
     cat <<EOF
 Usage: install.sh [OPTIONS]
@@ -195,7 +214,7 @@ EOF
         err "Release $TAG does not ship a $pkg wheel"
     fi
     set -- "$@" "$main_url"
-    run uv tool install --quiet --force "$@"
+    run_quiet uv tool install --force "$@"
 }
 
 install_skills() {

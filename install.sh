@@ -9,6 +9,7 @@
 set -eu
 
 REPO="gbrlcustodio/pipefy-mcp-server"
+TOOLS="pipefy_cli pipefy_mcp_server"  # wheels installed as standalone uv tools
 
 YES=0
 NO_SKILLS=0
@@ -138,35 +139,29 @@ detect_uv() {
     fi
 }
 
-resolve_tag() {
+resolve_release() {
     if [ -n "$TAG" ]; then
         say "Using --version: $TAG"
-        return 0
+        api_url="https://api.github.com/repos/$REPO/releases/tags/$TAG"
+    else
+        say "Resolving latest release from GitHub..."
+        api_url="https://api.github.com/repos/$REPO/releases?per_page=1"
     fi
-    say "Resolving latest release tag from GitHub..."
-    TAG="$(curl -fsSL "https://api.github.com/repos/$REPO/releases" \
-        | grep -m1 '"tag_name"' \
-        | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')"
+    body=$(curl -fsSL "$api_url") || err "Failed to reach GitHub API: $api_url"
     if [ -z "$TAG" ]; then
-        err "Could not resolve latest release tag from https://api.github.com/repos/$REPO/releases"
+        TAG=$(printf '%s' "$body" \
+            | grep -m1 '"tag_name"' \
+            | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+        [ -n "$TAG" ] || err "GitHub returned no releases for $REPO"
+        say "Resolved tag: $TAG"
     fi
-    say "Resolved tag: $TAG"
-}
-
-fetch_release_assets() {
-    WHEEL_URLS="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/tags/$TAG" \
+    WHEEL_URLS=$(printf '%s' "$body" \
         | grep '"browser_download_url"' \
         | grep -oE 'https://[^"]+\.whl' \
-        || true)"
-    if [ -z "$WHEEL_URLS" ]; then
-        err "No wheel assets in release $TAG"
-    fi
+        || true)
+    [ -n "$WHEEL_URLS" ] || err "Release $TAG has no wheel assets at $api_url"
     say "Wheels in $TAG:"
-    # WHEEL_URLS is newline-separated; iterate via while-read to avoid IFS surprises.
-    printf '%s\n' "$WHEEL_URLS" | while IFS= read -r url; do
-        [ -z "$url" ] && continue
-        printf '  %s\n' "$url"
-    done
+    printf '%s\n' "$WHEEL_URLS" | sed 's/^/  /'
 }
 
 install_tool() {
@@ -175,13 +170,21 @@ install_tool() {
     set --
     while IFS= read -r url; do
         [ -z "$url" ] && continue
+        # Skip sibling tools (each tool is installed in its own venv; bundling them
+        # as --with would inject the sibling's binary into this tool's environment).
+        skip=0
+        for tool in $TOOLS; do
+            [ "$tool" = "$pkg" ] && continue
+            case "$url" in
+                */"$tool"-*) skip=1; break ;;
+            esac
+        done
+        if [ "$skip" -eq 1 ]; then
+            continue
+        fi
         case "$url" in
-            */"$pkg"-*)
-                main_url="$url"
-                ;;
-            *)
-                set -- "$@" --with "$url"
-                ;;
+            */"$pkg"-*) main_url="$url" ;;
+            *) set -- "$@" --with "$url" ;;
         esac
     done <<EOF
 $WHEEL_URLS
@@ -209,7 +212,7 @@ install_skills() {
 claude_desktop_config_path() {
     case "$OS" in
         Darwin) printf '%s\n' "$HOME/Library/Application Support/Claude/claude_desktop_config.json" ;;
-        Linux)  printf '%s\n' "$HOME/.config/Claude/claude_desktop_config.json" ;;
+        Linux)  err "Claude Desktop has no Linux build. Use --client claude-code, --client cursor, or --client none (prints the snippet to paste into your own config)." ;;
         *)      err "Unsupported OS for --client claude-desktop: $OS" ;;
     esac
 }
@@ -223,21 +226,54 @@ require_python3() {
 json_merge_pipefy() {
     path="$1"
     if [ "$DRY_RUN" -eq 1 ]; then
-        printf '+ merge {"mcpServers": {"pipefy": {"command": "pipefy-mcp-server"}}} into %s\n' "$path" >&2
+        printf '+ ensure mcpServers.pipefy in %s (preserve existing entry if present)\n' "$path" >&2
         return 0
     fi
     require_python3
     mkdir -p "$(dirname "$path")"
     python3 - "$path" <<'PY'
-import json, pathlib, sys
+import json, os, pathlib, sys, tempfile
+
 p = pathlib.Path(sys.argv[1])
 data = {}
 if p.exists():
     text = p.read_text(encoding="utf-8").strip()
     if text:
-        data = json.loads(text)
-data.setdefault("mcpServers", {})["pipefy"] = {"command": "pipefy-mcp-server"}
-p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            sys.stderr.write(
+                f"error: {p} is not valid JSON ({exc}); "
+                f"use --client none and paste the snippet manually\n"
+            )
+            sys.exit(1)
+if not isinstance(data, dict):
+    sys.stderr.write(
+        f"error: {p} root is not a JSON object; "
+        f"use --client none and paste the snippet manually\n"
+    )
+    sys.exit(1)
+servers = data.get("mcpServers")
+if not isinstance(servers, dict):
+    servers = {}
+    data["mcpServers"] = servers
+if "pipefy" in servers:
+    print(f"{p}: mcpServers.pipefy already present; leaving as-is")
+    sys.exit(0)
+servers["pipefy"] = {"command": "pipefy-mcp-server"}
+fd, tmp_path = tempfile.mkstemp(prefix=p.name + ".", dir=str(p.parent))
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2)
+        fh.write("\n")
+    os.replace(tmp_path, p)
+except BaseException:
+    try:
+        os.unlink(tmp_path)
+    except OSError:
+        pass
+    raise
+print(f"Updated {p}")
 PY
 }
 
@@ -259,6 +295,7 @@ codex_append_pipefy() {
 [mcp_servers.pipefy]
 command = "pipefy-mcp-server"
 TOML
+    say "Updated $path"
 }
 
 print_manual_snippet() {
@@ -278,19 +315,13 @@ EOF
 write_client_config() {
     case "$CLIENT" in
         cursor)
-            target="$HOME/.cursor/mcp.json"
-            json_merge_pipefy "$target"
-            say "Updated $target"
+            json_merge_pipefy "$HOME/.cursor/mcp.json"
             ;;
         claude-desktop)
-            target="$(claude_desktop_config_path)"
-            json_merge_pipefy "$target"
-            say "Updated $target"
+            json_merge_pipefy "$(claude_desktop_config_path)"
             ;;
         codex)
-            target="$HOME/.codex/config.toml"
-            codex_append_pipefy "$target"
-            say "Updated $target"
+            codex_append_pipefy "$HOME/.codex/config.toml"
             ;;
         claude-code)
             cat <<EOF
@@ -319,7 +350,7 @@ print_next_steps() {
     say "  Default (browser):   pipefy auth login"
     say "  Headless (device):   pipefy auth login --device"
     if [ "$CLIENT" = "claude-code" ]; then
-        say "  Via Claude Code:     /pipefy-login"
+        say "  Via Claude Code:     /pipefy:login"
     fi
 }
 
@@ -327,13 +358,15 @@ main() {
     parse_args "$@"
     refuse_root
     detect_platform
+    case "$CLIENT" in
+        cursor|claude-desktop) require_python3 ;;
+    esac
     if [ -n "$PREFIX" ]; then
         UV_TOOL_DIR="$PREFIX"
         export UV_TOOL_DIR
     fi
     detect_uv
-    resolve_tag
-    fetch_release_assets
+    resolve_release
     install_tool pipefy_cli
     install_tool pipefy_mcp_server
     install_skills

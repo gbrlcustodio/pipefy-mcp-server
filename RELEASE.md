@@ -56,7 +56,7 @@ The Release workflow requires the git tag (without leading `v`) to **exactly mat
      | sh -s -- --yes --no-skills --client none --dry-run
    ```
 
-   The first line of output should read `Resolved tag: vX.Y.Z`.
+   Output should include `Resolved tag: vX.Y.Z` (right after `Resolving latest release from GitHub...`).
 
 ## Verification (cross-platform smoke test)
 

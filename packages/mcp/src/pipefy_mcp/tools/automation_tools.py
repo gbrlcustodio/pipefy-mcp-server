@@ -220,14 +220,17 @@ class AutomationTools:
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
         )
         async def get_automation_event_attributes(ctx: Context) -> dict[str, Any]:
-            """List official automation event attribute tokens for ``field_map.value``.
+            """List the official **event-scoped** ``field_map.value`` token catalog.
 
-            Returns attributes such as ``automation_event_execution_datetime`` with
-            ``internal_id``, ``label``, ``type``, and a ready-to-use ``value_token``
-            (for example ``%{automation_event_execution_datetime}``). Other tokens
-            (``%{created_at}``, ``%{id}``, ``%{<internal_id>}``) are valid in
-            ``field_map.value`` but are not listed here — see ``create_automation``
-            docstring and ``docs/mcp/tools/automations-and-ai.md``.
+            **Not the full token list.** Pipefy's ``automationEventAttributes`` GraphQL
+            field currently exposes only ``automation_event_execution_datetime`` (one row).
+            Do not treat this tool as exhaustive discovery for ``field_map.value``.
+
+            For card-attribute tokens (``%{id}``, ``%{created_at}``, ``%{title}``,
+            ``%{due_date}``, ``%{finished_at}``, ``%{current_phase}``, ``%{assignees}``,
+            ``%{labels}``, ``%{created_by}``, copy-from-field ``%{<internal_id>}``, etc.)
+            see ``create_automation`` docstring and
+            ``docs/mcp/tools/automations-and-ai.md#common-value-tokens-copy_from``.
             """
             try:
                 rows = await client.get_automation_event_attributes()

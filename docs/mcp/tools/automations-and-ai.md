@@ -16,7 +16,7 @@ Ten tools manage Pipefy traditional automations: if/then rules bound to a pipe v
 | `get_automations` | Yes | Lists rules; optional `organization_id` and/or `pipe_id`. |
 | `get_automation_actions` | Yes | Catalog of action types for a pipe (IDs and field metadata). |
 | `get_automation_events` | Yes | Catalog of trigger event definitions (global list; tool still takes `pipe_id` for context). |
-| `get_automation_event_attributes` | Yes | Official event-attribute tokens for `field_map.value` (e.g. `%{automation_event_execution_datetime}`). |
+| `get_automation_event_attributes` | Yes | **Event-scoped only** (today: one token). Full `field_map.value` list: see [Common value tokens](#common-value-tokens-copy_from) below. |
 | `simulate_automation` | Yes | Runs a dry-run simulation for an automation with a payload (see tool docstring). |
 | `create_automation` | No | Creates a rule: `pipe_id`, `name`, `trigger_id`, `action_id`; `active` defaults to true. Set `active: false` to create disabled. |
 | `create_send_task_automation` | No | Creates a send-a-task automation (`pipe_id`, trigger, task title, recipients). Created active; disable via `update_automation`. |
@@ -69,11 +69,20 @@ Also set `action_params.card_id` to `"%{id}"` for the triggering card. `fields_m
 | Token | Meaning |
 | --- | --- |
 | `%{id}` | Triggering card id (use in `card_id`, not only in `value`) |
+| `%{title}` | Card title |
 | `%{created_at}` | Card creation timestamp |
-| `%{automation_event_execution_datetime}` | Automation run timestamp |
+| `%{finished_at}` | Card finished timestamp |
+| `%{due_date}` | Card due date |
+| `%{current_phase}` | Current phase name |
+| `%{assignees}` | Assignee list |
+| `%{labels}` | Card labels |
+| `%{created_by}` | Card creator |
+| `%{automation_event_execution_datetime}` | Automation run timestamp (only token in `get_automation_event_attributes`) |
 | `%{<internal_id>}` | Copy value from another field on the card (digits only, e.g. `%{429659034}`) |
 
-Official catalog for event-scoped attributes: call `get_automation_event_attributes` (MCP) or `pipefy automation event-attributes` (CLI). See also [Automation Event Attributes](https://developers.pipefy.com/reference/automation-event-attributes). Tokens such as `%{created_at}` and `%{id}` work in `field_map.value` but are not returned by that catalog — see `create_automation` docstring and `get_automation` on an existing rule.
+Relative date ops (e.g. `%{created_at|plus:86400}`) are supported at runtime; see Pipefy's automation docs.
+
+Official **event-scoped** catalog only: `get_automation_event_attributes` (MCP) or `pipefy automation event-attributes` (CLI) — today returns **one row** (`automation_event_execution_datetime`). See also [Automation Event Attributes](https://developers.pipefy.com/reference/automation-event-attributes). For the full set above, use this table, the `create_automation` docstring, or `get_automation` on an existing rule.
 
 #### Slug vs `internal_id`
 

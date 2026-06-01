@@ -11,7 +11,7 @@ tags: [pipefy, portal, interfaces, sub-portal, pages, elements]
 
 Configure an organization's Pipefy portal: bootstrap the main hub, add pages and widgets, wire and publish sub-portals. **20 MCP tools** (Interfaces GraphQL + internal_api for sub-portal wiring).
 
-Deep reference: [`docs/mcp/tools/portal.md`](../../docs/mcp/tools/portal.md). Parity matrix: [`docs/parity.md`](../../docs/parity.md). Env vars: [`docs/config.md`](../../docs/config.md).
+Deep reference: [`docs/mcp/tools/portal.md`](../../../docs/mcp/tools/portal.md). Parity matrix: [`docs/parity.md`](../../../docs/parity.md). Env vars: [`docs/config.md`](../../../docs/config.md).
 
 ---
 
@@ -307,7 +307,7 @@ CLI `--json` prints the raw SDK payload (no `success` wrapper).
 | Symptom | Likely cause | Recovery |
 |---------|----------------|----------|
 | `PERMISSION_DENIED` on writes | Wrong org, missing `manage_portals`, or SA not joined on interface | Same org as `list_portals`; user runs portal admin join; try human admin token |
-| Reads OK, writes fail on “admin” org | Token is human on org A, numeric id is org B | Align `organization_uuid` with token membership |
+| Reads OK, writes fail on `admin` org | Token is human on org A, numeric id is org B | Align `organization_uuid` with token membership |
 | `Menu already created` on `create_portal` | Main deleted but org menu state remains | Delete orphan sub-portals; avoid raw `createInterface`; bootstrap with `create_portal_page` on existing UUID |
 | Main page empty in builder | Portal created outside `create_portal` template path | `create_portal_page` (title only) for templated elements |
 | `published` missing on list | Expected | `get_portal` |
@@ -323,5 +323,5 @@ CLI `--json` prints the raw SDK payload (no `success` wrapper).
 
 ## See also
 
-- [`docs/mcp/tools/portal.md`](../../docs/mcp/tools/portal.md) — endpoints, wire naming, maintainer introspection
-- [`skills/introspection/pipefy-introspection/SKILL.md`](../introspection/pipefy-introspection/SKILL.md) — verify Interfaces / internal_api mutations before changing tools
+- [`docs/mcp/tools/portal.md`](../../../docs/mcp/tools/portal.md) — endpoints, wire naming, maintainer introspection
+- [`skills/introspection/pipefy-introspection/SKILL.md`](../../introspection/pipefy-introspection/SKILL.md) — verify Interfaces / internal_api mutations before changing tools

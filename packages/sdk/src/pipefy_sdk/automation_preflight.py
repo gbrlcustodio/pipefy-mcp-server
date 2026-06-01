@@ -201,6 +201,27 @@ def collect_field_map_field_id_error_message(
     )
 
 
+def find_non_numeric_field_map_field_id(destination_ids: list[str]) -> str | None:
+    """Return the first slug-shaped ``fieldId``, or ``None`` when all are numeric."""
+    for field_id in destination_ids:
+        if not _DIGITS_ONLY_RE.match(field_id):
+            return field_id
+    return None
+
+
+def find_invalid_field_map_field_id(
+    destination_ids: list[str],
+    known_internal_ids: set[str],
+) -> tuple[str, bool] | None:
+    """Return ``(field_id, non_numeric_slug)`` for the first invalid id, or ``None``."""
+    for field_id in destination_ids:
+        if not _DIGITS_ONLY_RE.match(field_id):
+            return (field_id, True)
+        if field_id not in known_internal_ids:
+            return (field_id, False)
+    return None
+
+
 async def _load_action_pipe_internal_field_ids(
     client: PipefyClient,
     action_pipe_id: str,
@@ -218,33 +239,7 @@ async def _load_action_pipe_internal_field_ids(
     pipe_info = pipe_data.get("pipe") or {}
     if not isinstance(pipe_info, dict):
         return set()
-    internal_ids = collect_internal_field_ids_from_pipe_info(pipe_info)
-    phases_to_fetch: list[str] = []
-    for phase in pipe_info.get("phases") or []:
-        if not isinstance(phase, dict):
-            continue
-        embedded_fields = phase.get("fields")
-        phase_id = phase.get("id")
-        if phase_id and not embedded_fields:
-            phases_to_fetch.append(str(phase_id))
-    for phase_id in phases_to_fetch:
-        try:
-            phase_data = await client.get_phase_fields(phase_id)
-        except Exception:  # noqa: BLE001
-            logger.debug(
-                "Traditional automation field_map validation: "
-                "get_phase_fields failed; skipping phase (phase_id=%s)",
-                phase_id,
-                exc_info=True,
-            )
-            continue
-        for field in phase_data.get("fields") or []:
-            if not isinstance(field, dict):
-                continue
-            iid = field.get("internal_id")
-            if iid is not None:
-                internal_ids.add(str(iid))
-    return internal_ids
+    return collect_internal_field_ids_from_pipe_info(pipe_info)
 
 
 async def validate_automation_field_map_field_ids(
@@ -267,27 +262,31 @@ async def validate_automation_field_map_field_ids(
     destination_ids = extract_field_map_destination_ids(extra_input)
     if not destination_ids:
         return
+    slug_field_id = find_non_numeric_field_map_field_id(destination_ids)
+    if slug_field_id is not None:
+        raise AutomationPreflightError(
+            collect_field_map_field_id_error_message(
+                field_id=slug_field_id,
+                action_pipe_id=action_pipe_id,
+                non_numeric_slug=True,
+            )
+        )
     known_internal_ids = await _load_action_pipe_internal_field_ids(
         client, action_pipe_id
     )
     if known_internal_ids is None:
         return
-    for field_id in destination_ids:
-        if not _DIGITS_ONLY_RE.match(field_id):
-            raise AutomationPreflightError(
-                collect_field_map_field_id_error_message(
-                    field_id=field_id,
-                    action_pipe_id=action_pipe_id,
-                    non_numeric_slug=True,
-                )
-            )
-        if field_id not in known_internal_ids:
-            raise AutomationPreflightError(
-                collect_field_map_field_id_error_message(
-                    field_id=field_id,
-                    action_pipe_id=action_pipe_id,
-                )
-            )
+    invalid = find_invalid_field_map_field_id(destination_ids, known_internal_ids)
+    if invalid is None:
+        return
+    field_id, non_numeric_slug = invalid
+    raise AutomationPreflightError(
+        collect_field_map_field_id_error_message(
+            field_id=field_id,
+            action_pipe_id=action_pipe_id,
+            non_numeric_slug=non_numeric_slug,
+        )
+    )
 
 
 __all__ = [
@@ -296,6 +295,8 @@ __all__ = [
     "collect_field_map_field_id_error_message",
     "collect_internal_field_ids_from_pipe_info",
     "extract_field_map_destination_ids",
+    "find_invalid_field_map_field_id",
+    "find_non_numeric_field_map_field_id",
     "validate_automation_field_map_field_ids",
     "validate_traditional_automation_move_transition",
 ]

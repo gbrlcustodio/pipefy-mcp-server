@@ -14,6 +14,8 @@ from pipefy_sdk.automation_preflight import (
     collect_field_map_field_id_error_message,
     collect_internal_field_ids_from_pipe_info,
     extract_field_map_destination_ids,
+    find_invalid_field_map_field_id,
+    find_non_numeric_field_map_field_id,
     validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
@@ -24,7 +26,6 @@ def mock_client():
     client = MagicMock(PipefyClient)
     client.get_phase_allowed_move_targets = AsyncMock()
     client.get_pipe = AsyncMock()
-    client.get_phase_fields = AsyncMock()
     return client
 
 
@@ -348,6 +349,18 @@ def test_collect_internal_field_ids_from_pipe_info_pure():
     assert collect_internal_field_ids_from_pipe_info(pipe_info) == {"100", "200"}
 
 
+def test_find_non_numeric_field_map_field_id_pure():
+    assert find_non_numeric_field_map_field_id(["9001", "42"]) is None
+    assert find_non_numeric_field_map_field_id(["due_date"]) == "due_date"
+
+
+def test_find_invalid_field_map_field_id_pure():
+    known = {"9001", "42"}
+    assert find_invalid_field_map_field_id(["9001"], known) is None
+    assert find_invalid_field_map_field_id(["due_date"], known) == ("due_date", True)
+    assert find_invalid_field_map_field_id(["999999"], known) == ("999999", False)
+
+
 # ---------------------------------------------------------------------------
 # validate_automation_field_map_field_ids
 # ---------------------------------------------------------------------------
@@ -405,7 +418,6 @@ async def test_validate_field_map_raises_for_unknown_internal_id(mock_client):
 
 @pytest.mark.anyio
 async def test_validate_field_map_raises_for_slug_field_id(mock_client):
-    mock_client.get_pipe.return_value = _pipe_with_internal_field("9001")
     with pytest.raises(AutomationPreflightError) as excinfo:
         await validate_automation_field_map_field_ids(
             mock_client,
@@ -418,6 +430,7 @@ async def test_validate_field_map_raises_for_slug_field_id(mock_client):
         )
     assert "due_date" in str(excinfo.value)
     assert "slug" in str(excinfo.value).lower()
+    mock_client.get_pipe.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -444,29 +457,6 @@ async def test_validate_field_map_swallows_get_pipe_error(mock_client):
         "pipe-1",
         {"action_params": {"field_map": [{"fieldId": "999999"}]}},
     )
-
-
-@pytest.mark.anyio
-async def test_validate_field_map_lazy_loads_phase_fields(mock_client):
-    mock_client.get_pipe.return_value = {
-        "pipe": {
-            "start_form_fields": [],
-            "phases": [{"id": "phase-7", "fields": None}],
-        },
-    }
-    mock_client.get_phase_fields.return_value = {
-        "fields": [{"internal_id": "7001", "id": "slug_7"}],
-    }
-    await validate_automation_field_map_field_ids(
-        mock_client,
-        "pipe-1",
-        {
-            "action_params": {
-                "field_map": [{"fieldId": "7001", "inputMode": "copy_from"}],
-            },
-        },
-    )
-    mock_client.get_phase_fields.assert_awaited_once_with("phase-7")
 
 
 def test_collect_field_map_field_id_error_message_includes_discovery():

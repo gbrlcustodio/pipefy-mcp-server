@@ -34,17 +34,7 @@ _MINIMAL_PIPEFY_SETTINGS = Settings(
 async def test_register_tools(client_session):
     expected_tool_names = sorted(PIPEFY_TOOL_NAMES)
 
-    mock_container = MagicMock()
-    mock_container.initialize_services = AsyncMock()
-    mock_container.pipefy_client = MagicMock()
-
-    with (
-        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
-        patch(
-            "pipefy_mcp.server.ServicesContainer.get_instance",
-            return_value=mock_container,
-        ),
-    ):
+    with patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS):
         async with client_session as session:
             result = await session.list_tools()
             actual_tool_names = sorted(tool.name for tool in result.tools)

@@ -236,16 +236,18 @@ When changing portal SDK/MCP/CLI behavior:
 
 1. **Spec:** `.cursor/dev-planning/specs/portal-crud/` (PRD, `introspection-snapshot.md`, `tasks/tasks-portal-crud.md`).
 2. **TDD loop:** SDK unit tests → MCP tool tests → CLI tests; `uv run pytest -m "not integration" -k portal`; update [`docs/parity.md`](../../parity.md) in the same PR.
-3. **Live schema:** [`.cursor/skills/pipefy-graphql-introspection/SKILL.md`](../../../.cursor/skills/pipefy-graphql-introspection/SKILL.md) — point introspection at Interfaces or internal_api before adding mutations:
+3. **Live schema:** Portal mutations may live on Interfaces or internal_api (see [Endpoints](#endpoints) above), not the main GraphQL URL. Before adding SDK queries, verify shapes with [`skills/introspection/pipefy-introspection/SKILL.md`](../../../skills/introspection/pipefy-introspection/SKILL.md) (`introspect_mutation` / `pipefy introspect mutation`) or `gql-cli` against the derived URLs (set `PIPEFY_BASE_URL` and auth per [`docs/config.md`](../../config.md)):
 
    ```bash
-   PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql/interfaces \
-     uv run python3 .cursor/skills/pipefy-graphql-introspection/scripts/introspect.py deep-mutation createSubPortal
+   uv run gql-cli --headers "Authorization: Bearer $PIPEFY_ACCESS_TOKEN" \
+     "$PIPEFY_BASE_URL/graphql/interfaces" \
+     -i "query { __type(name: \"Mutation\") { fields { name } } }"
    ```
 
    ```bash
-   PIPEFY_GRAPHQL_URL=https://app.pipefy.com/internal_api \
-     uv run python3 .cursor/skills/pipefy-graphql-introspection/scripts/introspect.py deep-mutation updateSubPortalElement
+   uv run gql-cli --headers "Authorization: Bearer $PIPEFY_ACCESS_TOKEN" \
+     "$PIPEFY_BASE_URL/internal_api" \
+     -i "query { __type(name: \"Mutation\") { fields { name } } }"
    ```
 
 4. **Registry:** add tool names to `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` and keep the **149** count in `docs/parity.md` in sync.

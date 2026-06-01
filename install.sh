@@ -351,9 +351,11 @@ print_next_steps() {
         say ""
         say "==> uv was installed during this run."
         say "    'pipefy' and 'pipefy-mcp-server' live in \$HOME/.local/bin, which may"
-        say "    not be on this shell's PATH yet. To use the CLI in the CURRENT shell:"
+        say "    not be on this shell's PATH yet. To add it for the CURRENT shell,"
+        say "    either restart your shell or run:"
         say ""
-        say "        . \"\$HOME/.local/bin/env\""
+        say "        source \$HOME/.local/bin/env       (sh, bash, zsh)"
+        say "        source \$HOME/.local/bin/env.fish  (fish)"
         say ""
         say "    For future shells, uv has updated your shell rc; open a new terminal."
     fi

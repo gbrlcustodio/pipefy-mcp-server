@@ -127,9 +127,9 @@ detect_uv() {
     fi
     confirm "uv is not installed. Install from https://astral.sh/uv?" \
         || err "uv is required; aborting."
-    printf '+ curl -LsSf https://astral.sh/uv/install.sh | sh\n' >&2
+    printf '+ curl -LsSf https://astral.sh/uv/install.sh | sh -s -- -q\n' >&2
     if [ "$DRY_RUN" -eq 0 ]; then
-        curl -LsSf https://astral.sh/uv/install.sh | sh
+        curl -LsSf https://astral.sh/uv/install.sh | sh -s -- -q
         if [ -d "$HOME/.local/bin" ]; then
             PATH="$HOME/.local/bin:$PATH"
             export PATH
@@ -195,7 +195,7 @@ EOF
         err "Release $TAG does not ship a $pkg wheel"
     fi
     set -- "$@" "$main_url"
-    run uv tool install --force "$@"
+    run uv tool install --quiet --force "$@"
 }
 
 install_skills() {

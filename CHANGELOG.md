@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **MCP / CLI / SDK**: `get_automation_event_attributes` lists official `field_map.value` tokens; `create_automation` preflights `field_map` destination `fieldId` values (numeric `internal_id` on `action_repo_id`) and `card_moved` + `move_single_card` transitions before GraphQL. Skill and `docs/mcp/tools/automations-and-ai.md` document create-only preflight and text-only move-transition errors (recovery via error message or `get_phase_allowed_move_targets`, not a `valid_destinations` envelope field).
 - **SDK / Auth**: shared filesystem-backed configuration via `~/.config/pipefy/config.toml` (`%APPDATA%\pipefy\config.toml` on Windows; honours `XDG_CONFIG_HOME` and a `PIPEFY_CONFIG_FILE=<path>` override). Top-level TOML keys map to pydantic field names on `AuthSettings` and `PipefySettings`; precedence is `init kwargs > env > .env > config.toml > defaults`. The new `pipefy-infra` workspace package owns the loader (a schema-agnostic `PydanticBaseSettingsSource` subclass) and the path-discovery helpers; SDK and Auth depend on it symmetrically — neither imports the other. See [`docs/config.md`](docs/config.md) for the schema.
 - **CLI**: `pipefy auth status [--json|-j]` — reports auth source, identity, session expiry, and exit codes.
 - **CLI**: `pipefy auth logout` — revokes the refresh token at the IdP and clears the stored session.

@@ -52,7 +52,7 @@ The same fields populate from environment variables in upper-case `PIPEFY_<NAME>
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `PIPEFY_BASE_URL` | `https://app.pipefy.com` | Drives the four API endpoints (`graphql_url`, `internal_api_url`, `interfaces_graphql_url`, `service_account_url`) as computed properties. Set once for non-prod environments. Portal tools use `interfaces_graphql_url` (`<base>/graphql/interfaces`) and `internal_api_url` (`<base>/internal_api`); see [`mcp/tools/portal.md`](mcp/tools/portal.md#endpoints). |
+| `PIPEFY_BASE_URL` | `https://app.pipefy.com` | Drives the four API endpoints (`graphql_url`, `internal_api_url`, `interfaces_graphql_url`, `service_account_url`) as computed properties. Set once for non-prod environments. |
 | `PIPEFY_AUTH_URL` | `https://signin.pipefy.com/realms/pipefy` | OIDC issuer for `pipefy auth login`. Non-prod realm names don't follow a derivable convention, so this stays a separate full URL. |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | unset | Service-account OAuth client id. Required for unattended (CI / MCP server) auth unless `PIPEFY_TOKEN` is set. |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | unset | Companion secret. Treat as sensitive. |

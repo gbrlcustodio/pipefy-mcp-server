@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra, and root workspace meta."""
+"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra, and root workspace meta.
+
+After rewriting the version strings, runs ``uv lock`` so the workspace
+lockfile's ``pipefy-workspace`` entry tracks the new version.
+"""
 
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -191,7 +196,19 @@ def main() -> int:
 
     write_version_to_all_files(new_version)
     print(f"Bumped {current} -> {new_version}")
+    refresh_lockfile()
     return 0
+
+
+def refresh_lockfile() -> None:
+    """Run ``uv lock`` so the workspace lockfile picks up the new version.
+
+    Without this, ``uv.lock``'s ``pipefy-workspace`` entry lags behind the
+    root ``pyproject.toml`` and CI's ``uv sync --locked`` fails on every PR
+    until someone runs ``uv lock`` by hand.
+    """
+    print("Refreshing uv.lock...")
+    subprocess.run(["uv", "lock"], cwd=REPO_ROOT, check=True)
 
 
 if __name__ == "__main__":

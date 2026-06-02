@@ -6,9 +6,9 @@ MCP server for Pipefy — **149 tools** for AI agents (Cursor, Claude Desktop, C
 
 ```sh
 uvx \
-  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
-  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp" \
+  --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
+  --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/mcp" \
   --refresh pipefy-mcp-server
 ```
 
@@ -36,7 +36,7 @@ Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, preced
 
 ### macOS keychain `errSecParam (-25244)`
 
-`pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a deterministic per-binary ACL problem. If it occurs, retry the slash command (Claude Code) or `pipefy auth login` (terminal) first; as a fallback, run `pipefy auth login` once from a regular Terminal.app session and approve any macOS keychain dialog that appears. [Issue #235](https://github.com/gbrlcustodio/pipefy-mcp-server/issues/235) tracks platform-aware error messaging.
+`pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a deterministic per-binary ACL problem. If it occurs, retry the slash command (Claude Code) or `pipefy auth login` (terminal) first; as a fallback, run `pipefy auth login` once from a regular Terminal.app session and approve any macOS keychain dialog that appears. [Issue #235](https://github.com/pipefy/ai-toolkit/issues/235) tracks platform-aware error messaging.
 
 ### Claude Code: `claude mcp add` (per-project terminal flow)
 
@@ -45,9 +45,9 @@ Useful when you want to wire the server without editing `~/.claude.json` by hand
 ```bash
 claude mcp add --scope project pipefy \
   -- uvx \
-       --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
-       --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
-       --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp" \
+       --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
+       --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
+       --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/mcp" \
        pipefy-mcp-server
 ```
 

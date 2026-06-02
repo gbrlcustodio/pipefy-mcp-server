@@ -22,6 +22,7 @@ DRY_RUN=0
 OS=""
 WHEEL_URLS=""
 UV_INSTALLED_THIS_RUN=0
+PYTHON_OVERRIDE=""
 
 say() { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
@@ -168,6 +169,33 @@ detect_uv() {
     fi
 }
 
+pick_system_python() {
+    # On macOS, prefer a system/Homebrew python3 over uv-managed
+    # python-build-standalone (PBS). PBS binaries lack the entitlements that
+    # `Security.framework` requires for keychain writes, so `pipefy auth login`
+    # later fails with `(-25244, 'Unknown Error')` (errSecMissingEntitlement).
+    # On Linux, uv's default Python is fine. Respect a pre-set UV_PYTHON.
+    [ "$OS" = "Darwin" ] || return 0
+    [ -z "${UV_PYTHON:-}" ] || return 0
+
+    for cmd in python3.14 python3.13 python3.12 python3.11 python3; do
+        path=$(command -v "$cmd" 2>/dev/null) || continue
+        [ -n "$path" ] || continue
+        # Skip uv-managed PBS interpreters (the very thing we're avoiding).
+        case "$path" in
+            */.local/share/uv/python/*|*/share/uv/python/*) continue ;;
+        esac
+        if "$path" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
+            PYTHON_OVERRIDE="$path"
+            say "Using system Python for tool venvs: $path"
+            say "  (avoids macOS keychain entitlement failures with uv-managed Python.)"
+            return 0
+        fi
+    done
+
+    warn "No system python3 >= 3.11 found on PATH. uv will use its managed Python; if 'pipefy auth login' later fails with keychain error -25244, set PIPEFY_KEYCHAIN_BACKEND=file or install Homebrew python3."
+}
+
 resolve_release() {
     if [ -n "$TAG" ]; then
         say "Using --version: $TAG"
@@ -223,7 +251,11 @@ EOF
     fi
     set -- "$@" "$main_url"
     say "Installing $pkg (this may take a few seconds)..."
-    run_quiet uv tool install --force "$@"
+    if [ -n "$PYTHON_OVERRIDE" ]; then
+        run_quiet uv tool install --force --python "$PYTHON_OVERRIDE" "$@"
+    else
+        run_quiet uv tool install --force "$@"
+    fi
 }
 
 install_skills() {
@@ -407,6 +439,7 @@ main() {
         export UV_TOOL_DIR
     fi
     detect_uv
+    pick_system_python
     resolve_release
     install_tool pipefy_cli
     install_tool pipefy_mcp_server

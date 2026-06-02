@@ -22,6 +22,7 @@ DRY_RUN=0
 OS=""
 WHEEL_URLS=""
 UV_INSTALLED_THIS_RUN=0
+PYTHON_OVERRIDE=""
 
 say() { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
@@ -168,6 +169,66 @@ detect_uv() {
     fi
 }
 
+pick_system_python() {
+    # On macOS, prefer a system/Homebrew python3 over uv-managed
+    # python-build-standalone (PBS). PBS binaries lack the entitlements that
+    # `Security.framework` requires for keychain writes, so `pipefy auth login`
+    # later fails with `(-25244, 'Unknown Error')` (errSecMissingEntitlement).
+    # On Linux, uv's default Python is fine.
+    [ "$OS" = "Darwin" ] || return 0
+    # Honor UV_PYTHON only when it points at an absolute path (a user-pinned
+    # interpreter). A version spec like `UV_PYTHON=3.13` leaves uv free to
+    # resolve to PBS, which is the failure case this function exists to avoid.
+    uv_python_is_spec=0
+    case "${UV_PYTHON:-}" in
+        /*) return 0 ;;
+        ?*) uv_python_is_spec=1 ;;
+    esac
+
+    # Build a probe-local PATH that includes Homebrew's standard prefixes. A
+    # `curl | sh` run from a non-interactive shell (CI, cron, freshly-spawned
+    # subshell whose rc hasn't loaded Homebrew's shellenv) can inherit a PATH
+    # of just /usr/bin and friends; without this, brew's python3 is invisible
+    # and the loop falls through to PBS. The augmented PATH is scoped to the
+    # probe so the rest of main() (uv, curl, python3, npx, pipefy lookups)
+    # sees the unmodified PATH.
+    # /usr/local/bin first, then /opt/homebrew/bin, so the Apple-Silicon-native
+    # prefix lands at the front; on Intel /opt/homebrew/bin typically doesn't
+    # exist and is skipped.
+    probe_path="$PATH"
+    for brew_dir in /usr/local/bin /opt/homebrew/bin; do
+        [ -d "$brew_dir" ] && probe_path="$brew_dir:$probe_path"
+    done
+
+    keychain_hint="if 'pipefy auth login' later fails with keychain error -25244, set PIPEFY_KEYCHAIN_BACKEND=file or install Homebrew python3."
+
+    for cmd in python3.14 python3.13 python3.12 python3.11 python3; do
+        path=$(PATH="$probe_path"; command -v "$cmd" 2>/dev/null) || continue
+        [ -n "$path" ] || continue
+        # Probe version and resolve sys.executable in the same Python call so
+        # the PBS-path filter runs against the real interpreter, not a symlink:
+        # uv shims under ~/.local/bin/python3.NN point into PBS but their own
+        # paths don't contain `/share/uv/python/`.
+        real_path=$("$path" -c 'import os, sys; sys.version_info >= (3, 11) or sys.exit(1); print(os.path.realpath(sys.executable))' 2>/dev/null) || continue
+        case "$real_path" in
+            */.local/share/uv/python/*|*/share/uv/python/*) continue ;;
+        esac
+        PYTHON_OVERRIDE="$path"
+        say "Using system Python for tool venvs: $path"
+        say "  (avoids macOS keychain entitlement failures with uv-managed Python.)"
+        if [ "$uv_python_is_spec" -eq 1 ]; then
+            warn "UV_PYTHON=$UV_PYTHON (a version spec) overridden by $path to avoid PBS."
+        fi
+        return 0
+    done
+
+    if [ "$uv_python_is_spec" -eq 1 ]; then
+        warn "UV_PYTHON=$UV_PYTHON is a version spec, not an absolute path, and no system python3 >= 3.11 was found on PATH. uv will resolve UV_PYTHON to its managed Python (PBS); $keychain_hint"
+        return 0
+    fi
+    warn "No system python3 >= 3.11 found on PATH. uv will use its managed Python; $keychain_hint"
+}
+
 resolve_release() {
     if [ -n "$TAG" ]; then
         say "Using --version: $TAG"
@@ -223,7 +284,11 @@ EOF
     fi
     set -- "$@" "$main_url"
     say "Installing $pkg (this may take a few seconds)..."
-    run_quiet uv tool install --force "$@"
+    if [ -n "$PYTHON_OVERRIDE" ]; then
+        run_quiet uv tool install --force --python "$PYTHON_OVERRIDE" "$@"
+    else
+        run_quiet uv tool install --force "$@"
+    fi
 }
 
 install_skills() {
@@ -407,6 +472,7 @@ main() {
         export UV_TOOL_DIR
     fi
     detect_uv
+    pick_system_python
     resolve_release
     install_tool pipefy_cli
     install_tool pipefy_mcp_server

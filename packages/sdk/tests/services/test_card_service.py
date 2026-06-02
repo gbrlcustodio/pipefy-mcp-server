@@ -6,6 +6,7 @@ Tests validate the card-related operations without requiring real API credential
 from unittest.mock import AsyncMock
 
 import pytest
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.card_queries import (
     FIND_CARDS_QUERY,
@@ -15,19 +16,18 @@ from pipefy_sdk.queries.card_queries import (
 from pipefy_sdk.services.card_service import CardService
 from pipefy_sdk.settings import PipefySettings
 
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
+
 
 @pytest.fixture
 def mock_settings() -> PipefySettings:
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 
 def _make_service(mock_settings: PipefySettings, return_value: dict) -> CardService:
-    service = CardService(settings=mock_settings)
+    service = CardService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 

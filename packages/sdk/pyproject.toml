@@ -8,8 +8,8 @@ dependencies = [
     "email-validator>=2.2.0",
     "gql[httpx]>=3.5.2",
     "httpx>=0.27.0",
-    "httpx-auth>=0.23.1",
     "openpyxl>=3.1.5",
+    "pipefy-infra",
     "pydantic>=2.11.3",
     "pydantic-settings>=2.8.1",
     "rapidfuzz>=3.14.3",
@@ -44,7 +44,8 @@ markers = [
 ]
 
 [tool.ruff]
-lint.extend-select = ["I", "TID251"]
+extend = "../../pyproject.toml"
+lint.extend-select = ["TID251"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "pipefy_mcp".msg = "pipefy_sdk must not import the MCP package."

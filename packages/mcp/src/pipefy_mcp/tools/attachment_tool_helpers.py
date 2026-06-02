@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import binascii
 from typing import Any, Literal
 
-import httpx
 from pydantic import ValidationError
 
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
@@ -13,7 +11,7 @@ from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 UploadFlowStep = Literal[
     "validation",
-    "file_download",
+    "file_read",
     "presigned_url",
     "s3_upload",
     "field_update",
@@ -65,7 +63,7 @@ def build_upload_error_payload(
 
     Args:
         message: Actionable reason for the caller.
-        step: Failed stage (``file_download``, ``presigned_url``, ``s3_upload``, ``field_update``).
+        step: Failed stage (``validation``, ``file_read``, ``presigned_url``, ``s3_upload``, ``field_update``).
     """
     out: dict[str, Any] = tool_error(message)
     out["step"] = step
@@ -73,7 +71,8 @@ def build_upload_error_payload(
 
 
 def format_s3_upload_failure(upload_result: dict[str, Any]) -> str:
-    """Build an agent-facing message from ``AttachmentService.upload_file_to_s3`` output.
+    """Build an agent-facing message from the S3 PUT outcome carried on an
+    :class:`AttachmentUploadError` for ``step="s3_upload"``.
 
     Args:
         upload_result: Dict containing at least ``status_code``; may include ``body_snippet``.
@@ -100,12 +99,16 @@ def format_s3_upload_failure(upload_result: dict[str, Any]) -> str:
     return f"{base} Check content type, size, and presigned URL validity."
 
 
-def map_upload_error_to_message(exc: BaseException, step: UploadFlowStep) -> str:
-    """Map an exception to a short, actionable message.
+def map_upload_error_to_message(exc: BaseException) -> str:
+    """Map a validation or transport/GraphQL exception to a short, actionable message.
+
+    File-read errors are short-circuited by
+    :func:`_upload_error_envelope` in :mod:`pipefy_mcp.tools.attachment_tools`
+    (the originating :class:`pipefy_infra.filesystem.LocalFileError` carries
+    user-facing text directly), so they do not flow through this mapper.
 
     Args:
-        exc: Failure from transport, GraphQL, or validation.
-        step: Current flow step where the error was observed (for context only).
+        exc: Failure from input validation, transport, or GraphQL.
     """
     if isinstance(exc, ValidationError):
         parts: list[str] = []
@@ -117,25 +120,6 @@ def map_upload_error_to_message(exc: BaseException, step: UploadFlowStep) -> str
             else:
                 parts.append(str(msg))
         return "; ".join(parts) if parts else "Invalid input."
-    if isinstance(exc, binascii.Error):
-        return "Invalid file_content_base64: could not decode base64 data."
-    if isinstance(exc, httpx.HTTPStatusError):
-        if step == "file_download":
-            return (
-                f"Could not download file_url (HTTP {exc.response.status_code}). "
-                "Verify the URL is public or reachable from this server."
-            )
-        return (
-            f"HTTP error ({exc.response.status_code}) during request. "
-            "Retry or check network and URL."
-        )
-    if isinstance(exc, httpx.RequestError):
-        if step == "file_download":
-            return (
-                f"Network error while downloading file_url: {exc}. "
-                "Check connectivity and URL validity."
-            )
-        return f"Network error: {exc}"
     if isinstance(exc, ValueError):
         return str(exc)
     msgs = extract_error_strings(exc)

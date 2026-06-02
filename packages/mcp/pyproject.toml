@@ -7,13 +7,15 @@ requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27.0",
     "mcp[cli]>=1.25.0",
-    # Workspace resolves version in dev; PyPI releases stage this wheel alongside CLI/MCP (see release workflow).
+    # Workspace resolves versions in dev; PyPI releases stage these wheels alongside CLI/MCP (see release workflow).
+    "pipefy-auth",
     "pipefy-sdk",
     "pydantic>=2.11.3",
     "pydantic-settings>=2.8.1",
 ]
 
 [tool.uv.sources]
+pipefy-auth = { workspace = true }
 pipefy-sdk = { workspace = true }
 
 [project.scripts]
@@ -56,7 +58,8 @@ markers = [
 ]
 
 [tool.ruff]
-lint.extend-select = ["I", "TID251"]
+extend = "../../pyproject.toml"
+lint.extend-select = ["TID251"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "pipefy_cli".msg = "pipefy_mcp must not import the CLI package; keep MCP independent of pipefy-cli."

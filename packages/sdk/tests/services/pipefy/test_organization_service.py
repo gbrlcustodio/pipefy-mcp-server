@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.organization_queries import (
     GET_ORGANIZATION_QUERY,
@@ -10,19 +11,18 @@ from pipefy_sdk.queries.organization_queries import (
 from pipefy_sdk.services.organization_service import OrganizationService
 from pipefy_sdk.settings import PipefySettings
 
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
+
 
 @pytest.fixture
 def mock_settings():
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 
 def _make_service(mock_settings, return_value):
-    service = OrganizationService(settings=mock_settings)
+    service = OrganizationService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 

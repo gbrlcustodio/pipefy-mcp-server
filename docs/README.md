@@ -14,11 +14,12 @@ Human-facing guides for the **pipefy-labs** monorepo (`pipefy-mcp-server` on Git
 
 | Doc | Role |
 |-----|------|
-| [`setup.md`](setup.md) | First-time install, `PIPEFY_*` variables, MCP client JSON samples |
+| [`config.md`](config.md) | `PIPEFY_*` environment variables, `config.toml` schema and path, precedence chain |
+| [`cli/auth.md`](cli/auth.md) | CLI credential precedence, `pipefy auth login`, troubleshooting |
 | [`parity.md`](parity.md) | MCP tool ↔ CLI command matrix (source of truth for coverage and deferrals) |
 | [`MIGRATION.md`](MIGRATION.md) | Notes for existing MCP users across packaging changes |
 | [`dependencies.md`](dependencies.md) | Why each runtime dependency exists |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Contributing skills (Markdown playbooks) |
 | [`../RELEASE.md`](../RELEASE.md) | Versioning and GitHub Releases |
 
-Package READMEs under `packages/*/README.md` link here for install, parity, and MCP client setup.
+First-time install and per-client MCP wiring live in the root [`README.md#installation`](../README.md#installation). Package READMEs under `packages/*/README.md` cover surface-specific edge cases.

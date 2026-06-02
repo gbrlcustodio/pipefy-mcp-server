@@ -4,27 +4,20 @@ This package holds side-effect-free formatting/conversion helpers used by the
 service layer.
 """
 
-from .field_tokens import looks_like_uuid_token, slug_like_field_token
+from .field_tokens import slug_like_field_token
 from .formatters import (
     convert_fields_to_array,
     convert_values_to_camel_case,
     normalize_field_condition_actions,
     normalize_field_condition_payload,
 )
-from .url_ssrf import (
-    assert_hostname_is_not_internal,
-    assert_hostname_resolves_to_public_ips,
-    validate_https_service_endpoint_url,
-)
+from .organization_identifiers import looks_like_uuid
 
 __all__ = [
-    "assert_hostname_is_not_internal",
-    "assert_hostname_resolves_to_public_ips",
     "convert_fields_to_array",
     "convert_values_to_camel_case",
-    "looks_like_uuid_token",
+    "looks_like_uuid",
     "normalize_field_condition_actions",
     "normalize_field_condition_payload",
     "slug_like_field_token",
-    "validate_https_service_endpoint_url",
 ]

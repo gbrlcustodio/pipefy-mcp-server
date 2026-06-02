@@ -936,7 +936,7 @@ class TestAiAutomationNotConfigured:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "OAuth" in tool_error_message(payload)
+        assert "service-account credentials" in tool_error_message(payload)
 
     async def test_update_returns_error_payload_when_not_configured(
         self,
@@ -951,7 +951,7 @@ class TestAiAutomationNotConfigured:
         assert result.isError is False
         payload = extract_payload(result)
         assert payload["success"] is False
-        assert "OAuth" in tool_error_message(payload)
+        assert "service-account credentials" in tool_error_message(payload)
 
     async def test_delete_works_without_oauth_config(
         self,

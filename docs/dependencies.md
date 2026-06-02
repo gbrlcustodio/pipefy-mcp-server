@@ -1,6 +1,6 @@
 # Python runtime dependencies
 
-This document explains **why** the main third-party packages exist across the **uv workspace**. Values and pins live in each package’s `pyproject.toml` (`packages/sdk`, `packages/mcp`, `packages/cli`). Use **[`docs/setup.md`](setup.md)** for install and env vars.
+This document explains **why** the main third-party packages exist across the **uv workspace**. Values and pins live in each package’s `pyproject.toml` (`packages/sdk`, `packages/mcp`, `packages/cli`). Install commands live in the root [`README.md#installation`](../README.md#installation); env-var and `config.toml` reference is at [`docs/config.md`](config.md).
 
 ## pipefy-sdk (`packages/sdk`)
 
@@ -14,7 +14,7 @@ This document explains **why** the main third-party packages exist across the **
 | `rapidfuzz` | Fuzzy matching helpers used in domain logic where the SDK mirrors MCP/CLI behavior. |
 | `openpyxl` | Reads `.xlsx` exports and converts sheet data to text (CSV-like) when the API returns Excel. |
 
-**Security:** GraphQL and export URLs are validated against SSRF rules in SDK services; do not bypass host checks when adding download paths.
+**Security:** GraphQL and export URLs are validated against SSRF rules in `pipefy-infra` (invoked from SDK services and `AuthSettings`); do not bypass host checks when adding download paths.
 
 ## pipefy-mcp-server (`packages/mcp`)
 
@@ -33,7 +33,6 @@ This document explains **why** the main third-party packages exist across the **
 | `typer` | Command groups, options, and exit-code mapping. |
 | `rich` | Human-readable tables and summaries when `--json` is not used. |
 | `pydantic-settings` | Loads `PIPEFY_*` the same way as MCP/SDK. |
-| `pyyaml` | Parsing bundled skill frontmatter (`pipefy skills list` / `show`). |
 
 ## Supply-chain notes
 

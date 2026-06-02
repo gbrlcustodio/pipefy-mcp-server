@@ -34,3 +34,54 @@ def test_bump_prerelease(current: str, expected: str) -> None:
 def test_bump_prerelease_rejects_unknown_suffix() -> None:
     with pytest.raises(ValueError, match="unrecognized suffix"):
         _bump.bump_prerelease("0.2.0-dev.1")
+
+
+@pytest.mark.parametrize(
+    "pyproject",
+    [
+        # Simple case: version is the only [project] key
+        '[project]\nversion = "0.1.0"\n',
+        # name above version (the current real-world shape)
+        '[project]\nname = "x"\nversion = "0.1.0"\n',
+        # Array-valued keys above version (the brittle case the new pattern fixes)
+        '[project]\nclassifiers = ["A", "B"]\nversion = "0.1.0"\n',
+        '[project]\ndependencies = []\nversion = "0.1.0"\n',
+        '[project]\nkeywords = ["a"]\nversion = "0.1.0"\n',
+        # Multiple bracket-containing keys above version
+        (
+            '[project]\nname = "x"\nclassifiers = ["A"]\n'
+            'dependencies = ["dep"]\nversion = "0.1.0"\n'
+        ),
+        # Sibling [tool.X] table BEFORE [project] (must not shadow)
+        '[tool.commitizen]\nversion = "TOOL"\n[project]\nversion = "0.1.0"\n',
+        # Sibling [tool.X] table AFTER [project] (must not be touched)
+        '[project]\nversion = "0.1.0"\n[tool.commitizen]\nversion = "TOOL"\n',
+    ],
+)
+def test_root_project_version_re_replaces_project_version(pyproject: str) -> None:
+    new_text, count = _bump.ROOT_PROJECT_VERSION_RE.subn(
+        r'\1"REPLACED"', pyproject, count=1
+    )
+    assert count == 1, f"expected one match, got {count} in {pyproject!r}"
+    assert 'version = "REPLACED"' in new_text
+    # Make sure sibling [tool.X] versions stay untouched.
+    if '"TOOL"' in pyproject:
+        assert '"TOOL"' in new_text
+
+
+@pytest.mark.parametrize(
+    "pyproject",
+    [
+        # No [project] table at all
+        '[tool.x]\nversion = "Y"\n',
+        # [project] without a version key
+        '[project]\nname = "x"\n[tool.y]\n',
+        # version key inside a [project.subtable], not [project] itself
+        '[project]\nname = "x"\n[project.urls]\nversion = "X"\n',
+    ],
+)
+def test_root_project_version_re_rejects_missing_version(pyproject: str) -> None:
+    _new_text, count = _bump.ROOT_PROJECT_VERSION_RE.subn(
+        r'\1"REPLACED"', pyproject, count=1
+    )
+    assert count == 0, f"expected no match in {pyproject!r}"

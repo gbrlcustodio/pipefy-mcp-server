@@ -1,36 +1,118 @@
 # pipefy-mcp-server
 
-MCP server for Pipefy — **128 tools** for AI agents (Cursor, Claude Desktop, Claude Code, and any MCP-compatible client). Depends on [`pipefy-sdk`](../sdk/README.md) for all GraphQL and API logic.
+MCP server for Pipefy — **149 tools** for AI agents (Cursor, Claude Desktop, Claude Code, Codex, and any MCP-compatible client). Depends on [`pipefy-sdk`](../sdk/README.md) for all GraphQL and API logic.
 
 ## Install (pre-launch, v0.1 → v0.5)
 
 ```sh
-uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-mcp-server
+uvx \
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp" \
+  --refresh pipefy-mcp-server
 ```
 
-> At v1.0 this moves to `uvx pipefy-mcp-server` from PyPI.
+The `--with pipefy-sdk` / `pipefy-auth` flags are required pre-1.0 because the workspace members are not yet on PyPI. At v1.0 this collapses to `uvx pipefy-mcp-server`.
+
+For per-client wiring (Claude Code / Cursor / Claude Desktop / Codex), see [root `README.md#installation`](../../README.md#installation).
 
 ## Configuration
 
-Set the following environment variables (or add to a `.env` file in your working directory):
+Set the following environment variables (or add them to a `.env` file in the working directory, or pin them in `~/.config/pipefy/config.toml`):
 
 ```env
-PIPEFY_OAUTH_CLIENT=your_client_id
-PIPEFY_OAUTH_SECRET=your_client_secret
-PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql
-PIPEFY_OAUTH_URL=https://app.pipefy.com/oauth/token
-PIPEFY_INTERNAL_API_URL=https://app.pipefy.com/internal_api
+PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=your_client_id
+PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=your_client_secret
+# Non-prod environments only:
+# PIPEFY_BASE_URL=https://<your-api-host>
+# PIPEFY_AUTH_URL=https://<your-signin-host>/realms/<realm>
 ```
 
-Full guide: [`docs/setup.md`](../../docs/setup.md).
+`PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Set them only for non-prod environments.
 
-## MCP client setup (Cursor, Claude Desktop)
+Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, precedence chain): [`docs/config.md`](../../docs/config.md).
 
-Step-by-step JSON samples live in [`docs/setup.md#mcp-client-setup`](../../docs/setup.md#mcp-client-setup).
+## Edge cases and alternative wiring
+
+### macOS keychain `errSecParam (-25244)`
+
+`pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a deterministic per-binary ACL problem. If it occurs, retry the slash command (Claude Code) or `pipefy auth login` (terminal) first; as a fallback, run `pipefy auth login` once from a regular Terminal.app session and approve any macOS keychain dialog that appears. [Issue #235](https://github.com/gbrlcustodio/pipefy-mcp-server/issues/235) tracks platform-aware error messaging.
+
+### Claude Code: `claude mcp add` (per-project terminal flow)
+
+Useful when you want to wire the server without editing `~/.claude.json` by hand:
+
+```bash
+claude mcp add --scope project pipefy \
+  -- uvx \
+       --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+       --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+       --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp" \
+       pipefy-mcp-server
+```
+
+Then (repeat for each key you need):
+
+```bash
+claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_ID <YOUR_CLIENT_ID>
+claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET <YOUR_CLIENT_SECRET>
+# Non-prod environments only:
+# claude mcp add-env pipefy PIPEFY_BASE_URL https://<your-api-host>
+# claude mcp add-env pipefy PIPEFY_AUTH_URL https://<your-signin-host>/realms/<realm>
+```
+
+### Claude Code: settings edit (post-plugin install)
+
+The plugin's `.mcp.json` ships `command` + `args` only. To set the `env` block, edit the `pipefy` server entry in `~/.claude.json` (or the Claude Code settings UI):
+
+```json
+{
+  "mcpServers": {
+    "pipefy": {
+      "env": {
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<CLIENT_ID>",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<CLIENT_SECRET>"
+      }
+    }
+  }
+}
+```
+
+A live MCP server picks up rotated credentials on its next tool call; if the server failed to start because credentials were missing, restart it (or restart Claude Code) after login completes.
+
+### Local-clone alternative (contributors)
+
+If you have a clone of this repo and want the MCP server to use it directly (without `uvx` fetching from git), launch via `uv run` from the clone:
+
+```json
+{
+  "mcpServers": {
+    "pipefy": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/absolute/path/to/pipefy-mcp-server",
+        "pipefy-mcp-server"
+      ],
+      "env": {
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID": "<CLIENT_ID>",
+        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET": "<CLIENT_SECRET>"
+      }
+    }
+  }
+}
+```
+
+This form also works as a per-project `.mcp.json` if your team shares a clone. Committing `.mcp.json` without secrets (placeholders or env injection) keeps team setups consistent.
+
+### Legacy environment variables
+
+`PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` still resolve to the new `PIPEFY_SERVICE_ACCOUNT_*` names with a one-shot stderr deprecation warning. The aliases will be removed in a later `0.2.0-beta.x` release. The `PIPEFY_OAUTH_URL` alias was dropped — set `PIPEFY_BASE_URL` instead. Migration notes: [`docs/MIGRATION.md#service-account-env-var-rename`](../../docs/MIGRATION.md#service-account-env-var-rename).
 
 ## Tools
 
-128 tools across nine domains — see the root [`README.md`](../../README.md#mcp-tools) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)).
+**149 tools** across ten domains (including **Portals**) — see the root [`README.md`](../../README.md#mcp-server) for the full table with per-area links. Deep reference: [`docs/mcp/tools/`](../../docs/mcp/tools/cross-cutting.md) (start with [`cross-cutting.md`](../../docs/mcp/tools/cross-cutting.md)); portals: [`portal.md`](../../docs/mcp/tools/portal.md).
 
 ## Development
 

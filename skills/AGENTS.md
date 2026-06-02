@@ -22,7 +22,7 @@ skills/
 ```
 
 **Domain folders** match the MCP tool surface:
-`pipes-and-cards`, `database-tables`, `relations`, `reports`, `automations`, `ai-agents`, `observability`, `members-email-webhooks`, `introspection`, `process-design`, `process-intelligence`, `api-troubleshoot`
+`pipes-and-cards`, `database-tables`, `relations`, `reports`, `automations`, `ai-agents`, `observability`, `members-email-webhooks`, `portal-setup`, `attachments`, `introspection`, `process-design`, `process-intelligence`, `api-troubleshoot`
 
 ---
 
@@ -123,7 +123,7 @@ When a skill needs stable URLs into this repo’s Markdown:
 - **MCP tool semantics** — `docs/mcp/tools/<domain>.md` (cross-cutting rules: `docs/mcp/tools/cross-cutting.md`).
 - **CLI-only flows** — `docs/cli/` (e.g. `docs/cli/self-healing.md`).
 - **SDK usage** — `docs/sdk/README.md`.
-- **Install and `PIPEFY_*`** — always `docs/setup.md`; **MCP ↔ CLI matrix** — `docs/parity.md`.
+- **Install** — always root `README.md#installation`; **`PIPEFY_*` env vars and `config.toml`** — `docs/config.md`; **MCP ↔ CLI matrix** — `docs/parity.md`.
 
 ---
 
@@ -132,10 +132,9 @@ When a skill needs stable URLs into this repo’s Markdown:
 Skills and tools live in the same monorepo. When a CLI command or MCP tool is renamed:
 
 1. Update the skill reference in the same PR (or a paired PR opened in the same review window).
-2. The `skills-lint.yml` CI job validates frontmatter, starter-pack bundle drift against
-   `packages/cli/src/pipefy_cli/skills/`, MCP tool names and `pipefy` CLI references in
-   each `skills/**/SKILL.md`, and smoke-runs `pipefy skills list`. A rename that doesn't
-   update the skill fails the build.
+2. The `skills-lint.yml` CI job validates frontmatter on every `skills/**/SKILL.md`
+   and lints MCP tool names + `pipefy` CLI references in each file. A rename that
+   doesn't update the skill fails the build.
 
 ---
 
@@ -144,4 +143,3 @@ Skills and tools live in the same monorepo. When a CLI command or MCP tool is re
 - **Keep skills short.** If a skill exceeds 500 lines, split it by sub-domain.
 - **Link, don't duplicate.** Reference related skills with `See also: skills/...`.
 - **Test before shipping.** Run the skill end-to-end against a real Pipefy org before opening a PR.
-- **Starter pack eligibility.** High-impact skills (covering many tools or common workflows) are candidates for the CLI starter pack. See `scripts/sync_starter_pack.py` and `RELEASE.md`.

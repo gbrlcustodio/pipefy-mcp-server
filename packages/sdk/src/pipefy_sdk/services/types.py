@@ -50,3 +50,13 @@ class AutomationServiceResult(TypedDict):
 class ToggleAgentStatusResult(TypedDict):
     success: Literal[True]
     message: str
+
+
+class MePayload(TypedDict):
+    """Authenticated user identity returned by the GraphQL ``me`` query.
+
+    ``name`` is nullable in the Pipefy schema (verified via introspection).
+    """
+
+    email: str
+    name: str | None

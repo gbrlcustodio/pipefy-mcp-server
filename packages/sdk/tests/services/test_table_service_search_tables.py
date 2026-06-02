@@ -4,10 +4,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 from _shared.pagination_test_defaults import DEFAULT_FIRST
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.table_queries import SEARCH_TABLES_QUERY
 from pipefy_sdk.services.table_service import TableService
 from pipefy_sdk.settings import PipefySettings
+
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
 def _table_connection(
@@ -28,15 +31,12 @@ def _table_connection(
 @pytest.fixture
 def mock_settings() -> PipefySettings:
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 
 def _make_service(mock_settings: PipefySettings, return_value: dict) -> TableService:
-    service = TableService(settings=mock_settings)
+    service = TableService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 

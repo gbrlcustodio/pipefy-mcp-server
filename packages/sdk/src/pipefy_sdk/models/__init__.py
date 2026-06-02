@@ -14,6 +14,13 @@ from pipefy_sdk.models.ai_automation import (
     UpdateAiAutomationInput,
 )
 from pipefy_sdk.models.attachment import (
+    Attachment,
+    AttachmentTarget,
+    AttachmentUploadError,
+    AttachmentUploadResult,
+    AttachmentUploadStep,
+    CardTarget,
+    TableRecordTarget,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
     infer_content_type,
@@ -24,24 +31,37 @@ from pipefy_sdk.models.comment import (
     UpdateCommentInput,
 )
 from pipefy_sdk.models.member_invite import MemberInvite
+from pipefy_sdk.models.portal import (
+    CreatePortalElementInput,
+    UpdatePortalElementInput,
+)
 from pipefy_sdk.models.send_task_automation import CreateSendTaskAutomationInput
 from pipefy_sdk.models.validators import NonBlankStr, PipefyId
 
 __all__ = [
+    "Attachment",
+    "AttachmentTarget",
+    "AttachmentUploadError",
+    "AttachmentUploadResult",
+    "AttachmentUploadStep",
     "AutomationConditionInput",
     "AutomationEventParamsInput",
     "BehaviorInput",
+    "CardTarget",
     "CommentInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
+    "CreatePortalElementInput",
     "CreateSendTaskAutomationInput",
-    "MemberInvite",
     "DeleteCommentInput",
+    "MemberInvite",
     "NonBlankStr",
     "PipefyId",
+    "TableRecordTarget",
     "UpdateAiAgentInput",
     "UpdateAiAutomationInput",
     "UpdateCommentInput",
+    "UpdatePortalElementInput",
     "UploadAttachmentToCardInput",
     "UploadAttachmentToTableRecordInput",
     "infer_content_type",

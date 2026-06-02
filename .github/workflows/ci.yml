@@ -58,35 +58,26 @@ jobs:
     - name: Install dependencies
       run: uv sync --locked --all-extras --dev
     - name: Verify package versions are in lockstep
-      run: |
-        uv run python <<'PY'
-        import re
-        from pathlib import Path
-
-        paths = {
-            "sdk": Path("packages/sdk/src/pipefy_sdk/__init__.py"),
-            "mcp": Path("packages/mcp/src/pipefy_mcp/__init__.py"),
-            "cli": Path("packages/cli/src/pipefy_cli/__init__.py"),
-        }
-        rx = re.compile(r'^__version__\s*=\s*["\']([^"\']+)["\']', re.M)
-        found = {}
-        for name, path in paths.items():
-            text = path.read_text(encoding="utf-8")
-            m = rx.search(text)
-            if not m:
-                raise SystemExit(f"missing __version__ in {path}")
-            found[name] = m.group(1)
-        versions = list(found.values())
-        if len(set(versions)) != 1:
-            raise SystemExit(f"version mismatch across packages: {found}")
-        PY
+      run: uv run python scripts/bump_version.py verify
     - name: Lint (full tree)
-      run: uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src
+      run: uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src packages/auth/src packages/infra/src
     - name: Check formatting
-      run: uv run ruff format --check packages/sdk/src packages/mcp/src packages/cli/src
+      run: uv run ruff format --check packages/sdk/src packages/mcp/src packages/cli/src packages/auth/src packages/infra/src
     - name: Lint SDK (banned upward imports)
       run: cd packages/sdk && uv run ruff check src
-    - name: Build MCP wheel (packaging smoke)
-      run: uv build packages/mcp -o packages/mcp/dist
+    - name: Lint auth (banned upward imports)
+      run: cd packages/auth && uv run ruff check src
+    - name: Lint infra (banned upward imports)
+      run: cd packages/infra && uv run ruff check src
+    - name: Build workspace wheels (packaging smoke)
+      run: uv build --all-packages --wheel -o dist-packaging-smoke
+    - name: Smoke install CLI wheel (clean venv)
+      run: |
+        python -m venv .venv-cli-smoke
+        .venv-cli-smoke/bin/pip install dist-packaging-smoke/pipefy_infra-*.whl \
+          dist-packaging-smoke/pipefy_sdk-*.whl \
+          dist-packaging-smoke/pipefy_auth-*.whl \
+          dist-packaging-smoke/pipefy_cli-*.whl
+        .venv-cli-smoke/bin/pipefy --help
     - name: Run tests
       run: uv run pytest -m "not integration"

@@ -23,6 +23,7 @@ def mock_automation_client():
     client.get_automations = AsyncMock()
     client.get_automation_actions = AsyncMock()
     client.get_automation_events = AsyncMock()
+    client.get_automation_event_attributes = AsyncMock()
     client.create_automation = AsyncMock()
     client.create_send_task_automation = AsyncMock()
     client.update_automation = AsyncMock()
@@ -326,6 +327,31 @@ async def test_get_automation_events_graphql_error(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_get_automation_event_attributes_success(
+    automation_session, mock_automation_client, extract_payload
+):
+    attributes = [
+        {
+            "id": "automation_event_execution_datetime",
+            "internal_id": "automation_event_execution_datetime",
+            "label": "Automation execution datetime",
+            "type": "datetime",
+            "value_token": "%{automation_event_execution_datetime}",
+        }
+    ]
+    mock_automation_client.get_automation_event_attributes.return_value = attributes
+
+    async with automation_session as session:
+        result = await session.call_tool("get_automation_event_attributes", {})
+
+    assert result.isError is False
+    mock_automation_client.get_automation_event_attributes.assert_awaited_once_with()
+    assert extract_payload(result)["success"] is True
+    assert extract_payload(result)["data"] == attributes
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_read_automation_tools_have_read_only_hint(automation_session):
     async with automation_session as session:
         listed = await session.list_tools()
@@ -334,6 +360,7 @@ async def test_read_automation_tools_have_read_only_hint(automation_session):
         "get_automations",
         "get_automation_actions",
         "get_automation_events",
+        "get_automation_event_attributes",
     }
     by_name = {t.name: t for t in listed.tools}
     for name in names:
@@ -428,6 +455,51 @@ async def test_create_automation_surfaces_preflight_error_as_envelope(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "99" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_automation_surfaces_field_map_preflight_error(
+    automation_session, mock_automation_client, extract_payload
+):
+    from pipefy_sdk.automation_preflight import AutomationPreflightError
+
+    mock_automation_client.create_automation.side_effect = AutomationPreflightError(
+        'field_map fieldId "999999" was not found on pipe p1. '
+        "Discover numeric internal_id values with get_start_form_fields(pipe_id) "
+        "or get_phase_fields(phase_id)."
+    )
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_automation",
+            {
+                "pipe_id": "p1",
+                "name": "Bad field map",
+                "trigger_id": "card_created",
+                "action_id": "update_card_field",
+                "active": False,
+                "action_repo_id": None,
+                "extra_input": {
+                    "action_params": {
+                        "card_id": "%{id}",
+                        "field_map": [
+                            {
+                                "fieldId": "999999",
+                                "inputMode": "copy_from",
+                                "value": "%{created_at}",
+                            },
+                        ],
+                    },
+                },
+                "debug": False,
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "999999" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

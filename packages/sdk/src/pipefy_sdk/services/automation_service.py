@@ -11,6 +11,7 @@ from pipefy_sdk.queries.automation_queries import (
     CREATE_AUTOMATION_SIMULATION_MUTATION,
     DELETE_AUTOMATION_MUTATION,
     GET_AUTOMATION_ACTIONS_QUERY,
+    GET_AUTOMATION_EVENT_ATTRIBUTES_QUERY,
     GET_AUTOMATION_EVENTS_QUERY,
     GET_AUTOMATION_QUERY,
     GET_AUTOMATIONS_BY_ORG_QUERY,
@@ -20,6 +21,7 @@ from pipefy_sdk.queries.automation_queries import (
 )
 from pipefy_sdk.services.automation_graphql_types import (
     AutomationActionRow,
+    AutomationEventAttributeRow,
     AutomationEventRow,
     AutomationRuleRecord,
     AutomationRuleSummary,
@@ -29,6 +31,40 @@ from pipefy_sdk.services.automation_graphql_types import (
     SimulateAutomationServiceResult,
     UpdateAutomationMutationResult,
 )
+
+_AUTOMATION_EVENT_ATTRIBUTE_GRAPHQL_KEYS: tuple[tuple[str, str], ...] = (
+    ("automationEventExecutionDatetime", "automation_event_execution_datetime"),
+)
+
+
+def normalize_automation_event_attributes(
+    raw: dict[str, Any] | None,
+) -> list[AutomationEventAttributeRow]:
+    """Map ``automationEventAttributes`` GraphQL object keys to agent-friendly rows."""
+    if not raw:
+        return []
+    rows: list[AutomationEventAttributeRow] = []
+    for graphql_key, attr_id in _AUTOMATION_EVENT_ATTRIBUTE_GRAPHQL_KEYS:
+        entry = raw.get(graphql_key)
+        if not isinstance(entry, dict):
+            continue
+        internal_id = entry.get("internalId")
+        if not isinstance(internal_id, str):
+            internal_id = entry.get("internal_id")
+        label = entry.get("label")
+        field_type = entry.get("type")
+        row: AutomationEventAttributeRow = {
+            "id": attr_id,
+            "value_token": f"%{{{attr_id}}}",
+        }
+        if isinstance(internal_id, str):
+            row["internal_id"] = internal_id
+        if isinstance(label, str):
+            row["label"] = label
+        if isinstance(field_type, str):
+            row["type"] = field_type
+        rows.append(row)
+    return rows
 
 
 def _format_automation_error_details(detail_val: Any) -> str:
@@ -192,6 +228,18 @@ class AutomationService(BasePipefyClient):
         if rows is None:
             return []
         return cast(list[AutomationEventRow], list(rows))
+
+    async def get_automation_event_attributes(
+        self,
+    ) -> list[AutomationEventAttributeRow]:
+        """List official automation event attribute tokens for ``field_map.value`` templates."""
+        payload = await self.execute_query(GET_AUTOMATION_EVENT_ATTRIBUTES_QUERY, {})
+        raw = payload.get("automationEventAttributes")
+        if raw is None:
+            return []
+        if not isinstance(raw, dict):
+            return []
+        return normalize_automation_event_attributes(raw)
 
     async def create_automation(
         self,

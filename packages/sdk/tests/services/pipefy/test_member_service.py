@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.member_queries import (
     INVITE_MEMBERS_MUTATION,
@@ -14,19 +15,18 @@ from pipefy_sdk.services.member_service import MemberService
 from pipefy_sdk.services.pipe_service import PipeService
 from pipefy_sdk.settings import PipefySettings
 
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
+
 
 @pytest.fixture
 def mock_settings():
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 
 def _make_service(mock_settings, return_value: dict):
-    service = MemberService(settings=mock_settings)
+    service = MemberService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -56,7 +56,7 @@ async def test_invite_members_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_invite_members_transport_error(mock_settings):
-    service = MemberService(settings=mock_settings)
+    service = MemberService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -69,7 +69,7 @@ async def test_invite_members_transport_error(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_invite_members_rejects_invalid_email(mock_settings):
-    service = MemberService(settings=mock_settings)
+    service = MemberService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock()
     with pytest.raises(ValueError) as excinfo:
         await service.invite_members(
@@ -86,7 +86,7 @@ async def test_invite_members_rejects_invalid_email(mock_settings):
 @pytest.mark.asyncio
 async def test_invite_members_rejects_unknown_keys(mock_settings):
     """``MemberInvite.model_config`` forbids extras; surfaced as one-line ``ValueError``."""
-    service = MemberService(settings=mock_settings)
+    service = MemberService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock()
     with pytest.raises(ValueError) as excinfo:
         await service.invite_members(
@@ -109,7 +109,7 @@ async def test_invite_members_rejects_unknown_keys(mock_settings):
 @pytest.mark.asyncio
 async def test_invite_members_rejects_blank_role_name(mock_settings):
     """Blank ``role_name`` surfaces a single-line error pointing at the right field."""
-    service = MemberService(settings=mock_settings)
+    service = MemberService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock()
     with pytest.raises(ValueError) as excinfo:
         await service.invite_members(
@@ -150,7 +150,9 @@ async def test_remove_members_from_pipe_success(mock_settings):
     pipe_service.get_pipe = AsyncMock(
         return_value={"pipe": {"uuid": "pipe-uuid-1", "id": 99}}
     )
-    service = MemberService(settings=mock_settings, pipe_service=pipe_service)
+    service = MemberService(
+        settings=mock_settings, auth=_TEST_AUTH, pipe_service=pipe_service
+    )
     service.execute_query = AsyncMock(return_value=payload)
     result = await service.remove_members_from_pipe(
         "99",
@@ -177,7 +179,9 @@ async def test_remove_members_from_pipe_success(mock_settings):
 async def test_remove_members_from_pipe_transport_error(mock_settings):
     pipe_service = AsyncMock(spec=PipeService)
     pipe_service.get_pipe = AsyncMock(return_value={"pipe": {"uuid": "pu", "id": 1}})
-    service = MemberService(settings=mock_settings, pipe_service=pipe_service)
+    service = MemberService(
+        settings=mock_settings, auth=_TEST_AUTH, pipe_service=pipe_service
+    )
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
     )
@@ -190,7 +194,7 @@ async def test_remove_members_from_pipe_transport_error(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_remove_members_from_pipe_invalid_pipe_id_raises(mock_settings):
-    service = MemberService(settings=mock_settings)
+    service = MemberService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock()
     with pytest.raises(ValueError, match="pipe_id must be a numeric"):
         await service.remove_members_from_pipe("not-a-pipe-id", ["u1"])
@@ -217,7 +221,9 @@ async def test_remove_members_from_pipe_resolves_numeric_user_ids(mock_settings)
             }
         }
     )
-    service = MemberService(settings=mock_settings, pipe_service=pipe_service)
+    service = MemberService(
+        settings=mock_settings, auth=_TEST_AUTH, pipe_service=pipe_service
+    )
     service.execute_query = AsyncMock(return_value=payload)
     await service.remove_members_from_pipe("42", ["7", "8"])
 
@@ -251,7 +257,7 @@ async def test_set_role_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_set_role_transport_error(mock_settings):
-    service = MemberService(settings=mock_settings)
+    service = MemberService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "invalid"}])
     )
@@ -262,7 +268,7 @@ async def test_set_role_transport_error(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_remove_members_rejects_uuid_pipe_id(mock_settings):
-    service = MemberService(settings=mock_settings)
+    service = MemberService(settings=mock_settings, auth=_TEST_AUTH)
     with pytest.raises(ValueError, match="numeric pipe ID"):
         await service.remove_members_from_pipe(
             "a1b2c3d4-e5f6-7890-abcd-ef1234567890", ["u1"]

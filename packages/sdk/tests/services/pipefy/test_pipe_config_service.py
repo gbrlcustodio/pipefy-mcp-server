@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.pipe_config_queries import (
     CLONE_PIPE_MUTATION,
@@ -28,25 +29,26 @@ from pipefy_sdk.queries.pipe_config_queries import (
 from pipefy_sdk.services.pipe_config_service import PipeConfigService
 from pipefy_sdk.settings import PipefySettings
 
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
+
 
 @pytest.fixture
 def mock_settings():
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 
 def _make_service(mock_settings, return_value: dict):
-    service = PipeConfigService(settings=mock_settings)
+    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
 
 def _make_service_with_pipe(mock_settings, return_value: dict, pipe_service: AsyncMock):
-    service = PipeConfigService(settings=mock_settings, pipe_service=pipe_service)
+    service = PipeConfigService(
+        settings=mock_settings, auth=_TEST_AUTH, pipe_service=pipe_service
+    )
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -682,7 +684,7 @@ async def test_delete_label_sends_delete_input(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_pipe_propagates_execute_query_errors(mock_settings):
-    service = PipeConfigService(settings=mock_settings)
+    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(side_effect=RuntimeError("upstream"))
 
     with pytest.raises(RuntimeError, match="upstream"):
@@ -798,7 +800,7 @@ async def test_create_field_condition_rejects_reserved_phaseId_attr(mock_setting
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_field_condition_transport_error(mock_settings):
-    service = PipeConfigService(settings=mock_settings)
+    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "invalid"}])
     )
@@ -873,7 +875,7 @@ async def test_update_field_condition_rejects_reserved_id_attr(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_field_condition_transport_error(mock_settings):
-    service = PipeConfigService(settings=mock_settings)
+    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
     )
@@ -896,7 +898,7 @@ async def test_delete_field_condition_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_field_condition_transport_error(mock_settings):
-    service = PipeConfigService(settings=mock_settings)
+    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
     )
@@ -962,7 +964,7 @@ async def test_get_field_condition_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_field_condition_transport_error(mock_settings):
-    service = PipeConfigService(settings=mock_settings)
+    service = PipeConfigService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
     )

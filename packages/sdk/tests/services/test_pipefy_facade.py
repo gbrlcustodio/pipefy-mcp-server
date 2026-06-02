@@ -1,9 +1,8 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from httpx_auth import OAuth2ClientCredentials
+from pipefy_auth import StaticBearerAuth
 
-from pipefy_sdk.base_client import StaticBearerAuth
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
@@ -24,20 +23,16 @@ from pipefy_sdk.settings import PipefySettings
 @pytest.fixture
 def mock_settings():
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 
 @pytest.mark.unit
-def test_pipefy_client_bearer_token_uses_static_bearer_auth(mock_settings):
-    oauth_client = PipefyClient(mock_settings)
-    assert isinstance(oauth_client._card_service._auth, OAuth2ClientCredentials)
-
-    bearer_client = PipefyClient(mock_settings, bearer_token="unit-token")
-    assert isinstance(bearer_client._card_service._auth, StaticBearerAuth)
+def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
+    auth = StaticBearerAuth("unit-token")
+    client = PipefyClient(mock_settings, auth=auth)
+    assert client._card_service._auth is auth
+    assert client._pipe_service._auth is auth
 
 
 @pytest.mark.unit
@@ -162,6 +157,9 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     )
     automation_service.get_automation_events = AsyncMock(
         return_value={"ok": "get_automation_events"}
+    )
+    automation_service.get_automation_event_attributes = AsyncMock(
+        return_value={"ok": "get_automation_event_attributes"}
     )
     automation_service.create_automation = AsyncMock(
         return_value={"ok": "create_automation"}
@@ -466,6 +464,11 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.get_automation_events("p2") == {"ok": "get_automation_events"}
     automation_service.get_automation_events.assert_awaited_once_with("p2")
 
+    assert await client.get_automation_event_attributes() == {
+        "ok": "get_automation_event_attributes"
+    }
+    automation_service.get_automation_event_attributes.assert_awaited_once_with()
+
     assert await client.create_automation("p1", "Rule", "ev", "act") == {
         "ok": "create_automation"
     }
@@ -546,15 +549,13 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 
 @pytest.mark.unit
 def test_pipefy_client_creates_services_with_shared_auth():
-    """Test PipefyClient creates services that share the same OAuth auth instance."""
+    """Test PipefyClient creates services that share the same auth instance."""
 
     settings = PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
-    client = PipefyClient(settings=settings)
+    auth = StaticBearerAuth("shared-token")
+    client = PipefyClient(settings=settings, auth=auth)
 
     assert isinstance(client._pipe_service, PipeService)
     assert isinstance(client._card_service, CardService)
@@ -726,7 +727,7 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
     )
     from pipefy_sdk.services.internal_api_client import InternalApiClient
 
-    client = PipefyClient(settings=mock_settings)
+    client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
     internal = MagicMock(spec=InternalApiClient)
     internal.execute_query = AsyncMock(
         return_value={"deleteCardRelation": {"success": True}}
@@ -749,9 +750,30 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_pipefy_client_upload_attachment_methods_delegate_to_sdk_helpers():
-    """Facade forwards upload helpers to ``attachment_upload`` module functions."""
-    from unittest.mock import patch
+async def test_set_internal_api_client_forwards_to_portal_service(mock_settings):
+    """Sub-portal mutations on PortalService use the same internal_api client as the facade."""
+    from pipefy_sdk.services.internal_api_client import InternalApiClient
+
+    client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
+    internal = MagicMock(spec=InternalApiClient)
+    internal.execute_query = AsyncMock(
+        return_value={"updateSubPortalElement": {"success": True}}
+    )
+    client.set_internal_api_client(internal)
+
+    result = await client.publish_sub_portal("portal-1", "element-2", "sub-3")
+
+    internal.execute_query.assert_awaited()
+    assert result == {"updateSubPortalElement": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_pipefy_client_upload_attachment_delegates_to_attachment_service():
+    """``client.upload_attachment`` forwards to ``AttachmentService.upload_attachment``."""
+    from pathlib import Path
+
+    from pipefy_sdk import Attachment, CardTarget
 
     sample = {
         "file_name": "x.txt",
@@ -762,42 +784,29 @@ async def test_pipefy_client_upload_attachment_methods_delegate_to_sdk_helpers()
         "download_url": None,
     }
 
-    with (
-        patch(
-            "pipefy_sdk.client.upload_attachment_to_card_field",
-            new_callable=AsyncMock,
-            return_value=sample,
-        ) as card_m,
-        patch(
-            "pipefy_sdk.client.upload_attachment_to_table_record_field",
-            new_callable=AsyncMock,
-            return_value=sample,
-        ) as rec_m,
-    ):
-        client = PipefyClient.__new__(PipefyClient)
-        out_card = await client.upload_attachment_to_card_field(
-            organization_id="o",
-            card_id="c",
-            field_id="f1",
-            file_name="x.txt",
-            file_bytes=b"abc",
-        )
-        assert out_card == sample
-        card_m.assert_awaited_once()
-        assert card_m.await_args.kwargs["organization_id"] == "o"
-        assert card_m.await_args.kwargs["card_id"] == "c"
-        assert card_m.await_args.kwargs["file_bytes"] == b"abc"
+    attachment_service = AsyncMock()
+    attachment_service.upload_attachment = AsyncMock(return_value=sample)
 
-        out_rec = await client.upload_attachment_to_table_record_field(
-            organization_id="o",
-            table_record_id="t1",
-            field_id="f1",
-            file_name="x.txt",
-            file_bytes=b"abc",
-        )
-        assert out_rec == sample
-        rec_m.assert_awaited_once()
-        assert rec_m.await_args.kwargs["table_record_id"] == "t1"
+    client = PipefyClient.__new__(PipefyClient)
+    client._attachment_service = attachment_service
+
+    attachment = Attachment(path=Path("/tmp/x.txt"))
+    target = CardTarget(card_id="c", field_id="f1")
+    out = await client.upload_attachment(attachment, organization_id="o", target=target)
+
+    assert out == sample
+    attachment_service.upload_attachment.assert_awaited_once_with(
+        attachment, organization_id="o", target=target
+    )
+
+
+@pytest.mark.unit
+def test_attachment_service_receives_card_and_table_services_from_facade():
+    """PipefyClient wires its own card_service and table_service into AttachmentService."""
+    settings = PipefySettings(base_url="https://api.pipefy.com")
+    client = PipefyClient(settings=settings, auth=StaticBearerAuth("t"))
+    assert client._attachment_service._card_service is client._card_service
+    assert client._attachment_service._table_service is client._table_service
 
 
 @pytest.mark.unit

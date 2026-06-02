@@ -1,0 +1,15 @@
+{
+  "name": "pipefy",
+  "owner": {
+    "name": "Gabriel Custodio",
+    "url": "https://github.com/gbrlcustodio"
+  },
+  "plugins": [
+    {
+      "name": "pipefy",
+      "source": "./",
+      "description": "Pipefy workflow integration for Claude Code.",
+      "version": "0.2.0-beta.1"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.settings import PipefySettings
@@ -8,12 +9,11 @@ from pipefy_sdk.settings import PipefySettings
 
 @pytest.fixture
 def valid_settings() -> PipefySettings:
-    return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
-    )
+    return PipefySettings(base_url="https://api.pipefy.com")
+
+
+def _bearer() -> StaticBearerAuth:
+    return StaticBearerAuth("test-token")
 
 
 @pytest.mark.unit
@@ -30,7 +30,7 @@ async def test_execute_query_passes_variables_to_session(valid_settings):
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = BasePipefyClient(settings=valid_settings)
+        base = BasePipefyClient(settings=valid_settings, auth=_bearer())
         result = await base.execute_query(query, variables)
 
     mock_session.execute.assert_called_once_with(query, variable_values=variables)
@@ -66,7 +66,7 @@ async def test_execute_query_reuse_fetches_once_then_passes_cached_schema(
         second.schema = None
         mock_client_cls.side_effect = [first, second]
 
-        base = BasePipefyClient(settings=settings)
+        base = BasePipefyClient(settings=settings, auth=_bearer())
         assert await base.execute_query(query, variables) == {"one": 1}
         assert await base.execute_query(query, variables) == {"two": 2}
 
@@ -95,7 +95,7 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged(valid_settings)
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = BasePipefyClient(settings=valid_settings)
+        base = BasePipefyClient(settings=valid_settings, auth=_bearer())
 
         with pytest.raises(RuntimeError) as exc:
             await base.execute_query(query, variables)
@@ -104,64 +104,20 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged(valid_settings)
 
 
 @pytest.mark.unit
-def test_init_raises_when_graphql_url_is_none():
-    """Test that __init__ raises ValueError when graphql_url is None."""
-    settings = PipefySettings(
-        graphql_url=None,
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+def test_init_accepts_url_override():
+    """``url_override`` lets callers point a BasePipefyClient at a sibling endpoint."""
+    settings = PipefySettings(base_url="https://api.pipefy.com")
+    base = BasePipefyClient(
+        settings=settings,
+        auth=_bearer(),
+        url_override="https://api.pipefy.com/graphql/interfaces",
     )
-
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=settings)
-
-    assert "GraphQL URL must be provided in settings" in str(exc.value)
+    assert base._graphql_url == "https://api.pipefy.com/graphql/interfaces"
 
 
 @pytest.mark.unit
-def test_init_raises_when_oauth_url_is_none():
-    """Test that __init__ raises ValueError when oauth_url is None."""
-    settings = PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url=None,
-        oauth_client="client_id",
-        oauth_secret="client_secret",
-    )
-
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=settings)
-
-    assert "OAuth URL must be provided in settings" in str(exc.value)
-
-
-@pytest.mark.unit
-def test_init_raises_when_oauth_client_is_none():
-    """Test that __init__ raises ValueError when oauth_client is None."""
-    settings = PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client=None,
-        oauth_secret="client_secret",
-    )
-
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=settings)
-
-    assert "OAuth client ID must be provided in settings" in str(exc.value)
-
-
-@pytest.mark.unit
-def test_init_raises_when_oauth_secret_is_none():
-    """Test that __init__ raises ValueError when oauth_secret is None."""
-    settings = PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret=None,
-    )
-
-    with pytest.raises(ValueError) as exc:
-        BasePipefyClient(settings=settings)
-
-    assert "OAuth client secret must be provided in settings" in str(exc.value)
+def test_init_defaults_to_settings_graphql_url():
+    """Without ``url_override`` the client uses ``settings.graphql_url``."""
+    settings = PipefySettings(base_url="https://api.pipefy.com")
+    base = BasePipefyClient(settings=settings, auth=_bearer())
+    assert base._graphql_url == "https://api.pipefy.com/graphql"

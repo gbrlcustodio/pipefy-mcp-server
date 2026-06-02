@@ -5,28 +5,18 @@ IDs are unset. Use a disposable sandbox card/record and attachment fields.
 
 Run card + table end-to-end (requires all IDs for each test):
     uv run pytest tests/tools/test_attachment_tools_live.py -m integration -v
-
-Run S3 error matrix subset (requires org only + live test flag):
-    PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 \\
-    uv run pytest tests/tools/test_attachment_tools_live.py -m integration -k s3_put -v
-
-Optional long-run expired-URL check (waits for ``PIPE_ATTACHMENT_S3_EXPIRY_WAIT_SECONDS``):
-    PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 PIPE_ATTACHMENT_S3_EXPIRY_WAIT_SECONDS=310 \\
-    uv run pytest tests/tools/test_attachment_tools_live.py -m integration -k expired -v
 """
 
 from __future__ import annotations
 
-import asyncio
-import base64
 import os
 import uuid
 from datetime import timedelta
+from pathlib import Path
 from unittest.mock import patch
 
-import httpx
 import pytest
-from _shared.live_settings import require_live_creds
+from _shared.live_settings import live_resolved_auth, require_live_creds
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -36,6 +26,11 @@ from pipefy_sdk import PipefyClient
 from pipefy_mcp.server import mcp as mcp_server
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.attachment_tools import AttachmentTools
+
+
+def _live_pipefy_client() -> PipefyClient:
+    """PipefyClient wired with auth via the production precedence chain."""
+    return PipefyClient(settings=settings.pipefy, auth=live_resolved_auth())
 
 
 def _card_upload_env():
@@ -73,7 +68,7 @@ def _assert_field_shows_upload(value, file_name: str) -> None:
 @pytest.fixture
 def live_pipefy_client():
     require_live_creds()
-    return PipefyClient(settings=settings.pipefy)
+    return _live_pipefy_client()
 
 
 @pytest.fixture
@@ -88,6 +83,7 @@ def live_attachment_mcp(live_pipefy_client):
 async def test_live_upload_attachment_to_card_end_to_end(
     live_attachment_mcp,
     extract_payload,
+    tmp_path: Path,
 ):
     """Full MCP flow: presigned URL, S3 PUT, updateCardField, read-back on card."""
     require_live_creds()
@@ -101,7 +97,8 @@ async def test_live_upload_attachment_to_card_end_to_end(
     unique = uuid.uuid4().hex[:12]
     file_name = f"mcp-live-{unique}.txt"
     body = f"pipefy-mcp live attachment {unique}\n".encode()
-    b64 = base64.standard_b64encode(body).decode("ascii")
+    file_path = tmp_path / file_name
+    file_path.write_bytes(body)
 
     async with create_client_session(
         live_attachment_mcp,
@@ -114,8 +111,7 @@ async def test_live_upload_attachment_to_card_end_to_end(
                 "organization_id": org_id,
                 "card_id": card_id,
                 "field_id": field_id,
-                "file_name": file_name,
-                "file_content_base64": b64,
+                "file_path": str(file_path),
                 "content_type": "text/plain",
             },
         )
@@ -126,7 +122,7 @@ async def test_live_upload_attachment_to_card_end_to_end(
     assert payload.get("field_id") == field_id
     assert payload.get("card_id") == card_id
 
-    client = PipefyClient(settings=settings.pipefy)
+    client = _live_pipefy_client()
     data = await client.get_card(card_id, include_fields=True)
     card = data.get("card") or {}
     value = _find_named_field_value(card.get("fields"), field_id)
@@ -138,6 +134,7 @@ async def test_live_upload_attachment_to_card_end_to_end(
 async def test_live_upload_attachment_to_table_record_end_to_end(
     live_attachment_mcp,
     extract_payload,
+    tmp_path: Path,
 ):
     """Full MCP path for table records: setTableRecordFieldValue + read-back."""
     require_live_creds()
@@ -151,7 +148,8 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
     unique = uuid.uuid4().hex[:12]
     file_name = f"mcp-live-table-{unique}.txt"
     body = f"pipefy-mcp table live {unique}\n".encode()
-    b64 = base64.standard_b64encode(body).decode("ascii")
+    file_path = tmp_path / file_name
+    file_path.write_bytes(body)
 
     async with create_client_session(
         live_attachment_mcp,
@@ -164,8 +162,7 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
                 "organization_id": org_id,
                 "table_record_id": record_id,
                 "field_id": field_id,
-                "file_name": file_name,
-                "file_content_base64": b64,
+                "file_path": str(file_path),
                 "content_type": "text/plain",
             },
         )
@@ -174,7 +171,7 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
     assert payload.get("success") is True
     assert payload.get("table_record_id") == record_id
 
-    client = PipefyClient(settings=settings.pipefy)
+    client = _live_pipefy_client()
     data = await client.get_table_record(record_id)
     rec = data.get("table_record") or {}
     value = _find_named_field_value(rec.get("record_fields"), field_id)
@@ -183,7 +180,9 @@ async def test_live_upload_attachment_to_table_record_end_to_end(
 
 @pytest.mark.integration
 @pytest.mark.anyio
-async def test_live_pipeclaw_mcp_upload_attachment_to_card(extract_payload):
+async def test_live_pipeclaw_mcp_upload_attachment_to_card(
+    extract_payload, tmp_path: Path
+):
     """Registers AttachmentTools via the production app (ToolRegistry wiring)."""
     require_live_creds()
     env = _card_upload_env()
@@ -196,7 +195,8 @@ async def test_live_pipeclaw_mcp_upload_attachment_to_card(extract_payload):
     unique = uuid.uuid4().hex[:12]
     file_name = f"mcp-app-live-{unique}.txt"
     body = f"app-registry {unique}\n".encode()
-    b64 = base64.standard_b64encode(body).decode("ascii")
+    file_path = tmp_path / file_name
+    file_path.write_bytes(body)
 
     with patch("pipefy_mcp.server.settings", settings):
         async with create_client_session(
@@ -210,130 +210,9 @@ async def test_live_pipeclaw_mcp_upload_attachment_to_card(extract_payload):
                     "organization_id": org_id,
                     "card_id": card_id,
                     "field_id": field_id,
-                    "file_name": file_name,
-                    "file_content_base64": b64,
+                    "file_path": str(file_path),
                 },
             )
     assert result.isError is False
     payload = extract_payload(result)
     assert payload.get("success") is True
-
-
-def _s3_matrix_enabled() -> bool:
-    return os.environ.get("PIPE_ATTACHMENT_LIVE_S3_MATRIX", "").strip() in (
-        "1",
-        "true",
-        "yes",
-    )
-
-
-@pytest.mark.integration
-@pytest.mark.anyio
-async def test_live_s3_put_mismatched_content_length():
-    """PUT body size must match ``contentLength`` given to createPresignedUrl."""
-    require_live_creds()
-    org = os.environ.get("PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not org:
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not _s3_matrix_enabled():
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 to run S3 PUT matrix tests")
-
-    client = PipefyClient(settings=settings.pipefy)
-    file_name = f"s3-mismatch-{uuid.uuid4().hex[:10]}.bin"
-    signed_len = 200
-    presigned = await client.create_presigned_url(
-        organization_id=org,
-        file_name=file_name,
-        content_type="application/octet-stream",
-        content_length=signed_len,
-    )
-    url = presigned.get("url")
-    assert isinstance(url, str) and url.strip(), "no presigned url"
-
-    wrong_body = b"x" * 3
-    result = await client.upload_file_to_s3(
-        presigned_url=url.strip(),
-        file_bytes=wrong_body,
-        content_type="application/octet-stream",
-    )
-    code = result.get("status_code", 0)
-    if code < 400:
-        pytest.skip(
-            "Presigned URL did not reject mismatched contentLength in this environment; "
-            "VD-6 still documents the usual AWS 4xx behavior."
-        )
-
-
-@pytest.mark.integration
-@pytest.mark.anyio
-async def test_live_s3_put_expired_presigned_url():
-    """After X-Amz-Expires, PUT should fail (403 typical). Long wait — opt-in."""
-    require_live_creds()
-    org = os.environ.get("PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not org:
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not _s3_matrix_enabled():
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 for S3 matrix tests")
-
-    wait_raw = os.environ.get("PIPE_ATTACHMENT_S3_EXPIRY_WAIT_SECONDS", "").strip()
-    if not wait_raw:
-        pytest.skip(
-            "Set PIPE_ATTACHMENT_S3_EXPIRY_WAIT_SECONDS "
-            "(e.g. 310) to wait past presigned expiry"
-        )
-    wait_sec = int(wait_raw)
-
-    client = PipefyClient(settings=settings.pipefy)
-    file_name = f"s3-expiry-{uuid.uuid4().hex[:10]}.txt"
-    presigned = await client.create_presigned_url(
-        organization_id=org,
-        file_name=file_name,
-        content_type="text/plain",
-        content_length=4,
-    )
-    url = presigned.get("url")
-    assert isinstance(url, str) and url.strip()
-
-    await asyncio.sleep(wait_sec)
-    result = await client.upload_file_to_s3(
-        presigned_url=url.strip(),
-        file_bytes=b"abcd",
-        content_type="text/plain",
-    )
-    code = result.get("status_code", 0)
-    if code < 400:
-        pytest.skip(
-            "PUT still succeeded after wait; increase PIPE_ATTACHMENT_S3_EXPIRY_WAIT_SECONDS "
-            "past X-Amz-Expires or confirm clock skew."
-        )
-
-
-@pytest.mark.integration
-@pytest.mark.anyio
-async def test_live_s3_put_omits_content_type_when_signed():
-    """If Content-Type is signed, omitting it on PUT should fail."""
-    require_live_creds()
-    org = os.environ.get("PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not org:
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_ORG_ID")
-    if not _s3_matrix_enabled():
-        pytest.skip("Set PIPE_ATTACHMENT_LIVE_S3_MATRIX=1 for S3 matrix tests")
-
-    client = PipefyClient(settings=settings.pipefy)
-    file_name = f"s3-no-ctype-{uuid.uuid4().hex[:10]}.txt"
-    body = b"abcd"
-    presigned = await client.create_presigned_url(
-        organization_id=org,
-        file_name=file_name,
-        content_type="text/plain",
-        content_length=len(body),
-    )
-    url = presigned.get("url")
-    assert isinstance(url, str) and url.strip()
-
-    async with httpx.AsyncClient() as http:
-        response = await http.put(url.strip(), content=body)
-    if response.status_code < 400:
-        pytest.skip(
-            "Upload succeeded without Content-Type; signature may not bind it in this environment."
-        )

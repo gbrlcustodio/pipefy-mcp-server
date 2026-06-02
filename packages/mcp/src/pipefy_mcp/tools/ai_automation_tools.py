@@ -50,8 +50,9 @@ AI_AUTOMATION_UPDATE_FAILED = (
 )
 
 AI_AUTOMATION_NOT_CONFIGURED = (
-    "AI Automation requires OAuth credentials "
-    "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL). "
+    "AI Automation requires service-account credentials "
+    "(PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
     "Check .env.example for the required variables."
 )
 
@@ -364,7 +365,7 @@ class AiAutomationTools:
                     Discover via: ``get_automation_events(pipe_id)``.
                 pipe_id: Pipe ID where the automation runs.
                     Discover via: ``search_pipes`` or ``get_organization``.
-                prompt: AI prompt text. MUST reference at least one pipe field using %{internal_id} syntax (e.g. "Summarize the brief: %{425829426}"). Use the pipe's field internal_id values. Without a field reference the API rejects the request.
+                prompt: AI prompt text. MUST reference at least one pipe field using %{internal_id} syntax (e.g. "Summarize the brief: %{900000101}"). The digits are illustrative — substitute each field's numeric internal_id from get_phase_fields / get_start_form_fields. Without a field reference the API rejects the request.
                     Discover via: ``get_phase_fields(phase_id)[].internal_id`` for ``%{internal_id}`` tokens.
                 field_ids: List of field internal IDs where the AI writes its output.
                     Discover via: ``get_phase_fields(phase_id)[].internal_id``.
@@ -432,7 +433,7 @@ class AiAutomationTools:
                     Discover via: ``get_ai_automations(repo_uuid)[].id``.
                 name: New automation name (optional).
                 active: Whether the automation is active (optional).
-                prompt: New AI prompt text (optional). Must use %{internal_id} syntax to reference pipe fields (e.g. "Classify %{425829426}").
+                prompt: New AI prompt text (optional). Must use %{internal_id} syntax to reference pipe fields (e.g. "Classify %{900000101}" — use your field's internal_id).
                 field_ids: New list of field internal IDs (optional).
                 skills_ids: New list of AI skill IDs (optional).
                 event_params: Trigger-specific filters (e.g. {"to_phase_id": "..."} for card_moved). Pass to change; omit to keep current.

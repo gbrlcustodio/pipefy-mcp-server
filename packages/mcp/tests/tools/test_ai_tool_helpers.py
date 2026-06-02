@@ -1,6 +1,7 @@
 """Tests for AI tool helper functions (error enrichment, validation, payload builders)."""
 
 import pytest
+from _shared.fixture_ids import make_pipe_id
 from gql.transport.exceptions import TransportQueryError
 
 from pipefy_mcp.tools.ai_tool_helpers import (
@@ -617,7 +618,7 @@ def test_validate_unknown_action_type_ignore_mode():
 
 
 @pytest.mark.unit
-def test_validate_empty_field_ids_skips_field_check():
+def test_validate_empty_field_ids_reports_unknown_field_id():
     problems, warnings = validate_behaviors_against_pipe(
         [_update_card_behavior(field_id="any-id")],
         pipe_id="1",
@@ -625,8 +626,9 @@ def test_validate_empty_field_ids_skips_field_check():
         pipe_phase_ids=PIPE_PHASES,
         related_pipe_ids=RELATED_PIPES,
     )
-    assert problems == []
     assert warnings == []
+    assert len(problems) == 1
+    assert "any-id" in problems[0]
 
 
 @pytest.mark.unit
@@ -743,8 +745,9 @@ def test_summarize_behaviors_missing_action_params():
 def test_extract_pipe_id_from_update_card_behavior():
     from pipefy_mcp.tools.ai_agent_tools import _extract_pipe_id_from_behaviors
 
-    behaviors = [_update_card_behavior(pipe_id="306996636")]
-    assert _extract_pipe_id_from_behaviors(behaviors) == "306996636"
+    pipe_id = make_pipe_id()
+    behaviors = [_update_card_behavior(pipe_id=pipe_id)]
+    assert _extract_pipe_id_from_behaviors(behaviors) == pipe_id
 
 
 @pytest.mark.unit

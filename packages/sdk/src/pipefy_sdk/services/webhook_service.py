@@ -7,6 +7,7 @@ from typing import Any
 
 from gql.transport.exceptions import TransportQueryError
 from httpx import Auth
+from pipefy_infra import security
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.queries.webhook_queries import (
@@ -21,9 +22,6 @@ from pipefy_sdk.queries.webhook_queries import (
 )
 from pipefy_sdk.services.card_service import CardService
 from pipefy_sdk.settings import PipefySettings
-from pipefy_sdk.utils.url_ssrf import (
-    validate_https_service_endpoint_url,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +32,8 @@ class WebhookService(BasePipefyClient):
     def __init__(
         self,
         settings: PipefySettings,
-        auth: Auth | None = None,
         *,
+        auth: Auth,
         card_service: CardService | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
@@ -219,7 +217,7 @@ class WebhookService(BasePipefyClient):
             actions: List of event action strings (e.g. ['card.create', 'card.move']).
             **attrs: Extra CreateWebhookInput fields (name, filters, headers, etc.).
         """
-        validate_https_service_endpoint_url(
+        security.validate_https_url(
             url, "url", allow_insecure=self.settings.allow_insecure_urls
         )
         input_obj: dict[str, Any] = {
@@ -263,7 +261,7 @@ class WebhookService(BasePipefyClient):
         input_obj: dict[str, Any] = {"id": str(webhook_id)}
         url_val = attrs.get("url")
         if url_val is not None:
-            validate_https_service_endpoint_url(
+            security.validate_https_url(
                 str(url_val),
                 "url",
                 allow_insecure=self.settings.allow_insecure_urls,

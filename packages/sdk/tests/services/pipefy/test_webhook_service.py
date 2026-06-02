@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from _shared.pagination_test_defaults import DEFAULT_FIRST
 from gql.transport.exceptions import TransportQueryError
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
@@ -19,19 +20,18 @@ from pipefy_sdk.queries.webhook_queries import (
 from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
 
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
+
 
 @pytest.fixture
 def mock_settings():
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 
 def _make_service(mock_settings, return_value: dict):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -146,7 +146,9 @@ async def test_send_email_with_template_success(mock_settings):
             }
         }
     )
-    service = WebhookService(settings=mock_settings, card_service=card_service)
+    service = WebhookService(
+        settings=mock_settings, auth=_TEST_AUTH, card_service=card_service
+    )
     service.execute_query = AsyncMock(
         side_effect=[
             {
@@ -184,7 +186,7 @@ async def test_send_email_with_template_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_send_email_with_template_rejects_non_numeric_card_id(mock_settings):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock()
     with pytest.raises(ValueError, match="numeric card ID"):
         await service.send_email_with_template("not-a-number", "tmpl-1")
@@ -193,7 +195,7 @@ async def test_send_email_with_template_rejects_non_numeric_card_id(mock_setting
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_send_inbox_email_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -258,7 +260,7 @@ async def test_create_webhook_uses_settings_default_name(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_webhook_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "bad"}])
     )
@@ -269,7 +271,7 @@ async def test_create_webhook_transport_error(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_webhook_rejects_http_url(mock_settings):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     with pytest.raises(ValueError, match="HTTPS"):
         await service.create_webhook("p1", "http://insecure.com/hook", ["card.create"])
 
@@ -277,7 +279,7 @@ async def test_create_webhook_rejects_http_url(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_webhook_rejects_https_loopback(mock_settings):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     with pytest.raises(ValueError, match="127.0.0.1|private|loopback|link-local"):
         await service.create_webhook(
             "p1", "https://127.0.0.1:8080/hook", ["card.create"]
@@ -301,7 +303,7 @@ async def test_delete_webhook_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_webhook_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
     )
@@ -348,7 +350,7 @@ async def test_get_webhooks_empty(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_webhooks_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "nope"}])
     )
@@ -407,7 +409,7 @@ async def test_update_webhook_ignores_id_kwarg(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_webhook_rejects_http_url(mock_settings):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     with pytest.raises(ValueError, match="HTTPS"):
         await service.update_webhook("w1", url="http://insecure.example/hook")
 
@@ -415,7 +417,7 @@ async def test_update_webhook_rejects_http_url(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_webhook_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "bad"}])
     )
@@ -517,7 +519,7 @@ async def test_get_card_inbox_emails_empty_inbox(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_card_inbox_emails_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings)
+    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
     )

@@ -172,6 +172,16 @@ class AutomationEventRow(TypedDict, total=False):
     actionsBlacklist: list[Any]
 
 
+class AutomationEventAttributeRow(TypedDict, total=False):
+    """Normalized row from ``automationEventAttributes`` (official ``field_map`` token catalog)."""
+
+    id: str
+    internal_id: str
+    label: str
+    type: str
+    value_token: str
+
+
 class AutomationMutationSnapshot(TypedDict, total=False):
     """``automation`` object returned inside create/update mutations."""
 

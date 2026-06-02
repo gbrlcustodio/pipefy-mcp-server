@@ -1,0 +1,18 @@
+# Pre-commit hooks. Install once per clone with:
+#
+#     uvx pre-commit install
+#
+# Then ruff lint + format run on every `git commit` (only on staged Python
+# files). If a hook rewrites a file, the commit is aborted — re-stage with
+# `git add` and commit again. Bypass for a one-off WIP commit with
+# `git commit --no-verify`. Run against the whole tree on demand with
+# `uvx pre-commit run --all-files`.
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      # `ruff --fix` must run before `ruff-format` (ruff-pre-commit docs).
+      - id: ruff-format

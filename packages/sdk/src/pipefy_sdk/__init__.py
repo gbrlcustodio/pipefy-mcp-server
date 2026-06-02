@@ -2,25 +2,34 @@
 
 from __future__ import annotations
 
-__version__ = "0.2.0-beta.1"
+__version__ = "0.2.0-beta.2"
 
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
 from pipefy_sdk.models import (
+    Attachment,
+    AttachmentTarget,
+    AttachmentUploadError,
+    AttachmentUploadResult,
+    AttachmentUploadStep,
     AutomationConditionInput,
     AutomationEventParamsInput,
     BehaviorInput,
+    CardTarget,
     CommentInput,
     CreateAiAgentInput,
     CreateAiAutomationInput,
+    CreatePortalElementInput,
     CreateSendTaskAutomationInput,
     DeleteCommentInput,
     MemberInvite,
     NonBlankStr,
     PipefyId,
+    TableRecordTarget,
     UpdateAiAgentInput,
     UpdateAiAutomationInput,
     UpdateCommentInput,
+    UpdatePortalElementInput,
     UploadAttachmentToCardInput,
     UploadAttachmentToTableRecordInput,
     infer_content_type,
@@ -43,13 +52,23 @@ from pipefy_sdk.services.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
 )
-from pipefy_sdk.services.types import AiAgentGraphPayload, CardSearch, copy_card_search
+from pipefy_sdk.services.types import (
+    AiAgentGraphPayload,
+    CardSearch,
+    MePayload,
+    copy_card_search,
+)
 from pipefy_sdk.settings import PipefySettings
 
 __all__ = [
     "__version__",
     "AiAgentGraphPayload",
     "AiAutomationService",
+    "Attachment",
+    "AttachmentTarget",
+    "AttachmentUploadError",
+    "AttachmentUploadResult",
+    "AttachmentUploadStep",
     "UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS",
     "UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE",
     "AutomationActionRow",
@@ -60,13 +79,16 @@ __all__ = [
     "AutomationRuleSummary",
     "BehaviorInput",
     "CardSearch",
+    "CardTarget",
     "CommentInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",
+    "CreatePortalElementInput",
     "CreateSendTaskAutomationInput",
     "DeleteCommentInput",
     "download_bytes",
     "InternalApiClient",
+    "MePayload",
     "MemberInvite",
     "NonBlankStr",
     "PipefyAPIError",
@@ -74,9 +96,11 @@ __all__ = [
     "PipefyError",
     "PipefyId",
     "PipefySettings",
+    "TableRecordTarget",
     "UpdateAiAgentInput",
     "UpdateAiAutomationInput",
     "UpdateCommentInput",
+    "UpdatePortalElementInput",
     "UploadAttachmentToCardInput",
     "UploadAttachmentToTableRecordInput",
     "copy_card_search",

@@ -1,0 +1,46 @@
+[project]
+name = "pipefy-infra"
+dynamic = ["version"]
+description = "Shared infra (TOML config loader, path discovery, SSRF defenses, string helpers) for Pipefy SDK and Auth."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.11.3",
+    "pydantic-settings>=2.8.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "ruff>=0.11.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pipefy_infra"]
+
+[tool.hatch.version]
+path = "src/pipefy_infra/__init__.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "module"
+markers = [
+    "unit: marks a test as a unit test",
+]
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+lint.extend-select = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"pipefy_auth".msg = "pipefy_infra is a leaf package; it must not import the Auth package."
+"pipefy_sdk".msg = "pipefy_infra is a leaf package; it must not import the SDK package."
+"pipefy_cli".msg = "pipefy_infra is a leaf package; it must not import the CLI package."
+"pipefy_mcp".msg = "pipefy_infra is a leaf package; it must not import the MCP package."

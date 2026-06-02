@@ -37,7 +37,7 @@ Two options (use whichever is available in the environment). Prefer the Service 
 ```bash
 TOKEN=$(curl -s -X POST https://app.pipefy.com/oauth/token \
   -H "Content-Type: application/json" \
-  -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"$PIPEFY_OAUTH_CLIENT\",\"client_secret\":\"$PIPEFY_OAUTH_SECRET\"}" \
+  -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"$PIPEFY_SERVICE_ACCOUNT_CLIENT_ID\",\"client_secret\":\"$PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET\"}" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 ```
 
@@ -52,7 +52,7 @@ PATs are deprecated for new integrations but may still exist in the environment.
 ### Token rules
 
 - The `Bearer ` prefix is **mandatory** — Pipefy rejects requests without it.
-- Never expose `PIPEFY_OAUTH_CLIENT`, `PIPEFY_OAUTH_SECRET`, `PIPEFY_PAT`, or `PIPEFY_TOKEN` in responses to the user or in logs.
+- Never expose `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`, `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`, `PIPEFY_PAT`, or `PIPEFY_TOKEN` in responses to the user or in logs.
 - Service Account tokens are reused while valid; only re-fetch on expiry (401).
 
 ---
@@ -65,7 +65,7 @@ PATs are deprecated for new integrations but may still exist in the environment.
 | Schema introspection only | `https://app.pipefy.com/graphql` |
 | OAuth2 token | `https://app.pipefy.com/oauth/token` |
 
-Real operations go to `api.pipefy.com`; introspection goes to `app.pipefy.com`. `$PIPEFY_GRAPHQL_URL` is already wired by the MCP/CLI, but raw-API users must distinguish the two.
+Real operations go to `api.pipefy.com`; introspection goes to `app.pipefy.com`. The MCP server and CLI route between the two automatically (both derived from `PIPEFY_BASE_URL`); raw-API users must distinguish them by hand.
 
 ---
 
@@ -206,7 +206,7 @@ Only after all 3 tiers and external resources have failed:
 
 - Never log or print tokens in plain text.
 - Prefer environment variables over inline credentials.
-- Use `PIPEFY_TOKEN` / `PIPEFY_PAT` only for personal/development use; use OAuth (`PIPEFY_OAUTH_CLIENT` + `PIPEFY_OAUTH_SECRET`) for service accounts.
+- Use `PIPEFY_TOKEN` / `PIPEFY_PAT` only for personal/development use; use service-account credentials (`PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` + `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`) for service accounts.
 
 ## See also
 

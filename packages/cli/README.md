@@ -5,10 +5,23 @@ Typer-based CLI for Pipefy. Exposes all MCP tool capabilities as terminal comman
 ## Install (pre-launch, v0.1 → v0.5)
 
 ```sh
-uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-cli
+uvx \
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli" \
+  --refresh pipefy-cli
 ```
 
-> At v1.0 this moves to `uv tool install pipefy-cli` from PyPI.
+Or persistently:
+
+```sh
+uv tool install \
+  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
+  "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/cli"
+```
+
+The `--with` flags are required pre-1.0 because the workspace members are not yet on PyPI. At v1.0 this collapses to `uv tool install pipefy-cli`.
 
 ## Quick start
 
@@ -20,27 +33,33 @@ pipefy --help
 pipefy card get 12345 --json
 pipefy card list --pipe 67890
 pipefy card create --pipe 67890 --title "New card"
-
-# Skills catalog
-pipefy skills list
-pipefy skills show pipes-and-cards | pbcopy
 ```
+
+Agent skills are installed separately via [`skills.sh`](https://github.com/vercel-labs/skills); see [`skills/README.md`](../../skills/README.md).
 
 ## Configuration
 
 Same `PIPEFY_*` environment variables as `pipefy-mcp-server` (`.env` in CWD is loaded automatically):
 
 ```env
-PIPEFY_OAUTH_CLIENT=your_client_id
-PIPEFY_OAUTH_SECRET=your_client_secret
-PIPEFY_GRAPHQL_URL=https://app.pipefy.com/graphql
-PIPEFY_OAUTH_URL=https://app.pipefy.com/oauth/token
-PIPEFY_INTERNAL_API_URL=https://app.pipefy.com/internal_api
+PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=your_client_id
+PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=your_client_secret
+# Non-prod environments only:
+# PIPEFY_BASE_URL=https://<your-api-host>
+# PIPEFY_AUTH_URL=https://<your-signin-host>/realms/<realm>
 ```
 
-Full guide: [`docs/setup.md`](../../docs/setup.md). CLI-focused docs: [`docs/cli/`](../../docs/cli/README.md).
+`PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Set them only for non-prod environments.
 
-Use `PIPEFY_TOKEN` (or `--token`) for a direct bearer token instead of OAuth.
+### Authentication paths
+
+Three credential sources, in CLI precedence order:
+
+1. **Interactive (`pipefy auth login`)** — browser OAuth flow, session stored in the OS keychain. Best for human developers. Status and revocation via `pipefy auth status` and `pipefy auth logout`.
+2. **Static bearer (`PIPEFY_TOKEN` or `--token`)** — direct bearer token, no OAuth. Intended for CI and scripted use. Overrides everything else.
+3. **Service-account OAuth (`PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` + `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`)** — unattended OAuth client-credentials grant. Used by the MCP server.
+
+Full env-var reference, validation rules, and `config.toml` precedence: [`docs/config.md`](../../docs/config.md). Auth deep-dive (precedence rules, troubleshooting, keychain backends): [`docs/cli/auth.md`](../../docs/cli/auth.md).
 
 ## Output modes
 

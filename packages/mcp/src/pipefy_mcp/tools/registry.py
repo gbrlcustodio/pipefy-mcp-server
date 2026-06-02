@@ -14,6 +14,7 @@ from pipefy_mcp.tools.observability_tools import ObservabilityTools
 from pipefy_mcp.tools.organization_tools import OrganizationTools
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.pipe_tools import PipeTools
+from pipefy_mcp.tools.portal_tools import PortalTools
 from pipefy_mcp.tools.relation_tools import RelationTools
 from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.table_tools import TableTools
@@ -36,6 +37,10 @@ PIPEFY_TOOL_NAMES = frozenset(
         "create_pipe",
         "create_pipe_relation",
         "create_pipe_report",
+        "create_portal",
+        "create_portal_element",
+        "create_portal_page",
+        "create_sub_portal",
         "create_send_task_automation",
         "create_table",
         "create_table_field",
@@ -55,10 +60,16 @@ PIPEFY_TOOL_NAMES = frozenset(
         "delete_pipe",
         "delete_pipe_relation",
         "delete_pipe_report",
+        "delete_portal",
+        "delete_portal_element",
+        "delete_portal_page",
+        "delete_sub_portal",
+        "delete_sub_portal_element",
         "delete_table",
         "delete_table_field",
         "delete_table_record",
         "delete_webhook",
+        "duplicate_portal_element",
         "execute_graphql",
         "export_automation_jobs",
         "export_organization_report",
@@ -77,6 +88,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "get_ai_credit_usage",
         "get_automation",
         "get_automation_actions",
+        "get_automation_event_attributes",
         "get_automation_events",
         "get_automation_jobs_export",
         "get_automation_jobs_export_csv",
@@ -97,6 +109,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "get_organization_report_export",
         "get_organization_reports",
         "get_phase_fields",
+        "get_portal",
         "get_pipe",
         "get_pipe_members",
         "get_pipe_relations",
@@ -116,7 +129,9 @@ PIPEFY_TOOL_NAMES = frozenset(
         "introspect_query",
         "introspect_type",
         "invite_members",
+        "list_portals",
         "move_card_to_phase",
+        "publish_sub_portal",
         "remove_member_from_pipe",
         "search_pipes",
         "search_schema",
@@ -124,9 +139,11 @@ PIPEFY_TOOL_NAMES = frozenset(
         "send_email_with_template",
         "send_inbox_email",
         "simulate_automation",
+        "sort_portal_pages",
         "set_role",
         "set_table_record_field_value",
         "toggle_ai_agent_status",
+        "unpublish_sub_portal",
         "update_ai_agent",
         "update_ai_automation",
         "update_automation",
@@ -141,6 +158,11 @@ PIPEFY_TOOL_NAMES = frozenset(
         "update_pipe",
         "update_pipe_relation",
         "update_pipe_report",
+        "update_portal",
+        "update_portal_element",
+        "update_portal_page",
+        "update_portal_page_layout",
+        "update_sub_portal_element",
         "update_table",
         "update_table_field",
         "update_table_record",
@@ -211,6 +233,7 @@ class ToolRegistry:
         AutomationTools.register(self.mcp, self.services_container.pipefy_client)
         IntrospectionTools.register(self.mcp, self.services_container.pipefy_client)
         OrganizationTools.register(self.mcp, self.services_container.pipefy_client)
+        PortalTools.register(self.mcp, self.services_container.pipefy_client)
         ObservabilityTools.register(self.mcp, self.services_container.pipefy_client)
 
         AiAutomationTools.register(self.mcp, self.services_container.pipefy_client)

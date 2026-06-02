@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 from httpx import Auth
+from pipefy_infra.coerce import optional_str
 
 from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.queries.pipe_config_queries import (
@@ -52,8 +53,8 @@ class PipeConfigService(BasePipefyClient):
     def __init__(
         self,
         settings: PipefySettings,
-        auth: Auth | None = None,
         *,
+        auth: Auth,
         pipe_service: PipeService | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
@@ -208,10 +209,9 @@ class PipeConfigService(BasePipefyClient):
         for field in fields:
             if not isinstance(field, dict):
                 continue
-            fid = str(field.get("id", "")).strip()
-            iid = field.get("internal_id")
-            iid_str = str(iid).strip() if iid is not None else ""
-            uuid_str = str(field.get("uuid") or "").strip()
+            fid = optional_str(field.get("id")) or ""
+            iid_str = optional_str(field.get("internal_id")) or ""
+            uuid_str = optional_str(field.get("uuid")) or ""
             if (
                 tok == fid
                 or (iid_str and tok == iid_str)

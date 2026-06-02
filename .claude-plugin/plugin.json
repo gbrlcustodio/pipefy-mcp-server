@@ -1,0 +1,10 @@
+{
+  "name": "pipefy",
+  "displayName": "Pipefy",
+  "version": "0.2.0-beta.1",
+  "description": "Pipefy workflow integration for Claude Code.",
+  "author": { "name": "Gabriel Custodio" },
+  "homepage": "https://github.com/gbrlcustodio/pipefy-mcp-server",
+  "repository": "https://github.com/gbrlcustodio/pipefy-mcp-server",
+  "license": "Apache-2.0"
+}

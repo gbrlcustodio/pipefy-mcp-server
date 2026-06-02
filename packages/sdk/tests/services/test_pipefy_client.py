@@ -1,6 +1,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.services.card_service import CardService
@@ -11,13 +12,12 @@ from pipefy_sdk.services.schema_introspection_service import (
 )
 from pipefy_sdk.settings import PipefySettings
 
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
+
 
 def _mock_settings() -> PipefySettings:
     return PipefySettings(
-        graphql_url="https://api.pipefy.com/graphql",
-        oauth_url="https://auth.pipefy.com/oauth/token",
-        oauth_client="client_id",
-        oauth_secret="client_secret",
+        base_url="https://api.pipefy.com",
     )
 
 
@@ -28,10 +28,12 @@ def _make_facade_client(execute_return_value: dict):
     """
     settings = _mock_settings()
     client = PipefyClient.__new__(PipefyClient)
-    client._pipe_service = PipeService(settings=settings)
-    client._card_service = CardService(settings=settings)
-    client._pipe_config_service = PipeConfigService(settings=settings)
-    client._introspection_service = SchemaIntrospectionService(settings=settings)
+    client._pipe_service = PipeService(settings=settings, auth=_TEST_AUTH)
+    client._card_service = CardService(settings=settings, auth=_TEST_AUTH)
+    client._pipe_config_service = PipeConfigService(settings=settings, auth=_TEST_AUTH)
+    client._introspection_service = SchemaIntrospectionService(
+        settings=settings, auth=_TEST_AUTH
+    )
 
     mock_execute = AsyncMock(return_value=execute_return_value)
     client._pipe_service.execute_query = mock_execute

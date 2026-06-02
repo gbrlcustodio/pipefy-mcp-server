@@ -129,7 +129,7 @@ def test_each_mcp_tool_has_documentation_row(tool):
 
 
 def test_registry_tool_count_matches_documented_expectation():
-    """Keep the parity doc header (``**128** tools``) honest; update docs when the registry changes."""
+    """Keep the parity doc header (``**N** tools``) honest; update docs when the registry changes."""
     text = _PARITY_MD.read_text(encoding="utf-8")
     m = re.search(r"\*\*(\d+)\*\*\s+tools", text)
     assert m is not None, (

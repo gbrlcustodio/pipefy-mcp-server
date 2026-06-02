@@ -1,8 +1,33 @@
-"""Build an authenticated :class:`PipefyClient` from CLI configuration (OAuth or ``--token``)."""
+"""Build an authenticated :class:`PipefyClient` from CLI configuration.
+
+The precedence chain lives in :func:`pipefy_auth.resolve_pipefy_auth`; this
+module collapses the CLI's two static-token surfaces (``--token`` flag and
+``PIPEFY_TOKEN`` env var) into a single value before calling the resolver, and
+translates resolver failures into Typer exits. The flag-vs-env distinction
+survives only as a diagnostic label for ``pipefy auth status``.
+"""
 
 from __future__ import annotations
 
+import hashlib
+import json
+from dataclasses import asdict, dataclass
+from typing import Literal
+
 import typer
+from httpx import Auth
+from pipefy_auth import (
+    STATIC_TOKEN_TIER,
+    STORED_SESSION_TIER,
+    OidcClient,
+    RefreshError,
+    ServiceAccount,
+    detect_pipefy_tiers,
+    ensure_fresh_session,
+    missing_auth_message,
+    resolve_pipefy_auth,
+    tier_for,
+)
 from pipefy_sdk import (
     AiAutomationService,
     InternalApiClient,
@@ -10,13 +35,43 @@ from pipefy_sdk import (
     PipefySettings,
 )
 
-from pipefy_cli._docs import DOCS_SETUP_REF
-from pipefy_cli.config import (
-    describe_missing_oauth_vars,
-    ensure_public_graphql_configured,
-)
+from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 
-_cached_signature: tuple[object, ...] | None = None
+# Display labels for ``pipefy auth status``. The resolver knows the
+# static-token tier; the CLI restores the flag-vs-env distinction here.
+FLAG_TOKEN_SOURCE = "flag-token"
+ENV_TOKEN_SOURCE = "env-token"
+
+
+@dataclass(frozen=True)
+class BearerToken:
+    """Static bearer token plus the surface that produced it (``--token`` or env)."""
+
+    value: str
+    source: Literal["flag", "env"]
+
+
+@dataclass(frozen=True)
+class AuthContext:
+    """Auth inputs for a single CLI invocation.
+
+    Each field maps to one resolver tier (bearer-token, service-account,
+    stored-session). Built once at startup from the loaded
+    :class:`pipefy_auth.AuthSettings` plus the per-invocation ``--token`` /
+    ``PIPEFY_TOKEN`` resolution.
+
+    ``oidc_client`` is ``None`` only when ``AuthSettings.disable_stored_session``
+    is set (env: PIPEFY_DISABLE_STORED_SESSION); the stored-session tier is
+    then skipped end-to-end. Otherwise ``auth_url`` defaults to the prod IdP
+    and the client is always present.
+    """
+
+    bearer_token: BearerToken | None
+    service_account: ServiceAccount | None
+    oidc_client: OidcClient | None
+
+
+_cached_signature: str | None = None
 # One-shot CLIs reuse this; long-lived programmatic use should call
 # ``clear_authenticated_client_cache`` between logical sessions (tests reset via fixture).
 _cached_client: PipefyClient | None = None
@@ -29,77 +84,111 @@ def clear_authenticated_client_cache() -> None:
     _cached_client = None
 
 
+def _resolve(auth: AuthContext) -> Auth | None:
+    return resolve_pipefy_auth(
+        static_token=auth.bearer_token.value if auth.bearer_token else None,
+        service_account=auth.service_account,
+        oidc_client=auth.oidc_client,
+    )
+
+
+def _to_display_source(tier: str, bearer: BearerToken | None) -> str:
+    """Map a resolver tier name to the locked JSON wire schema for ``auth status``."""
+    if tier == STATIC_TOKEN_TIER:
+        return (
+            FLAG_TOKEN_SOURCE
+            if bearer and bearer.source == "flag"
+            else ENV_TOKEN_SOURCE
+        )
+    return tier
+
+
+def detect_cli_sources(auth: AuthContext) -> list[str]:
+    """Return detected sources mapped to CLI display labels."""
+    detected = detect_pipefy_tiers(
+        static_token=auth.bearer_token.value if auth.bearer_token else None,
+        service_account=auth.service_account,
+        oidc_client=auth.oidc_client,
+    )
+    return [_to_display_source(tier, auth.bearer_token) for tier in detected]
+
+
 def _cache_key(
     pipefy_settings: PipefySettings,
-    bearer_token: str | None,
-) -> tuple[object, ...]:
-    return (
-        (pipefy_settings.graphql_url or "").strip(),
-        (pipefy_settings.internal_api_url or "").strip(),
-        (pipefy_settings.oauth_url or "").strip(),
-        (pipefy_settings.oauth_client or "").strip(),
-        (pipefy_settings.oauth_secret or "").strip(),
-        bool(pipefy_settings.allow_insecure_urls),
-        (bearer_token or "").strip(),
+    auth: AuthContext,
+    tier: str,
+) -> str:
+    """SHA-256 digest of every input that could change the cached client.
+
+    Hashed (not stored as plaintext) so the dump's secrets — the bearer
+    token, the service-account ``client_secret`` — don't linger in module
+    state for the process lifetime. Adding a new field to
+    :class:`PipefySettings` or :class:`AuthContext` automatically participates
+    in the key without touching this function.
+    """
+    payload = json.dumps(
+        {
+            "settings": pipefy_settings.model_dump(mode="json"),
+            "auth": asdict(auth),
+            "tier": tier,
+        },
+        sort_keys=True,
+        default=str,
     )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def get_authenticated_client(
     pipefy_settings: PipefySettings,
-    *,
-    bearer_token: str | None = None,
+    auth: AuthContext,
 ) -> PipefyClient:
-    """Return a facade client using OAuth client-credentials or a static bearer token.
-
-    Uses the same OAuth wiring as ``pipefy-mcp-server`` via :class:`PipefyClient`
-    (``httpx_auth.OAuth2ClientCredentials`` when no bearer is supplied).
-
-    Args:
-        pipefy_settings: Validated Pipefy endpoint settings (``PIPEFY_*``).
-        bearer_token: When set, skips OAuth and uses this bearer for GraphQL transports.
-
-    Returns:
-        Shared in-process instance when settings match a prior call; otherwise a new
-        client. Tokens are not written to disk.
+    """Return a facade client using the highest-precedence available auth source.
 
     Raises:
-        typer.Exit: Code 2 when configuration is incomplete for the chosen auth mode.
+        typer.Exit: Code 2 when no auth source resolves, or when refreshing a
+            stored session fails.
     """
     global _cached_signature, _cached_client
 
-    try:
-        ensure_public_graphql_configured(pipefy_settings)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(2) from exc
+    resolved = _resolve(auth)
+    if resolved is None:
+        typer.echo(f"{missing_auth_message()} See {DOCS_CLI_AUTH_REF}.", err=True)
+        raise typer.Exit(2)
+    tier = tier_for(resolved)
 
-    key = _cache_key(pipefy_settings, bearer_token)
+    # Stored-session: warm up eagerly so refresh failures surface as a clean
+    # exit(2) with a "run `pipefy auth login` again" hint instead of leaking
+    # out as a transport error on the first GraphQL call.
+    if tier == STORED_SESSION_TIER:
+        oidc = auth.oidc_client
+        if oidc is None:
+            # Resolver only picks STORED_SESSION_TIER when oidc_client is non-None;
+            # reaching here means that invariant is broken.
+            raise RuntimeError(
+                "STORED_SESSION_TIER resolved without an OIDC client "
+                "(resolver invariant broken)."
+            )
+        try:
+            ensure_fresh_session(
+                issuer=oidc.issuer_url,
+                client_id=oidc.client_id,
+            )
+        except RefreshError as exc:
+            typer.echo(
+                f"Stored Pipefy session could not be refreshed: {exc}. "
+                "Run `pipefy auth login` to sign in again.",
+                err=True,
+            )
+            raise typer.Exit(2) from exc
+
+    key = _cache_key(pipefy_settings, auth, tier)
     if _cached_client is not None and _cached_signature == key:
         return _cached_client
 
-    if bearer_token:
-        client: PipefyClient = PipefyClient(
-            pipefy_settings, bearer_token=bearer_token.strip()
-        )
-        _cached_signature = key
-        _cached_client = client
-        return client
-
-    missing_msg = describe_missing_oauth_vars(pipefy_settings)
-    if missing_msg:
-        typer.echo(
-            f"Missing OAuth configuration ({missing_msg}). "
-            f"Use --token or PIPEFY_TOKEN for a bearer token, or set OAuth per {DOCS_SETUP_REF}.",
-            err=True,
-        )
-        raise typer.Exit(2)
-
-    client = PipefyClient(pipefy_settings)
+    client = PipefyClient(pipefy_settings, auth=resolved)
     internal_client = InternalApiClient(
         url=pipefy_settings.internal_api_url,
-        oauth_url=pipefy_settings.oauth_url,
-        oauth_client=pipefy_settings.oauth_client,
-        oauth_secret=pipefy_settings.oauth_secret,
+        auth=resolved,
         allow_insecure_urls=pipefy_settings.allow_insecure_urls,
     )
     client.set_internal_api_client(internal_client)
@@ -110,6 +199,11 @@ def get_authenticated_client(
 
 
 __all__ = [
+    "AuthContext",
+    "BearerToken",
+    "ENV_TOKEN_SOURCE",
+    "FLAG_TOKEN_SOURCE",
     "clear_authenticated_client_cache",
+    "detect_cli_sources",
     "get_authenticated_client",
 ]

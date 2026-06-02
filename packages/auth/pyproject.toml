@@ -1,0 +1,48 @@
+[project]
+name = "pipefy-auth"
+dynamic = ["version"]
+description = "Shared OAuth/keychain helpers for Pipefy CLI and MCP server."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28",
+    "httpx-auth>=0.23.1",
+    "keyring>=24",
+    "keyrings.alt>=5",
+    "pipefy-infra",
+    "pydantic>=2.11.3",
+    "pydantic-settings>=2.8.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "ruff>=0.11.4",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pipefy_auth"]
+
+[tool.hatch.version]
+path = "src/pipefy_auth/__init__.py"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+markers = [
+    "unit: marks a test as a unit test",
+]
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+lint.extend-select = ["TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"pipefy_cli".msg = "pipefy_auth must not import the CLI package."
+"pipefy_mcp".msg = "pipefy_auth must not import the MCP package."
+"pipefy_sdk".msg = "pipefy_auth must not import the SDK package."

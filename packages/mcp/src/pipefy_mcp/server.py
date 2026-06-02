@@ -32,7 +32,7 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
         )
         install_pipefy_validation_envelope()
         services_container = ServicesContainer.get_instance()
-        services_container.initialize_services(settings)
+        await services_container.initialize_services(settings)
         prepare_app_for_repeat_pipefy_tool_registration(app)
         registry = ToolRegistry(
             mcp=app,

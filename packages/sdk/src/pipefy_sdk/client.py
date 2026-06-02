@@ -5,18 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from httpx import Auth
-from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
-from pipefy_sdk.attachment_upload import (
-    AttachmentUploadResult,
-    upload_attachment_to_card_field,
-    upload_attachment_to_table_record_field,
-)
 from pipefy_sdk.automation_preflight import (
+    validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
-from pipefy_sdk.base_client import StaticBearerAuth
 from pipefy_sdk.models.ai_agent import (
     BehaviorInput,
     CreateAiAgentInput,
@@ -26,6 +20,11 @@ from pipefy_sdk.models.ai_automation import (
     CreateAiAutomationInput,
     UpdateAiAutomationInput,
 )
+from pipefy_sdk.models.attachment import (
+    Attachment,
+    AttachmentTarget,
+    AttachmentUploadResult,
+)
 from pipefy_sdk.queries.card_queries import (
     INTERNAL_DELETE_CARD_RELATION_MUTATION,
 )
@@ -34,6 +33,7 @@ from pipefy_sdk.services.ai_automation_service import AiAutomationService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_graphql_types import (
     AutomationActionRow,
+    AutomationEventAttributeRow,
     AutomationEventRow,
     AutomationRuleRecord,
     AutomationRuleSummary,
@@ -53,6 +53,7 @@ from pipefy_sdk.services.pipe_service import (
     SEARCH_PIPES_MAX_PER_ORG_CAP,
     PipeService,
 )
+from pipefy_sdk.services.portal_service import PortalService
 from pipefy_sdk.services.relation_service import RelationService
 from pipefy_sdk.services.report_service import ReportService
 from pipefy_sdk.services.schema_introspection_service import (
@@ -67,8 +68,10 @@ from pipefy_sdk.services.types import (
     AiAgentGraphPayload,
     AutomationServiceResult,
     CardSearch,
+    MePayload,
     ToggleAgentStatusResult,
 )
+from pipefy_sdk.services.user_service import UserService
 from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
 
@@ -80,24 +83,16 @@ class PipefyClient:
         self,
         settings: PipefySettings,
         *,
-        bearer_token: str | None = None,
+        auth: Auth,
     ) -> None:
-        """Build a facade wired for OAuth client-credentials or a static bearer token.
+        """Build a facade wired with a pre-constructed ``httpx.Auth``.
 
         Args:
-            settings: Pipefy endpoints and credentials (OAuth fields may be omitted when
-                ``bearer_token`` is set).
-            bearer_token: When set, GraphQL requests use this bearer and OAuth credentials
-                from ``settings`` are not required for the public GraphQL transport.
+            settings: Pipefy endpoint configuration.
+            auth: ``httpx.Auth`` that supplies the credentials for every GraphQL
+                call (construct via ``pipefy_auth.resolve`` or one of the bearer
+                adapters from ``pipefy_auth``).
         """
-        if bearer_token is not None:
-            auth: Auth = StaticBearerAuth(bearer_token)
-        else:
-            auth = OAuth2ClientCredentials(
-                token_url=settings.oauth_url,
-                client_id=settings.oauth_client,
-                client_secret=settings.oauth_secret,
-            )
         self._pipe_service = PipeService(settings=settings, auth=auth)
         self._card_service = CardService(settings=settings, auth=auth)
         self._pipe_config_service = PipeConfigService(
@@ -120,12 +115,19 @@ class PipefyClient:
         self._observability_service = ObservabilityService(settings=settings, auth=auth)
         self._report_service = ReportService(settings=settings, auth=auth)
         self._organization_service = OrganizationService(settings=settings, auth=auth)
-        self._attachment_service = AttachmentService(settings=settings, auth=auth)
+        self._user_service = UserService(settings=settings, auth=auth)
+        self._attachment_service = AttachmentService(
+            settings=settings,
+            auth=auth,
+            card_service=self._card_service,
+            table_service=self._table_service,
+        )
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
         self._ai_automation_service: AiAutomationService | None = None
         self._internal_api_client: InternalApiClient | None = None
+        self._portal_service = PortalService(settings=settings, auth=auth)
 
     @property
     def ai_automation_available(self) -> bool:
@@ -152,6 +154,7 @@ class PipefyClient:
             client: Configured :class:`InternalApiClient` instance.
         """
         self._internal_api_client = client
+        self._portal_service.set_internal_api_client(client)
 
     async def get_pipe(self, pipe_id: str | int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
@@ -628,6 +631,12 @@ class PipefyClient:
         """List available automation trigger events for a pipe (for building create/update payloads)."""
         return await self._automation_service.get_automation_events(pipe_id)
 
+    async def get_automation_event_attributes(
+        self,
+    ) -> list[AutomationEventAttributeRow]:
+        """List official event-attribute tokens for traditional automation ``field_map.value``."""
+        return await self._automation_service.get_automation_event_attributes()
+
     async def create_automation(
         self,
         pipe_id: str,
@@ -646,6 +655,11 @@ class PipefyClient:
         rule references an unreachable destination phase. The check is a no-op for other
         trigger/action combinations.
 
+        When ``extra_input.action_params.field_map`` is present, runs
+        :func:`pipefy_sdk.automation_preflight.validate_automation_field_map_field_ids`
+        against ``action_repo_id`` (default ``pipe_id``) so unknown or slug ``fieldId``
+        values fail before GraphQL.
+
         Args:
             pipe_id: Pipe ID (event source).
             name: Rule name.
@@ -658,10 +672,14 @@ class PipefyClient:
             extra_input: Extra ``CreateAutomationInput`` keys; ``active`` here overrides the ``active`` argument.
 
         Raises:
-            AutomationPreflightError: When the move-card transition is invalid.
+            AutomationPreflightError: When the move-card transition or ``field_map``
+                destination ``fieldId`` is invalid.
         """
         await validate_traditional_automation_move_transition(
             self, trigger_id, action_id, extra_input
+        )
+        await validate_automation_field_map_field_ids(
+            self, str(action_repo_id or pipe_id), extra_input
         )
         return await self._automation_service.create_automation(
             pipe_id,
@@ -702,7 +720,10 @@ class PipefyClient:
         automation_id: str,
         extra_input: dict[str, Any] | None = None,
     ) -> UpdateAutomationMutationResult:
-        """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names)."""
+        """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names).
+
+        Does not run ``field_map`` or move-transition preflight (those run on ``create_automation`` only).
+        """
         return await self._automation_service.update_automation(
             automation_id, **(extra_input or {})
         )
@@ -1175,99 +1196,372 @@ class PipefyClient:
         """
         return await self._organization_service.get_organization(organization_id)
 
-    async def create_presigned_url(
+    async def list_portals(
         self,
-        organization_id: str,
-        file_name: str,
-        content_type: str | None = None,
-        content_length: int | None = None,
-    ) -> dict[str, Any]:
-        """Request a presigned upload URL from Pipefy.
+        organization_uuid: str | int,
+        search_term: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List portals for an organization.
 
         Args:
-            organization_id: Organization ID.
-            file_name: Target file name for the upload.
-            content_type: Optional MIME type for the object.
-            content_length: Optional size in bytes.
+            organization_uuid: Organization UUID, or numeric organization id.
+            search_term: Optional name filter.
         """
-        return await self._attachment_service.create_presigned_url(
-            organization_id,
-            file_name,
-            content_type=content_type,
-            content_length=content_length,
+        return await self._portal_service.list_portals(
+            organization_uuid, search_term=search_term
         )
 
-    async def upload_file_to_s3(
-        self,
-        presigned_url: str,
-        file_bytes: bytes,
-        content_type: str | None = None,
-    ) -> dict[str, Any]:
-        """PUT file bytes to a presigned object storage URL.
+    async def get_portal(self, portal_uuid: str) -> dict[str, Any]:
+        """Fetch a portal by UUID.
 
         Args:
-            presigned_url: Full presigned destination URL.
-            file_bytes: Raw file content.
-            content_type: Optional ``Content-Type`` header for the PUT.
+            portal_uuid: Portal interface UUID.
         """
-        return await self._attachment_service.upload_file_to_s3(
-            presigned_url, file_bytes, content_type=content_type
+        return await self._portal_service.get_portal(portal_uuid)
+
+    async def create_portal(self, organization_uuid: str | int) -> dict[str, Any]:
+        """Create or fetch the organization's main portal (idempotent).
+
+        Args:
+            organization_uuid: Organization UUID or numeric organization id.
+        """
+        return await self._portal_service.create_portal(organization_uuid)
+
+    async def update_portal(
+        self,
+        interface_uuid: str,
+        *,
+        name: str | None = None,
+        visibility: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        display_pipefy_header: bool | None = None,
+    ) -> dict[str, Any]:
+        """Update portal metadata.
+
+        Args:
+            interface_uuid: Portal interface UUID.
+            name: Optional display name.
+            visibility: ``internal``, ``private``, or ``public``.
+            color: Optional theme color.
+            icon: Optional icon identifier.
+            display_pipefy_header: Whether to show the Pipefy header.
+        """
+        return await self._portal_service.update_portal(
+            interface_uuid,
+            name=name,
+            visibility=visibility,
+            color=color,
+            icon=icon,
+            display_pipefy_header=display_pipefy_header,
         )
 
-    async def upload_attachment_to_card_field(
+    async def delete_portal(self, interface_uuid: str) -> dict[str, Any]:
+        """Delete a portal interface (irreversible).
+
+        Args:
+            interface_uuid: Portal interface UUID.
+        """
+        return await self._portal_service.delete_portal(interface_uuid)
+
+    async def create_portal_page(
+        self,
+        interface_uuid: str,
+        title: str,
+        *,
+        description: str | None = None,
+        index: int | None = None,
+    ) -> dict[str, Any]:
+        """Create a portal page.
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            title: Page title.
+            description: Optional page description.
+            index: Optional sort index.
+        """
+        return await self._portal_service.create_portal_page(
+            interface_uuid,
+            title,
+            description=description,
+            index=index,
+        )
+
+    async def update_portal_page(
+        self,
+        interface_uuid: str,
+        page_id: str,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+        index: int | None = None,
+    ) -> dict[str, Any]:
+        """Update portal page metadata.
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            page_id: Page UUID.
+            title: Optional new title.
+            description: Optional new description.
+            index: Optional sort index.
+        """
+        return await self._portal_service.update_portal_page(
+            interface_uuid,
+            page_id,
+            title=title,
+            description=description,
+            index=index,
+        )
+
+    async def delete_portal_page(
+        self, interface_uuid: str, page_id: str
+    ) -> dict[str, Any]:
+        """Delete a portal page (irreversible).
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            page_id: Page UUID.
+        """
+        return await self._portal_service.delete_portal_page(interface_uuid, page_id)
+
+    async def sort_portal_pages(
+        self, interface_uuid: str, page_ids: list[str]
+    ) -> dict[str, Any]:
+        """Reorder portal pages.
+
+        Args:
+            interface_uuid: Parent portal interface UUID.
+            page_ids: Ordered list of page UUIDs.
+        """
+        return await self._portal_service.sort_portal_pages(interface_uuid, page_ids)
+
+    async def update_portal_page_layout(
+        self, page_id: str, layout: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a portal page grid layout.
+
+        Args:
+            page_id: Page UUID.
+            layout: Layout JSON for ``updatePageLayout``.
+        """
+        return await self._portal_service.update_portal_page_layout(page_id, layout)
+
+    async def create_portal_element(
+        self,
+        page_id: str,
+        *,
+        type: str,
+        metadata: dict[str, Any],
+        data_sources: list[dict[str, Any]] | None = None,
+        element_id: str | None = None,
+        editable: bool | None = None,
+        layout: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Create a portal page element.
+
+        Args:
+            page_id: Parent page UUID.
+            type: ``InterfacePageElementType`` value (e.g. ``forms``, ``link``).
+            metadata: Element metadata JSON.
+            data_sources: Optional data source bindings.
+            element_id: Optional client-provided element UUID.
+            editable: Optional editable flag.
+            layout: Optional layout JSON.
+        """
+        return await self._portal_service.create_portal_element(
+            page_id,
+            type=type,
+            metadata=metadata,
+            data_sources=data_sources,
+            element_id=element_id,
+            editable=editable,
+            layout=layout,
+        )
+
+    async def update_portal_element(
+        self,
+        element_id: str,
+        page_id: str,
+        *,
+        type: str,
+        metadata: dict[str, Any],
+        data_sources: list[dict[str, Any]] | None = None,
+        editable: bool | None = None,
+    ) -> dict[str, Any]:
+        """Update a portal page element (full metadata replace).
+
+        Returned ``metadata`` is the validated input echo (``updateElement`` does not
+        return stored element data). Use ``get_portal`` after update when you need
+        server-side state.
+
+        Args:
+            element_id: Element UUID.
+            page_id: Parent page UUID.
+            type: Element type for metadata validation.
+            metadata: Complete metadata blob.
+            data_sources: Optional data source bindings.
+            editable: Optional editable flag.
+        """
+        return await self._portal_service.update_portal_element(
+            element_id,
+            page_id,
+            type=type,
+            metadata=metadata,
+            data_sources=data_sources,
+            editable=editable,
+        )
+
+    async def delete_portal_element(
+        self, element_id: str, page_id: str
+    ) -> dict[str, Any]:
+        """Delete a portal page element (irreversible).
+
+        Args:
+            element_id: Element UUID.
+            page_id: Parent page UUID.
+        """
+        return await self._portal_service.delete_portal_element(element_id, page_id)
+
+    async def duplicate_portal_element(
         self,
         *,
-        organization_id: str,
-        card_id: str,
-        field_id: str,
-        file_name: str,
-        file_bytes: bytes,
-        content_type: str | None = None,
-    ) -> AttachmentUploadResult:
-        """Upload ``file_bytes`` to a card attachment field via the standard pipeline.
+        element_id: str,
+        portal_uuid: str,
+        page_id: str,
+    ) -> dict[str, Any]:
+        """Duplicate a portal page element on the same page.
 
-        Wraps presigned URL → S3 PUT → ``update_card_field`` in one call so MCP
-        and CLI surfaces do not duplicate the orchestration. Raises
-        :class:`AttachmentUploadError` on any step failure (with ``step`` attribute).
-        """
-        return await upload_attachment_to_card_field(
-            self,
-            organization_id=organization_id,
-            card_id=card_id,
-            field_id=field_id,
-            file_name=file_name,
-            file_bytes=file_bytes,
-            content_type=content_type,
-        )
-
-    async def upload_attachment_to_table_record_field(
-        self,
-        *,
-        organization_id: str,
-        table_record_id: str,
-        field_id: str,
-        file_name: str,
-        file_bytes: bytes,
-        content_type: str | None = None,
-    ) -> AttachmentUploadResult:
-        """Upload ``file_bytes`` to a table record attachment field via the standard pipeline."""
-        return await upload_attachment_to_table_record_field(
-            self,
-            organization_id=organization_id,
-            table_record_id=table_record_id,
-            field_id=field_id,
-            file_name=file_name,
-            file_bytes=file_bytes,
-            content_type=content_type,
-        )
-
-    def extract_storage_path(self, presigned_url: str) -> str:
-        """Return the object key path embedded in a presigned URL (no host or query string).
+        ``portal_uuid`` and ``page_id`` identify where the source element lives.
 
         Args:
-            presigned_url: Full HTTPS URL including path and optional query string.
+            element_id: Element UUID to duplicate.
+            portal_uuid: Portal interface UUID that owns the page.
+            page_id: Page UUID that contains the element.
         """
-        return self._attachment_service.extract_storage_path(presigned_url)
+        return await self._portal_service.duplicate_portal_element(
+            element_id=element_id,
+            portal_uuid=portal_uuid,
+            page_id=page_id,
+        )
+
+    async def create_sub_portal(
+        self,
+        main_portal_uuid: str,
+        name: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a sub-portal on a main portal.
+
+        Args:
+            main_portal_uuid: Parent main portal interface UUID.
+            name: Optional display name.
+        """
+        return await self._portal_service.create_sub_portal(main_portal_uuid, name)
+
+    async def update_sub_portal_element(
+        self,
+        portal_uuid: str,
+        element_id: str,
+        sub_portal_uuid: str,
+    ) -> dict[str, Any]:
+        """Attach a sub-portal to a portal page element.
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+            sub_portal_uuid: Sub-portal UUID.
+        """
+        return await self._portal_service.update_sub_portal_element(
+            portal_uuid,
+            element_id,
+            sub_portal_uuid,
+        )
+
+    async def publish_sub_portal(
+        self,
+        portal_uuid: str,
+        element_id: str,
+        sub_portal_uuid: str,
+    ) -> dict[str, Any]:
+        """Publish a sub-portal on a page element.
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+            sub_portal_uuid: Sub-portal UUID.
+        """
+        return await self._portal_service.publish_sub_portal(
+            portal_uuid,
+            element_id,
+            sub_portal_uuid,
+        )
+
+    async def unpublish_sub_portal(
+        self,
+        portal_uuid: str,
+        element_id: str,
+    ) -> dict[str, Any]:
+        """Unpublish a sub-portal from a page element via ``updateSubPortalElement``.
+
+        Sends ``subPortalUuid: null`` to clear the link. Distinct from
+        ``delete_sub_portal_element`` (removes the wiring slot) and
+        ``delete_sub_portal`` (deletes the sub-portal entity).
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+        """
+        return await self._portal_service.unpublish_sub_portal(
+            portal_uuid,
+            element_id,
+        )
+
+    async def delete_sub_portal_element(
+        self,
+        portal_uuid: str,
+        element_id: str,
+    ) -> dict[str, Any]:
+        """Remove sub-portal wiring from a page element.
+
+        Args:
+            portal_uuid: Main portal interface UUID.
+            element_id: Page element UUID.
+        """
+        return await self._portal_service.delete_sub_portal_element(
+            portal_uuid,
+            element_id,
+        )
+
+    async def delete_sub_portal(self, uuid: str) -> dict[str, Any]:
+        """Delete a sub-portal entity (irreversible).
+
+        Args:
+            uuid: Sub-portal UUID.
+        """
+        return await self._portal_service.delete_sub_portal(uuid)
+
+    async def get_me(self) -> MePayload | None:
+        """Return the authenticated user's identity, or ``None`` when ``me`` resolves null."""
+        return await self._user_service.get_me()
+
+    async def upload_attachment(
+        self,
+        attachment: Attachment,
+        *,
+        organization_id: str,
+        target: AttachmentTarget,
+    ) -> AttachmentUploadResult:
+        """Upload ``attachment`` to ``target`` via the standard Pipefy pipeline.
+
+        Runs file read, presigned URL, S3 PUT, and field update in one call.
+        ``target`` is a :class:`CardTarget` or :class:`TableRecordTarget`.
+
+        Raises:
+            AttachmentUploadError: On any pipeline failure; ``step`` identifies
+                the failing stage.
+        """
+        return await self._attachment_service.upload_attachment(
+            attachment, organization_id=organization_id, target=target
+        )
 
     async def introspect_type(
         self, type_name: str, *, max_depth: int = 1

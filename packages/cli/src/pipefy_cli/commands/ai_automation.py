@@ -26,7 +26,7 @@ from pipefy_cli.commands._common import (
 )
 
 ai_automation_app = typer.Typer(
-    help="AI Automations (generate_with_ai; requires OAuth).",
+    help="AI Automations (generate_with_ai; requires service-account credentials).",
     no_args_is_help=True,
 )
 
@@ -34,8 +34,9 @@ ai_automation_app = typer.Typer(
 def _require_ai_automation(client: PipefyClient) -> None:
     if not client.ai_automation_available:
         typer.echo(
-            "AI Automation requires OAuth credentials "
-            "(PIPEFY_OAUTH_CLIENT, PIPEFY_OAUTH_SECRET, PIPEFY_OAUTH_URL). "
+            "AI Automation requires service-account credentials "
+            "(PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
+            "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
             "Bearer --token mode does not attach the internal API client.",
             err=True,
         )

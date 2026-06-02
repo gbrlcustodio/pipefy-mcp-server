@@ -367,6 +367,24 @@ def automation_events_list(
     run_cli_command(ctx, json_out, factory)
 
 
+@automation_app.command("event-attributes")
+def automation_event_attributes(
+    ctx: typer.Context,
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """List official event-attribute tokens (``get_automation_event_attributes``)."""
+
+    async def factory(client: PipefyClient):
+        return await client.get_automation_event_attributes()
+
+    run_cli_command(ctx, json_out, factory)
+
+
 @actions_app.command("list")
 def automation_actions_list(
     ctx: typer.Context,

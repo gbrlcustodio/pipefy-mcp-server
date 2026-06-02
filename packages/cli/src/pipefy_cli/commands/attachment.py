@@ -5,31 +5,19 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
-from pipefy_sdk import PipefyClient
-from pipefy_sdk.attachment_upload import AttachmentUploadError
+from pipefy_sdk import (
+    Attachment,
+    AttachmentUploadError,
+    CardTarget,
+    PipefyClient,
+    TableRecordTarget,
+)
 
 from pipefy_cli.commands._common import run_cli_command
 
 attachment_app = typer.Typer(
     help="Attachment uploads (presigned URL + field update).", no_args_is_help=True
 )
-
-
-def _read_local_file_bytes(path: Path) -> bytes:
-    """Read file content for upload (S3 PUT requires the full body).
-
-    Args:
-        path: Readable file path.
-
-    Returns:
-        Raw bytes of the file.
-
-    Raises:
-        typer.BadParameter: When the path is not a readable file.
-    """
-    if not path.is_file():
-        raise typer.BadParameter(f"Not a file: {path}")
-    return path.read_bytes()
 
 
 @attachment_app.command("upload")
@@ -39,10 +27,7 @@ def attachment_upload(
         ...,
         "--file",
         "-f",
-        help="Local file path to upload.",
-        exists=True,
-        readable=True,
-        dir_okay=False,
+        help="Local file path to upload. Supports ~ expansion.",
     ),
     card: str | None = typer.Option(
         None,
@@ -84,8 +69,7 @@ def attachment_upload(
     """
     if (card is None) == (record is None):
         raise typer.BadParameter("Provide exactly one of --card or --record.")
-    file_name = file.name
-    file_bytes = _read_local_file_bytes(file)
+
     org_str = str(organization).strip()
     field_str = str(field).strip()
     if not org_str or not field_str:
@@ -94,29 +78,21 @@ def attachment_upload(
     card_id = str(card).strip() if card is not None else None
     record_id = str(record).strip() if record is not None else None
 
+    attachment = Attachment(path=file, content_type=content_type)
+    if card_id is not None:
+        target = CardTarget(card_id=card_id, field_id=field_str)
+    else:
+        target = TableRecordTarget(table_record_id=record_id or "", field_id=field_str)
+
     async def factory(client: PipefyClient) -> dict[str, object]:
         try:
-            if card_id is not None:
-                result = await client.upload_attachment_to_card_field(
-                    organization_id=org_str,
-                    card_id=card_id,
-                    field_id=field_str,
-                    file_name=file_name,
-                    file_bytes=file_bytes,
-                    content_type=content_type,
-                )
-                target: dict[str, object] = {"card_id": card_id}
-            else:
-                result = await client.upload_attachment_to_table_record_field(
-                    organization_id=org_str,
-                    table_record_id=record_id or "",
-                    field_id=field_str,
-                    file_name=file_name,
-                    file_bytes=file_bytes,
-                    content_type=content_type,
-                )
-                target = {"table_record_id": record_id}
+            result = await client.upload_attachment(
+                attachment, organization_id=org_str, target=target
+            )
         except AttachmentUploadError as exc:
+            if exc.step == "file_read":
+                message = str(exc.__cause__) if exc.__cause__ else str(exc)
+                raise typer.BadParameter(message) from exc
             out: dict[str, object] = {
                 "success": False,
                 "step": exc.step,
@@ -126,6 +102,12 @@ def attachment_upload(
                 out["body_snippet"] = exc.body_snippet
             return out
 
+        target_payload: dict[str, object]
+        if isinstance(target, CardTarget):
+            target_payload = {"card_id": target.card_id}
+        else:
+            target_payload = {"table_record_id": target.table_record_id}
+
         return {
             "success": True,
             "message": "Attachment uploaded.",
@@ -134,7 +116,7 @@ def attachment_upload(
             "file_size": result["file_size"],
             "field_id": result["field_id"],
             "download_url": result["download_url"],
-            **target,
+            **target_payload,
         }
 
     run_cli_command(ctx, json_out, factory)

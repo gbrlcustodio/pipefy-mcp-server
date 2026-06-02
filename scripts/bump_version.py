@@ -1,10 +1,20 @@
 #!/usr/bin/env python3
-"""Bump the lockstep workspace version across SDK, MCP, CLI, and root workspace meta."""
+"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra, and root workspace meta.
+
+After rewriting the version strings, runs ``uv lock`` so the workspace
+lockfile's ``pipefy-workspace`` entry tracks the new version.
+
+The ``verify`` mode reads every version-bearing file and exits non-zero on
+mismatch; CI invokes this in place of an inline lockstep snippet so the
+writer and reader stay in one place.
+"""
 
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
 
@@ -14,10 +24,19 @@ INIT_PATHS = (
     REPO_ROOT / "packages/sdk/src/pipefy_sdk/__init__.py",
     REPO_ROOT / "packages/mcp/src/pipefy_mcp/__init__.py",
     REPO_ROOT / "packages/cli/src/pipefy_cli/__init__.py",
+    REPO_ROOT / "packages/auth/src/pipefy_auth/__init__.py",
+    REPO_ROOT / "packages/infra/src/pipefy_infra/__init__.py",
 )
 
+# Anchored to the [project] table. The middle alternation walks lines that
+# don't start with `[` (so a sibling [tool.X] header ends the run), but the
+# line CONTENTS can contain `[` (so `classifiers = [...]`, `dependencies =
+# [...]`, etc. above `version` don't break the match).
 ROOT_PROJECT_VERSION_RE = re.compile(
-    r"^(version\s*=\s*)[\"'][^\"']+[\"']",
+    r"^(\[project\]\s*$"
+    r"(?:\n(?!\[)[^\n]*)*?"
+    r"\nversion\s*=\s*)"
+    r"[\"'][^\"']+[\"']",
     re.MULTILINE,
 )
 
@@ -157,15 +176,93 @@ def parse_explicit_version(arg: str) -> str:
     return raw
 
 
+def refresh_lockfile() -> None:
+    """Run ``uv lock`` so the workspace lockfile picks up the new version.
+
+    Without this, ``uv.lock``'s ``pipefy-workspace`` entry lags behind the
+    root ``pyproject.toml`` and CI's ``uv sync --locked`` fails on every PR
+    until someone runs ``uv lock`` by hand.
+    """
+    print("Refreshing uv.lock...")
+    subprocess.run(["uv", "lock"], cwd=REPO_ROOT, check=True)
+
+
+def read_root_pyproject_version() -> str:
+    """Return ``[project].version`` from the root pyproject.toml."""
+    data = tomllib.loads(ROOT_PYPROJECT.read_text(encoding="utf-8"))
+    return data["project"]["version"]
+
+
+def read_uv_lock_workspace_version() -> str:
+    """Return the ``pipefy-workspace`` package version from uv.lock.
+
+    The value is whatever uv wrote, which is PEP 440-normalized (e.g. uv
+    stores ``0.2.0b2.dev1`` for a pyproject value of ``0.2.0-beta.2.dev1``).
+    Callers must normalize the comparison side, not this one.
+    """
+    data = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
+    for pkg in data.get("package", []):
+        if pkg.get("name") == "pipefy-workspace":
+            return pkg["version"]
+    raise KeyError("pipefy-workspace not found in uv.lock")
+
+
+def verify_lockstep() -> int:
+    """Assert every version-bearing file holds the same version; print mismatches.
+
+    Returns 0 on success, 1 on any mismatch or missing field. Compares
+    canonical PEP 440 forms via ``packaging.version.Version`` so the
+    pyproject string ``0.2.0-beta.2.dev1`` matches uv.lock's normalized
+    ``0.2.0b2.dev1``.
+    """
+    from packaging.version import Version
+
+    raw: dict[str, str] = {}
+    for path in INIT_PATHS:
+        text = path.read_text(encoding="utf-8")
+        m = VERSION_ASSIGN_RE.search(text)
+        if not m:
+            print(f"missing __version__ in {path}", file=sys.stderr)
+            return 1
+        raw[str(path.relative_to(REPO_ROOT))] = m.group(2)
+
+    try:
+        raw["pyproject.toml"] = read_root_pyproject_version()
+    except (KeyError, tomllib.TOMLDecodeError, OSError) as exc:
+        print(
+            f"could not read [project].version from pyproject.toml: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        raw["uv.lock"] = read_uv_lock_workspace_version()
+    except (KeyError, tomllib.TOMLDecodeError, OSError) as exc:
+        print(
+            f"could not read pipefy-workspace version from uv.lock: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    canonical = {label: str(Version(v)) for label, v in raw.items()}
+    if len(set(canonical.values())) != 1:
+        print(f"version mismatch across packages: {raw}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print(
-            "Usage: bump_version.py <major|minor|patch|prerelease|version=X.Y.Z>",
+            "Usage: bump_version.py <major|minor|patch|prerelease|version=X.Y.Z|verify>",
             file=sys.stderr,
         )
         return 2
 
     token = sys.argv[1]
+    if token == "verify":
+        return verify_lockstep()
+
     current = read_sdk_version()
 
     bumpers: dict[str, Callable[[str], str]] = {
@@ -182,12 +279,13 @@ def main() -> int:
     else:
         print(
             f"Unknown argument {token!r}. "
-            "Use major, minor, patch, prerelease, or version=X.Y.Z",
+            "Use major, minor, patch, prerelease, version=X.Y.Z, or verify",
             file=sys.stderr,
         )
         return 2
 
     write_version_to_all_files(new_version)
+    refresh_lockfile()
     print(f"Bumped {current} -> {new_version}")
     return 0
 

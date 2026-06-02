@@ -4,27 +4,49 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
  Pipefy CLI (GraphQL via pipefy-sdk).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --graphql-url                TEXT  Override PIPEFY_GRAPHQL_URL.              │
-│ --token                      TEXT  Bearer token for GraphQL (skips OAuth).   │
-│                                    Overrides PIPEFY_TOKEN if both are set.   │
-│ --allow-insecure-urls              Allow http:// and private hosts           │
-│                                    (overrides env for this process).         │
-│ --version                          Print the pipefy-cli version and exit.    │
-│ --install-completion               Install completion for the current shell. │
-│ --show-completion                  Show completion for the current shell, to │
-│                                    copy it or customize the installation.    │
-│ --help                             Show this message and exit.               │
+│ --base-url                                       TEXT  Override              │
+│                                                        PIPEFY_BASE_URL       │
+│                                                        (Pipefy API host      │
+│                                                        root).                │
+│ --token                                          TEXT  Bearer token for      │
+│                                                        GraphQL (skips        │
+│                                                        OAuth). Overrides     │
+│                                                        PIPEFY_TOKEN if both  │
+│                                                        are set.              │
+│ --allow-insecure-urls    --no-allow-insecure…          Allow http:// and     │
+│                                                        private hosts         │
+│                                                        (overrides env for    │
+│                                                        this process). Pass   │
+│                                                        --no-allow-insecure-… │
+│                                                        to force-disable when │
+│                                                        PIPEFY_ALLOW_INSECUR… │
+│                                                        is in env.            │
+│ --version                                              Print the pipefy-cli  │
+│                                                        version and exit.     │
+│ --install-completion                                   Install completion    │
+│                                                        for the current       │
+│                                                        shell.                │
+│ --show-completion                                      Show completion for   │
+│                                                        the current shell, to │
+│                                                        copy it or customize  │
+│                                                        the installation.     │
+│ --help                                                 Show this message and │
+│                                                        exit.                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ agent             AI Agents (repo-scoped).                                   │
-│ ai-automation     AI Automations (generate_with_ai; requires OAuth).         │
+│ ai-automation     AI Automations (generate_with_ai; requires service-account │
+│                   credentials).                                              │
 │ attachment        Attachment uploads (presigned URL + field update).         │
 │ audit             Pipe audit log exports.                                    │
+│ auth              Authenticate the CLI as your Pipefy user (browser-based    │
+│                   login).                                                    │
 │ automation        Traditional automations and related exports.               │
 │ card              Card operations.                                           │
 │ email             Inbox emails and email templates.                          │
 │ field-condition   Field conditions (dynamic form rules on phases).           │
 │ pipe              Pipe operations.                                           │
+│ portal            Portal operations.                                         │
 │ phase             Pipe phase operations.                                     │
 │ field             Phase field operations.                                    │
 │ table             Database table operations.                                 │
@@ -33,7 +55,6 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │ webhook           Pipe webhook operations.                                   │
 │ relation          Pipe and card relations.                                   │
 │ member            Pipe member operations.                                    │
-│ skills            Browse bundled agent skill playbooks.                      │
 │ graphql           Execute arbitrary GraphQL (mutations require --yes). See   │
 │                   docs/cli/self-healing.md.                                  │
 │ introspect        Discover GraphQL types and operations (JSON default).      │
@@ -239,7 +260,7 @@ Usage: pipefy agent validate-behaviors [OPTIONS]
 ### HELP ai-automation
 Usage: pipefy ai-automation [OPTIONS] COMMAND [ARGS]...
 
- AI Automations (generate_with_ai; requires OAuth).
+ AI Automations (generate_with_ai; requires service-account credentials).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
@@ -394,7 +415,9 @@ Usage: pipefy attachment upload [OPTIONS]
  update.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --file                -f      FILE  Local file path to upload. [required] │
+│ *  --file                -f      PATH  Local file path to upload. Supports ~ │
+│                                        expansion.                            │
+│                                        [required]                            │
 │    --card                        TEXT  Target card id (mutually exclusive    │
 │                                        with --record).                       │
 │    --record                      TEXT  Target table record id (mutually      │
@@ -442,6 +465,59 @@ Usage: pipefy audit export [OPTIONS]
 │    --help                  Show this message and exit.                       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
+### HELP auth
+Usage: pipefy auth [OPTIONS] COMMAND [ARGS]...
+
+ Authenticate the CLI as your Pipefy user (browser-based login).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ login    Sign in to Pipefy via your browser and store the session in the OS  │
+│          keychain.                                                           │
+│ status   Print which auth source is active, the authenticated identity, and  │
+│          session expiry.                                                     │
+│ logout   Revoke the stored refresh token at the IdP and clear the local      │
+│          session.                                                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP auth/login
+Usage: pipefy auth login [OPTIONS]
+
+ Sign in to Pipefy via your browser and store the session in the OS keychain.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --no-browser                                    Print the authorization URL  │
+│                                                 instead of opening a         │
+│                                                 browser.                     │
+│ --callback-timeout        FLOAT RANGE [x>=5.0]  Seconds to wait for the      │
+│                                                 browser callback before      │
+│                                                 giving up.                   │
+│                                                 [default: 180.0]             │
+│ --help                                          Show this message and exit.  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP auth/logout
+Usage: pipefy auth logout [OPTIONS]
+
+ Revoke the stored refresh token at the IdP and clear the local session.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP auth/status
+Usage: pipefy auth status [OPTIONS]
+
+ Print which auth source is active, the authenticated identity, and session
+ expiry.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Emit a stable JSON schema instead of human-readable text.  │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
 ### HELP automation
 Usage: pipefy automation [OPTIONS] COMMAND [ARGS]...
 
@@ -451,20 +527,23 @@ Usage: pipefy automation [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list        List automation rules (``get_automations``).                     │
-│ get         Load one automation (``get_automation``).                        │
-│ create      Create an automation rule (``create_automation``).               │
-│ update      Update an automation (``update_automation``).                    │
-│ delete      Delete an automation rule (``delete_automation``).               │
-│ simulate    Dry-run an automation against a card (``simulate_automation``).  │
-│ logs        List automation execution logs (``get_automation_logs`` or       │
-│             ``get_automation_logs_by_repo``).                                │
-│ usage       Automation usage for an org in a date range                      │
-│             (``get_automations_usage``).                                     │
-│ send-task   Send-a-task automation helper.                                   │
-│ export      Automation jobs export (async).                                  │
-│ events      Automation trigger catalog.                                      │
-│ actions     Automation action catalog.                                       │
+│ list               List automation rules (``get_automations``).              │
+│ get                Load one automation (``get_automation``).                 │
+│ create             Create an automation rule (``create_automation``).        │
+│ update             Update an automation (``update_automation``).             │
+│ delete             Delete an automation rule (``delete_automation``).        │
+│ simulate           Dry-run an automation against a card                      │
+│                    (``simulate_automation``).                                │
+│ logs               List automation execution logs (``get_automation_logs``   │
+│                    or ``get_automation_logs_by_repo``).                      │
+│ event-attributes   List official event-attribute tokens                      │
+│                    (``get_automation_event_attributes``).                    │
+│ usage              Automation usage for an org in a date range               │
+│                    (``get_automations_usage``).                              │
+│ send-task          Send-a-task automation helper.                            │
+│ export             Automation jobs export (async).                           │
+│ events             Automation trigger catalog.                               │
+│ actions            Automation action catalog.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP automation/actions
@@ -536,6 +615,16 @@ Usage: pipefy automation delete [OPTIONS] AUTOMATION_ID
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP automation/event-attributes
+Usage: pipefy automation event-attributes [OPTIONS]
+
+ List official event-attribute tokens (``get_automation_event_attributes``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --json  -j        Print machine-readable JSON to stdout.                     │
 │ --help            Show this message and exit.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
@@ -1554,7 +1643,7 @@ Usage: pipefy org get [OPTIONS] [ORGANIZATION_ID]
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │   organization_id      [ORGANIZATION_ID]  Numeric organization id. Omit when │
 │                                           PIPEFY_ORG_ID is set (see          │
-│                                           docs/setup.md).                    │
+│                                           docs/config.md).                   │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --json  -j                                                                   │
@@ -1755,6 +1844,398 @@ Usage: pipefy pipe update [OPTIONS] PIPE_ID
 │ --help                       Show this message and exit.                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
+### HELP portal
+Usage: pipefy portal [OPTIONS] COMMAND [ARGS]...
+
+ Portal operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list         List portals for an organization.                               │
+│ get          Fetch a portal by UUID.                                         │
+│ create       Create or fetch the organization's main portal (idempotent).    │
+│ update       Update portal metadata (pass at least one attribute).           │
+│ delete       Delete a portal permanently.                                    │
+│ page         Portal page operations.                                         │
+│ element      Portal page elements (widgets / tools in the Pipefy UI).        │
+│ sub-portal   Sub-portal create, attach, publish, and delete.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/create
+Usage: pipefy portal create [OPTIONS]
+
+ Create or fetch the organization's main portal (idempotent).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization-uuid          TEXT  Organization UUID, or numeric          │
+│                                       organization id (string).              │
+│                                       [required]                             │
+│    --json               -j            Print machine-readable JSON to stdout. │
+│    --help                             Show this message and exit.            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/delete
+Usage: pipefy portal delete [OPTIONS] PORTAL_UUID
+
+ Delete a portal permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Portal UUID. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/element
+Usage: pipefy portal element [OPTIONS] COMMAND [ARGS]...
+
+ Portal page elements (widgets / tools in the Pipefy UI).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create      Create a portal page element.                                    │
+│ update      Update a portal page element (send the full metadata blob).      │
+│ delete      Delete a portal page element permanently.                        │
+│ duplicate   Duplicate a portal page element on the same page (source portal  │
+│             + page UUIDs).                                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/element/create
+Usage: pipefy portal element create [OPTIONS]
+
+ Create a portal page element.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --page-id               TEXT  Parent page UUID. [required]                │
+│ *  --type                  TEXT  InterfacePageElementType value (e.g. forms, │
+│                                  link).                                      │
+│                                  [required]                                  │
+│    --metadata              TEXT  Element metadata JSON (required; full shape │
+│                                  depends on --type).                         │
+│    --data-sources          TEXT  Optional JSON array of data source bindings │
+│                                  (forms elements).                           │
+│    --json          -j            Print machine-readable JSON to stdout.      │
+│    --help                        Show this message and exit.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/element/delete
+Usage: pipefy portal element delete [OPTIONS] ELEMENT_ID PAGE_ID
+
+ Delete a portal page element permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    element_id      TEXT  Element UUID. [required]                          │
+│ *    page_id         TEXT  Parent page UUID. [required]                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/element/duplicate
+Usage: pipefy portal element duplicate [OPTIONS]
+
+ Duplicate a portal page element on the same page (source portal + page UUIDs).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --element-id           TEXT  Element UUID to duplicate. [required]        │
+│ *  --portal-uuid          TEXT  Portal interface UUID that owns the page.    │
+│                                 [required]                                   │
+│ *  --page-id              TEXT  Page UUID that contains the element.         │
+│                                 [required]                                   │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/element/update
+Usage: pipefy portal element update [OPTIONS] ELEMENT_ID PAGE_ID
+
+ Update a portal page element (send the full metadata blob).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    element_id      TEXT  Element UUID. [required]                          │
+│ *    page_id         TEXT  Parent page UUID. [required]                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --type                  TEXT  Element type for metadata validation (full  │
+│                                  metadata replace on API).                   │
+│                                  [required]                                  │
+│    --metadata              TEXT  Complete element metadata JSON (Pipefy      │
+│                                  replaces the whole blob).                   │
+│    --data-sources          TEXT  Optional JSON array of data source          │
+│                                  bindings.                                   │
+│    --json          -j            Print machine-readable JSON to stdout.      │
+│    --help                        Show this message and exit.                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/get
+Usage: pipefy portal get [OPTIONS] PORTAL_UUID
+
+ Fetch a portal by UUID.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Portal UUID. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/list
+Usage: pipefy portal list [OPTIONS]
+
+ List portals for an organization.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization-uuid          TEXT  Organization UUID, or numeric          │
+│                                       organization id (string).              │
+│                                       [required]                             │
+│    --search-term                TEXT  Optional portal name filter.           │
+│    --json               -j            Print machine-readable JSON to stdout. │
+│    --help                             Show this message and exit.            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page
+Usage: pipefy portal page [OPTIONS] COMMAND [ARGS]...
+
+ Portal page operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create   Create a portal page (bootstrap template when elements omitted on   │
+│          the API).                                                           │
+│ update   Update portal page metadata (pass at least one attribute).          │
+│ delete   Delete a portal page permanently.                                   │
+│ sort     Reorder portal pages.                                               │
+│ layout   Portal page layout.                                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/create
+Usage: pipefy portal page create [OPTIONS]
+
+ Create a portal page (bootstrap template when elements omitted on the API).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --portal-uuid          TEXT                  Parent portal interface      │
+│                                                 UUID.                        │
+│                                                 [required]                   │
+│ *  --title                TEXT                  Page title. [required]       │
+│    --description          TEXT                  Optional page description.   │
+│    --index                INTEGER RANGE [x>=0]  Optional sort index          │
+│                                                 (non-negative).              │
+│    --json         -j                            Print machine-readable JSON  │
+│                                                 to stdout.                   │
+│    --help                                       Show this message and exit.  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/delete
+Usage: pipefy portal page delete [OPTIONS] PORTAL_UUID PAGE_UUID
+
+ Delete a portal page permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Parent portal interface UUID. [required]         │
+│ *    page_uuid        TEXT  Page UUID. [required]                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/layout
+Usage: pipefy portal page layout [OPTIONS] COMMAND [ARGS]...
+
+ Portal page layout.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ update   Update a portal page grid layout.                                   │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/layout/update
+Usage: pipefy portal page layout update [OPTIONS]
+
+ Update a portal page grid layout.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --page-id          TEXT  Page UUID. [required]                            │
+│ *  --layout           TEXT  Layout JSON for updatePageLayout. [required]     │
+│    --json     -j            Print machine-readable JSON to stdout.           │
+│    --help                   Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/sort
+Usage: pipefy portal page sort [OPTIONS]
+
+ Reorder portal pages.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --portal-uuid          TEXT  Parent portal interface UUID. [required]     │
+│    --page-ids             TEXT  Comma-separated ordered page UUIDs.          │
+│    --ids-json             TEXT  JSON array of ordered page UUIDs.            │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/page/update
+Usage: pipefy portal page update [OPTIONS] PORTAL_UUID PAGE_UUID
+
+ Update portal page metadata (pass at least one attribute).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Parent portal interface UUID. [required]         │
+│ *    page_uuid        TEXT  Page UUID. [required]                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --title                TEXT                  New page title.                 │
+│ --description          TEXT                  New page description.           │
+│ --index                INTEGER RANGE [x>=0]  New sort index (non-negative).  │
+│ --json         -j                            Print machine-readable JSON to  │
+│                                              stdout.                         │
+│ --help                                       Show this message and exit.     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal
+Usage: pipefy portal sub-portal [OPTIONS] COMMAND [ARGS]...
+
+ Sub-portal create, attach, publish, and delete.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create      Create a sub-portal on a main portal.                            │
+│ attach      Attach a sub-portal to a portal page element.                    │
+│ detach      Detach a sub-portal from a portal page element.                  │
+│ publish     Publish a sub-portal on a portal page element.                   │
+│ unpublish   Unpublish a sub-portal from a portal page element.               │
+│ delete      Delete a sub-portal permanently.                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/attach
+Usage: pipefy portal sub-portal attach [OPTIONS] PORTAL_UUID ELEMENT_ID
+                                        SUB_PORTAL_UUID
+
+ Attach a sub-portal to a portal page element.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid          TEXT  Main portal interface UUID. [required]       │
+│ *    element_id           TEXT  Page element UUID. [required]                │
+│ *    sub_portal_uuid      TEXT  Sub-portal UUID. [required]                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/create
+Usage: pipefy portal sub-portal create [OPTIONS]
+
+ Create a sub-portal on a main portal.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --main-portal-uuid          TEXT  Parent main portal interface UUID.      │
+│                                      [required]                              │
+│    --name                      TEXT  Optional sub-portal name.               │
+│    --json              -j            Print machine-readable JSON to stdout.  │
+│    --help                            Show this message and exit.             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/delete
+Usage: pipefy portal sub-portal delete [OPTIONS] SUB_PORTAL_UUID
+
+ Delete a sub-portal permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    sub_portal_uuid      TEXT  Sub-portal UUID. [required]                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/detach
+Usage: pipefy portal sub-portal detach [OPTIONS] PORTAL_UUID ELEMENT_ID
+
+ Detach a sub-portal from a portal page element.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Main portal interface UUID. [required]           │
+│ *    element_id       TEXT  Page element UUID. [required]                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --yes   -y        Skip interactive confirmation.                             │
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/publish
+Usage: pipefy portal sub-portal publish [OPTIONS] PORTAL_UUID ELEMENT_ID
+                                         SUB_PORTAL_UUID
+
+ Publish a sub-portal on a portal page element.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid          TEXT  Main portal interface UUID. [required]       │
+│ *    element_id           TEXT  Page element UUID. [required]                │
+│ *    sub_portal_uuid      TEXT  Sub-portal UUID. [required]                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/sub-portal/unpublish
+Usage: pipefy portal sub-portal unpublish [OPTIONS] PORTAL_UUID ELEMENT_ID
+
+ Unpublish a sub-portal from a portal page element.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Main portal interface UUID. [required]           │
+│ *    element_id       TEXT  Page element UUID. [required]                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP portal/update
+Usage: pipefy portal update [OPTIONS] PORTAL_UUID
+
+ Update portal metadata (pass at least one attribute).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    portal_uuid      TEXT  Portal UUID. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --name                                            TEXT  Portal display name. │
+│ --visibility                                      TEXT  Portal visibility:   │
+│                                                         internal, private,   │
+│                                                         or public.           │
+│ --color                                           TEXT  Theme color.         │
+│ --icon                                            TEXT  Icon identifier.     │
+│ --display-pipefy-he…      --no-display-pipefy…          Show or hide the     │
+│                                                         Pipefy header.       │
+│ --json                -j                                Print                │
+│                                                         machine-readable     │
+│                                                         JSON to stdout.      │
+│ --help                                                  Show this message    │
+│                                                         and exit.            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
 ### HELP record
 Usage: pipefy record [OPTIONS] COMMAND [ARGS]...
 
@@ -1877,7 +2358,8 @@ Usage: pipefy relation card [OPTIONS] COMMAND [ARGS]...
 │ list     List parent and child relations for a card (raw                     │
 │          ``get_card_relations`` payload).                                    │
 │ create   Link two cards via an existing pipe relation.                       │
-│ delete   Remove a card relation (requires OAuth; internal API).              │
+│ delete   Remove a card relation (requires service-account credentials;       │
+│          internal API).                                                      │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP relation/card/create
@@ -1898,7 +2380,7 @@ Usage: pipefy relation card create [OPTIONS]
 ### HELP relation/card/delete
 Usage: pipefy relation card delete [OPTIONS]
 
- Remove a card relation (requires OAuth; internal API).
+ Remove a card relation (requires service-account credentials; internal API).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --child           TEXT  Child card id. [required]                         │
@@ -2252,44 +2734,6 @@ Usage: pipefy report-pipe update [OPTIONS] REPORT_ID
 │ --featured-field          TEXT                                               │
 │ --json            -j            Print machine-readable JSON to stdout.       │
 │ --help                          Show this message and exit.                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-### HELP skills
-Usage: pipefy skills [OPTIONS] COMMAND [ARGS]...
-
- Browse bundled agent skill playbooks.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ list   List all bundled skills with their one-line descriptions.             │
-│ show   Print the full content of a bundled skill to stdout.                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-### HELP skills/list
-Usage: pipefy skills list [OPTIONS]
-
- List all bundled skills with their one-line descriptions.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-### HELP skills/show
-Usage: pipefy skills show [OPTIONS] NAME
-
- Print the full content of a bundled skill to stdout.
-
- Args:     name: Skill name matching the 'name' frontmatter field, the filename
- stem,         or the slug without the ``pipefy-`` prefix (e.g.
- ``pipes-and-cards``).
-
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    name      TEXT  Skill name (e.g. pipefy-pipes-and-cards). [required]    │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP table

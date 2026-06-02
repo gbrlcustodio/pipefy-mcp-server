@@ -5,15 +5,13 @@ from __future__ import annotations
 import csv
 import io
 from collections.abc import AsyncIterator
-from typing import Final
+from typing import Final, cast
 from urllib.parse import urljoin, urlparse
 
 import httpx
 from openpyxl import load_workbook
-
-from pipefy_sdk.utils.url_ssrf import (
-    assert_hostname_resolves_to_public_ips,
-)
+from pipefy_infra import security
+from pipefy_infra.coerce import optional_int
 
 _ALLOWED_HOST_SUFFIX: Final[str] = ".pipefy.com"
 
@@ -25,11 +23,12 @@ _MAX_REDIRECTS: Final[int] = 3
 async def _validate_export_download_url_before_fetch(url: str) -> None:
     if not is_allowed_pipefy_export_download_url(url):
         raise ValueError("Download URL is not an allowed Pipefy https URL.")
-    parsed = urlparse(url.strip())
-    hostname = parsed.hostname
-    if not hostname:
-        raise ValueError("Download URL has no hostname.")
-    await assert_hostname_resolves_to_public_ips(hostname)
+    # ``is_allowed_pipefy_export_download_url`` returned True, so
+    # ``parsed.hostname`` is guaranteed non-empty (the allowlist requires
+    # a host ending in ``.pipefy.com``). ``cast`` documents the invariant
+    # at the call site without an unreachable runtime check.
+    hostname = cast(str, urlparse(url.strip()).hostname)
+    await security.assert_hostname_resolves_to_public_ips(hostname)
 
 
 def is_allowed_pipefy_export_download_url(url: str) -> bool:
@@ -127,17 +126,11 @@ async def stream_bytes(url: str, *, max_bytes: int) -> AsyncIterator[bytes]:
                     continue
 
                 response.raise_for_status()
-                cl = response.headers.get("content-length")
-                if cl is not None:
-                    try:
-                        declared = int(cl)
-                    except ValueError:
-                        pass
-                    else:
-                        if declared > max_bytes:
-                            raise ValueError(
-                                f"Export file exceeds max_download_bytes ({max_bytes} bytes)."
-                            )
+                declared = optional_int(response.headers.get("content-length"))
+                if declared is not None and declared > max_bytes:
+                    raise ValueError(
+                        f"Export file exceeds max_download_bytes ({max_bytes} bytes)."
+                    )
                 total = 0
                 async for chunk in response.aiter_bytes():
                     total += len(chunk)

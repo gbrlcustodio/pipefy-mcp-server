@@ -12,6 +12,7 @@ from _shared.ai_agent_test_payloads import (
 )
 from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
+from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.base_client import unwrap_relay_connection_nodes
 from pipefy_sdk.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
@@ -67,16 +68,14 @@ def _make_action_dict(name="Move card", action_type="move_card"):
 
 
 _MOCK_SETTINGS = PipefySettings(
-    graphql_url="https://api.pipefy.com/graphql",
-    oauth_url="https://auth.pipefy.com/oauth/token",
-    oauth_client="test-client",
-    oauth_secret="test-secret",
+    base_url="https://api.pipefy.com",
 )
+_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
 def _create_mock_service(execute_return=None):
     """Create an AiAgentService with mocked execute_query."""
-    service = AiAgentService(settings=_MOCK_SETTINGS)
+    service = AiAgentService(settings=_MOCK_SETTINGS, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         return_value=execute_return or {"createAiAgent": {"agent": {"uuid": "abc-123"}}}
     )
@@ -545,7 +544,7 @@ async def test_get_agent_returns_empty_when_ai_agent_null():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_agent_transport_error():
-    service = AiAgentService(settings=_MOCK_SETTINGS)
+    service = AiAgentService(settings=_MOCK_SETTINGS, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -572,7 +571,7 @@ async def test_get_agents_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_agents_transport_error():
-    service = AiAgentService(settings=_MOCK_SETTINGS)
+    service = AiAgentService(settings=_MOCK_SETTINGS, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "missing"}])
     )
@@ -597,7 +596,7 @@ async def test_delete_agent_success():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_agent_transport_error():
-    service = AiAgentService(settings=_MOCK_SETTINGS)
+    service = AiAgentService(settings=_MOCK_SETTINGS, auth=_TEST_AUTH)
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
     )

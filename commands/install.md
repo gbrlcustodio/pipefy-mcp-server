@@ -9,7 +9,7 @@ If `command -v pipefy` succeeds, surface `pipefy --version` and stop.
 Otherwise prompt the user to confirm running:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/gbrlcustodio/pipefy-mcp-server/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/pipefy/ai-toolkit/main/install.sh \
   | sh -s -- --yes --no-skills --client none
 ```
 

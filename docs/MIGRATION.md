@@ -67,8 +67,8 @@ pipefy card get 12345
 **`skills/` catalog** — Anthropic Skills-format playbooks for common Pipefy workflows, consumable by any LLM agent. Install via [`skills.sh`](https://github.com/vercel-labs/skills):
 
 ```sh
-npx skills add gbrlcustodio/pipefy-mcp-server                           # all skills
-npx skills add gbrlcustodio/pipefy-mcp-server --skill pipefy-pipes-and-cards
+npx skills add pipefy/ai-toolkit                           # all skills
+npx skills add pipefy/ai-toolkit --skill pipefy-pipes-and-cards
 ```
 
 ---

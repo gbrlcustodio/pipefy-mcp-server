@@ -234,9 +234,8 @@ Nested GraphQL/internal_api `success: false` → MCP top-level `{ success: false
 
 When changing portal SDK/MCP/CLI behavior:
 
-1. **Spec:** `.cursor/dev-planning/specs/portal-crud/` (PRD, `introspection-snapshot.md`, `tasks/tasks-portal-crud.md`).
-2. **TDD loop:** SDK unit tests → MCP tool tests → CLI tests; `uv run pytest -m "not integration" -k portal`; update [`docs/parity.md`](../../parity.md) in the same PR.
-3. **Live schema:** Portal mutations may live on Interfaces or internal_api (see [Endpoints](#endpoints) above), not the main GraphQL URL. Before adding SDK queries, verify shapes with [`skills/introspection/pipefy-introspection/SKILL.md`](../../../skills/introspection/pipefy-introspection/SKILL.md) (`introspect_mutation` / `pipefy introspect mutation`) or `gql-cli` against the derived URLs (set `PIPEFY_BASE_URL` and auth per [`docs/config.md`](../../config.md)):
+1. **TDD loop:** SDK unit tests → MCP tool tests → CLI tests; `uv run pytest -m "not integration" -k portal`; update [`docs/parity.md`](../../parity.md) in the same PR.
+2. **Live schema:** Portal mutations may live on Interfaces or internal_api (see [Endpoints](#endpoints) above), not the main GraphQL URL. Before adding SDK queries, verify shapes with [`skills/introspection/pipefy-introspection/SKILL.md`](../../../skills/introspection/pipefy-introspection/SKILL.md) (`introspect_mutation` / `pipefy introspect mutation`) or `gql-cli` against the derived URLs (set `PIPEFY_BASE_URL` and auth per [`docs/config.md`](../../config.md)):
 
    ```bash
    uv run gql-cli --headers "Authorization: Bearer $PIPEFY_ACCESS_TOKEN" \
@@ -250,4 +249,4 @@ When changing portal SDK/MCP/CLI behavior:
      -i "query { __type(name: \"Mutation\") { fields { name } } }"
    ```
 
-4. **Registry:** add tool names to `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` and keep the **149** count in `docs/parity.md` in sync.
+3. **Registry:** add tool names to `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` and keep the count in [`docs/parity.md`](../../parity.md) in sync.

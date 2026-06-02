@@ -7,9 +7,9 @@ Markdown playbooks in **Anthropic Skills** format: each file describes a Pipefy 
 **Install via [`skills.sh`](https://github.com/vercel-labs/skills)** (55+ agent targets — Claude Code, Cursor, Codex, OpenCode, …):
 
 ```bash
-npx skills add gbrlcustodio/pipefy-mcp-server                           # all skills
-npx skills add gbrlcustodio/pipefy-mcp-server --skill pipefy-pipes-and-cards
-npx skills add gbrlcustodio/pipefy-mcp-server -g -a claude-code -y      # CI-friendly
+npx skills add pipefy/ai-toolkit                           # all skills
+npx skills add pipefy/ai-toolkit --skill pipefy-pipes-and-cards
+npx skills add pipefy/ai-toolkit -g -a claude-code -y      # CI-friendly
 ```
 
 `skills.sh` reads canonical `skills/**/SKILL.md` files directly from this repo; no install or wheel needed.
@@ -17,7 +17,7 @@ npx skills add gbrlcustodio/pipefy-mcp-server -g -a claude-code -y      # CI-fri
 **Reference from source (no install):**
 
 ```bash
-git clone https://github.com/gbrlcustodio/pipefy-mcp-server.git
+git clone https://github.com/pipefy/ai-toolkit.git
 # Reference paths such as skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md
 # in your IDE rules or agent context.
 ```

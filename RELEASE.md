@@ -94,6 +94,6 @@ Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.
 
 | Piece | Role |
 | --- | --- |
-| `scripts/bump_version.py` | Reads the SDK `__version__`, applies the bump, writes the same value to SDK, MCP, CLI, Auth, and Infra `__init__.py`. |
-| `.github/workflows/ci.yml` | Asserts the five `__version__` strings match. |
+| `scripts/bump_version.py` | Reads the SDK `__version__`, applies the bump, writes the same value to SDK, MCP, CLI, Auth, and Infra `__init__.py` plus the root `pyproject.toml`'s `[project].version`, then runs `uv lock` to refresh `uv.lock`. Also exposes a `verify` mode that asserts every version-bearing file agrees. |
+| `.github/workflows/ci.yml` | Invokes `scripts/bump_version.py verify` to assert the five `__version__` strings and root `pyproject.toml` `[project].version` all match. |
 | `.github/workflows/release.yml` | On `v*` tags: asserts the tag matches SDK `__version__`, extracts the matching `CHANGELOG.md` section as the GitHub Release body, builds wheels and sdists with `uv build --all-packages -o dist --wheel --sdist`, attaches wheels to the GitHub Release, and publishes CLI + MCP wheels to PyPI only when `github.ref_name` starts with `v1.`. |

@@ -1023,6 +1023,7 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "aiohttp" },
+    { name = "packaging" },
     { name = "pipefy-auth" },
     { name = "pipefy-cli" },
     { name = "pipefy-infra" },
@@ -1041,6 +1042,7 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "aiohttp", specifier = ">=3.11.16" },
+    { name = "packaging", specifier = ">=24" },
     { name = "pipefy-auth", editable = "packages/auth" },
     { name = "pipefy-cli", editable = "packages/cli" },
     { name = "pipefy-infra", editable = "packages/infra" },

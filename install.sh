@@ -179,7 +179,24 @@ pick_system_python() {
     # Honor UV_PYTHON only when it points at an absolute path (a user-pinned
     # interpreter). A version spec like `UV_PYTHON=3.13` leaves uv free to
     # resolve to PBS, which is the failure case this function exists to avoid.
-    case "${UV_PYTHON:-}" in /*) return 0 ;; esac
+    uv_python_is_spec=0
+    case "${UV_PYTHON:-}" in
+        /*) return 0 ;;
+        ?*) uv_python_is_spec=1 ;;
+    esac
+
+    # Under `curl | sh` the inherited PATH is often just /usr/bin and friends,
+    # so Homebrew's python3 at /opt/homebrew/bin (or /usr/local/bin on Intel)
+    # never gets probed and we fall through to PBS. Prepend the standard
+    # Homebrew prefixes on Darwin when they exist so the loop can find them.
+    for brew_dir in /opt/homebrew/bin /usr/local/bin; do
+        if [ -d "$brew_dir" ]; then
+            case ":$PATH:" in
+                *":$brew_dir:"*) ;;
+                *) PATH="$brew_dir:$PATH" ;;
+            esac
+        fi
+    done
 
     for cmd in python3.14 python3.13 python3.12 python3.11 python3; do
         path=$(command -v "$cmd" 2>/dev/null) || continue
@@ -198,6 +215,10 @@ pick_system_python() {
         return 0
     done
 
+    if [ "$uv_python_is_spec" -eq 1 ]; then
+        warn "UV_PYTHON=$UV_PYTHON is a version spec, not an absolute path, and no system python3 >= 3.11 was found on PATH. uv will resolve UV_PYTHON to its managed Python (PBS); if 'pipefy auth login' later fails with keychain error -25244, set PIPEFY_KEYCHAIN_BACKEND=file or install Homebrew python3."
+        return 0
+    fi
     warn "No system python3 >= 3.11 found on PATH. uv will use its managed Python; if 'pipefy auth login' later fails with keychain error -25244, set PIPEFY_KEYCHAIN_BACKEND=file or install Homebrew python3."
 }
 

@@ -3,6 +3,10 @@
 
 After rewriting the version strings, runs ``uv lock`` so the workspace
 lockfile's ``pipefy-workspace`` entry tracks the new version.
+
+The ``verify`` mode reads every version-bearing file and exits non-zero on
+mismatch; CI invokes this in place of an inline lockstep snippet so the
+writer and reader stay in one place.
 """
 
 from __future__ import annotations
@@ -10,6 +14,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
 
@@ -23,9 +28,12 @@ INIT_PATHS = (
     REPO_ROOT / "packages/infra/src/pipefy_infra/__init__.py",
 )
 
+# Anchored to the [project] table so a leading [tool.X] table with its own
+# `version = "..."` key doesn't shadow the real match. `[^[]*?` keeps the
+# non-greedy run inside [project] (stops at the next table header).
 ROOT_PROJECT_VERSION_RE = re.compile(
-    r"^(version\s*=\s*)[\"'][^\"']+[\"']",
-    re.MULTILINE,
+    r"^(\[project\][^[]*?^version\s*=\s*)[\"'][^\"']+[\"']",
+    re.MULTILINE | re.DOTALL,
 )
 
 VERSION_ASSIGN_RE = re.compile(
@@ -164,15 +172,63 @@ def parse_explicit_version(arg: str) -> str:
     return raw
 
 
+def refresh_lockfile() -> None:
+    """Run ``uv lock`` so the workspace lockfile picks up the new version.
+
+    Without this, ``uv.lock``'s ``pipefy-workspace`` entry lags behind the
+    root ``pyproject.toml`` and CI's ``uv sync --locked`` fails on every PR
+    until someone runs ``uv lock`` by hand.
+    """
+    print("Refreshing uv.lock...")
+    subprocess.run(["uv", "lock"], cwd=REPO_ROOT, check=True)
+
+
+def read_root_pyproject_version() -> str:
+    """Return ``[project].version`` from the root pyproject.toml."""
+    data = tomllib.loads(ROOT_PYPROJECT.read_text(encoding="utf-8"))
+    return data["project"]["version"]
+
+
+def verify_lockstep() -> int:
+    """Assert every version-bearing file holds the same string; print mismatches.
+
+    Returns 0 on success, 1 on any mismatch or missing field. Invoked by CI
+    in place of an inline snippet so the writer (bumper) and reader (CI)
+    can't drift apart.
+    """
+    found: dict[str, str] = {}
+    for path in INIT_PATHS:
+        text = path.read_text(encoding="utf-8")
+        m = VERSION_ASSIGN_RE.search(text)
+        if not m:
+            print(f"missing __version__ in {path}", file=sys.stderr)
+            return 1
+        found[str(path.relative_to(REPO_ROOT))] = m.group(2)
+
+    try:
+        found["pyproject.toml"] = read_root_pyproject_version()
+    except KeyError:
+        print("missing [project].version in pyproject.toml", file=sys.stderr)
+        return 1
+
+    if len(set(found.values())) != 1:
+        print(f"version mismatch across packages: {found}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print(
-            "Usage: bump_version.py <major|minor|patch|prerelease|version=X.Y.Z>",
+            "Usage: bump_version.py <major|minor|patch|prerelease|version=X.Y.Z|verify>",
             file=sys.stderr,
         )
         return 2
 
     token = sys.argv[1]
+    if token == "verify":
+        return verify_lockstep()
+
     current = read_sdk_version()
 
     bumpers: dict[str, Callable[[str], str]] = {
@@ -189,26 +245,15 @@ def main() -> int:
     else:
         print(
             f"Unknown argument {token!r}. "
-            "Use major, minor, patch, prerelease, or version=X.Y.Z",
+            "Use major, minor, patch, prerelease, version=X.Y.Z, or verify",
             file=sys.stderr,
         )
         return 2
 
     write_version_to_all_files(new_version)
-    print(f"Bumped {current} -> {new_version}")
     refresh_lockfile()
+    print(f"Bumped {current} -> {new_version}")
     return 0
-
-
-def refresh_lockfile() -> None:
-    """Run ``uv lock`` so the workspace lockfile picks up the new version.
-
-    Without this, ``uv.lock``'s ``pipefy-workspace`` entry lags behind the
-    root ``pyproject.toml`` and CI's ``uv sync --locked`` fails on every PR
-    until someone runs ``uv lock`` by hand.
-    """
-    print("Refreshing uv.lock...")
-    subprocess.run(["uv", "lock"], cwd=REPO_ROOT, check=True)
 
 
 if __name__ == "__main__":

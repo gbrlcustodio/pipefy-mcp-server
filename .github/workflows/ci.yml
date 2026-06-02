@@ -58,38 +58,7 @@ jobs:
     - name: Install dependencies
       run: uv sync --locked --all-extras --dev
     - name: Verify package versions are in lockstep
-      run: |
-        uv run python <<'PY'
-        import re
-        from pathlib import Path
-
-        init_paths = {
-            "sdk": Path("packages/sdk/src/pipefy_sdk/__init__.py"),
-            "mcp": Path("packages/mcp/src/pipefy_mcp/__init__.py"),
-            "cli": Path("packages/cli/src/pipefy_cli/__init__.py"),
-            "auth": Path("packages/auth/src/pipefy_auth/__init__.py"),
-            "infra": Path("packages/infra/src/pipefy_infra/__init__.py"),
-        }
-        init_rx = re.compile(r'^__version__\s*=\s*["\']([^"\']+)["\']', re.M)
-        found = {}
-        for name, path in init_paths.items():
-            text = path.read_text(encoding="utf-8")
-            m = init_rx.search(text)
-            if not m:
-                raise SystemExit(f"missing __version__ in {path}")
-            found[name] = m.group(1)
-        # Root pyproject.toml's [project] version is written by
-        # scripts/bump_version.py alongside the five __init__ files; assert it
-        # tracks the same value so a partial bump fails the lockstep check
-        # rather than relying on `uv sync --locked` to catch it downstream.
-        pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
-        m = re.search(r'^version\s*=\s*["\']([^"\']+)["\']', pyproject, re.M)
-        if not m:
-            raise SystemExit("missing [project] version in pyproject.toml")
-        found["pyproject"] = m.group(1)
-        if len(set(found.values())) != 1:
-            raise SystemExit(f"version mismatch across packages: {found}")
-        PY
+      run: uv run python scripts/bump_version.py verify
     - name: Lint (full tree)
       run: uv run ruff check packages/sdk/src packages/mcp/src packages/cli/src packages/auth/src packages/infra/src
     - name: Check formatting

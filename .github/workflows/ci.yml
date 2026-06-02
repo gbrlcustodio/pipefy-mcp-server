@@ -92,7 +92,15 @@ jobs:
       run: cd packages/auth && uv run ruff check src
     - name: Lint infra (banned upward imports)
       run: cd packages/infra && uv run ruff check src
-    - name: Build MCP wheel (packaging smoke)
-      run: uv build packages/mcp -o packages/mcp/dist
+    - name: Build workspace wheels (packaging smoke)
+      run: uv build --all-packages --wheel -o dist-packaging-smoke
+    - name: Smoke install CLI wheel (clean venv)
+      run: |
+        python -m venv .venv-cli-smoke
+        .venv-cli-smoke/bin/pip install dist-packaging-smoke/pipefy_infra-*.whl \
+          dist-packaging-smoke/pipefy_sdk-*.whl \
+          dist-packaging-smoke/pipefy_auth-*.whl \
+          dist-packaging-smoke/pipefy_cli-*.whl
+        .venv-cli-smoke/bin/pipefy --help
     - name: Run tests
       run: uv run pytest -m "not integration"

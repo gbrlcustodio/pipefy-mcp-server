@@ -9,7 +9,7 @@
 
 set -eu
 
-REPO="gbrlcustodio/pipefy-mcp-server"
+REPO="pipefy/ai-toolkit"
 TOOLS="pipefy_cli pipefy_mcp_server"  # wheels installed as standalone uv tools
 
 YES=0

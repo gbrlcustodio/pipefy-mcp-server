@@ -31,7 +31,7 @@ Do **not** use for:
 
 ## Prerequisites
 
-- **Organization id:** UUID or **numeric org id** (e.g. `302398434` from `pipefy org get` / URL). SDK resolves numeric ids before Interfaces calls. The org you pass to **`list_portals`** / **`create_portal`** must be the same org your token can write on.
+- **Organization id:** UUID or **numeric org id** from `pipefy org get` / the Pipefy URL (examples below use fictional `123456789` per [`fixture_ids.py`](../../../packages/sdk/tests/_shared/fixture_ids.py)). SDK resolves numeric ids before Interfaces calls. The org you pass to **`list_portals`** / **`create_portal`** must be the same org your token can write on.
 - **Portal writes:** token needs **`create_portal`** and/or **`manage_portals`** on that org. Many service accounts only have pipe/card scope on their default org → `PERMISSION_DENIED` on portal mutations even when reads succeed elsewhere.
 - **One main portal per org** — `create_portal` is idempotent (second call returns the same portal UUID).
 - **Cursor MCP:** after changing `PIPEFY_*` in `.env`, restart the MCP server so tools pick up the new credentials.
@@ -121,20 +121,20 @@ Element `type` values (15): `text`, `table`, `field`, `embedLink`, `embedVideo`,
 
    MCP:
    ```
-   list_portals organization_uuid="302398434"
+   list_portals organization_uuid="123456789"
    ```
 
    Expect **at most one** main portal row. If none:
 
    MCP:
    ```
-   create_portal organization_uuid="302398434"
+   create_portal organization_uuid="123456789"
    ```
 
    CLI:
    ```bash
-   pipefy portal list --organization-uuid 302398434
-   pipefy portal create --organization-uuid 302398434
+   pipefy portal list --organization-uuid 123456789
+   pipefy portal create --organization-uuid 123456789
    ```
 
    Capture `uuid` where `subType` is the main portal.

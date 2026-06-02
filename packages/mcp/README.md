@@ -6,9 +6,9 @@ MCP server for Pipefy — **149 tools** for AI agents (Cursor, Claude Desktop, C
 
 ```sh
 uvx \
-  --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
-  --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp" \
+  --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
+  --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
+  --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/mcp" \
   --refresh pipefy-mcp-server
 ```
 
@@ -36,7 +36,7 @@ Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, preced
 
 ### macOS keychain `errSecParam (-25244)`
 
-`pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a deterministic per-binary ACL problem. If it occurs, retry the slash command (Claude Code) or `pipefy auth login` (terminal) first; as a fallback, run `pipefy auth login` once from a regular Terminal.app session and approve any macOS keychain dialog that appears. [Issue #235](https://github.com/gbrlcustodio/pipefy-mcp-server/issues/235) tracks platform-aware error messaging.
+`pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a deterministic per-binary ACL problem. If it occurs, retry the slash command (Claude Code) or `pipefy auth login` (terminal) first; as a fallback, run `pipefy auth login` once from a regular Terminal.app session and approve any macOS keychain dialog that appears. [Issue #235](https://github.com/pipefy/ai-toolkit/issues/235) tracks platform-aware error messaging.
 
 ### Claude Code: `claude mcp add` (per-project terminal flow)
 
@@ -45,9 +45,9 @@ Useful when you want to wire the server without editing `~/.claude.json` by hand
 ```bash
 claude mcp add --scope project pipefy \
   -- uvx \
-       --with "pipefy-sdk @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/sdk" \
-       --with "pipefy-auth @ git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/auth" \
-       --from "git+https://github.com/gbrlcustodio/pipefy-mcp-server@latest#subdirectory=packages/mcp" \
+       --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
+       --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
+       --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/mcp" \
        pipefy-mcp-server
 ```
 
@@ -108,7 +108,7 @@ This form also works as a per-project `.mcp.json` if your team shares a clone. C
 
 ### Cursor / Claude Desktop / Codex: paste-into-config wiring
 
-The [curl installer](https://github.com/gbrlcustodio/pipefy-mcp-server/issues/231) writes these configs for you. The blocks below document the shape for users who prefer to wire by hand. Replace `<TAG>` with the latest release tag (e.g. `v0.2.0-beta.2`) and `<VERSION>` with its PEP 440 wheel form (e.g. `0.2.0b2`); see [Releases](https://github.com/gbrlcustodio/pipefy-mcp-server/releases) for current values.
+The [curl installer](https://github.com/pipefy/ai-toolkit/issues/231) writes these configs for you. The blocks below document the shape for users who prefer to wire by hand. Replace `<TAG>` with the latest release tag (e.g. `v0.2.0-beta.2`) and `<VERSION>` with its PEP 440 wheel form (e.g. `0.2.0b2`); see [Releases](https://github.com/pipefy/ai-toolkit/releases) for current values.
 
 #### Cursor
 
@@ -121,13 +121,13 @@ Edit `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per project):
       "command": "uvx",
       "args": [
         "--with",
-        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_sdk-<VERSION>-py3-none-any.whl",
+        "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_sdk-<VERSION>-py3-none-any.whl",
         "--with",
-        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_auth-<VERSION>-py3-none-any.whl",
+        "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_auth-<VERSION>-py3-none-any.whl",
         "--with",
-        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_infra-<VERSION>-py3-none-any.whl",
+        "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_infra-<VERSION>-py3-none-any.whl",
         "--from",
-        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_mcp_server-<VERSION>-py3-none-any.whl",
+        "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_mcp_server-<VERSION>-py3-none-any.whl",
         "pipefy-mcp-server"
       ],
       "env": {
@@ -155,13 +155,13 @@ Config file location:
       "command": "uvx",
       "args": [
         "--with",
-        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_sdk-<VERSION>-py3-none-any.whl",
+        "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_sdk-<VERSION>-py3-none-any.whl",
         "--with",
-        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_auth-<VERSION>-py3-none-any.whl",
+        "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_auth-<VERSION>-py3-none-any.whl",
         "--with",
-        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_infra-<VERSION>-py3-none-any.whl",
+        "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_infra-<VERSION>-py3-none-any.whl",
         "--from",
-        "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_mcp_server-<VERSION>-py3-none-any.whl",
+        "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_mcp_server-<VERSION>-py3-none-any.whl",
         "pipefy-mcp-server"
       ],
       "env": {
@@ -181,10 +181,10 @@ Edit `~/.codex/config.toml`:
 [mcp_servers.pipefy]
 command = "uvx"
 args = [
-  "--with", "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_sdk-<VERSION>-py3-none-any.whl",
-  "--with", "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_auth-<VERSION>-py3-none-any.whl",
-  "--with", "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_infra-<VERSION>-py3-none-any.whl",
-  "--from", "https://github.com/gbrlcustodio/pipefy-mcp-server/releases/download/<TAG>/pipefy_mcp_server-<VERSION>-py3-none-any.whl",
+  "--with", "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_sdk-<VERSION>-py3-none-any.whl",
+  "--with", "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_auth-<VERSION>-py3-none-any.whl",
+  "--with", "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_infra-<VERSION>-py3-none-any.whl",
+  "--from", "https://github.com/pipefy/ai-toolkit/releases/download/<TAG>/pipefy_mcp_server-<VERSION>-py3-none-any.whl",
   "pipefy-mcp-server",
 ]
 env = { PIPEFY_SERVICE_ACCOUNT_CLIENT_ID = "<CLIENT_ID>", PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET = "<CLIENT_SECRET>" }

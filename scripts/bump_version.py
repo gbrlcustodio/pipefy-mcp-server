@@ -28,12 +28,16 @@ INIT_PATHS = (
     REPO_ROOT / "packages/infra/src/pipefy_infra/__init__.py",
 )
 
-# Anchored to the [project] table so a leading [tool.X] table with its own
-# `version = "..."` key doesn't shadow the real match. `[^[]*?` keeps the
-# non-greedy run inside [project] (stops at the next table header).
+# Anchored to the [project] table. The middle alternation walks lines that
+# don't start with `[` (so a sibling [tool.X] header ends the run), but the
+# line CONTENTS can contain `[` (so `classifiers = [...]`, `dependencies =
+# [...]`, etc. above `version` don't break the match).
 ROOT_PROJECT_VERSION_RE = re.compile(
-    r"^(\[project\][^[]*?^version\s*=\s*)[\"'][^\"']+[\"']",
-    re.MULTILINE | re.DOTALL,
+    r"^(\[project\]\s*$"
+    r"(?:\n(?!\[)[^\n]*)*?"
+    r"\nversion\s*=\s*)"
+    r"[\"'][^\"']+[\"']",
+    re.MULTILINE,
 )
 
 VERSION_ASSIGN_RE = re.compile(
@@ -189,30 +193,60 @@ def read_root_pyproject_version() -> str:
     return data["project"]["version"]
 
 
-def verify_lockstep() -> int:
-    """Assert every version-bearing file holds the same string; print mismatches.
+def read_uv_lock_workspace_version() -> str:
+    """Return the ``pipefy-workspace`` package version from uv.lock.
 
-    Returns 0 on success, 1 on any mismatch or missing field. Invoked by CI
-    in place of an inline snippet so the writer (bumper) and reader (CI)
-    can't drift apart.
+    The value is whatever uv wrote, which is PEP 440-normalized (e.g. uv
+    stores ``0.2.0b2.dev1`` for a pyproject value of ``0.2.0-beta.2.dev1``).
+    Callers must normalize the comparison side, not this one.
     """
-    found: dict[str, str] = {}
+    data = tomllib.loads((REPO_ROOT / "uv.lock").read_text(encoding="utf-8"))
+    for pkg in data.get("package", []):
+        if pkg.get("name") == "pipefy-workspace":
+            return pkg["version"]
+    raise KeyError("pipefy-workspace not found in uv.lock")
+
+
+def verify_lockstep() -> int:
+    """Assert every version-bearing file holds the same version; print mismatches.
+
+    Returns 0 on success, 1 on any mismatch or missing field. Compares
+    canonical PEP 440 forms via ``packaging.version.Version`` so the
+    pyproject string ``0.2.0-beta.2.dev1`` matches uv.lock's normalized
+    ``0.2.0b2.dev1``.
+    """
+    from packaging.version import Version
+
+    raw: dict[str, str] = {}
     for path in INIT_PATHS:
         text = path.read_text(encoding="utf-8")
         m = VERSION_ASSIGN_RE.search(text)
         if not m:
             print(f"missing __version__ in {path}", file=sys.stderr)
             return 1
-        found[str(path.relative_to(REPO_ROOT))] = m.group(2)
+        raw[str(path.relative_to(REPO_ROOT))] = m.group(2)
 
     try:
-        found["pyproject.toml"] = read_root_pyproject_version()
-    except KeyError:
-        print("missing [project].version in pyproject.toml", file=sys.stderr)
+        raw["pyproject.toml"] = read_root_pyproject_version()
+    except (KeyError, tomllib.TOMLDecodeError, OSError) as exc:
+        print(
+            f"could not read [project].version from pyproject.toml: {exc}",
+            file=sys.stderr,
+        )
         return 1
 
-    if len(set(found.values())) != 1:
-        print(f"version mismatch across packages: {found}", file=sys.stderr)
+    try:
+        raw["uv.lock"] = read_uv_lock_workspace_version()
+    except (KeyError, tomllib.TOMLDecodeError, OSError) as exc:
+        print(
+            f"could not read pipefy-workspace version from uv.lock: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    canonical = {label: str(Version(v)) for label, v in raw.items()}
+    if len(set(canonical.values())) != 1:
+        print(f"version mismatch across packages: {raw}", file=sys.stderr)
         return 1
     return 0
 

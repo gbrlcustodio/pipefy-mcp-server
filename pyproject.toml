@@ -27,6 +27,7 @@ dev = [
     "pipefy-auth",
     "pipefy-infra",
     "aiohttp>=3.11.16",
+    "packaging>=24",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.1.1",

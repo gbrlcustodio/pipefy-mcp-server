@@ -4,7 +4,8 @@
 # Resolves the latest GitHub Release tag (or a tag passed via --version),
 # discovers its wheel assets, installs the CLI and MCP server via
 # `uv tool install`, optionally installs skills via `npx skills add`, and
-# writes the MCP server registration into the chosen client's config.
+# registers the MCP server with the chosen client (a config-file write for
+# most clients; `claude mcp add` at user scope for Claude Code).
 
 set -eu
 
@@ -71,8 +72,11 @@ and register the MCP server with an MCP client.
 Options:
   --yes, -y           Skip all confirmation prompts.
   --no-skills         Skip the skills installation step.
-  --client <id>       Register MCP server in this client's config.
+  --client <id>       Register the MCP server for this client.
                       One of: claude-code, claude-desktop, cursor, codex, none.
+                      claude-code registers via 'claude mcp add' at user scope
+                      (overrides the plugin's bundled server); the others write
+                      the client's own config file.
                       Defaults to 'none' (prints snippet to paste).
   --version <tag>     Install a specific GitHub Release tag (e.g. v0.2.0-beta.2).
                       Defaults to the most recent release (incl. prereleases).
@@ -314,6 +318,28 @@ require_python3() {
     fi
 }
 
+require_claude() {
+    if ! command -v claude >/dev/null 2>&1; then
+        err "the 'claude' CLI is required to register the MCP server in Claude Code, but was not found. Install Claude Code (https://claude.com/claude-code), or re-run with --client none and paste the snippet manually."
+    fi
+}
+
+claude_code_register_pipefy() {
+    # Register at USER scope: Claude Code resolves same-named servers
+    # local > project > user > plugin, so a user-scope `pipefy` shadows the
+    # plugin's bundled entry and only the binary installed above spawns. The
+    # bare binary (not a uvx command) keeps the server on the system Python it
+    # was installed with, without baking an interpreter path into user config.
+    if [ "$DRY_RUN" -eq 0 ]; then
+        require_claude
+        # `claude mcp add` errors on a duplicate name; drop any prior user-scope
+        # entry first to keep re-runs idempotent.
+        claude mcp remove pipefy --scope user >/dev/null 2>&1 || true
+    fi
+    run claude mcp add pipefy --scope user -- pipefy-mcp-server
+    [ "$DRY_RUN" -eq 1 ] || say "Registered 'pipefy' at user scope (overrides the plugin's bundled server)."
+}
+
 json_merge_pipefy() {
     path="$1"
     if [ "$DRY_RUN" -eq 1 ]; then
@@ -404,6 +430,8 @@ EOF
 }
 
 write_client_config() {
+    # cursor/claude-desktop/codex write the client's own config file; claude-code
+    # instead registers via `claude mcp add` (user scope) to override the plugin.
     case "$CLIENT" in
         cursor)
             json_merge_pipefy "$HOME/.cursor/mcp.json"
@@ -415,11 +443,7 @@ write_client_config() {
             codex_append_pipefy "$HOME/.codex/config.toml"
             ;;
         claude-code)
-            cat <<EOF
-To install in Claude Code, run these slash commands:
-  /plugin marketplace add $REPO
-  /plugin install pipefy@pipefy
-EOF
+            claude_code_register_pipefy
             ;;
         ""|none)
             print_manual_snippet
@@ -449,6 +473,13 @@ print_next_steps() {
         say "    For future shells, uv typically updates your shell rc (~/.bashrc,"
         say "    ~/.zshrc, ~/.config/fish/conf.d/uv.fish). If a new terminal still"
         say "    can't find 'pipefy', add \$HOME/.local/bin to PATH manually."
+    fi
+    if [ "$CLIENT" = "claude-code" ]; then
+        say ""
+        say "==> Pipefy MCP server registered at user scope (overrides the plugin's"
+        say "    bundled server). Reload or restart Claude Code for it to take effect."
+        say "    For skills and slash commands, also install the plugin:"
+        say "        /plugin marketplace add $REPO && /plugin install pipefy@pipefy"
     fi
     say ""
     say "Next: authenticate with Pipefy."

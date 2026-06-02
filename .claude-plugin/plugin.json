@@ -6,5 +6,17 @@
   "author": { "name": "Gabriel Custodio" },
   "homepage": "https://github.com/gbrlcustodio/pipefy-mcp-server",
   "repository": "https://github.com/gbrlcustodio/pipefy-mcp-server",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/check-server-version.sh\""
+          }
+        ]
+      }
+    ]
+  }
 }

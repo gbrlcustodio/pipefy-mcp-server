@@ -3,13 +3,13 @@ name: pipefy-automations
 description: >
   Use this skill when the user wants to create, read, update, or delete
   traditional automations (if/then rules) or AI automations (prompt-driven).
-  Covers 15 MCP tools. For AI agents (conversational), see skills/ai-agents/.
+  Covers 16 MCP tools. For AI agents (conversational), see skills/ai-agents/.
 tags: [pipefy, automations, ai-automations, rules]
 ---
 
 # Automations
 
-Traditional automations (if/then rules), AI automations (prompt-driven), task automations, and simulation. **15 MCP tools.**
+Traditional automations (if/then rules), AI automations (prompt-driven), task automations, and simulation. **16 MCP tools.**
 
 For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipefy-ai-agents/SKILL.md](../../ai-agents/pipefy-ai-agents/SKILL.md).
 
@@ -28,6 +28,7 @@ For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipe
 | `get_automation_logs` | `pipefy automation logs` | Execution history for one automation. |
 | `get_automation_logs_by_repo` | `pipefy automation logs --repo` | Logs across all automations in a pipe. |
 | `get_automation_events` | `pipefy automation events list` | Available trigger events. |
+| `get_automation_event_attributes` | `pipefy automation event-attributes` | Official `field_map.value` event-attribute tokens. |
 | `get_automation_actions` | `pipefy automation actions list` | Available action types for a pipe. |
 | `create_send_task_automation` | `pipefy automation send-task create` | Shortcut for send-a-task rules. |
 | `get_automations_usage` | `pipefy automation usage` / `pipefy usage automations` | Org usage stats (execution counts). |
@@ -87,6 +88,51 @@ For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipe
 
 ---
 
+## Steps — update a card field with a dynamic value
+
+Use when the user wants an if/then rule to **stamp or copy values** onto the triggering card (for example, set a datetime when `card_created` fires). This is **`create_automation`** with `action_id: update_card_field` and `extra_input.action_params.field_map` — **not** the MCP tool `update_card_field` (that tool uses field **slug** for one-off card edits).
+
+1. **Discover field `internal_id`s** (digits only — never slug in `fieldId`):
+
+   ```
+   get_start_form_fields pipe_id=67890
+   get_phase_fields phase_id="<phase_id>"
+   ```
+
+2. **Discover trigger, action, and event-attribute tokens:**
+
+   ```
+   get_automation_events pipe_id=67890
+   get_automation_actions pipe_id=67890
+   get_automation_event_attributes
+   ```
+
+   For `update_card_field`, `acceptedParameters` omits `field_map`; use the payload shape below (see `docs/mcp/tools/automations-and-ai.md`). Prefer `value_token` from `get_automation_event_attributes` when stamping execution time.
+
+3. **Create disabled** (`active=false`) so the rule does not fire while you verify:
+
+   ```
+   create_automation pipe_id=67890 name="Stamp execution time on new cards" trigger_id=card_created action_id=update_card_field active=false extra_input={"action_params":{"card_id":"%{id}","field_map":[{"fieldId":"<destination_internal_id>","inputMode":"copy_from","value":"%{automation_event_execution_datetime}"}],"fields_map_order":["<destination_internal_id>"]}}
+   ```
+
+   Common `value` tokens when `inputMode` is `copy_from`: `%{id}` (also use in `card_id`), `%{created_at}`, `%{automation_event_execution_datetime}`, `%{<other_internal_id>}` to copy another field.
+
+4. **Verify persisted config:**
+
+   ```
+   get_automation automation_id=<id>
+   ```
+
+   Confirm `action_params.field_map` round-tripped.
+
+5. **Enable** when correct:
+
+   ```
+   update_automation automation_id=<id> extra_input={"active":true}
+   ```
+
+---
+
 ## Steps — simulate a traditional automation
 
 `simulate_automation` is **AI-only** today (only `generate_with_ai` `action_id` is accepted). For non-AI rules, watch `get_automation_logs` after the trigger fires.
@@ -102,14 +148,19 @@ For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipe
 
 ---
 
-## Phase transition preflight
+## Traditional automation preflight
 
-For `move_single_card` actions with trigger `card_moved`, `create_automation` / `update_automation` validate that the destination phase is reachable from the source via `cards_can_be_moved_to_phases`. If invalid, the tool returns an `AutomationPreflightError` with:
+### `field_map` destination `fieldId`
 
-- `valid_destinations` — the allowed phase IDs.
-- A hint that transition rules are configured in the Pipefy UI only (not editable via API).
+On `create_automation`, when `extra_input.action_params.field_map` is present, the SDK checks each `fieldId` against numeric `internal_id` values on the action pipe (`action_repo_id`, default `pipe_id`). Slug-shaped `fieldId` values and unknown numeric ids fail before GraphQL with `success: false` and the offending id. Recovery: `get_start_form_fields` / `get_phase_fields` → use `internal_id`, not slug.
 
-Re-issue the call with one of `valid_destinations` rather than retrying the same payload.
+### Phase transition (`move_single_card`)
+
+For `move_single_card` actions with trigger `card_moved`, **`create_automation` only** validates that the destination phase is reachable from the source via `cards_can_be_moved_to_phases` (same read-only data as `move_card_to_phase`). `update_automation` does not run this check.
+
+If invalid, the tool returns `success: false` with a **text** error message listing allowed destination phases by name and id, plus a hint that transition rules are configured in the Pipefy UI only (not editable via API). There is no structured `valid_destinations` field on this envelope.
+
+Recovery: read the allowed phases in `error.message`, or call `get_phase_allowed_move_targets(phase_id=<source_phase_id>)` on the source phase from `event_params.to_phase_id`, then re-issue `create_automation` with a permitted destination phase id.
 
 ---
 
@@ -155,13 +206,19 @@ Use this pattern for approvals, financial decisions, content publication, and an
 - **`validate_ai_automation_prompt` returns `valid:false`.** Read `problems` (per-field) and `warnings`. Most common: prompt missing `%{internal_id}` reference, or `field_ids` overlap with prompt `%{id}` tokens.
 - **`create_automation` cycle detection.** Same-pipe `card_created` + `create_card` rejected with `"This automation can't be created! It would result in an endless card creation cycle."` Use a different trigger, target a different pipe, or use `update_card` instead.
 - **`create_automation` fails with unknown event/action.** Always run `get_automation_events` + `get_automation_actions` first; do not guess IDs.
-- **Phase transition error on `move_single_card`.** Re-issue with one of the `valid_destinations` returned in the error. UI is the only edit surface for transition rules.
+- **Phase transition error on `move_single_card`.** Only `create_automation` preflights transitions. Read allowed phase ids in the error text or call `get_phase_allowed_move_targets`, then re-issue with a permitted destination. UI is the only edit surface for transition rules.
 - **Cross-pipe `PERMISSION_DENIED`.** SA must be member of both source and destination pipes for `create_connected_card` / cross-pipe `create_card`. Recovery: `get_pipe_members` + `invite_members`.
 - **`get_automation_logs_by_repo` returns empty.** Pipe has no traditional automation executions; not an error. AI agent executions are separate (see `get_ai_agent_logs`).
 - **`create_send_task_automation` fires immediately when `active=true`.** Pass `active=false` first if you want to wire it up before the rule starts firing. The 2026-04-16 orphaned-task incident is the cautionary tale.
 - **`update_automation` API asymmetry.** `create_automation` takes a top-level `active` param; `update_automation` requires `extra_input={"active": false}`. Pass `active` through `extra_input` when toggling on an existing rule.
 - **`action_repo_id` semantics.** For cross-pipe actions (`create_connected_card`, `create_card` into another pipe), this is the **destination** pipe, not the source.
 - **Simulation reuses real rule params.** Before simulating, call `get_automation` to read `event_params` and `action_params` of a working rule and pass them verbatim. Don't hand-craft params.
+- **`field_map` uses slug in `fieldId`.** Preflight rejects non-numeric `fieldId` before GraphQL; slugs (e.g. `due_date`) used to surface as `INTERNAL_SERVER_ERROR`. Recovery: `get_start_form_fields` / `get_phase_fields` → use `internal_id`.
+- **Unknown `field_map` `fieldId`.** `create_automation` preflight fails with the offending id when the destination field is not on the action pipe. Re-discover ids on `action_repo_id` (not only the trigger pipe for cross-pipe actions).
+- **Used `update_card_field` MCP tool for a rule.** That tool updates one card by **slug**; automations need `create_automation` + `field_map` with numeric `fieldId`.
+- **Missing or wrong `card_id`.** Set `action_params.card_id` to `"%{id}"` for the triggering card; empty/wrong values prevent the intended update.
+- **Token typo in `field_map.value`.** Typos in `%{…}` templates leave fields unchanged at runtime. Compare with [Automation Event Attributes](https://developers.pipefy.com/reference/automation-event-attributes) and a working rule from `get_automation`.
+- **Rule runs but field unchanged.** Check `get_automation_logs` / `get_automation_logs_by_repo` for execution errors; invalid `fieldId` may fail silently (no card update).
 
 ## See also
 

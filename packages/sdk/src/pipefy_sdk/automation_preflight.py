@@ -9,6 +9,7 @@ CLI commands) can distinguish preflight failures from transport errors.
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING, Any
 
 from pipefy_sdk.transition_hints import (
@@ -23,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 # Traditional automation action IDs that move the current card to another phase (same repo).
 _AUTOMATION_MOVE_CARD_ACTION_IDS = frozenset({"move_single_card"})
+
+_DIGITS_ONLY_RE = re.compile(r"^\d+$")
 
 
 class AutomationPreflightError(ValueError):
@@ -130,8 +133,170 @@ async def validate_traditional_automation_move_transition(
     )
 
 
+def extract_field_map_destination_ids(
+    extra_input: dict[str, Any] | None,
+) -> list[str]:
+    """Return ``field_map`` destination ``fieldId`` values from ``CreateAutomationInput``-style dicts."""
+    if not isinstance(extra_input, dict):
+        return []
+    act = extra_input.get("action_params") or extra_input.get("actionParams") or {}
+    if not isinstance(act, dict):
+        return []
+    field_map = act.get("field_map") or act.get("fieldMap")
+    if not field_map:
+        return []
+    ids: list[str] = []
+    for entry in field_map:
+        if not isinstance(entry, dict):
+            continue
+        raw = entry.get("fieldId") or entry.get("field_id")
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if text:
+            ids.append(text)
+    return ids
+
+
+def collect_internal_field_ids_from_pipe_info(pipe_info: dict[str, Any]) -> set[str]:
+    """Collect numeric ``internal_id`` values from embedded start-form and phase fields."""
+    internal_ids: set[str] = set()
+    for field in pipe_info.get("start_form_fields") or []:
+        if not isinstance(field, dict):
+            continue
+        iid = field.get("internal_id")
+        if iid is not None:
+            internal_ids.add(str(iid))
+    for phase in pipe_info.get("phases") or []:
+        if not isinstance(phase, dict):
+            continue
+        for field in phase.get("fields") or []:
+            if not isinstance(field, dict):
+                continue
+            iid = field.get("internal_id")
+            if iid is not None:
+                internal_ids.add(str(iid))
+    return internal_ids
+
+
+def collect_field_map_field_id_error_message(
+    *,
+    field_id: str,
+    action_pipe_id: str,
+    non_numeric_slug: bool = False,
+) -> str:
+    """Build blocking error text for invalid ``field_map`` ``fieldId`` values."""
+    discovery = (
+        "Discover numeric internal_id values with get_start_form_fields(pipe_id) "
+        "or get_phase_fields(phase_id)."
+    )
+    if non_numeric_slug:
+        return (
+            f'field_map fieldId "{field_id}" must be the numeric internal_id on pipe '
+            f"{action_pipe_id}, not the field slug used by update_card_field. {discovery}"
+        )
+    return (
+        f'field_map fieldId "{field_id}" was not found on pipe {action_pipe_id}. '
+        f"{discovery}"
+    )
+
+
+def find_non_numeric_field_map_field_id(destination_ids: list[str]) -> str | None:
+    """Return the first slug-shaped ``fieldId``, or ``None`` when all are numeric."""
+    for field_id in destination_ids:
+        if not _DIGITS_ONLY_RE.match(field_id):
+            return field_id
+    return None
+
+
+def find_invalid_field_map_field_id(
+    destination_ids: list[str],
+    known_internal_ids: set[str],
+) -> tuple[str, bool] | None:
+    """Return ``(field_id, non_numeric_slug)`` for the first invalid id, or ``None``."""
+    for field_id in destination_ids:
+        if not _DIGITS_ONLY_RE.match(field_id):
+            return (field_id, True)
+        if field_id not in known_internal_ids:
+            return (field_id, False)
+    return None
+
+
+async def _load_action_pipe_internal_field_ids(
+    client: PipefyClient,
+    action_pipe_id: str,
+) -> set[str] | None:
+    try:
+        pipe_data = await client.get_pipe(action_pipe_id)
+    except Exception:  # noqa: BLE001
+        logger.debug(
+            "Traditional automation field_map validation: get_pipe failed; "
+            "skipping validation (pipe_id=%s)",
+            action_pipe_id,
+            exc_info=True,
+        )
+        return None
+    pipe_info = pipe_data.get("pipe") or {}
+    if not isinstance(pipe_info, dict):
+        return set()
+    return collect_internal_field_ids_from_pipe_info(pipe_info)
+
+
+async def validate_automation_field_map_field_ids(
+    client: PipefyClient,
+    action_pipe_id: str,
+    extra_input: dict[str, Any] | None,
+) -> None:
+    """Raise :class:`AutomationPreflightError` when ``field_map`` references unknown destination fields.
+
+    Only runs when ``extra_input`` includes ``action_params.field_map`` (or camelCase
+    equivalents). Compares each ``fieldId`` to numeric ``internal_id`` values on
+    ``action_pipe_id`` (the action repo pipe). Upstream field-load failures are logged
+    and skipped so preflight does not block creates on transient API errors.
+
+    Args:
+        client: Pipefy facade.
+        action_pipe_id: Pipe where the action executes (``action_repo_id`` or event pipe).
+        extra_input: Optional ``CreateAutomationInput``-style dict.
+    """
+    destination_ids = extract_field_map_destination_ids(extra_input)
+    if not destination_ids:
+        return
+    slug_field_id = find_non_numeric_field_map_field_id(destination_ids)
+    if slug_field_id is not None:
+        raise AutomationPreflightError(
+            collect_field_map_field_id_error_message(
+                field_id=slug_field_id,
+                action_pipe_id=action_pipe_id,
+                non_numeric_slug=True,
+            )
+        )
+    known_internal_ids = await _load_action_pipe_internal_field_ids(
+        client, action_pipe_id
+    )
+    if known_internal_ids is None:
+        return
+    invalid = find_invalid_field_map_field_id(destination_ids, known_internal_ids)
+    if invalid is None:
+        return
+    field_id, non_numeric_slug = invalid
+    raise AutomationPreflightError(
+        collect_field_map_field_id_error_message(
+            field_id=field_id,
+            action_pipe_id=action_pipe_id,
+            non_numeric_slug=non_numeric_slug,
+        )
+    )
+
+
 __all__ = [
     "AutomationPreflightError",
     "collect_automation_move_transition_error_message",
+    "collect_field_map_field_id_error_message",
+    "collect_internal_field_ids_from_pipe_info",
+    "extract_field_map_destination_ids",
+    "find_invalid_field_map_field_id",
+    "find_non_numeric_field_map_field_id",
+    "validate_automation_field_map_field_ids",
     "validate_traditional_automation_move_transition",
 ]

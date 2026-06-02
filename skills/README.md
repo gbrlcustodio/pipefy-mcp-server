@@ -36,7 +36,9 @@ git clone https://github.com/gbrlcustodio/pipefy-mcp-server.git
 | **AI Agents** | [pipefy-ai-agents](ai-agents/pipefy-ai-agents/SKILL.md) | Conversational AI agents and behaviors. 7 MCP tools. |
 | **Observability** | [pipefy-observability](observability/pipefy-observability/SKILL.md) | Logs, usage, credits, job exports. 10 MCP tools. |
 | **Members, Email & Webhooks** | [pipefy-members-email-webhooks](members-email-webhooks/pipefy-members-email-webhooks/SKILL.md) | Membership, email, webhooks. 11 MCP tools. |
+| **Portal setup** | [pipefy-portal-setup](portal-setup/pipefy-portal-setup/SKILL.md) | Main portal, pages, elements, sub-portals (publish/unpublish). 20 MCP tools. |
 | **Introspection** | [pipefy-introspection](introspection/pipefy-introspection/SKILL.md) | Schema discovery and GraphQL fallback. 6 MCP tools. |
+| **Attachments** | [pipefy-attachments](attachments/pipefy-attachments/SKILL.md) | Upload files to card or table-record attachment fields. 2 MCP tools. |
 | **Process Design** | [pipefy-process-design](process-design/pipefy-process-design/SKILL.md) | Process architecture (consulting; not execution). |
 | **Process Intelligence** | [pipefy-process-intelligence](process-intelligence/pipefy-process-intelligence/SKILL.md) | Analyze pipes for improvement opportunities. |
 | **API Fallback** | [pipefy-api-fallback](api-troubleshoot/pipefy-api-fallback/SKILL.md) | Raw GraphQL fallback when higher-level tools are insufficient. |

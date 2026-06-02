@@ -8,6 +8,7 @@ from httpx import Auth
 
 from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
 from pipefy_sdk.automation_preflight import (
+    validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
 from pipefy_sdk.models.ai_agent import (
@@ -32,6 +33,7 @@ from pipefy_sdk.services.ai_automation_service import AiAutomationService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_graphql_types import (
     AutomationActionRow,
+    AutomationEventAttributeRow,
     AutomationEventRow,
     AutomationRuleRecord,
     AutomationRuleSummary,
@@ -629,6 +631,12 @@ class PipefyClient:
         """List available automation trigger events for a pipe (for building create/update payloads)."""
         return await self._automation_service.get_automation_events(pipe_id)
 
+    async def get_automation_event_attributes(
+        self,
+    ) -> list[AutomationEventAttributeRow]:
+        """List official event-attribute tokens for traditional automation ``field_map.value``."""
+        return await self._automation_service.get_automation_event_attributes()
+
     async def create_automation(
         self,
         pipe_id: str,
@@ -647,6 +655,11 @@ class PipefyClient:
         rule references an unreachable destination phase. The check is a no-op for other
         trigger/action combinations.
 
+        When ``extra_input.action_params.field_map`` is present, runs
+        :func:`pipefy_sdk.automation_preflight.validate_automation_field_map_field_ids`
+        against ``action_repo_id`` (default ``pipe_id``) so unknown or slug ``fieldId``
+        values fail before GraphQL.
+
         Args:
             pipe_id: Pipe ID (event source).
             name: Rule name.
@@ -659,10 +672,14 @@ class PipefyClient:
             extra_input: Extra ``CreateAutomationInput`` keys; ``active`` here overrides the ``active`` argument.
 
         Raises:
-            AutomationPreflightError: When the move-card transition is invalid.
+            AutomationPreflightError: When the move-card transition or ``field_map``
+                destination ``fieldId`` is invalid.
         """
         await validate_traditional_automation_move_transition(
             self, trigger_id, action_id, extra_input
+        )
+        await validate_automation_field_map_field_ids(
+            self, str(action_repo_id or pipe_id), extra_input
         )
         return await self._automation_service.create_automation(
             pipe_id,
@@ -703,7 +720,10 @@ class PipefyClient:
         automation_id: str,
         extra_input: dict[str, Any] | None = None,
     ) -> UpdateAutomationMutationResult:
-        """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names)."""
+        """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names).
+
+        Does not run ``field_map`` or move-transition preflight (those run on ``create_automation`` only).
+        """
         return await self._automation_service.update_automation(
             automation_id, **(extra_input or {})
         )

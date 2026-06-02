@@ -158,6 +158,9 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     automation_service.get_automation_events = AsyncMock(
         return_value={"ok": "get_automation_events"}
     )
+    automation_service.get_automation_event_attributes = AsyncMock(
+        return_value={"ok": "get_automation_event_attributes"}
+    )
     automation_service.create_automation = AsyncMock(
         return_value={"ok": "create_automation"}
     )
@@ -460,6 +463,11 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 
     assert await client.get_automation_events("p2") == {"ok": "get_automation_events"}
     automation_service.get_automation_events.assert_awaited_once_with("p2")
+
+    assert await client.get_automation_event_attributes() == {
+        "ok": "get_automation_event_attributes"
+    }
+    automation_service.get_automation_event_attributes.assert_awaited_once_with()
 
     assert await client.create_automation("p1", "Rule", "ev", "act") == {
         "ok": "create_automation"

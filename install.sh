@@ -174,23 +174,28 @@ pick_system_python() {
     # python-build-standalone (PBS). PBS binaries lack the entitlements that
     # `Security.framework` requires for keychain writes, so `pipefy auth login`
     # later fails with `(-25244, 'Unknown Error')` (errSecMissingEntitlement).
-    # On Linux, uv's default Python is fine. Respect a pre-set UV_PYTHON.
+    # On Linux, uv's default Python is fine.
     [ "$OS" = "Darwin" ] || return 0
-    [ -z "${UV_PYTHON:-}" ] || return 0
+    # Honor UV_PYTHON only when it points at an absolute path (a user-pinned
+    # interpreter). A version spec like `UV_PYTHON=3.13` leaves uv free to
+    # resolve to PBS, which is the failure case this function exists to avoid.
+    case "${UV_PYTHON:-}" in /*) return 0 ;; esac
 
     for cmd in python3.14 python3.13 python3.12 python3.11 python3; do
         path=$(command -v "$cmd" 2>/dev/null) || continue
         [ -n "$path" ] || continue
-        # Skip uv-managed PBS interpreters (the very thing we're avoiding).
-        case "$path" in
+        # Probe version and resolve sys.executable in the same Python call so
+        # the PBS-path filter runs against the real interpreter, not a symlink:
+        # uv shims under ~/.local/bin/python3.NN point into PBS but their own
+        # paths don't contain `/share/uv/python/`.
+        real_path=$("$path" -c 'import os, sys; sys.version_info >= (3, 11) or sys.exit(1); print(os.path.realpath(sys.executable))' 2>/dev/null) || continue
+        case "$real_path" in
             */.local/share/uv/python/*|*/share/uv/python/*) continue ;;
         esac
-        if "$path" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
-            PYTHON_OVERRIDE="$path"
-            say "Using system Python for tool venvs: $path"
-            say "  (avoids macOS keychain entitlement failures with uv-managed Python.)"
-            return 0
-        fi
+        PYTHON_OVERRIDE="$path"
+        say "Using system Python for tool venvs: $path"
+        say "  (avoids macOS keychain entitlement failures with uv-managed Python.)"
+        return 0
     done
 
     warn "No system python3 >= 3.11 found on PATH. uv will use its managed Python; if 'pipefy auth login' later fails with keychain error -25244, set PIPEFY_KEYCHAIN_BACKEND=file or install Homebrew python3."

@@ -1,6 +1,6 @@
 # Release process
 
-Workspace distributions (`pipefy-sdk`, `pipefy-mcp-server`, `pipefy-cli`) share a single **lockstep** version string in each package’s `__init__.py`. CI fails if those values diverge.
+Workspace distributions (`pipefy-sdk`, `pipefy-mcp-server`, `pipefy-cli`, `pipefy-auth`, `pipefy-infra`) share a single **lockstep** version string in each package's `__init__.py`. CI fails if those values diverge.
 
 ## Pre-launch (v0.x): GitHub Release only
 
@@ -10,10 +10,10 @@ PyPI publishing is **disabled** for tags that do not start with `v1.`. Pre-relea
 
 The next **GitHub pre-release** after the standalone repo’s [`v0.1.0-beta.1`](https://github.com/gbrlcustodio/pipefy-mcp-server/releases/tag/v0.1.0-beta.1) is the **`v0.2.0-beta.*`** series on this monorepo (first cut: **`v0.2.0-beta.1`** unless you intentionally reuse another suffix). Same mechanics as any other **v0.x** tag: attach wheels to the GitHub Release; **no PyPI** until **`v1.`**.
 
-The Release workflow requires the git tag (without leading `v`) to **exactly match** `__version__` in `packages/sdk/src/pipefy_sdk/__init__.py` (and the MCP/CLI copies). For example tag **`v0.2.0-beta.1`** implies **`__version__ = "0.2.0-beta.1"`** in all three packages before you push the tag (set via step 2 below using `version=0.2.0-beta.1`, or edit the three `__init__.py` files together).
+The Release workflow requires the git tag (without leading `v`) to **exactly match** `__version__` in `packages/sdk/src/pipefy_sdk/__init__.py` (and the MCP/CLI/Auth/Infra copies). For example tag **`v0.2.0-beta.1`** implies **`__version__ = "0.2.0-beta.1"`** in all five packages before you push the tag (set via step 2 below using `version=0.2.0-beta.1`, or edit the five `__init__.py` files together).
 
 1. Merge work to `main` and ensure `CHANGELOG.md` has everything under `## [Unreleased]`.
-2. Bump the shared version (updates all three `__init__.py` files):
+2. Bump the shared version (updates all five `__init__.py` files):
 
    ```bash
    uv run python scripts/bump_version.py patch
@@ -43,7 +43,7 @@ The Release workflow requires the git tag (without leading `v`) to **exactly mat
    ```
 
 7. Wait for the **Release** workflow (`.github/workflows/release.yml`) to finish.
-8. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, and `pipefy_sdk-*.whl` when produced). Optionally verify install from the tag, for example:
+8. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, `pipefy_sdk-*.whl`, `pipefy_auth-*.whl`, and `pipefy_infra-*.whl`). Optionally verify install from the tag, for example:
 
    ```bash
    uvx --from git+https://github.com/<owner>/<repo>.git@vX.Y.Z --refresh pipefy-cli --version
@@ -94,6 +94,6 @@ Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.
 
 | Piece | Role |
 | --- | --- |
-| `scripts/bump_version.py` | Reads the SDK `__version__`, applies the bump, writes the same value to SDK, MCP, and CLI `__init__.py`. |
-| `.github/workflows/ci.yml` | Asserts the three `__version__` strings match. |
+| `scripts/bump_version.py` | Reads the SDK `__version__`, applies the bump, writes the same value to SDK, MCP, CLI, Auth, and Infra `__init__.py`. |
+| `.github/workflows/ci.yml` | Asserts the five `__version__` strings match. |
 | `.github/workflows/release.yml` | On `v*` tags: asserts the tag matches SDK `__version__`, extracts the matching `CHANGELOG.md` section as the GitHub Release body, builds wheels and sdists with `uv build --all-packages -o dist --wheel --sdist`, attaches wheels to the GitHub Release, and publishes CLI + MCP wheels to PyPI only when `github.ref_name` starts with `v1.`. |

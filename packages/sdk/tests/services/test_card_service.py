@@ -9,6 +9,7 @@ import pytest
 from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.card_queries import (
+    CREATE_CARD_MUTATION,
     FIND_CARDS_QUERY,
     GET_CARD_RELATIONS_QUERY,
     GET_CARDS_QUERY,
@@ -43,13 +44,125 @@ async def test_create_card_converts_fields_and_sets_generated_by_ai(mock_setting
     result = await service.create_card(pipe_id, fields)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables["pipe_id"] == str(pipe_id), "Expected pipe_id in variables"
-    assert variables["fields"] == [
-        {"field_id": "title", "field_value": "Teste-MCP", "generated_by_ai": True}
-    ], "Expected fields converted to array format"
+    assert variables == {
+        "input": {
+            "pipe_id": str(pipe_id),
+            "fields_attributes": [
+                {
+                    "field_id": "title",
+                    "field_value": "Teste-MCP",
+                    "generated_by_ai": True,
+                }
+            ],
+        }
+    }
     assert result == {"createCard": {"card": {"id": "12345"}}}, (
         "Expected createCard response"
     )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_card_with_phase_id_sends_create_card_input(mock_settings):
+    """create_card with phase_id uses CreateCardInput with phase_id and fields_attributes."""
+    pipe_id = 303181849
+    phase_id = 987654321
+    fields = {"title": "Orphan phase card"}
+
+    service = _make_service(mock_settings, {"createCard": {"card": {"id": "12345"}}})
+    await service.create_card(pipe_id, fields, phase_id=phase_id)
+
+    query_used = service.execute_query.call_args[0][0]
+    variables = service.execute_query.call_args[0][1]
+    assert query_used is CREATE_CARD_MUTATION
+    assert "CreateCardInput" in CREATE_CARD_MUTATION.loc.source.body
+    assert variables == {
+        "input": {
+            "pipe_id": str(pipe_id),
+            "phase_id": str(phase_id),
+            "fields_attributes": [
+                {
+                    "field_id": "title",
+                    "field_value": "Orphan phase card",
+                    "generated_by_ai": True,
+                }
+            ],
+        }
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_card_with_phase_id_and_title_sends_create_card_input(
+    mock_settings,
+):
+    """create_card passes optional title on CreateCardInput when provided."""
+    pipe_id = 303181849
+    phase_id = 987654321
+    card_title = "Seed card title"
+
+    service = _make_service(mock_settings, {"createCard": {"card": {"id": "12345"}}})
+    await service.create_card(pipe_id, {}, phase_id=phase_id, title=card_title)
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables == {
+        "input": {
+            "pipe_id": str(pipe_id),
+            "phase_id": str(phase_id),
+            "title": card_title,
+            "fields_attributes": [],
+        }
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_card_without_phase_id_uses_create_card_input(mock_settings):
+    """create_card without phase_id still uses CreateCardInput (no phase_id key)."""
+    pipe_id = 303181849
+    fields = {"title": "Start form card"}
+
+    service = _make_service(mock_settings, {"createCard": {"card": {"id": "12345"}}})
+    await service.create_card(pipe_id, fields)
+
+    query_used = service.execute_query.call_args[0][0]
+    variables = service.execute_query.call_args[0][1]
+    assert query_used is CREATE_CARD_MUTATION
+    assert "CreateCardInput" in CREATE_CARD_MUTATION.loc.source.body
+    assert variables == {
+        "input": {
+            "pipe_id": str(pipe_id),
+            "fields_attributes": [
+                {
+                    "field_id": "title",
+                    "field_value": "Start form card",
+                    "generated_by_ai": True,
+                }
+            ],
+        }
+    }
+    assert "phase_id" not in variables["input"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_card_with_title_only_sends_create_card_input(mock_settings):
+    """create_card passes title on CreateCardInput without phase_id (MCP happy path)."""
+    pipe_id = 303181849
+    card_title = "Start form title"
+
+    service = _make_service(mock_settings, {"createCard": {"card": {"id": "12345"}}})
+    await service.create_card(pipe_id, {}, title=card_title)
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables == {
+        "input": {
+            "pipe_id": str(pipe_id),
+            "title": card_title,
+            "fields_attributes": [],
+        }
+    }
+    assert "phase_id" not in variables["input"]
 
 
 @pytest.mark.unit
@@ -63,8 +176,12 @@ async def test_create_card_with_empty_dict_sends_empty_list(mock_settings):
     result = await service.create_card(pipe_id, fields)
 
     variables = service.execute_query.call_args[0][1]
-    assert variables["pipe_id"] == str(pipe_id), "Expected pipe_id in variables"
-    assert variables["fields"] == [], "Empty dict should result in empty list"
+    assert variables == {
+        "input": {
+            "pipe_id": str(pipe_id),
+            "fields_attributes": [],
+        }
+    }
     assert result == {"createCard": {"card": {"id": "12345"}}}, (
         "Expected createCard response"
     )

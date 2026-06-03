@@ -58,18 +58,22 @@ async def test_create_card_with_dict_fields():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == str(pipe_id)
-    assert isinstance(variables["fields"], list)
-    assert len(variables["fields"]) == 2
-    assert variables["fields"][0] == {
-        "field_id": "title",
-        "field_value": "Teste-MCP",
-        "generated_by_ai": True,
-    }
-    assert variables["fields"][1] == {
-        "field_id": "description",
-        "field_value": "Test description",
-        "generated_by_ai": True,
+    assert variables == {
+        "input": {
+            "pipe_id": str(pipe_id),
+            "fields_attributes": [
+                {
+                    "field_id": "title",
+                    "field_value": "Teste-MCP",
+                    "generated_by_ai": True,
+                },
+                {
+                    "field_id": "description",
+                    "field_value": "Test description",
+                    "generated_by_ai": True,
+                },
+            ],
+        }
     }
     assert result == {"createCard": {"card": {"id": "12345"}}}
 
@@ -91,17 +95,22 @@ async def test_create_card_with_array_fields():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == str(pipe_id)
-    assert len(variables["fields"]) == 2
-    assert variables["fields"][0] == {
-        "field_id": "title",
-        "field_value": "Teste-MCP",
-        "generated_by_ai": True,
-    }
-    assert variables["fields"][1] == {
-        "field_id": "description",
-        "field_value": "Test description",
-        "generated_by_ai": True,
+    assert variables == {
+        "input": {
+            "pipe_id": str(pipe_id),
+            "fields_attributes": [
+                {
+                    "field_id": "title",
+                    "field_value": "Teste-MCP",
+                    "generated_by_ai": True,
+                },
+                {
+                    "field_id": "description",
+                    "field_value": "Test description",
+                    "generated_by_ai": True,
+                },
+            ],
+        }
     }
     assert result == {"createCard": {"card": {"id": "12345"}}}
 
@@ -119,8 +128,12 @@ async def test_create_card_with_empty_dict():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == str(pipe_id)
-    assert variables["fields"] == []
+    assert variables == {
+        "input": {
+            "pipe_id": str(pipe_id),
+            "fields_attributes": [],
+        }
+    }
     assert result == {"createCard": {"card": {"id": "12345"}}}
 
 
@@ -138,12 +151,17 @@ async def test_create_card_with_single_field():
 
     mock_execute.assert_called_once()
     variables = mock_execute.call_args[0][1]
-    assert variables["pipe_id"] == str(pipe_id)
-    assert len(variables["fields"]) == 1
-    assert variables["fields"][0] == {
-        "field_id": "title",
-        "field_value": "Teste-MCP",
-        "generated_by_ai": True,
+    assert variables == {
+        "input": {
+            "pipe_id": str(pipe_id),
+            "fields_attributes": [
+                {
+                    "field_id": "title",
+                    "field_value": "Teste-MCP",
+                    "generated_by_ai": True,
+                }
+            ],
+        }
     }
     assert result == {"createCard": {"card": {"id": "12345"}}}
 
@@ -839,6 +857,46 @@ async def test_get_phase_allowed_move_targets_delegates_to_pipe_service():
 
     mock_execute.assert_awaited()
     assert mock_execute.call_args[0][1] == {"phase_id": "5"}
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_cards_count_payload_delegates_to_pipe_service():
+    expected = {"phase_id": "5", "phase_name": "Doing", "cards_count": 3}
+    pipe_service = AsyncMock()
+    pipe_service.get_phase_cards_count_payload = AsyncMock(return_value=expected)
+    client = PipefyClient.__new__(PipefyClient)
+    client._pipe_service = pipe_service
+
+    result = await client.get_phase_cards_count_payload(5)
+
+    pipe_service.get_phase_cards_count_payload.assert_awaited_once_with(5)
+    assert result == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_cards_delegates_to_pipe_service():
+    expected = {"phase": {"id": "5", "cards": {"edges": []}}}
+    pipe_service = AsyncMock()
+    pipe_service.get_phase_cards = AsyncMock(return_value=expected)
+    client = PipefyClient.__new__(PipefyClient)
+    client._pipe_service = pipe_service
+
+    result = await client.get_phase_cards(
+        5,
+        first=50,
+        after="c1",
+        include_fields=True,
+    )
+
+    pipe_service.get_phase_cards.assert_awaited_once_with(
+        5,
+        first=50,
+        after="c1",
+        include_fields=True,
+    )
     assert result == expected
 
 

@@ -309,6 +309,28 @@ async def test_create_pipe_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_pipe_report_forwards_golden_phase_filter(mock_settings):
+    from pipefy_sdk.report_filter_preflight import EXAMPLE_PHASE_FILTER
+
+    golden_filter = {
+        **EXAMPLE_PHASE_FILTER,
+        "queries": [
+            {
+                **EXAMPLE_PHASE_FILTER["queries"][0],
+                "value": "987654321",
+            }
+        ],
+    }
+    payload = {"createPipeReport": {"pipeReport": {"id": "r10", "name": "Filtered"}}}
+    service = _make_service(mock_settings, payload)
+    await service.create_pipe_report("123", "Filtered", filter=golden_filter)
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables["input"]["filter"] == golden_filter
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_create_pipe_report_minimal(mock_settings):
     payload = {"createPipeReport": {"pipeReport": {"id": "r11", "name": "Minimal"}}}
     service = _make_service(mock_settings, payload)

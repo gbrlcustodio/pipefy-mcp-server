@@ -13,6 +13,7 @@ GET_PIPE_QUERY = gql(
             phases {
                 id
                 name
+                cards_count
                 fields {
                     id
                     internal_id
@@ -133,7 +134,40 @@ GET_PHASE_CARDS_COUNT_QUERY = gql(
     query GetPhaseCardsCount($phase_id: ID!) {
         phase(id: $phase_id) {
             id
+            name
             cards_count
+        }
+    }
+    """
+)
+
+GET_PHASE_CARDS_QUERY = gql(
+    """
+    query GetPhaseCards(
+        $phase_id: ID!,
+        $first: Int,
+        $after: String,
+        $includeFields: Boolean!
+    ) {
+        phase(id: $phase_id) {
+            id
+            cards(first: $first, after: $after) {
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
+                edges {
+                    node {
+                        id
+                        title
+                        fields @include(if: $includeFields) {
+                            name
+                            value
+                        }
+                    }
+                }
+                totalCount
+            }
         }
     }
     """
@@ -176,6 +210,7 @@ GET_PIPE_WITH_PREFERENCES_QUERY = gql(
 __all__ = [
     "GET_PHASE_ALLOWED_MOVES_QUERY",
     "GET_PHASE_CARDS_COUNT_QUERY",
+    "GET_PHASE_CARDS_QUERY",
     "GET_PHASE_FIELDS_QUERY",
     "GET_PIPE_MEMBERS_QUERY",
     "GET_PIPE_QUERY",

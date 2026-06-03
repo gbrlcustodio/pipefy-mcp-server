@@ -40,11 +40,30 @@ class CardService(BasePipefyClient):
         super().__init__(settings=settings, auth=auth)
 
     async def create_card(
-        self, pipe_id: str | int, fields: dict[str, Any] | list[dict[str, Any]]
+        self,
+        pipe_id: str | int,
+        fields: dict[str, Any] | list[dict[str, Any]],
+        *,
+        phase_id: str | int | None = None,
+        title: str | None = None,
     ) -> dict:
-        """Create a card in the specified pipe with the given fields."""
-        variables = {"pipe_id": str(pipe_id), "fields": convert_fields_to_array(fields)}
-        return await self.execute_query(CREATE_CARD_MUTATION, variables)
+        """Create a card in the specified pipe with the given fields.
+
+        Args:
+            pipe_id: Target pipe id.
+            fields: Field slug/id map or ``FieldValueInput`` list (→ ``fields_attributes``).
+            phase_id: Optional phase to create the card in (non–start-form seeding).
+            title: Optional card title on ``CreateCardInput`` (vs post-create update).
+        """
+        card_input: dict[str, Any] = {
+            "pipe_id": str(pipe_id),
+            "fields_attributes": convert_fields_to_array(fields),
+        }
+        if phase_id is not None:
+            card_input["phase_id"] = str(phase_id)
+        if title is not None:
+            card_input["title"] = title
+        return await self.execute_query(CREATE_CARD_MUTATION, {"input": card_input})
 
     async def create_comment(self, card_id: str | int, text: str) -> dict:
         """Create a text comment on the specified card."""

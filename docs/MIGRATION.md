@@ -11,7 +11,7 @@ Existing users of `pipefy-mcp-server`: this guide covers what changed and what t
 **Pre-launch (v0.1 → v0.5):** install from git to get the latest:
 
 ```sh
-uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-mcp-server
+uvx --from git+https://github.com/pipefy/ai-toolkit@latest --refresh pipefy-mcp-server
 ```
 
 ---
@@ -43,12 +43,16 @@ All MCP tools keep the same names, parameters, and behavior as in the pre-monore
 
 ## Repo URL
 
-The repository was renamed from `pipefy-mcp-server` to `pipefy-labs` on GitHub. GitHub preserves redirects — your existing `git remote` URLs for the old repo keep working for `git fetch`, `git pull`, and `git push`.
-
-Update your remote at your convenience:
+The toolkit lives in the **Pipefy org** at **[github.com/pipefy/ai-toolkit](https://github.com/pipefy/ai-toolkit)**. Earlier community forks (`pipefy-mcp-server`, `pipefy-labs`) may still redirect on GitHub; update remotes and install URLs when you can.
 
 ```sh
-git remote set-url origin https://github.com/<owner>/pipefy-labs.git
+git remote set-url origin https://github.com/pipefy/ai-toolkit.git
+```
+
+Pre-1.0 installs from git:
+
+```sh
+uvx --from git+https://github.com/pipefy/ai-toolkit@latest --refresh pipefy-mcp-server
 ```
 
 ---
@@ -60,7 +64,7 @@ These are new additions — all optional to adopt:
 **`pipefy-cli`** — a terminal CLI with the same capabilities as the MCP server.
 
 ```sh
-uvx --from git+https://github.com/<owner>/pipefy-labs --refresh pipefy-cli
+uvx --from git+https://github.com/pipefy/ai-toolkit@latest --refresh pipefy-cli
 pipefy card get 12345
 ```
 
@@ -152,4 +156,4 @@ The legacy `PIPEFY_OAUTH_*` env-var aliases and the deprecation warning live on 
 
 ## Questions?
 
-Open an issue at [github.com/<owner>/pipefy-labs/issues](https://github.com/<owner>/pipefy-labs/issues) or email **dev@pipefy.com**.
+Open an issue at [github.com/pipefy/ai-toolkit/issues](https://github.com/pipefy/ai-toolkit/issues) or email **dev@pipefy.com**.

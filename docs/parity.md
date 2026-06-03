@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **149** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **152** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -30,16 +30,16 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_ai_agent` | `pipefy agent create` | shipped | AI Agents domain; post-v0.1 CLI unless explicitly rescoped. |
 | `create_ai_automation` | `pipefy ai-automation create` | shipped | AI Automations domain; post-v0.1 CLI unless explicitly rescoped. |
 | `create_automation` | `pipefy automation create` | shipped | (`--pipe`, `--name`, `--trigger-id`, `--action-id`, optional `--extra` JSON). |
-| `create_card` | `pipefy card create` | shipped | (`--fields` JSON, optional `--title`). |
+| `create_card` | `pipefy card create` | shipped | (`--fields` JSON, optional `--title`, optional `--phase-id` for `CreateCardInput.phase_id`). |
 | `create_card_relation` | `pipefy relation card create` | shipped | — |
 | `create_field_condition` | `pipefy field-condition create` | shipped | (`--phase`, `--name`, `--condition`, `--actions` JSON). |
-| `create_label` | `pipefy label create` | shipped | — |
+| `create_label` | `pipefy label create` | shipped | `color` must be hex `#RRGGBB` (validated before GraphQL). |
 | `create_organization_report` | `pipefy report-org create` | shipped | Organization reports; organization-level ops out of v0.1 parity. |
 | `create_phase` | `pipefy phase create` | shipped | — |
 | `create_phase_field` | `pipefy field create` | shipped | (phase fields). |
 | `create_pipe` | `pipefy pipe create` | shipped | (`--org`). |
 | `create_pipe_relation` | `pipefy relation pipe create` | shipped | — |
-| `create_pipe_report` | `pipefy report-pipe create` | shipped | Reports domain; deferred from v0.1 CLI parity. |
+| `create_pipe_report` | `pipefy report-pipe create` | shipped | Reports domain; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
 | `create_portal` | `pipefy portal create` | shipped | `--organization-uuid`; idempotent (find-or-create main portal). |
 | `create_portal_page` | `pipefy portal page create` | shipped | `--portal-uuid`, `--title`; optional `--description`, `--index`. Empty main portal may bootstrap a templated page when the API omits `elements`. |
 | `create_portal_element` | `pipefy portal element create` | shipped | `--page-id`, `--type`, `--metadata` JSON; optional `--data-sources` JSON array. SDK validates metadata before GraphQL. |
@@ -111,8 +111,11 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `get_organization_report` | `pipefy report-org get` | shipped | Organization reports. |
 | `get_organization_report_export` | (poll via `pipefy report-org export --format json`) | shipped | Organization reports + export-shaped. |
 | `get_organization_reports` | `pipefy report-org list` | shipped | Organization reports. |
+| `get_phase_allowed_move_targets` | `pipefy phase allowed-moves` | shipped | Read-only; mirrors Phase -> Connections (`cards_can_be_moved_to_phases`). |
+| `get_phase_cards_count` | `pipefy phase cards-count` | shipped | Native ``Phase.cards_count``; start-form caveat in tool docstring; pair with ``get_phase_cards`` to list. |
+| `get_phase_cards` | `pipefy phase cards` | shipped | ``Phase.cards`` pagination (``--first`` default 50, ``--after``, ``--include-fields``). Prefer over ``get_cards`` for phase-local inventory. |
 | `get_phase_fields` | `pipefy field list --phase` | shipped | ``pipefy phase get`` returns the same shape. |
-| `get_pipe` | `pipefy pipe get` | shipped | — |
+| `get_pipe` | `pipefy pipe get` | shipped | Additive `start_form_phase` + `phases[].cards_count` (start form not in `phases[]`). |
 | `get_pipe_members` | `pipefy member list` | shipped | — |
 | `get_pipe_relations` | `pipefy relation pipe list` | shipped | — |
 | `get_pipe_report` | `pipefy report-pipe get` | shipped | Reports domain. |
@@ -154,7 +157,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_card_field` | `pipefy card update` | shipped | Use `--field-updates` JSON array (). |
 | `update_comment` | `pipefy card comment update` | shipped | — |
 | `update_field_condition` | `pipefy field-condition update` | shipped | (`--extra` JSON). |
-| `update_label` | `pipefy label update` | shipped | — |
+| `update_label` | `pipefy label update` | shipped | `color` must be hex `#RRGGBB` (validated before GraphQL). |
 | `update_organization_report` | `pipefy report-org update` | shipped | Organization reports. |
 | `update_phase` | `pipefy phase update` | shipped | — |
 | `update_phase_field` | `pipefy field update` | shipped | (``--extra`` JSON). Optional ``phase_id`` / ``pipe_id`` in ``--extra`` resolve slug ``field_id`` to ``internal_id`` when ``uuid`` is omitted. |
@@ -186,6 +189,6 @@ for n in m.body:
             print(len(v.args[0].elts))"
 ```
 
-Expect **149** tool names in `PIPEFY_TOOL_NAMES` and **149** data rows in the parity table (excluding the header rows).
+Expect **152** tool names in `PIPEFY_TOOL_NAMES` and **152** data rows in the parity table (excluding the header rows).
 
 When adding or removing an MCP tool, update **this file** and `PIPEFY_TOOL_NAMES` in the same change set.

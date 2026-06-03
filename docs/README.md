@@ -1,6 +1,6 @@
 # Documentation index
 
-Human-facing guides for the **pipefy-labs** monorepo (`pipefy-mcp-server` on GitHub). Use the sections below to load only the surface you need.
+Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-toolkit)** monorepo (packages: `pipefy-mcp-server`, `pipefy-cli`, `pipefy-sdk`). Use the sections below to load only the surface you need.
 
 ## By surface
 

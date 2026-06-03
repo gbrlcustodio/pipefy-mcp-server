@@ -6,6 +6,16 @@ Releases are versioned in lockstep across workspace members (`pipefy-sdk`, `pipe
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0-beta.3] - 2026-06-03
+
+### Fixed
+
+- **SDK / MCP / CLI**: AI automation create and update no longer require service-account credentials. `generate_with_ai` create/update were routed through the `/internal_api` endpoint and gated behind a service-account check, so a normal user session (stored session from `pipefy auth login`, or a `--token` bearer) could not create or update an AI automation, which broke install flows that provision an AI triage automation. Both now go through the public `createAutomation` / `updateAutomation` mutations under the caller's normal auth, matching the read, list, and delete paths. Closes #272.
+
+### Changed
+
+- **SDK**: the AI automation surface moved from `AiAutomationService` to `AutomationService.create_ai_automation` / `update_ai_automation`, mirroring the existing `create_send_task_automation` pattern. `AiAutomationService`, `ai_automation_queries.py`, the `ai_automation_available` property, and `set_ai_automation_service` are removed; `PipefyClient` delegates to `AutomationService`. `InternalApiClient` stays (still used by `delete_card_relation`).
+
 ## [0.2.0-beta.2] - 2026-06-02
 
 ### Added

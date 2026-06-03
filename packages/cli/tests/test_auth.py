@@ -82,7 +82,6 @@ def test_get_authenticated_client_service_account_wires_internal_api(clean_pipef
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient") as mock_internal,
-        patch("pipefy_cli.auth.AiAutomationService"),
     ):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(settings, _auth())
@@ -98,7 +97,6 @@ def test_get_authenticated_client_bearer_path_shares_auth_with_internal_api(
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient") as mock_internal,
-        patch("pipefy_cli.auth.AiAutomationService"),
     ):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(settings, _auth(bearer_token="tok"))
@@ -115,7 +113,6 @@ def test_cache_returns_same_instance_for_identical_service_account_settings(
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient"),
-        patch("pipefy_cli.auth.AiAutomationService"),
     ):
         mock_pc.return_value = MagicMock()
         first = get_authenticated_client(settings, _auth())
@@ -242,7 +239,6 @@ def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient"),
-        patch("pipefy_cli.auth.AiAutomationService"),
         patch("pipefy_auth.resolver.load_session") as mock_load,
         patch("pipefy_cli.auth.ensure_fresh_session") as mock_ensure,
     ):
@@ -266,7 +262,6 @@ def test_service_account_creds_win_over_stored_session(clean_pipefy_env):
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_cli.auth.InternalApiClient"),
-        patch("pipefy_cli.auth.AiAutomationService"),
         patch("pipefy_auth.resolver.load_session") as mock_load,
         patch("pipefy_cli.auth.ensure_fresh_session") as mock_ensure,
     ):

@@ -268,9 +268,10 @@ UPDATE_FIELDS_VALUES_MUTATION = gql(
 # Internal API mutations (plain strings, not gql())
 #
 # ``deleteCardRelation`` is only available on the internal GraphQL schema
-# (core_api / internal_v1), not the public API.  The InternalApiClient sends
-# raw GraphQL text via JSON POST, so these are plain strings — same pattern
-# as ``ai_automation_queries.py``.
+# (core_api / internal_v1), not the public API. These are plain strings because
+# ``InternalApiClient.execute_query`` takes a raw string and parses it with
+# ``gql()`` itself before sending, unlike the public client which expects an
+# already-parsed ``DocumentNode``. Same pattern as ``portal_internal_queries.py``.
 # ---------------------------------------------------------------------------
 
 INTERNAL_DELETE_CARD_RELATION_MUTATION = """

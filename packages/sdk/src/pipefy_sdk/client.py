@@ -828,10 +828,17 @@ class PipefyClient:
         return await self._pipe_service.get_pipe_members(pipe_id)
 
     async def create_card(
-        self, pipe_id: str | int, fields: dict[str, Any] | list[dict[str, Any]]
+        self,
+        pipe_id: str | int,
+        fields: dict[str, Any] | list[dict[str, Any]],
+        *,
+        phase_id: str | int | None = None,
+        title: str | None = None,
     ) -> dict:
         """Create a card in the specified pipe with the given fields."""
-        return await self._card_service.create_card(pipe_id, fields)
+        return await self._card_service.create_card(
+            pipe_id, fields, phase_id=phase_id, title=title
+        )
 
     async def add_card_comment(self, card_id: str | int, text: str) -> dict:
         """Add a text comment to a card by its ID."""
@@ -1007,6 +1014,26 @@ class PipefyClient:
     async def get_phase_cards_count(self, phase_id: str | int) -> int:
         """Total card count for ``phase_id`` via native ``Phase.cards_count``."""
         return await self._pipe_service.get_phase_cards_count(phase_id)
+
+    async def get_phase_cards_count_payload(self, phase_id: str | int) -> dict:
+        """Phase id, name, and native ``cards_count`` (for MCP/CLI inventory)."""
+        return await self._pipe_service.get_phase_cards_count_payload(phase_id)
+
+    async def get_phase_cards(
+        self,
+        phase_id: str | int,
+        *,
+        first: int | None = None,
+        after: str | None = None,
+        include_fields: bool = False,
+    ) -> dict:
+        """Paginated cards in ``phase_id`` via ``Phase.cards``."""
+        return await self._pipe_service.get_phase_cards(
+            phase_id,
+            first=first,
+            after=after,
+            include_fields=include_fields,
+        )
 
     async def get_pipe_reports(
         self,

@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk.report_filter_preflight import validate_report_cards_filter
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.pagination_helpers import (
@@ -32,6 +33,15 @@ def _blank_field_error(value: str, field: str) -> dict[str, Any] | None:
     if not value.strip():
         return build_report_error_payload(message=f"'{field}' must be non-empty.")
     return None
+
+
+def _report_filter_preflight_error(
+    filter_obj: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    message = validate_report_cards_filter(filter_obj)
+    if message is None:
+        return None
+    return build_report_error_payload(message=message)
 
 
 class ReportTools:
@@ -378,6 +388,10 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Create a pipe report. Use column `name` in `fields`; filter field names from `get_pipe_report_filterable_fields`.
 
+            ``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``), not a
+            top-level ``current_phase`` key; discover field names via
+            ``get_pipe_report_filterable_fields``.
+
             Args:
                 pipe_id: Pipe ID (numeric string).
                 name: Report name.
@@ -390,6 +404,9 @@ class ReportTools:
             if err is not None:
                 return err
             err = _blank_field_error(name, "name")
+            if err is not None:
+                return err
+            err = _report_filter_preflight_error(filter)
             if err is not None:
                 return err
             try:
@@ -424,6 +441,9 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Update a pipe report; omitted parameters are unchanged.
 
+            ``filter`` uses the same ReportCardsFilter nested shape as ``create_pipe_report``
+            (``operator`` + ``queries``; no top-level ``current_phase`` list).
+
             Args:
                 report_id: Pipe report ID.
                 name: New report name.
@@ -435,6 +455,9 @@ class ReportTools:
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             err = _blank_field_error(report_id, "report_id")
+            if err is not None:
+                return err
+            err = _report_filter_preflight_error(filter)
             if err is not None:
                 return err
             try:
@@ -537,6 +560,9 @@ class ReportTools:
             err = _blank_field_error(name, "name")
             if err is not None:
                 return err
+            err = _report_filter_preflight_error(filter)
+            if err is not None:
+                return err
             if not pipe_ids or not isinstance(pipe_ids, list):
                 return build_report_error_payload(
                     message="'pipe_ids' must be a non-empty list.",
@@ -582,6 +608,9 @@ class ReportTools:
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             err = _blank_field_error(report_id, "report_id")
+            if err is not None:
+                return err
+            err = _report_filter_preflight_error(filter)
             if err is not None:
                 return err
             try:
@@ -683,6 +712,9 @@ class ReportTools:
             err = _blank_field_error(pipe_report_id, "pipe_report_id")
             if err is not None:
                 return err
+            err = _report_filter_preflight_error(filter)
+            if err is not None:
+                return err
             try:
                 raw = await client.export_pipe_report(
                     pipe_id,
@@ -729,6 +761,9 @@ class ReportTools:
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             organization_id, err = validate_tool_id(organization_id, "organization_id")
+            if err is not None:
+                return err
+            err = _report_filter_preflight_error(filter)
             if err is not None:
                 return err
             try:

@@ -6,6 +6,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk.label_color import normalize_label_color
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
@@ -13,6 +14,10 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_correlation_id,
     extract_graphql_error_codes,
     with_debug_suffix,
+)
+from pipefy_mcp.tools.pagination_helpers import (
+    build_pagination_info,
+    validate_page_size,
 )
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
     build_delete_pipe_error_payload,
@@ -22,11 +27,17 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     find_phase_field_dependents,
     handle_pipe_config_tool_graphql_error,
     map_delete_pipe_error_to_message,
+    normalize_phase_allowed_move_targets,
+    normalize_phase_cards_list,
     resolve_phase_dependents,
     resolve_phase_field_identifiers,
 )
 from pipefy_mcp.tools.pipe_tool_helpers import find_label_dependents
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from pipefy_mcp.tools.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_error_message,
+    tool_success,
+)
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
     validate_tool_id,
@@ -342,6 +353,174 @@ class PipeConfigTools:
                 label="Pipe(s) cloned.",
                 data=raw,
             )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def get_phase_allowed_move_targets(
+            phase_id: PipefyId,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """List phases a card may move to from a source phase (UI transition rules).
+
+            Read-only mirror of Pipefy **Phase -> Connections** (GraphQL
+            ``phase.cards_can_be_moved_to_phases``). Call before ``move_card_to_phase``
+            to avoid trial-and-error moves. New phases have no edges until configured
+            in the Pipefy UI.
+
+            Args:
+                phase_id: Source phase ID (typically the card's ``current_phase.id``).
+                    Discover via: ``get_card(card_id).current_phase.id`` or
+                    ``get_pipe(pipe_id).phases[].id``.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+
+            Returns:
+                ``success: true`` with ``data`` containing ``phase_id``, ``phase_name``,
+                and ``allowed_phases`` (list of ``{id, name}``). Empty
+                ``allowed_phases`` means no outbound transitions are configured.
+            """
+            phase_id_str, err = validate_tool_id(phase_id, "phase_id")
+            if err is not None:
+                return err
+            try:
+                raw = await client.get_phase_allowed_move_targets(phase_id_str)
+            except Exception as exc:  # noqa: BLE001
+                return handle_pipe_config_tool_graphql_error(
+                    exc,
+                    "Get phase allowed move targets failed.",
+                    debug=debug,
+                    resource_kind="phase",
+                    resource_id=phase_id_str,
+                )
+            normalized = normalize_phase_allowed_move_targets(raw)
+            if normalized is None:
+                return build_pipe_tool_error_payload(
+                    message=f"Phase {phase_id_str} not found or access denied.",
+                    code="NOT_FOUND",
+                )
+            return tool_success(
+                data=normalized,
+                message="Allowed move targets loaded.",
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def get_phase_cards_count(
+            phase_id: PipefyId,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Return the native ``Phase.cards_count`` for a phase (fast inventory).
+
+            Uses the schema scalar — no card enumeration. On the **start-form** phase,
+            ``cards_count`` may be **0** while cards still exist; use ``get_phase_cards``
+            to list or verify inventory when the count looks wrong.
+
+            Args:
+                phase_id: Phase ID. Discover via: ``get_pipe(pipe_id).phases[].id``.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+
+            Returns:
+                ``success: true`` with ``data`` containing ``phase_id``, ``phase_name``,
+                and ``cards_count``.
+            """
+            phase_id_str, err = validate_tool_id(phase_id, "phase_id")
+            if err is not None:
+                return err
+            try:
+                payload = await client.get_phase_cards_count_payload(phase_id_str)
+            except Exception as exc:  # noqa: BLE001
+                return handle_pipe_config_tool_graphql_error(
+                    exc,
+                    "Get phase cards count failed.",
+                    debug=debug,
+                    resource_kind="phase",
+                    resource_id=phase_id_str,
+                )
+            return tool_success(
+                data=payload,
+                message="Phase cards count loaded.",
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(
+                readOnlyHint=True,
+            ),
+        )
+        async def get_phase_cards(
+            phase_id: PipefyId,
+            first: int = 50,
+            after: str | None = None,
+            include_fields: bool = False,
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """List cards currently in a phase (``Phase.cards`` pagination).
+
+            Prefer this over ``get_cards`` when you need every card in a specific phase;
+            pipe-level ``CardSearch`` has no phase filter. For a quick scalar total,
+            use ``get_phase_cards_count`` (see start-form ``cards_count`` caveat there).
+
+            Args:
+                phase_id: Phase ID. Discover via: ``get_pipe(pipe_id).phases[].id``.
+                first: Max cards per page (1-500). Default 50.
+                after: Cursor from ``pageInfo.endCursor`` of a previous call.
+                include_fields: When True, include each card's custom fields.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+
+            Returns:
+                GraphQL ``phase`` object with ``cards`` connection (``edges``, ``pageInfo``,
+                ``totalCount``). When unified envelope is enabled, includes pagination hints.
+            """
+            phase_id_str, err = validate_tool_id(phase_id, "phase_id")
+            if err is not None:
+                return err
+            validated_first, page_err = validate_page_size(first)
+            if page_err is not None:
+                return page_err
+            try:
+                raw = await client.get_phase_cards(
+                    phase_id_str,
+                    first=validated_first,
+                    after=after,
+                    include_fields=include_fields,
+                )
+            except Exception as exc:  # noqa: BLE001
+                return handle_pipe_config_tool_graphql_error(
+                    exc,
+                    "Get phase cards failed.",
+                    debug=debug,
+                    resource_kind="phase",
+                    resource_id=phase_id_str,
+                )
+            phase_payload = normalize_phase_cards_list(raw)
+            if phase_payload is None:
+                return build_pipe_tool_error_payload(
+                    message=f"Phase {phase_id_str} not found or access denied.",
+                    code="NOT_FOUND",
+                )
+            if is_unified_envelope_enabled():
+                cards = (
+                    phase_payload.get("cards")
+                    if isinstance(phase_payload, dict)
+                    else None
+                )
+                page_info = (
+                    (cards or {}).get("pageInfo") if isinstance(cards, dict) else None
+                )
+                pagination = build_pagination_info(
+                    page_info=page_info,
+                    page_size=validated_first,
+                )
+                return tool_success(
+                    data=raw,
+                    message="Phase cards retrieved.",
+                    pagination=pagination,
+                )
+            return raw
 
         @mcp.tool(
             annotations=ToolAnnotations(
@@ -887,7 +1066,8 @@ class PipeConfigTools:
             Args:
                 pipe_id: Pipe that will receive the label.
                 name: Label name.
-                color: Label color (per Pipefy/API).
+                color: Label color as hex ``#RRGGBB`` (e.g. ``#E50000``, ``#FF0000``);
+                    color names such as ``red`` are rejected before GraphQL.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
@@ -904,10 +1084,17 @@ class PipeConfigTools:
                     code="INVALID_ARGUMENTS",
                 )
             try:
+                normalized_color = normalize_label_color(color)
+            except ValueError as exc:
+                return build_pipe_tool_error_payload(
+                    message=str(exc),
+                    code="INVALID_ARGUMENTS",
+                )
+            try:
                 raw = await client.create_label(
                     pipe_id,
                     name.strip(),
-                    color.strip(),
+                    normalized_color,
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
@@ -944,7 +1131,8 @@ class PipeConfigTools:
             Args:
                 label_id: Label ID to update.
                 name: New label name (non-empty).
-                color: New label color, hex string (non-empty).
+                color: New label color as hex ``#RRGGBB`` (e.g. ``#E50000``); color
+                    names are rejected before GraphQL.
                 extra_input: Additional UpdateLabelInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
@@ -961,13 +1149,20 @@ class PipeConfigTools:
                     message="Invalid 'color': provide a non-empty string.",
                     code="INVALID_ARGUMENTS",
                 )
+            try:
+                normalized_color = normalize_label_color(color)
+            except ValueError as exc:
+                return build_pipe_tool_error_payload(
+                    message=str(exc),
+                    code="INVALID_ARGUMENTS",
+                )
             update_attrs: dict[str, Any] = {
                 k: v
                 for k, v in (extra_input or {}).items()
                 if k not in _UPDATE_LABEL_EXTRA_RESERVED
             }
             update_attrs["name"] = name.strip()
-            update_attrs["color"] = color.strip()
+            update_attrs["color"] = normalized_color
             try:
                 raw = await client.update_label(label_id, **update_attrs)
             except Exception as exc:  # noqa: BLE001

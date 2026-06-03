@@ -6,6 +6,21 @@ Releases are versioned in lockstep across workspace members (`pipefy-sdk`, `pipe
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **SDK / MCP / CLI**: `create_card` accepts optional `phase_id` and passes `title` on GraphQL `CreateCardInput` (mutation `createCard(input: $input)`). MCP: `phase_id` skips start-form elicitation; non-empty `fields` are validated against `get_phase_fields(phase_id)`; agent seeding should set `skip_elicitation=true`. CLI: `pipefy card create <pipe_id> --phase-id <id>` (optional `--title`).
+- **MCP / CLI**: `get_phase_allowed_move_targets` lists valid destination phases for `move_card_to_phase` (GraphQL `phase.cards_can_be_moved_to_phases`). MCP returns normalized `{phase_id, phase_name, allowed_phases}`; CLI: `pipefy phase allowed-moves <phase_id>`.
+- **SDK / MCP / CLI**: `get_phase_cards_count` reads native `Phase.cards_count` (MCP/CLI return `{phase_id, phase_name, cards_count}`; documents start-form count quirk). `get_phase_cards` lists cards in a phase via `Phase.cards` pagination (`first` default 50, `after`, optional fields). CLI: `pipefy phase cards-count <phase_id>`, `pipefy phase cards <phase_id> --first --after`.
+- **SDK / MCP / CLI**: `get_pipe` adds `start_form_phase` (`id`, `name`, `cards_count`) and `cards_count` on each workflow phase in `phases[]` (start form excluded from `phases`; same JSON shape on MCP and `pipefy pipe get --json`).
+- **SDK / MCP / CLI**: `create_pipe_report` and `update_pipe_report` preflight `filter` as nested `ReportCardsFilter` (`operator` + `queries`); reject naive top-level keys such as `current_phase` before GraphQL.
+
+### Changed
+
+- **Docs / install**: canonical GitHub repository is [`pipefy/ai-toolkit`](https://github.com/pipefy/ai-toolkit). Install snippets, `install.sh`, MCP setup links, Claude plugin metadata, and `.mcp.json` now point at `github.com/pipefy/ai-toolkit` (GitHub may still redirect older URLs).
+- **MCP / CLI (6.0 label color)**: `create_label` and `update_label` validate `color` as hex `#RRGGBB` before GraphQL (e.g. `red` is rejected with `expected #RRGGBB, received 'red'`).
+
 ## [0.2.0-beta.2] - 2026-06-02
 
 ### Added

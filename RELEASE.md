@@ -64,11 +64,11 @@ After tagging a release, run the following on macOS and a Linux machine (or CI r
 
 ```bash
 # Install CLI from the tagged release
-uvx --from "git+https://github.com/<owner>/pipefy-labs.git@vX.Y.Z" --refresh pipefy-cli --version
+uvx --from "git+https://github.com/pipefy/ai-toolkit.git@vX.Y.Z" --refresh pipefy-cli --version
 # Expected: X.Y.Z
 
 # Verify MCP server starts
-uvx --from "git+https://github.com/<owner>/pipefy-labs.git@vX.Y.Z" --refresh pipefy-mcp-server --help
+uvx --from "git+https://github.com/pipefy/ai-toolkit.git@vX.Y.Z" --refresh pipefy-mcp-server --help
 # Expected: help text (server may block in stdio mode — Ctrl-C after banner)
 ```
 

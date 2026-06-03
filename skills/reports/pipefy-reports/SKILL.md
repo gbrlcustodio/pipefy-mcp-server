@@ -83,9 +83,14 @@ Pipe reports and organization reports: discovery, CRUD, and async exports. **17 
 
    MCP: `get_pipe_report_filterable_fields pipe_id=67890`
 
-2. **Create the report with a filter:**
+2. **Create the report with a `ReportCardsFilter` shape** (not a top-level `current_phase` array):
 
-   MCP: `create_pipe_report pipe_id=67890 name="Overdue Cards" filter='{"status":["overdue"]}'`
+   MCP:
+   ```
+   create_pipe_report pipe_id=67890 name="Phase subset" filter='{"operator":"and","queries":[{"field":"current_phase","operator":"eq","type":"select","value":"<phase_id>"}]}'
+   ```
+
+   Use the exact `field` string from step 1. Invalid shapes are rejected before GraphQL with a message pointing at `get_pipe_report_filterable_fields`.
 
 ---
 
@@ -98,7 +103,8 @@ Pipe reports and organization reports: discovery, CRUD, and async exports. **17 
 
 - **Export stuck in `processing`:** large pipes with many cards can take minutes. Wait at least 60 seconds per poll. Retry the export trigger if still `processing` after several minutes.
 - **`get_pipe_reports` returns `null` for `cardCount`:** known Pipefy API behavior; the tool omits that field automatically.
-- **Filter not working:** use `get_pipe_report_filterable_fields` to confirm the exact filter key and value format.
+- **Filter rejected at tool boundary:** do not pass `{"current_phase":["id"]}` — use `operator` + `queries` (see step 2 above).
+- **Filter not working after create:** use `get_pipe_report_filterable_fields` to confirm the exact `field` string and `value` format.
 
 ## See also
 

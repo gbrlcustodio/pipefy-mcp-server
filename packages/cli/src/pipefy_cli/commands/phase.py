@@ -13,6 +13,7 @@ from pipefy_cli.commands._common import (
     parse_json_object,
     resource_id_argument,
     run_cli_command,
+    validate_cards_page_size,
 )
 
 phase_app = typer.Typer(help="Pipe phase operations.", no_args_is_help=True)
@@ -38,6 +39,97 @@ def phase_get(
 
     async def factory(client: PipefyClient):
         return await client.get_phase_fields(phase_id, required_only=required_only)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@phase_app.command(
+    "allowed-moves",
+    context_settings=ID_POSITIONAL_CONTEXT_SETTINGS,
+)
+def phase_allowed_moves(
+    ctx: typer.Context,
+    phase_id: str = resource_id_argument(
+        help="Source phase id (card's current phase)."
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """List phases a card may move to from this phase (UI transition rules)."""
+
+    async def factory(client: PipefyClient):
+        return await client.get_phase_allowed_move_targets(phase_id)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@phase_app.command(
+    "cards-count",
+    context_settings=ID_POSITIONAL_CONTEXT_SETTINGS,
+)
+def phase_cards_count(
+    ctx: typer.Context,
+    phase_id: str = resource_id_argument(help="Phase id."),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """Return native ``Phase.cards_count`` for a phase (fast inventory).
+
+    On the start-form phase, ``cards_count`` may be 0 while cards still exist;
+    use ``pipefy phase cards`` to list cards when the count looks wrong.
+    """
+
+    async def factory(client: PipefyClient):
+        return await client.get_phase_cards_count_payload(phase_id)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@phase_app.command("cards", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def phase_cards(
+    ctx: typer.Context,
+    phase_id: str = resource_id_argument(help="Phase id."),
+    first: int = typer.Option(
+        50,
+        "--first",
+        help="Max cards per page (1-500).",
+    ),
+    after: str | None = typer.Option(
+        None,
+        "--after",
+        help="Cursor from pageInfo.endCursor of a previous call.",
+    ),
+    include_fields: bool = typer.Option(
+        False,
+        "--include-fields",
+        help="Include each card's custom fields in the response.",
+    ),
+    json_out: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print machine-readable JSON to stdout.",
+    ),
+) -> None:
+    """List cards in a phase (``Phase.cards`` pagination)."""
+
+    first = validate_cards_page_size(first)
+
+    async def factory(client: PipefyClient):
+        return await client.get_phase_cards(
+            phase_id,
+            first=first,
+            after=after,
+            include_fields=include_fields,
+        )
 
     run_cli_command(ctx, json_out, factory)
 

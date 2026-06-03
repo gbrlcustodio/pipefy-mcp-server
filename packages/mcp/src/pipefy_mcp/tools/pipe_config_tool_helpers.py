@@ -562,6 +562,44 @@ async def resolve_phase_dependents(
     return out
 
 
+def normalize_phase_allowed_move_targets(
+    raw: dict[str, Any],
+) -> dict[str, Any] | None:
+    phase = (raw or {}).get("phase")
+    if not isinstance(phase, dict):
+        return None
+    phase_id = phase.get("id")
+    if phase_id is None:
+        return None
+    allowed_raw = phase.get("cards_can_be_moved_to_phases") or []
+    allowed_phases: list[dict[str, str]] = []
+    if isinstance(allowed_raw, list):
+        for item in allowed_raw:
+            if not isinstance(item, dict):
+                continue
+            dest_id = item.get("id")
+            if dest_id is None:
+                continue
+            allowed_phases.append(
+                {
+                    "id": str(dest_id),
+                    "name": str(item.get("name") or ""),
+                }
+            )
+    return {
+        "phase_id": str(phase_id),
+        "phase_name": str(phase.get("name") or ""),
+        "allowed_phases": allowed_phases,
+    }
+
+
+def normalize_phase_cards_list(raw: dict[str, Any]) -> dict[str, Any] | None:
+    phase = (raw or {}).get("phase")
+    if not isinstance(phase, dict) or phase.get("id") is None:
+        return None
+    return phase
+
+
 __all__ = [
     "DeletePipeErrorPayload",
     "DeletePipePayload",
@@ -584,6 +622,8 @@ __all__ = [
     "find_phase_field_dependents",
     "handle_pipe_config_tool_graphql_error",
     "map_delete_pipe_error_to_message",
+    "normalize_phase_allowed_move_targets",
+    "normalize_phase_cards_list",
     "resolve_phase_dependents",
     "resolve_phase_field_identifiers",
 ]

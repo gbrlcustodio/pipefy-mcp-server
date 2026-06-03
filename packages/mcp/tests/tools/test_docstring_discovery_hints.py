@@ -54,7 +54,27 @@ AUDIT: list[tuple[str, str, list[str]]] = [
         "automation_tools.py",
         ["get_automation", "create_automation"],
     ),
-    ("move_card_to_phase", "pipe_tools.py", ["get_pipe"]),
+    ("move_card_to_phase", "pipe_tools.py", ["get_phase_allowed_move_targets"]),
+    (
+        "create_card",
+        "pipe_tools.py",
+        ["get_pipe", "get_phase_allowed_move_targets"],
+    ),
+    (
+        "get_phase_allowed_move_targets",
+        "pipe_config_tools.py",
+        ["get_card", "get_pipe"],
+    ),
+    (
+        "get_phase_cards_count",
+        "pipe_config_tools.py",
+        ["get_pipe", "get_phase_cards"],
+    ),
+    (
+        "get_phase_cards",
+        "pipe_config_tools.py",
+        ["get_pipe", "get_phase_cards_count"],
+    ),
     ("create_phase_field", "pipe_config_tools.py", ["get_pipe"]),
     ("update_phase_field", "pipe_config_tools.py", ["get_phase_fields"]),
     ("delete_phase_field", "pipe_config_tools.py", ["get_phase_fields"]),

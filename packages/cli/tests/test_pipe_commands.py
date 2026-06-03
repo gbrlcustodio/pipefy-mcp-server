@@ -57,6 +57,32 @@ def test_pipe_get_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     mock_client.get_pipe.assert_awaited_once_with("10")
 
 
+def test_pipe_get_json_includes_phase_inventory_fields(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("pipe-get-inventory")
+    payload = {
+        "pipe": {
+            "id": "10",
+            "name": "P",
+            "startFormPhaseId": "100",
+            "start_form_phase": {"id": "100", "name": "Start", "cards_count": 1},
+            "phases": [{"id": "200", "name": "Done", "cards_count": 3}],
+        }
+    }
+    mock_client = MagicMock()
+    mock_client.get_pipe = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(app, ["pipe", "get", "10", "--json"])
+    assert result.exit_code == 0
+    body = json.loads(result.stdout)
+    assert body["pipe"]["start_form_phase"]["cards_count"] == 1
+    assert body["pipe"]["phases"][0]["cards_count"] == 3
+
+
 def test_pipe_list_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("pipe-list")
     payload = {"organizations": []}
@@ -215,3 +241,101 @@ def test_pipe_update_preferences_empty_object_bad_parameter(
         )
     assert result.exit_code == 2
     mock_client.update_pipe.assert_not_called()
+
+
+def test_phase_allowed_moves_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("ph-allowed-moves")
+    payload = {
+        "phase": {
+            "id": "342182335",
+            "name": "Doing",
+            "cards_can_be_moved_to_phases": [{"id": "200", "name": "Done"}],
+        }
+    }
+    mock_client = MagicMock()
+    mock_client.get_phase_allowed_move_targets = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["phase", "allowed-moves", "342182335", "--json"],
+        )
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == payload
+    mock_client.get_phase_allowed_move_targets.assert_awaited_once_with("342182335")
+
+
+def test_phase_cards_count_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("ph-cards-count")
+    payload = {
+        "phase_id": "342182335",
+        "phase_name": "Doing",
+        "cards_count": 7,
+    }
+    mock_client = MagicMock()
+    mock_client.get_phase_cards_count_payload = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["phase", "cards-count", "342182335", "--json"],
+        )
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == payload
+    mock_client.get_phase_cards_count_payload.assert_awaited_once_with("342182335")
+
+
+def test_phase_cards_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("ph-cards-list")
+    payload = {
+        "phase": {
+            "id": "342182335",
+            "cards": {
+                "edges": [{"node": {"id": "1", "title": "A"}}],
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                "totalCount": 1,
+            },
+        }
+    }
+    mock_client = MagicMock()
+    mock_client.get_phase_cards = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["phase", "cards", "342182335", "--first", "50", "--after", "c1", "--json"],
+        )
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == payload
+    mock_client.get_phase_cards.assert_awaited_once_with(
+        "342182335",
+        first=50,
+        after="c1",
+        include_fields=False,
+    )
+
+
+def test_phase_cards_first_out_of_range_exit_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    # Help promises 1-500; the shared validate_cards_page_size clamp must reject
+    # an out-of-range --first before any API call (parity with `card list`).
+    oauth_env("ph-cards-bad-first")
+    mock_client = MagicMock()
+    mock_client.get_phase_cards = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["phase", "cards", "342182335", "--first", "501", "--json"],
+        )
+    assert result.exit_code == 2
+    mock_client.get_phase_cards.assert_not_called()

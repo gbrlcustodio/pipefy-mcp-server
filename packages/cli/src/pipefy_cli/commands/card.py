@@ -22,6 +22,8 @@ from pipefy_cli.commands._common import (
     parse_json_value,
     resource_id_argument,
     run_cli_command,
+    validate_cards_page_size,
+    validate_optional_resource_id,
 )
 
 card_app = typer.Typer(help="Card operations.", no_args_is_help=True)
@@ -36,20 +38,6 @@ def _parse_card_search_json(raw: str | None) -> CardSearch | None:
     if not isinstance(parsed, dict):
         raise typer.BadParameter("--search must be a JSON object")
     return copy_card_search(parsed)
-
-
-_CARDS_FIRST_MIN = 1
-_CARDS_FIRST_MAX = 500
-
-
-def _validate_cards_page_size(first: int | None) -> int | None:
-    if first is None:
-        return None
-    if first < _CARDS_FIRST_MIN or first > _CARDS_FIRST_MAX:
-        raise typer.BadParameter(
-            f"--first must be between {_CARDS_FIRST_MIN} and {_CARDS_FIRST_MAX} (inclusive)."
-        )
-    return first
 
 
 def _parse_fields_json(raw: str | None) -> dict[str, Any] | list[dict[str, Any]] | None:
@@ -137,7 +125,7 @@ def card_list(
     first: int | None = typer.Option(
         None,
         "--first",
-        help=f"Max cards per page ({_CARDS_FIRST_MIN}-{_CARDS_FIRST_MAX}).",
+        help="Max cards per page (1-500).",
     ),
     after: str | None = typer.Option(
         None,
@@ -161,7 +149,7 @@ def card_list(
     if title is not None and title.strip():
         merged["title"] = title.strip()
     effective_search: CardSearch | None = merged if merged else None
-    first_validated = _validate_cards_page_size(first)
+    first_validated = validate_cards_page_size(first) if first is not None else None
 
     async def factory(client: PipefyClient):
         return await client.get_cards(
@@ -259,6 +247,7 @@ def card_create(
     """Create a card in a pipe (start-form or phase fields via --fields JSON when required)."""
 
     fields = _parse_fields_json(fields_json)
+    phase_id = validate_optional_resource_id(phase_id, "phase_id")
 
     async def factory(client: PipefyClient):
         payload = fields if fields is not None else {}

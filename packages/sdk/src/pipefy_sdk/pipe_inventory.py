@@ -6,23 +6,7 @@ def enrich_pipe_get_pipe_inventory(
     *,
     start_form_phase_row: dict | None = None,
 ) -> dict:
-    """Add ``start_form_phase`` and per-phase ``cards_count`` to a ``get_pipe`` pipe row.
-
-    The start-form phase is removed from ``phases`` when ``startFormPhaseId`` is set so
-    agents can iterate workflow phases without duplicating the start form.
-
-    Args:
-        pipe: Raw ``pipe`` object from ``GET_PIPE_QUERY``.
-        start_form_phase_row: Optional ``phase`` row when the start form is absent from
-            ``pipe["phases"]`` (typically from ``GET_PHASE_CARDS_COUNT_QUERY``).
-
-    Returns:
-        A shallow copy of ``pipe`` with enriched ``phases`` and optional
-        ``start_form_phase``.
-
-    Raises:
-        ValueError: A workflow phase or the start form is missing ``cards_count``.
-    """
+    """Add ``start_form_phase`` and ``cards_count`` on workflow phases for ``get_pipe``."""
     out = dict(pipe)
     phases_raw = list(out.get("phases") or [])
     start_id = out.get("startFormPhaseId")

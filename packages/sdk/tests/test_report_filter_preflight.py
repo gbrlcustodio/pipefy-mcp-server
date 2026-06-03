@@ -82,3 +82,100 @@ def test_validate_report_cards_filter_rejects_non_object_filter():
     err = validate_report_cards_filter([])  # type: ignore[arg-type]
     assert err is not None
     assert "JSON object" in err
+
+
+def test_validate_report_cards_filter_rejects_non_string_group_operator():
+    err = validate_report_cards_filter({"operator": 123, "queries": []})
+    assert err is not None
+    assert "operator must be a non-empty string" in err
+
+
+def test_validate_report_cards_filter_rejects_non_list_queries():
+    err = validate_report_cards_filter({"operator": "and", "queries": "x"})
+    assert err is not None
+    assert "queries must be a list" in err
+
+
+def test_validate_report_cards_filter_rejects_non_list_groups():
+    err = validate_report_cards_filter({"operator": "and", "groups": "x"})
+    assert err is not None
+    assert "groups must be a list" in err
+
+
+def test_validate_report_cards_filter_rejects_non_object_group_entry():
+    err = validate_report_cards_filter({"operator": "and", "groups": ["x"]})
+    assert err is not None
+    assert "groups[0] must be an object" in err
+
+
+def test_validate_report_cards_filter_propagates_nested_group_error():
+    err = validate_report_cards_filter(
+        {"operator": "or", "groups": [{"operator": "xor", "queries": []}]}
+    )
+    assert err is not None
+    assert "groups[0].operator must be one of" in err
+
+
+def test_validate_report_cards_filter_rejects_non_object_query():
+    err = validate_report_cards_filter({"operator": "and", "queries": ["x"]})
+    assert err is not None
+    assert "queries[0] must be an object" in err
+
+
+def test_validate_report_cards_filter_rejects_blank_query_field():
+    err = validate_report_cards_filter(
+        {"operator": "and", "queries": [{"field": "  ", "operator": "eq"}]}
+    )
+    assert err is not None
+    assert "field must be a non-empty string" in err
+
+
+def test_validate_report_cards_filter_requires_query_operator():
+    err = validate_report_cards_filter(
+        {"operator": "and", "queries": [{"field": "current_phase"}]}
+    )
+    assert err is not None
+    assert ".operator is required" in err
+
+
+def test_validate_report_cards_filter_rejects_blank_query_operator():
+    err = validate_report_cards_filter(
+        {"operator": "and", "queries": [{"field": "current_phase", "operator": "  "}]}
+    )
+    assert err is not None
+    assert "operator must be a non-empty string" in err
+
+
+def test_validate_report_cards_filter_rejects_non_string_value():
+    err = validate_report_cards_filter(
+        {
+            "operator": "and",
+            "queries": [{"field": "current_phase", "operator": "eq", "value": 123}],
+        }
+    )
+    assert err is not None
+    assert "value must be a string" in err
+
+
+def test_validate_report_cards_filter_allows_omitted_value():
+    # exists / not_exists operators carry no value; an omitted value must pass.
+    assert (
+        validate_report_cards_filter(
+            {
+                "operator": "and",
+                "queries": [{"field": "due_date", "operator": "exists"}],
+            }
+        )
+        is None
+    )
+
+
+def test_validate_report_cards_filter_rejects_blank_query_type():
+    err = validate_report_cards_filter(
+        {
+            "operator": "and",
+            "queries": [{"field": "current_phase", "operator": "eq", "type": "  "}],
+        }
+    )
+    assert err is not None
+    assert "type must be a non-empty string" in err

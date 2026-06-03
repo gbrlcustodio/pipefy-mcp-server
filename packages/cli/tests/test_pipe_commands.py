@@ -319,3 +319,23 @@ def test_phase_cards_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
         after="c1",
         include_fields=False,
     )
+
+
+def test_phase_cards_first_out_of_range_exit_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    # Help promises 1-500; the shared validate_cards_page_size clamp must reject
+    # an out-of-range --first before any API call (parity with `card list`).
+    oauth_env("ph-cards-bad-first")
+    mock_client = MagicMock()
+    mock_client.get_phase_cards = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["phase", "cards", "342182335", "--first", "501", "--json"],
+        )
+    assert result.exit_code == 2
+    mock_client.get_phase_cards.assert_not_called()

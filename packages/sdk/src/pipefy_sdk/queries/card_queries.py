@@ -8,6 +8,7 @@ CREATE_CARD_MUTATION = gql(
         createCard(input: $input) {
             card {
                 id
+                title
             }
         }
     }

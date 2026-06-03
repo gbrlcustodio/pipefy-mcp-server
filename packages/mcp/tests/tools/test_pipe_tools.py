@@ -351,18 +351,18 @@ class TestCreateCardTool:
             assert "card_link" in response
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_title_warning_when_response_lacks_title(
+    async def test_title_warning_when_response_title_mismatches(
         self,
         client_session,
         mock_pipefy_client,
         pipe_id,
     ):
-        """When create succeeds but response omits title, return title_warning."""
+        """When API stores a different title than requested, return title_warning."""
         mock_pipefy_client.get_start_form_fields.return_value = {
             "start_form_fields": []
         }
         mock_pipefy_client.create_card.return_value = {
-            "createCard": {"card": {"id": "789"}}
+            "createCard": {"card": {"id": "789", "title": "Derived from field"}}
         }
 
         async with client_session as session:
@@ -376,10 +376,35 @@ class TestCreateCardTool:
             )
             mock_pipefy_client.update_card.assert_not_called()
             response = json.loads(result.content[0].text)
-            assert response["createCard"]["card"]["title"] == "My Title"
+            assert response["createCard"]["card"]["title"] == "Derived from field"
             assert "title_warning" in response
             assert "not applied as expected" in response["title_warning"]
             assert "card_link" in response
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_no_title_warning_when_response_matches(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """Titled create with matching API title must not emit title_warning."""
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "789", "title": "My Title"}}
+        }
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id, "title": "My Title"},
+            )
+            assert result.isError is False
+            response = json.loads(result.content[0].text)
+            assert response["createCard"]["card"]["title"] == "My Title"
+            assert "title_warning" not in response
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_no_title_skips_update_card(
@@ -436,6 +461,29 @@ class TestCreateCardTool:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "invite_members" in tool_error_message(payload)
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    @pytest.mark.parametrize("invalid_phase_id", [0, -1])
+    async def test_create_card_rejects_invalid_phase_id(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        invalid_phase_id,
+        extract_payload,
+    ):
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {
+                    "pipe_id": pipe_id,
+                    "phase_id": invalid_phase_id,
+                    "skip_elicitation": True,
+                },
+            )
+        mock_pipefy_client.create_card.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_create_card_forwards_phase_id_with_skip_elicitation(

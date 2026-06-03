@@ -483,6 +483,27 @@ async def test_create_pipe_report_rejects_naive_current_phase_filter(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_export_pipe_report_rejects_naive_current_phase_filter(
+    report_session, mock_report_client, extract_payload
+):
+    async with report_session as session:
+        result = await session.call_tool(
+            "export_pipe_report",
+            {
+                "pipe_id": "123",
+                "pipe_report_id": "r1",
+                "filter": {"current_phase": ["987654321"]},
+            },
+        )
+
+    mock_report_client.export_pipe_report.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "top-level" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
 async def test_update_pipe_report_rejects_invalid_report_filter(
     report_session, mock_report_client, extract_payload
 ):

@@ -42,12 +42,7 @@ class PipeService(BasePipefyClient):
         super().__init__(settings=settings, auth=auth)
 
     async def get_pipe(self, pipe_id: str | int) -> dict:
-        """Get a pipe by its ID, including phases, labels, and start form fields.
-
-        Normalizes inventory fields: ``start_form_phase`` (id, name, cards_count) when
-        ``startFormPhaseId`` is set, and ``cards_count`` on each workflow phase in
-        ``phases`` (start form excluded from ``phases``).
-        """
+        """Get a pipe by its ID, including phases, labels, and start form fields."""
         variables = {"pipe_id": str(pipe_id)}
         result = await self.execute_query(GET_PIPE_QUERY, variables)
         pipe = result.get("pipe")

@@ -111,8 +111,9 @@ class PipeTools:
             ``get_start_form_fields`` and pass all required values.
 
             With ``phase_id``, the card is created in that phase (including orphan
-            phases that are not the start form). Use ``get_pipe(pipe_id).phases[].id``
-            to discover phase IDs. For agent seeding in a specific phase, set
+            phases that are not the start form). Discover via:
+            ``get_pipe(pipe_id).phases[].id`` or ``get_pipe(pipe_id).start_form_phase.id``.
+            For agent seeding in a specific phase, set
             ``phase_id`` and ``skip_elicitation=true``. When ``fields`` is non-empty,
             keys are filtered against ``get_phase_fields(phase_id)`` and
             ``get_start_form_fields(pipe_id)`` so pipes that still require start-form
@@ -141,12 +142,17 @@ class PipeTools:
                     ``fields`` directly to the API. Recommended for AI agent workflows.
                 phase_id: Optional target phase ID. Skips start-form elicitation; when
                     ``fields`` is non-empty, validates against phase and start-form
-                    field definitions. Discover via: ``get_pipe(pipe_id).phases[].id``.
+                    field definitions. Discover via: ``get_pipe(pipe_id).phases[].id``
+                    or ``get_pipe(pipe_id).start_form_phase.id``.
             """
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
 
             if phase_id is not None:
+                phase_id_str, phase_err = validate_tool_id(phase_id, "phase_id")
+                if phase_err is not None:
+                    return phase_err
+                phase_id = phase_id_str
                 expected_fields: list[dict] = []
                 start_form_expected_fields: list[dict] = []
                 if fields:
@@ -258,7 +264,6 @@ class PipeTools:
                                 f"(response title={card_data_node.get('title')!r}, "
                                 f"requested={title!r})."
                             )
-                        card_data_node["title"] = title
                 card_url = f"https://app.pipefy.com/open-cards/{card_id}"
                 result["card_link"] = f"[{card_url}]({card_url})"
             return result

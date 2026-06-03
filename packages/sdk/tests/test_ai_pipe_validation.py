@@ -113,6 +113,43 @@ async def test_fetch_pipe_validation_context_surfaces_phase_fetch_warning() -> N
 
 
 @pytest.mark.unit
+@pytest.mark.asyncio
+async def test_fetch_pipe_validation_context_excludes_start_form_phase() -> None:
+    # get_pipe returns the enriched shape: workflow phases carry cards_count and
+    # the start form is a separate ``start_form_phase`` key, never in ``phases``.
+    # phase_ids must reflect only workflow phases (the start form is not a valid
+    # move target), so a behavior validated here is checked against the same set
+    # the public ``phases`` field already exposed before enrichment.
+    client = AsyncMock()
+    client.get_pipe = AsyncMock(
+        return_value={
+            "pipe": {
+                "startFormPhaseId": "100",
+                "start_form_phase": {
+                    "id": "100",
+                    "name": "Start form",
+                    "cards_count": 0,
+                },
+                "phases": [
+                    {"id": "200", "name": "Doing", "cards_count": 2},
+                    {"id": "300", "name": "Done", "cards_count": 5},
+                ],
+                "start_form_fields": [],
+            }
+        }
+    )
+    client.get_pipe_relations = AsyncMock(return_value={"children": [], "parents": []})
+    client.get_phase_fields = AsyncMock(return_value={"fields": []})
+
+    _, phase_ids, _, _ = await fetch_pipe_validation_context(
+        client, EXAMPLE_PIPE_ID, timeout=5
+    )
+
+    assert phase_ids == {"200", "300"}
+    assert "100" not in phase_ids
+
+
+@pytest.mark.unit
 def test_validate_behaviors_accepts_internal_id_when_in_pipe_field_set() -> None:
     behavior = {
         "name": "Update briefing",

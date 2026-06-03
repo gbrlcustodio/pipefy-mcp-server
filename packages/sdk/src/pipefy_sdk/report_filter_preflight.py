@@ -36,14 +36,6 @@ EXAMPLE_PHASE_FILTER: dict[str, Any] = {
 
 
 def validate_report_cards_filter(filter_obj: dict[str, Any] | None) -> str | None:
-    """Return an error message when ``filter_obj`` is not a valid ``ReportCardsFilter`` shape.
-
-    Args:
-        filter_obj: Filter dict from MCP/CLI, or ``None`` to skip validation.
-
-    Returns:
-        ``None`` when valid; otherwise a user-visible error string.
-    """
     if filter_obj is None:
         return None
     if not isinstance(filter_obj, dict):

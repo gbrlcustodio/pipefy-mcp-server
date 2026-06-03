@@ -16,8 +16,6 @@
 
 # Pipefy AI Toolkit
 
-Official repository: **[github.com/pipefy/ai-toolkit](https://github.com/pipefy/ai-toolkit)** (MCP server, CLI, SDK, and agent skills). This monorepo is also referred to as **pipefy-labs** in internal docs.
-
 Open-source toolkit for **Pipefy** developers: a Model Context Protocol (MCP) server for AI agents, a **`pipefy`** CLI for terminals and automation, a shared GraphQL SDK, and a catalog of agent skill playbooks.
 
 <p align="center">

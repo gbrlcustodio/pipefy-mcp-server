@@ -421,7 +421,9 @@ class PipeConfigTools:
             to list or verify inventory when the count looks wrong.
 
             Args:
-                phase_id: Phase ID. Discover via: ``get_pipe(pipe_id).phases[].id``.
+                phase_id: Phase ID. Discover via: ``get_pipe(pipe_id).phases[].id``
+                    for workflow phases, or ``get_pipe(pipe_id).start_form_phase.id``
+                    for the start-form phase.
                 debug: When True, append GraphQL codes and correlation_id to errors.
 
             Returns:
@@ -465,7 +467,9 @@ class PipeConfigTools:
             use ``get_phase_cards_count`` (see start-form ``cards_count`` caveat there).
 
             Args:
-                phase_id: Phase ID. Discover via: ``get_pipe(pipe_id).phases[].id``.
+                phase_id: Phase ID. Discover via: ``get_pipe(pipe_id).phases[].id``
+                    for workflow phases, or ``get_pipe(pipe_id).start_form_phase.id``
+                    for the start-form phase.
                 first: Max cards per page (1-500). Default 50.
                 after: Cursor from ``pageInfo.endCursor`` of a previous call.
                 include_fields: When True, include each card's custom fields.
@@ -503,14 +507,8 @@ class PipeConfigTools:
                     code="NOT_FOUND",
                 )
             if is_unified_envelope_enabled():
-                cards = (
-                    phase_payload.get("cards")
-                    if isinstance(phase_payload, dict)
-                    else None
-                )
-                page_info = (
-                    (cards or {}).get("pageInfo") if isinstance(cards, dict) else None
-                )
+                cards = phase_payload.get("cards") or {}
+                page_info = cards.get("pageInfo") if isinstance(cards, dict) else None
                 pagination = build_pagination_info(
                     page_info=page_info,
                     page_size=validated_first,

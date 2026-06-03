@@ -1,15 +1,18 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "pipefy",
   "owner": {
     "name": "Gabriel Custodio",
-    "url": "https://github.com/pipefy"
+    "url": "https://github.com/pipefy/ai-toolkit"
   },
   "plugins": [
     {
       "name": "pipefy",
       "source": "./",
       "description": "Pipefy workflow integration for Claude Code.",
-      "version": "0.2.0-beta.1"
+      "version": "0.2.0-beta.1",
+      "homepage": "https://github.com/pipefy/ai-toolkit",
+      "repository": "https://github.com/pipefy/ai-toolkit"
     }
   ]
 }

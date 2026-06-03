@@ -1859,7 +1859,7 @@ async def test_label_color_rejects_non_hex_before_graphql__no_integration(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload["error"]["code"] == "INVALID_ARGUMENTS"
-    assert "expected #RRGGBB, received" in tool_error_message(payload)
+    assert "expected #RGB or #RRGGBB" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

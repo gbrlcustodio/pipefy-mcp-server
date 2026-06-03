@@ -106,6 +106,23 @@ async def test_get_pipe_enriches_start_form_and_workflow_phases(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_pipe_raises_when_workflow_phase_missing_cards_count(mock_settings):
+    # The inventory enrichment requires cards_count on every workflow phase, so
+    # get_pipe propagates a ValueError instead of returning a partial pipe.
+    # get_pipe now backs delete previews, AI validation context, and get_labels,
+    # so this locks the shared hard-fail surface: a defensive fallback would
+    # change this expectation deliberately.
+    api_pipe = {
+        "id": "10",
+        "phases": [{"id": "200", "name": "Doing"}],  # cards_count omitted
+    }
+    service = _make_service(mock_settings, {"pipe": api_pipe})
+    with pytest.raises(ValueError, match="cards_count"):
+        await service.get_pipe("10")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_get_pipe_members_returns_members(mock_settings):
     """Test get_pipe_members returns the list of members for a pipe."""
     pipe_id = 123

@@ -47,14 +47,7 @@ class CardService(BasePipefyClient):
         phase_id: str | int | None = None,
         title: str | None = None,
     ) -> dict:
-        """Create a card in the specified pipe with the given fields.
-
-        Args:
-            pipe_id: Target pipe id.
-            fields: Field slug/id map or ``FieldValueInput`` list (→ ``fields_attributes``).
-            phase_id: Optional phase to create the card in (non–start-form seeding).
-            title: Optional card title on ``CreateCardInput`` (vs post-create update).
-        """
+        """Create a card in the specified pipe with the given fields."""
         card_input: dict[str, Any] = {
             "pipe_id": str(pipe_id),
             "fields_attributes": convert_fields_to_array(fields),

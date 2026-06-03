@@ -49,7 +49,7 @@ def test_label_create_rejects_color_name_before_api(
             ],
         )
     assert result.exit_code == 2
-    assert "expected #RRGGBB, received 'red'" in result.stderr
+    assert "expected #RGB or #RRGGBB hex color, received 'red'" in result.stderr
     mock_client.create_label.assert_not_called()
 
 
@@ -103,7 +103,7 @@ def test_label_update_rejects_color_name_before_api(
             ],
         )
     assert result.exit_code == 2
-    assert "expected #RRGGBB, received 'blue'" in result.stderr
+    assert "expected #RGB or #RRGGBB hex color, received 'blue'" in result.stderr
     mock_client.update_label.assert_not_called()
 
 

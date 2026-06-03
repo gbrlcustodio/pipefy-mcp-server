@@ -565,14 +565,6 @@ async def resolve_phase_dependents(
 def normalize_phase_allowed_move_targets(
     raw: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Map GraphQL ``phase`` payload to agent-friendly allowed-move targets.
-
-    Args:
-        raw: Response from ``PipefyClient.get_phase_allowed_move_targets``.
-
-    Returns:
-        ``{phase_id, phase_name, allowed_phases}`` or ``None`` when ``phase`` is missing.
-    """
     phase = (raw or {}).get("phase")
     if not isinstance(phase, dict):
         return None
@@ -602,7 +594,6 @@ def normalize_phase_allowed_move_targets(
 
 
 def normalize_phase_cards_list(raw: dict[str, Any]) -> dict[str, Any] | None:
-    """Return ``phase`` payload when present, else ``None`` (not found)."""
     phase = (raw or {}).get("phase")
     if not isinstance(phase, dict) or phase.get("id") is None:
         return None

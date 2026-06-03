@@ -450,7 +450,6 @@ def _merge_phase_and_start_form_field_values(
     phase_field_definitions: list[dict],
     start_form_field_definitions: list[dict],
 ) -> dict[str, object]:
-    """Filter ``fields`` against phase and start-form defs; keep both subsets."""
     start_form_values = _filter_fields_by_definitions(
         fields, start_form_field_definitions
     )

@@ -13,6 +13,7 @@ from pipefy_cli.commands._common import (
     parse_json_object,
     resource_id_argument,
     run_cli_command,
+    validate_cards_page_size,
 )
 
 phase_app = typer.Typer(help="Pipe phase operations.", no_args_is_help=True)
@@ -119,6 +120,8 @@ def phase_cards(
     ),
 ) -> None:
     """List cards in a phase (``Phase.cards`` pagination)."""
+
+    first = validate_cards_page_size(first)
 
     async def factory(client: PipefyClient):
         return await client.get_phase_cards(

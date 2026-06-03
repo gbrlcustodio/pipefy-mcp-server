@@ -522,13 +522,44 @@ def test_agent_toggle_inactive_yes_skips_confirm(
     )
 
 
-def test_ai_automation_create_requires_service_account(
+def test_ai_automation_create_succeeds_without_service_account(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
 ):
-    """``ai-automation create`` exits 2 with a clear message when service-account creds are not configured."""
-    oauth_env("ai-no-service-account")
+    """``ai-automation create`` works under a normal session (no service account).
+
+    Regression for issue 272: ``generate_with_ai`` create goes through the public
+    ``createAutomation`` mutation, so it must not require service-account creds.
+    """
+    oauth_env("ai-create-public")
     mock_client = MagicMock()
-    mock_client.ai_automation_available = False
+    # Prompt references field 9 as input; output field 88 is distinct so overlap preflight passes.
+    mock_client.get_pipe_with_preferences = AsyncMock(
+        return_value={
+            "pipe": {
+                "phases": [
+                    {
+                        "fields": [
+                            {"internal_id": "9", "id": "f9", "label": "L"},
+                            {"internal_id": "88", "id": "f88", "label": "Out"},
+                        ]
+                    }
+                ],
+                "start_form_fields": [],
+                "preferences": {"aiAgentsEnabled": True},
+                "organizationId": "300",
+            }
+        }
+    )
+    mock_client.get_automation_events = AsyncMock(return_value=[{"id": "card_created"}])
+    mock_client.get_ai_credit_usage = AsyncMock(
+        return_value={"aiCreditUsageStats": {"active": True, "usage": 0, "limit": 0}}
+    )
+    mock_client.create_ai_automation = AsyncMock(
+        return_value={
+            "automation_id": "auto-1",
+            "message": "AI Automation created successfully. ID: auto-1",
+        }
+    )
 
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
@@ -548,14 +579,16 @@ def test_ai_automation_create_requires_service_account(
                 "--prompt",
                 "Summarize: %{9}",
                 "--field-ids",
-                '["9"]',
+                '["88"]',
                 "--json",
             ],
         )
 
-    assert r.exit_code == 2
-    assert "service-account credentials" in r.stderr
-    mock_client.create_ai_automation.assert_not_called()
+    assert r.exit_code == 0, r.stderr
+    mock_client.create_ai_automation.assert_awaited_once()
+    sent_input = mock_client.create_ai_automation.call_args.args[0]
+    assert sent_input.pipe_id == "1"
+    assert sent_input.field_ids == ["88"]
 
 
 def test_automation_create_exits_on_preflight_error(
@@ -667,7 +700,6 @@ def test_ai_automation_update_auto_fetches_prompt_when_omitted(
     # Prompt references field 9 as input; output field 88 is distinct so overlap preflight passes.
     existing = _ai_automation_row("Summarize: %{9}", ["88"])
     mock_client = MagicMock()
-    mock_client.ai_automation_available = True
     mock_client.get_automation = AsyncMock(return_value=existing)
     mock_client.get_pipe_with_preferences = AsyncMock(
         return_value={
@@ -727,7 +759,6 @@ def test_ai_automation_update_errors_when_existing_row_missing_ai_params(
     """Non-AI automation row → clear error (cannot infer fallback prompt/field_ids)."""
     oauth_env("ai-up-missing")
     mock_client = MagicMock()
-    mock_client.ai_automation_available = True
     mock_client.get_automation = AsyncMock(
         return_value={
             "id": "auto-1",

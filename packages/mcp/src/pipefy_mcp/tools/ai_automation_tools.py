@@ -326,7 +326,7 @@ class AiAutomationTools:
                 skills_ids: AI skill IDs to attach. Defaults to empty (no skills).
                 event_params: Trigger-specific filters (e.g. {"to_phase_id": "..."} for card_moved, {"triggerFieldIds": [...]} for field_updated).
                 condition: Optional trigger condition dict. Omit to use the built-in placeholder (empty expression list) so Pipefy always receives a condition on create. Pass a dict to set a custom condition.
-                debug: When True, append internal_api code and correlation_id to create failures (after sanitizing the main message).
+                debug: When True, append GraphQL error codes and correlation_id to create failures.
             """
             await ctx.debug(
                 f"create_ai_automation: name={name}, event_id={event_id}, pipe_id={pipe_id}"
@@ -394,7 +394,7 @@ class AiAutomationTools:
                 skills_ids: New list of AI skill IDs (optional).
                 event_params: Trigger-specific filters (e.g. {"to_phase_id": "..."} for card_moved). Pass to change; omit to keep current.
                 condition: New trigger condition dict. Omit to leave the automation's condition unchanged; pass a dict to replace it.
-                debug: When True, append internal_api code and correlation_id to update failures (after sanitizing the main message).
+                debug: When True, append GraphQL error codes and correlation_id to update failures.
             """
             await ctx.debug(f"update_ai_automation: automation_id={automation_id}")
 

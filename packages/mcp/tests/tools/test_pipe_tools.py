@@ -322,21 +322,18 @@ class TestCreateCardTool:
             )
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_title_sets_card_title_after_creation(
+    async def test_title_passed_to_create_card_on_create_card_input(
         self,
         client_session,
         mock_pipefy_client,
         pipe_id,
     ):
-        """When title is provided, create_card calls update_card to set the title."""
+        """When title is provided, create_card passes title on CreateCardInput."""
         mock_pipefy_client.get_start_form_fields.return_value = {
             "start_form_fields": []
         }
         mock_pipefy_client.create_card.return_value = {
-            "createCard": {"card": {"id": "789"}}
-        }
-        mock_pipefy_client.update_card.return_value = {
-            "updateCard": {"card": {"id": "789", "title": "Copa América"}}
+            "createCard": {"card": {"id": "789", "title": "Copa América"}}
         }
 
         async with client_session as session:
@@ -345,30 +342,28 @@ class TestCreateCardTool:
                 {"pipe_id": pipe_id, "title": "Copa América"},
             )
             assert result.isError is False
-            mock_pipefy_client.create_card.assert_called_once_with(str(pipe_id), {})
-            mock_pipefy_client.update_card.assert_called_once_with(
-                "789", title="Copa América"
+            mock_pipefy_client.create_card.assert_called_once_with(
+                str(pipe_id), {}, title="Copa América"
             )
+            mock_pipefy_client.update_card.assert_not_called()
             response = json.loads(result.content[0].text)
             assert response["createCard"]["card"]["title"] == "Copa América"
             assert "card_link" in response
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_title_update_failure_returns_warning(
+    async def test_title_warning_when_response_title_mismatches(
         self,
         client_session,
         mock_pipefy_client,
         pipe_id,
     ):
-        """When update_card raises after a successful create_card, the card result
-        is still returned with a title_warning and no title set."""
+        """When API stores a different title than requested, return title_warning."""
         mock_pipefy_client.get_start_form_fields.return_value = {
             "start_form_fields": []
         }
         mock_pipefy_client.create_card.return_value = {
-            "createCard": {"card": {"id": "789"}}
+            "createCard": {"card": {"id": "789", "title": "Derived from field"}}
         }
-        mock_pipefy_client.update_card.side_effect = RuntimeError("API timeout")
 
         async with client_session as session:
             result = await session.call_tool(
@@ -376,15 +371,40 @@ class TestCreateCardTool:
                 {"pipe_id": pipe_id, "title": "My Title"},
             )
             assert result.isError is False
-            mock_pipefy_client.create_card.assert_called_once_with(str(pipe_id), {})
-            mock_pipefy_client.update_card.assert_called_once_with(
-                "789", title="My Title"
+            mock_pipefy_client.create_card.assert_called_once_with(
+                str(pipe_id), {}, title="My Title"
             )
+            mock_pipefy_client.update_card.assert_not_called()
             response = json.loads(result.content[0].text)
-            assert "title" not in response.get("createCard", {}).get("card", {})
+            assert response["createCard"]["card"]["title"] == "Derived from field"
             assert "title_warning" in response
-            assert "API timeout" in response["title_warning"]
+            assert "not applied as expected" in response["title_warning"]
             assert "card_link" in response
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_no_title_warning_when_response_matches(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """Titled create with matching API title must not emit title_warning."""
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "789", "title": "My Title"}}
+        }
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id, "title": "My Title"},
+            )
+            assert result.isError is False
+            response = json.loads(result.content[0].text)
+            assert response["createCard"]["card"]["title"] == "My Title"
+            assert "title_warning" not in response
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_no_title_skips_update_card(
@@ -441,6 +461,190 @@ class TestCreateCardTool:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "invite_members" in tool_error_message(payload)
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    @pytest.mark.parametrize("invalid_phase_id", [0, -1])
+    async def test_create_card_rejects_invalid_phase_id(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+        invalid_phase_id,
+        extract_payload,
+    ):
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {
+                    "pipe_id": pipe_id,
+                    "phase_id": invalid_phase_id,
+                    "skip_elicitation": True,
+                },
+            )
+        mock_pipefy_client.create_card.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_create_card_forwards_phase_id_with_skip_elicitation(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """create_card with phase_id and skip_elicitation forwards phase_id to SDK."""
+        phase_id = 987654321
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "42"}}
+        }
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {
+                    "pipe_id": pipe_id,
+                    "phase_id": phase_id,
+                    "skip_elicitation": True,
+                },
+            )
+
+        assert result.isError is False
+        mock_pipefy_client.create_card.assert_called_once_with(
+            str(pipe_id), {}, phase_id=str(phase_id)
+        )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_create_card_with_phase_id_filters_fields_via_get_phase_fields(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """When phase_id is set, field keys are filtered via phase and start-form defs."""
+        phase_id = 555666777
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": [
+                {
+                    "id": "sf1",
+                    "label": "SF1",
+                    "type": "short_text",
+                    "editable": True,
+                },
+                {
+                    "id": "sf_readonly",
+                    "label": "SF RO",
+                    "type": "short_text",
+                    "editable": False,
+                },
+            ]
+        }
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "phase_id": str(phase_id),
+                "phase_name": "Orphan",
+                "fields": [
+                    {
+                        "id": "pf1",
+                        "label": "PF1",
+                        "type": "short_text",
+                        "editable": True,
+                    },
+                    {
+                        "id": "pf2",
+                        "label": "PF2",
+                        "type": "short_text",
+                        "editable": False,
+                    },
+                ],
+            }
+        )
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "99"}}
+        }
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {
+                    "pipe_id": pipe_id,
+                    "phase_id": phase_id,
+                    "fields": {"pf1": "ok", "pf2": "ignored"},
+                    "skip_elicitation": True,
+                },
+            )
+
+        assert result.isError is False
+        mock_pipefy_client.get_start_form_fields.assert_called_once_with(
+            str(pipe_id), False
+        )
+        mock_pipefy_client.get_phase_fields.assert_called_once_with(
+            str(phase_id), False
+        )
+        mock_pipefy_client.create_card.assert_called_once_with(
+            str(pipe_id), {"pf1": "ok"}, phase_id=str(phase_id)
+        )
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_create_card_with_phase_id_keeps_start_form_and_phase_fields(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """phase_id path must not drop start-form keys required by CreateCardInput."""
+        phase_id = 555666778
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": [
+                {
+                    "id": "objetivo",
+                    "label": "Objetivo",
+                    "type": "long_text",
+                    "editable": True,
+                },
+            ]
+        }
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "phase_id": str(phase_id),
+                "phase_name": "Zona MCP",
+                "fields": [
+                    {
+                        "id": "flag_de_teste",
+                        "label": "Flag",
+                        "type": "checklist_vertical",
+                        "editable": True,
+                    },
+                ],
+            }
+        )
+        mock_pipefy_client.create_card.return_value = {
+            "createCard": {"card": {"id": "100"}}
+        }
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {
+                    "pipe_id": pipe_id,
+                    "phase_id": phase_id,
+                    "fields": {
+                        "objetivo": "Smoke",
+                        "flag_de_teste": "A",
+                        "unknown": "drop",
+                    },
+                    "skip_elicitation": True,
+                },
+            )
+
+        assert result.isError is False
+        mock_pipefy_client.create_card.assert_called_once_with(
+            str(pipe_id),
+            {"objetivo": "Smoke", "flag_de_teste": "A"},
+            phase_id=str(phase_id),
+        )
 
 
 @pytest.mark.anyio
@@ -592,6 +796,44 @@ class TestDirectToolCalls:
         mock_pipefy_client.get_pipe.assert_called_once_with(str(pipe_id))
         payload = extract_payload(result)
         assert payload["pipe"]["name"] == "My Pipe"
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_get_pipe_returns_enriched_inventory_fields(
+        self, client_session, mock_pipefy_client, extract_payload
+    ):
+        """get_pipe surfaces SDK start_form_phase and per-phase cards_count."""
+        pipe_id = "306996634"
+        mock_pipefy_client.get_pipe = AsyncMock(
+            return_value={
+                "pipe": {
+                    "id": pipe_id,
+                    "name": "Inventory Pipe",
+                    "startFormPhaseId": "100",
+                    "start_form_phase": {
+                        "id": "100",
+                        "name": "Start form",
+                        "cards_count": 0,
+                    },
+                    "phases": [
+                        {"id": "200", "name": "Doing", "cards_count": 4},
+                    ],
+                    "labels": [],
+                    "start_form_fields": [],
+                }
+            }
+        )
+        async with client_session as session:
+            result = await session.call_tool("get_pipe", {"pipe_id": pipe_id})
+        assert result.isError is False
+        payload = extract_payload(result)
+        pipe = payload["pipe"]
+        assert pipe["start_form_phase"] == {
+            "id": "100",
+            "name": "Start form",
+            "cards_count": 0,
+        }
+        assert pipe["phases"] == [{"id": "200", "name": "Doing", "cards_count": 4}]
+        assert all(p["id"] != "100" for p in pipe["phases"])
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_move_card_to_phase_forwards_params_to_client(

@@ -25,6 +25,7 @@ from pipefy_cli.commands._common import (
     resource_id_argument,
     run_cli_command,
     validate_cards_page_size,
+    validate_optional_resource_id,
 )
 
 card_app = typer.Typer(help="Card operations.", no_args_is_help=True)
@@ -223,12 +224,20 @@ def card_create(
         None,
         "--title",
         "-t",
-        help="Optional title (applied via update after create).",
+        help="Optional title (sent on CreateCardInput when set).",
+    ),
+    phase_id: str | None = typer.Option(
+        None,
+        "--phase-id",
+        help=(
+            "Target phase id (CreateCardInput.phase_id). "
+            "Creates the card in that phase instead of the start form."
+        ),
     ),
     fields_json: str | None = typer.Option(
         None,
         "--fields",
-        help="JSON object or array: start-form field values for createCard.",
+        help="JSON object or array: field values for createCard.",
     ),
     json_out: bool = typer.Option(
         False,
@@ -237,19 +246,19 @@ def card_create(
         help="Print machine-readable JSON to stdout.",
     ),
 ) -> None:
-    """Create a card in a pipe (start-form fields via --fields JSON when required)."""
+    """Create a card in a pipe (start-form or phase fields via --fields JSON when required)."""
 
     fields = _parse_fields_json(fields_json)
+    phase_id = validate_optional_resource_id(phase_id, "phase_id")
 
     async def factory(client: PipefyClient):
         payload = fields if fields is not None else {}
-        result = await client.create_card(pipe_id, payload)
-        card_node = (result.get("createCard") or {}).get("card") or {}
-        cid = card_node.get("id")
-        if title and cid:
-            await client.update_card(str(cid), title=title)
-            card_node["title"] = title
-        return result
+        create_kwargs: dict[str, Any] = {}
+        if phase_id is not None:
+            create_kwargs["phase_id"] = phase_id
+        if title:
+            create_kwargs["title"] = title
+        return await client.create_card(pipe_id, payload, **create_kwargs)
 
     run_cli_command(ctx, json_out, factory)
 

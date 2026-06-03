@@ -444,6 +444,19 @@ def _filter_fields_by_definitions(
     }
 
 
+def _merge_phase_and_start_form_field_values(
+    fields: dict[str, object] | None,
+    *,
+    phase_field_definitions: list[dict],
+    start_form_field_definitions: list[dict],
+) -> dict[str, object]:
+    start_form_values = _filter_fields_by_definitions(
+        fields, start_form_field_definitions
+    )
+    phase_values = _filter_fields_by_definitions(fields, phase_field_definitions)
+    return {**start_form_values, **phase_values}
+
+
 def map_delete_card_error_to_message(
     *, card_id: str | int, card_title: str, codes: list[str]
 ) -> str:

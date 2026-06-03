@@ -859,8 +859,8 @@ Usage: pipefy card [OPTIONS] COMMAND [ARGS]...
 │ get       Fetch a card by id.                                                │
 │ list      List cards in a pipe (get_cards): browse, filter, and paginate.    │
 │ find      Find cards in a pipe where a custom field equals a value.          │
-│ create    Create a card in a pipe (start-form fields via --fields JSON when  │
-│           required).                                                         │
+│ create    Create a card in a pipe (start-form or phase fields via --fields   │
+│           JSON when required).                                               │
 │ update    Update a card (title, assignees, labels, due date, and/or field    │
 │           updates).                                                          │
 │ delete    Delete a card permanently.                                         │
@@ -927,17 +927,20 @@ Usage: pipefy card comment update [OPTIONS] COMMENT_ID TEXT
 ### HELP card/create
 Usage: pipefy card create [OPTIONS] PIPE_ID
 
- Create a card in a pipe (start-form fields via --fields JSON when required).
+ Create a card in a pipe (start-form or phase fields via --fields JSON when
+ required).
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────╮
 │ *    pipe_id      TEXT  Pipe id. [required]                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --title   -t      TEXT  Optional title (applied via update after create).    │
-│ --fields          TEXT  JSON object or array: start-form field values for    │
-│                         createCard.                                          │
-│ --json    -j            Print machine-readable JSON to stdout.               │
-│ --help                  Show this message and exit.                          │
+│ --title     -t      TEXT  Optional title (sent on CreateCardInput when set). │
+│ --phase-id          TEXT  Target phase id (CreateCardInput.phase_id).        │
+│                           Creates the card in that phase instead of the      │
+│                           start form.                                        │
+│ --fields            TEXT  JSON object or array: field values for createCard. │
+│ --json      -j            Print machine-readable JSON to stdout.             │
+│ --help                    Show this message and exit.                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP card/delete
@@ -1504,7 +1507,9 @@ Usage: pipefy label create [OPTIONS]
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --pipe           TEXT  Pipe id. [required]                                │
 │ *  --name   -n      TEXT  Label name. [required]                             │
-│ *  --color  -c      TEXT  Label color (per Pipefy API). [required]           │
+│ *  --color  -c      TEXT  Label color as hex #RRGGBB (e.g. #E50000,          │
+│                           #FF0000).                                          │
+│                           [required]                                         │
 │    --json   -j                                                               │
 │    --help                 Show this message and exit.                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
@@ -1545,7 +1550,8 @@ Usage: pipefy label update [OPTIONS] LABEL_ID
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --name   -n      TEXT  New label name (required by API). [required]       │
-│ *  --color  -c      TEXT  New label color (required by API). [required]      │
+│ *  --color  -c      TEXT  New label color as hex #RRGGBB (required by API).  │
+│                           [required]                                         │
 │    --json   -j                                                               │
 │    --help                 Show this message and exit.                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
@@ -1659,11 +1665,64 @@ Usage: pipefy phase [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ get      Load phase metadata and fields by id (via ``get_phase_fields``).    │
-│ create   Create a phase in a pipe.                                           │
-│ update   Update a phase (Pipefy ``UpdatePhaseInput``). Resolves current name │
-│          when omitted.                                                       │
-│ delete   Delete a phase permanently.                                         │
+│ get             Load phase metadata and fields by id (via                    │
+│                 ``get_phase_fields``).                                       │
+│ allowed-moves   List phases a card may move to from this phase (UI           │
+│                 transition rules).                                           │
+│ cards-count     Return native ``Phase.cards_count`` for a phase (fast        │
+│                 inventory).                                                  │
+│ cards           List cards in a phase (``Phase.cards`` pagination).          │
+│ create          Create a phase in a pipe.                                    │
+│ update          Update a phase (Pipefy ``UpdatePhaseInput``). Resolves       │
+│                 current name when omitted.                                   │
+│ delete          Delete a phase permanently.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP phase/allowed-moves
+Usage: pipefy phase allowed-moves [OPTIONS] PHASE_ID
+
+ List phases a card may move to from this phase (UI transition rules).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    phase_id      TEXT  Source phase id (card's current phase). [required]  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP phase/cards
+Usage: pipefy phase cards [OPTIONS] PHASE_ID
+
+ List cards in a phase (``Phase.cards`` pagination).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    phase_id      TEXT  Phase id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --first                   INTEGER  Max cards per page (1-500). [default: 50] │
+│ --after                   TEXT     Cursor from pageInfo.endCursor of a       │
+│                                    previous call.                            │
+│ --include-fields                   Include each card's custom fields in the  │
+│                                    response.                                 │
+│ --json            -j               Print machine-readable JSON to stdout.    │
+│ --help                             Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP phase/cards-count
+Usage: pipefy phase cards-count [OPTIONS] PHASE_ID
+
+ Return native ``Phase.cards_count`` for a phase (fast inventory).
+
+ On the start-form phase, ``cards_count`` may be 0 while cards still exist; use
+ ``pipefy phase cards`` to list cards when the count looks wrong.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    phase_id      TEXT  Phase id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP phase/create

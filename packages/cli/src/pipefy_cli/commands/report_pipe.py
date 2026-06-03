@@ -6,6 +6,7 @@ from typing import Any
 
 import typer
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.report_filter_preflight import validate_report_cards_filter
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
@@ -19,6 +20,12 @@ from pipefy_cli.commands._common import (
 )
 
 report_pipe_app = typer.Typer(help="Pipe reports.", no_args_is_help=True)
+
+
+def _validate_report_filter_cli(filter_obj: dict[str, Any] | None) -> None:
+    message = validate_report_cards_filter(filter_obj)
+    if message is not None:
+        raise typer.BadParameter(message)
 
 
 def _parse_order(raw: str | None) -> dict[str, Any] | None:
@@ -139,6 +146,7 @@ def report_pipe_create(
     if fields_list is not None and not isinstance(fields_list, list):
         raise typer.BadParameter("--fields must be a JSON array")
     filt = parse_json_object(filter_json, "--filter")
+    _validate_report_filter_cli(filt)
     formulas_val = parse_json_value(formulas, "--formulas") if formulas else None
     if formulas_val is not None and not isinstance(formulas_val, list):
         raise typer.BadParameter("--formulas must be a JSON array")
@@ -174,6 +182,7 @@ def report_pipe_update(
     if fields_list is not None and not isinstance(fields_list, list):
         raise typer.BadParameter("--fields must be a JSON array")
     filt = parse_json_object(filter_json, "--filter")
+    _validate_report_filter_cli(filt)
     formulas_val = parse_json_value(formulas, "--formulas") if formulas else None
     if formulas_val is not None and not isinstance(formulas_val, list):
         raise typer.BadParameter("--formulas must be a JSON array")

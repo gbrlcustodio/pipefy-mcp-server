@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typer
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.label_color import normalize_label_color
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
@@ -46,17 +47,27 @@ def label_create(
     pipe_id: str = typer.Option(..., "--pipe", help="Pipe id."),
     name: str = typer.Option(..., "--name", "-n", help="Label name."),
     color: str = typer.Option(
-        ..., "--color", "-c", help="Label color (per Pipefy API)."
+        ...,
+        "--color",
+        "-c",
+        help="Label color as hex #RRGGBB (e.g. #E50000, #FF0000).",
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Create a label on a pipe."""
 
     nm = name.strip()
-    col = color.strip()
-    if not nm or not col:
-        typer.echo("--name and --color must be non-empty.", err=True)
+    if not nm:
+        typer.echo("--name must be non-empty.", err=True)
         raise typer.Exit(2)
+    if not color.strip():
+        typer.echo("--color must be non-empty.", err=True)
+        raise typer.Exit(2)
+    try:
+        col = normalize_label_color(color)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
 
     async def factory(client: PipefyClient):
         return await client.create_label(pipe_id, nm, col)
@@ -72,17 +83,27 @@ def label_update(
         ..., "--name", "-n", help="New label name (required by API)."
     ),
     color: str = typer.Option(
-        ..., "--color", "-c", help="New label color (required by API)."
+        ...,
+        "--color",
+        "-c",
+        help="New label color as hex #RRGGBB (required by API).",
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Update a label (name and color are both required by Pipefy)."""
 
     nm = name.strip()
-    col = color.strip()
-    if not nm or not col:
-        typer.echo("--name and --color must be non-empty.", err=True)
+    if not nm:
+        typer.echo("--name must be non-empty.", err=True)
         raise typer.Exit(2)
+    if not color.strip():
+        typer.echo("--color must be non-empty.", err=True)
+        raise typer.Exit(2)
+    try:
+        col = normalize_label_color(color)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
 
     async def factory(client: PipefyClient):
         return await client.update_label(label_id, name=nm, color=col)

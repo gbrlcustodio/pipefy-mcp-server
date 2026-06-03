@@ -29,54 +29,11 @@ from pipefy_mcp.tools.automation_tool_helpers import (
     handle_automation_tool_graphql_error,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
-from pipefy_mcp.tools.graphql_error_helpers import (
-    extract_internal_api_bracket_codes,
-    extract_internal_api_bracket_correlation_id,
-    strip_internal_api_diagnostic_markers,
-    with_debug_suffix,
-)
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
     validate_tool_id,
 )
-
-AI_AUTOMATION_CREATE_FAILED = (
-    "Could not create the AI automation. Verify pipe, fields, prompt, and that AI is "
-    "enabled for the pipe."
-)
-AI_AUTOMATION_UPDATE_FAILED = (
-    "Could not update the AI automation. Verify the automation ID and your changes."
-)
-
-AI_AUTOMATION_NOT_CONFIGURED = (
-    "AI Automation requires service-account credentials "
-    "(PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
-    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
-    "Check .env.example for the required variables."
-)
-
-
-def _ai_automation_api_failure_payload(
-    exc: BaseException, *, fallback: str, debug: bool = False
-) -> dict:
-    """Build a sanitized tool error for internal_api / service failures (default MCP).
-
-    Args:
-        exc: Exception from ``PipefyClient`` create/update AI automation.
-        fallback: Stable message when the exception text is empty after stripping.
-        debug: When True, append stripped bracket codes and correlation id to the message.
-    """
-    raw = str(exc).strip()
-    cleaned = strip_internal_api_diagnostic_markers(raw) if raw else ""
-    message = cleaned if cleaned else fallback
-    if debug:
-        codes = extract_internal_api_bracket_codes(raw)
-        cid = extract_internal_api_bracket_correlation_id(raw)
-        message = with_debug_suffix(
-            message, debug=True, codes=codes, correlation_id=cid
-        )
-    return build_ai_tool_error(message)
 
 
 class AiAutomationTools:
@@ -299,9 +256,6 @@ class AiAutomationTools:
                 ``success: False`` with ``error``.
             """
             await ctx.debug(f"delete_ai_automation: automation_id={automation_id}")
-            # No ai_automation_available check — deletion uses the public GraphQL
-            # endpoint (AutomationService.delete_automation), not internal_api.
-            # Only create/update require OAuth credentials.
 
             rid, rid_err = validate_tool_id(automation_id, "automation_id")
             if rid_err is not None:
@@ -377,8 +331,6 @@ class AiAutomationTools:
             await ctx.debug(
                 f"create_ai_automation: name={name}, event_id={event_id}, pipe_id={pipe_id}"
             )
-            if not client.ai_automation_available:
-                return build_ai_tool_error(AI_AUTOMATION_NOT_CONFIGURED)
 
             optional_fields: dict = {}
             if skills_ids is not None:
@@ -402,8 +354,12 @@ class AiAutomationTools:
             try:
                 result = await client.create_ai_automation(validated)
             except Exception as exc:  # noqa: BLE001
-                return _ai_automation_api_failure_payload(
-                    exc, fallback=AI_AUTOMATION_CREATE_FAILED, debug=debug
+                return await handle_automation_tool_graphql_error(
+                    exc,
+                    ctx,
+                    debug,
+                    resource_kind="pipe",
+                    resource_id=str(validated.pipe_id),
                 )
 
             return build_create_automation_success(
@@ -441,8 +397,6 @@ class AiAutomationTools:
                 debug: When True, append internal_api code and correlation_id to update failures (after sanitizing the main message).
             """
             await ctx.debug(f"update_ai_automation: automation_id={automation_id}")
-            if not client.ai_automation_available:
-                return build_ai_tool_error(AI_AUTOMATION_NOT_CONFIGURED)
 
             try:
                 validated = UpdateAiAutomationInput(

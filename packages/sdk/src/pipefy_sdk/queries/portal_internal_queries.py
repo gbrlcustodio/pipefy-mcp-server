@@ -1,7 +1,9 @@
 """GraphQL mutation strings for portal sub-portals (internal_api endpoint).
 
-Mutations are plain strings (not ``gql()``) because ``InternalApiClient``
-sends raw GraphQL text via JSON POST. See ``ai_automation_queries.py``.
+Mutations are plain strings (not ``gql()``) because
+``InternalApiClient.execute_query`` takes a raw string and parses it with
+``gql()`` itself before sending, unlike the public client which expects an
+already-parsed ``DocumentNode``.
 """
 
 from __future__ import annotations

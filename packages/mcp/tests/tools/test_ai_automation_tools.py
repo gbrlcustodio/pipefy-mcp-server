@@ -27,18 +27,16 @@ def mock_pipefy_client():
     client.get_pipe_with_preferences = AsyncMock()
     client.get_automation_events = AsyncMock()
     client.get_ai_credit_usage = AsyncMock()
-    client.ai_automation_available = True
     return client
 
 
 @pytest.fixture
 def mock_pipefy_client_no_ai():
-    """Client where AI automation is not configured (no OAuth credentials)."""
+    """Client wired only for the read/list/delete tools (public GraphQL path)."""
     client = MagicMock(spec=PipefyClient)
     client.get_automation = AsyncMock()
     client.get_automations = AsyncMock()
     client.delete_automation = AsyncMock()
-    client.ai_automation_available = False
     return client
 
 
@@ -647,34 +645,6 @@ class TestCreateAiAutomation:
         assert "INVALID_PROMPT" in err
         assert "abc-123-def" in err
 
-    async def test_only_diagnostic_suffixes_use_stable_fallback(
-        self,
-        client_session,
-        mock_pipefy_client,
-        extract_payload,
-    ):
-        mock_pipefy_client.create_ai_automation.side_effect = ValueError(
-            " [code=X] [correlation_id=Y]"
-        )
-        async with client_session as session:
-            result = await session.call_tool(
-                "create_ai_automation",
-                {
-                    "name": "My Auto",
-                    "event_id": "card_created",
-                    "pipe_id": "303",
-                    "prompt": "Summarize %{133}",
-                    "field_ids": ["133"],
-                },
-            )
-        assert result.isError is False
-        payload = extract_payload(result)
-        assert payload["success"] is False
-        err = tool_error_message(payload)
-        assert "[code=" not in err
-        assert "[correlation_id=" not in err
-        assert "Could not create the AI automation" in err
-
     async def test_omitted_condition_sends_default_condition_to_client(
         self,
         client_session,
@@ -908,68 +878,6 @@ class TestUpdateAiAutomation:
         assert "get_ai_automations" in err
         assert "get_pipe_members" not in err
         assert payload["error"]["code"] == "PERMISSION_DENIED"
-
-
-## ---------------------------------------------------------------------------
-## AI Automation not configured (no OAuth credentials)
-## ---------------------------------------------------------------------------
-
-
-@pytest.mark.anyio
-class TestAiAutomationNotConfigured:
-    async def test_create_returns_error_payload_when_not_configured(
-        self,
-        client_session_no_ai,
-        extract_payload,
-    ):
-        async with client_session_no_ai as session:
-            result = await session.call_tool(
-                "create_ai_automation",
-                {
-                    "name": "My Auto",
-                    "event_id": "card_created",
-                    "pipe_id": "303",
-                    "prompt": "Summarize %{133}",
-                    "field_ids": ["133"],
-                },
-            )
-        assert result.isError is False
-        payload = extract_payload(result)
-        assert payload["success"] is False
-        assert "service-account credentials" in tool_error_message(payload)
-
-    async def test_update_returns_error_payload_when_not_configured(
-        self,
-        client_session_no_ai,
-        extract_payload,
-    ):
-        async with client_session_no_ai as session:
-            result = await session.call_tool(
-                "update_ai_automation",
-                {"automation_id": "789", "name": "Updated"},
-            )
-        assert result.isError is False
-        payload = extract_payload(result)
-        assert payload["success"] is False
-        assert "service-account credentials" in tool_error_message(payload)
-
-    async def test_delete_works_without_oauth_config(
-        self,
-        client_session_no_ai,
-        mock_pipefy_client_no_ai,
-        extract_payload,
-    ):
-        """Delete uses public GraphQL — no OAuth needed (unlike create/update)."""
-        mock_pipefy_client_no_ai.delete_automation.return_value = {"success": True}
-        async with client_session_no_ai as session:
-            result = await session.call_tool(
-                "delete_ai_automation",
-                {"automation_id": "789", "confirm": True},
-            )
-        assert result.isError is False
-        mock_pipefy_client_no_ai.delete_automation.assert_awaited_once_with("789")
-        payload = extract_payload(result)
-        assert payload["success"] is True
 
 
 ## ---------------------------------------------------------------------------

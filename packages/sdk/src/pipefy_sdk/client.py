@@ -1015,9 +1015,9 @@ class PipefyClient:
         """Total card count for ``phase_id`` via native ``Phase.cards_count``."""
         return await self._pipe_service.get_phase_cards_count(phase_id)
 
-    async def get_phase_cards_count_payload(self, phase_id: str | int) -> dict:
-        """Phase id, name, and native ``cards_count`` (for MCP/CLI inventory)."""
-        return await self._pipe_service.get_phase_cards_count_payload(phase_id)
+    async def get_phase(self, phase_id: str | int) -> dict:
+        """Phase id, name, and native ``cards_count``."""
+        return await self._pipe_service.get_phase(phase_id)
 
     async def get_phase_cards(
         self,

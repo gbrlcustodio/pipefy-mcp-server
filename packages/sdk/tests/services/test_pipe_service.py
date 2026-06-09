@@ -71,54 +71,25 @@ def test_get_pipe_query_selects_cards_count_on_phases():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_enriches_start_form_and_workflow_phases(mock_settings):
+async def test_get_pipe_returns_phases_with_cards_count(mock_settings):
     pipe_id = 10
-    api_pipe = {
-        "id": str(pipe_id),
-        "startFormPhaseId": "100",
-        "phases": [
-            {"id": "200", "name": "Doing", "cards_count": 5, "fields": []},
-        ],
+    api_response = {
+        "pipe": {
+            "id": str(pipe_id),
+            "startFormPhaseId": "100",
+            "phases": [
+                {"id": "200", "name": "Doing", "cards_count": 5, "fields": []},
+            ],
+            "start_form_fields": [],
+        }
     }
-    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
-        side_effect=[
-            {"pipe": api_pipe},
-            {"phase": {"id": "100", "name": "Start", "cards_count": 2}},
-        ]
-    )
+    service = _make_service(mock_settings, api_response)
 
     result = await service.get_pipe(pipe_id)
 
-    assert service.execute_query.call_count == 2
-    assert service.execute_query.call_args_list[0][0][0] is GET_PIPE_QUERY
-    assert service.execute_query.call_args_list[1][0][0] is GET_PHASE_CARDS_COUNT_QUERY
-    pipe = result["pipe"]
-    assert pipe["start_form_phase"] == {
-        "id": "100",
-        "name": "Start",
-        "cards_count": 2,
-    }
-    assert pipe["phases"] == [
-        {"id": "200", "name": "Doing", "cards_count": 5, "fields": []}
-    ]
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_get_pipe_raises_when_workflow_phase_missing_cards_count(mock_settings):
-    # The inventory enrichment requires cards_count on every workflow phase, so
-    # get_pipe propagates a ValueError instead of returning a partial pipe.
-    # get_pipe now backs delete previews, AI validation context, and get_labels,
-    # so this locks the shared hard-fail surface: a defensive fallback would
-    # change this expectation deliberately.
-    api_pipe = {
-        "id": "10",
-        "phases": [{"id": "200", "name": "Doing"}],  # cards_count omitted
-    }
-    service = _make_service(mock_settings, {"pipe": api_pipe})
-    with pytest.raises(ValueError, match="cards_count"):
-        await service.get_pipe("10")
+    service.execute_query.assert_called_once()
+    assert service.execute_query.call_args[0][0] is GET_PIPE_QUERY
+    assert result == api_response
 
 
 @pytest.mark.unit
@@ -621,18 +592,37 @@ def test_get_phase_cards_count_query_selects_native_scalar():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_phase_cards_count_payload_returns_normalized_shape(mock_settings):
+async def test_get_phase_returns_normalized_shape(mock_settings):
     phase_id = 342182334
     api_response = {"phase": {"id": str(phase_id), "name": "Doing", "cards_count": 42}}
     service = _make_service(mock_settings, api_response)
 
-    result = await service.get_phase_cards_count_payload(phase_id)
+    result = await service.get_phase(phase_id)
 
     assert result == {
         "phase_id": str(phase_id),
         "phase_name": "Doing",
         "cards_count": 42,
     }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_cards_count_delegates_to_get_phase(mock_settings):
+    phase_id = 342182334
+    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
+    service.get_phase = AsyncMock(
+        return_value={
+            "phase_id": str(phase_id),
+            "phase_name": "Doing",
+            "cards_count": 42,
+        }
+    )
+
+    result = await service.get_phase_cards_count(phase_id)
+
+    service.get_phase.assert_awaited_once_with(phase_id)
+    assert result == 42
 
 
 @pytest.mark.unit

@@ -862,16 +862,16 @@ async def test_get_phase_allowed_move_targets_delegates_to_pipe_service():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_phase_cards_count_payload_delegates_to_pipe_service():
+async def test_get_phase_delegates_to_pipe_service():
     expected = {"phase_id": "5", "phase_name": "Doing", "cards_count": 3}
     pipe_service = AsyncMock()
-    pipe_service.get_phase_cards_count_payload = AsyncMock(return_value=expected)
+    pipe_service.get_phase = AsyncMock(return_value=expected)
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = pipe_service
 
-    result = await client.get_phase_cards_count_payload(5)
+    result = await client.get_phase(5)
 
-    pipe_service.get_phase_cards_count_payload.assert_awaited_once_with(5)
+    pipe_service.get_phase.assert_awaited_once_with(5)
     assert result == expected
 
 

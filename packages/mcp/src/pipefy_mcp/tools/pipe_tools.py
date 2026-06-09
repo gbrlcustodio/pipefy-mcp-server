@@ -112,7 +112,7 @@ class PipeTools:
 
             With ``phase_id``, the card is created in that phase (including orphan
             phases that are not the start form). Discover via:
-            ``get_pipe(pipe_id).phases[].id`` or ``get_pipe(pipe_id).start_form_phase.id``.
+            ``get_pipe(pipe_id).phases[].id`` or ``get_pipe(pipe_id).startFormPhaseId``.
             For agent seeding in a specific phase, set
             ``phase_id`` and ``skip_elicitation=true``. When ``fields`` is non-empty,
             keys are filtered against ``get_phase_fields(phase_id)`` and
@@ -143,7 +143,7 @@ class PipeTools:
                 phase_id: Optional target phase ID. Skips start-form elicitation; when
                     ``fields`` is non-empty, validates against phase and start-form
                     field definitions. Discover via: ``get_pipe(pipe_id).phases[].id``
-                    or ``get_pipe(pipe_id).start_form_phase.id``.
+                    or ``get_pipe(pipe_id).startFormPhaseId``.
             """
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
@@ -740,12 +740,11 @@ class PipeTools:
             Returns:
                 dict: GraphQL response containing a ``pipe`` object with ``id``, ``name``,
                 ``phases`` (workflow phases only; each includes ``cards_count``),
-                ``start_form_phase`` (``id``, ``name``, ``cards_count`` when
-                ``startFormPhaseId`` is set — not duplicated in ``phases``),
+                ``startFormPhaseId`` (start form is not listed in ``phases``),
                 ``labels``, ``start_form_fields``, and related metadata from the API.
 
-                Start-form ``cards_count`` may be 0 while cards still exist; use
-                ``get_phase_cards`` for a full list in that phase.
+                For start-form inventory, use ``get_phase`` / ``get_phase_cards`` on
+                ``startFormPhaseId`` — native ``cards_count`` may be 0 while cards exist.
             """
             await ctx.debug(f"get_pipe: pipe_id={pipe_id}")
             pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")

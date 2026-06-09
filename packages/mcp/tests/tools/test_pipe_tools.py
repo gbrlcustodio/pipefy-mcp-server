@@ -798,10 +798,10 @@ class TestDirectToolCalls:
         assert payload["pipe"]["name"] == "My Pipe"
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_get_pipe_returns_enriched_inventory_fields(
+    async def test_get_pipe_returns_phase_cards_count(
         self, client_session, mock_pipefy_client, extract_payload
     ):
-        """get_pipe surfaces SDK start_form_phase and per-phase cards_count."""
+        """get_pipe forwards workflow phases with cards_count from the SDK."""
         pipe_id = "306996634"
         mock_pipefy_client.get_pipe = AsyncMock(
             return_value={
@@ -809,11 +809,6 @@ class TestDirectToolCalls:
                     "id": pipe_id,
                     "name": "Inventory Pipe",
                     "startFormPhaseId": "100",
-                    "start_form_phase": {
-                        "id": "100",
-                        "name": "Start form",
-                        "cards_count": 0,
-                    },
                     "phases": [
                         {"id": "200", "name": "Doing", "cards_count": 4},
                     ],
@@ -827,11 +822,7 @@ class TestDirectToolCalls:
         assert result.isError is False
         payload = extract_payload(result)
         pipe = payload["pipe"]
-        assert pipe["start_form_phase"] == {
-            "id": "100",
-            "name": "Start form",
-            "cards_count": 0,
-        }
+        assert pipe["startFormPhaseId"] == "100"
         assert pipe["phases"] == [{"id": "200", "name": "Doing", "cards_count": 4}]
         assert all(p["id"] != "100" for p in pipe["phases"])
 

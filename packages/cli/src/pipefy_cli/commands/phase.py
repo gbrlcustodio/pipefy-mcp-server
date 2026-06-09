@@ -88,7 +88,7 @@ def phase_cards_count(
     """
 
     async def factory(client: PipefyClient):
-        return await client.get_phase_cards_count_payload(phase_id)
+        return await client.get_phase(phase_id)
 
     run_cli_command(ctx, json_out, factory)
 

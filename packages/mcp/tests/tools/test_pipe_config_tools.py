@@ -87,7 +87,7 @@ def mock_pipe_config_client():
     client.get_cards = AsyncMock()
     client.get_phase_allowed_move_targets = AsyncMock()
     client.get_phase_cards_count = AsyncMock()
-    client.get_phase_cards_count_payload = AsyncMock()
+    client.get_phase = AsyncMock()
     client.get_phase_cards = AsyncMock()
     client.create_field_condition = AsyncMock()
     client.update_field_condition = AsyncMock()
@@ -2630,7 +2630,7 @@ async def test_get_phase_cards_count_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
     phase_id = 342182335
-    mock_pipe_config_client.get_phase_cards_count_payload.return_value = {
+    mock_pipe_config_client.get_phase.return_value = {
         "phase_id": str(phase_id),
         "phase_name": "Doing",
         "cards_count": 7,
@@ -2643,9 +2643,7 @@ async def test_get_phase_cards_count_success(
         )
 
     assert result.isError is False
-    mock_pipe_config_client.get_phase_cards_count_payload.assert_awaited_once_with(
-        str(phase_id)
-    )
+    mock_pipe_config_client.get_phase.assert_awaited_once_with(str(phase_id))
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"] == {
@@ -2669,7 +2667,7 @@ async def test_get_phase_cards_count_rejects_invalid_phase_id(
             "get_phase_cards_count",
             {"phase_id": invalid_phase_id},
         )
-    mock_pipe_config_client.get_phase_cards_count_payload.assert_not_called()
+    mock_pipe_config_client.get_phase.assert_not_called()
     payload = extract_payload(result)
     assert payload["success"] is False
 
@@ -2679,7 +2677,7 @@ async def test_get_phase_cards_count_rejects_invalid_phase_id(
 async def test_get_phase_cards_count_graphql_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.get_phase_cards_count_payload.side_effect = (
+    mock_pipe_config_client.get_phase.side_effect = (
         TransportQueryError(
             "GraphQL Error",
             errors=[{"message": "Forbidden"}],

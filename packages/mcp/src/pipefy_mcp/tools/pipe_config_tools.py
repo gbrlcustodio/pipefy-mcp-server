@@ -422,8 +422,8 @@ class PipeConfigTools:
 
             Args:
                 phase_id: Phase ID. Discover via: ``get_pipe(pipe_id).phases[].id``
-                    for workflow phases, or ``get_pipe(pipe_id).start_form_phase.id``
-                    for the start-form phase.
+                    for workflow phases, or ``get_pipe(pipe_id).startFormPhaseId``
+                    for the start-form phase (not listed in ``phases[]``).
                 debug: When True, append GraphQL codes and correlation_id to errors.
 
             Returns:
@@ -434,7 +434,7 @@ class PipeConfigTools:
             if err is not None:
                 return err
             try:
-                payload = await client.get_phase_cards_count_payload(phase_id_str)
+                payload = await client.get_phase(phase_id_str)
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc,
@@ -468,8 +468,8 @@ class PipeConfigTools:
 
             Args:
                 phase_id: Phase ID. Discover via: ``get_pipe(pipe_id).phases[].id``
-                    for workflow phases, or ``get_pipe(pipe_id).start_form_phase.id``
-                    for the start-form phase.
+                    for workflow phases, or ``get_pipe(pipe_id).startFormPhaseId``
+                    for the start-form phase (not listed in ``phases[]``).
                 first: Max cards per page (1-500). Default 50.
                 after: Cursor from ``pageInfo.endCursor`` of a previous call.
                 include_fields: When True, include each card's custom fields.

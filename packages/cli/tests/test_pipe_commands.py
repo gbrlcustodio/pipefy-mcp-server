@@ -57,7 +57,7 @@ def test_pipe_get_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     mock_client.get_pipe.assert_awaited_once_with("10")
 
 
-def test_pipe_get_json_includes_phase_inventory_fields(
+def test_pipe_get_json_includes_phase_cards_count(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):
     oauth_env("pipe-get-inventory")
@@ -66,7 +66,6 @@ def test_pipe_get_json_includes_phase_inventory_fields(
             "id": "10",
             "name": "P",
             "startFormPhaseId": "100",
-            "start_form_phase": {"id": "100", "name": "Start", "cards_count": 1},
             "phases": [{"id": "200", "name": "Done", "cards_count": 3}],
         }
     }
@@ -79,7 +78,6 @@ def test_pipe_get_json_includes_phase_inventory_fields(
         result = runner.invoke(app, ["pipe", "get", "10", "--json"])
     assert result.exit_code == 0
     body = json.loads(result.stdout)
-    assert body["pipe"]["start_form_phase"]["cards_count"] == 1
     assert body["pipe"]["phases"][0]["cards_count"] == 3
 
 
@@ -275,7 +273,7 @@ def test_phase_cards_count_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
         "cards_count": 7,
     }
     mock_client = MagicMock()
-    mock_client.get_phase_cards_count_payload = AsyncMock(return_value=payload)
+    mock_client.get_phase = AsyncMock(return_value=payload)
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -286,7 +284,7 @@ def test_phase_cards_count_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
         )
     assert result.exit_code == 0
     assert json.loads(result.stdout) == payload
-    mock_client.get_phase_cards_count_payload.assert_awaited_once_with("342182335")
+    mock_client.get_phase.assert_awaited_once_with("342182335")
 
 
 def test_phase_cards_json(runner, clean_pipefy_env, saved_cwd, oauth_env):

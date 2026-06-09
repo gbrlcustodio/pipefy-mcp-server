@@ -25,7 +25,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 
 | Tool | Role |
 |------|------|
-| `get_pipe` | Load pipe metadata (phases, fields, settings). Response includes `start_form_phase` (`id`, `name`, `cards_count`) and per-phase `cards_count` on workflow phases (start form is not duplicated in `phases[]`). |
+| `get_pipe` | Load pipe metadata (phases, fields, settings). Workflow `phases[]` include `cards_count`; start-form intake is via `start_form_fields` and `startFormPhaseId` (start form is not in `phases[]`). |
 | `get_start_form_fields` | Start-form fields for a pipe. |
 | `get_phase_fields` | Fields for a phase — each includes `id`, `internal_id`, `uuid`. |
 | `get_pipe_members` | List pipe members. |
@@ -83,8 +83,8 @@ Because non-editable keys are dropped without warning, agents should discover fi
 get_start_form_fields(pipe_id)   → learn field IDs, types, required flag
 create_card(pipe_id, fields={…}) → supply every required field ID
 
-get_pipe(pipe_id)                → start_form_phase + phases[].id / cards_count for inventory
-                                 → phases[].id when seeding a non-start-form phase
+get_pipe(pipe_id)                → phases[].id / cards_count for workflow inventory
+                                 → startFormPhaseId when seeding the start-form phase
 create_card(
   pipe_id,
   phase_id="340012345",
@@ -99,20 +99,19 @@ fill_card_phase_fields(card_id, phase_id, fields={…}) → supply values
 
 With `phase_id`, the start-form elicitation path is skipped. Use `skip_elicitation=true` for agent workflows. When `fields` is non-empty, keys are filtered against both `get_phase_fields(phase_id)` and `get_start_form_fields(pipe_id)` so pipes that still require start-form values on `CreateCardInput` receive them alongside phase fields. Optional `title` is sent on `CreateCardInput` (no separate `update_card` on the happy path).
 
-### `get_pipe` inventory fields (additive)
+### `get_pipe` inventory fields
 
 MCP tool results use the standard envelope; inventory fields live under the `pipe` object:
 
 | JSON path | Meaning |
 |-----------|---------|
-| `pipe.start_form_phase.id` | Start-form phase ID (same as `pipe.startFormPhaseId`) |
-| `pipe.start_form_phase.name` | Start-form phase display name |
-| `pipe.start_form_phase.cards_count` | Native `Phase.cards_count` for the start form (may be **0** while cards exist — use `get_phase_cards`) |
+| `pipe.startFormPhaseId` | Start-form phase ID (private API; not listed in `phases[]`) |
+| `pipe.start_form_fields` | Start-form field definitions (intake) |
 | `pipe.phases[].id` | Workflow phase IDs (start form excluded) |
 | `pipe.phases[].name` | Phase display name |
 | `pipe.phases[].cards_count` | Native card count for that workflow phase |
 
-CLI `pipefy pipe get <pipe_id> --json` returns the same SDK-normalized shape.
+CLI `pipefy pipe get <pipe_id> --json` returns the same GraphQL shape.
 
 ### Phase inventory (`get_phase_cards_count` / `get_phase_cards`)
 
@@ -123,7 +122,7 @@ Use these when you need per-phase totals or card lists without pipe-wide `CardSe
 | `get_phase_cards_count` | `pipefy phase cards-count <phase_id>` | Quick scalar; empty phases for seeding. |
 | `get_phase_cards` | `pipefy phase cards <phase_id> --first 50 --after <cursor>` | Verify cards after create/move; paginate with `pageInfo.endCursor`. |
 
-Discovery path: `get_pipe(pipe_id)` → `phases[].id` (workflow) or `start_form_phase.id` (start form).
+Discovery path: `get_pipe(pipe_id)` → `phases[].id` (workflow) or `startFormPhaseId` (start form).
 
 ```
 get_phase_cards_count(phase_id="340012345")

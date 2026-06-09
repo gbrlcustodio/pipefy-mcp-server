@@ -78,7 +78,7 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 
 ### Steps
 
-1. **Load phase IDs** — `get_pipe(pipe_id)` → collect `phases[].id` and `start_form_phase.id` when seeding the start form.
+1. **Load phase IDs** — `get_pipe(pipe_id)` → collect `phases[].id` for workflow phases and `startFormPhaseId` when seeding the start form.
 
    MCP: `get_pipe pipe_id="306996634"`
 
@@ -120,7 +120,7 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 ### Failure modes
 
 - **Empty `allowed_phases`:** configure **Phase → Connections** in the Pipefy UI; the API cannot add edges.
-- **Start-form `cards_count` is 0:** use `get_phase_cards` on `start_form_phase.id` before assuming the phase is empty.
+- **Start-form `cards_count` is 0:** use `get_phase_cards` on `startFormPhaseId` before assuming the phase is empty.
 
 ---
 

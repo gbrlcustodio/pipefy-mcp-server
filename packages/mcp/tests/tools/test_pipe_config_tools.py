@@ -2677,11 +2677,9 @@ async def test_get_phase_cards_count_rejects_invalid_phase_id(
 async def test_get_phase_cards_count_graphql_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
-    mock_pipe_config_client.get_phase.side_effect = (
-        TransportQueryError(
-            "GraphQL Error",
-            errors=[{"message": "Forbidden"}],
-        )
+    mock_pipe_config_client.get_phase.side_effect = TransportQueryError(
+        "GraphQL Error",
+        errors=[{"message": "Forbidden"}],
     )
 
     async with pipe_config_session as session:

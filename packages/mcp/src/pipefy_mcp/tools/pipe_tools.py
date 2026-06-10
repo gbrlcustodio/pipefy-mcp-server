@@ -111,9 +111,8 @@ class PipeTools:
             ``get_start_form_fields`` and pass all required values.
 
             With ``phase_id``, the card is created in that phase (including orphan
-            phases that are not the start form). Discover via:
-            ``get_pipe(pipe_id).phases[].id`` or ``get_pipe(pipe_id).startFormPhaseId``.
-            For agent seeding in a specific phase, set
+            phases that are not the start form). Discover workflow phase IDs via
+            ``get_pipe(pipe_id).phases[].id``. For agent seeding in a specific phase, set
             ``phase_id`` and ``skip_elicitation=true``. When ``fields`` is non-empty,
             keys are filtered against ``get_phase_fields(phase_id)`` and
             ``get_start_form_fields(pipe_id)`` so pipes that still require start-form
@@ -140,10 +139,10 @@ class PipeTools:
                 required_fields_only: If True, only elicit required fields. Default: False.
                 skip_elicitation: When True, bypass interactive elicitation and send
                     ``fields`` directly to the API. Recommended for AI agent workflows.
-                phase_id: Optional target phase ID. Skips start-form elicitation; when
-                    ``fields`` is non-empty, validates against phase and start-form
-                    field definitions. Discover via: ``get_pipe(pipe_id).phases[].id``
-                    or ``get_pipe(pipe_id).startFormPhaseId``.
+                phase_id: Optional target phase ID. Interactive elicitation prompts
+                    start-form fields (matching the Pipefy UI); phase field values are
+                    merged from ``fields`` when provided. For agent seeding, set
+                    ``skip_elicitation=true``. Discover via: ``get_pipe(pipe_id).phases[].id``.
             """
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
@@ -153,55 +152,58 @@ class PipeTools:
                 if phase_err is not None:
                     return phase_err
                 phase_id = phase_id_str
-                expected_fields: list[dict] = []
-                start_form_expected_fields: list[dict] = []
-                if fields:
-                    try:
-                        phase_fields_result = await client.get_phase_fields(
-                            phase_id, required_fields_only
-                        )
-                    except MalformedFieldDefinitionError as exc:
-                        return tool_error(str(exc))
-                    expected_fields = _filter_editable_field_definitions(
-                        phase_fields_result.get("fields", [])
+                try:
+                    phase_fields_result = await client.get_phase_fields(
+                        phase_id, required_fields_only
                     )
-                    try:
-                        form_fields = await client.get_start_form_fields(
-                            pipe_id, required_fields_only
-                        )
-                    except MalformedFieldDefinitionError as exc:
-                        return tool_error(str(exc))
-                    start_form_expected_fields = _filter_editable_field_definitions(
-                        form_fields.get("start_form_fields", [])
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
+                phase_field_defs = _filter_editable_field_definitions(
+                    phase_fields_result.get("fields", [])
+                )
+                try:
+                    form_fields = await client.get_start_form_fields(
+                        pipe_id, required_fields_only
                     )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
+                start_form_field_defs = _filter_editable_field_definitions(
+                    form_fields.get("start_form_fields", [])
+                )
                 await ctx.debug(
-                    f"Expected fields for phase {phase_id}: {expected_fields}"
+                    f"Expected phase fields for {phase_id}: {phase_field_defs}"
                 )
                 await ctx.debug(
                     f"Expected start-form fields for pipe {pipe_id}: "
-                    f"{start_form_expected_fields}"
+                    f"{start_form_field_defs}"
                 )
                 await ctx.debug(f"Provided fields: {fields}")
 
-                if can_elicit and expected_fields and not skip_elicitation:
+                if can_elicit and start_form_field_defs and not skip_elicitation:
                     try:
-                        card_data = await PipeTools._elicit_field_details(
+                        elicited = await PipeTools._elicit_field_details(
                             message=(
                                 f"Creating a card in phase {phase_id} (pipe {pipe_id})"
                             ),
                             prefilled_fields=fields,
-                            expected_fields=expected_fields,
+                            expected_fields=start_form_field_defs,
                             ctx=ctx,
                         )
                     except MalformedFieldDefinitionError as exc:
                         return tool_error(str(exc))
                     except UserCancelledError:
                         return tool_error("Card creation cancelled by user.")
-                elif expected_fields or start_form_expected_fields:
+                    merged_source = {**(fields or {}), **elicited}
+                    card_data = _merge_phase_and_start_form_field_values(
+                        merged_source,
+                        phase_field_definitions=phase_field_defs,
+                        start_form_field_definitions=start_form_field_defs,
+                    )
+                elif phase_field_defs or start_form_field_defs:
                     card_data = _merge_phase_and_start_form_field_values(
                         card_data,
-                        phase_field_definitions=expected_fields,
-                        start_form_field_definitions=start_form_expected_fields,
+                        phase_field_definitions=phase_field_defs,
+                        start_form_field_definitions=start_form_field_defs,
                     )
             else:
                 try:
@@ -739,12 +741,8 @@ class PipeTools:
 
             Returns:
                 dict: GraphQL response containing a ``pipe`` object with ``id``, ``name``,
-                ``phases`` (workflow phases only; each includes ``cards_count``),
-                ``startFormPhaseId`` (start form is not listed in ``phases``),
+                ``phases`` (workflow phases; each includes ``cards_count``),
                 ``labels``, ``start_form_fields``, and related metadata from the API.
-
-                For start-form inventory, use ``get_phase`` / ``get_phase_cards`` on
-                ``startFormPhaseId`` — native ``cards_count`` may be 0 while cards exist.
             """
             await ctx.debug(f"get_pipe: pipe_id={pipe_id}")
             pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")

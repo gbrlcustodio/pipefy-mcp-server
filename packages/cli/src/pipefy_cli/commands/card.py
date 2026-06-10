@@ -51,6 +51,24 @@ def _parse_fields_json(raw: str | None) -> dict[str, Any] | list[dict[str, Any]]
     raise typer.BadParameter("--fields must be a JSON object or array")
 
 
+def _apply_create_card_title_warning(
+    result: dict[str, Any], *, requested_title: str | None
+) -> dict[str, Any]:
+    if not requested_title:
+        return result
+    card_node = result.get("createCard", {}).get("card")
+    if not isinstance(card_node, dict):
+        return result
+    if card_node.get("title") == requested_title:
+        return result
+    warned = dict(result)
+    warned["title_warning"] = (
+        "Card created but title was not applied as expected "
+        f"(response title={card_node.get('title')!r}, requested={requested_title!r})."
+    )
+    return warned
+
+
 def _parse_field_updates_json(raw: str | None) -> list[dict[str, Any]] | None:
     if raw is None or raw.strip() == "":
         return None
@@ -258,7 +276,8 @@ def card_create(
             create_kwargs["phase_id"] = phase_id
         if title:
             create_kwargs["title"] = title
-        return await client.create_card(pipe_id, payload, **create_kwargs)
+        result = await client.create_card(pipe_id, payload, **create_kwargs)
+        return _apply_create_card_title_warning(result, requested_title=title)
 
     run_cli_command(ctx, json_out, factory)
 

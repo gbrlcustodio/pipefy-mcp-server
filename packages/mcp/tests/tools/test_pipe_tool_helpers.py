@@ -23,6 +23,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     UserCancelledError,
     _filter_editable_field_definitions,
     _filter_fields_by_definitions,
+    _merge_phase_and_start_form_field_values,
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
@@ -473,6 +474,19 @@ def test_filter_fields_by_definitions_empty_returns_empty():
     """Empty fields returns empty dict."""
     defs = [{"id": "a", "type": "short_text"}]
     assert _filter_fields_by_definitions({}, defs) == {}
+
+
+@pytest.mark.unit
+def test_merge_phase_and_start_form_field_values_keeps_both_subsets():
+    defs_sf = [{"id": "sf1", "editable": True}]
+    defs_pf = [{"id": "pf1", "editable": True}]
+    fields = {"sf1": "a", "pf1": "b", "noise": "x"}
+    result = _merge_phase_and_start_form_field_values(
+        fields,
+        phase_field_definitions=defs_pf,
+        start_form_field_definitions=defs_sf,
+    )
+    assert result == {"sf1": "a", "pf1": "b"}
 
 
 def test_filter_fields_by_definitions_keeps_only_editable_ids():

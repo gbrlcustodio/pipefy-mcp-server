@@ -187,6 +187,29 @@ def test_card_create_forwards_phase_id(runner, clean_pipefy_env, saved_cwd, oaut
     )
 
 
+def test_card_create_title_warning_when_mismatch(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("create-card-title-warn")
+    create_resp = {
+        "createCard": {"card": {"id": "890", "title": "Derived from field"}}
+    }
+    mock_client = MagicMock()
+    mock_client.create_card = AsyncMock(return_value=create_resp)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["card", "create", "303", "--title", "Requested", "--json"],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    payload = json.loads(result.stdout)
+    assert "title_warning" in payload
+    assert "Requested" in payload["title_warning"]
+
+
 def test_card_create_phase_id_and_title(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("create-card-phase-title")
     create_resp = {"createCard": {"card": {"id": "889", "title": "Seed"}}}

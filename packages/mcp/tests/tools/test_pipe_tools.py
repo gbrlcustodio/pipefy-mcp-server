@@ -497,6 +497,13 @@ class TestCreateCardTool:
         mock_pipefy_client.get_start_form_fields.return_value = {
             "start_form_fields": []
         }
+        mock_pipefy_client.get_phase_fields = AsyncMock(
+            return_value={
+                "phase_id": str(phase_id),
+                "phase_name": "Target",
+                "fields": [],
+            }
+        )
         mock_pipefy_client.create_card.return_value = {
             "createCard": {"card": {"id": "42"}}
         }
@@ -798,33 +805,28 @@ class TestDirectToolCalls:
         assert payload["pipe"]["name"] == "My Pipe"
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_get_pipe_returns_phase_cards_count(
+    async def test_get_pipe_forwards_sdk_payload(
         self, client_session, mock_pipefy_client, extract_payload
     ):
-        """get_pipe forwards workflow phases with cards_count from the SDK."""
+        """get_pipe validates pipe_id and forwards the SDK response unchanged."""
         pipe_id = "306996634"
-        mock_pipefy_client.get_pipe = AsyncMock(
-            return_value={
-                "pipe": {
-                    "id": pipe_id,
-                    "name": "Inventory Pipe",
-                    "startFormPhaseId": "100",
-                    "phases": [
-                        {"id": "200", "name": "Doing", "cards_count": 4},
-                    ],
-                    "labels": [],
-                    "start_form_fields": [],
-                }
+        sdk_payload = {
+            "pipe": {
+                "id": pipe_id,
+                "name": "Inventory Pipe",
+                "phases": [
+                    {"id": "200", "name": "Doing", "cards_count": 4},
+                ],
+                "labels": [],
+                "start_form_fields": [],
             }
-        )
+        }
+        mock_pipefy_client.get_pipe = AsyncMock(return_value=sdk_payload)
         async with client_session as session:
             result = await session.call_tool("get_pipe", {"pipe_id": pipe_id})
         assert result.isError is False
         payload = extract_payload(result)
-        pipe = payload["pipe"]
-        assert pipe["startFormPhaseId"] == "100"
-        assert pipe["phases"] == [{"id": "200", "name": "Doing", "cards_count": 4}]
-        assert all(p["id"] != "100" for p in pipe["phases"])
+        assert payload == sdk_payload
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_move_card_to_phase_forwards_params_to_client(

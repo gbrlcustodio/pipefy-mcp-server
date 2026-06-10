@@ -191,9 +191,7 @@ def test_card_create_title_warning_when_mismatch(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):
     oauth_env("create-card-title-warn")
-    create_resp = {
-        "createCard": {"card": {"id": "890", "title": "Derived from field"}}
-    }
+    create_resp = {"createCard": {"card": {"id": "890", "title": "Derived from field"}}}
     mock_client = MagicMock()
     mock_client.create_card = AsyncMock(return_value=create_resp)
     with patch(

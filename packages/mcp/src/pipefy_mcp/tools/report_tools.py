@@ -30,12 +30,6 @@ from pipefy_mcp.tools.tool_error_envelope import (
 )
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
-_REPORT_FILTER_SHAPE_DOC = (
-    "``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``), not a "
-    "top-level ``current_phase`` key; discover field names via "
-    "``get_pipe_report_filterable_fields``."
-)
-
 
 def _blank_field_error(value: str, field: str) -> dict[str, Any] | None:
     """Return an error payload when ``value`` is blank."""
@@ -556,9 +550,11 @@ class ReportTools:
             filter: dict | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            f"""Create an org-wide report spanning multiple pipes.
+            """Create an org-wide report spanning multiple pipes.
 
-            {_REPORT_FILTER_SHAPE_DOC}
+            ``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``),
+            not a top-level ``current_phase`` key; discover field names via
+            ``get_pipe_report_filterable_fields``.
 
             Args:
                 organization_id: Organization ID.
@@ -610,9 +606,11 @@ class ReportTools:
             pipe_ids: list[str] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            f"""Update an organization report; omitted parameters are unchanged.
+            """Update an organization report; omitted parameters are unchanged.
 
-            {_REPORT_FILTER_SHAPE_DOC}
+            ``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``),
+            not a top-level ``current_phase`` key; discover field names via
+            ``get_pipe_report_filterable_fields``.
 
             Args:
                 report_id: Organization report ID.
@@ -712,9 +710,11 @@ class ReportTools:
             columns: list[str] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            f"""Trigger an async pipe report export. Returns an export ID with state 'processing'. Poll `get_pipe_report_export(export_id)` to check when state becomes 'done' -- the response will include a `fileURL` to download the file.
+            """Trigger an async pipe report export. Returns an export ID with state 'processing'. Poll `get_pipe_report_export(export_id)` to check when state becomes 'done' -- the response will include a `fileURL` to download the file.
 
-            {_REPORT_FILTER_SHAPE_DOC}
+            ``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``),
+            not a top-level ``current_phase`` key; discover field names via
+            ``get_pipe_report_filterable_fields``.
 
             Args:
                 pipe_id: Pipe ID (numeric string).
@@ -766,9 +766,11 @@ class ReportTools:
             columns: list[str] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            f"""Trigger an async organization report export. Poll `get_organization_report_export(export_id)` for completion.
+            """Trigger an async organization report export. Poll `get_organization_report_export(export_id)` for completion.
 
-            {_REPORT_FILTER_SHAPE_DOC}
+            ``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``),
+            not a top-level ``current_phase`` key; discover field names via
+            ``get_pipe_report_filterable_fields``.
 
             Args:
                 organization_id: Organization numeric ID (must be coercible to int — Pipefy's

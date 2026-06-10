@@ -1705,3 +1705,38 @@ async def test_export_organization_report_graphql_error(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "export org failed" in tool_error_message(payload)
+
+
+REPORT_FILTER_TOOL_NAMES = {
+    "create_pipe_report",
+    "update_pipe_report",
+    "create_organization_report",
+    "update_organization_report",
+    "export_pipe_report",
+    "export_organization_report",
+}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_report_tool_descriptions_are_non_empty(report_session):
+    async with report_session as session:
+        listed = await session.list_tools()
+
+    empty = [tool.name for tool in listed.tools if not (tool.description or "").strip()]
+    assert empty == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_filter_tools_warn_against_top_level_current_phase(report_session):
+    async with report_session as session:
+        listed = await session.list_tools()
+
+    descriptions = {tool.name: tool.description or "" for tool in listed.tools}
+    missing_guidance = [
+        name
+        for name in sorted(REPORT_FILTER_TOOL_NAMES)
+        if "current_phase" not in descriptions.get(name, "")
+    ]
+    assert missing_guidance == []

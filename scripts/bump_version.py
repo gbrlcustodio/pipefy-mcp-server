@@ -52,7 +52,7 @@ VERSION_ASSIGN_RE = re.compile(
 # bump or the hook nudges users who are already on the installed release.
 # plugin.json has a single top-level "version" key.
 PLUGIN_MANIFEST_VERSION_RE = re.compile(
-    r'(?P<prefix>"version"\s*:\s*")(?P<value>[^"]+)(?P<suffix>")',
+    r'("version"\s*:\s*)"([^"]+)"',
 )
 
 CORE_VER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)")
@@ -102,7 +102,7 @@ def write_version_to_all_files(new_version: str) -> None:
 
     manifest_text = PLUGIN_MANIFEST.read_text(encoding="utf-8")
     new_manifest, manifest_count = PLUGIN_MANIFEST_VERSION_RE.subn(
-        rf"\g<prefix>{new_version}\g<suffix>",
+        rf'\1"{new_version}"',
         manifest_text,
         count=1,
     )
@@ -277,7 +277,7 @@ def verify_lockstep() -> int:
     if not m:
         print(f'missing "version" in {PLUGIN_MANIFEST}', file=sys.stderr)
         return 1
-    raw[str(PLUGIN_MANIFEST.relative_to(REPO_ROOT))] = m.group("value")
+    raw[str(PLUGIN_MANIFEST.relative_to(REPO_ROOT))] = m.group(2)
 
     canonical = {label: str(Version(v)) for label, v in raw.items()}
     if len(set(canonical.values())) != 1:

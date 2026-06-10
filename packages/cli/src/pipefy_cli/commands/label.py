@@ -10,7 +10,6 @@ from pipefy_cli.commands._common import (
     confirm_destructive,
     resource_id_argument,
     run_cli_command,
-    validate_label_color_cli,
     validate_label_name_cli,
 )
 
@@ -58,10 +57,9 @@ def label_create(
     """Create a label on a pipe."""
 
     nm = validate_label_name_cli(name)
-    col = validate_label_color_cli(color)
 
     async def factory(client: PipefyClient):
-        return await client.create_label(pipe_id, nm, col)
+        return await client.create_label(pipe_id, nm, color)
 
     run_cli_command(ctx, json_out, factory)
 
@@ -84,10 +82,9 @@ def label_update(
     """Update a label (name and color are both required by Pipefy)."""
 
     nm = validate_label_name_cli(name)
-    col = validate_label_color_cli(color)
 
     async def factory(client: PipefyClient):
-        return await client.update_label(label_id, name=nm, color=col)
+        return await client.update_label(label_id, name=nm, color=color)
 
     run_cli_command(ctx, json_out, factory)
 

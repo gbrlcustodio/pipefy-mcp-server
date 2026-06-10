@@ -8,10 +8,6 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyClient, PipefyId
-from pipefy_sdk.report_filter_preflight import (
-    normalize_report_cards_filter,
-    validate_report_cards_filter,
-)
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.pagination_helpers import (
@@ -36,18 +32,6 @@ def _blank_field_error(value: str, field: str) -> dict[str, Any] | None:
     if not value.strip():
         return build_report_error_payload(message=f"'{field}' must be non-empty.")
     return None
-
-
-def _prepare_report_cards_filter(
-    filter_obj: dict[str, Any] | None,
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    if filter_obj is None:
-        return None, None
-    normalized = normalize_report_cards_filter(filter_obj)
-    message = validate_report_cards_filter(normalized)
-    if message is not None:
-        return None, build_report_error_payload(message=message)
-    return normalized, None
 
 
 class ReportTools:
@@ -412,13 +396,12 @@ class ReportTools:
             err = _blank_field_error(name, "name")
             if err is not None:
                 return err
-            filter, err = _prepare_report_cards_filter(filter)
-            if err is not None:
-                return err
             try:
                 raw = await client.create_pipe_report(
                     pipe_id, name, fields=fields, filter=filter, formulas=formulas
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,
@@ -463,9 +446,6 @@ class ReportTools:
             err = _blank_field_error(report_id, "report_id")
             if err is not None:
                 return err
-            filter, err = _prepare_report_cards_filter(filter)
-            if err is not None:
-                return err
             try:
                 raw = await client.update_pipe_report(
                     report_id,
@@ -476,6 +456,8 @@ class ReportTools:
                     formulas=formulas,
                     featured_field=featured_field,
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,
@@ -570,9 +552,6 @@ class ReportTools:
             err = _blank_field_error(name, "name")
             if err is not None:
                 return err
-            filter, err = _prepare_report_cards_filter(filter)
-            if err is not None:
-                return err
             if not pipe_ids or not isinstance(pipe_ids, list):
                 return build_report_error_payload(
                     message="'pipe_ids' must be a non-empty list.",
@@ -581,6 +560,8 @@ class ReportTools:
                 raw = await client.create_organization_report(
                     organization_id, name, pipe_ids, fields=fields, filter=filter
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,
@@ -624,9 +605,6 @@ class ReportTools:
             err = _blank_field_error(report_id, "report_id")
             if err is not None:
                 return err
-            filter, err = _prepare_report_cards_filter(filter)
-            if err is not None:
-                return err
             try:
                 raw = await client.update_organization_report(
                     report_id,
@@ -636,6 +614,8 @@ class ReportTools:
                     filter=filter,
                     pipe_ids=pipe_ids,
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,
@@ -730,9 +710,6 @@ class ReportTools:
             err = _blank_field_error(pipe_report_id, "pipe_report_id")
             if err is not None:
                 return err
-            filter, err = _prepare_report_cards_filter(filter)
-            if err is not None:
-                return err
             try:
                 raw = await client.export_pipe_report(
                     pipe_id,
@@ -741,6 +718,8 @@ class ReportTools:
                     filter=filter,
                     columns=columns,
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,
@@ -785,9 +764,6 @@ class ReportTools:
             organization_id, err = validate_tool_id(organization_id, "organization_id")
             if err is not None:
                 return err
-            filter, err = _prepare_report_cards_filter(filter)
-            if err is not None:
-                return err
             try:
                 raw = await client.export_organization_report(
                     organization_id,
@@ -797,6 +773,8 @@ class ReportTools:
                     filter=filter,
                     columns=columns,
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,

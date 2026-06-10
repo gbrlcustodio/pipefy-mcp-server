@@ -9,13 +9,13 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
+    bad_parameter_on_value_error,
     confirm_destructive,
     parse_json_object,
     parse_json_value,
     resource_id_argument,
     run_cli_command,
     run_pipefy_client_coroutine,
-    validate_report_filter_cli,
     write_export_csv_to_stdout,
 )
 
@@ -139,18 +139,20 @@ def report_pipe_create(
     fields_list = parse_json_value(fields, "--fields") if fields else None
     if fields_list is not None and not isinstance(fields_list, list):
         raise typer.BadParameter("--fields must be a JSON array")
-    filt = validate_report_filter_cli(parse_json_object(filter_json, "--filter"))
+    filt = parse_json_object(filter_json, "--filter")
     formulas_val = parse_json_value(formulas, "--formulas") if formulas else None
     if formulas_val is not None and not isinstance(formulas_val, list):
         raise typer.BadParameter("--formulas must be a JSON array")
 
     async def factory(client: PipefyClient):
-        return await client.create_pipe_report(
-            pipe,
-            name.strip(),
-            fields=fields_list,
-            filter=filt,
-            formulas=formulas_val,
+        return await bad_parameter_on_value_error(
+            client.create_pipe_report(
+                pipe,
+                name.strip(),
+                fields=fields_list,
+                filter=filt,
+                formulas=formulas_val,
+            )
         )
 
     run_cli_command(ctx, json_out, factory)
@@ -174,20 +176,22 @@ def report_pipe_update(
     fields_list = parse_json_value(fields, "--fields") if fields else None
     if fields_list is not None and not isinstance(fields_list, list):
         raise typer.BadParameter("--fields must be a JSON array")
-    filt = validate_report_filter_cli(parse_json_object(filter_json, "--filter"))
+    filt = parse_json_object(filter_json, "--filter")
     formulas_val = parse_json_value(formulas, "--formulas") if formulas else None
     if formulas_val is not None and not isinstance(formulas_val, list):
         raise typer.BadParameter("--formulas must be a JSON array")
 
     async def factory(client: PipefyClient):
-        return await client.update_pipe_report(
-            report_id,
-            name=name.strip() if name else None,
-            color=color,
-            fields=fields_list,
-            filter=filt,
-            formulas=formulas_val,
-            featured_field=featured_field,
+        return await bad_parameter_on_value_error(
+            client.update_pipe_report(
+                report_id,
+                name=name.strip() if name else None,
+                color=color,
+                fields=fields_list,
+                filter=filt,
+                formulas=formulas_val,
+                featured_field=featured_field,
+            )
         )
 
     run_cli_command(ctx, json_out, factory)
@@ -246,7 +250,7 @@ def report_pipe_export(
             "--json is mutually exclusive with --format csv (CSV is written as raw bytes to stdout)."
         )
     sort_obj = parse_json_object(sort_by, "--sort-by")
-    filt = validate_report_filter_cli(parse_json_object(filter_json, "--filter"))
+    filt = parse_json_object(filter_json, "--filter")
     cols = parse_json_value(columns, "--columns") if columns else None
     if cols is not None and not isinstance(cols, list):
         raise typer.BadParameter("--columns must be a JSON array")
@@ -254,24 +258,28 @@ def report_pipe_export(
     if fmt == "json":
 
         async def factory(client: PipefyClient):
-            return await client.export_pipe_report(
-                pipe,
-                report_id,
-                sort_by=sort_obj,
-                filter=filt,
-                columns=cols,
+            return await bad_parameter_on_value_error(
+                client.export_pipe_report(
+                    pipe,
+                    report_id,
+                    sort_by=sort_obj,
+                    filter=filt,
+                    columns=cols,
+                )
             )
 
         run_cli_command(ctx, json_out, factory)
         return
 
     async def csv_factory(client: PipefyClient) -> None:
-        start = await client.export_pipe_report(
-            pipe,
-            report_id,
-            sort_by=sort_obj,
-            filter=filt,
-            columns=cols,
+        start = await bad_parameter_on_value_error(
+            client.export_pipe_report(
+                pipe,
+                report_id,
+                sort_by=sort_obj,
+                filter=filt,
+                columns=cols,
+            )
         )
         exp = (start.get("exportPipeReport") or {}).get("pipeReportExport") or {}
         export_id = exp.get("id")

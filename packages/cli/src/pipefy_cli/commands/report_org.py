@@ -7,13 +7,13 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
+    bad_parameter_on_value_error,
     confirm_destructive,
     parse_json_object,
     parse_json_value,
     resource_id_argument,
     run_cli_command,
     run_pipefy_client_coroutine,
-    validate_report_filter_cli,
     write_export_csv_to_stdout,
 )
 
@@ -78,15 +78,17 @@ def report_org_create(
     fields_list = parse_json_value(fields, "--fields") if fields else None
     if fields_list is not None and not isinstance(fields_list, list):
         raise typer.BadParameter("--fields must be a JSON array")
-    filt = validate_report_filter_cli(parse_json_object(filter_json, "--filter"))
+    filt = parse_json_object(filter_json, "--filter")
 
     async def factory(client: PipefyClient):
-        return await client.create_organization_report(
-            organization,
-            name.strip(),
-            pipe_list,
-            fields=fields_list,
-            filter=filt,
+        return await bad_parameter_on_value_error(
+            client.create_organization_report(
+                organization,
+                name.strip(),
+                pipe_list,
+                fields=fields_list,
+                filter=filt,
+            )
         )
 
     run_cli_command(ctx, json_out, factory)
@@ -111,7 +113,7 @@ def report_org_update(
     fields_list = parse_json_value(fields, "--fields") if fields else None
     if fields_list is not None and not isinstance(fields_list, list):
         raise typer.BadParameter("--fields must be a JSON array")
-    filt = validate_report_filter_cli(parse_json_object(filter_json, "--filter"))
+    filt = parse_json_object(filter_json, "--filter")
     pids = parse_json_value(pipe_ids, "--pipe-ids") if pipe_ids else None
     if pids is not None:
         if not isinstance(pids, list):
@@ -119,13 +121,15 @@ def report_org_update(
         pids = [str(x) for x in pids]
 
     async def factory(client: PipefyClient):
-        return await client.update_organization_report(
-            report_id,
-            name=name.strip() if name else None,
-            color=color,
-            fields=fields_list,
-            filter=filt,
-            pipe_ids=pids,
+        return await bad_parameter_on_value_error(
+            client.update_organization_report(
+                report_id,
+                name=name.strip() if name else None,
+                color=color,
+                fields=fields_list,
+                filter=filt,
+                pipe_ids=pids,
+            )
         )
 
     run_cli_command(ctx, json_out, factory)
@@ -187,7 +191,7 @@ def report_org_export(
             "--json is mutually exclusive with --format csv (CSV is written as raw bytes to stdout)."
         )
     sort_obj = parse_json_object(sort_by, "--sort-by")
-    filt = validate_report_filter_cli(parse_json_object(filter_json, "--filter"))
+    filt = parse_json_object(filter_json, "--filter")
     cols = parse_json_value(columns, "--columns") if columns else None
     if cols is not None and not isinstance(cols, list):
         raise typer.BadParameter("--columns must be a JSON array")
@@ -200,7 +204,23 @@ def report_org_export(
     if fmt == "json":
 
         async def factory(client: PipefyClient):
-            return await client.export_organization_report(
+            return await bad_parameter_on_value_error(
+                client.export_organization_report(
+                    organization,
+                    organization_report_id=organization_report_id,
+                    pipe_ids=pids,
+                    sort_by=sort_obj,
+                    filter=filt,
+                    columns=cols,
+                )
+            )
+
+        run_cli_command(ctx, json_out, factory)
+        return
+
+    async def csv_factory(client: PipefyClient) -> None:
+        start = await bad_parameter_on_value_error(
+            client.export_organization_report(
                 organization,
                 organization_report_id=organization_report_id,
                 pipe_ids=pids,
@@ -208,18 +228,6 @@ def report_org_export(
                 filter=filt,
                 columns=cols,
             )
-
-        run_cli_command(ctx, json_out, factory)
-        return
-
-    async def csv_factory(client: PipefyClient) -> None:
-        start = await client.export_organization_report(
-            organization,
-            organization_report_id=organization_report_id,
-            pipe_ids=pids,
-            sort_by=sort_obj,
-            filter=filt,
-            columns=cols,
         )
         exp = (start.get("exportOrganizationReport") or {}).get(
             "organizationReportExport"

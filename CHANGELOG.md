@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **MCP / CLI (label color)**: `create_label` and `update_label` validate `color` as hex `#RGB` or `#RRGGBB` before GraphQL (e.g. `red` is rejected with `expected #RGB or #RRGGBB hex color, received 'red'`).
+- **SDK**: report `filter` preflight and label `color` normalization now run at the SDK boundary — `ReportService` create/update/export methods and `create_label`/`update_label` normalize input and raise `ValueError` when invalid (one decision point replacing per-surface guards). MCP tools and CLI commands only map the error; messages and exit codes are unchanged.
 - **Docs / install**: canonical GitHub repository is [`pipefy/ai-toolkit`](https://github.com/pipefy/ai-toolkit). Install snippets, `install.sh`, MCP setup links, Claude plugin metadata, and `.mcp.json` now point at `github.com/pipefy/ai-toolkit` (GitHub may still redirect older URLs).
 
 ## [0.2.0-beta.2] - 2026-06-02

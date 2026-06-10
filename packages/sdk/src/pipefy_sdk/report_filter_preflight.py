@@ -72,7 +72,8 @@ def _coerce_filter_query_value(value: Any) -> Any:
     return value
 
 
-def validate_report_cards_filter(filter_obj: dict[str, Any] | None) -> str | None:
+def report_cards_filter_error(filter_obj: dict[str, Any] | None) -> str | None:
+    """Return an error message for an invalid ``ReportCardsFilter``, or ``None`` when valid."""
     if filter_obj is None:
         return None
     if not isinstance(filter_obj, dict):
@@ -176,5 +177,5 @@ __all__ = [
     "REPORT_CARDS_FILTER_QUERY_KEYS",
     "REPORT_CARDS_FILTER_REJECTED_ROOT_KEYS",
     "normalize_report_cards_filter",
-    "validate_report_cards_filter",
+    "report_cards_filter_error",
 ]

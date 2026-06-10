@@ -31,6 +31,9 @@ def test_label_create_rejects_color_name_before_api(
 ):
     oauth_env("lbl-create-hex")
     mock_client = MagicMock()
+    mock_client.create_label = AsyncMock(
+        side_effect=ValueError("expected #RGB or #RRGGBB hex color, received 'red'")
+    )
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -50,7 +53,7 @@ def test_label_create_rejects_color_name_before_api(
         )
     assert result.exit_code == 2
     assert "expected #RGB or #RRGGBB hex color, received 'red'" in result.stderr
-    mock_client.create_label.assert_not_called()
+    mock_client.create_label.assert_awaited_once()
 
 
 def test_label_create_passes_normalized_hex(
@@ -78,7 +81,7 @@ def test_label_create_passes_normalized_hex(
             ],
         )
     assert result.exit_code == 0
-    mock_client.create_label.assert_awaited_once_with("8", "Bug", "#FF0000")
+    mock_client.create_label.assert_awaited_once_with("8", "Bug", "#ff0000")
 
 
 def test_label_update_rejects_color_name_before_api(
@@ -86,6 +89,9 @@ def test_label_update_rejects_color_name_before_api(
 ):
     oauth_env("lbl-update-hex")
     mock_client = MagicMock()
+    mock_client.update_label = AsyncMock(
+        side_effect=ValueError("expected #RGB or #RRGGBB hex color, received 'blue'")
+    )
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -104,7 +110,7 @@ def test_label_update_rejects_color_name_before_api(
         )
     assert result.exit_code == 2
     assert "expected #RGB or #RRGGBB hex color, received 'blue'" in result.stderr
-    mock_client.update_label.assert_not_called()
+    mock_client.update_label.assert_awaited_once()
 
 
 def test_label_list_pipe_denied_json(runner, clean_pipefy_env, saved_cwd, oauth_env):

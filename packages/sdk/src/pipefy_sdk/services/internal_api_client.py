@@ -1,19 +1,13 @@
 """GraphQL client for Pipefy's internal_api endpoint.
 
-A thin :class:`pipefy_sdk.base_client.BasePipefyClient` subclass — the only
-real difference from the public-API client is the error envelope: each GraphQL
-error is decorated with ``[code=…]`` / ``[correlation_id=…]`` suffixes drawn
-from ``extensions``. AI-automation MCP tools strip those suffixes via
-``pipefy_mcp.tools.graphql_error_helpers.strip_internal_api_diagnostic_markers``
-before surfacing the message to end users; service-layer tests assert the
-fully suffixed text.
+A thin :class:`pipefy_sdk.base_client.BasePipefyClient` subclass. The only real
+difference from the public-API client is the error envelope: each GraphQL error
+is decorated with ``[code=...]`` / ``[correlation_id=...]`` suffixes drawn from
+``extensions``. Service-layer tests assert the fully suffixed text.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
-from gql import gql as parse_gql
 from httpx import Auth
 from pipefy_infra import security
 
@@ -35,7 +29,14 @@ def _format_internal_api_error(errors: list[dict]) -> str:
 
 
 class InternalApiClient(BasePipefyClient):
-    """GraphQL client for Pipefy internal API (AI Automation mutations)."""
+    """GraphQL client for Pipefy's internal_api endpoint.
+
+    Used for mutations only available on the internal schema (card-relation
+    deletion, portal sub-portals). Accepts already-parsed ``gql()``
+    ``DocumentNode`` queries like every other client; the only behavioral
+    difference from the public-API client is the error envelope built by
+    ``_format_internal_api_error``.
+    """
 
     def __init__(
         self,
@@ -64,8 +65,3 @@ class InternalApiClient(BasePipefyClient):
             url_override=url.strip(),
             on_graphql_error=_format_internal_api_error,
         )
-
-    async def execute_query(  # type: ignore[override]
-        self, query: str, variables: dict[str, Any]
-    ) -> dict:
-        return await super().execute_query(parse_gql(query), variables)

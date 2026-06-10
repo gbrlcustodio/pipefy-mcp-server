@@ -722,6 +722,8 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
 async def test_delete_card_relation_delegates_to_internal_api_client(mock_settings):
     """delete_card_relation uses InternalApiClient (not CardService) because the
     mutation is only on the internal GraphQL schema."""
+    from graphql import print_ast
+
     from pipefy_sdk.queries.card_queries import (
         INTERNAL_DELETE_CARD_RELATION_MUTATION,
     )
@@ -735,9 +737,10 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
     client.set_internal_api_client(internal)
 
     # Pin the snake_case input keys that the internal API expects
-    assert "child_id: $childId" in INTERNAL_DELETE_CARD_RELATION_MUTATION
-    assert "parent_id: $parentId" in INTERNAL_DELETE_CARD_RELATION_MUTATION
-    assert "source_id: $sourceId" in INTERNAL_DELETE_CARD_RELATION_MUTATION
+    rendered = print_ast(INTERNAL_DELETE_CARD_RELATION_MUTATION)
+    assert "child_id: $childId" in rendered
+    assert "parent_id: $parentId" in rendered
+    assert "source_id: $sourceId" in rendered
 
     result = await client.delete_card_relation("c1", "p2", "src-3")
 

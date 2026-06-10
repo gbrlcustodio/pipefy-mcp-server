@@ -1665,30 +1665,15 @@ Usage: pipefy phase [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ get             Load phase metadata and fields by id (via                    │
-│                 ``get_phase_fields``).                                       │
-│ targets         List phases a card may move to from this phase (UI           │
-│                 transition rules).                                           │
-│ count           Return native ``Phase.cards_count`` for a phase (fast        │
-│                 inventory).                                                  │
-│ cards           List cards in a phase (``Phase.cards`` pagination).          │
-│ create          Create a phase in a pipe.                                    │
-│ update          Update a phase (Pipefy ``UpdatePhaseInput``). Resolves       │
-│                 current name when omitted.                                   │
-│ delete          Delete a phase permanently.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-### HELP phase/targets
-Usage: pipefy phase targets [OPTIONS] PHASE_ID
-
- List phases a card may move to from this phase (UI transition rules).
-
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    phase_id      TEXT  Source phase id (card's current phase). [required]  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --json  -j        Print machine-readable JSON to stdout.                     │
-│ --help            Show this message and exit.                                │
+│ get       Load phase metadata and fields by id (via ``get_phase_fields``).   │
+│ targets   List phases a card may move to from this phase (UI transition      │
+│           rules).                                                            │
+│ count     Return native ``Phase.cards_count`` for a phase (fast inventory).  │
+│ cards     List cards in a phase (``Phase.cards`` pagination).                │
+│ create    Create a phase in a pipe.                                          │
+│ update    Update a phase (Pipefy ``UpdatePhaseInput``). Resolves current     │
+│           name when omitted.                                                 │
+│ delete    Delete a phase permanently.                                        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP phase/cards
@@ -1768,6 +1753,19 @@ Usage: pipefy phase get [OPTIONS] PHASE_ID
 │ --required-only            Return only required fields (same query as MCP    │
 │                            get_phase_fields).                                │
 │ --help                     Show this message and exit.                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP phase/targets
+Usage: pipefy phase targets [OPTIONS] PHASE_ID
+
+ List phases a card may move to from this phase (UI transition rules).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    phase_id      TEXT  Source phase id (card's current phase). [required]  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --json  -j        Print machine-readable JSON to stdout.                     │
+│ --help            Show this message and exit.                                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP phase/update

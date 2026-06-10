@@ -25,7 +25,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 
 | Tool | Role |
 |------|------|
-| `get_pipe` | Load pipe metadata (phases, fields, settings). Workflow `phases[]` include `cards_count`; start-form intake is via `start_form_fields` and `startFormPhaseId` (start form is not in `phases[]`). |
+| `get_pipe` | Load pipe metadata (phases, fields, settings). Workflow `phases[]` include `cards_count`; start-form intake is via `start_form_fields` (start form is not in `phases[]`). |
 | `get_start_form_fields` | Start-form fields for a pipe. |
 | `get_phase_fields` | Fields for a phase — each includes `id`, `internal_id`, `uuid`. |
 | `get_pipe_members` | List pipe members. |
@@ -84,14 +84,13 @@ get_start_form_fields(pipe_id)   → learn field IDs, types, required flag
 create_card(pipe_id, fields={…}) → supply every required field ID
 
 get_pipe(pipe_id)                → phases[].id / cards_count for workflow inventory
-                                 → startFormPhaseId when seeding the start-form phase
 create_card(
   pipe_id,
   phase_id="340012345",
   skip_elicitation=true,
   title="Seeded card",
   fields={…},
-)                                → card created in that phase (fields validated via get_phase_fields)
+)                                → card created in that phase (fields via get_phase_fields + get_start_form_fields)
 
 get_phase_fields(phase_id)                     → learn phase field IDs
 fill_card_phase_fields(card_id, phase_id, fields={…}) → supply values
@@ -105,7 +104,6 @@ MCP tool results use the standard envelope; inventory fields live under the `pip
 
 | JSON path | Meaning |
 |-----------|---------|
-| `pipe.startFormPhaseId` | Start-form phase ID (private API; not listed in `phases[]`) |
 | `pipe.start_form_fields` | Start-form field definitions (intake) |
 | `pipe.phases[].id` | Workflow phase IDs (start form excluded) |
 | `pipe.phases[].name` | Phase display name |
@@ -119,10 +117,10 @@ Use these when you need per-phase totals or card lists without pipe-wide `CardSe
 
 | Tool | CLI | When to use |
 |------|-----|-------------|
-| `get_phase_cards_count` | `pipefy phase cards-count <phase_id>` | Quick scalar; empty phases for seeding. |
+| `get_phase_cards_count` | `pipefy phase count <phase_id>` | Quick scalar; empty phases for seeding. |
 | `get_phase_cards` | `pipefy phase cards <phase_id> --first 50 --after <cursor>` | Verify cards after create/move; paginate with `pageInfo.endCursor`. |
 
-Discovery path: `get_pipe(pipe_id)` → `phases[].id` (workflow) or `startFormPhaseId` (start form).
+Discovery path: `get_pipe(pipe_id)` → `phases[].id` for workflow phases; omit `phase_id` on `create_card` for start-form intake.
 
 ```
 get_phase_cards_count(phase_id="340012345")
@@ -137,7 +135,7 @@ Outbound moves are constrained by UI-configured connections — there is no API 
 2. `get_phase_allowed_move_targets(phase_id=<source>)` → `allowed_phases` (`{id, name}`).
 3. `move_card_to_phase(card_id, destination_phase_id=<allowed id>)`.
 
-CLI: `pipefy phase allowed-moves <phase_id> --json`.
+CLI: `pipefy phase targets <phase_id> --json`.
 
 Empty `allowed_phases` means no outbound transitions are configured in the UI.
 

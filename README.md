@@ -156,7 +156,7 @@ Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clien
 
 | Domain | Tools | Summary | Reference |
 |--------|:-----:|---------|-----------|
-| **Pipes & cards** | 37 | Pipes, phases, fields, labels, cards, field conditions, attachments. Phase inventory (`get_phase_cards`, `get_phase_cards_count`), move discovery (`get_phase_allowed_move_targets`), and `create_card(phase_id=…)` reduce raw GraphQL for agent seeding. | [docs](docs/mcp/tools/pipes-and-cards.md) |
+| **Pipes & cards** | 40 | Pipes, phases, fields, labels, cards, field conditions, attachments. Phase inventory (`get_phase_cards`, `get_phase_cards_count`), move discovery (`get_phase_allowed_move_targets`), and `create_card(phase_id=…)` reduce raw GraphQL for agent seeding. | [docs](docs/mcp/tools/pipes-and-cards.md) |
 | **Database tables** | 17 | Tables, records, schema, table-record attachments. | [docs](docs/mcp/tools/database-tables.md) |
 | **Relations** | 8 | Pipe and card relations. | [docs](docs/mcp/tools/relations.md) |
 | **Reports** | 17 | Pipe and organization reports, async exports. | [docs](docs/mcp/tools/reports.md) |
@@ -165,7 +165,7 @@ Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clien
 | **Members, email & webhooks** | 11 | Membership, inbox email, webhooks. | [docs](docs/mcp/tools/members-email-webhooks.md) |
 | **Organization** | 1 | Organization metadata. | [docs](docs/mcp/tools/organization.md) |
 | **Portals** | 20 | Portal read/CRUD, pages, elements, sub-portals (publish/unpublish). | [docs](docs/mcp/tools/portal.md) |
-| **Introspection** | 5 | Schema discovery and raw GraphQL. | [docs](docs/mcp/tools/introspection.md) |
+| **Introspection** | 6 | Schema discovery and raw GraphQL. | [docs](docs/mcp/tools/introspection.md) |
 
 ---
 
@@ -189,7 +189,7 @@ The [`skills/`](skills/) directory holds workflow playbooks: prerequisites, tool
 
 Full catalog: [`skills/README.md`](skills/README.md). Authoring: [`skills/AGENTS.md`](skills/AGENTS.md). Contributions: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-**Card & phase agent ergonomics:** use [`skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md`](skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md) (workflow *Seed pipe across phases*; prefer dedicated tools over `execute_graphql`). Manual smoke logs and replay payloads: [`.cursor/qa-tests-and-smoke/`](.cursor/qa-tests-and-smoke/).
+**Card & phase agent ergonomics:** use [`skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md`](skills/pipes-and-cards/pipefy-pipes-and-cards/SKILL.md) (workflow *Seed pipe across phases*; prefer dedicated tools over `execute_graphql`).
 
 ---
 

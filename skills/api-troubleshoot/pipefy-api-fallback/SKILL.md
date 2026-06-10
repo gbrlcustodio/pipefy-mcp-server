@@ -20,7 +20,7 @@ This skill activates only after Tiers 1 and 2 have failed. Call the Pipefy Graph
 
 | Tier | Method | When |
 |------|--------|------|
-| **1** | Dedicated MCP tool (`create_card`, `get_phase_cards`, `get_phase_allowed_move_targets`, `update_pipe`, etc.) | Always try first. For card/phase seeding and inventory, see the table in [pipefy-pipes-and-cards](../../pipes-and-cards/pipefy-pipes-and-cards/SKILL.md#avoid-execute_graphql-card--phase-workflows). |
+| **1** | Dedicated MCP tool (`create_card`, `get_phase_cards`, `get_phase_allowed_move_targets`, `update_pipe`, etc.) | Always try first. For card/phase seeding and inventory, see [Seed pipe across phases](../../pipes-and-cards/pipefy-pipes-and-cards/SKILL.md#seed-pipe-across-phases). |
 | **2** | Introspection + `execute_graphql` | When no dedicated tool exists or a tool fails unexpectedly. See [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md). |
 | **3** | Direct HTTP via curl / httpx (this skill) | When the MCP server itself is unavailable, or `execute_graphql` fails with an infrastructure error. |
 

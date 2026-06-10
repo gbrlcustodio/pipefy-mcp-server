@@ -3,14 +3,14 @@ name: pipefy-pipes-and-cards
 description: >
   Use this skill when the user wants to read, create, update, or delete
   pipes, phases, phase fields, labels, cards, comments, or field conditions.
-  Covers 37 MCP tools for the core pipe and card lifecycle. Use the
+  Covers 40 MCP tools for the core pipe and card lifecycle. Use the
   seed-pipe-across-phases workflow when populating empty phases for demos or QA.
 tags: [pipefy, pipes, cards, phases, fields, labels, comments, field-conditions]
 ---
 
 # Pipes & Cards
 
-Read, create, update, and delete pipes, phases, phase fields, labels, cards, attachments, and field conditions. **37 MCP tools.**
+Read, create, update, and delete pipes, phases, phase fields, labels, cards, attachments, and field conditions. **40 MCP tools.**
 
 ---
 
@@ -55,8 +55,8 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, att
 | `create_phase` | `pipefy phase create` | No | Add a phase to a pipe. |
 | `update_phase` | `pipefy phase update <id>` | No | Rename, reorder, set done flag. |
 | `delete_phase` | `pipefy phase delete <id>` | No | **Two-step destructive.** |
-| `get_phase_allowed_move_targets` | `pipefy phase allowed-moves <id>` | Yes | Valid destination phases before `move_card_to_phase` (UI-configured edges only). |
-| `get_phase_cards_count` | `pipefy phase cards-count <id>` | Yes | Native per-phase card count (start-form count may be 0 while cards exist). |
+| `get_phase_allowed_move_targets` | `pipefy phase targets <id>` | Yes | Valid destination phases before `move_card_to_phase` (UI-configured edges only). |
+| `get_phase_cards_count` | `pipefy phase count <id>` | Yes | Native per-phase card count via `get_phase`. |
 | `get_phase_cards` | `pipefy phase cards <id>` | Yes | Paginated cards in a phase (`--first`, `--after`, optional `--include-fields`). |
 
 ---
@@ -70,15 +70,15 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 | Tool (MCP) | CLI | Read-only |
 |------------|-----|-----------|
 | `get_pipe` | `pipefy pipe get <pipe_id>` | Yes |
-| `get_phase_cards_count` | `pipefy phase cards-count <phase_id>` | Yes |
+| `get_phase_cards_count` | `pipefy phase count <phase_id>` | Yes |
 | `create_card` | `pipefy card create --pipe <id> --phase-id <id>` | No |
 | `get_phase_cards` | `pipefy phase cards <phase_id>` | Yes |
-| `get_phase_allowed_move_targets` | `pipefy phase allowed-moves <phase_id>` | Yes |
+| `get_phase_allowed_move_targets` | `pipefy phase targets <phase_id>` | Yes |
 | `move_card_to_phase` | `pipefy card move <card_id> --phase <id>` | No |
 
 ### Steps
 
-1. **Load phase IDs** — `get_pipe(pipe_id)` → collect `phases[].id` for workflow phases and `startFormPhaseId` when seeding the start form.
+1. **Load phase IDs** — `get_pipe(pipe_id)` → collect `phases[].id` for workflow phases. Omit `phase_id` on `create_card` for start-form intake.
 
    MCP: `get_pipe pipe_id="306996634"`
 
@@ -88,9 +88,9 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 
    MCP: `get_phase_cards_count phase_id="340012345"`
 
-   CLI: `pipefy phase cards-count 340012345 --json`
+   CLI: `pipefy phase count 340012345 --json`
 
-3. **Create cards in empty phases** — loop `create_card` with `phase_id` (and `skip_elicitation=true` when no start-form elicitation is wanted). Discover required fields with `get_phase_fields(phase_id)` when `fields` is non-empty.
+3. **Create cards in empty phases** — loop `create_card` with `phase_id` (and `skip_elicitation=true` for agent seeding). When `fields` is non-empty, keys are filtered via `get_phase_fields(phase_id)` and `get_start_form_fields(pipe_id)`.
 
    MCP:
    ```
@@ -110,7 +110,7 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 
    MCP: `get_phase_allowed_move_targets phase_id="<current_phase_id>"`
 
-   CLI: `pipefy phase allowed-moves <current_phase_id> --json`
+   CLI: `pipefy phase targets <current_phase_id> --json`
 
 ### Success criteria
 
@@ -120,7 +120,7 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 ### Failure modes
 
 - **Empty `allowed_phases`:** configure **Phase → Connections** in the Pipefy UI; the API cannot add edges.
-- **Start-form `cards_count` is 0:** use `get_phase_cards` on `startFormPhaseId` before assuming the phase is empty.
+- **Unexpected empty count:** use `get_phase_cards` to list cards before creating duplicates.
 
 ---
 

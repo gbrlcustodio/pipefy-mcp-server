@@ -35,6 +35,43 @@ EXAMPLE_PHASE_FILTER: dict[str, Any] = {
 }
 
 
+def normalize_report_cards_filter(filter_obj: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy with JSON integer ``value`` scalars coerced to strings."""
+    return _normalize_filter_group(filter_obj)
+
+
+def _normalize_filter_group(node: dict[str, Any]) -> dict[str, Any]:
+    normalized: dict[str, Any] = dict(node)
+    queries = node.get("queries")
+    if isinstance(queries, list):
+        normalized["queries"] = [
+            _normalize_filter_query(query) if isinstance(query, dict) else query
+            for query in queries
+        ]
+    groups = node.get("groups")
+    if isinstance(groups, list):
+        normalized["groups"] = [
+            _normalize_filter_group(group) if isinstance(group, dict) else group
+            for group in groups
+        ]
+    return normalized
+
+
+def _normalize_filter_query(node: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(node)
+    if "value" in normalized:
+        normalized["value"] = _coerce_filter_query_value(normalized["value"])
+    return normalized
+
+
+def _coerce_filter_query_value(value: Any) -> Any:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return str(value)
+    return value
+
+
 def validate_report_cards_filter(filter_obj: dict[str, Any] | None) -> str | None:
     if filter_obj is None:
         return None
@@ -138,5 +175,6 @@ __all__ = [
     "REPORT_CARDS_FILTER_GROUP_KEYS",
     "REPORT_CARDS_FILTER_QUERY_KEYS",
     "REPORT_CARDS_FILTER_REJECTED_ROOT_KEYS",
+    "normalize_report_cards_filter",
     "validate_report_cards_filter",
 ]

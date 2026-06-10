@@ -8,7 +8,10 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyClient, PipefyId
-from pipefy_sdk.report_filter_preflight import validate_report_cards_filter
+from pipefy_sdk.report_filter_preflight import (
+    normalize_report_cards_filter,
+    validate_report_cards_filter,
+)
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.pagination_helpers import (
@@ -27,6 +30,12 @@ from pipefy_mcp.tools.tool_error_envelope import (
 )
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
+_REPORT_FILTER_SHAPE_DOC = (
+    "``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``), not a "
+    "top-level ``current_phase`` key; discover field names via "
+    "``get_pipe_report_filterable_fields``."
+)
+
 
 def _blank_field_error(value: str, field: str) -> dict[str, Any] | None:
     """Return an error payload when ``value`` is blank."""
@@ -35,13 +44,16 @@ def _blank_field_error(value: str, field: str) -> dict[str, Any] | None:
     return None
 
 
-def _report_filter_preflight_error(
+def _prepare_report_cards_filter(
     filter_obj: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    message = validate_report_cards_filter(filter_obj)
-    if message is None:
-        return None
-    return build_report_error_payload(message=message)
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if filter_obj is None:
+        return None, None
+    normalized = normalize_report_cards_filter(filter_obj)
+    message = validate_report_cards_filter(normalized)
+    if message is not None:
+        return None, build_report_error_payload(message=message)
+    return normalized, None
 
 
 class ReportTools:
@@ -406,7 +418,7 @@ class ReportTools:
             err = _blank_field_error(name, "name")
             if err is not None:
                 return err
-            err = _report_filter_preflight_error(filter)
+            filter, err = _prepare_report_cards_filter(filter)
             if err is not None:
                 return err
             try:
@@ -457,7 +469,7 @@ class ReportTools:
             err = _blank_field_error(report_id, "report_id")
             if err is not None:
                 return err
-            err = _report_filter_preflight_error(filter)
+            filter, err = _prepare_report_cards_filter(filter)
             if err is not None:
                 return err
             try:
@@ -544,7 +556,9 @@ class ReportTools:
             filter: dict | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Create an org-wide report spanning multiple pipes.
+            f"""Create an org-wide report spanning multiple pipes.
+
+            {_REPORT_FILTER_SHAPE_DOC}
 
             Args:
                 organization_id: Organization ID.
@@ -560,7 +574,7 @@ class ReportTools:
             err = _blank_field_error(name, "name")
             if err is not None:
                 return err
-            err = _report_filter_preflight_error(filter)
+            filter, err = _prepare_report_cards_filter(filter)
             if err is not None:
                 return err
             if not pipe_ids or not isinstance(pipe_ids, list):
@@ -596,7 +610,9 @@ class ReportTools:
             pipe_ids: list[str] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Update an organization report; omitted parameters are unchanged.
+            f"""Update an organization report; omitted parameters are unchanged.
+
+            {_REPORT_FILTER_SHAPE_DOC}
 
             Args:
                 report_id: Organization report ID.
@@ -610,7 +626,7 @@ class ReportTools:
             err = _blank_field_error(report_id, "report_id")
             if err is not None:
                 return err
-            err = _report_filter_preflight_error(filter)
+            filter, err = _prepare_report_cards_filter(filter)
             if err is not None:
                 return err
             try:
@@ -696,7 +712,9 @@ class ReportTools:
             columns: list[str] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Trigger an async pipe report export. Returns an export ID with state 'processing'. Poll `get_pipe_report_export(export_id)` to check when state becomes 'done' -- the response will include a `fileURL` to download the file.
+            f"""Trigger an async pipe report export. Returns an export ID with state 'processing'. Poll `get_pipe_report_export(export_id)` to check when state becomes 'done' -- the response will include a `fileURL` to download the file.
+
+            {_REPORT_FILTER_SHAPE_DOC}
 
             Args:
                 pipe_id: Pipe ID (numeric string).
@@ -712,7 +730,7 @@ class ReportTools:
             err = _blank_field_error(pipe_report_id, "pipe_report_id")
             if err is not None:
                 return err
-            err = _report_filter_preflight_error(filter)
+            filter, err = _prepare_report_cards_filter(filter)
             if err is not None:
                 return err
             try:
@@ -748,7 +766,9 @@ class ReportTools:
             columns: list[str] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Trigger an async organization report export. Poll `get_organization_report_export(export_id)` for completion.
+            f"""Trigger an async organization report export. Poll `get_organization_report_export(export_id)` for completion.
+
+            {_REPORT_FILTER_SHAPE_DOC}
 
             Args:
                 organization_id: Organization numeric ID (must be coercible to int — Pipefy's
@@ -763,7 +783,7 @@ class ReportTools:
             organization_id, err = validate_tool_id(organization_id, "organization_id")
             if err is not None:
                 return err
-            err = _report_filter_preflight_error(filter)
+            filter, err = _prepare_report_cards_filter(filter)
             if err is not None:
                 return err
             try:

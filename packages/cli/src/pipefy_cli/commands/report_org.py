@@ -78,8 +78,7 @@ def report_org_create(
     fields_list = parse_json_value(fields, "--fields") if fields else None
     if fields_list is not None and not isinstance(fields_list, list):
         raise typer.BadParameter("--fields must be a JSON array")
-    filt = parse_json_object(filter_json, "--filter")
-    validate_report_filter_cli(filt)
+    filt = validate_report_filter_cli(parse_json_object(filter_json, "--filter"))
 
     async def factory(client: PipefyClient):
         return await client.create_organization_report(
@@ -112,8 +111,7 @@ def report_org_update(
     fields_list = parse_json_value(fields, "--fields") if fields else None
     if fields_list is not None and not isinstance(fields_list, list):
         raise typer.BadParameter("--fields must be a JSON array")
-    filt = parse_json_object(filter_json, "--filter")
-    validate_report_filter_cli(filt)
+    filt = validate_report_filter_cli(parse_json_object(filter_json, "--filter"))
     pids = parse_json_value(pipe_ids, "--pipe-ids") if pipe_ids else None
     if pids is not None:
         if not isinstance(pids, list):
@@ -189,8 +187,7 @@ def report_org_export(
             "--json is mutually exclusive with --format csv (CSV is written as raw bytes to stdout)."
         )
     sort_obj = parse_json_object(sort_by, "--sort-by")
-    filt = parse_json_object(filter_json, "--filter")
-    validate_report_filter_cli(filt)
+    filt = validate_report_filter_cli(parse_json_object(filter_json, "--filter"))
     cols = parse_json_value(columns, "--columns") if columns else None
     if cols is not None and not isinstance(cols, list):
         raise typer.BadParameter("--columns must be a JSON array")

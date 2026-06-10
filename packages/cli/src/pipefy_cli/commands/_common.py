@@ -13,7 +13,11 @@ import typer
 from gql.transport.exceptions import TransportError, TransportQueryError
 from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
 from pipefy_sdk.exceptions import PipefyError
-from pipefy_sdk.report_filter_preflight import validate_report_cards_filter
+from pipefy_sdk.label_color import normalize_label_color
+from pipefy_sdk.report_filter_preflight import (
+    normalize_report_cards_filter,
+    validate_report_cards_filter,
+)
 
 from pipefy_cli.auth import (
     AuthContext,
@@ -80,10 +84,30 @@ def validate_cards_page_size(first: int | None) -> int | None:
     return first
 
 
-def validate_report_filter_cli(filter_obj: dict[str, Any] | None) -> None:
-    message = validate_report_cards_filter(filter_obj)
+def validate_report_filter_cli(filter_obj: dict[str, Any] | None) -> dict[str, Any] | None:
+    if filter_obj is None:
+        return None
+    normalized = normalize_report_cards_filter(filter_obj)
+    message = validate_report_cards_filter(normalized)
     if message is not None:
         raise typer.BadParameter(message)
+    return normalized
+
+
+def validate_label_name_cli(name: str) -> str:
+    nm = name.strip()
+    if not nm:
+        typer.echo("--name must be non-empty.", err=True)
+        raise typer.Exit(2)
+    return nm
+
+
+def validate_label_color_cli(color: str) -> str:
+    try:
+        return normalize_label_color(color)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
 
 
 def export_poll_max_rounds(

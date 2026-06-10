@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pipefy_sdk.report_filter_preflight import (
     EXAMPLE_PHASE_FILTER,
+    normalize_report_cards_filter,
     validate_report_cards_filter,
 )
 
@@ -150,11 +151,21 @@ def test_validate_report_cards_filter_rejects_non_string_value():
     err = validate_report_cards_filter(
         {
             "operator": "and",
-            "queries": [{"field": "current_phase", "operator": "eq", "value": 123}],
+            "queries": [{"field": "current_phase", "operator": "eq", "value": True}],
         }
     )
     assert err is not None
     assert "value must be a string" in err
+
+
+def test_normalize_report_cards_filter_coerces_integer_value():
+    filt = {
+        "operator": "and",
+        "queries": [{"field": "current_phase", "operator": "eq", "value": 987654321}],
+    }
+    normalized = normalize_report_cards_filter(filt)
+    assert normalized["queries"][0]["value"] == "987654321"
+    assert validate_report_cards_filter(normalized) is None
 
 
 def test_validate_report_cards_filter_allows_omitted_value():

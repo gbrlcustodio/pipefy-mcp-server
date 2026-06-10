@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import typer
 from pipefy_sdk import PipefyClient
-from pipefy_sdk.label_color import normalize_label_color
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     resource_id_argument,
     run_cli_command,
+    validate_label_color_cli,
+    validate_label_name_cli,
 )
 
 label_app = typer.Typer(help="Pipe label operations.", no_args_is_help=True)
@@ -56,18 +57,8 @@ def label_create(
 ) -> None:
     """Create a label on a pipe."""
 
-    nm = name.strip()
-    if not nm:
-        typer.echo("--name must be non-empty.", err=True)
-        raise typer.Exit(2)
-    if not color.strip():
-        typer.echo("--color must be non-empty.", err=True)
-        raise typer.Exit(2)
-    try:
-        col = normalize_label_color(color)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(2) from exc
+    nm = validate_label_name_cli(name)
+    col = validate_label_color_cli(color)
 
     async def factory(client: PipefyClient):
         return await client.create_label(pipe_id, nm, col)
@@ -92,18 +83,8 @@ def label_update(
 ) -> None:
     """Update a label (name and color are both required by Pipefy)."""
 
-    nm = name.strip()
-    if not nm:
-        typer.echo("--name must be non-empty.", err=True)
-        raise typer.Exit(2)
-    if not color.strip():
-        typer.echo("--color must be non-empty.", err=True)
-        raise typer.Exit(2)
-    try:
-        col = normalize_label_color(color)
-    except ValueError as exc:
-        typer.echo(str(exc), err=True)
-        raise typer.Exit(2) from exc
+    nm = validate_label_name_cli(name)
+    col = validate_label_color_cli(color)
 
     async def factory(client: PipefyClient):
         return await client.update_label(label_id, name=nm, color=col)

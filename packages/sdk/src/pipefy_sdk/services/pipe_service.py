@@ -10,9 +10,9 @@ from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.models.field_definition import parse_field_definitions
 from pipefy_sdk.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
-    GET_PHASE_CARDS_COUNT_QUERY,
     GET_PHASE_CARDS_QUERY,
     GET_PHASE_FIELDS_QUERY,
+    GET_PHASE_QUERY,
     GET_PIPE_MEMBERS_QUERY,
     GET_PIPE_QUERY,
     GET_PIPE_WITH_PREFERENCES_QUERY,
@@ -225,9 +225,9 @@ class PipeService(BasePipefyClient):
         variables = {"phase_id": str(phase_id)}
         return await self.execute_query(GET_PHASE_ALLOWED_MOVES_QUERY, variables)
 
-    async def _fetch_phase_cards_count_row(self, phase_id: str | int) -> dict:
+    async def _fetch_phase_row(self, phase_id: str | int) -> dict:
         variables = {"phase_id": str(phase_id)}
-        result = await self.execute_query(GET_PHASE_CARDS_COUNT_QUERY, variables)
+        result = await self.execute_query(GET_PHASE_QUERY, variables)
         phase = (result or {}).get("phase")
         if not isinstance(phase, dict) or phase.get("cards_count") is None:
             raise ValueError("phase.cards_count missing from response")
@@ -237,7 +237,7 @@ class PipeService(BasePipefyClient):
 
     async def get_phase(self, phase_id: str | int) -> dict:
         """Return phase id, name, and native ``cards_count``."""
-        phase = await self._fetch_phase_cards_count_row(phase_id)
+        phase = await self._fetch_phase_row(phase_id)
         return {
             "phase_id": str(phase["id"]),
             "phase_name": str(phase.get("name") or ""),

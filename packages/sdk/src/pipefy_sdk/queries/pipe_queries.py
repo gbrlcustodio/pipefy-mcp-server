@@ -129,9 +129,9 @@ GET_PHASE_FIELDS_QUERY = gql(
     """
 )
 
-GET_PHASE_CARDS_COUNT_QUERY = gql(
+GET_PHASE_QUERY = gql(
     """
-    query GetPhaseCardsCount($phase_id: ID!) {
+    query GetPhase($phase_id: ID!) {
         phase(id: $phase_id) {
             id
             name
@@ -209,7 +209,7 @@ GET_PIPE_WITH_PREFERENCES_QUERY = gql(
 
 __all__ = [
     "GET_PHASE_ALLOWED_MOVES_QUERY",
-    "GET_PHASE_CARDS_COUNT_QUERY",
+    "GET_PHASE_QUERY",
     "GET_PHASE_CARDS_QUERY",
     "GET_PHASE_FIELDS_QUERY",
     "GET_PIPE_MEMBERS_QUERY",

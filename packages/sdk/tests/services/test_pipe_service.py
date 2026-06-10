@@ -11,9 +11,9 @@ from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
-    GET_PHASE_CARDS_COUNT_QUERY,
     GET_PHASE_CARDS_QUERY,
     GET_PHASE_FIELDS_QUERY,
+    GET_PHASE_QUERY,
     GET_PIPE_QUERY,
     SEARCH_PIPES_QUERY,
 )
@@ -567,7 +567,7 @@ async def test_get_phase_cards_count_returns_native_scalar(mock_settings):
     result = await service.get_phase_cards_count(phase_id)
 
     service.execute_query.assert_called_once()
-    assert service.execute_query.call_args[0][0] is GET_PHASE_CARDS_COUNT_QUERY
+    assert service.execute_query.call_args[0][0] is GET_PHASE_QUERY
     assert service.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
     assert result == 42
 
@@ -581,8 +581,8 @@ async def test_get_phase_cards_count_raises_when_missing(mock_settings):
         await service.get_phase_cards_count(1)
 
 
-def test_get_phase_cards_count_query_selects_native_scalar():
-    query_text = print_ast(GET_PHASE_CARDS_COUNT_QUERY)
+def test_get_phase_query_selects_phase_row():
+    query_text = print_ast(GET_PHASE_QUERY)
     assert "cards_count" in query_text
     assert "name" in query_text
     # No card enumeration — must not touch the CardConnection edges/nodes.

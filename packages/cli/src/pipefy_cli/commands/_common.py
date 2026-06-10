@@ -84,7 +84,9 @@ def validate_cards_page_size(first: int | None) -> int | None:
     return first
 
 
-def validate_report_filter_cli(filter_obj: dict[str, Any] | None) -> dict[str, Any] | None:
+def validate_report_filter_cli(
+    filter_obj: dict[str, Any] | None,
+) -> dict[str, Any] | None:
     if filter_obj is None:
         return None
     normalized = normalize_report_cards_filter(filter_obj)

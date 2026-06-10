@@ -44,10 +44,10 @@ def phase_get(
 
 
 @phase_app.command(
-    "allowed-moves",
+    "targets",
     context_settings=ID_POSITIONAL_CONTEXT_SETTINGS,
 )
-def phase_allowed_moves(
+def phase_targets(
     ctx: typer.Context,
     phase_id: str = resource_id_argument(
         help="Source phase id (card's current phase)."
@@ -68,10 +68,10 @@ def phase_allowed_moves(
 
 
 @phase_app.command(
-    "cards-count",
+    "count",
     context_settings=ID_POSITIONAL_CONTEXT_SETTINGS,
 )
-def phase_cards_count(
+def phase_count(
     ctx: typer.Context,
     phase_id: str = resource_id_argument(help="Phase id."),
     json_out: bool = typer.Option(

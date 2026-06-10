@@ -241,8 +241,8 @@ def test_pipe_update_preferences_empty_object_bad_parameter(
     mock_client.update_pipe.assert_not_called()
 
 
-def test_phase_allowed_moves_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
-    oauth_env("ph-allowed-moves")
+def test_phase_targets_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("ph-targets")
     payload = {
         "phase": {
             "id": "342182335",
@@ -258,15 +258,15 @@ def test_phase_allowed_moves_json(runner, clean_pipefy_env, saved_cwd, oauth_env
     ):
         result = runner.invoke(
             app,
-            ["phase", "allowed-moves", "342182335", "--json"],
+            ["phase", "targets", "342182335", "--json"],
         )
     assert result.exit_code == 0
     assert json.loads(result.stdout) == payload
     mock_client.get_phase_allowed_move_targets.assert_awaited_once_with("342182335")
 
 
-def test_phase_cards_count_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
-    oauth_env("ph-cards-count")
+def test_phase_count_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("ph-count")
     payload = {
         "phase_id": "342182335",
         "phase_name": "Doing",
@@ -280,7 +280,7 @@ def test_phase_cards_count_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     ):
         result = runner.invoke(
             app,
-            ["phase", "cards-count", "342182335", "--json"],
+            ["phase", "count", "342182335", "--json"],
         )
     assert result.exit_code == 0
     assert json.loads(result.stdout) == payload

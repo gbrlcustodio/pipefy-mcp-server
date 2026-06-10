@@ -49,6 +49,7 @@ Static typing is the contract for internal code; do not re-check it at runtime. 
 Runtime type checks belong only at a trust boundary, where untyped or external data crosses into typed code and static analysis cannot follow:
 
 - The MCP tool signature is the boundary. FastMCP is pydantic-backed, so a scalar arg declared `color: str` is coerced and rejected there. SDK planners called behind it (for example `normalize_label_color`) trust the type and must not guard it again.
+- The CLI command signature is the same kind of boundary. Typer parses and coerces options against their annotations (a `color: str` option in `pipefy_cli` is the rejection point), and the same SDK planners run behind it, so the MCP and CLI surfaces validate at the edge and trust the type underneath identically.
 - A `dict`-typed tool arg (for example `filter: dict | None`) validates the container but not its nested values. Validating that nested, un-schema'd structure (the job of `validate_report_cards_filter`) is legitimate boundary work, not defensive noise.
 
 When a type-related failure looks plausible, the fix is a type checker in CI, not a per-function guard.

@@ -85,3 +85,22 @@ def test_root_project_version_re_rejects_missing_version(pyproject: str) -> None
         r'\1"REPLACED"', pyproject, count=1
     )
     assert count == 0, f"expected no match in {pyproject!r}"
+
+
+def test_plugin_manifest_version_re_replaces_only_the_version() -> None:
+    manifest = (
+        "{\n"
+        '  "name": "pipefy",\n'
+        '  "version": "0.2.0-beta.1",\n'
+        '  "homepage": "https://github.com/pipefy/ai-toolkit"\n'
+        "}\n"
+    )
+    new_text, count = _bump.PLUGIN_MANIFEST_VERSION_RE.subn(
+        r"\g<prefix>0.2.0-beta.2\g<suffix>", manifest, count=1
+    )
+    assert count == 1
+    assert '"version": "0.2.0-beta.2"' in new_text
+    # The named value group exposes the current version for verify mode.
+    assert _bump.PLUGIN_MANIFEST_VERSION_RE.search(manifest).group("value") == (
+        "0.2.0-beta.1"
+    )

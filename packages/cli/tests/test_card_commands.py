@@ -129,10 +129,10 @@ def test_card_find_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
 
 def test_card_create_with_title_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("create-card")
-    create_resp = {"createCard": {"card": {"id": "777", "title": "Draft"}}}
+    create_resp = {"createCard": {"card": {"id": "777", "title": "Hello"}}}
     mock_client = MagicMock()
     mock_client.create_card = AsyncMock(return_value=create_resp)
-    mock_client.update_card = AsyncMock(return_value={"updateCard": {"card": {}}})
+    mock_client.update_card = AsyncMock()
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -151,20 +151,120 @@ def test_card_create_with_title_json(runner, clean_pipefy_env, saved_cwd, oauth_
             ],
         )
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
-    mock_client.create_card.assert_awaited_once_with("303", {"field_x": "y"})
-    mock_client.update_card.assert_awaited_once_with("777", title="Hello")
+    mock_client.create_card.assert_awaited_once_with(
+        "303", {"field_x": "y"}, title="Hello"
+    )
+    mock_client.update_card.assert_not_called()
 
 
-def test_card_create_title_update_failure_exit_1(
+def test_card_create_forwards_phase_id(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("create-card-phase")
+    create_resp = {"createCard": {"card": {"id": "888"}}}
+    mock_client = MagicMock()
+    mock_client.create_card = AsyncMock(return_value=create_resp)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "create",
+                "303",
+                "--phase-id",
+                "phase_42",
+                "--fields",
+                '{"status": "Open"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    mock_client.create_card.assert_awaited_once_with(
+        "303",
+        {"status": "Open"},
+        phase_id="phase_42",
+    )
+
+
+def test_card_create_title_warning_skipped_when_create_card_null(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("create-card-null-response")
+    mock_client = MagicMock()
+    mock_client.create_card = AsyncMock(return_value={"createCard": None})
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["card", "create", "303", "--title", "Requested", "--json"],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    payload = json.loads(result.stdout)
+    assert payload == {"createCard": None}
+    assert "title_warning" not in payload
+
+
+def test_card_create_title_warning_when_mismatch(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("create-card-title-warn")
+    create_resp = {"createCard": {"card": {"id": "890", "title": "Derived from field"}}}
+    mock_client = MagicMock()
+    mock_client.create_card = AsyncMock(return_value=create_resp)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["card", "create", "303", "--title", "Requested", "--json"],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    payload = json.loads(result.stdout)
+    assert "title_warning" in payload
+    assert "Requested" in payload["title_warning"]
+
+
+def test_card_create_phase_id_and_title(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("create-card-phase-title")
+    create_resp = {"createCard": {"card": {"id": "889", "title": "Seed"}}}
+    mock_client = MagicMock()
+    mock_client.create_card = AsyncMock(return_value=create_resp)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "create",
+                "303",
+                "--phase-id",
+                "999",
+                "--title",
+                "Seed",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    mock_client.create_card.assert_awaited_once_with(
+        "303", {}, phase_id="999", title="Seed"
+    )
+
+
+def test_card_create_title_failure_exit_1(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):
     oauth_env("create-card-fail-title")
     from pipefy_sdk.exceptions import PipefyError
 
-    create_resp = {"createCard": {"card": {"id": "777", "title": "Draft"}}}
     mock_client = MagicMock()
-    mock_client.create_card = AsyncMock(return_value=create_resp)
-    mock_client.update_card = AsyncMock(side_effect=PipefyError("update failed"))
+    mock_client.create_card = AsyncMock(side_effect=PipefyError("create failed"))
+    mock_client.update_card = AsyncMock()
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -181,8 +281,8 @@ def test_card_create_title_update_failure_exit_1(
             ],
         )
     assert result.exit_code == 1
-    mock_client.create_card.assert_awaited_once()
-    mock_client.update_card.assert_awaited_once_with("777", title="Hello")
+    mock_client.create_card.assert_awaited_once_with("303", {}, title="Hello")
+    mock_client.update_card.assert_not_called()
 
 
 def test_card_create_invalid_fields_exit_2(

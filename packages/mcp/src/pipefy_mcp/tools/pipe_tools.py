@@ -45,6 +45,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     UserCancelledError,
     _filter_editable_field_definitions,
     _filter_fields_by_definitions,
+    _merge_phase_and_start_form_field_values,
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,
     build_delete_card_error_payload,
@@ -93,26 +94,35 @@ class PipeTools:
             fields: dict[str, Any] | None = None,
             required_fields_only: bool = False,
             skip_elicitation: bool = False,
+            phase_id: PipefyId | None = None,
         ) -> dict:
             """Create a card in the pipe.
 
             When ``skip_elicitation`` is True, field values from ``fields`` are
-            filtered to editable start-form field IDs and sent directly to the
-            API — no interactive form is shown. AI agents should set this to
-            True when they already know the field values.
+            filtered to editable field IDs and sent directly to the API — no
+            interactive form is shown. AI agents should set this to True when
+            they already know the field values.
 
             When ``skip_elicitation`` is False (default) and the client supports
             elicitation, an interactive form is presented even if ``fields``
             carries pre-filled values — the human can review and adjust them.
 
-            Discover fields first via ``get_start_form_fields`` and pass all
-            required values.
+            Without ``phase_id``, discover start-form fields via
+            ``get_start_form_fields`` and pass all required values.
 
-            The Pipefy ``createCard`` mutation does not accept a title directly.
-            If ``title`` is provided, the card is created first and then updated
-            via ``updateCard`` to set the title — this is especially useful when the
-            pipe has no start-form fields, which would otherwise leave the card
-            titled "Draft".
+            With ``phase_id``, the card is created in that phase (including orphan
+            phases that are not the start form). Discover workflow phase IDs via
+            ``get_pipe(pipe_id).phases[].id``. For agent seeding in a specific phase, set
+            ``phase_id`` and ``skip_elicitation=true``. When ``fields`` is non-empty,
+            keys are filtered against ``get_phase_fields(phase_id)`` and
+            ``get_start_form_fields(pipe_id)`` so pipes that still require start-form
+            values on ``CreateCardInput`` receive them alongside phase fields.
+
+            If you plan to move the card afterwards, call
+            ``get_phase_allowed_move_targets`` on the card's current phase before
+            ``move_card_to_phase`` — only phases allowed by the workflow can be used.
+
+            ``title`` is sent on ``CreateCardInput`` when provided.
 
             When the pipe uses Pipefy's default of deriving the card title from the
             first text-like start-form field, a later ``update_card_field`` on that
@@ -121,48 +131,122 @@ class PipeTools:
 
             Args:
                 pipe_id: The ID of the pipe where the card will be created.
-                title: Optional card title. Applied via updateCard after creation.
+                    Discover via: ``search_pipes`` or ``get_organization``.
+                title: Optional card title. Passed on CreateCardInput when set.
                 fields: A dictionary of fields that can be pre-filled on the card.
                     When ``skip_elicitation`` is False, these pre-fill the interactive
                     form. When True, they are sent directly to the API.
                 required_fields_only: If True, only elicit required fields. Default: False.
                 skip_elicitation: When True, bypass interactive elicitation and send
                     ``fields`` directly to the API. Recommended for AI agent workflows.
+                phase_id: Optional target phase ID. Interactive elicitation prompts
+                    start-form fields (matching the Pipefy UI); phase field values are
+                    merged from ``fields`` when provided. For agent seeding, set
+                    ``skip_elicitation=true``. Discover via: ``get_pipe(pipe_id).phases[].id``.
             """
-            try:
-                form_fields = await client.get_start_form_fields(
-                    pipe_id, required_fields_only
-                )
-            except MalformedFieldDefinitionError as exc:
-                return tool_error(str(exc))
-
-            expected_fields = _filter_editable_field_definitions(
-                form_fields.get("start_form_fields", [])
-            )
-
-            await ctx.debug(f"Expected fields for pipe {pipe_id}: {expected_fields}")
-            await ctx.debug(f"Provided fields: {fields}")
-
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
 
-            if can_elicit and not skip_elicitation:
+            if phase_id is not None:
+                phase_id_str, phase_err = validate_tool_id(phase_id, "phase_id")
+                if phase_err is not None:
+                    return phase_err
+                phase_id = phase_id_str
                 try:
-                    card_data = await PipeTools._elicit_field_details(
-                        message=f"Creating a card in pipe {pipe_id}",
-                        prefilled_fields=fields,
-                        expected_fields=expected_fields,
-                        ctx=ctx,
+                    phase_fields_result = await client.get_phase_fields(
+                        phase_id, required_fields_only
                     )
                 except MalformedFieldDefinitionError as exc:
                     return tool_error(str(exc))
-                except UserCancelledError:
-                    return tool_error("Card creation cancelled by user.")
-            elif expected_fields:
-                card_data = _filter_fields_by_definitions(card_data, expected_fields)
+                phase_field_defs = _filter_editable_field_definitions(
+                    phase_fields_result.get("fields", [])
+                )
+                try:
+                    form_fields = await client.get_start_form_fields(
+                        pipe_id, required_fields_only
+                    )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
+                start_form_field_defs = _filter_editable_field_definitions(
+                    form_fields.get("start_form_fields", [])
+                )
+                await ctx.debug(
+                    f"Expected phase fields for {phase_id}: {phase_field_defs}"
+                )
+                await ctx.debug(
+                    f"Expected start-form fields for pipe {pipe_id}: "
+                    f"{start_form_field_defs}"
+                )
+                await ctx.debug(f"Provided fields: {fields}")
+
+                if can_elicit and start_form_field_defs and not skip_elicitation:
+                    try:
+                        elicited = await PipeTools._elicit_field_details(
+                            message=(
+                                f"Creating a card in phase {phase_id} (pipe {pipe_id})"
+                            ),
+                            prefilled_fields=fields,
+                            expected_fields=start_form_field_defs,
+                            ctx=ctx,
+                        )
+                    except MalformedFieldDefinitionError as exc:
+                        return tool_error(str(exc))
+                    except UserCancelledError:
+                        return tool_error("Card creation cancelled by user.")
+                    merged_source = {**(fields or {}), **elicited}
+                    card_data = _merge_phase_and_start_form_field_values(
+                        merged_source,
+                        phase_field_definitions=phase_field_defs,
+                        start_form_field_definitions=start_form_field_defs,
+                    )
+                elif phase_field_defs or start_form_field_defs:
+                    card_data = _merge_phase_and_start_form_field_values(
+                        card_data,
+                        phase_field_definitions=phase_field_defs,
+                        start_form_field_definitions=start_form_field_defs,
+                    )
+            else:
+                try:
+                    form_fields = await client.get_start_form_fields(
+                        pipe_id, required_fields_only
+                    )
+                except MalformedFieldDefinitionError as exc:
+                    return tool_error(str(exc))
+
+                expected_fields = _filter_editable_field_definitions(
+                    form_fields.get("start_form_fields", [])
+                )
+
+                await ctx.debug(
+                    f"Expected fields for pipe {pipe_id}: {expected_fields}"
+                )
+                await ctx.debug(f"Provided fields: {fields}")
+
+                if can_elicit and not skip_elicitation:
+                    try:
+                        card_data = await PipeTools._elicit_field_details(
+                            message=f"Creating a card in pipe {pipe_id}",
+                            prefilled_fields=fields,
+                            expected_fields=expected_fields,
+                            ctx=ctx,
+                        )
+                    except MalformedFieldDefinitionError as exc:
+                        return tool_error(str(exc))
+                    except UserCancelledError:
+                        return tool_error("Card creation cancelled by user.")
+                elif expected_fields:
+                    card_data = _filter_fields_by_definitions(
+                        card_data, expected_fields
+                    )
+
+            create_kwargs: dict[str, Any] = {}
+            if phase_id is not None:
+                create_kwargs["phase_id"] = phase_id
+            if title:
+                create_kwargs["title"] = title
 
             try:
-                result = await client.create_card(pipe_id, card_data)
+                result = await client.create_card(pipe_id, card_data, **create_kwargs)
             except Exception as exc:  # noqa: BLE001
                 perm_msg = await enrich_permission_denied_error(
                     exc, [str(pipe_id)], client
@@ -171,19 +255,19 @@ class PipeTools:
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
                 return tool_error(error_text)
-            card_id = result.get("createCard", {}).get("card", {}).get("id")
+            card_data_node = (result.get("createCard") or {}).get("card")
+            card_id = (
+                card_data_node.get("id") if isinstance(card_data_node, dict) else None
+            )
             if card_id:
                 if title:
-                    try:
-                        await client.update_card(card_id, title=title)
-                    except Exception as exc:  # noqa: BLE001
-                        result["title_warning"] = (
-                            f"Card created but title update failed: {exc}"
-                        )
-                    else:
-                        card_data_node = result.get("createCard", {}).get("card")
-                        if card_data_node is not None:
-                            card_data_node["title"] = title
+                    if card_data_node is not None:
+                        if card_data_node.get("title") != title:
+                            result["title_warning"] = (
+                                "Card created but title was not applied as expected "
+                                f"(response title={card_data_node.get('title')!r}, "
+                                f"requested={title!r})."
+                            )
                 card_url = f"https://app.pipefy.com/open-cards/{card_id}"
                 result["card_link"] = f"[{card_url}]({card_url})"
             return result
@@ -659,7 +743,8 @@ class PipeTools:
 
             Returns:
                 dict: GraphQL response containing a ``pipe`` object with ``id``, ``name``,
-                ``phases``, ``labels``, ``start_form_fields``, and related metadata from the API.
+                ``phases`` (workflow phases; each includes ``cards_count``),
+                ``labels``, ``start_form_fields``, and related metadata from the API.
             """
             await ctx.debug(f"get_pipe: pipe_id={pipe_id}")
             pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
@@ -775,16 +860,16 @@ class PipeTools:
         ) -> dict:
             """Move a card to a target phase (Kanban column) within the same pipe.
 
-            Use this when the workflow should advance or regress a card; pair with ``get_pipe``
-            or ``get_card`` to resolve valid phase IDs. On failure, if the destination is not
-            among ``cards_can_be_moved_to_phases`` for the card's current phase, the tool may
+            Use this when the workflow should advance or regress a card. On failure, if the
+            destination is not among allowed targets for the card's current phase, the tool may
             return ``success: false`` with ``valid_destinations`` instead of only the raw API error.
 
             Args:
                 card_id: The card to move.
                     Discover via: ``find_cards`` or ``get_cards(pipe_id)``.
                 destination_phase_id: Target phase ID (must be allowed for the current phase).
-                    Discover via: ``get_pipe(pipe_id).phases[].id``.
+                    Discover via: ``get_phase_allowed_move_targets(current_phase_id)`` where
+                    ``current_phase_id`` comes from ``get_card(card_id).current_phase.id``.
 
             Returns:
                 dict: Pipefy move mutation response on success. On some validation failures,

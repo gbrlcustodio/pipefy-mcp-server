@@ -11,8 +11,10 @@ from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
-    GET_PHASE_CARDS_COUNT_QUERY,
+    GET_PHASE_CARDS_QUERY,
     GET_PHASE_FIELDS_QUERY,
+    GET_PHASE_QUERY,
+    GET_PIPE_QUERY,
     SEARCH_PIPES_QUERY,
 )
 from pipefy_sdk.services.pipe_service import PipeService
@@ -58,6 +60,36 @@ async def test_get_pipe_accepts_alphanumeric_id(mock_settings):
 
     variables = service.execute_query.call_args[0][1]
     assert variables == {"pipe_id": "Yr5RUVCi"}
+
+
+@pytest.mark.unit
+def test_get_pipe_query_selects_cards_count_on_phases():
+    printed = print_ast(GET_PIPE_QUERY)
+    assert "cards_count" in printed
+    assert printed.count("cards_count") >= 1
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_pipe_returns_phases_with_cards_count(mock_settings):
+    pipe_id = 10
+    api_response = {
+        "pipe": {
+            "id": str(pipe_id),
+            "startFormPhaseId": "100",
+            "phases": [
+                {"id": "200", "name": "Doing", "cards_count": 5, "fields": []},
+            ],
+            "start_form_fields": [],
+        }
+    }
+    service = _make_service(mock_settings, api_response)
+
+    result = await service.get_pipe(pipe_id)
+
+    service.execute_query.assert_called_once()
+    assert service.execute_query.call_args[0][0] is GET_PIPE_QUERY
+    assert result == api_response
 
 
 @pytest.mark.unit
@@ -535,7 +567,7 @@ async def test_get_phase_cards_count_returns_native_scalar(mock_settings):
     result = await service.get_phase_cards_count(phase_id)
 
     service.execute_query.assert_called_once()
-    assert service.execute_query.call_args[0][0] is GET_PHASE_CARDS_COUNT_QUERY
+    assert service.execute_query.call_args[0][0] is GET_PHASE_QUERY
     assert service.execute_query.call_args[0][1] == {"phase_id": str(phase_id)}
     assert result == 42
 
@@ -549,12 +581,105 @@ async def test_get_phase_cards_count_raises_when_missing(mock_settings):
         await service.get_phase_cards_count(1)
 
 
-def test_get_phase_cards_count_query_selects_native_scalar():
-    query_text = print_ast(GET_PHASE_CARDS_COUNT_QUERY)
+def test_get_phase_query_selects_phase_row():
+    query_text = print_ast(GET_PHASE_QUERY)
     assert "cards_count" in query_text
+    assert "name" in query_text
     # No card enumeration — must not touch the CardConnection edges/nodes.
     assert "edges" not in query_text
     assert "nodes" not in query_text
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_returns_normalized_shape(mock_settings):
+    phase_id = 342182334
+    api_response = {"phase": {"id": str(phase_id), "name": "Doing", "cards_count": 42}}
+    service = _make_service(mock_settings, api_response)
+
+    result = await service.get_phase(phase_id)
+
+    assert result == {
+        "phase_id": str(phase_id),
+        "phase_name": "Doing",
+        "cards_count": 42,
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_cards_count_delegates_to_get_phase(mock_settings):
+    phase_id = 342182334
+    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
+    service.get_phase = AsyncMock(
+        return_value={
+            "phase_id": str(phase_id),
+            "phase_name": "Doing",
+            "cards_count": 42,
+        }
+    )
+
+    result = await service.get_phase_cards_count(phase_id)
+
+    service.get_phase.assert_awaited_once_with(phase_id)
+    assert result == 42
+
+
+@pytest.mark.unit
+def test_get_phase_cards_query_requests_pagination_and_fields():
+    query_text = print_ast(GET_PHASE_CARDS_QUERY)
+    assert "first" in query_text
+    assert "after" in query_text
+    assert "totalCount" in query_text
+    assert "includeFields" in query_text
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_cards_sends_phase_id_first_after(mock_settings):
+    phase_id = 99
+    api_response = {
+        "phase": {
+            "id": str(phase_id),
+            "cards": {
+                "edges": [{"node": {"id": "1", "title": "A"}}],
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                "totalCount": 1,
+            },
+        }
+    }
+    service = _make_service(mock_settings, api_response)
+
+    result = await service.get_phase_cards(
+        phase_id,
+        first=50,
+        after="cursor-1",
+        include_fields=True,
+    )
+
+    service.execute_query.assert_called_once()
+    assert service.execute_query.call_args[0][0] is GET_PHASE_CARDS_QUERY
+    assert service.execute_query.call_args[0][1] == {
+        "phase_id": str(phase_id),
+        "first": 50,
+        "after": "cursor-1",
+        "includeFields": True,
+    }
+    assert result == api_response
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_phase_cards_omits_optional_variables_when_unset(mock_settings):
+    phase_id = 10
+    service = _make_service(mock_settings, {"phase": {"id": "10", "cards": {}}})
+
+    await service.get_phase_cards(phase_id, include_fields=False)
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables == {"phase_id": "10", "includeFields": False}
+    assert "first" not in variables
+    assert "after" not in variables
 
 
 @pytest.mark.unit

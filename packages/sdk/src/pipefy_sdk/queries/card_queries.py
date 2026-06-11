@@ -4,10 +4,11 @@ from gql import gql
 
 CREATE_CARD_MUTATION = gql(
     """
-    mutation ($pipe_id: ID!, $fields: [FieldValueInput!]!) {
-        createCard(input: {pipe_id: $pipe_id, fields_attributes: $fields}) {
+    mutation ($input: CreateCardInput!) {
+        createCard(input: $input) {
             card {
                 id
+                title
             }
         }
     }

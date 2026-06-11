@@ -25,6 +25,7 @@ from pipefy_sdk.queries.report_queries import (
     UPDATE_ORGANIZATION_REPORT_MUTATION,
     UPDATE_PIPE_REPORT_MUTATION,
 )
+from pipefy_sdk.report_filter_preflight import prepare_report_cards_filter
 from pipefy_sdk.settings import PipefySettings
 
 
@@ -164,14 +165,15 @@ class ReportService(BasePipefyClient):
             pipe_id: Pipe ID (numeric string).
             name: Report name.
             fields: Internal field names (``name`` from ``get_pipe_report_columns``).
-            filter: Report filter (``ReportCardsFilter`` shape).
+            filter: Report filter (``ReportCardsFilter`` shape; normalized, raises ``ValueError`` when invalid).
             formulas: Formula definitions (list of [field, operator, ...] tuples).
         """
         input_obj: dict[str, Any] = {"pipeId": str(pipe_id), "name": name}
+        prepared_filter = prepare_report_cards_filter(filter)
         if fields is not None:
             input_obj["fields"] = fields
-        if filter is not None:
-            input_obj["filter"] = filter
+        if prepared_filter is not None:
+            input_obj["filter"] = prepared_filter
         if formulas is not None:
             input_obj["formulas"] = formulas
         return await self.execute_query(
@@ -196,7 +198,7 @@ class ReportService(BasePipefyClient):
             name: New report name.
             color: Report color.
             fields: Internal field names for columns.
-            filter: Report filter (``ReportCardsFilter`` shape).
+            filter: Report filter (``ReportCardsFilter`` shape; normalized, raises ``ValueError`` when invalid).
             formulas: Formula definitions.
             featured_field: Featured field name.
         """
@@ -205,7 +207,7 @@ class ReportService(BasePipefyClient):
             "name": name,
             "color": color,
             "fields": fields,
-            "filter": filter,
+            "filter": prepare_report_cards_filter(filter),
             "formulas": formulas,
             "featuredField": featured_field,
         }
@@ -242,17 +244,18 @@ class ReportService(BasePipefyClient):
             name: Report name.
             pipe_ids: List of pipe IDs to include.
             fields: Internal field names for columns.
-            filter: Report filter (``ReportCardsFilter`` shape).
+            filter: Report filter (``ReportCardsFilter`` shape; normalized, raises ``ValueError`` when invalid).
         """
         input_obj: dict[str, Any] = {
             "organizationId": str(organization_id),
             "name": name,
             "pipeIds": [str(pid) for pid in pipe_ids],
         }
+        prepared_filter = prepare_report_cards_filter(filter)
         if fields is not None:
             input_obj["fields"] = fields
-        if filter is not None:
-            input_obj["filter"] = filter
+        if prepared_filter is not None:
+            input_obj["filter"] = prepared_filter
         return await self.execute_query(
             CREATE_ORGANIZATION_REPORT_MUTATION, {"input": input_obj}
         )
@@ -274,7 +277,7 @@ class ReportService(BasePipefyClient):
             name: New report name.
             color: Report color.
             fields: Internal field names for columns.
-            filter: Report filter (``ReportCardsFilter`` shape).
+            filter: Report filter (``ReportCardsFilter`` shape; normalized, raises ``ValueError`` when invalid).
             pipe_ids: Pipe IDs to include.
         """
         input_obj: dict[str, Any] = {"id": str(report_id)}
@@ -282,7 +285,7 @@ class ReportService(BasePipefyClient):
             "name": name,
             "color": color,
             "fields": fields,
-            "filter": filter,
+            "filter": prepare_report_cards_filter(filter),
             "pipeIds": [str(pid) for pid in pipe_ids] if pipe_ids is not None else None,
         }
         for key, value in optional_fields.items():
@@ -317,17 +320,18 @@ class ReportService(BasePipefyClient):
             pipe_id: Pipe ID (GraphQL ``ID``).
             pipe_report_id: Pipe report ID to export.
             sort_by: ``ReportSortDirectionInput`` (``direction``, ``field``).
-            filter: ``ReportCardsFilter`` shape.
+            filter: ``ReportCardsFilter`` shape; normalized, raises ``ValueError`` when invalid.
             columns: Column field IDs to include in the export file.
         """
         input_obj: dict[str, Any] = {
             "pipeId": str(pipe_id),
             "pipeReportId": str(pipe_report_id),
         }
+        prepared_filter = prepare_report_cards_filter(filter)
         if sort_by is not None:
             input_obj["sortBy"] = sort_by
-        if filter is not None:
-            input_obj["filter"] = filter
+        if prepared_filter is not None:
+            input_obj["filter"] = prepared_filter
         if columns is not None:
             input_obj["columns"] = columns
         return await self.execute_query(
@@ -351,7 +355,7 @@ class ReportService(BasePipefyClient):
             organization_report_id: Report to export; omit to export by pipes only.
             pipe_ids: Pipe IDs to scope the export.
             sort_by: ``ReportSortDirectionInput``.
-            filter: ``ReportCardsFilter`` shape.
+            filter: ``ReportCardsFilter`` shape; normalized, raises ``ValueError`` when invalid.
             columns: Column field IDs for the export file.
         """
         # int() casts: live schema uses Int (not ID) for these fields — see ADR-002.
@@ -362,7 +366,7 @@ class ReportService(BasePipefyClient):
             else None,
             "pipeIds": [int(pid) for pid in pipe_ids] if pipe_ids is not None else None,
             "sortBy": sort_by,
-            "filter": filter,
+            "filter": prepare_report_cards_filter(filter),
             "columns": columns,
         }
         for key, value in optional_fields.items():

@@ -9,6 +9,7 @@ from httpx import Auth
 from pipefy_infra.coerce import optional_str
 
 from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.label_color import normalize_label_color
 from pipefy_sdk.queries.pipe_config_queries import (
     CLONE_PIPE_MUTATION,
     CREATE_FIELD_CONDITION_MUTATION,
@@ -310,12 +311,13 @@ class PipeConfigService(BasePipefyClient):
         Args:
             pipe_id: Pipe that will receive the label.
             name: Label name.
-            color: Label color (per API).
+            color: Label color as hex ``#RGB`` or ``#RRGGBB`` (normalized to ``#RRGGBB``;
+                raises ``ValueError`` otherwise).
         """
         input_obj: dict[str, Any] = {
             "pipe_id": str(pipe_id),
             "name": name,
-            "color": color,
+            "color": normalize_label_color(color),
         }
         return await self.execute_query(CREATE_LABEL_MUTATION, {"input": input_obj})
 
@@ -325,7 +327,11 @@ class PipeConfigService(BasePipefyClient):
         Args:
             label_id: Label ID.
             **attrs: `UpdateLabelInput` fields to set (omit or pass None to skip).
+                ``color`` is normalized to hex ``#RRGGBB`` (raises ``ValueError``
+                on non-hex input).
         """
+        if attrs.get("color") is not None:
+            attrs["color"] = normalize_label_color(attrs["color"])
         payload: dict[str, Any] = {"id": str(label_id)}
         for key, value in attrs.items():
             if value is not None:

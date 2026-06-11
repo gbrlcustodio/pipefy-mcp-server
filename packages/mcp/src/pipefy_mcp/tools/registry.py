@@ -20,6 +20,7 @@ from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.table_tools import TableTools
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 
+# Keep PIPEFY_TOOL_NAMES in sync with docs/parity.md and README MCP totals.
 PIPEFY_TOOL_NAMES = frozenset(
     {
         "add_card_comment",
@@ -108,6 +109,9 @@ PIPEFY_TOOL_NAMES = frozenset(
         "get_organization_report",
         "get_organization_report_export",
         "get_organization_reports",
+        "get_phase_allowed_move_targets",
+        "get_phase_cards",
+        "get_phase_cards_count",
         "get_phase_fields",
         "get_portal",
         "get_pipe",

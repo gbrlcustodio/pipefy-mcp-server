@@ -378,6 +378,10 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Create a pipe report. Use column `name` in `fields`; filter field names from `get_pipe_report_filterable_fields`.
 
+            ``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``), not a
+            top-level ``current_phase`` key; discover field names via
+            ``get_pipe_report_filterable_fields``.
+
             Args:
                 pipe_id: Pipe ID (numeric string).
                 name: Report name.
@@ -396,6 +400,8 @@ class ReportTools:
                 raw = await client.create_pipe_report(
                     pipe_id, name, fields=fields, filter=filter, formulas=formulas
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,
@@ -424,6 +430,9 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Update a pipe report; omitted parameters are unchanged.
 
+            ``filter`` uses the same ReportCardsFilter nested shape as ``create_pipe_report``
+            (``operator`` + ``queries``; no top-level ``current_phase`` list).
+
             Args:
                 report_id: Pipe report ID.
                 name: New report name.
@@ -447,6 +456,8 @@ class ReportTools:
                     formulas=formulas,
                     featured_field=featured_field,
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,
@@ -523,6 +534,10 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Create an org-wide report spanning multiple pipes.
 
+            ``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``),
+            not a top-level ``current_phase`` key; discover field names via
+            ``get_pipe_report_filterable_fields``.
+
             Args:
                 organization_id: Organization ID.
                 name: Report name.
@@ -545,6 +560,8 @@ class ReportTools:
                 raw = await client.create_organization_report(
                     organization_id, name, pipe_ids, fields=fields, filter=filter
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,
@@ -572,6 +589,10 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Update an organization report; omitted parameters are unchanged.
 
+            ``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``),
+            not a top-level ``current_phase`` key; discover field names via
+            ``get_pipe_report_filterable_fields``.
+
             Args:
                 report_id: Organization report ID.
                 name: New report name.
@@ -593,6 +614,8 @@ class ReportTools:
                     filter=filter,
                     pipe_ids=pipe_ids,
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,
@@ -669,6 +692,10 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Trigger an async pipe report export. Returns an export ID with state 'processing'. Poll `get_pipe_report_export(export_id)` to check when state becomes 'done' -- the response will include a `fileURL` to download the file.
 
+            ``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``),
+            not a top-level ``current_phase`` key; discover field names via
+            ``get_pipe_report_filterable_fields``.
+
             Args:
                 pipe_id: Pipe ID (numeric string).
                 pipe_report_id: Pipe report ID to export.
@@ -691,6 +718,8 @@ class ReportTools:
                     filter=filter,
                     columns=columns,
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,
@@ -718,6 +747,10 @@ class ReportTools:
         ) -> dict[str, Any]:
             """Trigger an async organization report export. Poll `get_organization_report_export(export_id)` for completion.
 
+            ``filter`` must use ReportCardsFilter shape (``operator`` + ``queries``),
+            not a top-level ``current_phase`` key; discover field names via
+            ``get_pipe_report_filterable_fields``.
+
             Args:
                 organization_id: Organization numeric ID (must be coercible to int — Pipefy's
                     ``exportOrganizationReport`` mutation accepts ``Int!`` only).
@@ -740,6 +773,8 @@ class ReportTools:
                     filter=filter,
                     columns=columns,
                 )
+            except ValueError as exc:
+                return build_report_error_payload(message=str(exc))
             except Exception as exc:  # noqa: BLE001
                 return handle_report_tool_graphql_error(
                     exc,

@@ -20,6 +20,8 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     build_field_condition_delete_payload,
     build_field_condition_success_payload,
     field_condition_phase_field_id_looks_like_slug,
+    normalize_phase_allowed_move_targets,
+    normalize_phase_cards_list,
 )
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
@@ -83,7 +85,10 @@ def mock_pipe_config_client():
     client.update_label = AsyncMock()
     client.delete_label = AsyncMock()
     client.get_cards = AsyncMock()
+    client.get_phase_allowed_move_targets = AsyncMock()
     client.get_phase_cards_count = AsyncMock()
+    client.get_phase = AsyncMock()
+    client.get_phase_cards = AsyncMock()
     client.create_field_condition = AsyncMock()
     client.update_field_condition = AsyncMock()
     client.delete_field_condition = AsyncMock()
@@ -1139,16 +1144,16 @@ async def test_create_label_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
     mock_pipe_config_client.create_label.return_value = {
-        "createLabel": {"label": {"id": "1", "name": "Bug", "color": "red"}},
+        "createLabel": {"label": {"id": "1", "name": "Bug", "color": "#FF0000"}},
     }
 
     async with pipe_config_session as session:
         result = await session.call_tool(
             "create_label",
-            {"pipe_id": 2, "name": "Bug", "color": "red"},
+            {"pipe_id": 2, "name": "Bug", "color": "#FF0000"},
         )
 
-    mock_pipe_config_client.create_label.assert_awaited_once_with("2", "Bug", "red")
+    mock_pipe_config_client.create_label.assert_awaited_once_with("2", "Bug", "#FF0000")
     assert extract_payload(result)["success"] is True
 
 
@@ -1158,17 +1163,17 @@ async def test_update_label_success(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
     mock_pipe_config_client.update_label.return_value = {
-        "updateLabel": {"label": {"id": "3", "name": "Story", "color": "blue"}},
+        "updateLabel": {"label": {"id": "3", "name": "Story", "color": "#0000FF"}},
     }
 
     async with pipe_config_session as session:
         result = await session.call_tool(
             "update_label",
-            {"label_id": 3, "name": "Story", "color": "blue"},
+            {"label_id": 3, "name": "Story", "color": "#0000FF"},
         )
 
     mock_pipe_config_client.update_label.assert_awaited_once_with(
-        "3", name="Story", color="blue"
+        "3", name="Story", color="#0000FF"
     )
     assert extract_payload(result)["success"] is True
 
@@ -1179,7 +1184,7 @@ async def test_update_label_strips_id_from_extra_input__no_integration(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):
     mock_pipe_config_client.update_label.return_value = {
-        "updateLabel": {"label": {"id": "3", "name": "X", "color": "blue"}},
+        "updateLabel": {"label": {"id": "3", "name": "X", "color": "#0000FF"}},
     }
     async with pipe_config_session as session:
         result = await session.call_tool(
@@ -1187,14 +1192,14 @@ async def test_update_label_strips_id_from_extra_input__no_integration(
             {
                 "label_id": 3,
                 "name": "X",
-                "color": "blue",
+                "color": "#0000FF",
                 "extra_input": {"id": 999},
             },
         )
     mock_pipe_config_client.update_label.assert_awaited_once_with(
         "3",
         name="X",
-        color="blue",
+        color="#0000FF",
     )
     assert extract_payload(result)["success"] is True
 
@@ -1721,7 +1726,7 @@ async def test_create_label_graphql_error_returns_failure__no_integration(
     async with pipe_config_session as session:
         result = await session.call_tool(
             "create_label",
-            {"pipe_id": 2, "name": "Bug", "color": "red"},
+            {"pipe_id": 2, "name": "Bug", "color": "#FF0000"},
         )
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -1740,7 +1745,7 @@ async def test_update_label_graphql_error_returns_failure__no_integration(
     async with pipe_config_session as session:
         result = await session.call_tool(
             "update_label",
-            {"label_id": 3, "name": "Story", "color": "blue"},
+            {"label_id": 3, "name": "Story", "color": "#0000FF"},
         )
     payload = extract_payload(result)
     assert payload["success"] is False
@@ -1823,6 +1828,42 @@ async def test_create_label_rejects_blank_color__no_integration(
         )
     mock_pipe_config_client.create_label.assert_not_called()
     assert extract_payload(result)["success"] is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        (
+            "create_label",
+            {"pipe_id": 2, "name": "Bug", "color": "red"},
+        ),
+        (
+            "update_label",
+            {"label_id": 3, "name": "Story", "color": "blue"},
+        ),
+    ],
+)
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_label_color_maps_sdk_value_error__no_integration(
+    pipe_config_session,
+    mock_pipe_config_client,
+    extract_payload,
+    tool_name: str,
+    arguments: dict[str, object],
+):
+    rejection = ValueError(
+        f"expected #RGB or #RRGGBB hex color, received {arguments['color']!r}"
+    )
+    mock_pipe_config_client.create_label.side_effect = rejection
+    mock_pipe_config_client.update_label.side_effect = rejection
+    async with pipe_config_session as session:
+        result = await session.call_tool(tool_name, arguments)
+    getattr(mock_pipe_config_client, tool_name).assert_awaited_once()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "INVALID_ARGUMENTS"
+    assert "expected #RGB or #RRGGBB" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -2433,6 +2474,335 @@ async def test_delete_field_condition_error(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "Forbidden" in tool_error_message(payload)
+
+
+@pytest.mark.unit
+def test_normalize_phase_allowed_move_targets__no_integration():
+    raw = {
+        "phase": {
+            "id": "100",
+            "name": "Doing",
+            "cards_can_be_moved_to_phases": [
+                {"id": "200", "name": "Done"},
+                {"id": "201", "name": "Blocked"},
+            ],
+        }
+    }
+    assert normalize_phase_allowed_move_targets(raw) == {
+        "phase_id": "100",
+        "phase_name": "Doing",
+        "allowed_phases": [
+            {"id": "200", "name": "Done"},
+            {"id": "201", "name": "Blocked"},
+        ],
+    }
+
+
+@pytest.mark.unit
+def test_normalize_phase_allowed_move_targets_missing_phase__no_integration():
+    assert normalize_phase_allowed_move_targets({}) is None
+    assert normalize_phase_allowed_move_targets({"phase": None}) is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_allowed_move_targets_success(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    phase_id = 342182335
+    mock_pipe_config_client.get_phase_allowed_move_targets.return_value = {
+        "phase": {
+            "id": str(phase_id),
+            "name": "Doing",
+            "cards_can_be_moved_to_phases": [{"id": "200", "name": "Done"}],
+        }
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_allowed_move_targets",
+            {"phase_id": phase_id},
+        )
+
+    assert result.isError is False
+    mock_pipe_config_client.get_phase_allowed_move_targets.assert_awaited_once_with(
+        str(phase_id)
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"] == {
+        "phase_id": str(phase_id),
+        "phase_name": "Doing",
+        "allowed_phases": [{"id": "200", "name": "Done"}],
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+@pytest.mark.parametrize("invalid_phase_id", [0, -1])
+async def test_get_phase_allowed_move_targets_rejects_invalid_phase_id(
+    pipe_config_session,
+    mock_pipe_config_client,
+    extract_payload,
+    invalid_phase_id,
+):
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_allowed_move_targets",
+            {"phase_id": invalid_phase_id},
+        )
+    mock_pipe_config_client.get_phase_allowed_move_targets.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_allowed_move_targets_not_found(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_phase_allowed_move_targets.return_value = {
+        "phase": None
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_allowed_move_targets",
+            {"phase_id": 999},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "not found" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_allowed_move_targets_graphql_error(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_phase_allowed_move_targets.side_effect = (
+        TransportQueryError(
+            "GraphQL Error",
+            errors=[{"message": "Forbidden"}],
+        )
+    )
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_allowed_move_targets",
+            {"phase_id": 55},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "Forbidden" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_allowed_move_targets_read_only_hint(pipe_config_session):
+    async with pipe_config_session as session:
+        listed = await session.list_tools()
+    matching = [t for t in listed.tools if t.name == "get_phase_allowed_move_targets"]
+    assert len(matching) == 1
+    tool = matching[0]
+    assert tool.annotations is not None
+    assert tool.annotations.readOnlyHint is True
+
+
+@pytest.mark.unit
+def test_normalize_phase_cards_list__no_integration():
+    raw = {
+        "phase": {
+            "id": "100",
+            "cards": {"edges": [], "pageInfo": {"hasNextPage": False}},
+        }
+    }
+    assert normalize_phase_cards_list(raw) == raw["phase"]
+
+
+@pytest.mark.unit
+def test_normalize_phase_cards_list_missing_phase__no_integration():
+    assert normalize_phase_cards_list({}) is None
+    assert normalize_phase_cards_list({"phase": None}) is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_cards_count_success(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    phase_id = 342182335
+    mock_pipe_config_client.get_phase.return_value = {
+        "phase_id": str(phase_id),
+        "phase_name": "Doing",
+        "cards_count": 7,
+    }
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_cards_count",
+            {"phase_id": phase_id},
+        )
+
+    assert result.isError is False
+    mock_pipe_config_client.get_phase.assert_awaited_once_with(str(phase_id))
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"] == {
+        "phase_id": str(phase_id),
+        "phase_name": "Doing",
+        "cards_count": 7,
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+@pytest.mark.parametrize("invalid_phase_id", [0, -1])
+async def test_get_phase_cards_count_rejects_invalid_phase_id(
+    pipe_config_session,
+    mock_pipe_config_client,
+    extract_payload,
+    invalid_phase_id,
+):
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_cards_count",
+            {"phase_id": invalid_phase_id},
+        )
+    mock_pipe_config_client.get_phase.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_cards_count_not_found(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_phase.side_effect = ValueError(
+        "phase.cards_count missing from response"
+    )
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_cards_count",
+            {"phase_id": 999},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "not found" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_cards_count_graphql_error(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_phase.side_effect = TransportQueryError(
+        "GraphQL Error",
+        errors=[{"message": "Forbidden"}],
+    )
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_cards_count",
+            {"phase_id": 55},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "Forbidden" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_cards_success(
+    pipe_config_session,
+    mock_pipe_config_client,
+    extract_payload,
+    legacy_envelope,
+):
+    phase_id = 342182335
+    raw = {
+        "phase": {
+            "id": str(phase_id),
+            "cards": {
+                "edges": [{"node": {"id": "1", "title": "A"}}],
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                "totalCount": 1,
+            },
+        }
+    }
+    mock_pipe_config_client.get_phase_cards.return_value = raw
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_cards",
+            {"phase_id": phase_id, "first": 50, "after": "cursor-1"},
+        )
+
+    assert result.isError is False
+    mock_pipe_config_client.get_phase_cards.assert_awaited_once_with(
+        str(phase_id),
+        first=50,
+        after="cursor-1",
+        include_fields=False,
+    )
+    payload = extract_payload(result)
+    assert payload == raw
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_cards_not_found(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_phase_cards.return_value = {"phase": None}
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_cards",
+            {"phase_id": 999},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "not found" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+@pytest.mark.parametrize("invalid_phase_id", [0, -1])
+async def test_get_phase_cards_rejects_invalid_phase_id(
+    pipe_config_session,
+    mock_pipe_config_client,
+    extract_payload,
+    invalid_phase_id,
+):
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_cards",
+            {"phase_id": invalid_phase_id},
+        )
+    mock_pipe_config_client.get_phase_cards.assert_not_called()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_cards_read_only_hint(pipe_config_session):
+    async with pipe_config_session as session:
+        listed = await session.list_tools()
+    for name in ("get_phase_cards_count", "get_phase_cards"):
+        matching = [t for t in listed.tools if t.name == name]
+        assert len(matching) == 1
+        tool = matching[0]
+        assert tool.annotations is not None
+        assert tool.annotations.readOnlyHint is True
 
 
 @pytest.mark.anyio

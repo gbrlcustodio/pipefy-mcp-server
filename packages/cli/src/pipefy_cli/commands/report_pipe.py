@@ -12,6 +12,7 @@ from pipefy_cli.commands._common import (
     confirm_destructive,
     parse_json_object,
     parse_json_value,
+    prepare_report_cards_filter_cli,
     resource_id_argument,
     run_cli_command,
     run_pipefy_client_coroutine,
@@ -138,7 +139,7 @@ def report_pipe_create(
     fields_list = parse_json_value(fields, "--fields") if fields else None
     if fields_list is not None and not isinstance(fields_list, list):
         raise typer.BadParameter("--fields must be a JSON array")
-    filt = parse_json_object(filter_json, "--filter")
+    filt = prepare_report_cards_filter_cli(parse_json_object(filter_json, "--filter"))
     formulas_val = parse_json_value(formulas, "--formulas") if formulas else None
     if formulas_val is not None and not isinstance(formulas_val, list):
         raise typer.BadParameter("--formulas must be a JSON array")
@@ -173,7 +174,7 @@ def report_pipe_update(
     fields_list = parse_json_value(fields, "--fields") if fields else None
     if fields_list is not None and not isinstance(fields_list, list):
         raise typer.BadParameter("--fields must be a JSON array")
-    filt = parse_json_object(filter_json, "--filter")
+    filt = prepare_report_cards_filter_cli(parse_json_object(filter_json, "--filter"))
     formulas_val = parse_json_value(formulas, "--formulas") if formulas else None
     if formulas_val is not None and not isinstance(formulas_val, list):
         raise typer.BadParameter("--formulas must be a JSON array")
@@ -245,7 +246,7 @@ def report_pipe_export(
             "--json is mutually exclusive with --format csv (CSV is written as raw bytes to stdout)."
         )
     sort_obj = parse_json_object(sort_by, "--sort-by")
-    filt = parse_json_object(filter_json, "--filter")
+    filt = prepare_report_cards_filter_cli(parse_json_object(filter_json, "--filter"))
     cols = parse_json_value(columns, "--columns") if columns else None
     if cols is not None and not isinstance(cols, list):
         raise typer.BadParameter("--columns must be a JSON array")

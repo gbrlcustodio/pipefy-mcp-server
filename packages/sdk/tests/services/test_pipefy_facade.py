@@ -37,6 +37,20 @@ def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_card_forwards_phase_id_and_title(mock_settings):
+    """PipefyClient.create_card passes optional phase_id and title to CardService."""
+    card_service = AsyncMock()
+    card_service.create_card = AsyncMock(return_value={"ok": "create"})
+    client = PipefyClient(mock_settings, auth=StaticBearerAuth("unit-token"))
+    client._card_service = card_service
+
+    await client.create_card(10, {}, phase_id=20, title="Seed")
+
+    card_service.create_card.assert_awaited_once_with(10, {}, phase_id=20, title="Seed")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_pipefy_client_facade_delegates_to_services_without_modifying_args_or_return():
     """Test PipefyClient is a pure facade: delegates calls unchanged to services."""
     pipe_service = AsyncMock()
@@ -206,7 +220,9 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     pipe_service.get_start_form_fields.assert_awaited_once_with(2, True)
 
     assert await client.create_card(3, {"a": 1}) == {"ok": "create"}
-    card_service.create_card.assert_awaited_once_with(3, {"a": 1})
+    card_service.create_card.assert_awaited_once_with(
+        3, {"a": 1}, phase_id=None, title=None
+    )
 
     assert await client.add_card_comment(33, "hello") == {"ok": "comment"}
     card_service.create_comment.assert_awaited_once_with(33, "hello")

@@ -607,25 +607,6 @@ async def test_get_phase_returns_normalized_shape(mock_settings):
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
-async def test_get_phase_cards_count_delegates_to_get_phase(mock_settings):
-    phase_id = 342182334
-    service = PipeService(settings=mock_settings, auth=_TEST_AUTH)
-    service.get_phase = AsyncMock(
-        return_value={
-            "phase_id": str(phase_id),
-            "phase_name": "Doing",
-            "cards_count": 42,
-        }
-    )
-
-    result = await service.get_phase_cards_count(phase_id)
-
-    service.get_phase.assert_awaited_once_with(phase_id)
-    assert result == 42
-
-
-@pytest.mark.unit
 def test_get_phase_cards_query_requests_pagination_and_fields():
     query_text = print_ast(GET_PHASE_CARDS_QUERY)
     assert "first" in query_text

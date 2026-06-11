@@ -80,6 +80,7 @@ class BasePipefyClient:
             url=self._graphql_url,
             auth=self._auth,
             timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
+            verify=True,
         )
         try:
             if self.settings.gql_reuse_fetched_graphql_schema:

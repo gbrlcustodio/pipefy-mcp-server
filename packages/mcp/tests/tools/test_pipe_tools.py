@@ -382,6 +382,30 @@ class TestCreateCardTool:
             assert "card_link" in response
 
     @pytest.mark.parametrize("client_session", [None], indirect=True)
+    async def test_title_warning_skipped_when_create_card_null(
+        self,
+        client_session,
+        mock_pipefy_client,
+        pipe_id,
+    ):
+        """GraphQL null on createCard must not raise when checking title_warning."""
+        mock_pipefy_client.get_start_form_fields.return_value = {
+            "start_form_fields": []
+        }
+        mock_pipefy_client.create_card.return_value = {"createCard": None}
+
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_card",
+                {"pipe_id": pipe_id, "title": "My Title"},
+            )
+            assert result.isError is False
+            response = json.loads(result.content[0].text)
+            assert response == {"createCard": None}
+            assert "title_warning" not in response
+            assert "card_link" not in response
+
+    @pytest.mark.parametrize("client_session", [None], indirect=True)
     async def test_no_title_warning_when_response_matches(
         self,
         client_session,

@@ -118,9 +118,9 @@ class PipeTools:
             ``get_start_form_fields(pipe_id)`` so pipes that still require start-form
             values on ``CreateCardInput`` receive them alongside phase fields.
 
-            Before ``move_card_to_phase``, call ``get_phase_allowed_move_targets`` on
-            the card's current phase; transition rules are UI-only (Pipe settings ->
-            Phase -> Connections).
+            If you plan to move the card afterwards, call
+            ``get_phase_allowed_move_targets`` on the card's current phase before
+            ``move_card_to_phase`` — only phases allowed by the workflow can be used.
 
             ``title`` is sent on ``CreateCardInput`` when provided.
 
@@ -255,10 +255,12 @@ class PipeTools:
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
                 return tool_error(error_text)
-            card_id = result.get("createCard", {}).get("card", {}).get("id")
+            card_data_node = (result.get("createCard") or {}).get("card")
+            card_id = (
+                card_data_node.get("id") if isinstance(card_data_node, dict) else None
+            )
             if card_id:
                 if title:
-                    card_data_node = result.get("createCard", {}).get("card")
                     if card_data_node is not None:
                         if card_data_node.get("title") != title:
                             result["title_warning"] = (

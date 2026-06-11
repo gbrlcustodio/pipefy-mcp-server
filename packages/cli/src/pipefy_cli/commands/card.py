@@ -56,7 +56,7 @@ def _apply_create_card_title_warning(
 ) -> dict[str, Any]:
     if not requested_title:
         return result
-    card_node = result.get("createCard", {}).get("card")
+    card_node = (result.get("createCard") or {}).get("card")
     if not isinstance(card_node, dict):
         return result
     if card_node.get("title") == requested_title:

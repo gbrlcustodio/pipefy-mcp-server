@@ -187,6 +187,26 @@ def test_card_create_forwards_phase_id(runner, clean_pipefy_env, saved_cwd, oaut
     )
 
 
+def test_card_create_title_warning_skipped_when_create_card_null(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("create-card-null-response")
+    mock_client = MagicMock()
+    mock_client.create_card = AsyncMock(return_value={"createCard": None})
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["card", "create", "303", "--title", "Requested", "--json"],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    payload = json.loads(result.stdout)
+    assert payload == {"createCard": None}
+    assert "title_warning" not in payload
+
+
 def test_card_create_title_warning_when_mismatch(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):

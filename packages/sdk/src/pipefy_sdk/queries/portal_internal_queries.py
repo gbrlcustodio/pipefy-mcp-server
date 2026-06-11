@@ -1,34 +1,36 @@
-"""GraphQL mutation strings for portal sub-portals (internal_api endpoint).
+"""GraphQL mutations for portal sub-portals (internal_api endpoint).
 
-Mutations are plain strings (not ``gql()``) because ``InternalApiClient``
-sends raw GraphQL text via JSON POST. See ``ai_automation_queries.py``.
+These run through ``InternalApiClient``, which accepts a ``gql()``
+``DocumentNode`` like every other client.
 """
 
 from __future__ import annotations
 
-UPDATE_SUB_PORTAL_ELEMENT_MUTATION = """
+from gql import gql
+
+UPDATE_SUB_PORTAL_ELEMENT_MUTATION = gql("""
 mutation UpdateSubPortalElement($input: UpdateSubPortalElementInput!) {
   updateSubPortalElement(input: $input) {
     success
   }
 }
-"""
+""")
 
-DELETE_SUB_PORTAL_ELEMENT_MUTATION = """
+DELETE_SUB_PORTAL_ELEMENT_MUTATION = gql("""
 mutation DeleteSubPortalElement($input: DeleteSubPortalElementInput!) {
   deleteSubPortalElement(input: $input) {
     success
   }
 }
-"""
+""")
 
-DELETE_SUB_PORTAL_INTERFACE_MUTATION = """
+DELETE_SUB_PORTAL_INTERFACE_MUTATION = gql("""
 mutation DeleteSubPortalInterface($input: DeleteSubPortalInterfaceInput!) {
   deleteSubPortalInterface(input: $input) {
     success
   }
 }
-"""
+""")
 
 __all__ = [
     "DELETE_SUB_PORTAL_ELEMENT_MUTATION",

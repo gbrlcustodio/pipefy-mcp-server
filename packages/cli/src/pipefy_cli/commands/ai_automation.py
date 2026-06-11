@@ -26,21 +26,9 @@ from pipefy_cli.commands._common import (
 )
 
 ai_automation_app = typer.Typer(
-    help="AI Automations (generate_with_ai; requires service-account credentials).",
+    help="AI Automations (generate_with_ai).",
     no_args_is_help=True,
 )
-
-
-def _require_ai_automation(client: PipefyClient) -> None:
-    if not client.ai_automation_available:
-        typer.echo(
-            "AI Automation requires service-account credentials "
-            "(PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
-            "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
-            "Bearer --token mode does not attach the internal API client.",
-            err=True,
-        )
-        raise typer.Exit(2)
 
 
 def _raise_if_prompt_preflight_blocks(payload: dict[str, Any]) -> None:
@@ -188,7 +176,6 @@ def ai_automation_create(
         skills = list(skills_raw)
 
     async def factory(client: PipefyClient):
-        _require_ai_automation(client)
         pre = await validate_ai_automation_prompt_sdk(
             client, pipe.strip(), prompt, fids, event_id
         )
@@ -268,7 +255,6 @@ def ai_automation_update(
         skills = list(skills_raw)
 
     async def factory(client: PipefyClient):
-        _require_ai_automation(client)
         row = await client.get_automation(automation_id)
         if row is None:
             return {"success": False, "message": "Automation not found."}

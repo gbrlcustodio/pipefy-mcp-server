@@ -71,7 +71,7 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 |------------|-----|-----------|
 | `get_pipe` | `pipefy pipe get <pipe_id>` | Yes |
 | `get_phase_cards_count` | `pipefy phase count <phase_id>` | Yes |
-| `create_card` | `pipefy card create --pipe <id> --phase-id <id>` | No |
+| `create_card` | `pipefy card create <pipe_id> --phase-id <id>` | No |
 | `get_phase_cards` | `pipefy phase cards <phase_id>` | Yes |
 | `get_phase_allowed_move_targets` | `pipefy phase targets <phase_id>` | Yes |
 | `move_card_to_phase` | `pipefy card move <card_id> --phase <id>` | No |
@@ -99,7 +99,7 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 
    CLI:
    ```bash
-   pipefy card create --pipe 306996634 --phase-id 340012345 --title "Seeded"
+   pipefy card create 306996634 --phase-id 340012345 --title "Seeded"
    ```
 
 4. **Verify inventory** — `get_phase_cards(phase_id, first=50)` and confirm expected card IDs/titles.
@@ -149,7 +149,7 @@ This returns valid `type` enum values and their descriptions.
 | `get_card` | `pipefy card get <id>` | Yes | Card data, fields, and comments. |
 | `get_cards` | `pipefy card list --pipe <id>` | Yes | Paginated card list by pipe. |
 | `find_cards` | `pipefy card find --pipe <id>` | Yes | Filter by a single field value. |
-| `create_card` | `pipefy card create --pipe <id>` | No | Default: start form. Optional `--phase-id` / `phase_id` skips start-form elicitation. |
+| `create_card` | `pipefy card create <pipe_id>` | No | Default: start form. Optional `--phase-id` / `phase_id` creates in that phase; interactive clients may elicit start-form fields unless `skip_elicitation=true`. |
 | `update_card` | `pipefy card update <id>` | No | Update title, assignee, due date, fields. |
 | `move_card_to_phase` | `pipefy card move <id> --phase <id>` | No | Call `get_phase_allowed_move_targets` on the source phase first. |
 | `delete_card` | `pipefy card delete <id>` | No | **Two-step destructive.** |
@@ -172,7 +172,7 @@ This returns valid `type` enum values and their descriptions.
 
    CLI:
    ```bash
-   pipefy card create --pipe 67890 --title "My Card" --fields '{"field_slug":"value"}'
+   pipefy card create 67890 --title "My Card" --fields '{"field_slug":"value"}'
    ```
 
 3. **Report result** with card ID and link: `https://app.pipefy.com/open-cards/<CARD_ID>`

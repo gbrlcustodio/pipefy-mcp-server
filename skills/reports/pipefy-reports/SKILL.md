@@ -103,7 +103,7 @@ Pipe reports and organization reports: discovery, CRUD, and async exports. **17 
 
 - **Export stuck in `processing`:** large pipes with many cards can take minutes. Wait at least 60 seconds per poll. Retry the export trigger if still `processing` after several minutes.
 - **`get_pipe_reports` returns `null` for `cardCount`:** known Pipefy API behavior; the tool omits that field automatically.
-- **Filter rejected at tool boundary:** do not pass `{"current_phase":["id"]}` — use `operator` + `queries` (see step 2 above).
+- **Filter rejected before GraphQL:** do not pass `{"current_phase":["id"]}`; use `operator` + `queries` (see step 2 above).
 - **Filter not working after create:** use `get_pipe_report_filterable_fields` to confirm the exact `field` string and `value` format.
 
 ## See also

@@ -96,7 +96,7 @@ get_phase_fields(phase_id)                     → learn phase field IDs
 fill_card_phase_fields(card_id, phase_id, fields={…}) → supply values
 ```
 
-With `phase_id`, the start-form elicitation path is skipped. Use `skip_elicitation=true` for agent workflows. When `fields` is non-empty, keys are filtered against both `get_phase_fields(phase_id)` and `get_start_form_fields(pipe_id)` so pipes that still require start-form values on `CreateCardInput` receive them alongside phase fields. Optional `title` is sent on `CreateCardInput` (no separate `update_card` on the happy path).
+With `phase_id`, interactive clients may still elicit start-form fields when elicitation is supported; set `skip_elicitation=true` for agent workflows. When `fields` is non-empty, keys are filtered against both `get_phase_fields(phase_id)` and `get_start_form_fields(pipe_id)` so pipes that still require start-form values on `CreateCardInput` receive them alongside phase fields. Optional `title` is sent on `CreateCardInput` (no separate `update_card` on the happy path).
 
 ### `get_pipe` inventory fields
 

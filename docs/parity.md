@@ -34,7 +34,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_card_relation` | `pipefy relation card create` | shipped | — |
 | `create_field_condition` | `pipefy field-condition create` | shipped | (`--phase`, `--name`, `--condition`, `--actions` JSON). |
 | `create_label` | `pipefy label create` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |
-| `create_organization_report` | `pipefy report-org create` | shipped | Organization reports; organization-level ops out of v0.1 parity. |
+| `create_organization_report` | `pipefy report-org create` | shipped | Organization reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
 | `create_phase` | `pipefy phase create` | shipped | — |
 | `create_phase_field` | `pipefy field create` | shipped | (phase fields). |
 | `create_pipe` | `pipefy pipe create` | shipped | (`--org`). |
@@ -77,7 +77,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `export_automation_jobs` | `pipefy export automation-jobs` (also `pipefy automation export jobs`) | shipped | (`--organization`, `--period`). |
 | `export_organization_report` | `pipefy report-org export` | shipped | Exports + organization reports. |
 | `export_pipe_audit_logs` | `pipefy audit export` | shipped | (`--pipe`); API queues export (JSON payload only). |
-| `export_pipe_report` | `pipefy report-pipe export` | shipped | Exports + reports. |
+| `export_pipe_report` | `pipefy report-pipe export` | shipped | Exports + reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
 | `fill_card_phase_fields` | — | deferred | Card bulk fill; not in initial launch command list (may follow card field updates). |
 | `find_cards` | `pipefy card find` | shipped | (`--pipe`, `--field`, `--value`). |
 | `find_records` | `pipefy record find` | shipped | (`--filter` JSON with `field_id` + `field_value`). Unified MCP envelope: top-level `pagination` uses `has_more` / `end_cursor` / `page_size` (same as `get_table_records`). |
@@ -112,8 +112,8 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `get_organization_report_export` | (poll via `pipefy report-org export --format json`) | shipped | Organization reports + export-shaped. |
 | `get_organization_reports` | `pipefy report-org list` | shipped | Organization reports. |
 | `get_phase_allowed_move_targets` | `pipefy phase targets` | shipped | Read-only; mirrors Phase -> Connections (`cards_can_be_moved_to_phases`). |
-| `get_phase_cards_count` | `pipefy phase count` | shipped | Native ``Phase.cards_count`` via ``get_phase``; pair with ``get_phase_cards`` to list. |
 | `get_phase_cards` | `pipefy phase cards` | shipped | ``Phase.cards`` pagination (``--first`` default 50, ``--after``, ``--include-fields``). Prefer over ``get_cards`` for phase-local inventory. |
+| `get_phase_cards_count` | `pipefy phase count` | shipped | Native ``Phase.cards_count`` via ``get_phase``; pair with ``get_phase_cards`` to list. |
 | `get_phase_fields` | `pipefy field list --phase` | shipped | ``pipefy phase get`` returns the same shape. |
 | `get_pipe` | `pipefy pipe get` | shipped | `phases[].cards_count` on workflow phases; `start_form_fields` for start-form intake (start form not in `phases[]`). |
 | `get_pipe_members` | `pipefy member list` | shipped | — |
@@ -158,12 +158,12 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_comment` | `pipefy card comment update` | shipped | — |
 | `update_field_condition` | `pipefy field-condition update` | shipped | (`--extra` JSON). |
 | `update_label` | `pipefy label update` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |
-| `update_organization_report` | `pipefy report-org update` | shipped | Organization reports. |
+| `update_organization_report` | `pipefy report-org update` | shipped | Organization reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
 | `update_phase` | `pipefy phase update` | shipped | — |
 | `update_phase_field` | `pipefy field update` | shipped | (``--extra`` JSON). Optional ``phase_id`` / ``pipe_id`` in ``--extra`` resolve slug ``field_id`` to ``internal_id`` when ``uuid`` is omitted. |
 | `update_pipe` | `pipefy pipe update` | shipped | (`--name`, `--icon`, `--color`, `--preferences` JSON). |
 | `update_pipe_relation` | `pipefy relation pipe update` | shipped | — |
-| `update_pipe_report` | `pipefy report-pipe update` | shipped | Reports domain. |
+| `update_pipe_report` | `pipefy report-pipe update` | shipped | Reports domain; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
 | `update_portal` | `pipefy portal update` | shipped | (`--name`, `--visibility`, optional `--color`, `--icon`, header flags). |
 | `update_portal_page` | `pipefy portal page update` | shipped | positional portal + page UUIDs; at least one of `--title`, `--description`, `--index`. |
 | `update_portal_page_layout` | `pipefy portal page layout update` | shipped | `--page-id` + `--layout` JSON only (no portal UUID on the wire). |

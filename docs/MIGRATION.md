@@ -43,7 +43,7 @@ All MCP tools keep the same names, parameters, and behavior as in the pre-monore
 
 ## Repo URL
 
-The toolkit lives in the **Pipefy org** at **[github.com/pipefy/ai-toolkit](https://github.com/pipefy/ai-toolkit)**. Earlier community forks (`pipefy-mcp-server`, `pipefy-labs`) may still redirect on GitHub; update remotes and install URLs when you can.
+The toolkit lives in the **Pipefy org** at **[github.com/pipefy/ai-toolkit](https://github.com/pipefy/ai-toolkit)**. Earlier names of this repository (`pipefy-mcp-server`, `pipefy-labs`) may still redirect on GitHub; update remotes and install URLs when you can.
 
 ```sh
 git remote set-url origin https://github.com/pipefy/ai-toolkit.git

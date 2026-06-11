@@ -6,7 +6,6 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyClient, PipefyId
-from pipefy_sdk.label_color import normalize_label_color
 from pipefy_sdk.phase_inventory import (
     get_phase_not_found_message,
     is_get_phase_not_found_error,
@@ -1094,17 +1093,15 @@ class PipeConfigTools:
                     code="INVALID_ARGUMENTS",
                 )
             try:
-                normalized_color = normalize_label_color(color)
+                raw = await client.create_label(
+                    pipe_id,
+                    name.strip(),
+                    color,
+                )
             except ValueError as exc:
                 return build_pipe_tool_error_payload(
                     message=str(exc),
                     code="INVALID_ARGUMENTS",
-                )
-            try:
-                raw = await client.create_label(
-                    pipe_id,
-                    name.strip(),
-                    normalized_color,
                 )
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
@@ -1159,22 +1156,20 @@ class PipeConfigTools:
                     message="Invalid 'color': provide a non-empty string.",
                     code="INVALID_ARGUMENTS",
                 )
-            try:
-                normalized_color = normalize_label_color(color)
-            except ValueError as exc:
-                return build_pipe_tool_error_payload(
-                    message=str(exc),
-                    code="INVALID_ARGUMENTS",
-                )
             update_attrs: dict[str, Any] = {
                 k: v
                 for k, v in (extra_input or {}).items()
                 if k not in _UPDATE_LABEL_EXTRA_RESERVED
             }
             update_attrs["name"] = name.strip()
-            update_attrs["color"] = normalized_color
+            update_attrs["color"] = color
             try:
                 raw = await client.update_label(label_id, **update_attrs)
+            except ValueError as exc:
+                return build_pipe_tool_error_payload(
+                    message=str(exc),
+                    code="INVALID_ARGUMENTS",
+                )
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc,

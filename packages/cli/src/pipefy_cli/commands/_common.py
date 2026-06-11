@@ -14,10 +14,7 @@ from gql.transport.exceptions import TransportError, TransportQueryError
 from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
 from pipefy_sdk.exceptions import PipefyError
 from pipefy_sdk.label_color import normalize_label_color
-from pipefy_sdk.report_filter_preflight import (
-    normalize_report_cards_filter,
-    validate_report_cards_filter,
-)
+from pipefy_sdk.report_filter_preflight import prepare_report_cards_filter
 
 from pipefy_cli.auth import (
     AuthContext,
@@ -84,18 +81,6 @@ def validate_cards_page_size(first: int | None) -> int | None:
     return first
 
 
-def validate_report_filter_cli(
-    filter_obj: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    if filter_obj is None:
-        return None
-    normalized = normalize_report_cards_filter(filter_obj)
-    message = validate_report_cards_filter(normalized)
-    if message is not None:
-        raise typer.BadParameter(message)
-    return normalized
-
-
 def validate_label_name_cli(name: str) -> str:
     nm = name.strip()
     if not nm:
@@ -103,7 +88,18 @@ def validate_label_name_cli(name: str) -> str:
     return nm
 
 
-def validate_label_color_cli(color: str) -> str:
+def prepare_report_cards_filter_cli(
+    filter_obj: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Normalize and validate ``ReportCardsFilter`` before auth or network I/O."""
+    try:
+        return prepare_report_cards_filter(filter_obj)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def normalize_label_color_cli(color: str) -> str:
+    """Normalize label ``color`` before auth or network I/O."""
     try:
         return normalize_label_color(color)
     except ValueError as exc:

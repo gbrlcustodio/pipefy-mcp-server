@@ -465,6 +465,10 @@ async def test_create_pipe_report_forwards_golden_report_filter(
 async def test_create_pipe_report_rejects_naive_current_phase_filter(
     report_session, mock_report_client, extract_payload
 ):
+    mock_report_client.create_pipe_report.side_effect = ValueError(
+        "filter must use ReportCardsFilter shape (operator + queries), "
+        "not top-level 'current_phase'."
+    )
     async with report_session as session:
         result = await session.call_tool(
             "create_pipe_report",
@@ -475,7 +479,7 @@ async def test_create_pipe_report_rejects_naive_current_phase_filter(
             },
         )
 
-    mock_report_client.create_pipe_report.assert_not_called()
+    mock_report_client.create_pipe_report.assert_awaited_once()
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "top-level" in tool_error_message(payload)
@@ -486,6 +490,10 @@ async def test_create_pipe_report_rejects_naive_current_phase_filter(
 async def test_export_pipe_report_rejects_naive_current_phase_filter(
     report_session, mock_report_client, extract_payload
 ):
+    mock_report_client.export_pipe_report.side_effect = ValueError(
+        "filter must use ReportCardsFilter shape (operator + queries), "
+        "not top-level 'current_phase'."
+    )
     async with report_session as session:
         result = await session.call_tool(
             "export_pipe_report",
@@ -496,7 +504,7 @@ async def test_export_pipe_report_rejects_naive_current_phase_filter(
             },
         )
 
-    mock_report_client.export_pipe_report.assert_not_called()
+    mock_report_client.export_pipe_report.assert_awaited_once()
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "top-level" in tool_error_message(payload)
@@ -507,13 +515,16 @@ async def test_export_pipe_report_rejects_naive_current_phase_filter(
 async def test_update_pipe_report_rejects_invalid_report_filter(
     report_session, mock_report_client, extract_payload
 ):
+    mock_report_client.update_pipe_report.side_effect = ValueError(
+        "filter.operator must be one of ['and', 'or'], received 'xor'."
+    )
     async with report_session as session:
         result = await session.call_tool(
             "update_pipe_report",
             {"report_id": "r10", "filter": {"operator": "xor", "queries": []}},
         )
 
-    mock_report_client.update_pipe_report.assert_not_called()
+    mock_report_client.update_pipe_report.assert_awaited_once()
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "operator must be one of" in tool_error_message(payload)

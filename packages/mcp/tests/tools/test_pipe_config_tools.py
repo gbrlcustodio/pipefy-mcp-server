@@ -1845,17 +1845,21 @@ async def test_create_label_rejects_blank_color__no_integration(
     ],
 )
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
-async def test_label_color_rejects_non_hex_before_graphql__no_integration(
+async def test_label_color_maps_sdk_value_error__no_integration(
     pipe_config_session,
     mock_pipe_config_client,
     extract_payload,
     tool_name: str,
     arguments: dict[str, object],
 ):
+    rejection = ValueError(
+        f"expected #RGB or #RRGGBB hex color, received {arguments['color']!r}"
+    )
+    mock_pipe_config_client.create_label.side_effect = rejection
+    mock_pipe_config_client.update_label.side_effect = rejection
     async with pipe_config_session as session:
         result = await session.call_tool(tool_name, arguments)
-    mock_pipe_config_client.create_label.assert_not_called()
-    mock_pipe_config_client.update_label.assert_not_called()
+    getattr(mock_pipe_config_client, tool_name).assert_awaited_once()
     payload = extract_payload(result)
     assert payload["success"] is False
     assert payload["error"]["code"] == "INVALID_ARGUMENTS"

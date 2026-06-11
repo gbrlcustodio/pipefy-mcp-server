@@ -10,7 +10,7 @@ dependencies = [
     # Workspace resolves versions in dev; PyPI releases stage these wheels alongside CLI/MCP (see release workflow).
     "pipefy-auth",
     "pipefy-sdk",
-    "pydantic>=2.11.3",
+    "pydantic>=2.13.4",
     "pydantic-settings>=2.8.1",
 ]
 

@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **SDK**: GraphQL `HTTPXAsyncTransport` now sets `verify=True` explicitly to pin TLS verification on, independent of httpx's default.
+- **Deps**: upgraded `pydantic` to 2.13.4 (`pydantic-core` 2.46.4, `pydantic-settings` 2.14.1) across workspace packages.
 
 ## [0.2.0-beta.3] - 2026-06-03
 

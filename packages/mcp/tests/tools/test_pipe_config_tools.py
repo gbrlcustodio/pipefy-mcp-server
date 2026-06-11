@@ -1845,7 +1845,7 @@ async def test_create_label_rejects_blank_color__no_integration(
     ],
 )
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
-async def test_label_color_rejects_non_hex_before_graphql__no_integration(
+async def test_label_color_maps_sdk_value_error__no_integration(
     pipe_config_session,
     mock_pipe_config_client,
     extract_payload,

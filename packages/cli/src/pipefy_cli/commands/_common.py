@@ -13,6 +13,8 @@ import typer
 from gql.transport.exceptions import TransportError, TransportQueryError
 from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
 from pipefy_sdk.exceptions import PipefyError
+from pipefy_sdk.label_color import normalize_label_color
+from pipefy_sdk.report_filter_preflight import prepare_report_cards_filter
 
 from pipefy_cli.auth import (
     AuthContext,
@@ -86,10 +88,20 @@ def validate_label_name_cli(name: str) -> str:
     return nm
 
 
-async def bad_parameter_on_value_error(call: Awaitable[_T]) -> _T:
-    """Await an SDK call, mapping its input-validation ``ValueError`` to ``typer.BadParameter``."""
+def prepare_report_cards_filter_cli(
+    filter_obj: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Normalize and validate ``ReportCardsFilter`` before auth or network I/O."""
     try:
-        return await call
+        return prepare_report_cards_filter(filter_obj)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def normalize_label_color_cli(color: str) -> str:
+    """Normalize label ``color`` before auth or network I/O."""
+    try:
+        return normalize_label_color(color)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
 

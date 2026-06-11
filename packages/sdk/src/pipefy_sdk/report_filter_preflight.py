@@ -72,6 +72,19 @@ def _coerce_filter_query_value(value: Any) -> Any:
     return value
 
 
+def prepare_report_cards_filter(
+    filter_obj: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Normalize a ``ReportCardsFilter`` and raise ``ValueError`` when invalid."""
+    if filter_obj is None:
+        return None
+    normalized = normalize_report_cards_filter(filter_obj)
+    message = report_cards_filter_error(normalized)
+    if message is not None:
+        raise ValueError(message)
+    return normalized
+
+
 def report_cards_filter_error(filter_obj: dict[str, Any] | None) -> str | None:
     """Return an error message for an invalid ``ReportCardsFilter``, or ``None`` when valid."""
     if filter_obj is None:
@@ -177,5 +190,6 @@ __all__ = [
     "REPORT_CARDS_FILTER_QUERY_KEYS",
     "REPORT_CARDS_FILTER_REJECTED_ROOT_KEYS",
     "normalize_report_cards_filter",
+    "prepare_report_cards_filter",
     "report_cards_filter_error",
 ]

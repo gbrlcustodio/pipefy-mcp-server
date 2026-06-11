@@ -15,12 +15,7 @@ def test_report_pipe_create_rejects_naive_current_phase_filter(
 ):
     oauth_env("report-filter-bad")
     mock_client = MagicMock()
-    mock_client.create_pipe_report = AsyncMock(
-        side_effect=ValueError(
-            "filter must use ReportCardsFilter shape (operator + queries), "
-            "not top-level 'current_phase'."
-        )
-    )
+    mock_client.create_pipe_report = AsyncMock()
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -39,8 +34,35 @@ def test_report_pipe_create_rejects_naive_current_phase_filter(
             ],
         )
     assert result.exit_code == 2
-    mock_client.create_pipe_report.assert_awaited_once()
+    mock_client.create_pipe_report.assert_not_called()
     assert "top-level" in result.stderr
+
+
+def test_report_pipe_create_rejects_invalid_filter_without_auth(
+    runner, clean_pipefy_env, saved_cwd
+):
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "report-pipe",
+                "create",
+                "--pipe",
+                "123",
+                "--name",
+                "R",
+                "--filter",
+                json.dumps({"current_phase": ["1"]}),
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.create_pipe_report.assert_not_called()
+    assert "top-level" in result.stderr
+    assert "auth" not in result.stderr.lower()
 
 
 def test_report_pipe_create_forwards_valid_filter(
@@ -88,11 +110,7 @@ def test_report_pipe_update_rejects_invalid_filter_operator(
 ):
     oauth_env("report-filter-update-bad")
     mock_client = MagicMock()
-    mock_client.update_pipe_report = AsyncMock(
-        side_effect=ValueError(
-            "filter.operator must be one of ['and', 'or'], received 'xor'."
-        )
-    )
+    mock_client.update_pipe_report = AsyncMock()
     with patch(
         "pipefy_cli.commands._common.get_authenticated_client",
         return_value=mock_client,
@@ -108,5 +126,5 @@ def test_report_pipe_update_rejects_invalid_filter_operator(
             ],
         )
     assert result.exit_code == 2
-    mock_client.update_pipe_report.assert_awaited_once()
+    mock_client.update_pipe_report.assert_not_called()
     assert "operator must be one of" in result.stderr

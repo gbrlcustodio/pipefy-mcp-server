@@ -25,24 +25,8 @@ from pipefy_sdk.queries.report_queries import (
     UPDATE_ORGANIZATION_REPORT_MUTATION,
     UPDATE_PIPE_REPORT_MUTATION,
 )
-from pipefy_sdk.report_filter_preflight import (
-    normalize_report_cards_filter,
-    report_cards_filter_error,
-)
+from pipefy_sdk.report_filter_preflight import prepare_report_cards_filter
 from pipefy_sdk.settings import PipefySettings
-
-
-def _prepared_report_cards_filter(
-    filter_obj: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    """Normalize a ``ReportCardsFilter`` and raise ``ValueError`` when invalid."""
-    if filter_obj is None:
-        return None
-    normalized = normalize_report_cards_filter(filter_obj)
-    message = report_cards_filter_error(normalized)
-    if message is not None:
-        raise ValueError(message)
-    return normalized
 
 
 class ReportService(BasePipefyClient):
@@ -185,7 +169,7 @@ class ReportService(BasePipefyClient):
             formulas: Formula definitions (list of [field, operator, ...] tuples).
         """
         input_obj: dict[str, Any] = {"pipeId": str(pipe_id), "name": name}
-        prepared_filter = _prepared_report_cards_filter(filter)
+        prepared_filter = prepare_report_cards_filter(filter)
         if fields is not None:
             input_obj["fields"] = fields
         if prepared_filter is not None:
@@ -223,7 +207,7 @@ class ReportService(BasePipefyClient):
             "name": name,
             "color": color,
             "fields": fields,
-            "filter": _prepared_report_cards_filter(filter),
+            "filter": prepare_report_cards_filter(filter),
             "formulas": formulas,
             "featuredField": featured_field,
         }
@@ -267,7 +251,7 @@ class ReportService(BasePipefyClient):
             "name": name,
             "pipeIds": [str(pid) for pid in pipe_ids],
         }
-        prepared_filter = _prepared_report_cards_filter(filter)
+        prepared_filter = prepare_report_cards_filter(filter)
         if fields is not None:
             input_obj["fields"] = fields
         if prepared_filter is not None:
@@ -301,7 +285,7 @@ class ReportService(BasePipefyClient):
             "name": name,
             "color": color,
             "fields": fields,
-            "filter": _prepared_report_cards_filter(filter),
+            "filter": prepare_report_cards_filter(filter),
             "pipeIds": [str(pid) for pid in pipe_ids] if pipe_ids is not None else None,
         }
         for key, value in optional_fields.items():
@@ -343,7 +327,7 @@ class ReportService(BasePipefyClient):
             "pipeId": str(pipe_id),
             "pipeReportId": str(pipe_report_id),
         }
-        prepared_filter = _prepared_report_cards_filter(filter)
+        prepared_filter = prepare_report_cards_filter(filter)
         if sort_by is not None:
             input_obj["sortBy"] = sort_by
         if prepared_filter is not None:
@@ -382,7 +366,7 @@ class ReportService(BasePipefyClient):
             else None,
             "pipeIds": [int(pid) for pid in pipe_ids] if pipe_ids is not None else None,
             "sortBy": sort_by,
-            "filter": _prepared_report_cards_filter(filter),
+            "filter": prepare_report_cards_filter(filter),
             "columns": columns,
         }
         for key, value in optional_fields.items():

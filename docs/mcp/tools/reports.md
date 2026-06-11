@@ -5,7 +5,7 @@ Pipe reports and organization reports: discovery, CRUD, single pipe report fetch
 ## Cross-cutting patterns
 
 - Build `ReportCardsFilter` using `get_pipe_report_columns` and `get_pipe_report_filterable_fields`; use `introspect_type` for uncommon inputs.
-- **Filter shape:** nested `operator` (`and` | `or`) plus `queries` (and optional `groups`). Do **not** pass a top-level `current_phase` array — that is not valid GraphQL input. Filter structure is validated in the SDK before calling the API; MCP and CLI surface the same error.
+- **Filter shape:** nested `operator` (`and` | `or`) plus `queries` (and optional `groups`). Do **not** pass a top-level `current_phase` array — that is not valid GraphQL input. The SDK validates filter structure before calling the API; MCP and CLI surface the same error.
 
 ### Example phase filter (`create_pipe_report` / `update_pipe_report`)
 

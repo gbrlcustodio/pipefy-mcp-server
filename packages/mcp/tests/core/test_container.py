@@ -94,14 +94,12 @@ class TestServicesContainer:
 
         assert container.pipefy_client is None
 
-    @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.PipefyClient")
     async def test_initialize_services_creates_pipefy_client(
         self,
         mock_pipefy_client_class,
         mock_internal_api_client_class,
-        mock_ai_automation_service_class,
     ):
         """Test that initialize_services creates and assigns PipefyClient"""
         mock_client = Mock(spec=PipefyClient)
@@ -123,12 +121,10 @@ class TestServicesContainer:
         assert container.pipefy_client is mock_client
 
     @patch("pipefy_mcp.core.container.InternalApiClient")
-    @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.PipefyClient")
-    async def test_initialize_services_creates_ai_services(
+    async def test_initialize_services_attaches_internal_api_client(
         self,
         mock_pipefy_client_class,
-        mock_ai_automation_service_class,
         mock_internal_api_client_class,
     ):
         mock_client = Mock(spec=PipefyClient)
@@ -144,25 +140,22 @@ class TestServicesContainer:
         await container.initialize_services(settings)
 
         mock_internal_api_client_class.assert_called_once()
-        mock_ai_automation_service_class.assert_called_once()
-        mock_client.set_ai_automation_service.assert_called_once_with(
-            mock_ai_automation_service_class.return_value
+        mock_client.set_internal_api_client.assert_called_once_with(
+            mock_internal_api_client_class.return_value
         )
 
-    @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.PipefyClient")
     async def test_initialize_services_picks_up_pipefy_token_over_service_account(
         self,
         mock_pipefy_client_class,
         mock_internal_api_client_class,
-        mock_ai_automation_service_class,
     ):
         """``PIPEFY_TOKEN`` outranks ``PIPEFY_SERVICE_ACCOUNT_*`` (same precedence as the CLI).
 
-        Also asserts that the bearer path wires ``InternalApiClient`` +
-        ``AiAutomationService`` with the SAME ``auth`` instance
-        ``PipefyClient`` got, so GraphQL auth and AI automation can't drift.
+        Also asserts that the bearer path wires ``InternalApiClient`` with the
+        SAME ``auth`` instance ``PipefyClient`` got, so GraphQL auth and the
+        internal API client can't drift.
         """
         mock_client = Mock(spec=PipefyClient)
         mock_client.client = Mock()
@@ -178,23 +171,20 @@ class TestServicesContainer:
         assert isinstance(pc_auth, StaticBearerAuth)
         mock_internal_api_client_class.assert_called_once()
         assert mock_internal_api_client_class.call_args.kwargs["auth"] is pc_auth
-        mock_ai_automation_service_class.assert_called_once()
-        mock_client.set_ai_automation_service.assert_called_once_with(
-            mock_ai_automation_service_class.return_value
+        mock_client.set_internal_api_client.assert_called_once_with(
+            mock_internal_api_client_class.return_value
         )
 
     # Patch ``load_session``: ``auth_url``'s prod default makes the stored-session
     # tier always reachable, so a host with a real keychain entry would otherwise
     # satisfy resolution and break the assertion.
     @patch("pipefy_auth.resolver.load_session", lambda **_: None)
-    @patch("pipefy_mcp.core.container.AiAutomationService")
     @patch("pipefy_mcp.core.container.InternalApiClient")
     @patch("pipefy_mcp.core.container.PipefyClient")
     async def test_initialize_services_raises_when_no_auth_source_configured(
         self,
         mock_pipefy_client_class,
         mock_internal_api_client_class,
-        mock_ai_automation_service_class,
     ):
         """No PIPEFY_TOKEN and no service-account triple → runtime error."""
         settings = Settings(

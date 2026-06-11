@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.2.0-beta.2"
+__version__ = "0.2.0-beta.3"
 
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
@@ -35,7 +35,6 @@ from pipefy_sdk.models import (
     infer_content_type,
 )
 from pipefy_sdk.models.form import create_form_model
-from pipefy_sdk.services.ai_automation_service import AiAutomationService
 from pipefy_sdk.services.automation_graphql_types import (
     AutomationActionRow,
     AutomationEventRow,
@@ -63,7 +62,6 @@ from pipefy_sdk.settings import PipefySettings
 __all__ = [
     "__version__",
     "AiAgentGraphPayload",
-    "AiAutomationService",
     "Attachment",
     "AttachmentTarget",
     "AttachmentUploadError",

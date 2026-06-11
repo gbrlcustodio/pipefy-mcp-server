@@ -9,7 +9,7 @@ artifacts surfaced here to the SDK.
 
 from __future__ import annotations
 
-__version__ = "0.2.0-beta.2"
+__version__ = "0.2.0-beta.3"
 
 from pipefy_auth.bearer import (
     CallableBearerAuth,

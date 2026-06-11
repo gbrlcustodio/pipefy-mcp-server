@@ -113,7 +113,7 @@ For `card_moved` + `move_single_card`, when `extra_input` includes source and de
 
 ## AI automations
 
-AI automations are separate from traditional rules above. They are prompt-driven and use the internal API.
+AI automations are separate from traditional rules above. They are prompt-driven (`generate_with_ai`) and go through the same public `createAutomation` / `updateAutomation` mutations as traditional rules, using the session's normal auth. No service-account credentials are required.
 
 | Tool | Read-only | Role |
 |------|-----------|------|

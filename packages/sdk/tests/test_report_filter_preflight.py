@@ -14,7 +14,7 @@ def test_report_cards_filter_error_none_passes():
 
 
 def test_report_cards_filter_error_valid_phase_skeleton_passes():
-    assert report_cards_filter_error(EXAMPLE_PHASE_FILTER) is None
+    assert report_cards_filter_error(dict(EXAMPLE_PHASE_FILTER)) is None
 
 
 def test_report_cards_filter_error_nested_group_passes():
@@ -190,3 +190,44 @@ def test_report_cards_filter_error_rejects_blank_query_type():
     )
     assert err is not None
     assert "type must be a non-empty string" in err
+
+
+def test_report_cards_filter_error_rejects_invalid_query_operator():
+    err = report_cards_filter_error(
+        {
+            "operator": "and",
+            "queries": [{"field": "current_phase", "operator": "equals", "value": "1"}],
+        }
+    )
+    assert err is not None
+    assert "operator must be one of" in err
+    assert "equals" in err
+
+
+def test_report_cards_filter_error_rejects_invalid_query_type():
+    err = report_cards_filter_error(
+        {
+            "operator": "and",
+            "queries": [
+                {
+                    "field": "current_phase",
+                    "operator": "eq",
+                    "type": "text",
+                    "value": "1",
+                }
+            ],
+        }
+    )
+    assert err is not None
+    assert "type must be one of" in err
+    assert "text" in err
+
+
+def test_example_phase_filter_is_read_only():
+    try:
+        EXAMPLE_PHASE_FILTER["operator"] = "or"  # type: ignore[index]
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("EXAMPLE_PHASE_FILTER must not allow top-level mutation")
+    assert EXAMPLE_PHASE_FILTER["operator"] == "and"

@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, cast
 
 from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.models.ai_automation import (
+    AutomationConditionInput,
+    AutomationEventParamsInput,
+    CreateAiAutomationInput,
+    UpdateAiAutomationInput,
+)
 from pipefy_sdk.queries.automation_queries import (
     AUTOMATION_SIMULATION_QUERY,
     CREATE_AUTOMATION_MUTATION,
@@ -31,10 +38,62 @@ from pipefy_sdk.services.automation_graphql_types import (
     SimulateAutomationServiceResult,
     UpdateAutomationMutationResult,
 )
+from pipefy_sdk.services.types import AutomationServiceResult
+
+ACTION_ID_GENERATE_WITH_AI = "generate_with_ai"
 
 _AUTOMATION_EVENT_ATTRIBUTE_GRAPHQL_KEYS: tuple[tuple[str, str], ...] = (
     ("automationEventExecutionDatetime", "automation_event_execution_datetime"),
 )
+
+
+def _automation_condition_for_api(
+    condition: AutomationConditionInput,
+) -> dict[str, Any]:
+    """Serialize condition for GraphQL without injecting unset model defaults."""
+    return condition.model_dump(
+        mode="python",
+        exclude_unset=True,
+        exclude_none=True,
+    )
+
+
+def _automation_event_params_for_api(
+    params: AutomationEventParamsInput,
+) -> dict[str, Any]:
+    """Serialize event_params without unset fields or explicit ``None`` values."""
+    return params.model_dump(
+        mode="python",
+        exclude_unset=True,
+        exclude_none=True,
+    )
+
+
+def _ai_params_payload(
+    *,
+    prompt: str | None,
+    field_ids: list[str] | None,
+    skills_ids: list[str] | None,
+) -> dict[str, Any]:
+    """Build the ``aiParams`` body from the fields the caller set (omits ``None``)."""
+    payload: dict[str, Any] = {}
+    if prompt is not None:
+        payload["value"] = prompt
+    if field_ids is not None:
+        payload["fieldIds"] = field_ids
+    if skills_ids is not None:
+        payload["skillsIds"] = skills_ids
+    return payload
+
+
+def _extract_automation_id(raw: Mapping[str, Any], mutation_key: str) -> str:
+    """Pull ``automation.id`` from a create/update mutation payload, or raise."""
+    automation = (raw.get(mutation_key) or {}).get("automation")
+    if not automation or "id" not in automation:
+        raise ValueError(
+            f"Unexpected API payload: automation.id missing from {mutation_key} response"
+        )
+    return str(automation["id"])
 
 
 def normalize_automation_event_attributes(
@@ -333,6 +392,95 @@ class AutomationService(BasePipefyClient):
             action_repo_id=None,
             **extra_input,
         )
+
+    async def create_ai_automation(
+        self, automation_input: CreateAiAutomationInput
+    ) -> AutomationServiceResult:
+        """Create a ``generate_with_ai`` automation via the public ``createAutomation``.
+
+        Builds the ``action_params.aiParams`` envelope expected by Pipefy and
+        delegates to :meth:`create_automation`. The public ``/graphql`` endpoint
+        accepts ``action_id="generate_with_ai"`` under the caller's normal session
+        auth, with no internal API or service-account credentials required.
+
+        Args:
+            automation_input: Validated create input. ``condition`` is always
+                present on the mutation (the model supplies ``DEFAULT_CONDITION``
+                when the caller did not set one).
+
+        Raises:
+            ValueError: When the API response is missing ``automation.id``.
+        """
+        event_params = automation_input.event_params
+        raw = await self.create_automation(
+            automation_input.pipe_id,
+            automation_input.name,
+            automation_input.event_id,
+            ACTION_ID_GENERATE_WITH_AI,
+            action_repo_id=automation_input.action_repo_id,
+            action_params={
+                "aiParams": _ai_params_payload(
+                    prompt=automation_input.prompt,
+                    field_ids=automation_input.field_ids,
+                    skills_ids=automation_input.skills_ids,
+                )
+            },
+            condition=_automation_condition_for_api(automation_input.condition),
+            event_params=(
+                _automation_event_params_for_api(event_params)
+                if event_params is not None
+                else None
+            ),
+        )
+        automation_id = _extract_automation_id(raw, "createAutomation")
+        return {
+            "automation_id": automation_id,
+            "message": f"AI Automation created successfully. ID: {automation_id}",
+        }
+
+    async def update_ai_automation(
+        self, automation_input: UpdateAiAutomationInput
+    ) -> AutomationServiceResult:
+        """Update a ``generate_with_ai`` automation via the public ``updateAutomation``.
+
+        Only the fields the caller set are patched. Delegates to
+        :meth:`update_automation` over the public ``/graphql`` endpoint.
+
+        Args:
+            automation_input: Validated update input.
+
+        Raises:
+            ValueError: When the API response is missing ``automation.id``.
+        """
+        ai_params = _ai_params_payload(
+            prompt=automation_input.prompt,
+            field_ids=automation_input.field_ids,
+            skills_ids=automation_input.skills_ids,
+        )
+        event_params = automation_input.event_params
+        condition = automation_input.condition
+        # ``update_automation`` drops ``None`` attrs, so unset fields fall away here.
+        raw = await self.update_automation(
+            automation_input.automation_id,
+            name=automation_input.name,
+            active=automation_input.active,
+            action_params={"aiParams": ai_params} if ai_params else None,
+            event_params=(
+                _automation_event_params_for_api(event_params)
+                if event_params is not None
+                else None
+            ),
+            condition=(
+                _automation_condition_for_api(condition)
+                if condition is not None
+                else None
+            ),
+        )
+        automation_id = _extract_automation_id(raw, "updateAutomation")
+        return {
+            "automation_id": automation_id,
+            "message": f"AI Automation updated successfully. ID: {automation_id}",
+        }
 
     async def update_automation(
         self,

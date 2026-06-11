@@ -29,7 +29,6 @@ from pipefy_sdk.queries.card_queries import (
     INTERNAL_DELETE_CARD_RELATION_MUTATION,
 )
 from pipefy_sdk.services.ai_agent_service import AiAgentService
-from pipefy_sdk.services.ai_automation_service import AiAutomationService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_graphql_types import (
     AutomationActionRow,
@@ -125,27 +124,13 @@ class PipefyClient:
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
-        self._ai_automation_service: AiAutomationService | None = None
         self._internal_api_client: InternalApiClient | None = None
         self._portal_service = PortalService(settings=settings, auth=auth)
-
-    @property
-    def ai_automation_available(self) -> bool:
-        """Whether the AI Automation service is configured (OAuth credentials present)."""
-        return self._ai_automation_service is not None
 
     @property
     def internal_api_available(self) -> bool:
         """Whether the internal API client is configured (OAuth credentials present)."""
         return self._internal_api_client is not None
-
-    def set_ai_automation_service(self, service: AiAutomationService) -> None:
-        """Attach an AI automation service (requires OAuth credentials).
-
-        Args:
-            service: Configured :class:`AiAutomationService` instance.
-        """
-        self._ai_automation_service = service
 
     def set_internal_api_client(self, client: InternalApiClient) -> None:
         """Attach the internal API client (requires OAuth credentials).
@@ -812,16 +797,18 @@ class PipefyClient:
     async def create_ai_automation(
         self, automation_input: CreateAiAutomationInput
     ) -> AutomationServiceResult:
-        """Create an AI Automation (generate_with_ai action via internal API)."""
-        assert self._ai_automation_service is not None  # noqa: S101
-        return await self._ai_automation_service.create_automation(automation_input)
+        """Create an AI Automation (``generate_with_ai``) via the public ``createAutomation``.
+
+        Uses the session's normal auth on the public ``/graphql`` endpoint; no
+        service-account credentials or internal API access are required.
+        """
+        return await self._automation_service.create_ai_automation(automation_input)
 
     async def update_ai_automation(
         self, automation_input: UpdateAiAutomationInput
     ) -> AutomationServiceResult:
-        """Update an existing AI Automation via internal API."""
-        assert self._ai_automation_service is not None  # noqa: S101
-        return await self._ai_automation_service.update_automation(automation_input)
+        """Update an existing AI Automation via the public ``updateAutomation``."""
+        return await self._automation_service.update_ai_automation(automation_input)
 
     async def get_pipe_members(self, pipe_id: str | int) -> dict:
         """Get the members of a pipe."""

@@ -21,6 +21,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **SDK / MCP / CLI (label color)**: `create_label` and `update_label` validate `color` as hex `#RGB` or `#RRGGBB` in the SDK before GraphQL (e.g. `red` is rejected with `expected #RGB or #RRGGBB hex color, received 'red'`). CLI rejects invalid color before auth.
 - **Docs / install**: canonical GitHub repository is [`pipefy/ai-toolkit`](https://github.com/pipefy/ai-toolkit). Install snippets, `install.sh`, MCP setup links, Claude plugin metadata, and `.mcp.json` now point at `github.com/pipefy/ai-toolkit` (GitHub may still redirect older URLs).
 
+## [0.2.0-beta.3] - 2026-06-03
+
+### Fixed
+
+- **SDK / MCP / CLI**: AI automation create and update no longer require service-account credentials. `generate_with_ai` create/update were routed through the `/internal_api` endpoint and gated behind a service-account check, so a normal user session (stored session from `pipefy auth login`, or a `--token` bearer) could not create or update an AI automation, which broke install flows that provision an AI triage automation. Both now go through the public `createAutomation` / `updateAutomation` mutations under the caller's normal auth, matching the read, list, and delete paths. Closes #272.
+
+### Changed
+
+- **SDK**: the AI automation surface moved from `AiAutomationService` to `AutomationService.create_ai_automation` / `update_ai_automation`, mirroring the existing `create_send_task_automation` pattern. `AiAutomationService`, `ai_automation_queries.py`, the `ai_automation_available` property, and `set_ai_automation_service` are removed; `PipefyClient` delegates to `AutomationService`. `InternalApiClient` stays (still used by `delete_card_relation`).
+
 ## [0.2.0-beta.2] - 2026-06-02
 
 ### Added

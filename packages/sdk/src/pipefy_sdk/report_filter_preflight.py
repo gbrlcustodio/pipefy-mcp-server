@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any
 
 REPORT_CARDS_FILTER_GROUP_KEYS = frozenset(
@@ -11,6 +13,33 @@ REPORT_CARDS_FILTER_QUERY_KEYS = frozenset(
     {"field", "operator", "value", "type", "label", "id"}
 )
 REPORT_CARDS_FILTER_GROUP_OPERATORS = frozenset({"and", "or"})
+REPORT_CARDS_FILTER_QUERY_OPERATORS = frozenset(
+    {
+        "eq",
+        "not_eq",
+        "contains",
+        "not_contains",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "exists",
+        "not_exists",
+        "unknown",
+        "period",
+    }
+)
+REPORT_CARDS_FILTER_FIELD_TYPES = frozenset(
+    {
+        "email",
+        "number",
+        "string",
+        "group_select",
+        "select",
+        "date",
+        "boolean",
+    }
+)
 
 REPORT_CARDS_FILTER_REJECTED_ROOT_KEYS = frozenset(
     {
@@ -22,17 +51,22 @@ REPORT_CARDS_FILTER_REJECTED_ROOT_KEYS = frozenset(
     }
 )
 
-EXAMPLE_PHASE_FILTER: dict[str, Any] = {
-    "operator": "and",
-    "queries": [
-        {
-            "field": "current_phase",
-            "operator": "eq",
-            "type": "select",
-            "value": "<phase_id>",
-        }
-    ],
-}
+
+def _example_phase_filter_body() -> dict[str, Any]:
+    return {
+        "operator": "and",
+        "queries": [
+            {
+                "field": "current_phase",
+                "operator": "eq",
+                "type": "select",
+                "value": "<phase_id>",
+            }
+        ],
+    }
+
+
+EXAMPLE_PHASE_FILTER: Mapping[str, Any] = MappingProxyType(_example_phase_filter_body())
 
 
 def normalize_report_cards_filter(filter_obj: dict[str, Any]) -> dict[str, Any]:
@@ -96,7 +130,7 @@ def report_cards_filter_error(filter_obj: dict[str, Any] | None) -> str | None:
 
 def _validate_filter_group(node: dict[str, Any], *, path: str) -> str | None:
     if path == "filter":
-        for rejected in REPORT_CARDS_FILTER_REJECTED_ROOT_KEYS:
+        for rejected in sorted(REPORT_CARDS_FILTER_REJECTED_ROOT_KEYS):
             if rejected in node:
                 return (
                     f"filter must use ReportCardsFilter shape (operator + queries), not top-level "
@@ -163,9 +197,17 @@ def _validate_filter_query(node: Any, *, path: str) -> str | None:
 
     op = node.get("operator")
     if op is None:
-        return f"{path}.operator is required (eq, not_eq, contains, ...)."
+        return (
+            f"{path}.operator is required "
+            f"({', '.join(sorted(REPORT_CARDS_FILTER_QUERY_OPERATORS))})."
+        )
     if not isinstance(op, str) or not op.strip():
         return f"{path}.operator must be a non-empty string, received {op!r}."
+    if op not in REPORT_CARDS_FILTER_QUERY_OPERATORS:
+        return (
+            f"{path}.operator must be one of {sorted(REPORT_CARDS_FILTER_QUERY_OPERATORS)!r}, "
+            f"received {op!r}."
+        )
 
     value = node.get("value")
     if value is not None and not isinstance(value, str):
@@ -174,12 +216,17 @@ def _validate_filter_query(node: Any, *, path: str) -> str | None:
         )
 
     field_type = node.get("type")
-    if field_type is not None and (
-        not isinstance(field_type, str) or not field_type.strip()
-    ):
-        return (
-            f"{path}.type must be a non-empty string when set, received {field_type!r}."
-        )
+    if field_type is not None:
+        if not isinstance(field_type, str) or not field_type.strip():
+            return (
+                f"{path}.type must be a non-empty string when set, "
+                f"received {field_type!r}."
+            )
+        if field_type not in REPORT_CARDS_FILTER_FIELD_TYPES:
+            return (
+                f"{path}.type must be one of {sorted(REPORT_CARDS_FILTER_FIELD_TYPES)!r}, "
+                f"received {field_type!r}."
+            )
 
     return None
 

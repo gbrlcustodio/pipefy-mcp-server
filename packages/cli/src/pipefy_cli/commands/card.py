@@ -16,12 +16,15 @@ from pipefy_sdk import (
 from pydantic import ValidationError
 
 from pipefy_cli.commands._common import (
+    _CARDS_PAGE_SIZE_MAX,
+    _CARDS_PAGE_SIZE_MIN,
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     format_card_get_transport_query_error,
     parse_json_value,
     resource_id_argument,
     run_cli_command,
+    validate_cards_page_size,
 )
 
 card_app = typer.Typer(help="Card operations.", no_args_is_help=True)
@@ -36,20 +39,6 @@ def _parse_card_search_json(raw: str | None) -> CardSearch | None:
     if not isinstance(parsed, dict):
         raise typer.BadParameter("--search must be a JSON object")
     return copy_card_search(parsed)
-
-
-_CARDS_FIRST_MIN = 1
-_CARDS_FIRST_MAX = 500
-
-
-def _validate_cards_page_size(first: int | None) -> int | None:
-    if first is None:
-        return None
-    if first < _CARDS_FIRST_MIN or first > _CARDS_FIRST_MAX:
-        raise typer.BadParameter(
-            f"--first must be between {_CARDS_FIRST_MIN} and {_CARDS_FIRST_MAX} (inclusive)."
-        )
-    return first
 
 
 def _parse_fields_json(raw: str | None) -> dict[str, Any] | list[dict[str, Any]] | None:
@@ -137,7 +126,7 @@ def card_list(
     first: int | None = typer.Option(
         None,
         "--first",
-        help=f"Max cards per page ({_CARDS_FIRST_MIN}-{_CARDS_FIRST_MAX}).",
+        help=f"Max cards per page ({_CARDS_PAGE_SIZE_MIN}-{_CARDS_PAGE_SIZE_MAX}).",
     ),
     after: str | None = typer.Option(
         None,
@@ -161,7 +150,7 @@ def card_list(
     if title is not None and title.strip():
         merged["title"] = title.strip()
     effective_search: CardSearch | None = merged if merged else None
-    first_validated = _validate_cards_page_size(first)
+    first_validated = validate_cards_page_size(first)
 
     async def factory(client: PipefyClient):
         return await client.get_cards(

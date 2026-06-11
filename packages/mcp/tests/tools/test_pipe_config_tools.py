@@ -2674,6 +2674,26 @@ async def test_get_phase_cards_count_rejects_invalid_phase_id(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
+async def test_get_phase_cards_count_not_found(
+    pipe_config_session, mock_pipe_config_client, extract_payload
+):
+    mock_pipe_config_client.get_phase.side_effect = ValueError(
+        "phase.cards_count missing from response"
+    )
+
+    async with pipe_config_session as session:
+        result = await session.call_tool(
+            "get_phase_cards_count",
+            {"phase_id": 999},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "not found" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("pipe_config_session", [None], indirect=True)
 async def test_get_phase_cards_count_graphql_error(
     pipe_config_session, mock_pipe_config_client, extract_payload
 ):

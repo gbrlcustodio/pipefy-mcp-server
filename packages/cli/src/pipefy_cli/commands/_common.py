@@ -69,7 +69,9 @@ _CARDS_PAGE_SIZE_MIN = 1
 _CARDS_PAGE_SIZE_MAX = 500
 
 
-def validate_cards_page_size(first: int) -> int:
+def validate_cards_page_size(first: int | None) -> int | None:
+    if first is None:
+        return None
     if first < _CARDS_PAGE_SIZE_MIN or first > _CARDS_PAGE_SIZE_MAX:
         raise typer.BadParameter(
             f"--first must be between {_CARDS_PAGE_SIZE_MIN} and "

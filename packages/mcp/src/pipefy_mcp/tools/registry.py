@@ -20,7 +20,7 @@ from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.table_tools import TableTools
 from pipefy_mcp.tools.webhook_tools import WebhookTools
 
-# 152 tools — keep in sync with docs/parity.md row count and README MCP totals.
+# Keep PIPEFY_TOOL_NAMES in sync with docs/parity.md and README MCP totals.
 PIPEFY_TOOL_NAMES = frozenset(
     {
         "add_card_comment",

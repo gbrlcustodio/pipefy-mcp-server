@@ -287,6 +287,25 @@ def test_phase_count_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     mock_client.get_phase.assert_awaited_once_with("342182335")
 
 
+def test_phase_count_not_found_exit_2(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("ph-count-missing")
+    mock_client = MagicMock()
+    mock_client.get_phase = AsyncMock(
+        side_effect=ValueError("phase.cards_count missing from response")
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["phase", "count", "999", "--json"],
+        )
+    assert result.exit_code == 2
+    assert "not found" in result.stderr.lower()
+    mock_client.get_phase.assert_awaited_once_with("999")
+
+
 def test_phase_cards_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("ph-cards-list")
     payload = {

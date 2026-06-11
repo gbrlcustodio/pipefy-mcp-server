@@ -7,6 +7,10 @@ from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyClient, PipefyId
 from pipefy_sdk.label_color import normalize_label_color
+from pipefy_sdk.phase_inventory import (
+    get_phase_not_found_message,
+    is_get_phase_not_found_error,
+)
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
@@ -416,7 +420,7 @@ class PipeConfigTools:
         ) -> dict[str, Any]:
             """Return the native ``Phase.cards_count`` for a phase (fast inventory).
 
-            Uses the schema scalar — no card enumeration. On the **start-form** phase,
+            Uses the schema scalar; no card enumeration. On the **start-form** phase,
             ``cards_count`` may be **0** while cards still exist; use ``get_phase_cards``
             to list or verify inventory when the count looks wrong.
 
@@ -435,6 +439,13 @@ class PipeConfigTools:
                 return err
             try:
                 payload = await client.get_phase(phase_id_str)
+            except ValueError as exc:
+                if is_get_phase_not_found_error(exc):
+                    return build_pipe_tool_error_payload(
+                        message=get_phase_not_found_message(phase_id_str),
+                        code="NOT_FOUND",
+                    )
+                raise
             except Exception as exc:  # noqa: BLE001
                 return handle_pipe_config_tool_graphql_error(
                     exc,
@@ -476,8 +487,9 @@ class PipeConfigTools:
                 debug: When True, append GraphQL codes and correlation_id to errors.
 
             Returns:
-                GraphQL ``phase`` object with ``cards`` connection (``edges``, ``pageInfo``,
-                ``totalCount``). When unified envelope is enabled, includes pagination hints.
+                Query-root dict ``{"phase": {...}}`` with a ``cards`` connection
+                (``edges``, ``pageInfo``, ``totalCount``). With unified envelope enabled,
+                that dict is under ``data`` and includes pagination hints.
             """
             phase_id_str, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
@@ -1064,8 +1076,8 @@ class PipeConfigTools:
             Args:
                 pipe_id: Pipe that will receive the label.
                 name: Label name.
-                color: Label color as hex ``#RRGGBB`` (e.g. ``#E50000``, ``#FF0000``);
-                    color names such as ``red`` are rejected before GraphQL.
+                color: Label color as hex ``#RGB`` or ``#RRGGBB`` (e.g. ``#F00``,
+                    ``#FF0000``); color names such as ``red`` are rejected before GraphQL.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
@@ -1129,8 +1141,8 @@ class PipeConfigTools:
             Args:
                 label_id: Label ID to update.
                 name: New label name (non-empty).
-                color: New label color as hex ``#RRGGBB`` (e.g. ``#E50000``); color
-                    names are rejected before GraphQL.
+                color: New label color as hex ``#RGB`` or ``#RRGGBB`` (e.g. ``#F00``);
+                    color names are rejected before GraphQL.
                 extra_input: Additional UpdateLabelInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """

@@ -6,6 +6,10 @@ from typing import Any
 
 import typer
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.phase_inventory import (
+    get_phase_not_found_message,
+    is_get_phase_not_found_error,
+)
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
@@ -88,7 +92,12 @@ def phase_count(
     """
 
     async def factory(client: PipefyClient):
-        return await client.get_phase(phase_id)
+        try:
+            return await client.get_phase(phase_id)
+        except ValueError as exc:
+            if is_get_phase_not_found_error(exc):
+                raise ValueError(get_phase_not_found_message(phase_id)) from exc
+            raise
 
     run_cli_command(ctx, json_out, factory)
 

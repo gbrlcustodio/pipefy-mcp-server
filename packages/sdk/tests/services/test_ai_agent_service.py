@@ -33,14 +33,14 @@ UUID_PATTERN = re.compile(r"%\{action:([a-f0-9-]{36})\}")
 
 @pytest.mark.unit
 def test_get_ai_agent_query_includes_email_template_metadata_fields():
-    printed = print_ast(GET_AI_AGENT_QUERY)
+    printed = print_ast(GET_AI_AGENT_QUERY.document)
     assert "emailTemplateId" in printed
     assert "allowTemplateModifications" in printed
 
 
 @pytest.mark.unit
 def test_update_ai_agent_mutation_includes_email_template_metadata_fields():
-    printed = print_ast(UPDATE_AI_AGENT_MUTATION)
+    printed = print_ast(UPDATE_AI_AGENT_MUTATION.document)
     assert "emailTemplateId" in printed
     assert "allowTemplateModifications" in printed
 

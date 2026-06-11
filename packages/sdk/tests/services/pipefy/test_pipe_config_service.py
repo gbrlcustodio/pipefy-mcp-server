@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
+from graphql import print_ast
 from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.pipe_config_queries import (
@@ -934,7 +935,7 @@ async def test_get_field_conditions_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_FIELD_CONDITIONS_QUERY
-    assert "actionId" in GET_FIELD_CONDITIONS_QUERY.loc.source.body
+    assert "actionId" in print_ast(GET_FIELD_CONDITIONS_QUERY.document)
     assert variables == {"phaseId": "404"}
     assert result == api_payload
 
@@ -956,7 +957,7 @@ async def test_get_field_condition_success(mock_settings):
 
     query, variables = service.execute_query.call_args[0]
     assert query is GET_FIELD_CONDITION_QUERY
-    assert "actionId" in GET_FIELD_CONDITION_QUERY.loc.source.body
+    assert "actionId" in print_ast(GET_FIELD_CONDITION_QUERY.document)
     assert variables == {"id": "fc-2"}
     assert result == api_payload
 

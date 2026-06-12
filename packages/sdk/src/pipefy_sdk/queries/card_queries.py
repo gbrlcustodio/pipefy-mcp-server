@@ -271,7 +271,7 @@ UPDATE_FIELDS_VALUES_MUTATION = gql(
 # (core_api / internal_v1), not the public API. These are plain strings because
 # ``InternalApiClient.execute_query`` takes a raw string and parses it with
 # ``gql()`` itself before sending, unlike the public client which expects an
-# already-parsed ``DocumentNode``. Same pattern as ``portal_internal_queries.py``.
+# already-parsed ``GraphQLRequest`` from ``gql()``. Same pattern as ``portal_internal_queries.py``.
 # ---------------------------------------------------------------------------
 
 INTERNAL_DELETE_CARD_RELATION_MUTATION = """

@@ -34,8 +34,11 @@ def unwrap_relay_connection_nodes(connection: Any) -> list[dict[str, Any]]:
 def _graphql_request_with_variables(
     query: Any, variables: dict[str, Any]
 ) -> GraphQLRequest:
-    """Bind variables on a fresh request so shared ``gql()`` constants stay immutable."""
-    return GraphQLRequest(query, variable_values=variables or None)
+    """Bind variables on a fresh request so shared ``gql()`` constants stay immutable.
+
+    An empty ``variables`` dict omits ``variable_values`` (``None``) on the request.
+    """
+    return GraphQLRequest(query, variable_values=variables if variables else None)
 
 
 class BasePipefyClient:

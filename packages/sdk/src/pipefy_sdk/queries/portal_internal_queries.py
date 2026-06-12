@@ -3,7 +3,7 @@
 Mutations are plain strings (not ``gql()``) because
 ``InternalApiClient.execute_query`` takes a raw string and parses it with
 ``gql()`` itself before sending, unlike the public client which expects an
-already-parsed ``DocumentNode``.
+already-parsed ``GraphQLRequest`` from ``gql()``.
 """
 
 from __future__ import annotations

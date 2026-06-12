@@ -73,6 +73,28 @@ async def test_execute_query_passes_variables_to_session(valid_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_execute_query_omits_variable_values_for_empty_dict(valid_settings):
+    """Empty variables omits variable_values on the bound GraphQLRequest."""
+    query = _sample_query()
+    variables: dict = {}
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"ok": True})
+
+    with patch("pipefy_sdk.base_client.Client") as mock_client_cls:
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        base = BasePipefyClient(settings=valid_settings, auth=_bearer())
+        await base.execute_query(query, variables)
+
+    request = mock_session.execute.call_args[0][0]
+    assert isinstance(request, GraphQLRequest)
+    assert request.variable_values is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_execute_query_reuse_fetches_once_then_passes_cached_schema(
     valid_settings,
 ):

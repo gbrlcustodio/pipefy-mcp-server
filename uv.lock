@@ -852,7 +852,7 @@ requires-dist = [
     { name = "keyring", specifier = ">=24" },
     { name = "keyrings-alt", specifier = ">=5" },
     { name = "pipefy-infra", editable = "packages/infra" },
-    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "pydantic-settings", specifier = ">=2.8.1" },
 ]
 
@@ -914,7 +914,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "pydantic-settings", specifier = ">=2.8.1" },
 ]
 
@@ -954,7 +954,7 @@ requires-dist = [
     { name = "mcp", extras = ["cli"], specifier = ">=1.25.0" },
     { name = "pipefy-auth", editable = "packages/auth" },
     { name = "pipefy-sdk", editable = "packages/sdk" },
-    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "pydantic-settings", specifier = ">=2.8.1" },
 ]
 
@@ -1000,7 +1000,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pipefy-infra", editable = "packages/infra" },
-    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "pydantic", specifier = ">=2.13.4,<3" },
     { name = "pydantic-settings", specifier = ">=2.8.1" },
     { name = "rapidfuzz", specifier = ">=3.14.3" },
 ]

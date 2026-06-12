@@ -18,6 +18,29 @@ def _bearer() -> StaticBearerAuth:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_execute_query_builds_transport_with_tls_verification(valid_settings):
+    """HTTPXAsyncTransport must explicitly enable TLS certificate verification."""
+    query = object()
+    variables: dict = {}
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"ok": True})
+
+    with (
+        patch("pipefy_sdk.base_client.HTTPXAsyncTransport") as mock_transport_cls,
+        patch("pipefy_sdk.base_client.Client") as mock_client_cls,
+    ):
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        base = BasePipefyClient(settings=valid_settings, auth=_bearer())
+        await base.execute_query(query, variables)
+
+    mock_transport_cls.assert_called_once()
+    assert mock_transport_cls.call_args.kwargs["verify"] is True
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_execute_query_passes_variables_to_session(valid_settings):
     """Test execute_query creates a session and passes variable_values unchanged."""
     query = object()

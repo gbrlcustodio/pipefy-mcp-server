@@ -6,6 +6,12 @@ Releases are versioned in lockstep across workspace members (`pipefy-sdk`, `pipe
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **SDK**: GraphQL `HTTPXAsyncTransport` now sets `verify=True` explicitly to pin TLS verification on, independent of httpx's default.
+
 ## [0.2.0-beta.3] - 2026-06-03
 
 ### Fixed

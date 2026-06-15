@@ -270,9 +270,7 @@ UPDATE_FIELDS_VALUES_MUTATION = gql(
 #
 # ``deleteCardRelation`` is only available on the internal GraphQL schema
 # (core_api / internal_v1), not the public API. It runs through
-# ``InternalApiClient``, which accepts a ``gql()`` ``GraphQLRequest`` like every
-# other client (gql 4 returns ``GraphQLRequest`` from ``gql()``). Same pattern as
-# ``portal_internal_queries.py``.
+# ``InternalApiClient``, which accepts a ``gql()`` query like every other client.
 # ---------------------------------------------------------------------------
 
 INTERNAL_DELETE_CARD_RELATION_MUTATION = gql("""

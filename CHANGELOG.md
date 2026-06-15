@@ -20,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **SDK / MCP / CLI (label color)**: `create_label` and `update_label` validate `color` as hex `#RGB` or `#RRGGBB` in the SDK before GraphQL (e.g. `red` is rejected with `expected #RGB or #RRGGBB hex color, received 'red'`). CLI rejects invalid color before auth.
 - **Docs / install**: canonical GitHub repository is [`pipefy/ai-toolkit`](https://github.com/pipefy/ai-toolkit). Install snippets, `install.sh`, MCP setup links, Claude plugin metadata, and `.mcp.json` now point at `github.com/pipefy/ai-toolkit` (GitHub may still redirect older URLs).
+- **SDK**: GraphQL `HTTPXAsyncTransport` now sets `verify=True` explicitly to pin TLS verification on, independent of httpx's default.
+- **Deps**: upgraded `pydantic` to 2.13.4 (`pydantic-core` 2.46.4, `pydantic-settings` 2.14.1) across workspace packages.
+- **Deps**: upgraded `gql[httpx]` to 4.0.0; `gql()` constants are `GraphQLRequest` objects (use `.document` for AST introspection in tests).
 
 ## [0.2.0-beta.3] - 2026-06-03
 

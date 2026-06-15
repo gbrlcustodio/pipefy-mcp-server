@@ -1,7 +1,8 @@
 """GraphQL mutations for portal sub-portals (internal_api endpoint).
 
 These run through ``InternalApiClient``, which accepts a ``gql()``
-``DocumentNode`` like every other client.
+``GraphQLRequest`` like every other client (gql 4 returns ``GraphQLRequest``
+from ``gql()``).
 """
 
 from __future__ import annotations

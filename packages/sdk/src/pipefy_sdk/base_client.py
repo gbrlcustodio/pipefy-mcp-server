@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import Any, ClassVar
 
 from gql import Client
+from gql.graphql_request import GraphQLRequest
 from gql.transport.exceptions import TransportQueryError
 from gql.transport.httpx import HTTPXAsyncTransport
 from graphql import GraphQLSchema
@@ -28,6 +29,16 @@ def unwrap_relay_connection_nodes(connection: Any) -> list[dict[str, Any]]:
         if isinstance(node, dict):
             nodes.append(node)
     return nodes
+
+
+def _graphql_request_with_variables(
+    query: Any, variables: dict[str, Any]
+) -> GraphQLRequest:
+    """Bind variables on a fresh request so shared ``gql()`` constants stay immutable.
+
+    An empty ``variables`` dict omits ``variable_values`` (``None``) on the request.
+    """
+    return GraphQLRequest(query, variable_values=variables if variables else None)
 
 
 class BasePipefyClient:
@@ -80,6 +91,7 @@ class BasePipefyClient:
             url=self._graphql_url,
             auth=self._auth,
             timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
+            verify=True,
         )
         try:
             if self.settings.gql_reuse_fetched_graphql_schema:
@@ -92,7 +104,7 @@ class BasePipefyClient:
                             )
                             async with client as session:
                                 result = await session.execute(
-                                    query, variable_values=variables
+                                    _graphql_request_with_variables(query, variables)
                                 )
                             if client.schema is not None:
                                 self._fetched_gql_schema = client.schema
@@ -103,12 +115,16 @@ class BasePipefyClient:
                     fetch_schema_from_transport=False,
                 )
                 async with reuse_client as session:
-                    return await session.execute(query, variable_values=variables)
+                    return await session.execute(
+                        _graphql_request_with_variables(query, variables)
+                    )
 
             async with Client(
                 transport=transport, fetch_schema_from_transport=False
             ) as session:
-                return await session.execute(query, variable_values=variables)
+                return await session.execute(
+                    _graphql_request_with_variables(query, variables)
+                )
         except TransportQueryError as exc:
             if self._on_graphql_error is None:
                 raise

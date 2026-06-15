@@ -92,7 +92,7 @@ def _build_attachment(tmp_path: Path, *, name: str = "report.pdf") -> Attachment
 
 @pytest.mark.unit
 def test_create_presigned_url_mutation_document_shape():
-    doc = print_ast(CREATE_PRESIGNED_URL_MUTATION)
+    doc = print_ast(CREATE_PRESIGNED_URL_MUTATION.document)
     lowered = doc.lower()
     stripped_lines = {ln.strip() for ln in doc.splitlines()}
     assert "createpresignedurl" in lowered

@@ -11,7 +11,7 @@ import httpx
 import pytest
 import respx
 from gql import gql
-from gql.transport.exceptions import TransportServerError
+from gql.transport.exceptions import TransportConnectionFailed, TransportServerError
 from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.services.internal_api_client import InternalApiClient
@@ -216,7 +216,7 @@ async def test_execute_query_raises_on_timeout(respx_mock):
         side_effect=httpx.TimeoutException("Request timed out")
     )
 
-    with pytest.raises(httpx.TimeoutException):
+    with pytest.raises(TransportConnectionFailed, match="timed out"):
         await _build_client().execute_query(gql("query { x }"), {})
 
 

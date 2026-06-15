@@ -75,7 +75,7 @@ async def test_create_card_with_phase_id_sends_create_card_input(mock_settings):
     query_used = service.execute_query.call_args[0][0]
     variables = service.execute_query.call_args[0][1]
     assert query_used is CREATE_CARD_MUTATION
-    assert "CreateCardInput" in CREATE_CARD_MUTATION.loc.source.body
+    assert "CreateCardInput" in CREATE_CARD_MUTATION.document.loc.source.body
     assert variables == {
         "input": {
             "pipe_id": str(pipe_id),
@@ -128,7 +128,7 @@ async def test_create_card_without_phase_id_uses_create_card_input(mock_settings
     query_used = service.execute_query.call_args[0][0]
     variables = service.execute_query.call_args[0][1]
     assert query_used is CREATE_CARD_MUTATION
-    assert "CreateCardInput" in CREATE_CARD_MUTATION.loc.source.body
+    assert "CreateCardInput" in CREATE_CARD_MUTATION.document.loc.source.body
     assert variables == {
         "input": {
             "pipe_id": str(pipe_id),

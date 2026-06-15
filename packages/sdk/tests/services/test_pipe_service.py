@@ -64,7 +64,7 @@ async def test_get_pipe_accepts_alphanumeric_id(mock_settings):
 
 @pytest.mark.unit
 def test_get_pipe_query_selects_cards_count_on_phases():
-    printed = print_ast(GET_PIPE_QUERY)
+    printed = print_ast(GET_PIPE_QUERY.document)
     assert "cards_count" in printed
     assert printed.count("cards_count") >= 1
 
@@ -520,20 +520,20 @@ async def test_search_pipes_truncates_per_org_when_api_returns_fewer_than_pipes_
 
 @pytest.mark.unit
 def test_search_pipes_query_selects_pipes_count():
-    printed = print_ast(SEARCH_PIPES_QUERY)
+    printed = print_ast(SEARCH_PIPES_QUERY.document)
     assert "pipesCount" in printed
 
 
 @pytest.mark.unit
 def test_get_phase_fields_query_selects_internal_id_and_uuid():
-    printed = print_ast(GET_PHASE_FIELDS_QUERY)
+    printed = print_ast(GET_PHASE_FIELDS_QUERY.document)
     assert "internal_id" in printed
     assert "uuid" in printed
 
 
 @pytest.mark.unit
 def test_get_phase_allowed_moves_query_requests_transition_field():
-    printed = print_ast(GET_PHASE_ALLOWED_MOVES_QUERY)
+    printed = print_ast(GET_PHASE_ALLOWED_MOVES_QUERY.document)
     assert "cards_can_be_moved_to_phases" in printed
 
 
@@ -582,7 +582,7 @@ async def test_get_phase_cards_count_raises_when_missing(mock_settings):
 
 
 def test_get_phase_query_selects_phase_row():
-    query_text = print_ast(GET_PHASE_QUERY)
+    query_text = print_ast(GET_PHASE_QUERY.document)
     assert "cards_count" in query_text
     assert "name" in query_text
     # No card enumeration — must not touch the CardConnection edges/nodes.
@@ -627,7 +627,7 @@ async def test_get_phase_cards_count_delegates_to_get_phase(mock_settings):
 
 @pytest.mark.unit
 def test_get_phase_cards_query_requests_pagination_and_fields():
-    query_text = print_ast(GET_PHASE_CARDS_QUERY)
+    query_text = print_ast(GET_PHASE_CARDS_QUERY.document)
     assert "first" in query_text
     assert "after" in query_text
     assert "totalCount" in query_text

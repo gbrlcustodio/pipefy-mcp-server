@@ -101,12 +101,21 @@ def automation_create(
         "--action-repo",
         help="Destination pipe id for cross-pipe actions (defaults to --pipe).",
     ),
+    to_phase: str | None = typer.Option(
+        None,
+        "--to-phase",
+        help=(
+            "Destination phase id for a move_single_card action; "
+            "shortcut for --extra '{\"action_params\":{\"to_phase_id\":\"...\"}}'."
+        ),
+    ),
     extra: str | None = typer.Option(
         None,
         "--extra",
         help=(
             "Optional JSON object of extra CreateAutomationInput fields, "
-            "snake_case API names (e.g. action_params, event_params)."
+            "snake_case API names (e.g. action_params, event_params); "
+            "camelCase keys are also accepted."
         ),
     ),
     json_out: bool = typer.Option(
@@ -118,6 +127,14 @@ def automation_create(
 ) -> None:
     """Create an automation rule (``create_automation``)."""
     extra_obj = parse_json_object(extra, "--extra")
+    if to_phase is not None:
+        if extra_obj is not None and (
+            "action_params" in extra_obj or "actionParams" in extra_obj
+        ):
+            raise typer.BadParameter(
+                "Pass either --to-phase or action_params in --extra, not both."
+            )
+        extra_obj = {**(extra_obj or {}), "action_params": {"to_phase_id": to_phase}}
 
     async def factory(client: PipefyClient):
         return await client.create_automation(
@@ -142,7 +159,7 @@ def automation_update(
         "--extra",
         help=(
             "JSON object of fields to patch (UpdateAutomationInput), "
-            "snake_case API names."
+            "snake_case API names; camelCase keys are also accepted."
         ),
     ),
     json_out: bool = typer.Option(

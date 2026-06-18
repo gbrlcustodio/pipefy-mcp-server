@@ -24,6 +24,7 @@ from pipefy_sdk.services.automation_service import (
     AutomationService,
     _format_automation_error_details,
     normalize_automation_event_attributes,
+    normalize_automation_input_keys,
 )
 from pipefy_sdk.settings import PipefySettings
 
@@ -100,6 +101,58 @@ class TestFormatAutomationErrorDetails:
             [{"messages": ["", "real error", ""]}]
         )
         assert result == "real error"
+
+
+## ---------------------------------------------------------------------------
+## normalize_automation_input_keys
+## ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestNormalizeAutomationInputKeys:
+    def test_remaps_camelcase_top_level_keys_to_snake_case(self):
+        result = normalize_automation_input_keys(
+            {
+                "actionParams": {"to_phase_id": "ph-1"},
+                "eventParams": {"to_phase_id": "ph-0"},
+                "actionId": "move_single_card",
+                "eventId": "card_moved",
+                "eventRepoId": "p1",
+                "actionRepoId": "p2",
+            }
+        )
+        assert result == {
+            "action_params": {"to_phase_id": "ph-1"},
+            "event_params": {"to_phase_id": "ph-0"},
+            "action_id": "move_single_card",
+            "event_id": "card_moved",
+            "event_repo_id": "p1",
+            "action_repo_id": "p2",
+        }
+
+    def test_leaves_snake_case_keys_unchanged(self):
+        attrs = {"action_params": {"x": 1}, "condition": {"y": 2}, "active": False}
+        assert normalize_automation_input_keys(attrs) == attrs
+
+    def test_does_not_touch_nested_camelcase_payloads(self):
+        result = normalize_automation_input_keys(
+            {"actionParams": {"taskParams": {"title": "T"}, "fromPhaseId": "ph"}}
+        )
+        assert result == {
+            "action_params": {"taskParams": {"title": "T"}, "fromPhaseId": "ph"}
+        }
+
+    def test_passes_through_unknown_keys(self):
+        assert normalize_automation_input_keys({"name": "N", "sampleCardId": "c1"}) == {
+            "name": "N",
+            "sampleCardId": "c1",
+        }
+
+    def test_explicit_snake_case_wins_over_camelcase_alias(self):
+        result = normalize_automation_input_keys(
+            {"action_params": {"keep": True}, "actionParams": {"drop": True}}
+        )
+        assert result == {"action_params": {"keep": True}}
 
 
 ## ---------------------------------------------------------------------------
@@ -517,6 +570,28 @@ async def test_create_automation_active_false_via_attrs(mock_settings):
     await service.create_automation("p1", "Off", "e", "a", **{"active": False})
     inp = service.execute_query.call_args[0][1]["input"]
     assert inp["active"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_automation_normalizes_camelcase_action_params(mock_settings):
+    """camelCase ``actionParams`` from --extra reaches the API as ``action_params``."""
+    created = {
+        "createAutomation": {
+            "automation": {"id": "a-move", "name": "move", "active": False},
+        },
+    }
+    service = _make_service(mock_settings, created)
+    await service.create_automation(
+        "p1",
+        "move",
+        "card_created",
+        "move_single_card",
+        **{"actionParams": {"to_phase_id": "ph-1"}},
+    )
+    inp = service.execute_query.call_args[0][1]["input"]
+    assert inp["action_params"] == {"to_phase_id": "ph-1"}
+    assert "actionParams" not in inp
 
 
 @pytest.mark.unit

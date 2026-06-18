@@ -46,6 +46,32 @@ _AUTOMATION_EVENT_ATTRIBUTE_GRAPHQL_KEYS: tuple[tuple[str, str], ...] = (
     ("automationEventExecutionDatetime", "automation_event_execution_datetime"),
 )
 
+_AUTOMATION_INPUT_KEY_ALIASES: dict[str, str] = {
+    "actionParams": "action_params",
+    "eventParams": "event_params",
+    "actionId": "action_id",
+    "eventId": "event_id",
+    "eventRepoId": "event_repo_id",
+    "actionRepoId": "action_repo_id",
+}
+
+
+def normalize_automation_input_keys(attrs: Mapping[str, Any]) -> dict[str, Any]:
+    """Map camelCase top-level automation input keys to the snake_case names the API requires.
+
+    Only the top-level CreateAutomationInput/UpdateAutomationInput fields are remapped.
+    Nested payloads under ``action_params``/``event_params`` keep their camelCase keys
+    (``taskParams``, ``aiParams``, ``fromPhaseId``, ...), which the API expects there.
+    When both spellings of a field are supplied, the explicit snake_case key wins.
+    """
+    normalized: dict[str, Any] = {}
+    for key, value in attrs.items():
+        canonical = _AUTOMATION_INPUT_KEY_ALIASES.get(key, key)
+        if canonical != key and canonical in attrs:
+            continue
+        normalized[canonical] = value
+    return normalized
+
 
 def _automation_condition_for_api(
     condition: AutomationConditionInput,
@@ -330,7 +356,7 @@ class AutomationService(BasePipefyClient):
             "event_repo_id": pipe_id,
             "action_repo_id": action_repo_id or pipe_id,
         }
-        for key, value in attrs.items():
+        for key, value in normalize_automation_input_keys(attrs).items():
             if value is not None:
                 input_obj[key] = value
         if "active" not in input_obj:
@@ -494,7 +520,7 @@ class AutomationService(BasePipefyClient):
             **attrs: Fields to patch (API key names). ``None`` values are omitted.
         """
         input_obj: dict[str, Any] = {"id": automation_id}
-        for key, value in attrs.items():
+        for key, value in normalize_automation_input_keys(attrs).items():
             if value is not None:
                 input_obj[key] = value
         raw = await self.execute_query(
@@ -551,7 +577,7 @@ class AutomationService(BasePipefyClient):
             input_obj["condition"] = condition
         if name is not None:
             input_obj["name"] = name
-        for key, value in (extra_input or {}).items():
+        for key, value in normalize_automation_input_keys(extra_input or {}).items():
             if value is not None:
                 input_obj[key] = value
         raw_mutation = await self.execute_query(

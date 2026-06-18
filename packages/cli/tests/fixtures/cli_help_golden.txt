@@ -594,13 +594,20 @@ Usage: pipefy automation create [OPTIONS]
 │    --action-repo                               TEXT  Destination pipe id for │
 │                                                      cross-pipe actions      │
 │                                                      (defaults to --pipe).   │
+│    --to-phase                                  TEXT  Destination phase id    │
+│                                                      for a move_single_card  │
+│                                                      action; shortcut for    │
+│                                                      --extra                 │
+│                                                      '{"action_params":{"to… │
 │    --extra                                     TEXT  Optional JSON object of │
 │                                                      extra                   │
 │                                                      CreateAutomationInput   │
 │                                                      fields, snake_case API  │
 │                                                      names (e.g.             │
 │                                                      action_params,          │
-│                                                      event_params).          │
+│                                                      event_params);          │
+│                                                      camelCase keys are also │
+│                                                      accepted.               │
 │    --json                   -j                       Print machine-readable  │
 │                                                      JSON to stdout.         │
 │    --help                                            Show this message and   │
@@ -820,7 +827,8 @@ Usage: pipefy automation update [OPTIONS] AUTOMATION_ID
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --extra          TEXT  JSON object of fields to patch                     │
-│                           (UpdateAutomationInput), snake_case API names.     │
+│                           (UpdateAutomationInput), snake_case API names;     │
+│                           camelCase keys are also accepted.                  │
 │                           [required]                                         │
 │    --json   -j            Print machine-readable JSON to stdout.             │
 │    --help                 Show this message and exit.                        │

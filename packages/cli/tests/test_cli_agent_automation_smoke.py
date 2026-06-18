@@ -681,6 +681,84 @@ def test_automation_create_accepts_event_id_alias(
     assert kwargs.get("active") is False
 
 
+def test_automation_create_to_phase_builds_action_params(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``--to-phase`` is a shortcut that builds the move_single_card action_params."""
+    oauth_env("aut-to-phase")
+    mock_client = MagicMock()
+    mock_client.create_automation = AsyncMock(
+        return_value={"createAutomation": {"automation": {"id": "55"}}}
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation",
+                "create",
+                "--pipe",
+                "1",
+                "--name",
+                "Move",
+                "--event-id",
+                "card_created",
+                "--action-id",
+                "move_single_card",
+                "--to-phase",
+                "ph-9",
+                "--no-active",
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    _, kwargs = mock_client.create_automation.call_args
+    assert kwargs["extra_input"] == {"action_params": {"to_phase_id": "ph-9"}}
+
+
+def test_automation_create_to_phase_conflicts_with_extra_action_params(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``--to-phase`` and an ``action_params`` in ``--extra`` are mutually exclusive."""
+    oauth_env("aut-to-phase-conflict")
+    mock_client = MagicMock()
+    mock_client.create_automation = AsyncMock(
+        return_value={"createAutomation": {"automation": {"id": "55"}}}
+    )
+
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation",
+                "create",
+                "--pipe",
+                "1",
+                "--name",
+                "Move",
+                "--event-id",
+                "card_created",
+                "--action-id",
+                "move_single_card",
+                "--to-phase",
+                "ph-9",
+                "--extra",
+                '{"action_params":{"to_phase_id":"ph-1"}}',
+                "--no-active",
+            ],
+        )
+
+    assert r.exit_code != 0
+    mock_client.create_automation.assert_not_awaited()
+
+
 def _ai_automation_row(prompt: str, field_ids: list[str]) -> dict:
     return {
         "id": "auto-1",

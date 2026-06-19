@@ -759,6 +759,149 @@ def test_automation_create_to_phase_conflicts_with_extra_action_params(
     mock_client.create_automation.assert_not_awaited()
 
 
+def _automation_create_mock():
+    mock_client = MagicMock()
+    mock_client.create_automation = AsyncMock(
+        return_value={"createAutomation": {"automation": {"id": "55"}}}
+    )
+    return mock_client
+
+
+def test_automation_create_event_param_flags_build_event_params(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``--from-phase``/``--in-phase``/``--trigger-fields`` build event_params."""
+    oauth_env("aut-evt-flags")
+    mock_client = _automation_create_mock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation", "create",
+                "--pipe", "1",
+                "--name", "Moved",
+                "--event-id", "card_moved",
+                "--action-id", "move_single_card",
+                "--from-phase", "ph-a",
+                "--in-phase", "ph-b",
+                "--trigger-fields", "f1, f2 ,f3",
+                "--to-phase", "ph-z",
+                "--no-active",
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    _, kwargs = mock_client.create_automation.call_args
+    assert kwargs["extra_input"] == {
+        "action_params": {"to_phase_id": "ph-z"},
+        "event_params": {
+            "fromPhaseId": "ph-a",
+            "inPhaseId": "ph-b",
+            "triggerFieldIds": ["f1", "f2", "f3"],
+        },
+    }
+
+
+def test_automation_create_http_flags_build_action_params(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """HTTP flags map to the API's mixed-case action_params keys."""
+    oauth_env("aut-http-flags")
+    mock_client = _automation_create_mock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation", "create",
+                "--pipe", "1",
+                "--name", "Webhook",
+                "--event-id", "card_created",
+                "--action-id", "send_http_request",
+                "--url", "https://example.com/hook",
+                "--http-method", "POST",
+                "--request-body", '{"k":"v"}',
+                "--headers", '{"Content-Type":"application/json"}',
+                "--no-active",
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    _, kwargs = mock_client.create_automation.call_args
+    assert kwargs["extra_input"] == {
+        "action_params": {
+            "url": "https://example.com/hook",
+            "httpMethod": "POST",
+            "body": '{"k":"v"}',
+            "headers": '{"Content-Type":"application/json"}',
+        }
+    }
+
+
+def test_automation_create_email_template_flag(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """``--email-template`` maps to action_params.email_template_id."""
+    oauth_env("aut-email-flag")
+    mock_client = _automation_create_mock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation", "create",
+                "--pipe", "1",
+                "--name", "Mail",
+                "--event-id", "card_created",
+                "--action-id", "send_email_template",
+                "--email-template", "tmpl-1",
+                "--no-active",
+                "--json",
+            ],
+        )
+
+    assert r.exit_code == 0, r.stderr
+    _, kwargs = mock_client.create_automation.call_args
+    assert kwargs["extra_input"] == {"action_params": {"email_template_id": "tmpl-1"}}
+
+
+def test_automation_create_event_flag_conflicts_with_extra_event_params(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    """Event-param flags and event_params in --extra are mutually exclusive."""
+    oauth_env("aut-evt-conflict")
+    mock_client = _automation_create_mock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "automation", "create",
+                "--pipe", "1",
+                "--name", "Moved",
+                "--event-id", "card_moved",
+                "--action-id", "move_single_card",
+                "--from-phase", "ph-a",
+                "--extra", '{"event_params":{"fromPhaseId":"ph-x"}}',
+                "--no-active",
+            ],
+        )
+
+    assert r.exit_code != 0
+    mock_client.create_automation.assert_not_awaited()
+
+
 def _ai_automation_row(prompt: str, field_ids: list[str]) -> dict:
     return {
         "id": "auto-1",

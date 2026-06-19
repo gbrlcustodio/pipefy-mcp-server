@@ -24,6 +24,55 @@ events_app = typer.Typer(help="Automation trigger catalog.", no_args_is_help=Tru
 actions_app = typer.Typer(help="Automation action catalog.", no_args_is_help=True)
 
 
+def _automation_params_from_flags(
+    *,
+    to_phase: str | None,
+    from_phase: str | None,
+    in_phase: str | None,
+    trigger_fields: str | None,
+    email_template: str | None,
+    url: str | None,
+    http_method: str | None,
+    request_body: str | None,
+    headers: str | None,
+) -> dict[str, dict[str, object]]:
+    """Build the ``action_params``/``event_params`` envelopes from convenience flags.
+
+    Each flag maps to the API's exact-cased nested key. Containers with no flags
+    set are omitted so they never shadow an ``--extra`` payload.
+    """
+    action_params: dict[str, object] = {}
+    if to_phase is not None:
+        action_params["to_phase_id"] = to_phase
+    if email_template is not None:
+        action_params["email_template_id"] = email_template
+    if url is not None:
+        action_params["url"] = url
+    if http_method is not None:
+        action_params["httpMethod"] = http_method
+    if request_body is not None:
+        action_params["body"] = request_body
+    if headers is not None:
+        action_params["headers"] = headers
+
+    event_params: dict[str, object] = {}
+    if from_phase is not None:
+        event_params["fromPhaseId"] = from_phase
+    if in_phase is not None:
+        event_params["inPhaseId"] = in_phase
+    if trigger_fields is not None:
+        event_params["triggerFieldIds"] = [
+            token.strip() for token in trigger_fields.split(",") if token.strip()
+        ]
+
+    built: dict[str, dict[str, object]] = {}
+    if action_params:
+        built["action_params"] = action_params
+    if event_params:
+        built["event_params"] = event_params
+    return built
+
+
 @automation_app.command("list")
 def automation_list(
     ctx: typer.Context,
@@ -104,10 +153,47 @@ def automation_create(
     to_phase: str | None = typer.Option(
         None,
         "--to-phase",
-        help=(
-            "Destination phase id for a move_single_card action; "
-            "shortcut for --extra '{\"action_params\":{\"to_phase_id\":\"...\"}}'."
-        ),
+        help="Move actions: destination phase id (action_params.to_phase_id).",
+    ),
+    from_phase: str | None = typer.Option(
+        None,
+        "--from-phase",
+        help="card_moved/card_left_phase trigger: origin phase id (event_params.fromPhaseId).",
+    ),
+    in_phase: str | None = typer.Option(
+        None,
+        "--in-phase",
+        help="Trigger filter: current phase id (event_params.inPhaseId).",
+    ),
+    trigger_fields: str | None = typer.Option(
+        None,
+        "--trigger-fields",
+        help="field_updated trigger: comma-separated field ids (event_params.triggerFieldIds).",
+    ),
+    email_template: str | None = typer.Option(
+        None,
+        "--email-template",
+        help="send_email_template action: template id (action_params.email_template_id).",
+    ),
+    url: str | None = typer.Option(
+        None,
+        "--url",
+        help="send_http_request action: request URL (action_params.url).",
+    ),
+    http_method: str | None = typer.Option(
+        None,
+        "--http-method",
+        help="send_http_request action: HTTP method, e.g. POST (action_params.httpMethod).",
+    ),
+    request_body: str | None = typer.Option(
+        None,
+        "--request-body",
+        help="send_http_request action: request body (action_params.body).",
+    ),
+    headers: str | None = typer.Option(
+        None,
+        "--headers",
+        help="send_http_request action: request headers (action_params.headers).",
     ),
     extra: str | None = typer.Option(
         None,
@@ -126,15 +212,33 @@ def automation_create(
     ),
 ) -> None:
     """Create an automation rule (``create_automation``)."""
-    extra_obj = parse_json_object(extra, "--extra")
-    if to_phase is not None:
-        if extra_obj is not None and (
-            "action_params" in extra_obj or "actionParams" in extra_obj
-        ):
-            raise typer.BadParameter(
-                "Pass either --to-phase or action_params in --extra, not both."
-            )
-        extra_obj = {**(extra_obj or {}), "action_params": {"to_phase_id": to_phase}}
+    extra_obj = parse_json_object(extra, "--extra") or {}
+    flag_params = _automation_params_from_flags(
+        to_phase=to_phase,
+        from_phase=from_phase,
+        in_phase=in_phase,
+        trigger_fields=trigger_fields,
+        email_template=email_template,
+        url=url,
+        http_method=http_method,
+        request_body=request_body,
+        headers=headers,
+    )
+    if "action_params" in flag_params and (
+        "action_params" in extra_obj or "actionParams" in extra_obj
+    ):
+        raise typer.BadParameter(
+            "Action-param flags (--to-phase, --email-template, --url, ...) "
+            "conflict with action_params in --extra; use one or the other."
+        )
+    if "event_params" in flag_params and (
+        "event_params" in extra_obj or "eventParams" in extra_obj
+    ):
+        raise typer.BadParameter(
+            "Event-param flags (--from-phase, --in-phase, --trigger-fields) "
+            "conflict with event_params in --extra; use one or the other."
+        )
+    extra_input = {**extra_obj, **flag_params} or None
 
     async def factory(client: PipefyClient):
         return await client.create_automation(
@@ -144,7 +248,7 @@ def automation_create(
             action_id,
             active=active,
             action_repo_id=action_repo,
-            extra_input=extra_obj,
+            extra_input=extra_input,
         )
 
     run_cli_command(ctx, json_out, factory)

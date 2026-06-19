@@ -594,11 +594,36 @@ Usage: pipefy automation create [OPTIONS]
 │    --action-repo                               TEXT  Destination pipe id for │
 │                                                      cross-pipe actions      │
 │                                                      (defaults to --pipe).   │
-│    --to-phase                                  TEXT  Destination phase id    │
-│                                                      for a move_single_card  │
-│                                                      action; shortcut for    │
-│                                                      --extra                 │
-│                                                      '{"action_params":{"to… │
+│    --to-phase                                  TEXT  Move actions:           │
+│                                                      destination phase id    │
+│                                                      (action_params.to_phas… │
+│    --from-phase                                TEXT  card_moved/card_left_p… │
+│                                                      trigger: origin phase   │
+│                                                      id                      │
+│                                                      (event_params.fromPhas… │
+│    --in-phase                                  TEXT  Trigger filter: current │
+│                                                      phase id                │
+│                                                      (event_params.inPhaseI… │
+│    --trigger-fields                            TEXT  field_updated trigger:  │
+│                                                      comma-separated field   │
+│                                                      ids                     │
+│                                                      (event_params.triggerF… │
+│    --email-template                            TEXT  send_email_template     │
+│                                                      action: template id     │
+│                                                      (action_params.email_t… │
+│    --url                                       TEXT  send_http_request       │
+│                                                      action: request URL     │
+│                                                      (action_params.url).    │
+│    --http-method                               TEXT  send_http_request       │
+│                                                      action: HTTP method,    │
+│                                                      e.g. POST               │
+│                                                      (action_params.httpMet… │
+│    --request-body                              TEXT  send_http_request       │
+│                                                      action: request body    │
+│                                                      (action_params.body).   │
+│    --headers                                   TEXT  send_http_request       │
+│                                                      action: request headers │
+│                                                      (action_params.headers… │
 │    --extra                                     TEXT  Optional JSON object of │
 │                                                      extra                   │
 │                                                      CreateAutomationInput   │

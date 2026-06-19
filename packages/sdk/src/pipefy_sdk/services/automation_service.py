@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any, cast
 
@@ -55,14 +56,88 @@ _AUTOMATION_INPUT_KEY_ALIASES: dict[str, str] = {
     "actionRepoId": "action_repo_id",
 }
 
+# The API is inconsistently cased inside action_params/event_params: some fields
+# are snake_case (to_phase_id, card_id) and others camelCase (httpMethod,
+# fromPhaseId). These are the canonical spellings the API accepts; we map the
+# opposite-cased spelling of each onto it so hand-written --extra tolerates both.
+_AUTOMATION_ACTION_PARAM_FIELDS: frozenset[str] = frozenset({
+    "to_phase_id",
+    "card_id",
+    "email_template_id",
+    "field_map",
+    "fields_map_order",
+    "aiParams",
+    "aiBehaviorParams",
+    "taskParams",
+    "slaParams",
+    "httpMethod",
+    "body",
+    "headers",
+    "url",
+    "strategy",
+    "oauth2Uuid",
+    "authenticationAddTo",
+    "authenticationKey",
+    "authenticationType",
+    "authenticationValue",
+})
+_AUTOMATION_EVENT_PARAM_FIELDS: frozenset[str] = frozenset({
+    "to_phase_id",
+    "fromPhaseId",
+    "inPhaseId",
+    "kindOfSla",
+    "triggerAutomationId",
+    "triggerFieldIds",
+})
+
+
+def _camel_to_snake(name: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def _snake_to_camel(name: str) -> str:
+    head, *rest = name.split("_")
+    return head + "".join(word[:1].upper() + word[1:] for word in rest)
+
+
+def _build_param_alias_lookup(canonical_fields: frozenset[str]) -> dict[str, str]:
+    lookup: dict[str, str] = {field: field for field in canonical_fields}
+    for field in canonical_fields:
+        lookup.setdefault(_camel_to_snake(field), field)
+        lookup.setdefault(_snake_to_camel(field), field)
+    return lookup
+
+
+_AUTOMATION_ACTION_PARAM_ALIASES = _build_param_alias_lookup(
+    _AUTOMATION_ACTION_PARAM_FIELDS
+)
+_AUTOMATION_EVENT_PARAM_ALIASES = _build_param_alias_lookup(
+    _AUTOMATION_EVENT_PARAM_FIELDS
+)
+
+
+def _canonicalize_param_keys(
+    params: Mapping[str, Any], lookup: Mapping[str, str]
+) -> dict[str, Any]:
+    canonicalized: dict[str, Any] = {}
+    for key, value in params.items():
+        canonical = lookup.get(key, key)
+        if canonical != key and canonical in params:
+            continue
+        canonicalized[canonical] = value
+    return canonicalized
+
 
 def normalize_automation_input_keys(attrs: Mapping[str, Any]) -> dict[str, Any]:
-    """Map camelCase top-level automation input keys to the snake_case names the API requires.
+    """Map automation input keys to the spellings the Pipefy API requires.
 
-    Only the top-level CreateAutomationInput/UpdateAutomationInput fields are remapped.
-    Nested payloads under ``action_params``/``event_params`` keep their camelCase keys
-    (``taskParams``, ``aiParams``, ``fromPhaseId``, ...), which the API expects there.
-    When both spellings of a field are supplied, the explicit snake_case key wins.
+    Top-level CreateAutomationInput/UpdateAutomationInput fields are snake_case
+    (``action_params``, ``event_params``, ...), so their camelCase spellings are
+    remapped. The immediate keys of ``action_params``/``event_params`` are then
+    canonicalized to the API's spelling (which mixes cases: ``to_phase_id`` but
+    ``fromPhaseId``); deeper payloads (``taskParams``, ``aiParams``, ``field_map``
+    entries) are left untouched. When both spellings of a field are supplied, the
+    explicit canonical key wins.
     """
     normalized: dict[str, Any] = {}
     for key, value in attrs.items():
@@ -70,6 +145,16 @@ def normalize_automation_input_keys(attrs: Mapping[str, Any]) -> dict[str, Any]:
         if canonical != key and canonical in attrs:
             continue
         normalized[canonical] = value
+    action_params = normalized.get("action_params")
+    if isinstance(action_params, dict):
+        normalized["action_params"] = _canonicalize_param_keys(
+            action_params, _AUTOMATION_ACTION_PARAM_ALIASES
+        )
+    event_params = normalized.get("event_params")
+    if isinstance(event_params, dict):
+        normalized["event_params"] = _canonicalize_param_keys(
+            event_params, _AUTOMATION_EVENT_PARAM_ALIASES
+        )
     return normalized
 
 

@@ -154,6 +154,54 @@ class TestNormalizeAutomationInputKeys:
         )
         assert result == {"action_params": {"keep": True}}
 
+    def test_canonicalizes_nested_action_param_keys(self):
+        result = normalize_automation_input_keys(
+            {
+                "actionParams": {
+                    "toPhaseId": "ph-1",
+                    "http_method": "POST",
+                    "emailTemplateId": "tmpl-1",
+                }
+            }
+        )
+        assert result == {
+            "action_params": {
+                "to_phase_id": "ph-1",
+                "httpMethod": "POST",
+                "email_template_id": "tmpl-1",
+            }
+        }
+
+    def test_canonicalizes_nested_event_param_keys(self):
+        result = normalize_automation_input_keys(
+            {"event_params": {"from_phase_id": "ph-0", "to_phase_id": "ph-1"}}
+        )
+        assert result == {
+            "event_params": {"fromPhaseId": "ph-0", "to_phase_id": "ph-1"}
+        }
+
+    def test_leaves_unknown_and_deep_nested_keys_untouched(self):
+        result = normalize_automation_input_keys(
+            {
+                "action_params": {
+                    "taskParams": {"title": "T", "recipients": "a@b.com"},
+                    "customField": "x",
+                }
+            }
+        )
+        assert result == {
+            "action_params": {
+                "taskParams": {"title": "T", "recipients": "a@b.com"},
+                "customField": "x",
+            }
+        }
+
+    def test_nested_explicit_canonical_wins_over_alias(self):
+        result = normalize_automation_input_keys(
+            {"action_params": {"to_phase_id": "keep", "toPhaseId": "drop"}}
+        )
+        assert result == {"action_params": {"to_phase_id": "keep"}}
+
 
 ## ---------------------------------------------------------------------------
 ## Service tests

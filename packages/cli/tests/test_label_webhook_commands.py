@@ -26,6 +26,116 @@ def test_label_list_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     assert out["labels"] == [{"id": "1", "name": "Bug"}]
 
 
+def test_label_create_rejects_non_hex_color_without_auth(
+    runner, clean_pipefy_env, saved_cwd
+):
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "label",
+                "create",
+                "--pipe",
+                "8",
+                "--name",
+                "Bug",
+                "--color",
+                "red",
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.create_label.assert_not_called()
+    assert "expected #RGB or #RRGGBB hex color, received 'red'" in result.stderr
+    assert "auth" not in result.stderr.lower()
+
+
+def test_label_create_rejects_non_hex_color(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("lbl-create-hex")
+    mock_client = MagicMock()
+    mock_client.create_label = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "label",
+                "create",
+                "--pipe",
+                "8",
+                "--name",
+                "Bug",
+                "--color",
+                "red",
+            ],
+        )
+    assert result.exit_code == 2
+    assert "expected #RGB or #RRGGBB hex color, received 'red'" in result.stderr
+    mock_client.create_label.assert_not_called()
+
+
+def test_label_create_forwards_normalized_color_to_sdk(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("lbl-create-ok")
+    mock_client = MagicMock()
+    mock_client.create_label = AsyncMock(return_value={"createLabel": {}})
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "label",
+                "create",
+                "--pipe",
+                "8",
+                "--name",
+                "Bug",
+                "--color",
+                "#ff0000",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0
+    mock_client.create_label.assert_awaited_once_with("8", "Bug", "#FF0000")
+
+
+def test_label_update_rejects_non_hex_color(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("lbl-update-hex")
+    mock_client = MagicMock()
+    mock_client.update_label = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "label",
+                "update",
+                "3",
+                "--name",
+                "Story",
+                "--color",
+                "blue",
+            ],
+        )
+    assert result.exit_code == 2
+    assert "expected #RGB or #RRGGBB hex color, received 'blue'" in result.stderr
+    mock_client.update_label.assert_not_called()
+
+
 def test_label_list_pipe_denied_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("lbl-denied")
     mock_client = MagicMock()

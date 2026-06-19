@@ -10,10 +10,21 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
+from pipefy_sdk.report_filter_preflight import EXAMPLE_PHASE_FILTER
 
 from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from tools.conftest import assert_invalid_arguments_envelope
+
+GOLDEN_REPORT_PHASE_FILTER = {
+    **EXAMPLE_PHASE_FILTER,
+    "queries": [
+        {
+            **EXAMPLE_PHASE_FILTER["queries"][0],
+            "value": "987654321",
+        }
+    ],
+}
 
 
 @pytest.fixture
@@ -416,6 +427,107 @@ async def test_create_pipe_report_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["result"]["createPipeReport"]["pipeReport"]["id"] == "r10"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_create_pipe_report_forwards_golden_report_filter(
+    report_session, mock_report_client, extract_payload
+):
+    mock_report_client.create_pipe_report.return_value = {
+        "createPipeReport": {"pipeReport": {"id": "r10", "name": "Filtered"}}
+    }
+
+    async with report_session as session:
+        result = await session.call_tool(
+            "create_pipe_report",
+            {
+                "pipe_id": "123",
+                "name": "Filtered",
+                "filter": GOLDEN_REPORT_PHASE_FILTER,
+            },
+        )
+
+    assert result.isError is False
+    mock_report_client.create_pipe_report.assert_awaited_once_with(
+        "123",
+        "Filtered",
+        fields=None,
+        filter=GOLDEN_REPORT_PHASE_FILTER,
+        formulas=None,
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_create_pipe_report_rejects_naive_current_phase_filter(
+    report_session, mock_report_client, extract_payload
+):
+    mock_report_client.create_pipe_report.side_effect = ValueError(
+        "filter must use ReportCardsFilter shape (operator + queries), "
+        "not top-level 'current_phase'."
+    )
+    async with report_session as session:
+        result = await session.call_tool(
+            "create_pipe_report",
+            {
+                "pipe_id": "123",
+                "name": "Bad filter",
+                "filter": {"current_phase": ["987654321"]},
+            },
+        )
+
+    mock_report_client.create_pipe_report.assert_awaited_once()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "top-level" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_export_pipe_report_rejects_naive_current_phase_filter(
+    report_session, mock_report_client, extract_payload
+):
+    mock_report_client.export_pipe_report.side_effect = ValueError(
+        "filter must use ReportCardsFilter shape (operator + queries), "
+        "not top-level 'current_phase'."
+    )
+    async with report_session as session:
+        result = await session.call_tool(
+            "export_pipe_report",
+            {
+                "pipe_id": "123",
+                "pipe_report_id": "r1",
+                "filter": {"current_phase": ["987654321"]},
+            },
+        )
+
+    mock_report_client.export_pipe_report.assert_awaited_once()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "top-level" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_update_pipe_report_rejects_invalid_report_filter(
+    report_session, mock_report_client, extract_payload
+):
+    mock_report_client.update_pipe_report.side_effect = ValueError(
+        "filter.operator must be one of ['and', 'or'], received 'xor'."
+    )
+    async with report_session as session:
+        result = await session.call_tool(
+            "update_pipe_report",
+            {"report_id": "r10", "filter": {"operator": "xor", "queries": []}},
+        )
+
+    mock_report_client.update_pipe_report.assert_awaited_once()
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "operator must be one of" in tool_error_message(payload)
 
 
 @pytest.mark.anyio
@@ -1604,3 +1716,38 @@ async def test_export_organization_report_graphql_error(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "export org failed" in tool_error_message(payload)
+
+
+REPORT_FILTER_TOOL_NAMES = {
+    "create_pipe_report",
+    "update_pipe_report",
+    "create_organization_report",
+    "update_organization_report",
+    "export_pipe_report",
+    "export_organization_report",
+}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_report_tool_descriptions_are_non_empty(report_session):
+    async with report_session as session:
+        listed = await session.list_tools()
+
+    empty = [tool.name for tool in listed.tools if not (tool.description or "").strip()]
+    assert empty == []
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("report_session", [None], indirect=True)
+async def test_filter_tools_warn_against_top_level_current_phase(report_session):
+    async with report_session as session:
+        listed = await session.list_tools()
+
+    descriptions = {tool.name: tool.description or "" for tool in listed.tools}
+    missing_guidance = [
+        name
+        for name in sorted(REPORT_FILTER_TOOL_NAMES)
+        if "current_phase" not in descriptions.get(name, "")
+    ]
+    assert missing_guidance == []

@@ -25,12 +25,14 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 
 | Tool | Role |
 |------|------|
-| `get_pipe` | Load pipe metadata (phases, fields, settings). |
+| `get_pipe` | Load pipe metadata (phases, fields, settings). Workflow `phases[]` include `cards_count`; start-form intake is via `start_form_fields` (start form is not in `phases[]`). |
 | `get_start_form_fields` | Start-form fields for a pipe. |
 | `get_phase_fields` | Fields for a phase — each includes `id`, `internal_id`, `uuid`. |
 | `get_pipe_members` | List pipe members. |
 | `get_labels` | List labels configured on the pipe (`id`, `name`). |
 | `search_pipes` | Search pipes by name. |
+| `get_phase_cards_count` | Native `Phase.cards_count` for one phase (fast scalar). Start-form count may be **0** while cards exist — pair with `get_phase_cards`. |
+| `get_phase_cards` | Paginated cards in a phase (`Phase.cards`). Prefer over `get_cards` for phase-local inventory. |
 
 ## Card reads
 
@@ -46,6 +48,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 |-------|-------|-------|
 | Pipe | `create_pipe`, `update_pipe`, `delete_pipe`, `clone_pipe` | `delete_pipe`: two-step — preview first, then `confirm=true`. |
 | Phase | `create_phase`, `update_phase`, `delete_phase` | Destructive deletes: confirm with the user. |
+| Phase transitions | `get_phase_allowed_move_targets` | Read-only; mirrors **Phase → Connections** (`cards_can_be_moved_to_phases`). Call before `move_card_to_phase`. Edges are configured in the Pipefy UI only. |
 | Phase field | `create_phase_field`, `update_phase_field`, `delete_phase_field` | `field_type` maps to API `type`; `field_id` may be a slug or numeric ID. |
 | Label | `create_label`, `update_label`, `delete_label` | `color` must be a hex string (e.g. `#FF0000`), not a name. |
 
@@ -53,7 +56,7 @@ Pipefy’s GraphQL API uses **string** IDs for pipes, phases, cards, and most ot
 
 | Tool | Role |
 |------|------|
-| `create_card` | Create a card; may use elicitation to ask the user for required fields mid-call. |
+| `create_card` | Create a card in the start form (default) or in a specific phase via optional `phase_id`; may use elicitation to ask the user for required fields mid-call. |
 | `fill_card_phase_fields` | Fill phase-specific fields on a card; may use elicitation when available. |
 | `add_card_comment` | Add a comment to a card. |
 | `update_comment` | Update an existing comment. |
@@ -80,9 +83,61 @@ Because non-editable keys are dropped without warning, agents should discover fi
 get_start_form_fields(pipe_id)   → learn field IDs, types, required flag
 create_card(pipe_id, fields={…}) → supply every required field ID
 
+get_pipe(pipe_id)                → phases[].id / cards_count for workflow inventory
+create_card(
+  pipe_id,
+  phase_id="340012345",
+  skip_elicitation=true,
+  title="Seeded card",
+  fields={…},
+)                                → card created in that phase (fields via get_phase_fields + get_start_form_fields)
+
 get_phase_fields(phase_id)                     → learn phase field IDs
 fill_card_phase_fields(card_id, phase_id, fields={…}) → supply values
 ```
+
+With `phase_id`, interactive clients may still elicit start-form fields when elicitation is supported; set `skip_elicitation=true` for agent workflows. When `fields` is non-empty, keys are filtered against both `get_phase_fields(phase_id)` and `get_start_form_fields(pipe_id)` so pipes that still require start-form values on `CreateCardInput` receive them alongside phase fields. Optional `title` is sent on `CreateCardInput` (no separate `update_card` on the happy path).
+
+### `get_pipe` inventory fields
+
+MCP tool results use the standard envelope; inventory fields live under the `pipe` object:
+
+| JSON path | Meaning |
+|-----------|---------|
+| `pipe.start_form_fields` | Start-form field definitions (intake) |
+| `pipe.phases[].id` | Workflow phase IDs (start form excluded) |
+| `pipe.phases[].name` | Phase display name |
+| `pipe.phases[].cards_count` | Native card count for that workflow phase |
+
+CLI `pipefy pipe get <pipe_id> --json` returns the same GraphQL shape.
+
+### Phase inventory (`get_phase_cards_count` / `get_phase_cards`)
+
+Use these when you need per-phase totals or card lists without pipe-wide `CardSearch`:
+
+| Tool | CLI | When to use |
+|------|-----|-------------|
+| `get_phase_cards_count` | `pipefy phase count <phase_id>` | Quick scalar; empty phases for seeding. |
+| `get_phase_cards` | `pipefy phase cards <phase_id> --first 50 --after <cursor>` | Verify cards after create/move; paginate with `pageInfo.endCursor`. |
+
+Discovery path: `get_pipe(pipe_id)` → `phases[].id` for workflow phases; omit `phase_id` on `create_card` for start-form intake.
+
+```
+get_phase_cards_count(phase_id="340012345")
+get_phase_cards(phase_id="340012345", first=50, include_fields=true)
+```
+
+### Phase transitions (`get_phase_allowed_move_targets`)
+
+Outbound moves are constrained by UI-configured connections — there is no API to add edges.
+
+1. Resolve source phase: `get_card(card_id).current_phase.id` (or known `phase_id` before move).
+2. `get_phase_allowed_move_targets(phase_id=<source>)` → `allowed_phases` (`{id, name}`).
+3. `move_card_to_phase(card_id, destination_phase_id=<allowed id>)`.
+
+CLI: `pipefy phase targets <phase_id> --json`.
+
+Empty `allowed_phases` means no outbound transitions are configured in the UI.
 
 ## Field condition tools
 

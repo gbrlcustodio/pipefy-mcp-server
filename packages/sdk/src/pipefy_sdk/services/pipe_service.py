@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from httpx import Auth
 from pipefy_infra.coerce import optional_int
 from rapidfuzz import fuzz
@@ -8,8 +10,9 @@ from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.models.field_definition import parse_field_definitions
 from pipefy_sdk.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
-    GET_PHASE_CARDS_COUNT_QUERY,
+    GET_PHASE_CARDS_QUERY,
     GET_PHASE_FIELDS_QUERY,
+    GET_PHASE_QUERY,
     GET_PIPE_MEMBERS_QUERY,
     GET_PIPE_QUERY,
     GET_PIPE_WITH_PREFERENCES_QUERY,
@@ -222,6 +225,25 @@ class PipeService(BasePipefyClient):
         variables = {"phase_id": str(phase_id)}
         return await self.execute_query(GET_PHASE_ALLOWED_MOVES_QUERY, variables)
 
+    async def _fetch_phase_row(self, phase_id: str | int) -> dict:
+        variables = {"phase_id": str(phase_id)}
+        result = await self.execute_query(GET_PHASE_QUERY, variables)
+        phase = (result or {}).get("phase")
+        if not isinstance(phase, dict) or phase.get("cards_count") is None:
+            raise ValueError("phase.cards_count missing from response")
+        if phase.get("id") is None:
+            raise ValueError("phase id missing from response")
+        return phase
+
+    async def get_phase(self, phase_id: str | int) -> dict:
+        """Return phase id, name, and native ``cards_count``."""
+        phase = await self._fetch_phase_row(phase_id)
+        return {
+            "phase_id": str(phase["id"]),
+            "phase_name": str(phase.get("name") or ""),
+            "cards_count": int(phase["cards_count"]),
+        }
+
     async def get_phase_cards_count(self, phase_id: str | int) -> int:
         """Return the total card count for ``phase_id`` via ``Phase.cards_count``.
 
@@ -237,12 +259,36 @@ class PipeService(BasePipefyClient):
         Raises:
             ValueError: ``phase.cards_count`` is missing from the response.
         """
-        variables = {"phase_id": str(phase_id)}
-        result = await self.execute_query(GET_PHASE_CARDS_COUNT_QUERY, variables)
-        phase = (result or {}).get("phase")
-        if not isinstance(phase, dict) or phase.get("cards_count") is None:
-            raise ValueError("phase.cards_count missing from response")
-        return int(phase["cards_count"])
+        return (await self.get_phase(phase_id))["cards_count"]
+
+    async def get_phase_cards(
+        self,
+        phase_id: str | int,
+        *,
+        first: int | None = None,
+        after: str | None = None,
+        include_fields: bool = False,
+    ) -> dict:
+        """List cards currently in ``phase_id`` via ``Phase.cards`` (Relay pagination).
+
+        Args:
+            phase_id: Phase ID.
+            first: Max cards per page.
+            after: Cursor from ``pageInfo.endCursor``.
+            include_fields: When True, include each card's custom fields.
+
+        Returns:
+            Raw GraphQL payload (``phase`` key at top level).
+        """
+        variables: dict[str, Any] = {
+            "phase_id": str(phase_id),
+            "includeFields": include_fields,
+        }
+        if first is not None:
+            variables["first"] = first
+        if after is not None:
+            variables["after"] = after
+        return await self.execute_query(GET_PHASE_CARDS_QUERY, variables)
 
     async def get_phase_fields(
         self, phase_id: str | int, required_only: bool = False

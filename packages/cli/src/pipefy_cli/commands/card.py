@@ -16,12 +16,16 @@ from pipefy_sdk import (
 from pydantic import ValidationError
 
 from pipefy_cli.commands._common import (
+    _CARDS_PAGE_SIZE_MAX,
+    _CARDS_PAGE_SIZE_MIN,
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     format_card_get_transport_query_error,
     parse_json_value,
     resource_id_argument,
     run_cli_command,
+    validate_cards_page_size,
+    validate_optional_resource_id,
 )
 
 card_app = typer.Typer(help="Card operations.", no_args_is_help=True)
@@ -38,20 +42,6 @@ def _parse_card_search_json(raw: str | None) -> CardSearch | None:
     return copy_card_search(parsed)
 
 
-_CARDS_FIRST_MIN = 1
-_CARDS_FIRST_MAX = 500
-
-
-def _validate_cards_page_size(first: int | None) -> int | None:
-    if first is None:
-        return None
-    if first < _CARDS_FIRST_MIN or first > _CARDS_FIRST_MAX:
-        raise typer.BadParameter(
-            f"--first must be between {_CARDS_FIRST_MIN} and {_CARDS_FIRST_MAX} (inclusive)."
-        )
-    return first
-
-
 def _parse_fields_json(raw: str | None) -> dict[str, Any] | list[dict[str, Any]] | None:
     if raw is None or raw.strip() == "":
         return None
@@ -59,6 +49,24 @@ def _parse_fields_json(raw: str | None) -> dict[str, Any] | list[dict[str, Any]]
     if isinstance(parsed, dict | list):
         return parsed
     raise typer.BadParameter("--fields must be a JSON object or array")
+
+
+def _apply_create_card_title_warning(
+    result: dict[str, Any], *, requested_title: str | None
+) -> dict[str, Any]:
+    if not requested_title:
+        return result
+    card_node = (result.get("createCard") or {}).get("card")
+    if not isinstance(card_node, dict):
+        return result
+    if card_node.get("title") == requested_title:
+        return result
+    warned = dict(result)
+    warned["title_warning"] = (
+        "Card created but title was not applied as expected "
+        f"(response title={card_node.get('title')!r}, requested={requested_title!r})."
+    )
+    return warned
 
 
 def _parse_field_updates_json(raw: str | None) -> list[dict[str, Any]] | None:
@@ -137,7 +145,7 @@ def card_list(
     first: int | None = typer.Option(
         None,
         "--first",
-        help=f"Max cards per page ({_CARDS_FIRST_MIN}-{_CARDS_FIRST_MAX}).",
+        help=f"Max cards per page ({_CARDS_PAGE_SIZE_MIN}-{_CARDS_PAGE_SIZE_MAX}).",
     ),
     after: str | None = typer.Option(
         None,
@@ -161,7 +169,7 @@ def card_list(
     if title is not None and title.strip():
         merged["title"] = title.strip()
     effective_search: CardSearch | None = merged if merged else None
-    first_validated = _validate_cards_page_size(first)
+    first_validated = validate_cards_page_size(first)
 
     async def factory(client: PipefyClient):
         return await client.get_cards(
@@ -234,12 +242,20 @@ def card_create(
         None,
         "--title",
         "-t",
-        help="Optional title (applied via update after create).",
+        help="Optional title (sent on CreateCardInput when set).",
+    ),
+    phase_id: str | None = typer.Option(
+        None,
+        "--phase-id",
+        help=(
+            "Target phase id (CreateCardInput.phase_id). "
+            "Creates the card in that phase instead of the start form."
+        ),
     ),
     fields_json: str | None = typer.Option(
         None,
         "--fields",
-        help="JSON object or array: start-form field values for createCard.",
+        help="JSON object or array: field values for createCard.",
     ),
     json_out: bool = typer.Option(
         False,
@@ -248,19 +264,20 @@ def card_create(
         help="Print machine-readable JSON to stdout.",
     ),
 ) -> None:
-    """Create a card in a pipe (start-form fields via --fields JSON when required)."""
+    """Create a card in a pipe (start-form or phase fields via --fields JSON when required)."""
 
     fields = _parse_fields_json(fields_json)
+    phase_id = validate_optional_resource_id(phase_id, "phase_id")
 
     async def factory(client: PipefyClient):
         payload = fields if fields is not None else {}
-        result = await client.create_card(pipe_id, payload)
-        card_node = (result.get("createCard") or {}).get("card") or {}
-        cid = card_node.get("id")
-        if title and cid:
-            await client.update_card(str(cid), title=title)
-            card_node["title"] = title
-        return result
+        create_kwargs: dict[str, Any] = {}
+        if phase_id is not None:
+            create_kwargs["phase_id"] = phase_id
+        if title:
+            create_kwargs["title"] = title
+        result = await client.create_card(pipe_id, payload, **create_kwargs)
+        return _apply_create_card_title_warning(result, requested_title=title)
 
     run_cli_command(ctx, json_out, factory)
 

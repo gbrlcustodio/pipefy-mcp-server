@@ -13,6 +13,8 @@ import typer
 from gql.transport.exceptions import TransportError, TransportQueryError
 from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
 from pipefy_sdk.exceptions import PipefyError
+from pipefy_sdk.label_color import normalize_label_color
+from pipefy_sdk.report_filter_preflight import prepare_report_cards_filter
 
 from pipefy_cli.auth import (
     AuthContext,
@@ -47,6 +49,61 @@ def validate_positional_id(value: str) -> str:
 def resource_id_argument(*, help: str) -> Any:
     """Typer ``Argument`` for resource ids when ``ignore_unknown_options`` is enabled."""
     return typer.Argument(..., help=help, callback=validate_positional_id)
+
+
+def validate_optional_resource_id(value: str | None, label: str) -> str | None:
+    if value is None:
+        return None
+    cleaned = value.strip()
+    if not cleaned:
+        raise typer.BadParameter(
+            f"Invalid '{label}': provide a non-empty string or positive integer."
+        )
+    if cleaned.startswith("-") and cleaned[1:].isdigit():
+        raise typer.BadParameter(f"Invalid '{label}': provide a positive integer.")
+    if cleaned.isdigit() and int(cleaned) <= 0:
+        raise typer.BadParameter(f"Invalid '{label}': provide a positive integer.")
+    return cleaned
+
+
+_CARDS_PAGE_SIZE_MIN = 1
+_CARDS_PAGE_SIZE_MAX = 500
+
+
+def validate_cards_page_size(first: int | None) -> int | None:
+    if first is None:
+        return None
+    if first < _CARDS_PAGE_SIZE_MIN or first > _CARDS_PAGE_SIZE_MAX:
+        raise typer.BadParameter(
+            f"--first must be between {_CARDS_PAGE_SIZE_MIN} and "
+            f"{_CARDS_PAGE_SIZE_MAX} (inclusive)."
+        )
+    return first
+
+
+def validate_label_name_cli(name: str) -> str:
+    nm = name.strip()
+    if not nm:
+        raise typer.BadParameter("--name must be non-empty.")
+    return nm
+
+
+def prepare_report_cards_filter_cli(
+    filter_obj: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Normalize and validate ``ReportCardsFilter`` before auth or network I/O."""
+    try:
+        return prepare_report_cards_filter(filter_obj)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+
+def normalize_label_color_cli(color: str) -> str:
+    """Normalize label ``color`` before auth or network I/O."""
+    try:
+        return normalize_label_color(color)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 def export_poll_max_rounds(

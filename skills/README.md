@@ -28,7 +28,7 @@ git clone https://github.com/pipefy/ai-toolkit.git
 
 | Domain | Skill | Description |
 |--------|-------|-------------|
-| **Pipes & Cards** | [pipefy-pipes-and-cards](pipes-and-cards/pipefy-pipes-and-cards/SKILL.md) | Pipes, phases, fields, labels, cards, field conditions. 37 MCP tools. |
+| **Pipes & Cards** | [pipefy-pipes-and-cards](pipes-and-cards/pipefy-pipes-and-cards/SKILL.md) | Pipes, phases, cards, labels; phase inventory/moves; `create_card(phase_id=…)`. Prefer over `execute_graphql` for seeding. 40 MCP tools. |
 | **Database Tables** | [pipefy-database-tables](database-tables/pipefy-database-tables/SKILL.md) | Tables, records, schema, attachments. 17 MCP tools. |
 | **Relations** | [pipefy-relations](relations/pipefy-relations/SKILL.md) | Pipe and card relations. 8 MCP tools. |
 | **Reports** | [pipefy-reports](reports/pipefy-reports/SKILL.md) | Pipe and organization reports, async exports. 17 MCP tools. |

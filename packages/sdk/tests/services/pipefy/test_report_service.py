@@ -24,6 +24,7 @@ from pipefy_sdk.queries.report_queries import (
     UPDATE_ORGANIZATION_REPORT_MUTATION,
     UPDATE_PIPE_REPORT_MUTATION,
 )
+from pipefy_sdk.report_filter_preflight import EXAMPLE_PHASE_FILTER
 from pipefy_sdk.services.report_service import ReportService
 from pipefy_sdk.settings import PipefySettings
 
@@ -309,6 +310,26 @@ async def test_create_pipe_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_pipe_report_forwards_golden_phase_filter(mock_settings):
+    golden_filter = {
+        **EXAMPLE_PHASE_FILTER,
+        "queries": [
+            {
+                **EXAMPLE_PHASE_FILTER["queries"][0],
+                "value": "987654321",
+            }
+        ],
+    }
+    payload = {"createPipeReport": {"pipeReport": {"id": "r10", "name": "Filtered"}}}
+    service = _make_service(mock_settings, payload)
+    await service.create_pipe_report("123", "Filtered", filter=golden_filter)
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables["input"]["filter"] == golden_filter
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_create_pipe_report_minimal(mock_settings):
     payload = {"createPipeReport": {"pipeReport": {"id": "r11", "name": "Minimal"}}}
     service = _make_service(mock_settings, payload)
@@ -516,3 +537,94 @@ async def test_update_pipe_report_transport_error(mock_settings):
     )
     with pytest.raises(TransportQueryError):
         await service.update_pipe_report("10", name="N")
+
+
+def _filter_method_invokers():
+    return [
+        (
+            "create_pipe_report",
+            lambda service, filt: service.create_pipe_report(
+                "123", "Report", filter=filt
+            ),
+        ),
+        (
+            "update_pipe_report",
+            lambda service, filt: service.update_pipe_report("10", filter=filt),
+        ),
+        (
+            "create_organization_report",
+            lambda service, filt: service.create_organization_report(
+                "100", "Report", ["200"], filter=filt
+            ),
+        ),
+        (
+            "update_organization_report",
+            lambda service, filt: service.update_organization_report("5", filter=filt),
+        ),
+        (
+            "export_pipe_report",
+            lambda service, filt: service.export_pipe_report("100", "200", filter=filt),
+        ),
+        (
+            "export_organization_report",
+            lambda service, filt: service.export_organization_report(42, filter=filt),
+        ),
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method_name", "invoke"),
+    _filter_method_invokers(),
+    ids=[name for name, _ in _filter_method_invokers()],
+)
+async def test_report_mutations_reject_invalid_filter(
+    mock_settings, method_name, invoke
+):
+    service = _make_service(mock_settings, {})
+
+    with pytest.raises(ValueError, match="top-level 'current_phase'"):
+        await invoke(service, {"current_phase": ["987654321"]})
+
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method_name", "invoke"),
+    _filter_method_invokers(),
+    ids=[name for name, _ in _filter_method_invokers()],
+)
+async def test_report_mutations_reject_invalid_filter_operator(
+    mock_settings, method_name, invoke
+):
+    service = _make_service(mock_settings, {})
+
+    with pytest.raises(ValueError, match="operator must be one of"):
+        await invoke(service, {"operator": "xor", "queries": []})
+
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method_name", "invoke"),
+    _filter_method_invokers(),
+    ids=[name for name, _ in _filter_method_invokers()],
+)
+async def test_report_mutations_normalize_integer_filter_values(
+    mock_settings, method_name, invoke
+):
+    int_value_filter = {
+        **EXAMPLE_PHASE_FILTER,
+        "queries": [{**EXAMPLE_PHASE_FILTER["queries"][0], "value": 99}],
+    }
+    service = _make_service(mock_settings, {})
+
+    await invoke(service, int_value_filter)
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables["input"]["filter"]["queries"][0]["value"] == "99"

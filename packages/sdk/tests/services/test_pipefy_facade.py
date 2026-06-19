@@ -37,6 +37,20 @@ def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_create_card_forwards_phase_id_and_title(mock_settings):
+    """PipefyClient.create_card passes optional phase_id and title to CardService."""
+    card_service = AsyncMock()
+    card_service.create_card = AsyncMock(return_value={"ok": "create"})
+    client = PipefyClient(mock_settings, auth=StaticBearerAuth("unit-token"))
+    client._card_service = card_service
+
+    await client.create_card(10, {}, phase_id=20, title="Seed")
+
+    card_service.create_card.assert_awaited_once_with(10, {}, phase_id=20, title="Seed")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_pipefy_client_facade_delegates_to_services_without_modifying_args_or_return():
     """Test PipefyClient is a pure facade: delegates calls unchanged to services."""
     pipe_service = AsyncMock()
@@ -206,7 +220,9 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     pipe_service.get_start_form_fields.assert_awaited_once_with(2, True)
 
     assert await client.create_card(3, {"a": 1}) == {"ok": "create"}
-    card_service.create_card.assert_awaited_once_with(3, {"a": 1})
+    card_service.create_card.assert_awaited_once_with(
+        3, {"a": 1}, phase_id=None, title=None
+    )
 
     assert await client.add_card_comment(33, "hello") == {"ok": "comment"}
     card_service.create_comment.assert_awaited_once_with(33, "hello")
@@ -722,6 +738,8 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
 async def test_delete_card_relation_delegates_to_internal_api_client(mock_settings):
     """delete_card_relation uses InternalApiClient (not CardService) because the
     mutation is only on the internal GraphQL schema."""
+    from graphql import print_ast
+
     from pipefy_sdk.queries.card_queries import (
         INTERNAL_DELETE_CARD_RELATION_MUTATION,
     )
@@ -735,9 +753,10 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
     client.set_internal_api_client(internal)
 
     # Pin the snake_case input keys that the internal API expects
-    assert "child_id: $childId" in INTERNAL_DELETE_CARD_RELATION_MUTATION
-    assert "parent_id: $parentId" in INTERNAL_DELETE_CARD_RELATION_MUTATION
-    assert "source_id: $sourceId" in INTERNAL_DELETE_CARD_RELATION_MUTATION
+    rendered = print_ast(INTERNAL_DELETE_CARD_RELATION_MUTATION.document)
+    assert "child_id: $childId" in rendered
+    assert "parent_id: $parentId" in rendered
+    assert "source_id: $sourceId" in rendered
 
     result = await client.delete_card_relation("c1", "p2", "src-3")
 

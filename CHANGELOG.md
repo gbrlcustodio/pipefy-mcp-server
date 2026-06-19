@@ -6,10 +6,20 @@ Releases are versioned in lockstep across workspace members (`pipefy-sdk`, `pipe
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0-beta.4] - 2026-06-19
+
+### Added
+
+- **SDK / MCP / CLI**: `create_card` accepts optional `phase_id` and passes `title` on GraphQL `CreateCardInput` (mutation `createCard(input: $input)`). MCP: interactive `phase_id` elicits start-form fields; non-empty `fields` are filtered against `get_phase_fields(phase_id)` and `get_start_form_fields(pipe_id)`; agent seeding should set `skip_elicitation=true`. CLI: `pipefy card create <pipe_id> --phase-id <id>` (optional `--title`; emits `title_warning` when the API overrides the requested title).
+- **MCP / CLI**: `get_phase_allowed_move_targets` lists valid destination phases for `move_card_to_phase` (GraphQL `phase.cards_can_be_moved_to_phases`). MCP returns normalized `{phase_id, phase_name, allowed_phases}`; CLI: `pipefy phase targets <phase_id>`.
+- **SDK / MCP / CLI**: `get_phase_cards_count` reads native `Phase.cards_count` (MCP/CLI return `{phase_id, phase_name, cards_count}` via `get_phase`). `get_phase_cards` lists cards in a phase via `Phase.cards` pagination (`first` default 50, `after`, optional fields). CLI: `pipefy phase count <phase_id>`, `pipefy phase cards <phase_id> --first --after`.
+- **SDK / MCP / CLI**: `get_pipe` selects `cards_count` on each workflow phase in `phases[]` (start-form intake stays on `start_form_fields`).
+- **SDK / MCP / CLI**: report create/update/export paths preflight `filter` as nested `ReportCardsFilter` (`operator` + `queries`) in the SDK before GraphQL; reject naive top-level keys such as `current_phase`; coerce integer `value` scalars to strings. MCP and CLI surface the same error; CLI rejects invalid filters before auth.
 
 ### Changed
 
+- **SDK / MCP / CLI (label color)**: `create_label` and `update_label` validate `color` as hex `#RGB` or `#RRGGBB` in the SDK before GraphQL (e.g. `red` is rejected with `expected #RGB or #RRGGBB hex color, received 'red'`). CLI rejects invalid color before auth.
+- **Docs / install**: canonical GitHub repository is [`pipefy/ai-toolkit`](https://github.com/pipefy/ai-toolkit). Install snippets, `install.sh`, MCP setup links, Claude plugin metadata, and `.mcp.json` now point at `github.com/pipefy/ai-toolkit` (GitHub may still redirect older URLs).
 - **SDK**: GraphQL `HTTPXAsyncTransport` now sets `verify=True` explicitly to pin TLS verification on, independent of httpx's default.
 - **Deps**: upgraded `pydantic` to 2.13.4 (`pydantic-core` 2.46.4, `pydantic-settings` 2.14.1) across workspace packages.
 - **Deps**: upgraded `gql[httpx]` to 4.0.0; `gql()` constants are `GraphQLRequest` objects (use `.document` for AST introspection in tests).

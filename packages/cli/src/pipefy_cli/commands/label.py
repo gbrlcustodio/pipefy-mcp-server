@@ -8,8 +8,10 @@ from pipefy_sdk import PipefyClient
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
+    normalize_label_color_cli,
     resource_id_argument,
     run_cli_command,
+    validate_label_name_cli,
 )
 
 label_app = typer.Typer(help="Pipe label operations.", no_args_is_help=True)
@@ -46,20 +48,20 @@ def label_create(
     pipe_id: str = typer.Option(..., "--pipe", help="Pipe id."),
     name: str = typer.Option(..., "--name", "-n", help="Label name."),
     color: str = typer.Option(
-        ..., "--color", "-c", help="Label color (per Pipefy API)."
+        ...,
+        "--color",
+        "-c",
+        help="Label color as hex #RRGGBB (e.g. #E50000, #FF0000).",
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Create a label on a pipe."""
 
-    nm = name.strip()
-    col = color.strip()
-    if not nm or not col:
-        typer.echo("--name and --color must be non-empty.", err=True)
-        raise typer.Exit(2)
+    nm = validate_label_name_cli(name)
+    clr = normalize_label_color_cli(color)
 
     async def factory(client: PipefyClient):
-        return await client.create_label(pipe_id, nm, col)
+        return await client.create_label(pipe_id, nm, clr)
 
     run_cli_command(ctx, json_out, factory)
 
@@ -72,20 +74,20 @@ def label_update(
         ..., "--name", "-n", help="New label name (required by API)."
     ),
     color: str = typer.Option(
-        ..., "--color", "-c", help="New label color (required by API)."
+        ...,
+        "--color",
+        "-c",
+        help="New label color as hex #RRGGBB (required by API).",
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Update a label (name and color are both required by Pipefy)."""
 
-    nm = name.strip()
-    col = color.strip()
-    if not nm or not col:
-        typer.echo("--name and --color must be non-empty.", err=True)
-        raise typer.Exit(2)
+    nm = validate_label_name_cli(name)
+    clr = normalize_label_color_cli(color)
 
     async def factory(client: PipefyClient):
-        return await client.update_label(label_id, name=nm, color=col)
+        return await client.update_label(label_id, name=nm, color=clr)
 
     run_cli_command(ctx, json_out, factory)
 

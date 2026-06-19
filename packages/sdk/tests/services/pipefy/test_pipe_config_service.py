@@ -639,18 +639,66 @@ async def test_delete_phase_field_includes_pipe_uuid_when_provided(mock_settings
 async def test_create_label_sends_pipe_name_color(mock_settings):
     service = _make_service(
         mock_settings,
-        {"createLabel": {"label": {"id": "1", "name": "Bug", "color": "red"}}},
+        {"createLabel": {"label": {"id": "1", "name": "Bug", "color": "#FF0000"}}},
     )
-    result = await service.create_label(20, "Bug", "red")
+    result = await service.create_label(20, "Bug", "#FF0000")
 
     query, variables = service.execute_query.call_args[0]
     assert query is CREATE_LABEL_MUTATION
     assert variables == {
-        "input": {"pipe_id": "20", "name": "Bug", "color": "red"},
+        "input": {"pipe_id": "20", "name": "Bug", "color": "#FF0000"},
     }
     assert result == {
-        "createLabel": {"label": {"id": "1", "name": "Bug", "color": "red"}},
+        "createLabel": {"label": {"id": "1", "name": "Bug", "color": "#FF0000"}},
     }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("raw_color", "normalized_color"),
+    [("#abc", "#AABBCC"), ("#ff0000", "#FF0000")],
+)
+async def test_create_label_normalizes_color(
+    mock_settings, raw_color, normalized_color
+):
+    service = _make_service(mock_settings, {"createLabel": {"label": {"id": "1"}}})
+    await service.create_label(20, "Bug", raw_color)
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables["input"]["color"] == normalized_color
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_create_label_rejects_non_hex_color(mock_settings):
+    service = _make_service(mock_settings, {})
+
+    with pytest.raises(ValueError, match="expected #RGB or #RRGGBB hex color"):
+        await service.create_label(20, "Bug", "red")
+
+    service.execute_query.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_label_normalizes_color(mock_settings):
+    service = _make_service(mock_settings, {"updateLabel": {"label": {"id": "2"}}})
+    await service.update_label(2, name="Feature", color="#abc")
+
+    variables = service.execute_query.call_args[0][1]
+    assert variables["input"]["color"] == "#AABBCC"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_update_label_rejects_non_hex_color(mock_settings):
+    service = _make_service(mock_settings, {})
+
+    with pytest.raises(ValueError, match="expected #RGB or #RRGGBB hex color"):
+        await service.update_label(2, name="Feature", color="blue")
+
+    service.execute_query.assert_not_called()
 
 
 @pytest.mark.unit

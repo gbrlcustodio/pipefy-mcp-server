@@ -6,7 +6,7 @@ Releases are versioned in lockstep across workspace members (`pipefy-sdk`, `pipe
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.2.0-beta.4] - 2026-06-19
 
 ### Added
 

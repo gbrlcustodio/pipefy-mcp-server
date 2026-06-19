@@ -27,6 +27,7 @@ actions_app = typer.Typer(help="Automation action catalog.", no_args_is_help=Tru
 def _automation_params_from_flags(
     *,
     to_phase: str | None,
+    trigger_phase: str | None,
     from_phase: str | None,
     in_phase: str | None,
     trigger_fields: str | None,
@@ -56,6 +57,8 @@ def _automation_params_from_flags(
         action_params["headers"] = headers
 
     event_params: dict[str, object] = {}
+    if trigger_phase is not None:
+        event_params["to_phase_id"] = trigger_phase
     if from_phase is not None:
         event_params["fromPhaseId"] = from_phase
     if in_phase is not None:
@@ -155,15 +158,20 @@ def automation_create(
         "--to-phase",
         help="Move actions: destination phase id (action_params.to_phase_id).",
     ),
+    trigger_phase: str | None = typer.Option(
+        None,
+        "--trigger-phase",
+        help="card_moved trigger: fire when a card is moved into this phase id (event_params.to_phase_id).",
+    ),
     from_phase: str | None = typer.Option(
         None,
         "--from-phase",
-        help="card_moved/card_left_phase trigger: origin phase id (event_params.fromPhaseId).",
+        help="card_left_phase trigger: origin phase id (event_params.fromPhaseId).",
     ),
     in_phase: str | None = typer.Option(
         None,
         "--in-phase",
-        help="Trigger filter: current phase id (event_params.inPhaseId).",
+        help="card_inbox_received_email trigger: phase id (event_params.inPhaseId).",
     ),
     trigger_fields: str | None = typer.Option(
         None,
@@ -215,6 +223,7 @@ def automation_create(
     extra_obj = parse_json_object(extra, "--extra") or {}
     flag_params = _automation_params_from_flags(
         to_phase=to_phase,
+        trigger_phase=trigger_phase,
         from_phase=from_phase,
         in_phase=in_phase,
         trigger_fields=trigger_fields,

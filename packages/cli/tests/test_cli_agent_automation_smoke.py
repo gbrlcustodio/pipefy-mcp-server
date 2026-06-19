@@ -785,6 +785,7 @@ def test_automation_create_event_param_flags_build_event_params(
                 "--name", "Moved",
                 "--event-id", "card_moved",
                 "--action-id", "move_single_card",
+                "--trigger-phase", "ph-t",
                 "--from-phase", "ph-a",
                 "--in-phase", "ph-b",
                 "--trigger-fields", "f1, f2 ,f3",
@@ -799,6 +800,7 @@ def test_automation_create_event_param_flags_build_event_params(
     assert kwargs["extra_input"] == {
         "action_params": {"to_phase_id": "ph-z"},
         "event_params": {
+            "to_phase_id": "ph-t",
             "fromPhaseId": "ph-a",
             "inPhaseId": "ph-b",
             "triggerFieldIds": ["f1", "f2", "f3"],

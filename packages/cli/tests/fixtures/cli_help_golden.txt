@@ -597,12 +597,17 @@ Usage: pipefy automation create [OPTIONS]
 │    --to-phase                                  TEXT  Move actions:           │
 │                                                      destination phase id    │
 │                                                      (action_params.to_phas… │
-│    --from-phase                                TEXT  card_moved/card_left_p… │
+│    --trigger-phase                             TEXT  card_moved trigger:     │
+│                                                      fire when a card is     │
+│                                                      moved into this phase   │
+│                                                      id                      │
+│                                                      (event_params.to_phase… │
+│    --from-phase                                TEXT  card_left_phase         │
 │                                                      trigger: origin phase   │
 │                                                      id                      │
 │                                                      (event_params.fromPhas… │
-│    --in-phase                                  TEXT  Trigger filter: current │
-│                                                      phase id                │
+│    --in-phase                                  TEXT  card_inbox_received_em… │
+│                                                      trigger: phase id       │
 │                                                      (event_params.inPhaseI… │
 │    --trigger-fields                            TEXT  field_updated trigger:  │
 │                                                      comma-separated field   │

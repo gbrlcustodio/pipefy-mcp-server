@@ -17,38 +17,45 @@ Implications for tool design:
   server are not appropriate here. They add maintenance cost without buying
   a security boundary.
 
-If a future distribution profile (self-hosted, streaming, etc.) changes this
-trust model, deferred code paths are tagged with `GATED:<PROFILE>` markers.
-See below.
+A hosted/remote distribution profile is in progress (see issue #297). It runs
+the server as a multi-user HTTP service. Tool exposure there is **default-deny**:
+only tools explicitly marked remote-safe are registered; everything else is
+withheld. The marker is described below.
 
-## Greppable deployment-profile markers
+## Remote-profile tool marker
 
-Convention: `GATED:<PROFILE>` is a code comment placed on a tool whose
-inputs or capabilities are restricted in the current deployment profile and
-would be broader under another. Uppercase profile name, no spaces. The
-marker annotates a tool that exists today; it is not a deletion changelog.
+When `PIPEFY_MCP_REMOTE_MODE` is true, the server exposes ONLY tools whose
+registration carries `meta=REMOTE`. Any unmarked tool is implicitly withheld
+(default-deny). When the flag is false (the default, local stdio profile), all
+tools register and the marker is inert.
 
-Greppable as a family: `rg "GATED:" packages/mcp` lists every
-deployment-profile marker in the package.
+The marker is a single co-located source of truth on the `@mcp.tool` decorator:
 
-Today's markers:
+```python
+from pipefy_mcp.tools.remote_profile import REMOTE
 
-- `GATED:SELF_HOSTED` on `upload_attachment_to_card` and
-  `upload_attachment_to_table_record` in `tools/attachment_tools.py`. These
-  tools accept only `file_path` in the local-subprocess profile. Under a
-  self-hosted profile they would also accept a `file_url`, behind a
-  capability flag, with SSRF and size-cap guards initialized from injected
-  settings (not from a fresh `PipefySettings()` env read).
+@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True), meta=REMOTE)
+async def get_organization(...): ...
+```
 
-### When to add a new marker
+`ToolRegistry.apply_remote_profile()` reads it back via `is_remote_tool` and
+removes every unmarked Pipefy tool at registration time (before the server
+serves anything). The marker is greppable (`rg "meta=REMOTE" packages/mcp`) and
+machine-enforced, unlike the comment-only `GATED:` convention it replaces.
 
-Add a `GATED:<PROFILE>` marker on a tool whose surface differs across
-deployment profiles. The comment lives next to the tool's registration (or
-the relevant restricted parameter) so it reads as an annotation on the tool,
-not a paragraph elsewhere in the file. Document the new profile in this
-file alongside the existing ones: which tools carry the marker, what they
-accept today, what they would accept under the other profile.
+Inclusion criteria for marking a tool remote-safe: it reaches the API with the
+request-scoped bearer and is fully governed by API permissions; it does NOT read
+the local filesystem; it does NOT read process-global settings for a per-user
+decision. Opting a tool in is a deliberate, reviewed change (it shifts the
+`REMOTE_SEED` drift guard in `tests/tools/test_remote_profile.py`).
 
-If you are merely deleting code that another profile might want later,
-that's git history and CHANGELOG territory, not a `GATED:` marker. Re-add
-the marker when the gated tool itself returns.
+### Exposure vs input restriction
+
+The `meta` marker expresses **exposure** only: whether a tool is available in the
+remote profile. The retired `GATED:` convention could also express *input*
+restriction within an exposed tool. Where a remotely-exposed tool needs restricted
+inputs (for example the attachment tools tracked in #305, which would accept a
+`file_url` rather than a local `file_path`), enforce that in the tool body gated on
+`mcp_remote_mode` at call time, not via the marker. A tool whose exclusion deserves
+a reason gets a plain code comment pointing at its follow-up issue (the attachment
+tools point at #305); the exclusion itself needs no annotation.

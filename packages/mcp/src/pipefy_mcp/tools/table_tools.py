@@ -25,6 +25,7 @@ from pipefy_mcp.tools.pagination_helpers import (
     build_pagination_info,
     validate_page_size,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.table_tool_helpers import (
     build_delete_table_error_payload,
     build_delete_table_success_payload,
@@ -65,6 +66,7 @@ class TableTools:
     def register(mcp: FastMCP, client: PipefyClient) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def search_tables(
             table_name: str | None = None,
@@ -122,6 +124,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_table(table_id: PipefyId) -> dict[str, Any]:
             """Load one database table: name, description, fields, and authorization.
@@ -161,6 +164,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_tables(table_ids: list[PipefyId]) -> dict[str, Any]:
             """Load several database tables by ID (same shape as get_table per table).
@@ -197,6 +201,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_table_records(
             table_id: PipefyId,
@@ -263,6 +268,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_table_record(record_id: PipefyId) -> dict[str, Any]:
             """Load a single database table record with its field values.
@@ -301,6 +307,7 @@ class TableTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def find_records(
             table_id: PipefyId,

@@ -30,6 +30,10 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
             "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
             "enabled" if settings.pipefy.mcp_unified_envelope else "disabled",
         )
+        logger.info(
+            "PIPEFY_MCP_REMOTE_MODE=%s",
+            "enabled" if settings.pipefy.mcp_remote_mode else "disabled",
+        )
         install_pipefy_validation_envelope()
         services_container = ServicesContainer.get_instance()
         await services_container.initialize_services(settings)
@@ -41,7 +45,10 @@ async def lifespan(app: FastMCP) -> AsyncIterator[FastMCP]:
         registry.check_for_name_collisions()
         mark_pipefy_tool_registration_started(app, set(registry.pipefy_tool_names))
         mcp = registry.register_tools()
-        mark_pipefy_tool_registration_complete(app, set(registry.pipefy_tool_names))
+        registry.apply_remote_profile(remote_mode=settings.pipefy.mcp_remote_mode)
+        mark_pipefy_tool_registration_complete(
+            app, registry.registered_pipefy_tool_names()
+        )
     except Exception:
         cleanup_failed_pipefy_tool_registration(app)
         logger.exception("Fatal error during server lifespan initialization")

@@ -10,6 +10,7 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 
 
 class OrganizationTools:
@@ -21,6 +22,7 @@ class OrganizationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_organization(organization_id: PipefyId) -> dict:
             """Fetch Pipefy organization details by ID.

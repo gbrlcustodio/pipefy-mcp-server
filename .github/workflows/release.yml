@@ -86,6 +86,7 @@ jobs:
           files: dist/*.whl
           body_path: CHANGELOG_RELEASE_BODY.md
       - name: Upload built distributions
+        if: vars.PYPI_PUBLISH_ENABLED == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -105,22 +106,12 @@ jobs:
         with:
           name: dist
           path: dist/
-      - name: Stage PyPI wheels (SDK + CLI + MCP + Auth + Infra)
+      - name: Stage wheels for PyPI (exclude sdists)
+        # The release job already verified exactly one wheel per package before
+        # uploading the artifact, so just publish the wheels and skip the sdists.
         run: |
           mkdir -p dist-pypi
-          shopt -s nullglob
-          sdk=(dist/pipefy_sdk-*.whl)
-          cli=(dist/pipefy_cli-*.whl)
-          mcp=(dist/pipefy_mcp_server-*.whl)
-          auth=(dist/pipefy_auth-*.whl)
-          infra=(dist/pipefy_infra-*.whl)
-          if [ "${#sdk[@]}" -ne 1 ] || [ "${#cli[@]}" -ne 1 ] || [ "${#mcp[@]}" -ne 1 ] || [ "${#auth[@]}" -ne 1 ] || [ "${#infra[@]}" -ne 1 ]; then
-            echo "Expected one SDK, one CLI, one MCP, one Auth, and one Infra wheel in dist/"
-            echo "sdk=${#sdk[@]} cli=${#cli[@]} mcp=${#mcp[@]} auth=${#auth[@]} infra=${#infra[@]}"
-            ls -la dist || true
-            exit 1
-          fi
-          cp "${sdk[0]}" "${cli[0]}" "${mcp[0]}" "${auth[0]}" "${infra[0]}" dist-pypi/
+          cp dist/*.whl dist-pypi/
       - name: Smoke install staged wheels (clean venv)
         run: |
           python -m venv .venv-pypi-smoke

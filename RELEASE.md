@@ -2,13 +2,16 @@
 
 Workspace distributions (`pipefy-sdk`, `pipefy-mcp-server`, `pipefy-cli`, `pipefy-auth`, `pipefy-infra`) share a single **lockstep** version string in each package's `__init__.py`. CI fails if those values diverge.
 
-## Pre-launch (v0.x): GitHub Release only
+## Cutting a release
 
-PyPI publishing is **disabled** for tags that do not start with `v1.`. Pre-release installs use git references (for example `uvx --from git+https://github.com/<owner>/<repo>.git@vX.Y.Z --refresh pipefy-cli`).
+Every `v*` tag builds all five wheels and sdists and creates a GitHub Release with the wheels attached. PyPI publishing runs on top of that, gated by the `PYPI_PUBLISH_ENABLED` repository variable (Settings > Secrets and variables > Actions > Variables):
+
+- **Unset or not `true`** (current state, while the PyPI account is being provisioned): GitHub Release only. Installs use git references, for example `uvx --from git+https://github.com/<owner>/<repo>.git@vX.Y.Z --refresh pipefy-cli`.
+- **`true`**: the `publish-pypi` job also uploads all five wheels to PyPI via Trusted Publishing, on **every** release tag including the `v0.2.0-beta.*` line. There is no version-based gate. Betas publish as PEP 440 pre-releases (a `v0.2.0-beta.4` tag ships `0.2.0b4`, which `pip` installs only with `--pre`).
 
 ### Public beta line (`v0.2.0-beta.*`)
 
-The next **GitHub pre-release** after the standalone repo’s [`v0.1.0-beta.1`](https://github.com/pipefy/ai-toolkit/releases/tag/v0.1.0-beta.1) is the **`v0.2.0-beta.*`** series on this monorepo (first cut: **`v0.2.0-beta.1`** unless you intentionally reuse another suffix). Same mechanics as any other **v0.x** tag: attach wheels to the GitHub Release; **no PyPI** until **`v1.`**.
+The next **GitHub pre-release** after the standalone repo's [`v0.1.0-beta.1`](https://github.com/pipefy/ai-toolkit/releases/tag/v0.1.0-beta.1) is the **`v0.2.0-beta.*`** series on this monorepo (first cut: **`v0.2.0-beta.1`** unless you intentionally reuse another suffix). Same mechanics as any other tag: wheels attach to the GitHub Release, and they also go to PyPI once `PYPI_PUBLISH_ENABLED` is `true`.
 
 The Release workflow requires the git tag (without leading `v`) to **exactly match** `__version__` in `packages/sdk/src/pipefy_sdk/__init__.py` (and the MCP/CLI/Auth/Infra copies). For example tag **`v0.2.0-beta.1`** implies **`__version__ = "0.2.0-beta.1"`** in all five packages before you push the tag (set via step 2 below using `version=0.2.0-beta.1`, or edit the five `__init__.py` files together).
 
@@ -72,19 +75,21 @@ uvx --from "git+https://github.com/pipefy/ai-toolkit.git@vX.Y.Z" --refresh pipef
 # Expected: help text (server may block in stdio mode — Ctrl-C after banner)
 ```
 
-## v1.0 and later: GitHub Release + PyPI
+## PyPI publishing
 
-Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.0.0` or `v1.0.0rc1`), the release workflow also runs **Trusted Publishing** to upload all five wheels (**`pipefy-cli`**, **`pipefy-mcp-server`**, **`pipefy-sdk`**, **`pipefy-auth`**, **`pipefy-infra`**) to PyPI via `pypa/gh-action-pypi-publish`. All five are required: `pipefy-cli` and `pipefy-mcp-server` depend on `pipefy-sdk` and `pipefy-auth`, which depend on `pipefy-infra`, so a public `pip install` only resolves if every package in that closure is on PyPI. See **Repository setup** below.
+When `PYPI_PUBLISH_ENABLED` is `true`, the `publish-pypi` job runs after the GitHub Release on every release tag and uses **Trusted Publishing** to upload all five wheels (**`pipefy-cli`**, **`pipefy-mcp-server`**, **`pipefy-sdk`**, **`pipefy-auth`**, **`pipefy-infra`**) to PyPI via `pypa/gh-action-pypi-publish`. All five are required: `pipefy-cli` and `pipefy-mcp-server` depend on `pipefy-sdk` and `pipefy-auth`, which depend on `pipefy-infra`, so a public `pip install` only resolves if every package in that closure is on PyPI. See **Repository setup** below.
 
 **Repository setup (maintainers):**
 
 - Configure [Trusted Publishers](https://docs.pypi.org/trusted-publishers/using-a-publisher/) on PyPI for all five distributions: **`pipefy-cli`**, **`pipefy-mcp-server`**, **`pipefy-sdk`**, **`pipefy-auth`**, and **`pipefy-infra`**. The upload is a single batch, so if any of the five lacks a configured publisher, PyPI rejects that file and the release fails.
-- For the first release, the projects do not exist on PyPI yet. Register each of the five as a [pending publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/); the project is created on the first successful publish.
-- No long-lived PyPI token is required when using OIDC; the workflow requests `id-token: write`.
+- For the first publish, the projects do not exist on PyPI yet. Register each of the five as a [pending publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/); the project is created on the first successful publish. Each publisher points at owner `pipefy`, repo `ai-toolkit`, workflow `release.yml`, environment `pypi`.
+- No long-lived PyPI token is required when using OIDC; the `publish-pypi` job requests `id-token: write`.
+- Publishing stays off until the `PYPI_PUBLISH_ENABLED` repository variable is set to `true`. Flip it on only after the five (pending) publishers exist, since one missing publisher fails the whole release.
+- The `publish-pypi` job runs under the `pypi` GitHub Actions environment; add protection rules to that environment (required reviewers, allowed tags) if you want an approval gate before each upload.
 
-**After a v1.x tag:**
+**After a published tag:**
 
-1. Confirm the new versions appear on PyPI for each published package.
+1. Confirm the new versions appear on PyPI for each of the five packages.
 2. Smoke-test a clean install, for example:
 
     ```bash
@@ -97,4 +102,4 @@ Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.
 | --- | --- |
 | `scripts/bump_version.py` | Reads the SDK `__version__`, applies the bump, writes the same value to SDK, MCP, CLI, Auth, and Infra `__init__.py` plus the root `pyproject.toml`'s `[project].version`, then runs `uv lock` to refresh `uv.lock`. Also exposes a `verify` mode that asserts every version-bearing file agrees. |
 | `.github/workflows/ci.yml` | Invokes `scripts/bump_version.py verify` to assert the five `__version__` strings and root `pyproject.toml` `[project].version` all match. |
-| `.github/workflows/release.yml` | On `v*` tags: asserts the tag matches SDK `__version__`, extracts the matching `CHANGELOG.md` section as the GitHub Release body, builds wheels and sdists with `uv build --all-packages -o dist --wheel --sdist`, attaches wheels to the GitHub Release, and publishes all five wheels (CLI, MCP, SDK, Auth, Infra) to PyPI only when `github.ref_name` starts with `v1.`. |
+| `.github/workflows/release.yml` | On `v*` tags, the `release` job asserts the tag matches SDK `__version__`, extracts the matching `CHANGELOG.md` section as the GitHub Release body, builds wheels and sdists with `uv build --all-packages -o dist --wheel --sdist`, and attaches wheels to the GitHub Release. A separate `publish-pypi` job (environment `pypi`) then uploads all five wheels (CLI, MCP, SDK, Auth, Infra) to PyPI via Trusted Publishing when the `PYPI_PUBLISH_ENABLED` repository variable is `true`. |

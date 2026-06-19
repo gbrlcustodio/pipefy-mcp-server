@@ -60,35 +60,39 @@ _AUTOMATION_INPUT_KEY_ALIASES: dict[str, str] = {
 # are snake_case (to_phase_id, card_id) and others camelCase (httpMethod,
 # fromPhaseId). These are the canonical spellings the API accepts; we map the
 # opposite-cased spelling of each onto it so hand-written --extra tolerates both.
-_AUTOMATION_ACTION_PARAM_FIELDS: frozenset[str] = frozenset({
-    "to_phase_id",
-    "card_id",
-    "email_template_id",
-    "field_map",
-    "fields_map_order",
-    "aiParams",
-    "aiBehaviorParams",
-    "taskParams",
-    "slaParams",
-    "httpMethod",
-    "body",
-    "headers",
-    "url",
-    "strategy",
-    "oauth2Uuid",
-    "authenticationAddTo",
-    "authenticationKey",
-    "authenticationType",
-    "authenticationValue",
-})
-_AUTOMATION_EVENT_PARAM_FIELDS: frozenset[str] = frozenset({
-    "to_phase_id",
-    "fromPhaseId",
-    "inPhaseId",
-    "kindOfSla",
-    "triggerAutomationId",
-    "triggerFieldIds",
-})
+_AUTOMATION_ACTION_PARAM_FIELDS: frozenset[str] = frozenset(
+    {
+        "to_phase_id",
+        "card_id",
+        "email_template_id",
+        "field_map",
+        "fields_map_order",
+        "aiParams",
+        "aiBehaviorParams",
+        "taskParams",
+        "slaParams",
+        "httpMethod",
+        "body",
+        "headers",
+        "url",
+        "strategy",
+        "oauth2Uuid",
+        "authenticationAddTo",
+        "authenticationKey",
+        "authenticationType",
+        "authenticationValue",
+    }
+)
+_AUTOMATION_EVENT_PARAM_FIELDS: frozenset[str] = frozenset(
+    {
+        "to_phase_id",
+        "fromPhaseId",
+        "inPhaseId",
+        "kindOfSla",
+        "triggerAutomationId",
+        "triggerFieldIds",
+    }
+)
 
 
 def _camel_to_snake(name: str) -> str:

@@ -39,7 +39,9 @@ def _automation_params_from_flags(
 ) -> dict[str, dict[str, object]]:
     """Build the ``action_params``/``event_params`` envelopes from convenience flags.
 
-    Each flag maps to the API's exact-cased nested key. Containers with no flags
+    Keys are emitted in snake_case; the SDK canonicalizes them to whatever casing
+    each field requires at the API (which mixes ``to_phase_id`` with ``httpMethod``),
+    so this layer does not encode the API's casing quirks. Containers with no flags
     set are omitted so they never shadow an ``--extra`` payload.
     """
     action_params: dict[str, object] = {}
@@ -50,7 +52,7 @@ def _automation_params_from_flags(
     if url is not None:
         action_params["url"] = url
     if http_method is not None:
-        action_params["httpMethod"] = http_method
+        action_params["http_method"] = http_method
     if request_body is not None:
         action_params["body"] = request_body
     if headers is not None:
@@ -60,11 +62,11 @@ def _automation_params_from_flags(
     if trigger_phase is not None:
         event_params["to_phase_id"] = trigger_phase
     if from_phase is not None:
-        event_params["fromPhaseId"] = from_phase
+        event_params["from_phase_id"] = from_phase
     if in_phase is not None:
-        event_params["inPhaseId"] = in_phase
+        event_params["in_phase_id"] = in_phase
     if trigger_fields is not None:
-        event_params["triggerFieldIds"] = [
+        event_params["trigger_field_ids"] = [
             token.strip() for token in trigger_fields.split(",") if token.strip()
         ]
 

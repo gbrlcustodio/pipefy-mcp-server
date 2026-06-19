@@ -174,10 +174,22 @@ class TestNormalizeAutomationInputKeys:
 
     def test_canonicalizes_nested_event_param_keys(self):
         result = normalize_automation_input_keys(
-            {"event_params": {"from_phase_id": "ph-0", "to_phase_id": "ph-1"}}
+            {
+                "event_params": {
+                    "from_phase_id": "ph-0",
+                    "in_phase_id": "ph-2",
+                    "trigger_field_ids": ["f1", "f2"],
+                    "to_phase_id": "ph-1",
+                }
+            }
         )
         assert result == {
-            "event_params": {"fromPhaseId": "ph-0", "to_phase_id": "ph-1"}
+            "event_params": {
+                "fromPhaseId": "ph-0",
+                "inPhaseId": "ph-2",
+                "triggerFieldIds": ["f1", "f2"],
+                "to_phase_id": "ph-1",
+            }
         }
 
     def test_leaves_unknown_and_deep_nested_keys_untouched(self):

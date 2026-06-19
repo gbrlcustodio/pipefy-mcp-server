@@ -770,7 +770,10 @@ def _automation_create_mock():
 def test_automation_create_event_param_flags_build_event_params(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
 ):
-    """``--from-phase``/``--in-phase``/``--trigger-fields`` build event_params."""
+    """``--from-phase``/``--in-phase``/``--trigger-fields`` build snake_case event_params.
+
+    The CLI emits snake_case keys; the SDK canonicalizes them to the API's casing.
+    """
     oauth_env("aut-evt-flags")
     mock_client = _automation_create_mock()
     with patch(
@@ -811,9 +814,9 @@ def test_automation_create_event_param_flags_build_event_params(
         "action_params": {"to_phase_id": "ph-z"},
         "event_params": {
             "to_phase_id": "ph-t",
-            "fromPhaseId": "ph-a",
-            "inPhaseId": "ph-b",
-            "triggerFieldIds": ["f1", "f2", "f3"],
+            "from_phase_id": "ph-a",
+            "in_phase_id": "ph-b",
+            "trigger_field_ids": ["f1", "f2", "f3"],
         },
     }
 
@@ -821,7 +824,7 @@ def test_automation_create_event_param_flags_build_event_params(
 def test_automation_create_http_flags_build_action_params(
     runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
 ):
-    """HTTP flags map to the API's mixed-case action_params keys."""
+    """HTTP flags build snake_case action_params (SDK canonicalizes to API casing)."""
     oauth_env("aut-http-flags")
     mock_client = _automation_create_mock()
     with patch(
@@ -859,7 +862,7 @@ def test_automation_create_http_flags_build_action_params(
     assert kwargs["extra_input"] == {
         "action_params": {
             "url": "https://example.com/hook",
-            "httpMethod": "POST",
+            "http_method": "POST",
             "body": '{"k":"v"}',
             "headers": '{"Content-Type":"application/json"}',
         }

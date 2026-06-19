@@ -74,11 +74,12 @@ uvx --from "git+https://github.com/pipefy/ai-toolkit.git@vX.Y.Z" --refresh pipef
 
 ## v1.0 and later: GitHub Release + PyPI
 
-Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.0.0` or `v1.0.0rc1`), the release workflow also runs **Trusted Publishing** to upload the **`pipefy-cli`** and **`pipefy-mcp-server`** wheels to PyPI via `pypa/gh-action-pypi-publish` (the `pipefy-sdk` wheel is built for the GitHub Release but is **not** uploaded to PyPI until maintainers enable it in the workflow; see **Repository setup** below).
+Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.0.0` or `v1.0.0rc1`), the release workflow also runs **Trusted Publishing** to upload all five wheels (**`pipefy-cli`**, **`pipefy-mcp-server`**, **`pipefy-sdk`**, **`pipefy-auth`**, **`pipefy-infra`**) to PyPI via `pypa/gh-action-pypi-publish`. All five are required: `pipefy-cli` and `pipefy-mcp-server` depend on `pipefy-sdk` and `pipefy-auth`, which depend on `pipefy-infra`, so a public `pip install` only resolves if every package in that closure is on PyPI. See **Repository setup** below.
 
 **Repository setup (maintainers):**
 
-- Configure [Trusted Publishers](https://docs.pypi.org/trusted-publishers/using-a-publisher/) on PyPI for **`pipefy-cli`** and **`pipefy-mcp-server`** (and `pipefy-sdk` later if you enable it in the workflow).
+- Configure [Trusted Publishers](https://docs.pypi.org/trusted-publishers/using-a-publisher/) on PyPI for all five distributions: **`pipefy-cli`**, **`pipefy-mcp-server`**, **`pipefy-sdk`**, **`pipefy-auth`**, and **`pipefy-infra`**. The upload is a single batch, so if any of the five lacks a configured publisher, PyPI rejects that file and the release fails.
+- For the first release, the projects do not exist on PyPI yet. Register each of the five as a [pending publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/); the project is created on the first successful publish.
 - No long-lived PyPI token is required when using OIDC; the workflow requests `id-token: write`.
 
 **After a v1.x tag:**
@@ -96,4 +97,4 @@ Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.
 | --- | --- |
 | `scripts/bump_version.py` | Reads the SDK `__version__`, applies the bump, writes the same value to SDK, MCP, CLI, Auth, and Infra `__init__.py` plus the root `pyproject.toml`'s `[project].version`, then runs `uv lock` to refresh `uv.lock`. Also exposes a `verify` mode that asserts every version-bearing file agrees. |
 | `.github/workflows/ci.yml` | Invokes `scripts/bump_version.py verify` to assert the five `__version__` strings and root `pyproject.toml` `[project].version` all match. |
-| `.github/workflows/release.yml` | On `v*` tags: asserts the tag matches SDK `__version__`, extracts the matching `CHANGELOG.md` section as the GitHub Release body, builds wheels and sdists with `uv build --all-packages -o dist --wheel --sdist`, attaches wheels to the GitHub Release, and publishes CLI + MCP wheels to PyPI only when `github.ref_name` starts with `v1.`. |
+| `.github/workflows/release.yml` | On `v*` tags: asserts the tag matches SDK `__version__`, extracts the matching `CHANGELOG.md` section as the GitHub Release body, builds wheels and sdists with `uv build --all-packages -o dist --wheel --sdist`, attaches wheels to the GitHub Release, and publishes all five wheels (CLI, MCP, SDK, Auth, Infra) to PyPI only when `github.ref_name` starts with `v1.`. |

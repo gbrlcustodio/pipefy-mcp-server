@@ -9,7 +9,7 @@ dependencies = [
     "httpx-auth>=0.23.1",
     "keyring>=24",
     "keyrings.alt>=5",
-    "pipefy-infra",
+    "pipefy-infra==0.2.0-beta.3",
     "pydantic>=2.13.4,<3",
     "pydantic-settings>=2.8.1",
 ]

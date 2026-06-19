@@ -9,7 +9,7 @@ dependencies = [
     "gql[httpx]>=4.0.0,<5",
     "httpx>=0.27.0",
     "openpyxl>=3.1.5",
-    "pipefy-infra",
+    "pipefy-infra==0.2.0-beta.3",
     "pydantic>=2.13.4,<3",
     "pydantic-settings>=2.8.1",
     "rapidfuzz>=3.14.3",

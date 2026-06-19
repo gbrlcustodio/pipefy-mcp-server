@@ -28,6 +28,17 @@ INIT_PATHS = (
     REPO_ROOT / "packages/infra/src/pipefy_infra/__init__.py",
 )
 
+# Each published package pins its workspace siblings to the exact lockstep
+# version in its built metadata, so `pip install pipefy-cli==X` pulls
+# pipefy-sdk==X rather than a newer sibling that happens to be on PyPI. The
+# [tool.uv.sources] workspace mapping overrides these pins for in-repo dev.
+WORKSPACE_DEP_PINS: dict[Path, tuple[str, ...]] = {
+    REPO_ROOT / "packages/sdk/pyproject.toml": ("pipefy-infra",),
+    REPO_ROOT / "packages/auth/pyproject.toml": ("pipefy-infra",),
+    REPO_ROOT / "packages/cli/pyproject.toml": ("pipefy-sdk", "pipefy-auth"),
+    REPO_ROOT / "packages/mcp/pyproject.toml": ("pipefy-sdk", "pipefy-auth"),
+}
+
 # Anchored to the [project] table. The middle alternation walks lines that
 # don't start with `[` (so a sibling [tool.X] header ends the run), but the
 # line CONTENTS can contain `[` (so `classifiers = [...]`, `dependencies =
@@ -89,6 +100,34 @@ def write_version_to_all_files(new_version: str) -> None:
         )
         raise ValueError(msg)
     ROOT_PYPROJECT.write_text(new_root, encoding="utf-8")
+
+
+def workspace_dep_pin_re(dep_name: str) -> re.Pattern[str]:
+    """Match a quoted ``dep_name`` requirement, with or without an existing ``==`` pin.
+
+    The name must fill the entire quoted string, so the unquoted
+    ``[tool.uv.sources]`` keys and a parenthesized mention inside a description
+    are not matched. A package's own ``name = "..."`` field IS a full quoted
+    string and would match; that collision is avoided by ``WORKSPACE_DEP_PINS``
+    never listing a package's own name (a package cannot depend on itself).
+    """
+    return re.compile(rf'(["\']){re.escape(dep_name)}(?:\s*==[^"\']*)?(["\'])')
+
+
+def write_dep_pins(new_version: str) -> None:
+    """Pin each package's workspace-sibling dependencies to ``new_version``."""
+    for path, deps in WORKSPACE_DEP_PINS.items():
+        text = path.read_text(encoding="utf-8")
+        for dep in deps:
+            text, count = workspace_dep_pin_re(dep).subn(
+                rf"\g<1>{dep}=={new_version}\g<2>",
+                text,
+                count=1,
+            )
+            if count != 1:
+                msg = f"Expected one {dep!r} dependency in {path}, replaced {count}"
+                raise ValueError(msg)
+        path.write_text(text, encoding="utf-8")
 
 
 def parse_core(version: str) -> tuple[int, int, int]:
@@ -226,6 +265,15 @@ def verify_lockstep() -> int:
             return 1
         raw[str(path.relative_to(REPO_ROOT))] = m.group(2)
 
+    for path, deps in WORKSPACE_DEP_PINS.items():
+        text = path.read_text(encoding="utf-8")
+        for dep in deps:
+            m = re.search(rf'(["\']){re.escape(dep)}==([^"\']+)\1', text)
+            if not m:
+                print(f"missing pinned {dep!r} dependency in {path}", file=sys.stderr)
+                return 1
+            raw[f"{path.relative_to(REPO_ROOT)}::{dep}"] = m.group(2)
+
     try:
         raw["pyproject.toml"] = read_root_pyproject_version()
     except (KeyError, tomllib.TOMLDecodeError, OSError) as exc:
@@ -285,6 +333,7 @@ def main() -> int:
         return 2
 
     write_version_to_all_files(new_version)
+    write_dep_pins(new_version)
     refresh_lockfile()
     print(f"Bumped {current} -> {new_version}")
     return 0

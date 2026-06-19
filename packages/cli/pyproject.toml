@@ -5,8 +5,8 @@ description = "Typer CLI for Pipefy (pipefy-sdk)."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "pipefy-sdk",
-    "pipefy-auth",
+    "pipefy-sdk==0.2.0-beta.3",
+    "pipefy-auth==0.2.0-beta.3",
     "typer>=0.12",
     "rich>=13",
     "pydantic-settings>=2.8.1",

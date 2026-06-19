@@ -8,8 +8,8 @@ dependencies = [
     "httpx>=0.27.0",
     "mcp[cli]>=1.25.0",
     # Workspace resolves versions in dev; PyPI releases stage these wheels alongside CLI/MCP (see release workflow).
-    "pipefy-auth",
-    "pipefy-sdk",
+    "pipefy-auth==0.2.0-beta.3",
+    "pipefy-sdk==0.2.0-beta.3",
     "pydantic>=2.13.4,<3",
     "pydantic-settings>=2.8.1",
 ]

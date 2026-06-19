@@ -85,3 +85,56 @@ def test_root_project_version_re_rejects_missing_version(pyproject: str) -> None
         r'\1"REPLACED"', pyproject, count=1
     )
     assert count == 0, f"expected no match in {pyproject!r}"
+
+
+@pytest.mark.parametrize(
+    ("entry", "expected"),
+    [
+        # Bare dependency gains a pin.
+        ('"pipefy-sdk"', '"pipefy-sdk==9.9.9"'),
+        # Already-pinned dependency is re-pinned to the new version.
+        ('"pipefy-sdk==0.2.0-beta.3"', '"pipefy-sdk==9.9.9"'),
+        # Single quotes are handled too.
+        ("'pipefy-sdk'", "'pipefy-sdk==9.9.9'"),
+    ],
+)
+def test_workspace_dep_pin_re_rewrites_dependency(entry: str, expected: str) -> None:
+    new_text, count = _bump.workspace_dep_pin_re("pipefy-sdk").subn(
+        r"\g<1>pipefy-sdk==9.9.9\g<2>", entry, count=1
+    )
+    assert count == 1
+    assert new_text == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # An unquoted [tool.uv.sources] key must not be pinned (no quotes).
+        "pipefy-sdk = { workspace = true }",
+        # A parenthesized mention inside a description must not be pinned
+        # (the name is not the whole quoted string).
+        'description = "Typer CLI for Pipefy (pipefy-sdk)."',
+    ],
+)
+def test_workspace_dep_pin_re_leaves_non_dependencies_untouched(text: str) -> None:
+    _new_text, count = _bump.workspace_dep_pin_re("pipefy-sdk").subn(
+        r"\g<1>pipefy-sdk==9.9.9\g<2>", text, count=1
+    )
+    assert count == 0, f"unexpectedly matched in {text!r}"
+
+
+def test_workspace_dep_pins_never_target_own_name() -> None:
+    """The own-name collision (name = "x" is a full quoted string) is avoided by
+    the pin map never listing a package's own distribution name."""
+    own_name = {
+        "sdk": "pipefy-sdk",
+        "mcp": "pipefy-mcp-server",
+        "cli": "pipefy-cli",
+        "auth": "pipefy-auth",
+        "infra": "pipefy-infra",
+    }
+    for path, deps in _bump.WORKSPACE_DEP_PINS.items():
+        pkg_dir = path.parent.name
+        assert own_name[pkg_dir] not in deps, (
+            f"{path} would pin its own name {own_name[pkg_dir]!r}"
+        )

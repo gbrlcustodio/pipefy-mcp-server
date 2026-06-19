@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -71,7 +75,8 @@ jobs:
           from pathlib import Path
 
           dist = Path("dist")
-          for prefix in ("pipefy_sdk", "pipefy_mcp_server", "pipefy_cli", "pipefy_auth", "pipefy_infra"):
+          expected = ("pipefy_sdk", "pipefy_mcp_server", "pipefy_cli", "pipefy_auth", "pipefy_infra")
+          for prefix in expected:
               wheels = list(dist.glob(f"{prefix}-*.whl"))
               if len(wheels) != 1:
                   print(
@@ -79,6 +84,17 @@ jobs:
                       file=sys.stderr,
                   )
                   sys.exit(1)
+          # Bound the published set: any wheel beyond the five known packages
+          # (e.g. a new workspace member) must fail here rather than be silently
+          # published, since the publish step copies every wheel in dist/.
+          all_wheels = list(dist.glob("*.whl"))
+          if len(all_wheels) != len(expected):
+              print(
+                  f"expected exactly {len(expected)} wheels in dist/, got "
+                  f"{sorted(w.name for w in all_wheels)!r}",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
           PY
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -92,6 +108,7 @@ jobs:
           name: dist
           path: dist/
           if-no-files-found: error
+          retention-days: 1
 
   publish-pypi:
     needs: release
@@ -101,17 +118,28 @@ jobs:
     permissions:
       id-token: write
     steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - name: Download built distributions
         uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
       - name: Stage wheels for PyPI (exclude sdists)
-        # The release job already verified exactly one wheel per package before
-        # uploading the artifact, so just publish the wheels and skip the sdists.
+        # The release job already verified exactly one wheel per package and no
+        # extras before uploading the artifact, so publish the wheels and skip
+        # the sdists.
         run: |
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          if [ ${#wheels[@]} -eq 0 ]; then
+            echo "no wheels in dist/ to publish" >&2
+            exit 1
+          fi
           mkdir -p dist-pypi
-          cp dist/*.whl dist-pypi/
+          cp "${wheels[@]}" dist-pypi/
       - name: Smoke install staged wheels (clean venv)
         run: |
           python -m venv .venv-pypi-smoke
@@ -123,3 +151,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist-pypi/
+          # Idempotent re-runs: a re-pushed tag at an already-published version
+          # skips existing files instead of failing the release on PyPI's 400.
+          skip-existing: true

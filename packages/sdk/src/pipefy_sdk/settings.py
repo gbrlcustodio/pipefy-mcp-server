@@ -148,6 +148,16 @@ class PipefySettings(BaseSettings):
         ),
     )
 
+    mcp_remote_mode: bool = Field(
+        default=False,
+        description=(
+            "When true (env: PIPEFY_MCP_REMOTE_MODE), the server runs the hosted/remote "
+            "profile and exposes ONLY tools explicitly marked remote-safe (default-deny). "
+            "When false (default), all tools register (local stdio profile). Read at "
+            "registration time, a startup decision, not per call."
+        ),
+    )
+
     @field_validator("base_url", "org_id", mode="before")
     @classmethod
     def _strip_str(cls, value: object) -> object:

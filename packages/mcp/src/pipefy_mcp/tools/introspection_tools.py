@@ -12,6 +12,7 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 
 
 class IntrospectionTools:
@@ -23,6 +24,7 @@ class IntrospectionTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def introspect_type(
             type_name: str,
@@ -51,6 +53,7 @@ class IntrospectionTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def introspect_mutation(
             mutation_name: str,
@@ -81,6 +84,7 @@ class IntrospectionTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def introspect_query(
             query_name: str,
@@ -109,6 +113,7 @@ class IntrospectionTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def search_schema(
             keyword: str,

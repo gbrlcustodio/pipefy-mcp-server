@@ -36,6 +36,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     resolve_phase_field_identifiers,
 )
 from pipefy_mcp.tools.pipe_tool_helpers import find_label_dependents
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_error_envelope import (
     is_unified_envelope_enabled,
     tool_error_message,
@@ -462,6 +463,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_phase_cards(
             phase_id: PipefyId,

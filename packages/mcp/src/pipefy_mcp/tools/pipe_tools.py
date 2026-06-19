@@ -65,6 +65,7 @@ from pipefy_mcp.tools.relation_tool_helpers import (
     build_relation_mutation_success_payload,
     handle_relation_tool_graphql_error,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_error_envelope import (
     is_unified_envelope_enabled,
     tool_error,
@@ -276,6 +277,7 @@ class PipeTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_card(
             ctx: Context[ServerSession, None],
@@ -591,6 +593,7 @@ class PipeTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_cards(
             ctx: Context[ServerSession, None],
@@ -664,6 +667,7 @@ class PipeTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def find_cards(
             pipe_id: PipefyId,
@@ -724,6 +728,7 @@ class PipeTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_pipe(
             ctx: Context[ServerSession, None],
@@ -992,6 +997,7 @@ class PipeTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_start_form_fields(
             pipe_id: PipefyId, required_only: bool = False
@@ -1024,6 +1030,7 @@ class PipeTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_phase_fields(
             phase_id: PipefyId, required_only: bool = False
@@ -1146,6 +1153,7 @@ class PipeTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def search_pipes(
             pipe_name: str | None = None,

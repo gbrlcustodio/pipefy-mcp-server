@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import logging
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.core.fastmcp_tool_lifecycle import remove_fastmcp_tools_by_name
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
 from pipefy_mcp.tools.attachment_tools import AttachmentTools
@@ -16,9 +21,15 @@ from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.pipe_tools import PipeTools
 from pipefy_mcp.tools.portal_tools import PortalTools
 from pipefy_mcp.tools.relation_tools import RelationTools
+from pipefy_mcp.tools.remote_profile import is_remote_tool
 from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.table_tools import TableTools
 from pipefy_mcp.tools.webhook_tools import WebhookTools
+
+if TYPE_CHECKING:
+    from mcp.server.fastmcp.tools.base import Tool
+
+logger = logging.getLogger(__name__)
 
 # Keep PIPEFY_TOOL_NAMES in sync with docs/parity.md and README MCP totals.
 PIPEFY_TOOL_NAMES = frozenset(
@@ -244,3 +255,51 @@ class ToolRegistry:
         AiAgentTools.register(self.mcp, self.services_container.pipefy_client)
 
         return self.mcp
+
+    def registered_pipefy_tool_names(self) -> set[str]:
+        """Pipefy tools currently registered on the app.
+
+        In the local profile this is the full set; after
+        :meth:`apply_remote_profile` in remote mode it is the surviving subset.
+        The registry owns this query so callers do not reconstruct it from set
+        arithmetic on ``pipefy_tool_names``.
+        """
+        return {
+            tool.name
+            for tool in self.mcp._tool_manager.list_tools()
+            if tool.name in self.pipefy_tool_names
+        }
+
+    def retain_only(self, predicate: Callable[[Tool], bool]) -> set[str]:
+        """Remove every Pipefy tool that does not satisfy ``predicate``.
+
+        Runs after :meth:`register_tools`: the marker rides on the ``@mcp.tool``
+        decorator, so a tool must be registered before its marker can be read.
+        Only names in ``pipefy_tool_names`` are eligible for removal, so
+        third-party or test-registered tools are never touched.
+
+        Returns the set of withheld (removed) tool names.
+        """
+        withheld = {
+            tool.name
+            for tool in self.mcp._tool_manager.list_tools()
+            if tool.name in self.pipefy_tool_names and not predicate(tool)
+        }
+        remove_fastmcp_tools_by_name(self.mcp, withheld)
+        return withheld
+
+    def apply_remote_profile(self, *, remote_mode: bool) -> set[str]:
+        """When ``remote_mode`` is on, withhold every tool not marked remote-safe.
+
+        Default-deny: only tools carrying ``meta=REMOTE`` survive. When off, a
+        no-op that returns an empty set (local stdio profile keeps all tools).
+        """
+        if not remote_mode:
+            return set()
+        withheld = self.retain_only(is_remote_tool)
+        logger.info(
+            "Remote profile: exposed %d, withheld %d Pipefy tools.",
+            len(self.pipefy_tool_names) - len(withheld),
+            len(withheld),
+        )
+        return withheld

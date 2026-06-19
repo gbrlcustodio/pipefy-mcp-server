@@ -85,6 +85,93 @@ async def test_repeat_lifespan_preserves_foreign_tools_and_stable_pipefy_names()
     assert "create_card" in second_names
 
 
+@pytest.mark.anyio
+async def test_lifespan_remote_mode_exposes_only_remote_safe_tools():
+    """With remote mode on, the lifespan withholds every tool not marked remote."""
+    from pipefy_mcp.server import lifespan
+
+    remote_settings = Settings(
+        pipefy=PipefySettings(base_url="https://api.pipefy.com", mcp_remote_mode=True),
+        auth=AuthSettings(),
+    )
+
+    app = FastMCP("remote-lifespan-test")
+
+    @app.tool()
+    async def foreign_mcp_tool() -> str:
+        """Outside ToolRegistry: must survive remote-mode filtering."""
+        return "ok"
+
+    mock_container = MagicMock()
+    mock_container.initialize_services = AsyncMock()
+    mock_container.pipefy_client = MagicMock()
+
+    with (
+        patch("pipefy_mcp.server.settings", remote_settings),
+        patch(
+            "pipefy_mcp.server.ServicesContainer.get_instance",
+            return_value=mock_container,
+        ),
+    ):
+        async with lifespan(app):
+            registered = {t.name for t in app._tool_manager.list_tools()}
+
+    exposed_pipefy = registered & PIPEFY_TOOL_NAMES
+    # Only the small remote-safe seed survives; the bulk is withheld.
+    assert 0 < len(exposed_pipefy) < len(PIPEFY_TOOL_NAMES)
+    assert "get_organization" in exposed_pipefy
+    assert "upload_attachment_to_card" not in exposed_pipefy
+    assert "execute_graphql" not in exposed_pipefy
+    # Foreign tools are never touched by the profile filter.
+    assert "foreign_mcp_tool" in registered
+
+
+@pytest.mark.anyio
+async def test_repeat_lifespan_in_remote_mode_does_not_accumulate_withheld_tools():
+    """A second remote-mode visit re-applies the filter cleanly; withheld tools do not leak back.
+
+    Guards the registration-completion record: each visit removes the previously
+    owned (surviving) set, re-registers, and re-filters, so the exposed set stays
+    stable instead of growing by the withheld tools removed on the prior visit.
+    """
+    from pipefy_mcp.server import lifespan
+
+    remote_settings = Settings(
+        pipefy=PipefySettings(base_url="https://api.pipefy.com", mcp_remote_mode=True),
+        auth=AuthSettings(),
+    )
+
+    app = FastMCP("remote-repeat-lifespan-test")
+
+    @app.tool()
+    async def foreign_mcp_tool() -> str:
+        """Outside ToolRegistry: must survive both visits."""
+        return "ok"
+
+    mock_container = MagicMock()
+    mock_container.initialize_services = AsyncMock()
+    mock_container.pipefy_client = MagicMock()
+
+    with (
+        patch("pipefy_mcp.server.settings", remote_settings),
+        patch(
+            "pipefy_mcp.server.ServicesContainer.get_instance",
+            return_value=mock_container,
+        ),
+    ):
+        async with lifespan(app):
+            first = {t.name for t in app._tool_manager.list_tools()}
+        async with lifespan(app):
+            second = {t.name for t in app._tool_manager.list_tools()}
+
+    # Stable across visits: no withheld tool leaked back, none were lost.
+    assert first == second
+    assert "foreign_mcp_tool" in second
+    exposed_pipefy = second & PIPEFY_TOOL_NAMES
+    assert 0 < len(exposed_pipefy) < len(PIPEFY_TOOL_NAMES)
+    assert "upload_attachment_to_card" not in second
+
+
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_lifespan_logs_error_when_initialization_raises():
@@ -170,6 +257,7 @@ async def test_lifespan_retry_after_failed_register_tools_succeeds():
         mock_ok = MagicMock()
         mock_ok.register_tools.return_value = app
         mock_ok.pipefy_tool_names = frozenset({"create_card"})
+        mock_ok.registered_pipefy_tool_names.return_value = {"create_card"}
         mock_registry_cls.side_effect = [mock_fail, mock_ok]
 
         with pytest.raises(RuntimeError, match="register failed"):

@@ -4,7 +4,7 @@
 
 ## Status
 
-Workspace-internal in v0.1; publishing **`pipefy-sdk`** to PyPI is gated separately from CLI/MCP (see **`RELEASE.md`** Trusted Publishing notes).
+Workspace-internal in v0.1. When PyPI publishing is enabled, `pipefy-sdk` ships to PyPI in the same single batch as CLI, MCP, Auth, and Infra (all five share one lockstep version); it is not gated separately (see **`RELEASE.md`** Trusted Publishing notes).
 
 ## Usage (within the monorepo)
 

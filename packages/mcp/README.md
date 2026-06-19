@@ -12,7 +12,7 @@ uvx \
   --refresh pipefy-mcp-server
 ```
 
-The `--with pipefy-sdk` / `pipefy-auth` flags are required pre-1.0 because the workspace members are not yet on PyPI. At v1.0 this collapses to `uvx pipefy-mcp-server`.
+The `--with pipefy-sdk` / `pipefy-auth` flags are required while the workspace members are not yet on PyPI. Once they are published, this collapses to `uvx pipefy-mcp-server`.
 
 For per-client wiring (Claude Code / Cursor / Claude Desktop / Codex), see [root `README.md#installation`](../../README.md#installation).
 

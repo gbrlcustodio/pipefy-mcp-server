@@ -93,7 +93,11 @@ When `PYPI_PUBLISH_ENABLED` is `true`, the `publish-pypi` job runs after the Git
 2. Smoke-test a clean install, for example:
 
     ```bash
+    # Final (non-prerelease) tags:
     uv tool install pipefy-cli
+
+    # Beta tags publish PEP 440 pre-releases, so allow them explicitly:
+    uv tool install --prerelease=allow pipefy-cli
     ```
 
 ## Automation reference

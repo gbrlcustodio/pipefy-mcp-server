@@ -21,7 +21,7 @@ uv tool install \
   "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/cli"
 ```
 
-The `--with` flags are required pre-1.0 because the workspace members are not yet on PyPI. At v1.0 this collapses to `uv tool install pipefy-cli`.
+The `--with` flags are required while the workspace members are not yet on PyPI. Once they are published, this collapses to `uv tool install pipefy-cli`.
 
 ## Quick start
 

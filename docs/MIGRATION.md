@@ -6,7 +6,7 @@ Existing users of `pipefy-mcp-server`: this guide covers what changed and what t
 
 ## Package name — unchanged
 
-`pipefy-mcp-server` is the same PyPI package name as before. Your `pip install pipefy-mcp-server` or `uvx pipefy-mcp-server` still works. The existing PyPI version is frozen at the pre-monorepo release; new versions ship at v1.0 via the same name.
+`pipefy-mcp-server` is the same PyPI package name as before. Your `pip install pipefy-mcp-server` or `uvx pipefy-mcp-server` still works. The existing PyPI version is frozen at the pre-monorepo release; new versions ship to the same name once PyPI publishing is enabled (see [`RELEASE.md`](../RELEASE.md)).
 
 **Pre-launch (v0.1 → v0.5):** install from git to get the latest:
 

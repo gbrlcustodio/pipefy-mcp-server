@@ -1,9 +1,11 @@
 """Typed OAuth response wrappers (RFC 6749 §5.1 success, §5.2 error;
-RFC 8628 §3.5 error).
+RFC 8628 §3.2 device authorization, §3.5 polling error).
 
-``TokenResponse`` parses the token-endpoint success body. ``OAuthErrorResponse``
-parses the error envelope; the call site supplies the rendering prefix and
-fallback so endpoint context stays out of the wire-shape model.
+``TokenResponse`` parses the token-endpoint success body.
+``DeviceAuthorization`` parses the device-authorization endpoint success body.
+``OAuthErrorResponse`` parses the error envelope; the call site supplies the
+rendering prefix and fallback so endpoint context stays out of the wire-shape
+model.
 """
 
 from __future__ import annotations
@@ -19,7 +21,10 @@ from pydantic import (
     StrictInt,
     StrictStr,
     ValidationError,
+    field_validator,
 )
+
+_DEFAULT_POLL_INTERVAL_S = 5
 
 
 def _strip_or_none(value: object) -> str | None:
@@ -60,6 +65,34 @@ class TokenResponse(BaseModel):
 
     @classmethod
     def from_payload(cls, payload: dict[str, object]) -> "TokenResponse":
+        return cls.model_validate(payload)
+
+
+class DeviceAuthorization(BaseModel):
+    """Parsed OAuth 2.0 device-authorization success response (RFC 8628 §3.2).
+
+    Strict typing matches :class:`TokenResponse`. ``interval`` defaults to 5s
+    per RFC 8628 §3.5 when absent, and any non-positive server-sent value is
+    clamped to the same default (a zero or negative poll cadence would either
+    busy-loop or never poll).
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    device_code: Annotated[StrictStr, Field(min_length=1)]
+    user_code: Annotated[StrictStr, Field(min_length=1)]
+    verification_uri: Annotated[StrictStr, Field(min_length=1)]
+    verification_uri_complete: _OptionalStr = None
+    expires_in: StrictInt
+    interval: StrictInt = _DEFAULT_POLL_INTERVAL_S
+
+    @field_validator("interval", mode="after")
+    @classmethod
+    def _clamp_nonpositive_interval(cls, value: int) -> int:
+        return value if value > 0 else _DEFAULT_POLL_INTERVAL_S
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, object]) -> "DeviceAuthorization":
         return cls.model_validate(payload)
 
 
@@ -123,4 +156,4 @@ def _format_validation_error(exc: ValidationError) -> str:
     return "; ".join(clauses) or "Response failed validation."
 
 
-__all__ = ["OAuthErrorResponse", "TokenResponse"]
+__all__ = ["DeviceAuthorization", "OAuthErrorResponse", "TokenResponse"]

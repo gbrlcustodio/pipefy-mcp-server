@@ -16,6 +16,7 @@ from pipefy_auth.bearer import (
     RefreshableBearerAuth,
     StaticBearerAuth,
 )
+from pipefy_auth.device import DeviceAuthorization, run_device_login
 from pipefy_auth.discovery import (
     DiscoveryPolicy,
     ProviderMetadata,
@@ -60,6 +61,7 @@ __all__ = [
     "AuthSettings",
     "CallableBearerAuth",
     "DEFAULT_AUTH_CLIENT_ID",
+    "DeviceAuthorization",
     "DiscoveryPolicy",
     "LoginError",
     "LoginResult",
@@ -91,6 +93,7 @@ __all__ = [
     "refresh_access_token",
     "resolve_pipefy_auth",
     "revoke_session",
+    "run_device_login",
     "run_login",
     "store_session",
     "tier_for",

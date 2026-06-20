@@ -16,6 +16,7 @@ from gql.transport.exceptions import (
     TransportServerError,
 )
 from pipefy_auth import (
+    DeviceAuthorization,
     DiscoveryPolicy,
     LoginError,
     OidcClient,
@@ -28,6 +29,7 @@ from pipefy_auth import (
     keychain_backend_name,
     load_session,
     revoke_session,
+    run_device_login,
     run_login,
     store_session,
 )
@@ -90,6 +92,7 @@ auth_app = typer.Typer(
 
 _SERVICE_ACCOUNT_ENV_KEYS = tuple(_LEGACY_ENV_KEYS_TO_NEW.values())
 _LEGACY_SERVICE_ACCOUNT_ENV_KEYS = tuple(_LEGACY_ENV_KEYS_TO_NEW.keys())
+_DEFAULT_CALLBACK_TIMEOUT_S = 180.0
 
 
 def _session_masking_env_vars() -> list[str]:
@@ -125,13 +128,18 @@ def _warn_if_masked() -> None:
 @auth_app.command("login")
 def auth_login(
     ctx: typer.Context,
+    device: bool = typer.Option(  # noqa: B008 (Typer Option pattern)
+        False,
+        "--device",
+        help="Use the OAuth 2.0 device authorization grant (headless-friendly).",
+    ),
     no_browser: bool = typer.Option(  # noqa: B008 (Typer Option pattern)
         False,
         "--no-browser",
         help="Print the authorization URL instead of opening a browser.",
     ),
     callback_timeout: float = typer.Option(  # noqa: B008
-        180.0,
+        _DEFAULT_CALLBACK_TIMEOUT_S,
         "--callback-timeout",
         help="Seconds to wait for the browser callback before giving up.",
         min=5.0,
@@ -140,6 +148,18 @@ def auth_login(
     """Sign in to Pipefy via your browser and store the session in the OS keychain."""
     # Lazy to keep keyring's ~30-80ms backend-discovery cost off every CLI startup.
     from keyring.errors import KeyringError
+
+    if device:
+        if no_browser:
+            raise typer.BadParameter(
+                "--no-browser is incompatible with --device "
+                "(the device flow has no browser-callback dance to suppress)."
+            )
+        if callback_timeout != _DEFAULT_CALLBACK_TIMEOUT_S:
+            raise typer.BadParameter(
+                "--callback-timeout is incompatible with --device "
+                "(the device deadline is governed by the IdP's RFC 8628 expires_in)."
+            )
 
     settings, auth = settings_and_auth_from_ctx(ctx)
     if auth.oidc_client is None:
@@ -170,16 +190,35 @@ def auth_login(
         return False
 
     try:
-        result = run_login(
-            issuer_url=issuer_url,
-            client_id=client_id,
-            callback_timeout_s=callback_timeout,
-            open_browser=_open,
-            on_url=_print_url,
-            discovery_policy=DiscoveryPolicy(
-                allow_insecure_urls=settings.allow_insecure_urls
-            ),
-        )
+        if device:
+
+            def _print_device_info(dev: DeviceAuthorization) -> None:
+                typer.echo("")
+                typer.echo(f"User code: {dev.user_code}")
+                typer.echo(f"Visit: {dev.verification_uri}")
+                if dev.verification_uri_complete:
+                    typer.echo(f"Or open: {dev.verification_uri_complete}")
+                typer.echo("")
+
+            result = run_device_login(
+                issuer_url=issuer_url,
+                client_id=client_id,
+                on_device_info=_print_device_info,
+                discovery_policy=DiscoveryPolicy(
+                    allow_insecure_urls=settings.allow_insecure_urls
+                ),
+            )
+        else:
+            result = run_login(
+                issuer_url=issuer_url,
+                client_id=client_id,
+                callback_timeout_s=callback_timeout,
+                open_browser=_open,
+                on_url=_print_url,
+                discovery_policy=DiscoveryPolicy(
+                    allow_insecure_urls=settings.allow_insecure_urls
+                ),
+            )
     except LoginError as exc:
         typer.echo(f"Login failed: {exc}", err=True)
         raise typer.Exit(1) from exc

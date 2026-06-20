@@ -487,6 +487,9 @@ Usage: pipefy auth login [OPTIONS]
  Sign in to Pipefy via your browser and store the session in the OS keychain.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --device                                        Use the OAuth 2.0 device     │
+│                                                 authorization grant          │
+│                                                 (headless-friendly).         │
 │ --no-browser                                    Print the authorization URL  │
 │                                                 instead of opening a         │
 │                                                 browser.                     │

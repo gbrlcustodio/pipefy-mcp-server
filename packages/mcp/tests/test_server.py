@@ -9,7 +9,7 @@ import pytest
 import uvicorn
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -25,6 +25,7 @@ from pipefy_mcp.server import (
 )
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
     pipefy=PipefySettings(base_url="https://api.pipefy.com"),
@@ -34,14 +35,16 @@ _MINIMAL_PIPEFY_SETTINGS = Settings(
 
 @pytest.fixture
 def mocked_container():
-    """Patch ``ServicesContainer.get_instance`` with a no-network container."""
+    """Patch the ``ServicesContainer`` the lifespan builds with a no-network mock.
+
+    The lifespan constructs ``ServicesContainer()`` per entry; this intercepts
+    that construction so ``initialize_services`` is a no-op and ``pipefy_client``
+    is a stand-in a tool can resolve.
+    """
     container = MagicMock()
     container.initialize_services = AsyncMock()
     container.pipefy_client = MagicMock()
-    with patch(
-        "pipefy_mcp.server.ServicesContainer.get_instance",
-        return_value=container,
-    ):
+    with patch("pipefy_mcp.server.ServicesContainer", return_value=container):
         yield container
 
 
@@ -122,7 +125,7 @@ def test_second_registration_pass_is_rejected_by_collision_preflight(mocked_cont
 async def test_lifespan_initializes_services_and_yields_container_without_registering(
     mocked_container,
 ):
-    """The lifespan initializes services and yields the container; it adds no tools."""
+    """The lifespan builds a container, initializes it, and yields it; no tools added."""
     app = FastMCP("lifespan-resources-test")
 
     @app.tool()
@@ -144,7 +147,11 @@ async def test_lifespan_initializes_services_and_yields_container_without_regist
 async def test_repeat_lifespan_reinitializes_each_visit_and_leaves_tools_untouched(
     mocked_container,
 ):
-    """Re-entering the lifespan re-initializes services but never re-registers."""
+    """Re-entering the lifespan builds and initializes a fresh container, never registers.
+
+    Streamable HTTP re-enters the lifespan per session; each session gets its own
+    initialized container, and the tool table is never mutated.
+    """
     app = FastMCP("lifespan-repeat-test")
 
     @app.tool()
@@ -159,7 +166,7 @@ async def test_repeat_lifespan_reinitializes_each_visit_and_leaves_tools_untouch
             second = {t.name for t in app._tool_manager.list_tools()}
 
     assert first == second == {"foreign_mcp_tool"}
-    # Resources are re-initialized per visit; the tool table is never mutated.
+    # Resources are initialized per visit; the tool table is never mutated.
     assert mocked_container.initialize_services.await_count == 2
 
 
@@ -168,17 +175,15 @@ async def test_repeat_lifespan_reinitializes_each_visit_and_leaves_tools_untouch
 async def test_lifespan_logs_error_when_initialization_raises():
     """When service init raises, logger.exception runs and the error propagates."""
     app = FastMCP("lifespan-init-fail")
+    mock_container = MagicMock()
+    mock_container.initialize_services = AsyncMock(
+        side_effect=ValueError("init failed")
+    )
     with (
         patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
-        patch("pipefy_mcp.server.ServicesContainer.get_instance") as mock_get_instance,
+        patch("pipefy_mcp.server.ServicesContainer", return_value=mock_container),
         patch("pipefy_mcp.server.logger") as mock_logger,
     ):
-        mock_container = MagicMock()
-        mock_container.initialize_services = AsyncMock(
-            side_effect=ValueError("init failed")
-        )
-        mock_get_instance.return_value = mock_container
-
         with pytest.raises(ValueError, match="init failed"):
             async with lifespan(app):
                 pass
@@ -189,23 +194,6 @@ async def test_lifespan_logs_error_when_initialization_raises():
 
 
 # --- HTTP (Streamable) transport profile (#300) -----------------------------
-
-
-def _build_http_app(remote_mode: bool) -> FastMCP:
-    """Register tools on a fresh, lifespan-free app with a mocked client.
-
-    Mirrors how ``run_server(http=True)`` builds the HTTP app, minus the socket.
-    """
-    app = FastMCP("http-transport-test")
-    mock_container = MagicMock()
-    mock_container.initialize_services = AsyncMock()
-    mock_container.pipefy_client = MagicMock()
-    with patch(
-        "pipefy_mcp.server.ServicesContainer.get_instance",
-        return_value=mock_container,
-    ):
-        _register_pipefy_tools(app, remote_mode=remote_mode)
-    return app
 
 
 @pytest.mark.unit
@@ -224,23 +212,18 @@ def test_loopback_http_bind_refuses_non_loopback_hosts(host):
 
 
 @pytest.mark.unit
-def test_run_server_http_registers_once_without_lifespan_and_serves():
+def test_run_server_http_builds_the_app_and_serves_over_streamable_http():
+    """The HTTP path builds through the shared builder and serves streamable-http."""
     fake_app = MagicMock()
     with (
         patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
-        patch("pipefy_mcp.server.anyio.run") as mock_anyio_run,
-        patch("pipefy_mcp.server.FastMCP", return_value=fake_app) as mock_fastmcp,
-        patch("pipefy_mcp.server._register_pipefy_tools") as mock_register,
-        patch("pipefy_mcp.server.ServicesContainer.get_instance"),
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
     ):
         run_server(http=True, host="127.0.0.1", port=9123, remote_mode=True)
 
-    mock_anyio_run.assert_called_once()
-    _, fastmcp_kwargs = mock_fastmcp.call_args
-    assert fastmcp_kwargs["host"] == "127.0.0.1"
-    assert fastmcp_kwargs["port"] == 9123
-    assert "lifespan" not in fastmcp_kwargs
-    mock_register.assert_called_once_with(fake_app, remote_mode=True)
+    mock_build.assert_called_once_with(remote_mode=True, host="127.0.0.1", port=9123)
     fake_app.run.assert_called_once_with("streamable-http")
 
 
@@ -250,31 +233,44 @@ def test_run_server_http_fills_host_and_port_from_settings_when_unset():
     fake_app = MagicMock()
     with (
         patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
-        patch("pipefy_mcp.server.anyio.run"),
-        patch("pipefy_mcp.server.FastMCP", return_value=fake_app) as mock_fastmcp,
-        patch("pipefy_mcp.server._register_pipefy_tools"),
-        patch("pipefy_mcp.server.ServicesContainer.get_instance"),
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
     ):
         run_server(http=True)
 
-    _, fastmcp_kwargs = mock_fastmcp.call_args
-    assert fastmcp_kwargs["host"] == "127.0.0.1"
-    assert fastmcp_kwargs["port"] == 8000
+    _, kwargs = mock_build.call_args
+    assert kwargs["host"] == "127.0.0.1"
+    assert kwargs["port"] == 8000
 
 
 @pytest.mark.unit
-def test_run_server_http_refuses_non_loopback_before_initializing_services():
-    """The loopback guard fires before any service init or socket bind."""
+def test_run_server_http_respects_an_explicit_zero_port():
+    """``port=0`` (let the OS pick) must not be swallowed as a falsy default."""
+    fake_app = MagicMock()
     with (
         patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
-        patch("pipefy_mcp.server.anyio.run") as mock_anyio_run,
-        patch("pipefy_mcp.server.FastMCP") as mock_fastmcp,
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
+    ):
+        run_server(http=True, host="127.0.0.1", port=0)
+
+    _, kwargs = mock_build.call_args
+    assert kwargs["port"] == 0
+
+
+@pytest.mark.unit
+def test_run_server_http_refuses_non_loopback_before_building():
+    """The loopback guard fires before the app is built or served."""
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build,
     ):
         with pytest.raises(RuntimeError, match="Refusing to serve"):
             run_server(http=True, host="0.0.0.0", port=9123, remote_mode=True)
 
-    mock_anyio_run.assert_not_called()
-    mock_fastmcp.assert_not_called()
+    mock_build.assert_not_called()
 
 
 def _free_port() -> int:
@@ -305,14 +301,25 @@ def _served_http_app(app: FastMCP, host: str, port: int):
 
 
 @pytest.mark.anyio
-async def test_http_client_completes_a_tool_call_over_streamable_http():
-    """Acceptance: a client connects over HTTP, lists the remote surface, and calls a tool."""
-    app = _build_http_app(remote_mode=True)
+async def test_http_client_resolves_the_lifespan_client_over_streamable_http(
+    mocked_container,
+):
+    """Acceptance: over real HTTP a tool resolves the per-request client, and the
+    remote profile is applied.
+
+    Builds through the shared :func:`build_pipefy_mcp_server` so the served app
+    carries the real lifespan. The custom tool calls :func:`get_pipefy_client`,
+    which reads ``ctx.request_context.lifespan_context.pipefy_client``. This
+    guards the regression where the HTTP app carried no lifespan: ``lifespan_context``
+    was then an empty dict and every client-backed tool raised on resolution.
+    """
+    app = build_pipefy_mcp_server(remote_mode=True)
 
     @app.tool()
-    async def ping() -> str:
-        """Minimal tool to prove a tools/call round-trip over HTTP."""
-        return "pong"
+    async def resolve_client(ctx: Context) -> str:
+        # Raises unless the lifespan yielded the container as lifespan_context.
+        get_pipefy_client(ctx)
+        return "resolved"
 
     host, port = "127.0.0.1", _free_port()
     with _served_http_app(app, host, port):
@@ -324,8 +331,9 @@ async def test_http_client_completes_a_tool_call_over_streamable_http():
                 listed = {tool.name for tool in (await session.list_tools()).tools}
                 assert "get_organization" in listed
                 assert "upload_attachment_to_card" not in listed
+                assert "resolve_client" in listed
 
-                result = await session.call_tool("ping", {})
+                result = await session.call_tool("resolve_client", {})
                 assert any(
-                    getattr(block, "text", "") == "pong" for block in result.content
+                    getattr(block, "text", "") == "resolved" for block in result.content
                 )

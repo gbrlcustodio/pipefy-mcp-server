@@ -5,7 +5,6 @@ import textwrap
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-import anyio
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.container import ServicesContainer
@@ -29,14 +28,22 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 async def lifespan(app: FastMCP) -> AsyncIterator[ServicesContainer]:
     """Manage the server's resource lifecycle (not tool registration).
 
-    Following the FastMCP lifespan contract, this owns resources only: it
-    initializes services and yields the container as the request
-    ``lifespan_context``. Tools are registered once, up front, by
-    :func:`_register_pipefy_tools`, so re-entering this context manager (which
-    Streamable HTTP does per session) never re-registers and cannot race on the
-    tool table. Tools resolve the live client per request from this
-    ``lifespan_context`` (see :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`),
-    so a re-entry that rebuilds the client is picked up without re-registration.
+    Following the FastMCP lifespan contract, this owns resources only: it builds a
+    container, initializes its services, and yields it as the request
+    ``lifespan_context``. Tools resolve the live client per request from this
+    ``lifespan_context`` (see
+    :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so both transports
+    must run a lifespan for tools to find a client.
+
+    The container is built per entry. Streamable HTTP re-enters this context
+    manager per session, so each session gets its own initialized container. That
+    re-resolution is cheap (the stored-session warm-up only hits the network when
+    the token is stale, serialized by the auth layer) and the HTTP profile is
+    loopback validation-only; #302's per-request identity will build the client
+    from the request here instead. See AGENTS.md for the fuller rationale.
+
+    Tools are registered once, up front, by :func:`_register_pipefy_tools`, never
+    here, so re-entry cannot race the tool table.
     """
     try:
         logger.info("Initializing services")
@@ -48,7 +55,7 @@ async def lifespan(app: FastMCP) -> AsyncIterator[ServicesContainer]:
             "PIPEFY_MCP_REMOTE_MODE=%s",
             "enabled" if settings.mcp.remote_mode else "disabled",
         )
-        container = ServicesContainer.get_instance()
+        container = ServicesContainer()
         await container.initialize_services(settings)
     except Exception:
         logger.exception("Fatal error during server lifespan initialization")
@@ -74,14 +81,42 @@ def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     registry.apply_remote_profile(remote_mode=remote_mode)
 
 
-def build_pipefy_mcp_server(*, remote_mode: bool | None = None) -> FastMCP:
-    """Build the stdio FastMCP app with its tools registered once, before serving.
+def _resolve_bind(host: str | None, port: int | None) -> tuple[str, int]:
+    """Fill an unset HTTP bind host/port from ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``.
 
-    ``remote_mode`` defaults to the configured ``PIPEFY_MCP_REMOTE_MODE``; pass
-    an explicit value to override (used by tests).
+    The single owner of the default-source rule, shared by :func:`run_server` (which
+    needs the resolved values for its log line and the loopback guard) and
+    :func:`build_pipefy_mcp_server` (which passes them to ``FastMCP``).
+    """
+    return (
+        host if host is not None else settings.mcp.host,
+        port if port is not None else settings.mcp.port,
+    )
+
+
+def build_pipefy_mcp_server(
+    *,
+    remote_mode: bool | None = None,
+    host: str | None = None,
+    port: int | None = None,
+) -> FastMCP:
+    """Build the FastMCP app with its tools registered once, before serving.
+
+    Used by both transports: the resource-only :func:`lifespan` is the same, only
+    the transport ``run`` differs. ``remote_mode`` defaults to the configured
+    ``PIPEFY_MCP_REMOTE_MODE``; pass an explicit value to override (used by
+    tests). ``host``/``port`` default to ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``
+    and matter only for the HTTP transport; stdio ignores them.
     """
     resolved = settings.mcp.remote_mode if remote_mode is None else remote_mode
-    app = FastMCP("pipefy", instructions=PIPEFY_INSTRUCTIONS, lifespan=lifespan)
+    resolved_host, resolved_port = _resolve_bind(host, port)
+    app = FastMCP(
+        "pipefy",
+        instructions=PIPEFY_INSTRUCTIONS,
+        lifespan=lifespan,
+        host=resolved_host,
+        port=resolved_port,
+    )
     _register_pipefy_tools(app, remote_mode=resolved)
     return app
 
@@ -130,11 +165,9 @@ def run_server(
     make ``--version``/``--help`` pay the full cost and turn any registration
     error into an import failure.
 
-    The two transports diverge only in how the app is wired: stdio reuses
-    :func:`build_pipefy_mcp_server` (which keeps the resource-only ``lifespan``);
-    HTTP builds a dedicated app with no constructor ``lifespan`` (which Streamable
-    HTTP would run per session) and initializes services once before serving.
-    Both register tools through the shared :func:`_register_pipefy_tools`.
+    Both transports build the same app through :func:`build_pipefy_mcp_server`
+    (same :func:`lifespan`, same :func:`_register_pipefy_tools`) and differ only
+    in the transport ``run`` and HTTP's bind concerns.
     """
     if not http:
         logger.info("Starting Pipefy MCP server")
@@ -142,8 +175,7 @@ def run_server(
         return
 
     resolved_remote = settings.mcp.remote_mode if remote_mode is None else remote_mode
-    resolved_host = host or settings.mcp.host
-    resolved_port = port or settings.mcp.port
+    resolved_host, resolved_port = _resolve_bind(host, port)
     logger.info(
         "Starting Pipefy MCP server over HTTP on %s:%d (remote_mode=%s)",
         resolved_host,
@@ -152,14 +184,7 @@ def run_server(
     )
     _assert_loopback_http_bind(host=resolved_host)
 
-    container = ServicesContainer.get_instance()
-    anyio.run(container.initialize_services, settings)
-
-    http_app = FastMCP(
-        "pipefy",
-        instructions=PIPEFY_INSTRUCTIONS,
-        host=resolved_host,
-        port=resolved_port,
+    app = build_pipefy_mcp_server(
+        remote_mode=resolved_remote, host=resolved_host, port=resolved_port
     )
-    _register_pipefy_tools(http_app, remote_mode=resolved_remote)
-    http_app.run("streamable-http")
+    app.run("streamable-http")

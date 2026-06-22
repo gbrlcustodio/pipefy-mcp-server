@@ -71,9 +71,12 @@ def mock_pipefy_client():
 def mock_services_container(mocker, mock_pipefy_client):
     container = Mock(ServicesContainer)
     container.pipefy_client = mock_pipefy_client
+    container.initialize_services = AsyncMock()
 
+    # The lifespan builds ServicesContainer() per entry; patch it where the
+    # server module looks it up so the built container is this mock.
     return mocker.patch(
-        "pipefy_mcp.core.container.ServicesContainer.get_instance",
+        "pipefy_mcp.server.ServicesContainer",
         return_value=container,
     )
 

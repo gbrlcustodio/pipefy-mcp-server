@@ -52,31 +52,37 @@ loopback (remote-safe file inputs are tracked in #305). When inbound auth lands
 ## Tool registration
 
 Tools are registered **once, at construction** (via `_register_pipefy_tools` in
-`server.py`, reached through `build_pipefy_mcp_server` for stdio and the HTTP path
-of `run_server`), not inside the FastMCP `lifespan`. The lifespan owns resources only:
-it initializes services and yields the container as the request
-`lifespan_context`. This follows the FastMCP contract, where the lifespan can run
-per session (per request under Streamable HTTP) and so must not mutate the tool
-table.
+`server.py`, reached through `build_pipefy_mcp_server`, which both transports use),
+not inside the FastMCP `lifespan`. The lifespan owns resources only: it
+initializes services and yields the container as the request `lifespan_context`.
+This follows the FastMCP contract, where the lifespan can run per session (per
+request under Streamable HTTP) and so must not mutate the tool table.
 
 Tools take no client at registration. Each tool function declares a
 `ctx: Context` parameter (FastMCP injects it and keeps it out of the tool's
 input schema) and resolves the live client per request with
 `get_pipefy_client(ctx)` (`tools/tool_context.py`), which reads
 `ctx.request_context.lifespan_context.pipefy_client`. Because the client is
-looked up per call, a service re-initialization (a fresh client) is picked up
-without re-registering tools, and a per-request identity (issue #302) can vary
-the client the lifespan yields without touching any tool. That is why there is
-no repeat-visit bookkeeping: registration never repeats.
+looked up per call rather than captured at registration, what the lifespan yields
+can change (a per-request identity for issue #302 can vary the client) without
+touching any tool or re-registering. That is why there is no repeat-visit
+bookkeeping: registration never repeats.
 
 When adding a tool, give it a `ctx: Context` parameter and start its body with
 `client = get_pipefy_client(ctx)`; do not pass a client through `register`.
 
 Both transports launch through the single `run_server` entry point (stdio by
-default, HTTP with `http=True`) and share `_register_pipefy_tools`. The stdio app
-keeps the resource-only `lifespan`; the HTTP app carries no constructor `lifespan`
-(which Streamable HTTP would run per session) and initializes services once before
-serving.
+default, HTTP with `http=True`), build the same app through
+`build_pipefy_mcp_server` (same `lifespan`, same `_register_pipefy_tools`), and
+differ only in the transport `run` and HTTP's bind concerns. Initialization runs
+in the lifespan, in the serving event loop, for both: the per-request HTTP clients
+bind to the loop that is running when they are first used, so creating them off in
+a separate startup loop would leave them bound to a closed loop. The lifespan
+builds a fresh `ServicesContainer` per entry (no singleton); Streamable HTTP
+re-enters it per session, so each session gets its own initialized container. The
+per-session re-resolution is cheap (the stored-session warm-up only hits the
+network when the token is stale, serialized by the auth layer) and #302's
+per-request identity will build the client from the request here anyway.
 
 ## Remote-profile tool marker
 

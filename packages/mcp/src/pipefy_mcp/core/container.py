@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Self
 
 from pipefy_auth import (
     STORED_SESSION_TIER,
@@ -22,19 +21,15 @@ logger = logging.getLogger(__name__)
 
 
 class ServicesContainer:
-    """Container for all services."""
+    """Holds the services a request needs, built once per server lifespan.
 
-    _instance: Self | None = None
+    The server lifespan constructs one of these, initializes it, and yields it as
+    the request ``lifespan_context``; tools read the client off it via
+    ``get_pipefy_client``. It is a plain per-lifespan object, not a singleton.
+    """
 
     def __init__(self) -> None:
         self.pipefy_client: PipefyClient | None = None
-
-    @classmethod
-    def get_instance(cls) -> Self:
-        """Get the singleton instance of the container."""
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
 
     async def initialize_services(self, settings: Settings) -> None:
         """Create and wire all services.

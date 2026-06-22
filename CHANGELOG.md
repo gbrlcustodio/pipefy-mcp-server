@@ -6,6 +6,12 @@ Releases are versioned in lockstep across workspace members (`pipefy-sdk`, `pipe
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **Plugin (Claude Code)**: renamed the OAuth slash command from `/login` to `/pipefy-login` (`commands/login.md` → `commands/pipefy-login.md`, frontmatter `name: pipefy-login`). The old `name: login` claimed the `/login` trigger and shadowed Claude Code's built-in `/login` (Claude account sign-in): selecting the built-in entry in the command picker still ran the Pipefy command, so Claude login was unreachable via `/login` while the plugin was installed. Closes #331.
+
 ## [0.2.0-beta.4] - 2026-06-19
 
 ### Added

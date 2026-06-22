@@ -245,6 +245,24 @@ def test_run_server_http_registers_once_without_lifespan_and_serves():
 
 
 @pytest.mark.unit
+def test_run_server_http_fills_host_and_port_from_settings_when_unset():
+    """Unset host/port resolve to the configured PIPEFY_MCP_HOST / PIPEFY_MCP_PORT."""
+    fake_app = MagicMock()
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.anyio.run"),
+        patch("pipefy_mcp.server.FastMCP", return_value=fake_app) as mock_fastmcp,
+        patch("pipefy_mcp.server._register_pipefy_tools"),
+        patch("pipefy_mcp.server.ServicesContainer.get_instance"),
+    ):
+        run_server(http=True)
+
+    _, fastmcp_kwargs = mock_fastmcp.call_args
+    assert fastmcp_kwargs["host"] == "127.0.0.1"
+    assert fastmcp_kwargs["port"] == 8000
+
+
+@pytest.mark.unit
 def test_run_server_http_refuses_non_loopback_before_initializing_services():
     """The loopback guard fires before any service init or socket bind."""
     with (

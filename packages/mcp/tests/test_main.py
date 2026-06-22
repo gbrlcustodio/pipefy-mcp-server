@@ -63,9 +63,9 @@ def test_remote_starts_http_server_with_remote_profile(mocker):
     _, kwargs = server_mock.call_args
     assert kwargs["http"] is True
     assert kwargs["remote_mode"] is True
-    # Falls back to the settings defaults when not overridden.
-    assert kwargs["host"] == "127.0.0.1"
-    assert kwargs["port"] == 8000
+    # Unset flags pass through as None; run_server resolves the settings defaults.
+    assert kwargs["host"] is None
+    assert kwargs["port"] is None
 
 
 @pytest.mark.unit

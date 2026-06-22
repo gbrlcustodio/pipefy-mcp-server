@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -13,6 +12,7 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.organization_tools import OrganizationTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tools.conftest import build_tool_test_server
 
 
 @pytest.fixture
@@ -24,9 +24,11 @@ def mock_org_client():
 
 @pytest.fixture
 def org_mcp_server(mock_org_client):
-    mcp = FastMCP("Pipefy Organization Tools Test")
-    OrganizationTools.register(mcp, mock_org_client)
-    return mcp
+    return build_tool_test_server(
+        "Pipefy Organization Tools Test",
+        OrganizationTools.register,
+        mock_org_client,
+    )
 
 
 @pytest.fixture

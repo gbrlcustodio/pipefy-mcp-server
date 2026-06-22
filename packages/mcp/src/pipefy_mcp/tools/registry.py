@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from mcp.server.fastmcp import FastMCP
-from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.core.container import PipefyClientProxy, ServicesContainer
 from pipefy_mcp.core.fastmcp_tool_lifecycle import remove_fastmcp_tools_by_name
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
@@ -216,9 +214,8 @@ _TOOLSETS = (
 class ToolRegistry:
     """Responsible for registering tools with the MCP server."""
 
-    def __init__(self, mcp: FastMCP, services_container: ServicesContainer):
+    def __init__(self, mcp: FastMCP):
         self.mcp = mcp
-        self.services_container = services_container
         self.pipefy_tool_names: frozenset[str] = PIPEFY_TOOL_NAMES
 
     @staticmethod
@@ -243,15 +240,14 @@ class ToolRegistry:
     def register_tools(self) -> None:
         """Register tools with the MCP server.
 
-        Tools bind a :class:`PipefyClientProxy`, not a concrete client, so they
-        can be registered before services are initialized and keep working after
-        a service re-initialization (which swaps the underlying client). This is
-        what lets registration run once, at construction, rather than inside the
+        Tool functions resolve the live Pipefy client per request from the MCP
+        lifespan context (see
+        :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so registration
+        needs no client and runs once, at construction, rather than inside the
         lifespan.
         """
-        client = cast(PipefyClient, PipefyClientProxy(self.services_container))
         for toolset in _TOOLSETS:
-            toolset.register(self.mcp, client)
+            toolset.register(self.mcp)
 
     def retain_only(self, predicate: Callable[[Tool], bool]) -> set[str]:
         """Remove every Pipefy tool that does not satisfy ``predicate``.

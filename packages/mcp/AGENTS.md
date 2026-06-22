@@ -31,11 +31,18 @@ as the request `lifespan_context`. This follows the FastMCP contract, where the
 lifespan can run per session (per request under Streamable HTTP) and so must not
 mutate the tool table.
 
-To register before services exist, tools bind a `PipefyClientProxy`
-(`core/container.py`) rather than a concrete `PipefyClient`. The proxy resolves
-`container.pipefy_client` on each access, so a service re-initialization (a fresh
-client) is picked up without re-registering tools. That is why there is no
-repeat-visit bookkeeping: registration never repeats.
+Tools take no client at registration. Each tool function declares a
+`ctx: Context` parameter (FastMCP injects it and keeps it out of the tool's
+input schema) and resolves the live client per request with
+`get_pipefy_client(ctx)` (`tools/tool_context.py`), which reads
+`ctx.request_context.lifespan_context.pipefy_client`. Because the client is
+looked up per call, a service re-initialization (a fresh client) is picked up
+without re-registering tools, and a per-request identity (issue #302) can vary
+the client the lifespan yields without touching any tool. That is why there is
+no repeat-visit bookkeeping: registration never repeats.
+
+When adding a tool, give it a `ctx: Context` parameter and start its body with
+`client = get_pipefy_client(ctx)`; do not pass a client through `register`.
 
 ## Remote-profile tool marker
 

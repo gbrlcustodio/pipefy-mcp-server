@@ -17,7 +17,6 @@ from unittest.mock import patch
 
 import pytest
 from _shared.live_settings import live_resolved_auth, require_live_creds
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -26,6 +25,7 @@ from pipefy_sdk import PipefyClient
 from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.attachment_tools import AttachmentTools
+from tools.conftest import build_tool_test_server
 
 mcp_server = build_pipefy_mcp_server()
 
@@ -75,9 +75,9 @@ def live_pipefy_client():
 
 @pytest.fixture
 def live_attachment_mcp(live_pipefy_client):
-    mcp = FastMCP("Attachment tools live")
-    AttachmentTools.register(mcp, live_pipefy_client)
-    return mcp
+    return build_tool_test_server(
+        "Attachment tools live", AttachmentTools.register, live_pipefy_client
+    )
 
 
 @pytest.mark.integration

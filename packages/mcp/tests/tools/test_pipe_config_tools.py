@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -25,7 +24,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
 )
 from pipefy_mcp.tools.pipe_config_tools import PipeConfigTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
 
 
 @pytest.mark.unit
@@ -101,9 +100,12 @@ def mock_pipe_config_client():
 
 @pytest.fixture
 def pipe_config_mcp_server(mock_pipe_config_client):
-    mcp = FastMCP("Pipe Config Tools Test")
-    PipeConfigTools.register(mcp, mock_pipe_config_client)
-    FieldConditionTools.register(mcp, mock_pipe_config_client)
+    mcp = build_tool_test_server(
+        "Pipe Config Tools Test",
+        PipeConfigTools.register,
+        mock_pipe_config_client,
+    )
+    FieldConditionTools.register(mcp)
     return mcp
 
 

@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -14,7 +13,10 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.observability_tools import _MAX_PAGE_SIZE, ObservabilityTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import (
+    assert_invalid_arguments_envelope,
+    build_tool_test_server,
+)
 
 
 @pytest.fixture
@@ -35,9 +37,11 @@ def mock_observability_client():
 
 @pytest.fixture
 def observability_mcp_server(mock_observability_client):
-    mcp = FastMCP("Observability Tools Test")
-    ObservabilityTools.register(mcp, mock_observability_client)
-    return mcp
+    return build_tool_test_server(
+        "Observability Tools Test",
+        ObservabilityTools.register,
+        mock_observability_client,
+    )
 
 
 @pytest.fixture

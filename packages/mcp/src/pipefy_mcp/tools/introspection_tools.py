@@ -4,22 +4,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
 )
 from pipefy_mcp.tools.remote_profile import REMOTE
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 
 class IntrospectionTools:
     """Registers MCP tools for schema introspection and ``execute_graphql``."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         """Register introspection-related tools on the MCP server."""
 
         @mcp.tool(
@@ -28,6 +28,7 @@ class IntrospectionTools:
         )
         async def introspect_type(
             type_name: str,
+            ctx: Context,
             max_depth: int = 1,
             include_parsed: bool = False,
         ) -> dict:
@@ -42,6 +43,7 @@ class IntrospectionTools:
                 max_depth: Levels of sub-types to resolve (1 = no recursion, 2+ = inline referenced types).
                 include_parsed: When True, include ``data`` dict alongside ``result``.
             """
+            client = get_pipefy_client(ctx)
             try:
                 result = await client.introspect_type(type_name, max_depth=max_depth)
             except Exception as exc:  # noqa: BLE001
@@ -57,6 +59,7 @@ class IntrospectionTools:
         )
         async def introspect_mutation(
             mutation_name: str,
+            ctx: Context,
             max_depth: int = 1,
             include_parsed: bool = False,
         ) -> dict:
@@ -71,6 +74,7 @@ class IntrospectionTools:
                 max_depth: Levels of sub-types to resolve (1 = no recursion, 2+ = inline referenced types).
                 include_parsed: When True, include ``data`` dict alongside ``result``.
             """
+            client = get_pipefy_client(ctx)
             try:
                 result = await client.introspect_mutation(
                     mutation_name, max_depth=max_depth
@@ -88,6 +92,7 @@ class IntrospectionTools:
         )
         async def introspect_query(
             query_name: str,
+            ctx: Context,
             max_depth: int = 1,
             include_parsed: bool = False,
         ) -> dict:
@@ -102,6 +107,7 @@ class IntrospectionTools:
                 max_depth: Levels of sub-types to resolve (1 = no recursion, 2+ = inline referenced types).
                 include_parsed: When True, include ``data`` dict alongside ``result``.
             """
+            client = get_pipefy_client(ctx)
             try:
                 result = await client.introspect_query(query_name, max_depth=max_depth)
             except Exception as exc:  # noqa: BLE001
@@ -117,6 +123,7 @@ class IntrospectionTools:
         )
         async def search_schema(
             keyword: str,
+            ctx: Context,
             kind: str | None = None,
             include_parsed: bool = False,
         ) -> dict:
@@ -131,6 +138,7 @@ class IntrospectionTools:
                 kind: Optional filter by GraphQL type kind (e.g. OBJECT, INPUT_OBJECT, ENUM, SCALAR).
                 include_parsed: When True, include ``data`` dict alongside ``result``.
             """
+            client = get_pipefy_client(ctx)
             try:
                 result = await client.search_schema(keyword, kind=kind)
             except Exception as exc:  # noqa: BLE001
@@ -145,6 +153,7 @@ class IntrospectionTools:
         )
         async def execute_graphql(
             query: str,
+            ctx: Context,
             variables: dict[str, Any] | None = None,
             include_parsed: bool = False,
         ) -> dict:
@@ -160,6 +169,7 @@ class IntrospectionTools:
                 variables: Optional variable map for the operation.
                 include_parsed: When True, include ``data`` dict alongside ``result``.
             """
+            client = get_pipefy_client(ctx)
             try:
                 result = await client.execute_graphql(query, variables)
             except Exception as exc:  # noqa: BLE001

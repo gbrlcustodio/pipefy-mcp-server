@@ -7,7 +7,7 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk import PipefyId
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
@@ -17,6 +17,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     field_condition_actions_error_message,
     handle_pipe_config_tool_graphql_error,
 )
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.validation_helpers import (
     validate_tool_id,
@@ -42,7 +43,7 @@ class FieldConditionTools:
     """Declares MCP tools for field conditions (read, create, update, delete)."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(
                 readOnlyHint=True,
@@ -67,6 +68,7 @@ class FieldConditionTools:
                 On success: ``success``, ``message``, and ``field_conditions`` (list from the API).
                 On failure: ``success: False`` and ``error``.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"get_field_conditions: phase_id={phase_id!r}, debug={debug}"
             )
@@ -119,6 +121,7 @@ class FieldConditionTools:
                 On success: ``success``, ``message``, and ``field_condition`` (single object).
                 On failure: ``success: False`` and ``error``.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"get_field_condition: field_condition_id={field_condition_id!r}, debug={debug}"
             )
@@ -222,6 +225,7 @@ class FieldConditionTools:
                 extra_input: Optional extra keys for ``createFieldConditionInput`` (e.g. ``index``).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"create_field_condition: phase_id={phase_id!r}, debug={debug}"
             )
@@ -341,6 +345,7 @@ class FieldConditionTools:
                 extra_input: Additional fields to merge into ``UpdateFieldConditionInput``.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"update_field_condition: condition_id={condition_id!r}, debug={debug}"
             )
@@ -447,6 +452,7 @@ class FieldConditionTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"delete_field_condition: condition_id={condition_id!r}, debug={debug}"
             )

@@ -7,7 +7,7 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk import PipefyId
 
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.relation_tool_helpers import (
@@ -16,6 +16,7 @@ from pipefy_mcp.tools.relation_tool_helpers import (
     build_relation_read_success_payload,
     handle_relation_tool_graphql_error,
 )
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     validate_tool_id,
@@ -26,11 +27,11 @@ class RelationTools:
     """MCP tools for relations between pipes/tables and linked cards."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def get_pipe_relations(pipe_id: PipefyId) -> dict[str, Any]:
+        async def get_pipe_relations(pipe_id: PipefyId, ctx: Context) -> dict[str, Any]:
             """List pipe relations for a pipe (parent and child links, config, and repo refs).
 
             Takes a **pipe** ID. Each relation's ``id`` in the response is a **pipe relation**
@@ -40,6 +41,7 @@ class RelationTools:
             Args:
                 pipe_id: Pipe ID.
             """
+            client = get_pipefy_client(ctx)
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -60,10 +62,12 @@ class RelationTools:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
-        async def get_table_relations(relation_ids: list[PipefyId]) -> dict[str, Any]:
+        async def get_table_relations(
+            relation_ids: list[PipefyId], ctx: Context
+        ) -> dict[str, Any]:
             """Load table relations by ID (Pipefy root ``table_relations``).
 
-            **Do not pass** ``table_id`` or a database table ID — this tool only accepts
+            **Do not pass** ``table_id`` or a database table ID, this tool only accepts
             **table relation** identifiers (the link object between tables). To resolve
             table IDs for schema/records, use ``get_table`` / ``search_tables`` instead.
             Obtain table-relation IDs from the Pipefy UI, your saved metadata, or GraphQL
@@ -72,6 +76,7 @@ class RelationTools:
             Args:
                 relation_ids: Non-empty list of **table relation** IDs (never the database table ID).
             """
+            client = get_pipefy_client(ctx)
             if not isinstance(relation_ids, list) or not relation_ids:
                 return build_relation_error_payload(
                     message="Invalid 'relation_ids': provide a non-empty list of table relation IDs.",
@@ -102,6 +107,7 @@ class RelationTools:
             parent_id: PipefyId,
             child_id: PipefyId,
             name: str,
+            ctx: Context,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -119,6 +125,7 @@ class RelationTools:
                 extra_input: Optional extra fields for the mutation input.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             parent_id, err = validate_tool_id(parent_id, "parent_id")
             if err is not None:
                 return err
@@ -160,6 +167,7 @@ class RelationTools:
         async def update_pipe_relation(
             relation_id: PipefyId,
             name: str,
+            ctx: Context,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -174,6 +182,7 @@ class RelationTools:
                 extra_input: Optional extra fields for the mutation input.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             relation_id, err = validate_tool_id(relation_id, "relation_id")
             if err is not None:
                 return err
@@ -229,6 +238,7 @@ class RelationTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             relation_id, err = validate_tool_id(relation_id, "relation_id")
             if err is not None:
                 return err
@@ -263,6 +273,7 @@ class RelationTools:
             parent_id: PipefyId,
             child_id: PipefyId,
             source_id: PipefyId,
+            ctx: Context,
             extra_input: Any | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -281,6 +292,7 @@ class RelationTools:
                 extra_input: Optional ``CreateCardRelationInput`` fields (camelCase), e.g. ``sourceType`` (default ``PipeRelation``).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             parent_id, err = validate_tool_id(parent_id, "parent_id")
             if err is not None:
                 return err

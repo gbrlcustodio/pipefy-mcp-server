@@ -11,7 +11,6 @@ from pipefy_sdk import (
     CardSearch,
     CommentInput,
     DeleteCommentInput,
-    PipefyClient,
     PipefyId,
     UpdateCommentInput,
     copy_card_search,
@@ -66,6 +65,7 @@ from pipefy_mcp.tools.relation_tool_helpers import (
     handle_relation_tool_graphql_error,
 )
 from pipefy_mcp.tools.remote_profile import REMOTE
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.tool_error_envelope import (
     is_unified_envelope_enabled,
     tool_error,
@@ -82,7 +82,7 @@ class PipeTools:
     """Declares tools to be used in the Pipe context."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         """Register the tools in the MCP server"""
 
         @mcp.tool(
@@ -145,6 +145,7 @@ class PipeTools:
                     merged from ``fields`` when provided. For agent seeding, set
                     ``skip_elicitation=true``. Discover via: ``get_pipe(pipe_id).phases[].id``.
             """
+            client = get_pipefy_client(ctx)
             card_data = fields or {}
             can_elicit = supports_elicitation(ctx)
 
@@ -301,6 +302,7 @@ class PipeTools:
                 dict: GraphQL ``card`` query payload (typically ``card`` with ``id``, ``title``,
                 ``phase``, ``assignees``, ``labels``, and—when requested—``fields``).
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"get_card: card_id={card_id}")
             card_id_str, err = validate_tool_id(card_id, "card_id")
             if err is not None:
@@ -341,6 +343,7 @@ class PipeTools:
                 (API fields ``child_relations`` / ``parent_relations`` on ``Card``). On failure:
                 ``success: False`` and ``error``.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"get_card_relations: card_id={card_id}")
             card_id_str, err = validate_tool_id(card_id, "card_id")
             if err is not None:
@@ -384,7 +387,7 @@ class PipeTools:
             structured_output=False,
         )
         async def add_card_comment(
-            card_id: PipefyId, text: str
+            card_id: PipefyId, text: str, ctx: Context[ServerSession, None]
         ) -> AddCardCommentPayload:
             """Add a text comment to a Pipefy card.
 
@@ -392,6 +395,7 @@ class PipeTools:
                 card_id: The ID of the card to comment on
                 text: The comment text to post (1-1000 characters)
             """
+            client = get_pipefy_client(ctx)
             # Privacy: never log the full comment text (it may contain sensitive data).
             try:
                 comment_input = CommentInput(card_id=card_id, text=text)
@@ -420,7 +424,7 @@ class PipeTools:
             structured_output=False,
         )
         async def update_comment(
-            comment_id: PipefyId, text: str
+            comment_id: PipefyId, text: str, ctx: Context[ServerSession, None]
         ) -> UpdateCommentPayload:
             """Update an existing comment by its ID.
 
@@ -428,6 +432,7 @@ class PipeTools:
                 comment_id: The ID of the comment to update.
                 text: The new comment text (1-1000 characters).
             """
+            client = get_pipefy_client(ctx)
             # Privacy: do not log full comment text.
             try:
                 update_input = UpdateCommentInput(comment_id=comment_id, text=text)
@@ -473,6 +478,7 @@ class PipeTools:
                 comment_id: The ID of the comment to delete.
                 confirm: Must be ``True`` to run the delete mutation.
             """
+            client = get_pipefy_client(ctx)
             try:
                 delete_input = DeleteCommentInput(comment_id=comment_id)
             except ValidationError:
@@ -532,6 +538,7 @@ class PipeTools:
             Returns:
                 Success payload with mutation result, or ``success: False`` with ``error``.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"delete_card_relation: child_id={child_id}, parent_id={parent_id}, "
                 f"source_id={source_id}, confirm={confirm}"
@@ -623,6 +630,7 @@ class PipeTools:
                 first: Max cards to return per page (1-500).
                 after: Cursor for fetching the next page (from ``pageInfo.endCursor`` of a previous call).
             """
+            client = get_pipefy_client(ctx)
             if first is not None:
                 validated_first, err = validate_page_size(first)
                 if err is not None:
@@ -673,6 +681,7 @@ class PipeTools:
             pipe_id: PipefyId,
             field_id: str,
             field_value: str,
+            ctx: Context[ServerSession, None],
             include_fields: bool = False,
             first: int | None = None,
             after: str | None = None,
@@ -702,6 +711,7 @@ class PipeTools:
                 after: Cursor from ``pageInfo.endCursor`` for the next page (optional).
                 debug: When True, append GraphQL codes and correlation_id on errors.
             """
+            client = get_pipefy_client(ctx)
             try:
                 response = await client.find_cards(
                     pipe_id,
@@ -751,6 +761,7 @@ class PipeTools:
                 ``phases`` (workflow phases; each includes ``cards_count``),
                 ``labels``, ``start_form_fields``, and related metadata from the API.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"get_pipe: pipe_id={pipe_id}")
             pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
@@ -789,6 +800,7 @@ class PipeTools:
                 On success: ``success``, ``message``, and ``labels`` (list of ``{id, name}``).
                 On failure: ``success: False`` and ``error``.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"get_labels: pipe_id={pipe_id}")
             pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
@@ -842,6 +854,7 @@ class PipeTools:
                 dict: GraphQL payload whose ``pipe.members`` entries include ``user``
                 (``id``, ``uuid``, ``name``, ``email``) and ``role_name`` per member.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"get_pipe_members: pipe_id={pipe_id}")
             pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
@@ -861,7 +874,9 @@ class PipeTools:
             annotations=ToolAnnotations(readOnlyHint=False, idempotentHint=True),
         )
         async def move_card_to_phase(
-            card_id: PipefyId, destination_phase_id: PipefyId
+            card_id: PipefyId,
+            destination_phase_id: PipefyId,
+            ctx: Context[ServerSession, None],
         ) -> dict:
             """Move a card to a target phase (Kanban column) within the same pipe.
 
@@ -881,7 +896,7 @@ class PipeTools:
                 a structured payload with ``success: false`` and ``valid_destinations`` when the
                 destination phase is not allowed from the current phase.
             """
-
+            client = get_pipefy_client(ctx)
             try:
                 return await client.move_card_to_phase(card_id, destination_phase_id)
             except Exception as exc:  # noqa: BLE001
@@ -901,6 +916,7 @@ class PipeTools:
             card_id: PipefyId,
             field_id: str,
             new_value: Any,
+            ctx: Context[ServerSession, None],
             debug: bool = False,
         ) -> dict:
             """Update a single field of a card.
@@ -926,6 +942,7 @@ class PipeTools:
                 dict: GraphQL response with success status and updated card information
                       including the card's id, title, fields, and updated_at timestamp
             """
+            client = get_pipefy_client(ctx)
             try:
                 return await client.update_card_field(card_id, field_id, new_value)
             except Exception as exc:  # noqa: BLE001
@@ -941,6 +958,7 @@ class PipeTools:
         )
         async def update_card(
             card_id: PipefyId,
+            ctx: Context[ServerSession, None],
             title: str | None = None,
             assignee_ids: list[PipefyId] | None = None,
             label_ids: list[PipefyId] | None = None,
@@ -984,6 +1002,7 @@ class PipeTools:
                     {"field_id": "tags", "value": "urgent", "operation": "ADD"},
                 ])
             """
+            client = get_pipefy_client(ctx)
             return await client.update_card(
                 card_id=card_id,
                 title=title,
@@ -1000,7 +1019,9 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_start_form_fields(
-            pipe_id: PipefyId, required_only: bool = False
+            pipe_id: PipefyId,
+            ctx: Context[ServerSession, None],
+            required_only: bool = False,
         ) -> dict:
             """Get the start form fields of a pipe.
 
@@ -1024,6 +1045,7 @@ class PipeTools:
                       - description: Field description text
                       - help: Help text for the field
             """
+            client = get_pipefy_client(ctx)
             return await client.get_start_form_fields(pipe_id, required_only)
 
         @mcp.tool(
@@ -1033,7 +1055,9 @@ class PipeTools:
             meta=REMOTE,
         )
         async def get_phase_fields(
-            phase_id: PipefyId, required_only: bool = False
+            phase_id: PipefyId,
+            ctx: Context[ServerSession, None],
+            required_only: bool = False,
         ) -> dict:
             """Get the fields available in a specific phase.
 
@@ -1060,6 +1084,7 @@ class PipeTools:
                       - description: Field description text
                       - help: Help text for the field
             """
+            client = get_pipefy_client(ctx)
             return await client.get_phase_fields(phase_id, required_only)
 
         @mcp.tool(
@@ -1099,6 +1124,7 @@ class PipeTools:
             Returns:
                 dict: GraphQL response with success status and updated card information.
             """
+            client = get_pipefy_client(ctx)
             try:
                 phase_fields_result = await client.get_phase_fields(
                     phase_id, required_fields_only
@@ -1156,6 +1182,7 @@ class PipeTools:
             meta=REMOTE,
         )
         async def search_pipes(
+            ctx: Context[ServerSession, None],
             pipe_name: str | None = None,
             max_pipes_per_org: int = 500,
         ) -> dict:
@@ -1193,6 +1220,7 @@ class PipeTools:
                           - match_score: Fuzzy match score (0-100) when pipe_name is provided.
                       And ``search_limits`` with applied caps.
             """
+            client = get_pipefy_client(ctx)
             mpc = max(1, min(500, int(max_pipes_per_org)))
             return await client.search_pipes(pipe_name, max_pipes_per_org=mpc)
 
@@ -1226,6 +1254,7 @@ class PipeTools:
             Returns:
                 Success/error status of the deletion.
             """
+            client = get_pipefy_client(ctx)
             card_id_str, err = validate_tool_id(card_id, "card_id")
             if err is not None:
                 return build_delete_card_error_payload(message=tool_error_message(err))

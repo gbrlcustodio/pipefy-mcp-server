@@ -7,7 +7,7 @@ from typing import Any
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk import PipefyId
 from pipefy_sdk.models.portal import (
     CreatePortalElementInput,
     PortalElementType,
@@ -31,6 +31,7 @@ from pipefy_mcp.tools.portal_tool_helpers import (
     validate_sort_page_ids_no_duplicates,
     validate_tool_ids,
 )
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
@@ -39,7 +40,7 @@ class PortalTools:
     """Registers MCP tools for portal read, metadata CRUD, and page operations."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         """Register portal-related tools on the MCP server."""
 
         @mcp.tool(
@@ -63,6 +64,7 @@ class PortalTools:
                     (string or unquoted integer via MCP clients).
                 search_term: Optional name filter.
             """
+            client = get_pipefy_client(ctx)
             organization_uuid, err = validate_tool_id(
                 organization_uuid, "organization_uuid"
             )
@@ -105,6 +107,7 @@ class PortalTools:
             Args:
                 portal_uuid: Portal interface UUID.
             """
+            client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
             if err is not None:
                 return err
@@ -131,6 +134,7 @@ class PortalTools:
             Args:
                 organization_uuid: Organization UUID, or numeric organization id.
             """
+            client = get_pipefy_client(ctx)
             organization_uuid, err = validate_tool_id(
                 organization_uuid, "organization_uuid"
             )
@@ -168,6 +172,7 @@ class PortalTools:
                 icon: Optional icon identifier.
                 display_pipefy_header: Whether to show the Pipefy header.
             """
+            client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
             if err is not None:
                 return err
@@ -225,6 +230,7 @@ class PortalTools:
                 portal_uuid: Portal interface UUID to delete.
                 confirm: Set to True to execute the deletion (step 2).
             """
+            client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
             if err is not None:
                 return err
@@ -272,6 +278,7 @@ class PortalTools:
                 description: Optional page description.
                 index: Optional sort index.
             """
+            client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
             if err is not None:
                 return err
@@ -325,6 +332,7 @@ class PortalTools:
                 description: Optional new description.
                 index: Optional sort index.
             """
+            client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
             if err is not None:
                 return err
@@ -389,6 +397,7 @@ class PortalTools:
                 page_id: Page UUID to delete.
                 confirm: Set to True to execute the deletion (step 2).
             """
+            client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
             if err is not None:
                 return err
@@ -435,6 +444,7 @@ class PortalTools:
                 portal_uuid: Parent portal interface UUID.
                 page_ids: Ordered list of page UUIDs (new sort order).
             """
+            client = get_pipefy_client(ctx)
             portal_uuid, err = validate_tool_id(portal_uuid, "portal_uuid")
             if err is not None:
                 return err
@@ -483,6 +493,7 @@ class PortalTools:
                 page_id: Page UUID.
                 layout: Layout JSON (full layout object for the page).
             """
+            client = get_pipefy_client(ctx)
             page_id, err = validate_tool_id(page_id, "page_id")
             if err is not None:
                 return err
@@ -527,6 +538,7 @@ class PortalTools:
                 editable: Optional editable flag.
                 layout: Optional layout JSON.
             """
+            client = get_pipefy_client(ctx)
             page_id, err = validate_tool_id(page_id, "page_id")
             if err is not None:
                 return err
@@ -600,6 +612,7 @@ class PortalTools:
                 data_sources: Optional data source bindings.
                 editable: Optional editable flag.
             """
+            client = get_pipefy_client(ctx)
             element_id, err = validate_tool_id(element_id, "element_id")
             if err is not None:
                 return err
@@ -662,6 +675,7 @@ class PortalTools:
                 page_id: Parent page UUID.
                 confirm: Set to True to execute the deletion (step 2).
             """
+            client = get_pipefy_client(ctx)
             element_id, err = validate_tool_id(element_id, "element_id")
             if err is not None:
                 return err
@@ -714,6 +728,7 @@ class PortalTools:
                 portal_uuid: Portal interface UUID that owns the page.
                 page_id: Page UUID that contains the element.
             """
+            client = get_pipefy_client(ctx)
             element_id, err = validate_tool_id(element_id, "element_id")
             if err is not None:
                 return err
@@ -756,6 +771,7 @@ class PortalTools:
                 main_portal_uuid: Parent main portal interface UUID.
                 name: Optional display name.
             """
+            client = get_pipefy_client(ctx)
             main_portal_uuid, err = validate_tool_id(
                 main_portal_uuid, "main_portal_uuid"
             )
@@ -796,6 +812,7 @@ class PortalTools:
                 element_id: Page element UUID (e.g. templated ``forms`` slot).
                 sub_portal_uuid: Sub-portal UUID to attach.
             """
+            client = get_pipefy_client(ctx)
             return await run_sub_portal_internal_api_tool(
                 ids={
                     "portal_uuid": portal_uuid,
@@ -839,6 +856,7 @@ class PortalTools:
                 element_id: Page element UUID (e.g. templated ``forms`` slot).
                 sub_portal_uuid: Sub-portal UUID to publish on the element.
             """
+            client = get_pipefy_client(ctx)
             return await run_sub_portal_internal_api_tool(
                 ids={
                     "portal_uuid": portal_uuid,
@@ -880,6 +898,7 @@ class PortalTools:
                 portal_uuid: Main portal interface UUID.
                 element_id: Page element UUID to unpublish.
             """
+            client = get_pipefy_client(ctx)
             return await run_sub_portal_internal_api_tool(
                 ids={
                     "portal_uuid": portal_uuid,
@@ -924,6 +943,7 @@ class PortalTools:
                 element_id: Page element UUID to detach.
                 confirm: Set to True to execute the detach (step 2).
             """
+            client = get_pipefy_client(ctx)
             ids, err = validate_tool_ids(
                 {"portal_uuid": portal_uuid, "element_id": element_id}
             )
@@ -982,6 +1002,7 @@ class PortalTools:
                 sub_portal_uuid: Sub-portal UUID to delete permanently.
                 confirm: Set to True to execute the deletion (step 2).
             """
+            client = get_pipefy_client(ctx)
             ids, err = validate_tool_ids({"sub_portal_uuid": sub_portal_uuid})
             if err is not None or ids is None:
                 return err or build_error_payload("Invalid tool IDs.")

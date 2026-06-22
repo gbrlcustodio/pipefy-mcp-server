@@ -28,8 +28,9 @@ async def lifespan(app: FastMCP) -> AsyncIterator[ServicesContainer]:
     ``lifespan_context``. Tools are registered once, up front, by
     :func:`_register_pipefy_tools`, so re-entering this context manager (which
     Streamable HTTP does per session) never re-registers and cannot race on the
-    tool table. Tools resolve the live client through ``PipefyClientProxy``, so a
-    re-entry that rebuilds the client is picked up without re-registration.
+    tool table. Tools resolve the live client per request from this
+    ``lifespan_context`` (see :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`),
+    so a re-entry that rebuilds the client is picked up without re-registration.
     """
     try:
         logger.info("Initializing services")
@@ -53,14 +54,15 @@ async def lifespan(app: FastMCP) -> AsyncIterator[ServicesContainer]:
 def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     """Register every Pipefy tool on ``app`` exactly once, at construction.
 
-    Tools bind a ``PipefyClientProxy`` (via :class:`ToolRegistry`) rather than a
-    live client, so they can be registered before services are initialized and
-    keep working across a service re-initialization. Registration never repeats,
-    so there is no repeat-visit bookkeeping to maintain.
+    Tools take no client at registration: each resolves the live client per
+    request from the lifespan context (see
+    :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so they can be
+    registered before services are initialized and keep working across a service
+    re-initialization. Registration never repeats, so there is no repeat-visit
+    bookkeeping to maintain.
     """
     install_pipefy_validation_envelope()
-    container = ServicesContainer.get_instance()
-    registry = ToolRegistry(mcp=app, services_container=container)
+    registry = ToolRegistry(mcp=app)
     registry.check_for_name_collisions()
     registry.register_tools()
     registry.apply_remote_profile(remote_mode=remote_mode)

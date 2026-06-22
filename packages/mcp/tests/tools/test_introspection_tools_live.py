@@ -15,13 +15,13 @@ from _shared.live_settings import (
     live_resolved_auth,
     require_live_creds,
 )
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
+from tools.conftest import build_tool_test_server
 
 
 @pytest.fixture
@@ -32,9 +32,11 @@ def live_pipefy_client():
 
 @pytest.fixture
 def live_introspection_mcp(live_pipefy_client):
-    mcp = FastMCP("Introspection tools live")
-    IntrospectionTools.register(mcp, live_pipefy_client)
-    return mcp
+    return build_tool_test_server(
+        "Introspection tools live",
+        IntrospectionTools.register,
+        live_pipefy_client,
+    )
 
 
 @pytest.fixture

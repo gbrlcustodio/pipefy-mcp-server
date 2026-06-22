@@ -21,6 +21,7 @@ from pipefy_mcp.tools.member_tool_helpers import (
     build_member_success_payload,
     handle_member_tool_graphql_error,
 )
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 
@@ -28,13 +29,14 @@ class MemberTools:
     """MCP tools for inviting, removing, and setting roles for pipe members."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=False),
         )
         async def invite_members(
             pipe_id: PipefyId,
             members: list[dict[str, Any]],
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Invite one or more users to a pipe.
@@ -46,6 +48,7 @@ class MemberTools:
                 members: List of member dicts with `email` and `role_name`.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -111,6 +114,7 @@ class MemberTools:
                 confirm: Set to True to execute the removal (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -179,6 +183,7 @@ class MemberTools:
             pipe_id: PipefyId,
             member_id: PipefyId,
             role_name: str,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Set a member's role on a pipe.
@@ -193,6 +198,7 @@ class MemberTools:
                 role_name: New role name (e.g. 'member', 'admin').
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err

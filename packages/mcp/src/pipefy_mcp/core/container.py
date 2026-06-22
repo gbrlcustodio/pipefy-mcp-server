@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Self
+from typing import Self
 
 from pipefy_auth import (
     STORED_SESSION_TIER,
@@ -92,28 +92,3 @@ class ServicesContainer:
             allow_insecure_urls=pipefy.allow_insecure_urls,
         )
         self.pipefy_client.set_internal_api_client(internal_client)
-
-
-class PipefyClientProxy:
-    """A stable handle that always resolves the container's current client.
-
-    Tools capture this once, at registration, instead of a concrete
-    :class:`PipefyClient`. Each attribute access forwards to the live
-    ``container.pipefy_client``, so re-initializing services (which builds a
-    fresh client) is picked up without re-registering tools. This is what lets
-    registration happen once at construction rather than inside the lifespan.
-    """
-
-    def __init__(self, container: ServicesContainer) -> None:
-        self._container = container
-
-    def __getattr__(self, name: str) -> Any:
-        # ``_container`` is a real instance attribute, so it never routes here;
-        # any other attribute is delegated to the live client.
-        client = self._container.pipefy_client
-        if client is None:
-            raise RuntimeError(
-                "Pipefy client is not initialized; the server lifespan must "
-                "initialize services before any tool is invoked."
-            )
-        return getattr(client, name)

@@ -4,7 +4,6 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -12,6 +11,7 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tools.conftest import build_tool_test_server
 
 
 @pytest.fixture
@@ -26,9 +26,11 @@ def scenario_client():
 
 @pytest.fixture
 def scenario_mcp(scenario_client):
-    mcp = FastMCP("Introspection scenarios")
-    IntrospectionTools.register(mcp, scenario_client)
-    return mcp
+    return build_tool_test_server(
+        "Introspection scenarios",
+        IntrospectionTools.register,
+        scenario_client,
+    )
 
 
 @pytest.fixture

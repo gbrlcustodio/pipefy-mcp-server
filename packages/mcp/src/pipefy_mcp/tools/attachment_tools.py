@@ -13,7 +13,6 @@ from pipefy_sdk import (
     AttachmentUploadError,
     AttachmentUploadResult,
     CardTarget,
-    PipefyClient,
     PipefyId,
     TableRecordTarget,
     UploadAttachmentToCardInput,
@@ -27,13 +26,14 @@ from pipefy_mcp.tools.attachment_tool_helpers import (
     format_s3_upload_failure,
     map_upload_error_to_message,
 )
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 
 class AttachmentTools:
     """MCP tools for orchestrated attachment uploads (presigned URL, S3 PUT, field update)."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         def _upload_error_envelope(exc: AttachmentUploadError) -> dict[str, Any]:
             if exc.step == "file_read":
                 # Preserve the original LocalFileError message (no type prefix or
@@ -99,6 +99,7 @@ class AttachmentTools:
                 file_name: File name including extension. Optional; defaults to the path's basename.
                 content_type: Optional MIME type; sent with the S3 upload and presigned request.
             """
+            client = get_pipefy_client(ctx)
             try:
                 data = UploadAttachmentToCardInput(
                     organization_id=organization_id,
@@ -170,6 +171,7 @@ class AttachmentTools:
                 file_name: File name including extension. Optional; defaults to the path's basename.
                 content_type: Optional MIME type for storage.
             """
+            client = get_pipefy_client(ctx)
             try:
                 data = UploadAttachmentToTableRecordInput(
                     organization_id=organization_id,

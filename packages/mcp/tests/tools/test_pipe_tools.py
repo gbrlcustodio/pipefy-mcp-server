@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 from mcp import ClientSession
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.context import RequestContext
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -25,6 +24,7 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
 )
 from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
+from tools.conftest import build_tool_test_server
 
 # =============================================================================
 # Fixtures
@@ -33,10 +33,9 @@ from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
 
 @pytest.fixture
 def mcp_server(mock_pipefy_client):
-    mcp = FastMCP("Pipefy MCP Test Server")
-    PipeTools.register(mcp, mock_pipefy_client)
-
-    return mcp
+    return build_tool_test_server(
+        "Pipefy MCP Test Server", PipeTools.register, mock_pipefy_client
+    )
 
 
 @pytest.fixture
@@ -260,12 +259,17 @@ class TestCreateCardTool:
             "createCard": {"card": {"id": "789"}}
         }
 
-        mcp = FastMCP("Pipefy MCP Test Server")
-        PipeTools.register(mcp, mock_pipefy_client)
+        mcp = build_tool_test_server(
+            "Pipefy MCP Test Server", PipeTools.register, mock_pipefy_client
+        )
+
+        container = ServicesContainer()
+        container.pipefy_client = mock_pipefy_client
 
         ctx = MagicMock()
         ctx.debug = AsyncMock()
         ctx.session = SimpleNamespace(client_params=SimpleNamespace())
+        ctx.request_context = SimpleNamespace(lifespan_context=container)
 
         result = await mcp._tool_manager.call_tool(
             "create_card",

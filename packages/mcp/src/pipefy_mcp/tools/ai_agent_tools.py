@@ -41,6 +41,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
     extract_error_strings,
 )
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30
 
@@ -85,7 +86,7 @@ class AiAgentTools:
     """Declares MCP tools for AI Agent CRUD and status."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         """Register AI Agent tools on the MCP server."""
 
         def error_payload_from_exception(exc: BaseException) -> dict:
@@ -94,7 +95,7 @@ class AiAgentTools:
             return build_ai_tool_error(text)
 
         async def _enrich_with_validation(
-            exc: BaseException, behaviors: list[dict]
+            exc: BaseException, behaviors: list[dict], client: PipefyClient
         ) -> str:
             """Enrich an error with validation context for RECORD_NOT_SAVED.
 
@@ -251,6 +252,7 @@ class AiAgentTools:
                     ``get_phase_fields(phase_id)`` for ``triggerFieldIds`` / ``destinationPhaseId``.
                 data_source_ids: Optional knowledge-source IDs (same as ``update_ai_agent``).
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"create_ai_agent: name={name}, repo_uuid={repo_uuid}, "
                 f"instruction_len={len(instruction)}, behaviors_count={len(behaviors)}, "
@@ -312,7 +314,7 @@ class AiAgentTools:
                     ]
                 pipe_ids = collect_pipe_ids_from_behaviors(resolved)
                 perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
-                error_text = await _enrich_with_validation(exc, resolved)
+                error_text = await _enrich_with_validation(exc, resolved, client)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
                 return build_create_agent_partial_failure(
@@ -380,6 +382,7 @@ class AiAgentTools:
                     Discover via: ``get_automation_events(pipe_id)`` and ``get_phase_fields(phase_id)``.
                 data_source_ids: Optional list of data source IDs.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(
                 f"update_ai_agent: uuid={uuid}, behaviors_count={len(behaviors)}"
             )
@@ -421,7 +424,7 @@ class AiAgentTools:
                     ]
                 pipe_ids = collect_pipe_ids_from_behaviors(resolved)
                 perm_msg = await enrich_permission_denied_error(exc, pipe_ids, client)
-                error_text = await _enrich_with_validation(exc, resolved)
+                error_text = await _enrich_with_validation(exc, resolved, client)
                 if perm_msg:
                     error_text = f"{perm_msg}\n{error_text}"
                 return build_ai_tool_error(error_text)
@@ -448,6 +451,7 @@ class AiAgentTools:
                 uuid: UUID of the agent to enable/disable.
                 active: True to activate, False to deactivate.
             """
+            client = get_pipefy_client(ctx)
             await ctx.debug(f"toggle_ai_agent_status: uuid={uuid}, active={active}")
             agent_uuid = uuid.strip()
             if not agent_uuid:
@@ -481,6 +485,7 @@ class AiAgentTools:
             Args:
                 uuid: Agent UUID.
             """
+            client = get_pipefy_client(ctx)
             agent_uuid = uuid.strip()
             await ctx.debug(f"get_ai_agent: uuid={agent_uuid}")
             if not agent_uuid:
@@ -502,6 +507,7 @@ class AiAgentTools:
             Args:
                 repo_uuid: UUID of the pipe.
             """
+            client = get_pipefy_client(ctx)
             pipe_uuid = repo_uuid.strip()
             await ctx.debug(f"get_ai_agents: repo_uuid={pipe_uuid}")
             if not pipe_uuid:
@@ -528,6 +534,7 @@ class AiAgentTools:
                 uuid: Agent UUID.
                 confirm: Must be ``True`` to run the delete mutation.
             """
+            client = get_pipefy_client(ctx)
             agent_uuid = uuid.strip()
             await ctx.debug(f"delete_ai_agent: uuid={agent_uuid}")
             if not agent_uuid:
@@ -614,6 +621,7 @@ class AiAgentTools:
                 strict_unknown_action_types: When ``True`` (default), unknown ``actionType`` values
                     are reported in ``problems``. When ``False``, they appear in ``warnings`` only.
             """
+            client = get_pipefy_client(ctx)
             pid = str(pipe_id).strip()
             await ctx.debug(
                 f"validate_ai_agent_behaviors: pipe_id={pid}, "

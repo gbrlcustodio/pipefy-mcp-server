@@ -22,6 +22,21 @@ the server as a multi-user HTTP service. Tool exposure there is **default-deny**
 only tools explicitly marked remote-safe are registered; everything else is
 withheld. The marker is described below.
 
+## Tool registration
+
+Tools are registered **once, at construction** (`build_pipefy_mcp_server` ->
+`_register_pipefy_tools` in `server.py`), not inside the FastMCP `lifespan`. The
+lifespan owns resources only: it initializes services and yields the container
+as the request `lifespan_context`. This follows the FastMCP contract, where the
+lifespan can run per session (per request under Streamable HTTP) and so must not
+mutate the tool table.
+
+To register before services exist, tools bind a `PipefyClientProxy`
+(`core/container.py`) rather than a concrete `PipefyClient`. The proxy resolves
+`container.pipefy_client` on each access, so a service re-initialization (a fresh
+client) is picked up without re-registering tools. That is why there is no
+repeat-visit bookkeeping: registration never repeats.
+
 ## Remote-profile tool marker
 
 When `PIPEFY_MCP_REMOTE_MODE` is true, the server exposes ONLY tools whose

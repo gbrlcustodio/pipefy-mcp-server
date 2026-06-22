@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from mcp.server.fastmcp import FastMCP
+from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.core.container import PipefyClientProxy, ServicesContainer
 from pipefy_mcp.core.fastmcp_tool_lifecycle import remove_fastmcp_tools_by_name
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
@@ -232,27 +233,33 @@ class ToolRegistry:
             )
 
     def register_tools(self) -> FastMCP:
-        """Register tools with the MCP server."""
-        if self.services_container.pipefy_client is None:
-            raise ValueError("Pipefy client is not initialized in services container")
+        """Register tools with the MCP server.
 
-        PipeTools.register(self.mcp, self.services_container.pipefy_client)
-        PipeConfigTools.register(self.mcp, self.services_container.pipefy_client)
-        FieldConditionTools.register(self.mcp, self.services_container.pipefy_client)
-        TableTools.register(self.mcp, self.services_container.pipefy_client)
-        RelationTools.register(self.mcp, self.services_container.pipefy_client)
-        ReportTools.register(self.mcp, self.services_container.pipefy_client)
-        AttachmentTools.register(self.mcp, self.services_container.pipefy_client)
-        MemberTools.register(self.mcp, self.services_container.pipefy_client)
-        WebhookTools.register(self.mcp, self.services_container.pipefy_client)
-        AutomationTools.register(self.mcp, self.services_container.pipefy_client)
-        IntrospectionTools.register(self.mcp, self.services_container.pipefy_client)
-        OrganizationTools.register(self.mcp, self.services_container.pipefy_client)
-        PortalTools.register(self.mcp, self.services_container.pipefy_client)
-        ObservabilityTools.register(self.mcp, self.services_container.pipefy_client)
+        Tools bind a :class:`PipefyClientProxy`, not a concrete client, so they
+        can be registered before services are initialized and keep working after
+        a service re-initialization (which swaps the underlying client). This is
+        what lets registration run once, at construction, rather than inside the
+        lifespan.
+        """
+        client = cast(PipefyClient, PipefyClientProxy(self.services_container))
 
-        AiAutomationTools.register(self.mcp, self.services_container.pipefy_client)
-        AiAgentTools.register(self.mcp, self.services_container.pipefy_client)
+        PipeTools.register(self.mcp, client)
+        PipeConfigTools.register(self.mcp, client)
+        FieldConditionTools.register(self.mcp, client)
+        TableTools.register(self.mcp, client)
+        RelationTools.register(self.mcp, client)
+        ReportTools.register(self.mcp, client)
+        AttachmentTools.register(self.mcp, client)
+        MemberTools.register(self.mcp, client)
+        WebhookTools.register(self.mcp, client)
+        AutomationTools.register(self.mcp, client)
+        IntrospectionTools.register(self.mcp, client)
+        OrganizationTools.register(self.mcp, client)
+        PortalTools.register(self.mcp, client)
+        ObservabilityTools.register(self.mcp, client)
+
+        AiAutomationTools.register(self.mcp, client)
+        AiAgentTools.register(self.mcp, client)
 
         return self.mcp
 

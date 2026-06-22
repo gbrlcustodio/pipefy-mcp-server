@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.core.container import PipefyClientProxy, ServicesContainer
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES, ToolRegistry
 
 
@@ -48,46 +48,51 @@ class TestToolRegistry:
         mock_introspection_tools_register,
         mock_observability_tools_register,
     ):
-        """Test that register_tools calls Pipe, PipeConfig, FieldCondition, Table, Relation, Report, Member, Webhook, Introspection, and Observability tools."""
+        """Each tool group is registered once with the shared client proxy."""
         mock_mcp = Mock(spec=FastMCP)
-        mock_client = Mock()
         mock_container = Mock(spec=ServicesContainer)
-        mock_container.pipefy_client = mock_client
+        mock_container.pipefy_client = Mock()
 
         registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
         result = registry.register_tools()
 
-        mock_pipe_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_pipe_config_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_field_condition_tools_register.assert_called_once_with(
-            mock_mcp, mock_client
-        )
-        mock_table_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_relation_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_report_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_attachment_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_member_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_webhook_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_observability_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        # Tools bind a single PipefyClientProxy, not the concrete client, so a
+        # later service re-init is picked up without re-registering.
+        proxy = mock_pipe_tools_register.call_args.args[1]
+        assert isinstance(proxy, PipefyClientProxy)
+
+        for mock_register in (
+            mock_pipe_tools_register,
+            mock_pipe_config_tools_register,
+            mock_field_condition_tools_register,
+            mock_table_tools_register,
+            mock_relation_tools_register,
+            mock_report_tools_register,
+            mock_attachment_tools_register,
+            mock_member_tools_register,
+            mock_webhook_tools_register,
+            mock_automation_tools_register,
+            mock_introspection_tools_register,
+            mock_observability_tools_register,
+        ):
+            mock_register.assert_called_once_with(mock_mcp, proxy)
         assert result is mock_mcp
         assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
-    def test_register_tools_raises_when_pipefy_client_is_none(self):
-        """Test that register_tools raises ValueError when pipefy_client is None"""
+    def test_register_tools_succeeds_when_pipefy_client_is_none(self):
+        """Registration binds a proxy, so it works before services are initialized.
+
+        The proxy defers client resolution to call time, which is what lets
+        tools register once at construction (before the lifespan runs). The
+        absence of a live client only surfaces when a tool is actually invoked.
+        """
         mock_mcp = Mock(spec=FastMCP)
         mock_container = Mock(spec=ServicesContainer)
         mock_container.pipefy_client = None
 
         registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
 
-        with pytest.raises(ValueError) as exc:
-            registry.register_tools()
-
-        assert "Pipefy client is not initialized in services container" in str(
-            exc.value
-        )
+        assert registry.register_tools() is mock_mcp
 
     @patch("pipefy_mcp.tools.registry.ObservabilityTools.register")
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")
@@ -121,29 +126,32 @@ class TestToolRegistry:
         mock_observability_tools_register,
     ):
         mock_mcp = Mock(spec=FastMCP)
-        mock_client = Mock()
         mock_container = Mock(spec=ServicesContainer)
-        mock_container.pipefy_client = mock_client
+        mock_container.pipefy_client = Mock()
 
         registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
         registry.register_tools()
 
-        mock_pipe_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_pipe_config_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_field_condition_tools_register.assert_called_once_with(
-            mock_mcp, mock_client
-        )
-        mock_table_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_relation_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_report_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_attachment_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_member_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_webhook_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_introspection_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_observability_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_ai_automation_tools_register.assert_called_once_with(mock_mcp, mock_client)
-        mock_ai_agent_tools_register.assert_called_once_with(mock_mcp, mock_client)
+        proxy = mock_pipe_tools_register.call_args.args[1]
+        assert isinstance(proxy, PipefyClientProxy)
+
+        for mock_register in (
+            mock_pipe_tools_register,
+            mock_pipe_config_tools_register,
+            mock_field_condition_tools_register,
+            mock_table_tools_register,
+            mock_relation_tools_register,
+            mock_report_tools_register,
+            mock_attachment_tools_register,
+            mock_member_tools_register,
+            mock_webhook_tools_register,
+            mock_automation_tools_register,
+            mock_introspection_tools_register,
+            mock_observability_tools_register,
+            mock_ai_automation_tools_register,
+            mock_ai_agent_tools_register,
+        ):
+            mock_register.assert_called_once_with(mock_mcp, proxy)
         assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
     def test_register_tools_records_pipefy_tool_names_on_real_fastmcp(self):

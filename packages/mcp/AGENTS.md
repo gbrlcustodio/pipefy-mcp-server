@@ -39,10 +39,15 @@ on-behalf-of identity (#302); until those land it is unauthenticated and uses th
 single identity resolved at startup. Treat `--remote` as local/validation only, not
 a production hosted endpoint.
 
-**Public-HTTP safety interlock.** The HTTP path of `run_server` refuses to serve
-the full tool surface on a non-loopback host unless the remote profile is on
-(`--remote`) or `PIPEFY_MCP_ALLOW_FULL_SURFACE_OVER_HTTP=true` is set. Loopback
-binds are always allowed for local development.
+**Loopback-only bind.** While the HTTP transport is unauthenticated, the HTTP path
+of `run_server` refuses any non-loopback bind (`_assert_loopback_http_bind`): every
+call would run as the single startup identity, so a network-reachable port would
+hand that identity to anyone who can reach it. This is independent of the tool
+profile, the remote-safe subset is no safer over an unauthenticated network bind.
+It also keeps the filesystem tools coherent: the attachment uploads read a local
+`file_path`, which only resolves when the server shares the client's disk, i.e. on
+loopback (remote-safe file inputs are tracked in #305). When inbound auth lands
+(#301), revisit allowing a network bind.
 
 ## Tool registration
 

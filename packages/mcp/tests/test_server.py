@@ -17,13 +17,13 @@ from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.server import (
-    _assert_http_surface_is_safe,
+    _assert_loopback_http_bind,
     _register_pipefy_tools,
     build_pipefy_mcp_server,
     lifespan,
     run_server,
 )
-from pipefy_mcp.settings import McpSettings, Settings
+from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
@@ -209,38 +209,18 @@ def _build_http_app(remote_mode: bool) -> FastMCP:
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    ("host", "remote_mode", "hatch"),
-    [
-        ("127.0.0.1", False, False),  # loopback, full surface
-        ("localhost", False, False),  # loopback alias
-        ("0.0.0.0", True, False),  # public but remote profile is the safe surface
-        ("203.0.113.5", False, True),  # public, full surface, escape hatch set
-    ],
-)
-def test_http_surface_interlock_allows(host, remote_mode, hatch):
-    settings = Settings(
-        pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-        auth=AuthSettings(),
-        mcp=McpSettings(allow_full_surface_over_http=hatch),
-    )
-    with patch("pipefy_mcp.server.settings", settings):
-        # Does not raise.
-        _assert_http_surface_is_safe(host=host, remote_mode=remote_mode)
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
+def test_loopback_http_bind_allows_loopback_hosts(host):
+    # Does not raise.
+    _assert_loopback_http_bind(host=host)
 
 
 @pytest.mark.unit
-def test_http_surface_interlock_refuses_public_full_surface_without_hatch():
-    settings = Settings(
-        pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-        auth=AuthSettings(),
-        mcp=McpSettings(allow_full_surface_over_http=False),
-    )
-    with (
-        patch("pipefy_mcp.server.settings", settings),
-        pytest.raises(RuntimeError, match="Refusing to serve the full tool surface"),
-    ):
-        _assert_http_surface_is_safe(host="0.0.0.0", remote_mode=False)
+@pytest.mark.parametrize("host", ["0.0.0.0", "203.0.113.5"])
+def test_loopback_http_bind_refuses_non_loopback_hosts(host):
+    """A non-loopback bind is refused outright; the tool profile cannot exempt it."""
+    with pytest.raises(RuntimeError, match="non-loopback host"):
+        _assert_loopback_http_bind(host=host)
 
 
 @pytest.mark.unit
@@ -265,15 +245,15 @@ def test_run_server_http_registers_once_without_lifespan_and_serves():
 
 
 @pytest.mark.unit
-def test_run_server_http_interlock_refuses_before_initializing_services():
-    """The interlock fires before any service init or socket bind."""
+def test_run_server_http_refuses_non_loopback_before_initializing_services():
+    """The loopback guard fires before any service init or socket bind."""
     with (
         patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
         patch("pipefy_mcp.server.anyio.run") as mock_anyio_run,
         patch("pipefy_mcp.server.FastMCP") as mock_fastmcp,
     ):
         with pytest.raises(RuntimeError, match="Refusing to serve"):
-            run_server(http=True, host="0.0.0.0", port=9123, remote_mode=False)
+            run_server(http=True, host="0.0.0.0", port=9123, remote_mode=True)
 
     mock_anyio_run.assert_not_called()
     mock_fastmcp.assert_not_called()

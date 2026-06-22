@@ -263,20 +263,6 @@ class ToolRegistry:
 
         return self.mcp
 
-    def registered_pipefy_tool_names(self) -> set[str]:
-        """Pipefy tools currently registered on the app.
-
-        In the local profile this is the full set; after
-        :meth:`apply_remote_profile` in remote mode it is the surviving subset.
-        The registry owns this query so callers do not reconstruct it from set
-        arithmetic on ``pipefy_tool_names``.
-        """
-        return {
-            tool.name
-            for tool in self.mcp._tool_manager.list_tools()
-            if tool.name in self.pipefy_tool_names
-        }
-
     def retain_only(self, predicate: Callable[[Tool], bool]) -> set[str]:
         """Remove every Pipefy tool that does not satisfy ``predicate``.
 

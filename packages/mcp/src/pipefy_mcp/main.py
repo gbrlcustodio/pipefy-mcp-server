@@ -13,7 +13,6 @@ from typing import Sequence
 
 from pipefy_mcp import __version__
 from pipefy_mcp.server import run_server
-from pipefy_mcp.settings import settings
 
 _HELP = (
     f"pipefy-mcp-server {__version__}\n"
@@ -59,11 +58,16 @@ def main(argv: Sequence[str] | None = None) -> None:
         return
 
     if "--remote" in args:
-        host = _option_value(args, "--host") or settings.mcp.host
+        # Pass the parsed flags through as-is; run_server fills any unset value
+        # from PIPEFY_MCP_HOST / PIPEFY_MCP_PORT. --remote forces the
+        # default-deny remote profile alongside HTTP.
         port_arg = _option_value(args, "--port")
-        port = int(port_arg) if port_arg is not None else settings.mcp.port
-        # --remote forces the default-deny remote profile alongside HTTP.
-        run_server(http=True, host=host, port=port, remote_mode=True)
+        run_server(
+            http=True,
+            host=_option_value(args, "--host"),
+            port=int(port_arg) if port_arg is not None else None,
+            remote_mode=True,
+        )
         return
 
     run_server()

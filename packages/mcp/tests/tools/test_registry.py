@@ -1,9 +1,8 @@
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES, ToolRegistry
 
 
@@ -11,14 +10,12 @@ class TestToolRegistry:
     """Test cases for ToolRegistry"""
 
     def test_init_sets_attributes(self):
-        """Test that __init__ sets mcp and services_container attributes"""
+        """Test that __init__ sets mcp and pipefy_tool_names attributes"""
         mock_mcp = Mock(spec=FastMCP)
-        mock_container = Mock(spec=ServicesContainer)
 
-        registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
+        registry = ToolRegistry(mcp=mock_mcp)
 
         assert registry.mcp is mock_mcp
-        assert registry.services_container is mock_container
         assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
     @patch("pipefy_mcp.tools.registry.ObservabilityTools.register")
@@ -50,10 +47,8 @@ class TestToolRegistry:
     ):
         """Each tool group is registered once, with the app and no client."""
         mock_mcp = Mock(spec=FastMCP)
-        mock_container = Mock(spec=ServicesContainer)
-        mock_container.pipefy_client = Mock()
 
-        registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
+        registry = ToolRegistry(mcp=mock_mcp)
         registry.register_tools()
 
         # Registration passes only the app: tools resolve the live client per
@@ -75,8 +70,8 @@ class TestToolRegistry:
             mock_register.assert_called_once_with(mock_mcp)
         assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
-    def test_register_tools_does_not_touch_the_container_client(self):
-        """Registration never reads the client, so a None client is irrelevant.
+    def test_register_tools_takes_no_client(self):
+        """Registration never receives a client, so it can run before services exist.
 
         Tools resolve the client per request from the lifespan context, which is
         what lets registration run once at construction, before the lifespan has
@@ -84,10 +79,8 @@ class TestToolRegistry:
         tool is actually invoked.
         """
         mock_mcp = Mock(spec=FastMCP)
-        mock_container = Mock(spec=ServicesContainer)
-        mock_container.pipefy_client = None
 
-        registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
+        registry = ToolRegistry(mcp=mock_mcp)
 
         assert registry.register_tools() is None
 
@@ -123,10 +116,8 @@ class TestToolRegistry:
         mock_observability_tools_register,
     ):
         mock_mcp = Mock(spec=FastMCP)
-        mock_container = Mock(spec=ServicesContainer)
-        mock_container.pipefy_client = Mock()
 
-        registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
+        registry = ToolRegistry(mcp=mock_mcp)
         registry.register_tools()
 
         for mock_register in (
@@ -150,9 +141,7 @@ class TestToolRegistry:
 
     def test_register_tools_records_pipefy_tool_names_on_real_fastmcp(self):
         mcp = FastMCP("tool-registry-names")
-        mock_container = Mock(spec=ServicesContainer)
-        mock_container.pipefy_client = MagicMock()
-        registry = ToolRegistry(mcp=mcp, services_container=mock_container)
+        registry = ToolRegistry(mcp=mcp)
         registry.register_tools()
 
         assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
@@ -161,8 +150,7 @@ class TestToolRegistry:
 
     def test_check_for_name_collisions_raises_when_pipefy_name_already_registered(self):
         mock_mcp = Mock(spec=FastMCP)
-        mock_container = Mock(spec=ServicesContainer)
-        registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
+        registry = ToolRegistry(mcp=mock_mcp)
         with patch.object(
             ToolRegistry,
             "_snapshot_tool_names",
@@ -175,8 +163,7 @@ class TestToolRegistry:
 
     def test_check_for_name_collisions_ok_when_no_overlap(self):
         mock_mcp = Mock(spec=FastMCP)
-        mock_container = Mock(spec=ServicesContainer)
-        registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
+        registry = ToolRegistry(mcp=mock_mcp)
         with patch.object(
             ToolRegistry,
             "_snapshot_tool_names",

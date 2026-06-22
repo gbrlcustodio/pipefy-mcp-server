@@ -62,8 +62,7 @@ def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     bookkeeping to maintain.
     """
     install_pipefy_validation_envelope()
-    container = ServicesContainer.get_instance()
-    registry = ToolRegistry(mcp=app, services_container=container)
+    registry = ToolRegistry(mcp=app)
     registry.check_for_name_collisions()
     registry.register_tools()
     registry.apply_remote_profile(remote_mode=remote_mode)

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 from mcp.server.fastmcp import FastMCP
 
-from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.core.fastmcp_tool_lifecycle import remove_fastmcp_tools_by_name
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
@@ -215,9 +214,8 @@ _TOOLSETS = (
 class ToolRegistry:
     """Responsible for registering tools with the MCP server."""
 
-    def __init__(self, mcp: FastMCP, services_container: ServicesContainer):
+    def __init__(self, mcp: FastMCP):
         self.mcp = mcp
-        self.services_container = services_container
         self.pipefy_tool_names: frozenset[str] = PIPEFY_TOOL_NAMES
 
     @staticmethod

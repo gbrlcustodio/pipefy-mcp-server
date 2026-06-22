@@ -14,8 +14,8 @@ def get_pipefy_client(ctx: Context) -> PipefyClient:
     The server lifespan initializes services and yields the
     :class:`ServicesContainer` as the request ``lifespan_context``. Tools read the
     client from it per call rather than closing over one at registration, so a
-    request-scoped identity (issue #302) can vary the client without
-    re-registering the tool table.
+    request-scoped identity can vary the client without re-registering the tool
+    table.
     """
     container: ServicesContainer = ctx.request_context.lifespan_context
     client = container.pipefy_client

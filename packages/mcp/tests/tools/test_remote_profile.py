@@ -1,11 +1,9 @@
 """Tests for the default-deny remote-profile tool allowlist (#304)."""
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, Mock
 
 from mcp.server.fastmcp import FastMCP
 
-from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES, ToolRegistry
 from pipefy_mcp.tools.remote_profile import REMOTE, REMOTE_META_KEY, is_remote_tool
 
@@ -40,9 +38,7 @@ REMOTE_SEED = frozenset(
 def _registry_with_all_tools() -> tuple[ToolRegistry, FastMCP]:
     """Register every Pipefy tool on a real FastMCP, as the lifespan does."""
     mcp = FastMCP("remote-profile-test")
-    container = Mock(spec=ServicesContainer)
-    container.pipefy_client = MagicMock()
-    registry = ToolRegistry(mcp=mcp, services_container=container)
+    registry = ToolRegistry(mcp=mcp)
     registry.register_tools()
     return registry, mcp
 

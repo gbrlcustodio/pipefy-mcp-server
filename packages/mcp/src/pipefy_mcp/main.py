@@ -7,14 +7,11 @@ it without entering the stdio loop. Any other argv runs the server as before.
 
 from __future__ import annotations
 
-import logging
 import sys
 from typing import Sequence
 
 from pipefy_mcp import __version__
 from pipefy_mcp.server import run_server
-
-logger = logging.getLogger(__name__)
 
 _HELP = (
     f"pipefy-mcp-server {__version__}\n"
@@ -41,7 +38,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         sys.stdout.write(f"{__version__}\n")
         return
 
-    logger.info("Starting Pipefy MCP server")
     run_server()
 
 

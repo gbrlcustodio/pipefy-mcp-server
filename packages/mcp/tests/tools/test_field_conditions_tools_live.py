@@ -29,8 +29,10 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
-from pipefy_mcp.server import mcp as mcp_server
+from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
+
+mcp_server = build_pipefy_mcp_server()
 
 
 @pytest.mark.integration

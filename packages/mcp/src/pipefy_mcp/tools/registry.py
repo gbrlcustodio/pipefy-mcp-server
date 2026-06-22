@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from mcp.server.fastmcp import FastMCP
+from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.core.container import PipefyClientProxy, ServicesContainer
 from pipefy_mcp.core.fastmcp_tool_lifecycle import remove_fastmcp_tools_by_name
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
@@ -190,6 +191,28 @@ PIPEFY_TOOL_NAMES = frozenset(
 )
 
 
+# Toolsets registered on the server, in registration order. Each exposes a
+# ``register(mcp, client)`` static method. Add a toolset by appending it here.
+_TOOLSETS = (
+    PipeTools,
+    PipeConfigTools,
+    FieldConditionTools,
+    TableTools,
+    RelationTools,
+    ReportTools,
+    AttachmentTools,
+    MemberTools,
+    WebhookTools,
+    AutomationTools,
+    IntrospectionTools,
+    OrganizationTools,
+    PortalTools,
+    ObservabilityTools,
+    AiAutomationTools,
+    AiAgentTools,
+)
+
+
 class ToolRegistry:
     """Responsible for registering tools with the MCP server."""
 
@@ -200,21 +223,7 @@ class ToolRegistry:
 
     @staticmethod
     def _snapshot_tool_names(mcp: FastMCP) -> set[str]:
-        try:
-            tools = mcp._tool_manager.list_tools()
-        except AttributeError:
-            return set()
-        try:
-            tool_list = list(tools)
-        except TypeError:
-            return set()
-        names: set[str] = set()
-        for tool in tool_list:
-            try:
-                names.add(tool.name)
-            except AttributeError:
-                continue
-        return names
+        return {tool.name for tool in mcp._tool_manager.list_tools()}
 
     def check_for_name_collisions(self) -> None:
         """Fail fast if any Pipefy tool name is already registered on the app.
@@ -231,44 +240,18 @@ class ToolRegistry:
                 f"{names}"
             )
 
-    def register_tools(self) -> FastMCP:
-        """Register tools with the MCP server."""
-        if self.services_container.pipefy_client is None:
-            raise ValueError("Pipefy client is not initialized in services container")
+    def register_tools(self) -> None:
+        """Register tools with the MCP server.
 
-        PipeTools.register(self.mcp, self.services_container.pipefy_client)
-        PipeConfigTools.register(self.mcp, self.services_container.pipefy_client)
-        FieldConditionTools.register(self.mcp, self.services_container.pipefy_client)
-        TableTools.register(self.mcp, self.services_container.pipefy_client)
-        RelationTools.register(self.mcp, self.services_container.pipefy_client)
-        ReportTools.register(self.mcp, self.services_container.pipefy_client)
-        AttachmentTools.register(self.mcp, self.services_container.pipefy_client)
-        MemberTools.register(self.mcp, self.services_container.pipefy_client)
-        WebhookTools.register(self.mcp, self.services_container.pipefy_client)
-        AutomationTools.register(self.mcp, self.services_container.pipefy_client)
-        IntrospectionTools.register(self.mcp, self.services_container.pipefy_client)
-        OrganizationTools.register(self.mcp, self.services_container.pipefy_client)
-        PortalTools.register(self.mcp, self.services_container.pipefy_client)
-        ObservabilityTools.register(self.mcp, self.services_container.pipefy_client)
-
-        AiAutomationTools.register(self.mcp, self.services_container.pipefy_client)
-        AiAgentTools.register(self.mcp, self.services_container.pipefy_client)
-
-        return self.mcp
-
-    def registered_pipefy_tool_names(self) -> set[str]:
-        """Pipefy tools currently registered on the app.
-
-        In the local profile this is the full set; after
-        :meth:`apply_remote_profile` in remote mode it is the surviving subset.
-        The registry owns this query so callers do not reconstruct it from set
-        arithmetic on ``pipefy_tool_names``.
+        Tools bind a :class:`PipefyClientProxy`, not a concrete client, so they
+        can be registered before services are initialized and keep working after
+        a service re-initialization (which swaps the underlying client). This is
+        what lets registration run once, at construction, rather than inside the
+        lifespan.
         """
-        return {
-            tool.name
-            for tool in self.mcp._tool_manager.list_tools()
-            if tool.name in self.pipefy_tool_names
-        }
+        client = cast(PipefyClient, PipefyClientProxy(self.services_container))
+        for toolset in _TOOLSETS:
+            toolset.register(self.mcp, client)
 
     def retain_only(self, predicate: Callable[[Tool], bool]) -> set[str]:
         """Remove every Pipefy tool that does not satisfy ``predicate``.

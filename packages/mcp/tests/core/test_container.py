@@ -14,7 +14,7 @@ from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefyClient, PipefySettings
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
-from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.core.container import PipefyClientProxy, ServicesContainer
 from pipefy_mcp.settings import Settings
 
 _AUTH_ENV_KEYS = (
@@ -281,3 +281,41 @@ class TestServicesContainer:
         assert "invalid_grant" in hint_message
         assert "pipefy auth login" in hint_message
         assert DOCS_SETUP_REF in hint_message
+
+
+class TestPipefyClientProxy:
+    """The proxy that lets tools bind once and follow client re-initialization."""
+
+    @pytest.mark.unit
+    def test_forwards_attribute_access_to_current_client(self):
+        container = ServicesContainer()
+        client = Mock()
+        container.pipefy_client = client
+
+        proxy = PipefyClientProxy(container)
+
+        assert proxy.get_organization is client.get_organization
+
+    @pytest.mark.unit
+    def test_follows_client_swap_without_rebinding(self):
+        """A re-init that swaps the client is picked up by the same proxy."""
+        container = ServicesContainer()
+        first, second = Mock(), Mock()
+
+        proxy = PipefyClientProxy(container)
+
+        container.pipefy_client = first
+        assert proxy.get_organization is first.get_organization
+
+        container.pipefy_client = second
+        assert proxy.get_organization is second.get_organization
+
+    @pytest.mark.unit
+    def test_raises_when_no_client_initialized_yet(self):
+        container = ServicesContainer()
+        container.pipefy_client = None
+
+        proxy = PipefyClientProxy(container)
+
+        with pytest.raises(RuntimeError, match="client is not initialized"):
+            _ = proxy.get_organization

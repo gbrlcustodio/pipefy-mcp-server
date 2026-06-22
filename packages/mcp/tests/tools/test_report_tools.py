@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -14,7 +13,7 @@ from pipefy_sdk.report_filter_preflight import EXAMPLE_PHASE_FILTER
 
 from pipefy_mcp.tools.report_tools import ReportTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
 
 GOLDEN_REPORT_PHASE_FILTER = {
     **EXAMPLE_PHASE_FILTER,
@@ -51,9 +50,9 @@ def mock_report_client():
 
 @pytest.fixture
 def report_mcp_server(mock_report_client):
-    mcp = FastMCP("Report Tools Test")
-    ReportTools.register(mcp, mock_report_client)
-    return mcp
+    return build_tool_test_server(
+        "Report Tools Test", ReportTools.register, mock_report_client
+    )
 
 
 @pytest.fixture

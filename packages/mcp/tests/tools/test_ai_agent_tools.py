@@ -14,7 +14,6 @@ from _shared.fixture_ids import (
     make_pipe_id,
 )
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -23,7 +22,10 @@ from pipefy_sdk.models.ai_agent import UpdateAiAgentInput
 import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.tools.ai_agent_tools import AiAgentTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import (
+    assert_invalid_arguments_envelope,
+    build_tool_test_server,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -51,9 +53,9 @@ def mock_pipefy_client():
 
 @pytest.fixture
 def mcp_server(mock_pipefy_client):
-    mcp = FastMCP("AI Agent Tools Test")
-    AiAgentTools.register(mcp, mock_pipefy_client)
-    return mcp
+    return build_tool_test_server(
+        "AI Agent Tools Test", AiAgentTools.register, mock_pipefy_client
+    )
 
 
 @pytest.fixture

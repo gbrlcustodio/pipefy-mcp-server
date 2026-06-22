@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from pipefy_mcp.core.container import PipefyClientProxy, ServicesContainer
+from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES, ToolRegistry
 
 
@@ -48,7 +48,7 @@ class TestToolRegistry:
         mock_introspection_tools_register,
         mock_observability_tools_register,
     ):
-        """Each tool group is registered once with the shared client proxy."""
+        """Each tool group is registered once, with the app and no client."""
         mock_mcp = Mock(spec=FastMCP)
         mock_container = Mock(spec=ServicesContainer)
         mock_container.pipefy_client = Mock()
@@ -56,11 +56,8 @@ class TestToolRegistry:
         registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
         registry.register_tools()
 
-        # Tools bind a single PipefyClientProxy, not the concrete client, so a
-        # later service re-init is picked up without re-registering.
-        proxy = mock_pipe_tools_register.call_args.args[1]
-        assert isinstance(proxy, PipefyClientProxy)
-
+        # Registration passes only the app: tools resolve the live client per
+        # request from the lifespan context, not from a registration argument.
         for mock_register in (
             mock_pipe_tools_register,
             mock_pipe_config_tools_register,
@@ -75,15 +72,16 @@ class TestToolRegistry:
             mock_introspection_tools_register,
             mock_observability_tools_register,
         ):
-            mock_register.assert_called_once_with(mock_mcp, proxy)
+            mock_register.assert_called_once_with(mock_mcp)
         assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
-    def test_register_tools_succeeds_when_pipefy_client_is_none(self):
-        """Registration binds a proxy, so it works before services are initialized.
+    def test_register_tools_does_not_touch_the_container_client(self):
+        """Registration never reads the client, so a None client is irrelevant.
 
-        The proxy defers client resolution to call time, which is what lets
-        tools register once at construction (before the lifespan runs). The
-        absence of a live client only surfaces when a tool is actually invoked.
+        Tools resolve the client per request from the lifespan context, which is
+        what lets registration run once at construction, before the lifespan has
+        initialized services. The absence of a live client only surfaces when a
+        tool is actually invoked.
         """
         mock_mcp = Mock(spec=FastMCP)
         mock_container = Mock(spec=ServicesContainer)
@@ -131,9 +129,6 @@ class TestToolRegistry:
         registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
         registry.register_tools()
 
-        proxy = mock_pipe_tools_register.call_args.args[1]
-        assert isinstance(proxy, PipefyClientProxy)
-
         for mock_register in (
             mock_pipe_tools_register,
             mock_pipe_config_tools_register,
@@ -150,7 +145,7 @@ class TestToolRegistry:
             mock_ai_automation_tools_register,
             mock_ai_agent_tools_register,
         ):
-            mock_register.assert_called_once_with(mock_mcp, proxy)
+            mock_register.assert_called_once_with(mock_mcp)
         assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
     def test_register_tools_records_pipefy_tool_names_on_real_fastmcp(self):

@@ -1,10 +1,33 @@
 """Shared fixtures for tool tests."""
 
 import json
+from contextlib import asynccontextmanager
 
 import pytest
+from mcp.server.fastmcp import FastMCP
 
+from pipefy_mcp.core.container import ServicesContainer
 from pipefy_mcp.settings import settings
+
+
+def build_tool_test_server(name, register, client):
+    """Build a FastMCP server whose lifespan yields a container holding ``client``.
+
+    Tools resolve the live client from the request ``lifespan_context`` (see
+    :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so a test injects
+    its mock by presetting it on the container the lifespan yields. ``register``
+    is a tool group's ``register`` staticmethod, called with the app alone.
+    """
+
+    @asynccontextmanager
+    async def _lifespan(_app):
+        container = ServicesContainer()
+        container.pipefy_client = client
+        yield container
+
+    mcp = FastMCP(name, lifespan=_lifespan)
+    register(mcp)
+    return mcp
 
 
 @pytest.fixture

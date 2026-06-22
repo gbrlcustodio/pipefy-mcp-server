@@ -37,6 +37,7 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
 )
 from pipefy_mcp.tools.pipe_tool_helpers import find_label_dependents
 from pipefy_mcp.tools.remote_profile import REMOTE
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.tool_error_envelope import (
     is_unified_envelope_enabled,
     tool_error_message,
@@ -123,7 +124,7 @@ class PipeConfigTools:
     """MCP tools for pipe, phase, field, and label configuration (builder CRUD)."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(
                 readOnlyHint=False,
@@ -132,6 +133,7 @@ class PipeConfigTools:
         async def create_pipe(
             name: str,
             organization_id: PipefyId,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Create a new empty pipe in an organization.
@@ -143,6 +145,7 @@ class PipeConfigTools:
                 organization_id: Organization ID that will own the pipe.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             if not isinstance(name, str) or not name.strip():
                 return build_pipe_tool_error_payload(
                     message="Invalid 'name': provide a non-empty string.",
@@ -173,6 +176,7 @@ class PipeConfigTools:
         )
         async def update_pipe(
             pipe_id: PipefyId,
+            ctx: Context,
             name: str | None = None,
             icon: str | None = None,
             color: str | None = None,
@@ -192,6 +196,7 @@ class PipeConfigTools:
                 preferences: Repo preferences object, if changing.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -245,6 +250,7 @@ class PipeConfigTools:
                 confirm: When True, performs the deletion after explicit user confirmation.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_id_str, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return build_delete_pipe_error_payload(message=tool_error_message(err))
@@ -315,6 +321,7 @@ class PipeConfigTools:
         )
         async def clone_pipe(
             pipe_template_id: PipefyId,
+            ctx: Context,
             organization_id: PipefyId | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -330,6 +337,7 @@ class PipeConfigTools:
                 organization_id: Optional organization ID for the clone operation.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_template_id, err = validate_tool_id(
                 pipe_template_id, "pipe_template_id"
             )
@@ -365,6 +373,7 @@ class PipeConfigTools:
         )
         async def get_phase_allowed_move_targets(
             phase_id: PipefyId,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """List phases a card may move to from a source phase (UI transition rules).
@@ -385,6 +394,7 @@ class PipeConfigTools:
                 and ``allowed_phases`` (list of ``{id, name}``). Empty
                 ``allowed_phases`` means no outbound transitions are configured.
             """
+            client = get_pipefy_client(ctx)
             phase_id_str, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
                 return err
@@ -416,6 +426,7 @@ class PipeConfigTools:
         )
         async def get_phase_cards_count(
             phase_id: PipefyId,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Return the native ``Phase.cards_count`` for a phase (fast inventory).
@@ -434,6 +445,7 @@ class PipeConfigTools:
                 ``success: true`` with ``data`` containing ``phase_id``, ``phase_name``,
                 and ``cards_count``.
             """
+            client = get_pipefy_client(ctx)
             phase_id_str, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
                 return err
@@ -467,6 +479,7 @@ class PipeConfigTools:
         )
         async def get_phase_cards(
             phase_id: PipefyId,
+            ctx: Context,
             first: int = 50,
             after: str | None = None,
             include_fields: bool = False,
@@ -492,6 +505,7 @@ class PipeConfigTools:
                 (``edges``, ``pageInfo``, ``totalCount``). With unified envelope enabled,
                 that dict is under ``data`` and includes pagination hints.
             """
+            client = get_pipefy_client(ctx)
             phase_id_str, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
                 return err
@@ -541,6 +555,7 @@ class PipeConfigTools:
         async def create_phase(
             pipe_id: PipefyId,
             name: str,
+            ctx: Context,
             done: bool = False,
             index: float | int | None = None,
             description: str | None = None,
@@ -556,6 +571,7 @@ class PipeConfigTools:
                 description: Optional phase description.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -592,6 +608,7 @@ class PipeConfigTools:
         )
         async def update_phase(
             phase_id: PipefyId,
+            ctx: Context,
             name: str | None = None,
             description: str | None = None,
             done: bool | None = None,
@@ -619,6 +636,7 @@ class PipeConfigTools:
                 only_admin_can_move_to_previous: If changing (deprecated in API).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             phase_id, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
                 return err
@@ -710,6 +728,7 @@ class PipeConfigTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             phase_id, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
                 return err
@@ -760,6 +779,7 @@ class PipeConfigTools:
             phase_id: PipefyId,
             label: str,
             field_type: str,
+            ctx: Context,
             options: list[str] | None = None,
             description: str | None = None,
             required: bool | None = None,
@@ -785,6 +805,7 @@ class PipeConfigTools:
                 extra_input: Additional ``CreatePhaseFieldInput`` fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             phase_id, err = validate_tool_id(phase_id, "phase_id")
             if err is not None:
                 return err
@@ -837,6 +858,7 @@ class PipeConfigTools:
         async def update_phase_field(
             field_id: PipefyId,
             label: str,
+            ctx: Context,
             description: str | None = None,
             required: bool | None = None,
             options: list[Any] | dict[str, Any] | None = None,
@@ -873,6 +895,7 @@ class PipeConfigTools:
                 extra_input: Additional UpdatePhaseFieldInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
                 return err
@@ -990,6 +1013,7 @@ class PipeConfigTools:
                     field conditions (``confirm=False`` only).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             field_id, err = validate_tool_id(field_id, "field_id")
             if err is not None:
                 return err
@@ -1070,6 +1094,7 @@ class PipeConfigTools:
             pipe_id: PipefyId,
             name: str,
             color: str,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Create a label on a pipe.
@@ -1081,6 +1106,7 @@ class PipeConfigTools:
                     ``#FF0000``); color names such as ``red`` are rejected before GraphQL.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             pipe_id, err = validate_tool_id(pipe_id, "pipe_id")
             if err is not None:
                 return err
@@ -1127,6 +1153,7 @@ class PipeConfigTools:
             label_id: PipefyId,
             name: str,
             color: str,
+            ctx: Context,
             extra_input: dict[str, Any] | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
@@ -1145,6 +1172,7 @@ class PipeConfigTools:
                 extra_input: Additional UpdateLabelInput fields, if any.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             label_id, err = validate_tool_id(label_id, "label_id")
             if err is not None:
                 return err
@@ -1211,6 +1239,7 @@ class PipeConfigTools:
                 confirm: Set to True to execute the deletion (step 2).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             label_id, err = validate_tool_id(label_id, "label_id")
             if err is not None:
                 return err

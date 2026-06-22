@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk import PipefyId
 
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 from pipefy_mcp.tools.observability_tool_helpers import (
@@ -15,6 +15,7 @@ from pipefy_mcp.tools.observability_tool_helpers import (
     build_observability_read_success_payload,
     handle_observability_tool_graphql_error,
 )
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 # --- Validation constants ---
@@ -57,12 +58,13 @@ class ObservabilityTools:
     """MCP tools for monitoring AI agent and automation execution."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
         )
         async def get_ai_agent_logs(
             repo_uuid: str,
+            ctx: Context,
             first: int = 30,
             after: str | None = None,
             status: str | None = None,
@@ -79,6 +81,7 @@ class ObservabilityTools:
                 search_term: Free-text search within logs.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             if not repo_uuid or not isinstance(repo_uuid, str):
                 return build_observability_error_payload(
                     message="Invalid 'repo_uuid': provide a non-empty string.",
@@ -112,6 +115,7 @@ class ObservabilityTools:
         )
         async def get_ai_agent_log_details(
             log_uuid: str,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Get detailed AI agent execution log by UUID. Includes executionTime, finishedAt, and tracingNodes — a step-by-step trace of each action the agent performed with per-node status (success, failed, skipped, conditions_not_met).
@@ -120,6 +124,7 @@ class ObservabilityTools:
                 log_uuid: UUID of the AI agent log entry.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             if not log_uuid or not isinstance(log_uuid, str):
                 return build_observability_error_payload(
                     message="Invalid 'log_uuid': provide a non-empty string.",
@@ -146,6 +151,7 @@ class ObservabilityTools:
         )
         async def get_automation_logs(
             automation_id: PipefyId,
+            ctx: Context,
             first: int = 30,
             after: str | None = None,
             status: str | None = None,
@@ -162,6 +168,7 @@ class ObservabilityTools:
                 search_term: Free-text search within logs.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             if not automation_id:
                 return build_observability_error_payload(
                     message="Invalid 'automation_id': provide a non-empty string.",
@@ -195,6 +202,7 @@ class ObservabilityTools:
         )
         async def get_automation_logs_by_repo(
             repo_id: PipefyId,
+            ctx: Context,
             first: int = 30,
             after: str | None = None,
             status: str | None = None,
@@ -211,6 +219,7 @@ class ObservabilityTools:
                 search_term: Free-text search within logs.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             if not repo_id:
                 return build_observability_error_payload(
                     message="Invalid 'repo_id': provide a non-empty string.",
@@ -246,6 +255,7 @@ class ObservabilityTools:
             organization_uuid: PipefyId,
             filter_date_from: str,
             filter_date_to: str,
+            ctx: Context,
             filters: dict[str, Any] | None = None,
             search: str | None = None,
             sort: dict[str, Any] | None = None,
@@ -262,6 +272,7 @@ class ObservabilityTools:
                 sort: SortCriteria dict (field + direction).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             organization_uuid, err = validate_tool_id(
                 organization_uuid, "organization_uuid"
             )
@@ -298,6 +309,7 @@ class ObservabilityTools:
             organization_uuid: PipefyId,
             filter_date_from: str,
             filter_date_to: str,
+            ctx: Context,
             filters: dict[str, Any] | None = None,
             search: str | None = None,
             sort: dict[str, Any] | None = None,
@@ -314,6 +326,7 @@ class ObservabilityTools:
                 sort: SortCriteria dict (field + direction).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             organization_uuid, err = validate_tool_id(
                 organization_uuid, "organization_uuid"
             )
@@ -349,6 +362,7 @@ class ObservabilityTools:
         async def get_ai_credit_usage(
             organization_uuid: PipefyId,
             period: str,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Get AI credit usage dashboard for an org. Shows credit limit, total consumption, per-resource breakdown (AI Agents vs Assistants), addon status, and free credit info. `period`: 'current_month', 'last_month', or 'last_3_months'.
@@ -359,6 +373,7 @@ class ObservabilityTools:
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             organization_uuid, err = validate_tool_id(
                 organization_uuid, "organization_uuid"
             )
@@ -390,6 +405,7 @@ class ObservabilityTools:
         async def export_automation_jobs(
             organization_id: PipefyId,
             period: str,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Trigger async export of automation job history for an org. `period`: 'current_month', 'last_month', or 'last_3_months'. The export file is delivered to the requesting user.
@@ -399,6 +415,7 @@ class ObservabilityTools:
                 period: PeriodFilter (current_month, last_month, last_3_months).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             organization_id, err = validate_tool_id(organization_id, "organization_id")
             if err is not None:
                 return err
@@ -426,6 +443,7 @@ class ObservabilityTools:
         )
         async def get_automation_jobs_export(
             export_id: PipefyId,
+            ctx: Context,
             debug: bool = False,
         ) -> dict[str, Any]:
             """Poll an automation jobs export by id. Returns `status` (`created`, `processing`, `finished`, `failed`) and `fileUrl` when the API provides a signed download link (often after `finished`). Use after `export_automation_jobs`; repeat until `finished` or `failed`. The tool does not download the file — use `fileUrl` over HTTP if needed.
@@ -434,6 +452,7 @@ class ObservabilityTools:
                 export_id: Export id from `export_automation_jobs` result (`automationJobsExport.id`).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             if not export_id:
                 return build_observability_error_payload(
                     message="Invalid 'export_id': provide a non-empty string.",
@@ -457,6 +476,7 @@ class ObservabilityTools:
         )
         async def get_automation_jobs_export_csv(
             export_id: PipefyId,
+            ctx: Context,
             max_output_chars: int = _DEFAULT_CSV_CHARS,
             max_download_bytes: int = _DEFAULT_EXPORT_DOWNLOAD_BYTES,
             debug: bool = False,
@@ -469,6 +489,7 @@ class ObservabilityTools:
                 max_download_bytes: Max xlsx size to download (4 KiB–80 MiB); default 50 MiB.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
+            client = get_pipefy_client(ctx)
             if not export_id:
                 return build_observability_error_payload(
                     message="Invalid 'export_id': provide a non-empty string.",

@@ -2,29 +2,30 @@
 
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyClient, PipefyId
+from pipefy_sdk import PipefyId
 
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
 )
 from pipefy_mcp.tools.remote_profile import REMOTE
+from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 
 class OrganizationTools:
     """Registers MCP tools for organization operations."""
 
     @staticmethod
-    def register(mcp: FastMCP, client: PipefyClient) -> None:
+    def register(mcp: FastMCP) -> None:
         """Register organization-related tools on the MCP server."""
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
             meta=REMOTE,
         )
-        async def get_organization(organization_id: PipefyId) -> dict:
+        async def get_organization(organization_id: PipefyId, ctx: Context) -> dict:
             """Fetch Pipefy organization details by ID.
 
             Returns id, uuid, name, plan, role, members count, pipes count,
@@ -34,6 +35,7 @@ class OrganizationTools:
             Args:
                 organization_id: Numeric organization ID.
             """
+            client = get_pipefy_client(ctx)
             try:
                 result = await client.get_organization(organization_id)
             except Exception as exc:  # noqa: BLE001

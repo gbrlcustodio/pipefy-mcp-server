@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from _shared.pagination_test_defaults import DEFAULT_FIRST
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -14,7 +13,7 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.table_tools import TableTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
 
 
 @pytest.fixture
@@ -41,9 +40,9 @@ def mock_table_client():
 
 @pytest.fixture
 def table_mcp_server(mock_table_client):
-    mcp = FastMCP("Table Tools Test")
-    TableTools.register(mcp, mock_table_client)
-    return mcp
+    return build_tool_test_server(
+        "Table Tools Test", TableTools.register, mock_table_client
+    )
 
 
 @pytest.fixture

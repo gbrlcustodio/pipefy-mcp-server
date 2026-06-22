@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -13,7 +12,7 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.tools.automation_tools import AutomationTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
-from tools.conftest import assert_invalid_arguments_envelope
+from tools.conftest import assert_invalid_arguments_envelope, build_tool_test_server
 
 
 @pytest.fixture
@@ -36,9 +35,9 @@ def mock_automation_client():
 
 @pytest.fixture
 def automation_mcp_server(mock_automation_client):
-    mcp = FastMCP("Automation Tools Test")
-    AutomationTools.register(mcp, mock_automation_client)
-    return mcp
+    return build_tool_test_server(
+        "Automation Tools Test", AutomationTools.register, mock_automation_client
+    )
 
 
 @pytest.fixture

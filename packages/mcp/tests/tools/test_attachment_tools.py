@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
-from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -21,6 +20,7 @@ from pipefy_sdk.models.attachment import infer_content_type
 
 from pipefy_mcp.tools.attachment_tools import AttachmentTools
 from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from tools.conftest import build_tool_test_server
 
 
 @pytest.fixture
@@ -47,9 +47,9 @@ def mock_attachment_client():
 
 @pytest.fixture
 def attachment_mcp_server(mock_attachment_client):
-    mcp = FastMCP("Attachment Tools Test")
-    AttachmentTools.register(mcp, mock_attachment_client)
-    return mcp
+    return build_tool_test_server(
+        "Attachment Tools Test", AttachmentTools.register, mock_attachment_client
+    )
 
 
 @pytest.fixture

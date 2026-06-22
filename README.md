@@ -83,7 +83,7 @@ After install, run `pipefy auth login` to authenticate (`--device` on headless s
 /plugin marketplace add pipefy/ai-toolkit
 /plugin install pipefy
 /pipefy:install
-/pipefy-login
+/pipefy:pipefy-login
 ```
 
 `/plugin install pipefy` registers the MCP server and the `/pipefy:install` + `/pipefy-login` slash commands. `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent). `/pipefy-login` runs the OAuth browser flow. For hand-wired setups (paste-into-config blocks per client, the macOS `errSecParam` keychain note, the local-clone alternative for contributors), see [`packages/mcp/README.md`](packages/mcp/README.md).

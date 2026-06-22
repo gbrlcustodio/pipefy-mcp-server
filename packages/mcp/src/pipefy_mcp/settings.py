@@ -41,7 +41,7 @@ class McpSettings(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
-        # Reads the shared config.toml; keys are this model's bare field names.
+        # Reads the shared config.toml; keys are this class's bare field names.
         return (
             init_settings,
             env_settings,

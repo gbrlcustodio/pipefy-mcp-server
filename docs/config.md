@@ -17,7 +17,7 @@ The file is **not** auto-created. Missing file = no error; settings use environm
 
 ## Schema
 
-Top-level keys match pydantic field names on `pipefy_auth.AuthSettings`, `pipefy_sdk.PipefySettings`, and `pipefy_mcp.McpSettings`. The models read the same file; each picks the keys it knows about and ignores the rest. Shared keys (`base_url`, `allow_insecure_urls`) populate both auth and SDK from one entry; the `mcp_*` keys feed the MCP server only.
+Top-level keys match pydantic field names on `pipefy_auth.AuthSettings`, `pipefy_sdk.PipefySettings`, and `pipefy_mcp.McpSettings`. Each settings class reads the same file, picks the keys it knows about, and ignores the rest. Shared keys (`base_url`, `allow_insecure_urls`) populate both auth and SDK from one entry; the MCP keys (`unified_envelope`, `remote_mode`, `host`, `port`) feed the MCP server only.
 
 ```toml
 # Shared (both AuthSettings and PipefySettings)
@@ -51,7 +51,7 @@ Unknown keys are silently ignored — pasting both auth and SDK fields into one 
 
 ## Environment variables
 
-The same fields populate from environment variables in upper-case `PIPEFY_<NAME>` form. Env vars feed `pipefy_auth.AuthSettings`, `pipefy_sdk.PipefySettings`, and `pipefy_mcp.McpSettings` independently (each model runs its own loading; auth and SDK additionally run their own SSRF gates and validation). Precedence over TOML and defaults is documented in the next section. A working sample with placeholders lives at [`../.env.example`](../.env.example).
+The same fields populate from environment variables in upper-case `PIPEFY_<NAME>` form. Env vars feed `pipefy_auth.AuthSettings`, `pipefy_sdk.PipefySettings`, and `pipefy_mcp.McpSettings` independently (each settings class runs its own loading; auth and SDK additionally run their own SSRF gates and validation). Precedence over TOML and defaults is documented in the next section. A working sample with placeholders lives at [`../.env.example`](../.env.example).
 
 ### URL and credential variables
 

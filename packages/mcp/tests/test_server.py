@@ -1,7 +1,14 @@
+import socket
+import threading
+import time
+from contextlib import closing, contextmanager
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import uvicorn
+from mcp import ClientSession
+from mcp.client.streamable_http import streamable_http_client
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
@@ -10,12 +17,14 @@ from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.server import (
+    _assert_http_surface_is_safe,
     _register_pipefy_tools,
     build_pipefy_mcp_server,
     lifespan,
+    run_http_server,
     run_server,
 )
-from pipefy_mcp.settings import Settings
+from pipefy_mcp.settings import McpSettings, Settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
@@ -178,3 +187,148 @@ async def test_lifespan_logs_error_when_initialization_raises():
         mock_logger.exception.assert_called_once()
         call_msg = mock_logger.exception.call_args[0][0]
         assert "Fatal error during server lifespan" in call_msg
+
+
+# --- HTTP (Streamable) transport profile (#300) -----------------------------
+
+
+def _build_http_app(remote_mode: bool) -> FastMCP:
+    """Register tools on a fresh, lifespan-free app with a mocked client.
+
+    Mirrors how ``run_http_server`` builds the HTTP app, minus the socket.
+    """
+    app = FastMCP("http-transport-test")
+    mock_container = MagicMock()
+    mock_container.initialize_services = AsyncMock()
+    mock_container.pipefy_client = MagicMock()
+    with patch(
+        "pipefy_mcp.server.ServicesContainer.get_instance",
+        return_value=mock_container,
+    ):
+        _register_pipefy_tools(app, remote_mode=remote_mode)
+    return app
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("host", "remote_mode", "hatch"),
+    [
+        ("127.0.0.1", False, False),  # loopback, full surface
+        ("localhost", False, False),  # loopback alias
+        ("0.0.0.0", True, False),  # public but remote profile is the safe surface
+        ("203.0.113.5", False, True),  # public, full surface, escape hatch set
+    ],
+)
+def test_http_surface_interlock_allows(host, remote_mode, hatch):
+    settings = Settings(
+        pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+        auth=AuthSettings(),
+        mcp=McpSettings(allow_full_surface_over_http=hatch),
+    )
+    with patch("pipefy_mcp.server.settings", settings):
+        # Does not raise.
+        _assert_http_surface_is_safe(host=host, remote_mode=remote_mode)
+
+
+@pytest.mark.unit
+def test_http_surface_interlock_refuses_public_full_surface_without_hatch():
+    settings = Settings(
+        pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+        auth=AuthSettings(),
+        mcp=McpSettings(allow_full_surface_over_http=False),
+    )
+    with (
+        patch("pipefy_mcp.server.settings", settings),
+        pytest.raises(RuntimeError, match="Refusing to serve the full tool surface"),
+    ):
+        _assert_http_surface_is_safe(host="0.0.0.0", remote_mode=False)
+
+
+@pytest.mark.unit
+def test_run_http_server_registers_once_without_lifespan_and_serves():
+    fake_app = MagicMock()
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.anyio.run") as mock_anyio_run,
+        patch("pipefy_mcp.server.FastMCP", return_value=fake_app) as mock_fastmcp,
+        patch("pipefy_mcp.server._register_pipefy_tools") as mock_register,
+        patch("pipefy_mcp.server.ServicesContainer.get_instance"),
+    ):
+        run_http_server(host="127.0.0.1", port=9123, remote_mode=True)
+
+    mock_anyio_run.assert_called_once()
+    _, fastmcp_kwargs = mock_fastmcp.call_args
+    assert fastmcp_kwargs["host"] == "127.0.0.1"
+    assert fastmcp_kwargs["port"] == 9123
+    assert "lifespan" not in fastmcp_kwargs
+    mock_register.assert_called_once_with(fake_app, remote_mode=True)
+    fake_app.run.assert_called_once_with("streamable-http")
+
+
+@pytest.mark.unit
+def test_run_http_server_interlock_refuses_before_initializing_services():
+    """The interlock fires before any service init or socket bind."""
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.anyio.run") as mock_anyio_run,
+        patch("pipefy_mcp.server.FastMCP") as mock_fastmcp,
+    ):
+        with pytest.raises(RuntimeError, match="Refusing to serve"):
+            run_http_server(host="0.0.0.0", port=9123, remote_mode=False)
+
+    mock_anyio_run.assert_not_called()
+    mock_fastmcp.assert_not_called()
+
+
+def _free_port() -> int:
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+@contextmanager
+def _served_http_app(app: FastMCP, host: str, port: int):
+    """Serve ``app`` over real Streamable HTTP in a background thread."""
+    config = uvicorn.Config(
+        app.streamable_http_app(), host=host, port=port, log_level="warning"
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    try:
+        deadline = time.monotonic() + 10
+        while not server.started and time.monotonic() < deadline:
+            time.sleep(0.02)
+        if not server.started:
+            raise RuntimeError("HTTP server did not start in time")
+        yield
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
+
+
+@pytest.mark.anyio
+async def test_http_client_completes_a_tool_call_over_streamable_http():
+    """Acceptance: a client connects over HTTP, lists the remote surface, and calls a tool."""
+    app = _build_http_app(remote_mode=True)
+
+    @app.tool()
+    async def ping() -> str:
+        """Minimal tool to prove a tools/call round-trip over HTTP."""
+        return "pong"
+
+    host, port = "127.0.0.1", _free_port()
+    with _served_http_app(app, host, port):
+        url = f"http://{host}:{port}/mcp"
+        async with streamable_http_client(url) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+
+                listed = {tool.name for tool in (await session.list_tools()).tools}
+                assert "get_organization" in listed
+                assert "upload_attachment_to_card" not in listed
+
+                result = await session.call_tool("ping", {})
+                assert any(
+                    getattr(block, "text", "") == "pong" for block in result.content
+                )

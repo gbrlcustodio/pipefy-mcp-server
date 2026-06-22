@@ -50,3 +50,45 @@ def test_unknown_flag_still_starts_server(mocker):
     main(["--unknown-flag"])
 
     server_mock.assert_called_once()
+
+
+@pytest.mark.unit
+def test_remote_starts_http_server_with_remote_profile(mocker):
+    """``--remote`` serves over HTTP with the default-deny remote profile, not stdio."""
+    stdio_mock = mocker.patch("pipefy_mcp.main.run_server")
+    http_mock = mocker.patch("pipefy_mcp.main.run_http_server")
+
+    main(["--remote"])
+
+    stdio_mock.assert_not_called()
+    http_mock.assert_called_once()
+    _, kwargs = http_mock.call_args
+    assert kwargs["remote_mode"] is True
+    # Falls back to the settings defaults when not overridden.
+    assert kwargs["host"] == "127.0.0.1"
+    assert kwargs["port"] == 8000
+
+
+@pytest.mark.unit
+def test_remote_host_and_port_overrides(mocker):
+    """``--host`` / ``--port`` override the settings defaults under ``--remote``."""
+    http_mock = mocker.patch("pipefy_mcp.main.run_http_server")
+
+    main(["--remote", "--host", "0.0.0.0", "--port", "9001"])
+
+    _, kwargs = http_mock.call_args
+    assert kwargs["host"] == "0.0.0.0"
+    assert kwargs["port"] == 9001
+    assert kwargs["remote_mode"] is True
+
+
+@pytest.mark.unit
+def test_remote_host_and_port_equals_form(mocker):
+    """``--host=`` / ``--port=`` forms are accepted too."""
+    http_mock = mocker.patch("pipefy_mcp.main.run_http_server")
+
+    main(["--remote", "--host=127.0.0.2", "--port=9002"])
+
+    _, kwargs = http_mock.call_args
+    assert kwargs["host"] == "127.0.0.2"
+    assert kwargs["port"] == 9002

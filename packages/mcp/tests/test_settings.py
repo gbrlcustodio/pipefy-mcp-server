@@ -193,7 +193,6 @@ def test_mcp_settings_defaults():
     assert mcp.remote_mode is False
     assert mcp.host == "127.0.0.1"
     assert mcp.port == 8000
-    assert mcp.allow_full_surface_over_http is False
 
 
 @pytest.mark.unit
@@ -202,12 +201,10 @@ def test_mcp_settings_loads_from_pipefy_mcp_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_MCP_REMOTE_MODE", "true")
     monkeypatch.setenv("PIPEFY_MCP_HOST", "0.0.0.0")
     monkeypatch.setenv("PIPEFY_MCP_PORT", "9100")
-    monkeypatch.setenv("PIPEFY_MCP_ALLOW_FULL_SURFACE_OVER_HTTP", "true")
     monkeypatch.setenv("PIPEFY_MCP_UNIFIED_ENVELOPE", "false")
 
     mcp = Settings().mcp
     assert mcp.remote_mode is True
     assert mcp.host == "0.0.0.0"
     assert mcp.port == 9100
-    assert mcp.allow_full_surface_over_http is True
     assert mcp.unified_envelope is False

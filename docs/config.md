@@ -43,7 +43,6 @@ unified_envelope = true
 remote_mode = false
 host = "127.0.0.1"
 port = 8000
-allow_full_surface_over_http = false
 ```
 
 Keys use **bare pydantic field names**, not the upper-case `PIPEFY_<NAME>` environment variable names. The env-only aliases (`PIPEFY_TOKEN`, `PIPEFY_OAUTH_CLIENT`, ...) exist to refuse unprefixed environment leakage and do not double as TOML keys.

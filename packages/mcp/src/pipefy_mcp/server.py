@@ -19,9 +19,9 @@ PIPEFY_INSTRUCTIONS = textwrap.dedent("""
     You are connected to a Pipefy MCP server for managing Kanban-style workflow processes.
     """).strip()
 
-# Hosts that keep the server reachable only from the local machine. Binding
-# anywhere else (a routable interface or 0.0.0.0) is treated as public and
-# gates the full tool surface behind the remote profile or an escape hatch.
+# Hosts that keep the server reachable only from the local machine. The HTTP
+# transport refuses to bind anywhere else (a routable interface or 0.0.0.0)
+# while it is unauthenticated foundation work (#301/#302).
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
@@ -86,27 +86,23 @@ def build_pipefy_mcp_server(*, remote_mode: bool | None = None) -> FastMCP:
     return app
 
 
-def _assert_http_surface_is_safe(*, host: str, remote_mode: bool) -> None:
-    """Refuse to serve the full tool surface on a public HTTP host.
+def _assert_loopback_http_bind(*, host: str) -> None:
+    """Refuse to bind the HTTP transport to a non-loopback host.
 
-    The default-deny remote profile (``remote_mode``) is the safe surface; the
-    escape hatch is an explicit operator opt-in. Loopback binds are always
-    allowed so local development is unaffected.
+    The HTTP profile is unauthenticated foundation work: it validates no inbound
+    bearer (#301) and carries no per-request identity (#302), so every call runs
+    as the single identity resolved at startup. A network-reachable bind would
+    hand that identity to anyone who can reach the port, so HTTP is restricted to
+    loopback until inbound auth lands. (The filesystem tools, e.g. the attachment
+    uploads, also only make sense on loopback, where the server shares the
+    client's disk; remote-safe file inputs are tracked in #305.)
     """
-    if remote_mode or host in _LOOPBACK_HOSTS:
-        return
-    if settings.mcp.allow_full_surface_over_http:
-        logger.warning(
-            "Serving the full tool surface over HTTP on %s because "
-            "PIPEFY_MCP_ALLOW_FULL_SURFACE_OVER_HTTP is set.",
-            host,
-        )
+    if host in _LOOPBACK_HOSTS:
         return
     raise RuntimeError(
-        f"Refusing to serve the full tool surface over HTTP on a public host "
-        f"({host}). Launch with --remote to expose only the default-deny "
-        f"remote-safe tools, or set PIPEFY_MCP_ALLOW_FULL_SURFACE_OVER_HTTP=true "
-        f"to override."
+        f"Refusing to serve over HTTP on a non-loopback host ({host}). The HTTP "
+        f"transport is unauthenticated foundation work and is restricted to "
+        f"loopback (127.0.0.1/localhost/::1) until inbound auth lands (#301)."
     )
 
 
@@ -120,14 +116,14 @@ def run_server(
     """Run the Pipefy MCP server. The single serve entry point for both transports.
 
     With ``http=False`` (the default, local profile) the process speaks MCP over
-    stdio. With ``http=True`` (the hosted profile) it serves over Streamable HTTP
-    on ``host``/``port``, defaulting to the configured ``PIPEFY_MCP_HOST`` /
-    ``PIPEFY_MCP_PORT``.
+    stdio. With ``http=True`` it serves over Streamable HTTP on ``host``/``port``,
+    defaulting to the configured ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``. HTTP
+    is restricted to a loopback bind while it is unauthenticated foundation work
+    (see :func:`_assert_loopback_http_bind`).
 
     ``remote_mode`` selects the default-deny remote tool surface and defaults to
     the configured ``PIPEFY_MCP_REMOTE_MODE``. It is orthogonal to the transport:
-    stdio can run the remote profile, and HTTP can serve the full surface on a
-    loopback host (or behind the escape hatch).
+    stdio can run the remote profile too.
 
     The server is built here, at startup rather than at import. Building registers
     every tool and reads ``PIPEFY_MCP_REMOTE_MODE``, so building at import would
@@ -154,7 +150,7 @@ def run_server(
         resolved_port,
         "enabled" if resolved_remote else "disabled",
     )
-    _assert_http_surface_is_safe(host=resolved_host, remote_mode=resolved_remote)
+    _assert_loopback_http_bind(host=resolved_host)
 
     container = ServicesContainer.get_instance()
     anyio.run(container.initialize_services, settings)

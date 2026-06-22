@@ -20,7 +20,7 @@ class McpSettings(BaseSettings):
     re-attaches it so the operator-facing ``PIPEFY_MCP_*`` env vars stay
     byte-identical. The shared ``config.toml`` source keys off the bare field
     names, so TOML keys are ``unified_envelope``, ``remote_mode``, ``host``,
-    ``port``, ``allow_full_surface_over_http``.
+    ``port``.
     """
 
     model_config = SettingsConfigDict(
@@ -74,7 +74,8 @@ class McpSettings(BaseSettings):
         description=(
             "Bind host for the Streamable HTTP transport (env: PIPEFY_MCP_HOST). "
             "Only consulted when the server is launched with --remote; the stdio "
-            "profile ignores it. Defaults to loopback."
+            "profile ignores it. Must stay loopback (the default): the HTTP "
+            "transport refuses a non-loopback bind while it is unauthenticated."
         ),
     )
 
@@ -83,16 +84,6 @@ class McpSettings(BaseSettings):
         description=(
             "Bind port for the Streamable HTTP transport (env: PIPEFY_MCP_PORT). "
             "Only consulted when the server is launched with --remote."
-        ),
-    )
-
-    allow_full_surface_over_http: bool = Field(
-        default=False,
-        description=(
-            "Escape hatch (env: PIPEFY_MCP_ALLOW_FULL_SURFACE_OVER_HTTP). The HTTP "
-            "transport refuses to serve the full tool surface on a non-loopback host "
-            "unless this is true; --remote enables the default-deny remote profile and "
-            "does not need it. Leave false in any shared environment."
         ),
     )
 

@@ -21,7 +21,6 @@ from pipefy_mcp.server import (
     _register_pipefy_tools,
     build_pipefy_mcp_server,
     lifespan,
-    run_http_server,
     run_server,
 )
 from pipefy_mcp.settings import McpSettings, Settings
@@ -70,11 +69,11 @@ async def test_register_tools(mocked_container):
 
 
 @pytest.mark.unit
-def test_run_server_builds_the_server_and_runs_it_with_no_arguments():
-    """run_server builds the server at startup and delegates to mcp.run() with no args."""
+def test_run_server_builds_the_stdio_server_and_runs_it():
+    """The default (stdio) profile builds at startup and delegates to mcp.run()."""
     with patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build:
         run_server()
-        mock_build.assert_called_once_with()
+        mock_build.assert_called_once_with(remote_mode=None)
         mock_build.return_value.run.assert_called_once_with()
 
 
@@ -195,7 +194,7 @@ async def test_lifespan_logs_error_when_initialization_raises():
 def _build_http_app(remote_mode: bool) -> FastMCP:
     """Register tools on a fresh, lifespan-free app with a mocked client.
 
-    Mirrors how ``run_http_server`` builds the HTTP app, minus the socket.
+    Mirrors how ``run_server(http=True)`` builds the HTTP app, minus the socket.
     """
     app = FastMCP("http-transport-test")
     mock_container = MagicMock()
@@ -245,7 +244,7 @@ def test_http_surface_interlock_refuses_public_full_surface_without_hatch():
 
 
 @pytest.mark.unit
-def test_run_http_server_registers_once_without_lifespan_and_serves():
+def test_run_server_http_registers_once_without_lifespan_and_serves():
     fake_app = MagicMock()
     with (
         patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
@@ -254,7 +253,7 @@ def test_run_http_server_registers_once_without_lifespan_and_serves():
         patch("pipefy_mcp.server._register_pipefy_tools") as mock_register,
         patch("pipefy_mcp.server.ServicesContainer.get_instance"),
     ):
-        run_http_server(host="127.0.0.1", port=9123, remote_mode=True)
+        run_server(http=True, host="127.0.0.1", port=9123, remote_mode=True)
 
     mock_anyio_run.assert_called_once()
     _, fastmcp_kwargs = mock_fastmcp.call_args
@@ -266,7 +265,7 @@ def test_run_http_server_registers_once_without_lifespan_and_serves():
 
 
 @pytest.mark.unit
-def test_run_http_server_interlock_refuses_before_initializing_services():
+def test_run_server_http_interlock_refuses_before_initializing_services():
     """The interlock fires before any service init or socket bind."""
     with (
         patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
@@ -274,7 +273,7 @@ def test_run_http_server_interlock_refuses_before_initializing_services():
         patch("pipefy_mcp.server.FastMCP") as mock_fastmcp,
     ):
         with pytest.raises(RuntimeError, match="Refusing to serve"):
-            run_http_server(host="0.0.0.0", port=9123, remote_mode=False)
+            run_server(http=True, host="0.0.0.0", port=9123, remote_mode=False)
 
     mock_anyio_run.assert_not_called()
     mock_fastmcp.assert_not_called()

@@ -12,7 +12,7 @@ import sys
 from typing import Sequence
 
 from pipefy_mcp import __version__
-from pipefy_mcp.server import run_http_server, run_server
+from pipefy_mcp.server import run_server
 from pipefy_mcp.settings import settings
 
 _HELP = (
@@ -63,7 +63,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         port_arg = _option_value(args, "--port")
         port = int(port_arg) if port_arg is not None else settings.mcp.port
         # --remote forces the default-deny remote profile alongside HTTP.
-        run_http_server(host=host, port=port, remote_mode=True)
+        run_server(http=True, host=host, port=port, remote_mode=True)
         return
 
     run_server()

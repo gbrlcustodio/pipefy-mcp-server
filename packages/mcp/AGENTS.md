@@ -39,16 +39,16 @@ on-behalf-of identity (#302); until those land it is unauthenticated and uses th
 single identity resolved at startup. Treat `--remote` as local/validation only, not
 a production hosted endpoint.
 
-**Public-HTTP safety interlock.** `run_http_server` refuses to serve the full tool
-surface on a non-loopback host unless the remote profile is on (`--remote`) or
-`PIPEFY_MCP_ALLOW_FULL_SURFACE_OVER_HTTP=true` is set. Loopback binds are always
-allowed for local development.
+**Public-HTTP safety interlock.** The HTTP path of `run_server` refuses to serve
+the full tool surface on a non-loopback host unless the remote profile is on
+(`--remote`) or `PIPEFY_MCP_ALLOW_FULL_SURFACE_OVER_HTTP=true` is set. Loopback
+binds are always allowed for local development.
 
 ## Tool registration
 
-Tools are registered **once, at construction** (`build_pipefy_mcp_server` for
-stdio, `run_http_server` for HTTP, both via `_register_pipefy_tools` in
-`server.py`), not inside the FastMCP `lifespan`. The lifespan owns resources only:
+Tools are registered **once, at construction** (via `_register_pipefy_tools` in
+`server.py`, reached through `build_pipefy_mcp_server` for stdio and the HTTP path
+of `run_server`), not inside the FastMCP `lifespan`. The lifespan owns resources only:
 it initializes services and yields the container as the request
 `lifespan_context`. This follows the FastMCP contract, where the lifespan can run
 per session (per request under Streamable HTTP) and so must not mutate the tool
@@ -67,9 +67,10 @@ no repeat-visit bookkeeping: registration never repeats.
 When adding a tool, give it a `ctx: Context` parameter and start its body with
 `client = get_pipefy_client(ctx)`; do not pass a client through `register`.
 
-Both transports share `_register_pipefy_tools`. The stdio app keeps the
-resource-only `lifespan`; the HTTP app carries no constructor `lifespan` (which
-Streamable HTTP would run per session) and initializes services once before
+Both transports launch through the single `run_server` entry point (stdio by
+default, HTTP with `http=True`) and share `_register_pipefy_tools`. The stdio app
+keeps the resource-only `lifespan`; the HTTP app carries no constructor `lifespan`
+(which Streamable HTTP would run per session) and initializes services once before
 serving.
 
 ## Remote-profile tool marker

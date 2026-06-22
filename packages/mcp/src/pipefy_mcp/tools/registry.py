@@ -191,6 +191,28 @@ PIPEFY_TOOL_NAMES = frozenset(
 )
 
 
+# Toolsets registered on the server, in registration order. Each exposes a
+# ``register(mcp, client)`` static method. Add a toolset by appending it here.
+_TOOLSETS = (
+    PipeTools,
+    PipeConfigTools,
+    FieldConditionTools,
+    TableTools,
+    RelationTools,
+    ReportTools,
+    AttachmentTools,
+    MemberTools,
+    WebhookTools,
+    AutomationTools,
+    IntrospectionTools,
+    OrganizationTools,
+    PortalTools,
+    ObservabilityTools,
+    AiAutomationTools,
+    AiAgentTools,
+)
+
+
 class ToolRegistry:
     """Responsible for registering tools with the MCP server."""
 
@@ -201,21 +223,7 @@ class ToolRegistry:
 
     @staticmethod
     def _snapshot_tool_names(mcp: FastMCP) -> set[str]:
-        try:
-            tools = mcp._tool_manager.list_tools()
-        except AttributeError:
-            return set()
-        try:
-            tool_list = list(tools)
-        except TypeError:
-            return set()
-        names: set[str] = set()
-        for tool in tool_list:
-            try:
-                names.add(tool.name)
-            except AttributeError:
-                continue
-        return names
+        return {tool.name for tool in mcp._tool_manager.list_tools()}
 
     def check_for_name_collisions(self) -> None:
         """Fail fast if any Pipefy tool name is already registered on the app.
@@ -232,7 +240,7 @@ class ToolRegistry:
                 f"{names}"
             )
 
-    def register_tools(self) -> FastMCP:
+    def register_tools(self) -> None:
         """Register tools with the MCP server.
 
         Tools bind a :class:`PipefyClientProxy`, not a concrete client, so they
@@ -242,26 +250,8 @@ class ToolRegistry:
         lifespan.
         """
         client = cast(PipefyClient, PipefyClientProxy(self.services_container))
-
-        PipeTools.register(self.mcp, client)
-        PipeConfigTools.register(self.mcp, client)
-        FieldConditionTools.register(self.mcp, client)
-        TableTools.register(self.mcp, client)
-        RelationTools.register(self.mcp, client)
-        ReportTools.register(self.mcp, client)
-        AttachmentTools.register(self.mcp, client)
-        MemberTools.register(self.mcp, client)
-        WebhookTools.register(self.mcp, client)
-        AutomationTools.register(self.mcp, client)
-        IntrospectionTools.register(self.mcp, client)
-        OrganizationTools.register(self.mcp, client)
-        PortalTools.register(self.mcp, client)
-        ObservabilityTools.register(self.mcp, client)
-
-        AiAutomationTools.register(self.mcp, client)
-        AiAgentTools.register(self.mcp, client)
-
-        return self.mcp
+        for toolset in _TOOLSETS:
+            toolset.register(self.mcp, client)
 
     def retain_only(self, predicate: Callable[[Tool], bool]) -> set[str]:
         """Remove every Pipefy tool that does not satisfy ``predicate``.

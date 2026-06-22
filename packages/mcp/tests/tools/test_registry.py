@@ -54,7 +54,7 @@ class TestToolRegistry:
         mock_container.pipefy_client = Mock()
 
         registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
-        result = registry.register_tools()
+        registry.register_tools()
 
         # Tools bind a single PipefyClientProxy, not the concrete client, so a
         # later service re-init is picked up without re-registering.
@@ -76,7 +76,6 @@ class TestToolRegistry:
             mock_observability_tools_register,
         ):
             mock_register.assert_called_once_with(mock_mcp, proxy)
-        assert result is mock_mcp
         assert registry.pipefy_tool_names == PIPEFY_TOOL_NAMES
 
     def test_register_tools_succeeds_when_pipefy_client_is_none(self):
@@ -92,7 +91,7 @@ class TestToolRegistry:
 
         registry = ToolRegistry(mcp=mock_mcp, services_container=mock_container)
 
-        assert registry.register_tools() is mock_mcp
+        assert registry.register_tools() is None
 
     @patch("pipefy_mcp.tools.registry.ObservabilityTools.register")
     @patch("pipefy_mcp.tools.registry.IntrospectionTools.register")

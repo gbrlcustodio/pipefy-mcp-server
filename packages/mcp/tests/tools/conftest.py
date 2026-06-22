@@ -33,21 +33,21 @@ def build_tool_test_server(name, register, client):
 @pytest.fixture
 def legacy_envelope(monkeypatch):
     """Disable unified envelope (``PIPEFY_MCP_UNIFIED_ENVELOPE`` off)."""
-    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", False)
+    monkeypatch.setattr(settings.mcp, "unified_envelope", False)
     return False
 
 
 @pytest.fixture
 def unified_envelope(monkeypatch):
     """Enable unified envelope (explicit)."""
-    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", True)
+    monkeypatch.setattr(settings.mcp, "unified_envelope", True)
     return True
 
 
 @pytest.fixture(params=[True, False], ids=["flag-on", "flag-off"])
 def envelope_flag(request, monkeypatch):
     """Runs the test twice: unified envelope on, then off."""
-    monkeypatch.setattr(settings.pipefy, "mcp_unified_envelope", request.param)
+    monkeypatch.setattr(settings.mcp, "unified_envelope", request.param)
     return request.param
 
 

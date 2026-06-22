@@ -17,7 +17,7 @@ The file is **not** auto-created. Missing file = no error; settings use environm
 
 ## Schema
 
-Top-level keys match pydantic field names on `pipefy_auth.AuthSettings` and `pipefy_sdk.PipefySettings`. The two models read the same file; each picks the keys it knows about and ignores the rest. Shared keys (`base_url`, `allow_insecure_urls`) populate both models from one entry.
+Top-level keys match pydantic field names on `pipefy_auth.AuthSettings`, `pipefy_sdk.PipefySettings`, and `pipefy_mcp.McpSettings`. The models read the same file; each picks the keys it knows about and ignores the rest. Shared keys (`base_url`, `allow_insecure_urls`) populate both auth and SDK from one entry; the `mcp_*` keys feed the MCP server only.
 
 ```toml
 # Shared (both AuthSettings and PipefySettings)
@@ -37,7 +37,13 @@ service_account_ids = ["42", "43"]
 default_webhook_name = "Pipefy Webhook"
 permission_denied_enrichment_timeout_seconds = 5.0
 gql_reuse_fetched_graphql_schema = false
-mcp_unified_envelope = true
+
+# MCP server (pipefy_mcp.McpSettings)
+unified_envelope = true
+remote_mode = false
+host = "127.0.0.1"
+port = 8000
+allow_full_surface_over_http = false
 ```
 
 Keys use **bare pydantic field names**, not the upper-case `PIPEFY_<NAME>` environment variable names. The env-only aliases (`PIPEFY_TOKEN`, `PIPEFY_OAUTH_CLIENT`, ...) exist to refuse unprefixed environment leakage and do not double as TOML keys.
@@ -46,7 +52,7 @@ Unknown keys are silently ignored — pasting both auth and SDK fields into one 
 
 ## Environment variables
 
-The same fields populate from environment variables in upper-case `PIPEFY_<NAME>` form. Env vars feed `pipefy_auth.AuthSettings` and `pipefy_sdk.PipefySettings` independently (both packages run their own SSRF gates and validation). Precedence over TOML and defaults is documented in the next section. A working sample with placeholders lives at [`../.env.example`](../.env.example).
+The same fields populate from environment variables in upper-case `PIPEFY_<NAME>` form. Env vars feed `pipefy_auth.AuthSettings`, `pipefy_sdk.PipefySettings`, and `pipefy_mcp.McpSettings` independently (each model runs its own loading; auth and SDK additionally run their own SSRF gates and validation). Precedence over TOML and defaults is documented in the next section. A working sample with placeholders lives at [`../.env.example`](../.env.example).
 
 ### URL and credential variables
 

@@ -5,6 +5,7 @@ import textwrap
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import anyio
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.container import ServicesContainer
@@ -17,6 +18,11 @@ logger = logging.getLogger(__name__)
 PIPEFY_INSTRUCTIONS = textwrap.dedent("""
     You are connected to a Pipefy MCP server for managing Kanban-style workflow processes.
     """).strip()
+
+# Hosts that keep the server reachable only from the local machine. Binding
+# anywhere else (a routable interface or 0.0.0.0) is treated as public and
+# gates the full tool surface behind the remote profile or an escape hatch.
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 @asynccontextmanager
@@ -36,11 +42,11 @@ async def lifespan(app: FastMCP) -> AsyncIterator[ServicesContainer]:
         logger.info("Initializing services")
         logger.info(
             "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
-            "enabled" if settings.pipefy.mcp_unified_envelope else "disabled",
+            "enabled" if settings.mcp.unified_envelope else "disabled",
         )
         logger.info(
             "PIPEFY_MCP_REMOTE_MODE=%s",
-            "enabled" if settings.pipefy.mcp_remote_mode else "disabled",
+            "enabled" if settings.mcp.remote_mode else "disabled",
         )
         container = ServicesContainer.get_instance()
         await container.initialize_services(settings)
@@ -54,8 +60,8 @@ async def lifespan(app: FastMCP) -> AsyncIterator[ServicesContainer]:
 def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     """Register every Pipefy tool on ``app`` exactly once, at construction.
 
-    Tools take no client at registration: each resolves the live client per
-    request from the lifespan context (see
+    Shared by both transports. Tools take no client at registration: each
+    resolves the live client per request from the lifespan context (see
     :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so they can be
     registered before services are initialized and keep working across a service
     re-initialization. Registration never repeats, so there is no repeat-visit
@@ -69,12 +75,12 @@ def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
 
 
 def build_pipefy_mcp_server(*, remote_mode: bool | None = None) -> FastMCP:
-    """Build the FastMCP app with its tools registered once, before serving.
+    """Build the stdio FastMCP app with its tools registered once, before serving.
 
     ``remote_mode`` defaults to the configured ``PIPEFY_MCP_REMOTE_MODE``; pass
-    an explicit value to override (used by tests and the HTTP transport).
+    an explicit value to override (used by tests).
     """
-    resolved = settings.pipefy.mcp_remote_mode if remote_mode is None else remote_mode
+    resolved = settings.mcp.remote_mode if remote_mode is None else remote_mode
     app = FastMCP("pipefy", instructions=PIPEFY_INSTRUCTIONS, lifespan=lifespan)
     _register_pipefy_tools(app, remote_mode=resolved)
     return app
@@ -91,3 +97,56 @@ def run_server():
     logger.info("Starting Pipefy MCP server")
 
     build_pipefy_mcp_server().run()
+
+
+def _assert_http_surface_is_safe(*, host: str, remote_mode: bool) -> None:
+    """Refuse to serve the full tool surface on a public HTTP host.
+
+    The default-deny remote profile (``remote_mode``) is the safe surface; the
+    escape hatch is an explicit operator opt-in. Loopback binds are always
+    allowed so local development is unaffected.
+    """
+    if remote_mode or host in _LOOPBACK_HOSTS:
+        return
+    if settings.mcp.allow_full_surface_over_http:
+        logger.warning(
+            "Serving the full tool surface over HTTP on %s because "
+            "PIPEFY_MCP_ALLOW_FULL_SURFACE_OVER_HTTP is set.",
+            host,
+        )
+        return
+    raise RuntimeError(
+        f"Refusing to serve the full tool surface over HTTP on a public host "
+        f"({host}). Launch with --remote to expose only the default-deny "
+        f"remote-safe tools, or set PIPEFY_MCP_ALLOW_FULL_SURFACE_OVER_HTTP=true "
+        f"to override."
+    )
+
+
+def run_http_server(*, host: str, port: int, remote_mode: bool) -> None:
+    """Run the MCP server over Streamable HTTP (the hosted profile).
+
+    Builds a dedicated app and registers tools once via the shared
+    :func:`_register_pipefy_tools`, the same path stdio uses at construction. The
+    HTTP app carries no constructor ``lifespan`` (which Streamable HTTP would run
+    per session); services are initialized once here before serving.
+    """
+    logger.info(
+        "Starting Pipefy MCP server over HTTP on %s:%d (remote_mode=%s)",
+        host,
+        port,
+        "enabled" if remote_mode else "disabled",
+    )
+    _assert_http_surface_is_safe(host=host, remote_mode=remote_mode)
+
+    container = ServicesContainer.get_instance()
+    anyio.run(container.initialize_services, settings)
+
+    http_app = FastMCP(
+        "pipefy",
+        instructions=PIPEFY_INSTRUCTIONS,
+        host=host,
+        port=port,
+    )
+    _register_pipefy_tools(http_app, remote_mode=remote_mode)
+    http_app.run("streamable-http")

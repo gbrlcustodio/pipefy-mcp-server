@@ -22,7 +22,7 @@ _ORG_ID_PATTERN = r"^[0-9]+$"
 
 
 class PipefySettings(BaseSettings):
-    """Pipefy API connection and shared runtime knobs (MCP, CLI, scripts).
+    """Pipefy API connection and shared runtime knobs (CLI, scripts).
 
     Endpoint configuration only — credentials live on
     :class:`pipefy_auth.AuthSettings`. Consumers compose both side by side in
@@ -136,25 +136,6 @@ class PipefySettings(BaseSettings):
         description=(
             "Default ``name`` for create_webhook when the caller does not set one "
             "(env: PIPEFY_DEFAULT_WEBHOOK_NAME)."
-        ),
-    )
-
-    mcp_unified_envelope: bool = Field(
-        default=True,
-        description=(
-            "When true (env: PIPEFY_MCP_UNIFIED_ENVELOPE), migrated MCP tools return "
-            "{success, data, message?, pagination?}. When false, legacy shapes. "
-            "Read at call time, not cached at import."
-        ),
-    )
-
-    mcp_remote_mode: bool = Field(
-        default=False,
-        description=(
-            "When true (env: PIPEFY_MCP_REMOTE_MODE), the server runs the hosted/remote "
-            "profile and exposes ONLY tools explicitly marked remote-safe (default-deny). "
-            "When false (default), all tools register (local stdio profile). Read at "
-            "registration time, a startup decision, not per call."
         ),
     )
 

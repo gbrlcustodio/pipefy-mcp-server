@@ -93,3 +93,16 @@ def test_remote_host_and_port_equals_form(mocker):
     assert kwargs["http"] is True
     assert kwargs["host"] == "127.0.0.2"
     assert kwargs["port"] == 9002
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad_port", ["abc", ""])
+def test_remote_rejects_a_non_integer_port(mocker, bad_port):
+    """A non-integer ``--port`` exits with a usage error instead of crashing."""
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--remote", "--port", bad_port])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()

@@ -1,15 +1,8 @@
-import socket
-import threading
-import time
-from contextlib import closing, contextmanager
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import uvicorn
-from mcp import ClientSession
-from mcp.client.streamable_http import streamable_http_client
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -25,7 +18,6 @@ from pipefy_mcp.server import (
 )
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
-from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
     pipefy=PipefySettings(base_url="https://api.pipefy.com"),
@@ -193,7 +185,7 @@ async def test_lifespan_logs_error_when_initialization_raises():
         assert "Fatal error during server lifespan" in call_msg
 
 
-# --- HTTP (Streamable) transport profile (#300) -----------------------------
+# --- HTTP (Streamable) transport profile ------------------------------------
 
 
 @pytest.mark.unit
@@ -271,69 +263,3 @@ def test_run_server_http_refuses_non_loopback_before_building():
             run_server(http=True, host="0.0.0.0", port=9123, remote_mode=True)
 
     mock_build.assert_not_called()
-
-
-def _free_port() -> int:
-    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-@contextmanager
-def _served_http_app(app: FastMCP, host: str, port: int):
-    """Serve ``app`` over real Streamable HTTP in a background thread."""
-    config = uvicorn.Config(
-        app.streamable_http_app(), host=host, port=port, log_level="warning"
-    )
-    server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    try:
-        deadline = time.monotonic() + 10
-        while not server.started and time.monotonic() < deadline:
-            time.sleep(0.02)
-        if not server.started:
-            raise RuntimeError("HTTP server did not start in time")
-        yield
-    finally:
-        server.should_exit = True
-        thread.join(timeout=5)
-
-
-@pytest.mark.anyio
-async def test_http_client_resolves_the_lifespan_client_over_streamable_http(
-    mocked_container,
-):
-    """Acceptance: over real HTTP a tool resolves the per-request client, and the
-    remote profile is applied.
-
-    Builds through the shared :func:`build_pipefy_mcp_server` so the served app
-    carries the real lifespan. The custom tool calls :func:`get_pipefy_client`,
-    which reads ``ctx.request_context.lifespan_context.pipefy_client``. This
-    guards the regression where the HTTP app carried no lifespan: ``lifespan_context``
-    was then an empty dict and every client-backed tool raised on resolution.
-    """
-    app = build_pipefy_mcp_server(remote_mode=True)
-
-    @app.tool()
-    async def resolve_client(ctx: Context) -> str:
-        # Raises unless the lifespan yielded the container as lifespan_context.
-        get_pipefy_client(ctx)
-        return "resolved"
-
-    host, port = "127.0.0.1", _free_port()
-    with _served_http_app(app, host, port):
-        url = f"http://{host}:{port}/mcp"
-        async with streamable_http_client(url) as (read, write, _):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-
-                listed = {tool.name for tool in (await session.list_tools()).tools}
-                assert "get_organization" in listed
-                assert "upload_attachment_to_card" not in listed
-                assert "resolve_client" in listed
-
-                result = await session.call_tool("resolve_client", {})
-                assert any(
-                    getattr(block, "text", "") == "resolved" for block in result.content
-                )

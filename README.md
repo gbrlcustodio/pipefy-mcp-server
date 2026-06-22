@@ -53,7 +53,7 @@ Feedback and issues: [GitHub Issues](https://github.com/pipefy/ai-toolkit/issues
 
 Two auth paths:
 
-- **Human OAuth (interactive)**: `pipefy auth login` runs the browser flow and stores a session in your OS keychain. Works anywhere the `pipefy` CLI is on PATH (`uv tool install` once, any client can invoke it). Claude Code additionally exposes it as the `/pipefy:login` slash command via the plugin marketplace. Pipe membership is whatever the signed-in user already has.
+- **Human OAuth (interactive)**: `pipefy auth login` runs the browser flow and stores a session in your OS keychain. Works anywhere the `pipefy` CLI is on PATH (`uv tool install` once, any client can invoke it). Claude Code additionally exposes it as the `/pipefy:pipefy-login` slash command via the plugin marketplace. Pipe membership is whatever the signed-in user already has.
 - **Service account (unattended / CI)**: provision a Service Account in [Pipefy Admin](https://app.pipefy.com/) (Admin → Service Accounts) and add that account to every pipe the tools should touch. Wire `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` and `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` into the client config below.
 
 Full env-var reference and `config.toml` precedence: [`docs/config.md`](docs/config.md).
@@ -83,10 +83,10 @@ After install, run `pipefy auth login` to authenticate (`--device` on headless s
 /plugin marketplace add pipefy/ai-toolkit
 /plugin install pipefy
 /pipefy:install
-/pipefy:login
+/pipefy:pipefy-login
 ```
 
-`/plugin install pipefy` registers the MCP server and the `/pipefy:install` + `/pipefy:login` slash commands. `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent). `/pipefy:login` runs the OAuth browser flow. For hand-wired setups (paste-into-config blocks per client, the macOS `errSecParam` keychain note, the local-clone alternative for contributors), see [`packages/mcp/README.md`](packages/mcp/README.md).
+`/plugin install pipefy` registers the MCP server and the `/pipefy:install` + `/pipefy:pipefy-login` slash commands. `/pipefy:install` runs `uv tool install` once to put `pipefy` on PATH (idempotent). `/pipefy:pipefy-login` runs the OAuth browser flow. For hand-wired setups (paste-into-config blocks per client, the macOS `errSecParam` keychain note, the local-clone alternative for contributors), see [`packages/mcp/README.md`](packages/mcp/README.md).
 
 ### CLI
 

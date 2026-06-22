@@ -47,6 +47,22 @@ def _option_value(args: list[str], flag: str) -> str | None:
     return value
 
 
+def _parse_port(value: str | None) -> int | None:
+    """Parse a ``--port`` value, exiting with a usage error on a non-integer.
+
+    ``None`` (flag absent) passes through so ``run_server`` falls back to
+    ``PIPEFY_MCP_PORT``. A non-numeric value (e.g. ``--port abc`` or ``--port ""``)
+    exits 2 rather than crashing with an unhandled ``ValueError``.
+    """
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        sys.stderr.write(f"error: --port must be an integer, got {value!r}\n")
+        raise SystemExit(2) from None
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     """Entry point declared in ``packages/mcp/pyproject.toml``."""
     args = sys.argv[1:] if argv is None else list(argv)
@@ -61,11 +77,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         # Pass the parsed flags through as-is; run_server fills any unset value
         # from PIPEFY_MCP_HOST / PIPEFY_MCP_PORT. --remote forces the
         # default-deny remote profile alongside HTTP.
-        port_arg = _option_value(args, "--port")
         run_server(
             http=True,
             host=_option_value(args, "--host"),
-            port=int(port_arg) if port_arg is not None else None,
+            port=_parse_port(_option_value(args, "--port")),
             remote_mode=True,
         )
         return

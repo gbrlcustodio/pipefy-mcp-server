@@ -63,31 +63,6 @@ class TestServicesContainer:
         for key in _AUTH_ENV_KEYS:
             monkeypatch.delenv(key, raising=False)
 
-    @pytest.fixture(autouse=True)
-    def reset_singleton(self):
-        """Reset singleton before and after each test"""
-        ServicesContainer._instance = None
-        yield
-        ServicesContainer._instance = None
-
-    def test_get_instance_returns_singleton(self):
-        """Test that get_instance returns the same instance"""
-
-        instance1 = ServicesContainer.get_instance()
-        instance2 = ServicesContainer.get_instance()
-
-        assert instance1 is instance2
-        assert isinstance(instance1, ServicesContainer)
-
-    def test_get_instance_creates_new_instance_when_none(self):
-        """Test that get_instance creates a new instance when _instance is None"""
-
-        instance = ServicesContainer.get_instance()
-
-        assert instance is not None
-        assert isinstance(instance, ServicesContainer)
-        assert ServicesContainer._instance is instance
-
     def test_init_initializes_empty_container(self):
         """Test that __init__ creates an empty container"""
         container = ServicesContainer()

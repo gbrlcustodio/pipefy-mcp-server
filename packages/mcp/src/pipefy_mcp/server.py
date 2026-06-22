@@ -20,7 +20,7 @@ PIPEFY_INSTRUCTIONS = textwrap.dedent("""
 
 # Hosts that keep the server reachable only from the local machine. The HTTP
 # transport refuses to bind anywhere else (a routable interface or 0.0.0.0)
-# while it is unauthenticated foundation work (#301/#302).
+# while it is unauthenticated.
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
@@ -124,20 +124,20 @@ def build_pipefy_mcp_server(
 def _assert_loopback_http_bind(*, host: str) -> None:
     """Refuse to bind the HTTP transport to a non-loopback host.
 
-    The HTTP profile is unauthenticated foundation work: it validates no inbound
-    bearer (#301) and carries no per-request identity (#302), so every call runs
-    as the single identity resolved at startup. A network-reachable bind would
-    hand that identity to anyone who can reach the port, so HTTP is restricted to
-    loopback until inbound auth lands. (The filesystem tools, e.g. the attachment
-    uploads, also only make sense on loopback, where the server shares the
-    client's disk; remote-safe file inputs are tracked in #305.)
+    The HTTP profile is unauthenticated: it validates no inbound bearer and
+    carries no per-request identity, so every call runs as the single identity
+    resolved at startup. A network-reachable bind would hand that identity to
+    anyone who can reach the port, so HTTP is restricted to loopback. Relax this
+    guard when inbound auth lands (#301). (The filesystem tools, e.g. the
+    attachment uploads, also only make sense on loopback, where the server shares
+    the client's disk.)
     """
     if host in _LOOPBACK_HOSTS:
         return
     raise RuntimeError(
         f"Refusing to serve over HTTP on a non-loopback host ({host}). The HTTP "
-        f"transport is unauthenticated foundation work and is restricted to "
-        f"loopback (127.0.0.1/localhost/::1) until inbound auth lands (#301)."
+        f"transport is unauthenticated and is restricted to loopback "
+        f"(127.0.0.1/localhost/::1) until inbound auth lands."
     )
 
 

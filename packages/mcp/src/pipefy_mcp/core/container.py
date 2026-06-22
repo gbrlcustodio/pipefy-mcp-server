@@ -25,7 +25,9 @@ class ServicesContainer:
     """Container for all services."""
 
     _instance: Self | None = None
-    pipefy_client: PipefyClient | None = None
+
+    def __init__(self) -> None:
+        self.pipefy_client: PipefyClient | None = None
 
     @classmethod
     def get_instance(cls) -> Self:

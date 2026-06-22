@@ -23,9 +23,11 @@ from mcp.shared.memory import (
 )
 from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.server import mcp as mcp_server
+from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.attachment_tools import AttachmentTools
+
+mcp_server = build_pipefy_mcp_server()
 
 
 def _live_pipefy_client() -> PipefyClient:

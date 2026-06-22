@@ -78,11 +78,14 @@ def build_pipefy_mcp_server(*, remote_mode: bool | None = None) -> FastMCP:
     return app
 
 
-mcp = build_pipefy_mcp_server()
-
-
 def run_server():
-    """Run the MCP server over stdio (the local profile)."""
+    """Run the MCP server over stdio (the local profile).
+
+    The server is built here, at startup, rather than at import. Building
+    registers every tool and reads ``PIPEFY_MCP_REMOTE_MODE``, so building at
+    import would make ``--version``/``--help`` pay the full cost and turn any
+    registration error into an import failure.
+    """
     logger.info("Starting Pipefy MCP server")
 
-    mcp.run()
+    build_pipefy_mcp_server().run()

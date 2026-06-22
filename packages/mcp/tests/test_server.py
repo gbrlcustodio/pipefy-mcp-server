@@ -15,19 +15,8 @@ from pipefy_mcp.server import (
     lifespan,
     run_server,
 )
-from pipefy_mcp.server import mcp as mcp_server
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
-
-
-@pytest.fixture(scope="module")
-def client_session():
-    return create_client_session(
-        mcp_server,
-        read_timeout_seconds=timedelta(seconds=10),
-        raise_exceptions=True,
-    )
-
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
     pipefy=PipefySettings(base_url="https://api.pipefy.com"),
@@ -49,25 +38,35 @@ def mocked_container():
 
 
 @pytest.mark.anyio
-async def test_register_tools(client_session):
-    expected_tool_names = sorted(PIPEFY_TOOL_NAMES)
+async def test_register_tools(mocked_container):
+    """The full Pipefy tool surface is reachable through an MCP session.
 
-    with patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS):
-        async with client_session as session:
-            result = await session.list_tools()
-            actual_tool_names = sorted(tool.name for tool in result.tools)
+    Builds its own app with an explicit ``remote_mode=False`` (so the ambient
+    ``PIPEFY_MCP_REMOTE_MODE`` cannot change the surface) under ``mocked_container``
+    (so entering the lifespan does not resolve real auth).
+    """
+    app = build_pipefy_mcp_server(remote_mode=False)
+    session = create_client_session(
+        app,
+        read_timeout_seconds=timedelta(seconds=10),
+        raise_exceptions=True,
+    )
+    async with session as s:
+        result = await s.list_tools()
+        actual_tool_names = sorted(tool.name for tool in result.tools)
 
-            assert actual_tool_names == expected_tool_names, (
-                "Registered tool names must match PIPEFY_TOOL_NAMES"
-            )
+    assert actual_tool_names == sorted(PIPEFY_TOOL_NAMES), (
+        "Registered tool names must match PIPEFY_TOOL_NAMES"
+    )
 
 
 @pytest.mark.unit
-def test_run_server_starts_mcp_with_no_arguments():
-    """run_server delegates to mcp.run() without extra arguments."""
-    with patch("pipefy_mcp.server.mcp") as mock_mcp:
+def test_run_server_builds_the_server_and_runs_it_with_no_arguments():
+    """run_server builds the server at startup and delegates to mcp.run() with no args."""
+    with patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build:
         run_server()
-        mock_mcp.run.assert_called_once_with()
+        mock_build.assert_called_once_with()
+        mock_build.return_value.run.assert_called_once_with()
 
 
 # --- Registration happens once, at construction (not in the lifespan) --------
@@ -93,12 +92,15 @@ def test_build_server_remote_mode_exposes_only_the_remote_safe_seed(mocked_conta
 
 
 @pytest.mark.unit
-def test_register_pipefy_tools_is_once_only_second_pass_collides(mocked_container):
-    """A second registration on the same app collides.
+def test_second_registration_pass_is_rejected_by_collision_preflight(mocked_container):
+    """A second registration pass on the same app is rejected by the preflight.
 
-    This is why registration lives at construction and the lifespan no longer
-    registers: under Streamable HTTP the lifespan runs per session, and a
-    second registration pass would raise (or race) on the tool table.
+    The guard is ``check_for_name_collisions()``: the first pass already
+    registered the Pipefy names on this app, so the second pass's preflight sees
+    them and raises. FastMCP's own ``add_tool`` would silently dedup duplicate
+    names rather than raise, so the preflight is what makes re-registration safe
+    to forbid. This is why registration runs once, at construction, and the
+    lifespan (which Streamable HTTP re-enters per session) never re-registers.
     """
     app = build_pipefy_mcp_server(remote_mode=False)
     with pytest.raises(RuntimeError, match="already exist"):

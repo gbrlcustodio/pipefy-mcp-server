@@ -86,19 +86,6 @@ def build_pipefy_mcp_server(*, remote_mode: bool | None = None) -> FastMCP:
     return app
 
 
-def run_server():
-    """Run the MCP server over stdio (the local profile).
-
-    The server is built here, at startup, rather than at import. Building
-    registers every tool and reads ``PIPEFY_MCP_REMOTE_MODE``, so building at
-    import would make ``--version``/``--help`` pay the full cost and turn any
-    registration error into an import failure.
-    """
-    logger.info("Starting Pipefy MCP server")
-
-    build_pipefy_mcp_server().run()
-
-
 def _assert_http_surface_is_safe(*, host: str, remote_mode: bool) -> None:
     """Refuse to serve the full tool surface on a public HTTP host.
 
@@ -123,21 +110,51 @@ def _assert_http_surface_is_safe(*, host: str, remote_mode: bool) -> None:
     )
 
 
-def run_http_server(*, host: str, port: int, remote_mode: bool) -> None:
-    """Run the MCP server over Streamable HTTP (the hosted profile).
+def run_server(
+    *,
+    http: bool = False,
+    host: str | None = None,
+    port: int | None = None,
+    remote_mode: bool | None = None,
+) -> None:
+    """Run the Pipefy MCP server. The single serve entry point for both transports.
 
-    Builds a dedicated app and registers tools once via the shared
-    :func:`_register_pipefy_tools`, the same path stdio uses at construction. The
-    HTTP app carries no constructor ``lifespan`` (which Streamable HTTP would run
-    per session); services are initialized once here before serving.
+    With ``http=False`` (the default, local profile) the process speaks MCP over
+    stdio. With ``http=True`` (the hosted profile) it serves over Streamable HTTP
+    on ``host``/``port``, defaulting to the configured ``PIPEFY_MCP_HOST`` /
+    ``PIPEFY_MCP_PORT``.
+
+    ``remote_mode`` selects the default-deny remote tool surface and defaults to
+    the configured ``PIPEFY_MCP_REMOTE_MODE``. It is orthogonal to the transport:
+    stdio can run the remote profile, and HTTP can serve the full surface on a
+    loopback host (or behind the escape hatch).
+
+    The server is built here, at startup rather than at import. Building registers
+    every tool and reads ``PIPEFY_MCP_REMOTE_MODE``, so building at import would
+    make ``--version``/``--help`` pay the full cost and turn any registration
+    error into an import failure.
+
+    The two transports diverge only in how the app is wired: stdio reuses
+    :func:`build_pipefy_mcp_server` (which keeps the resource-only ``lifespan``);
+    HTTP builds a dedicated app with no constructor ``lifespan`` (which Streamable
+    HTTP would run per session) and initializes services once before serving.
+    Both register tools through the shared :func:`_register_pipefy_tools`.
     """
+    if not http:
+        logger.info("Starting Pipefy MCP server")
+        build_pipefy_mcp_server(remote_mode=remote_mode).run()
+        return
+
+    resolved_remote = settings.mcp.remote_mode if remote_mode is None else remote_mode
+    resolved_host = host or settings.mcp.host
+    resolved_port = port or settings.mcp.port
     logger.info(
         "Starting Pipefy MCP server over HTTP on %s:%d (remote_mode=%s)",
-        host,
-        port,
-        "enabled" if remote_mode else "disabled",
+        resolved_host,
+        resolved_port,
+        "enabled" if resolved_remote else "disabled",
     )
-    _assert_http_surface_is_safe(host=host, remote_mode=remote_mode)
+    _assert_http_surface_is_safe(host=resolved_host, remote_mode=resolved_remote)
 
     container = ServicesContainer.get_instance()
     anyio.run(container.initialize_services, settings)
@@ -145,8 +162,8 @@ def run_http_server(*, host: str, port: int, remote_mode: bool) -> None:
     http_app = FastMCP(
         "pipefy",
         instructions=PIPEFY_INSTRUCTIONS,
-        host=host,
-        port=port,
+        host=resolved_host,
+        port=resolved_port,
     )
-    _register_pipefy_tools(http_app, remote_mode=remote_mode)
+    _register_pipefy_tools(http_app, remote_mode=resolved_remote)
     http_app.run("streamable-http")

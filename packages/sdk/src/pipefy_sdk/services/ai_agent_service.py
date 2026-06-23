@@ -8,10 +8,7 @@ from typing import Any
 
 from httpx import Auth
 
-from pipefy_sdk.base_client import (
-    BasePipefyClient,
-    unwrap_relay_connection_nodes,
-)
+from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_sdk.queries.ai_agent_queries import (
     CREATE_AI_AGENT_MUTATION,
@@ -27,6 +24,7 @@ from pipefy_sdk.services.types import (
     ToggleAgentStatusResult,
 )
 from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 
 def inject_reference_ids(behaviors: list[dict[str, Any]]) -> list[dict[str, Any]]:

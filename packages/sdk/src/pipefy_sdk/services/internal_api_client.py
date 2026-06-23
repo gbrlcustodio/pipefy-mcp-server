@@ -11,20 +11,8 @@ from __future__ import annotations
 from httpx import Auth
 
 from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.services.internal_api_errors import _format_internal_api_error
 from pipefy_sdk.settings import PipefySettings
-
-
-def _format_internal_api_error(errors: list[dict]) -> str:
-    parts: list[str] = []
-    for err in errors:
-        msg = err.get("message", "Unknown error")
-        ext = err.get("extensions", {})
-        code = ext.get("code", "")
-        corr = ext.get("correlation_id", "")
-        suffix = f" [code={code}]" if code else ""
-        suffix += f" [correlation_id={corr}]" if corr else ""
-        parts.append(f"{msg}{suffix}")
-    return "; ".join(parts)
 
 
 class InternalApiClient(BasePipefyClient):

@@ -9,7 +9,7 @@ from typing import Any
 from gql.transport.exceptions import TransportQueryError
 from httpx import Auth
 
-from pipefy_sdk.base_client import BasePipefyClient, unwrap_relay_connection_nodes
+from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.models.portal import (
     CreatePortalElementInput,
@@ -43,6 +43,7 @@ from pipefy_sdk.queries.portal_queries import (
 from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.settings import PipefySettings
 from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
+from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 logger = logging.getLogger(__name__)
 

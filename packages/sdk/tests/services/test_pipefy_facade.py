@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pipefy_auth import StaticBearerAuth
 
-from pipefy_sdk.client import PipefyClient
+from pipefy_sdk.client import PipefyClient, build_executors
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_service import AutomationService
@@ -36,6 +36,16 @@ def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
     assert client._card_service._executor._auth is auth
     assert client._pipe_service._executor._auth is auth
     assert client._internal_executor._auth is auth
+
+
+@pytest.mark.unit
+def test_build_executors_routes_each_endpoint_to_its_url(mock_settings):
+    ex = build_executors(mock_settings, StaticBearerAuth("unit-token"))
+    # Each executor must target its own endpoint; a copy-paste that aimed
+    # interfaces or internal at the public graphql_url would route silently.
+    assert ex.public._graphql_url == mock_settings.graphql_url
+    assert ex.interfaces._graphql_url == mock_settings.interfaces_graphql_url
+    assert ex.internal._graphql_url == mock_settings.internal_api_url
 
 
 @pytest.mark.unit

@@ -23,11 +23,6 @@ from pipefy_sdk.queries.observability_queries import RESOLVE_ORGANIZATION_UUID_Q
 from pipefy_sdk.queries.portal_queries import GET_PORTAL_QUERY, LIST_PORTALS_QUERY
 from pipefy_sdk.services.portal_service import PortalService
 
-BASE_URL = "https://app.pipefy.com"
-INTERFACES_URL = "https://app.pipefy.com/graphql/interfaces"
-MAIN_GRAPHQL_URL = "https://app.pipefy.com/graphql"
-OAUTH_URL = "https://app.pipefy.com/oauth/token"
-
 
 @pytest.mark.unit
 @pytest.mark.asyncio

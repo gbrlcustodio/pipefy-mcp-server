@@ -941,11 +941,7 @@ class PipefyClient:
         parent_id: str | int,
         source_id: str | int,
     ) -> dict:
-        """Delete a relation link between two cards (internal API, requires OAuth).
-
-        The ``deleteCardRelation`` mutation is not exposed on the public GraphQL
-        schema, only on the internal API (core_api / internal_v1).
-        """
+        """Delete a relation link between two cards (internal API, requires OAuth)."""
         return await self._relation_service.delete_card_relation(
             child_id, parent_id, source_id
         )

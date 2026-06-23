@@ -108,8 +108,8 @@ class PipefyClient:
             pipe_service=self._pipe_service,
         )
         self._webhook_service = WebhookService(
+            executor=public_executor,
             settings=settings,
-            auth=auth,
             card_service=self._card_service,
         )
         self._automation_service = AutomationService(executor=public_executor)

@@ -3,9 +3,9 @@
 from unittest.mock import AsyncMock
 
 import pytest
+from _shared.mock_clients import mock_executor
 from _shared.pagination_test_defaults import DEFAULT_FIRST
 from gql.transport.exceptions import TransportQueryError
-from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
@@ -20,8 +20,6 @@ from pipefy_sdk.queries.webhook_queries import (
 from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
 
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
-
 
 @pytest.fixture
 def mock_settings():
@@ -31,9 +29,11 @@ def mock_settings():
 
 
 def _make_service(mock_settings, return_value: dict):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value=return_value)
-    return service
+    executor = mock_executor(return_value)
+    service = WebhookService(
+        executor=executor, settings=mock_settings, card_service=AsyncMock()
+    )
+    return service, executor
 
 
 @pytest.mark.unit
@@ -44,11 +44,11 @@ async def test_get_email_templates_success(mock_settings):
             "edges": [{"node": {"id": "t1", "name": "Follow-up", "subject": "Hi"}}]
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     result = await service.get_email_templates("307061640")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_EMAIL_TEMPLATES_QUERY
     assert variables["repoId"] == "307061640"
     assert variables["first"] == DEFAULT_FIRST
@@ -59,10 +59,10 @@ async def test_get_email_templates_success(mock_settings):
 @pytest.mark.asyncio
 async def test_get_email_templates_with_filter(mock_settings):
     payload = {"emailTemplates": {"edges": []}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     await service.get_email_templates("307061640", filter_by_name="Follow", first=10)
 
-    _, variables = service.execute_query.call_args[0]
+    _, variables = executor.execute_query.call_args[0]
     assert variables["filterByName"] == "Follow"
     assert variables["first"] == 10
 
@@ -79,13 +79,13 @@ async def test_get_parsed_email_template_success(mock_settings):
             "toEmail": "r@x.com",
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     result = await service.get_parsed_email_template(
         "42", card_uuid="550e8400-e29b-41d4-a716-446655440000"
     )
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_PARSED_EMAIL_TEMPLATE_QUERY
     assert variables["emailTemplateId"] == "42"
     assert variables["cardUuid"] == "550e8400-e29b-41d4-a716-446655440000"
@@ -96,10 +96,10 @@ async def test_get_parsed_email_template_success(mock_settings):
 @pytest.mark.asyncio
 async def test_get_parsed_email_template_without_card_uuid(mock_settings):
     payload = {"parsedEmailTemplate": {"id": "42", "subject": "Raw"}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     await service.get_parsed_email_template("42")
 
-    _, variables = service.execute_query.call_args[0]
+    _, variables = executor.execute_query.call_args[0]
     assert "cardUuid" not in variables
 
 
@@ -113,7 +113,7 @@ async def test_send_inbox_email_success(mock_settings):
             "inboxEmail": {"id": "e1"},
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     result = await service.send_inbox_email(
         card_id="card-1",
         to=["a@x.com"],
@@ -122,8 +122,8 @@ async def test_send_inbox_email_success(mock_settings):
         from_="sender@pipefy.com",
     )
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_AND_SEND_INBOX_EMAIL_MUTATION
     inp = variables["input"]
     assert inp["cardId"] == "card-1"
@@ -146,10 +146,7 @@ async def test_send_email_with_template_success(mock_settings):
             }
         }
     )
-    service = WebhookService(
-        settings=mock_settings, auth=_TEST_AUTH, card_service=card_service
-    )
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=[
             {
                 "parsedEmailTemplate": {
@@ -168,13 +165,16 @@ async def test_send_email_with_template_success(mock_settings):
             },
         ]
     )
+    service = WebhookService(
+        executor=executor, settings=mock_settings, card_service=card_service
+    )
     result = await service.send_email_with_template("1320616225", "tmpl-42")
 
     assert card_service.get_card.await_count == 1
     card_service.get_card.assert_awaited_once_with("1320616225")
-    assert service.execute_query.await_count == 2
-    first_q, first_vars = service.execute_query.call_args_list[0][0]
-    second_q, second_inp = service.execute_query.call_args_list[1][0]
+    assert executor.execute_query.await_count == 2
+    first_q, first_vars = executor.execute_query.call_args_list[0][0]
+    second_q, second_inp = executor.execute_query.call_args_list[1][0]
     assert first_q is GET_PARSED_EMAIL_TEMPLATE_QUERY
     assert second_q is CREATE_AND_SEND_INBOX_EMAIL_MUTATION
     assert second_inp["input"]["repoId"] == "307061640"
@@ -186,8 +186,10 @@ async def test_send_email_with_template_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_send_email_with_template_rejects_non_numeric_card_id(mock_settings):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock()
+    executor = mock_executor()
+    service = WebhookService(
+        executor=executor, settings=mock_settings, card_service=AsyncMock()
+    )
     with pytest.raises(ValueError, match="numeric card ID"):
         await service.send_email_with_template("not-a-number", "tmpl-1")
 
@@ -195,9 +197,11 @@ async def test_send_email_with_template_rejects_non_numeric_card_id(mock_setting
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_send_inbox_email_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
+    )
+    service = WebhookService(
+        executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
     with pytest.raises(TransportQueryError):
         await service.send_inbox_email(
@@ -217,15 +221,15 @@ async def test_create_webhook_success(mock_settings):
             }
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     result = await service.create_webhook(
         pipe_id="601",
         url="https://example.com/hook",
         actions=["card.create"],
     )
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_WEBHOOK_MUTATION
     inp = variables["input"]
     assert inp["pipe_id"] == "601"
@@ -247,22 +251,24 @@ async def test_create_webhook_uses_settings_default_name(mock_settings):
             "webhook": {"id": "w1", "url": "https://x.com/h", "actions": []}
         }
     }
-    service = _make_service(custom, payload)
+    service, executor = _make_service(custom, payload)
     await service.create_webhook(
         pipe_id="1",
         url="https://x.com/hook",
         actions=["card.create"],
     )
-    _query, variables = service.execute_query.call_args[0]
+    _query, variables = executor.execute_query.call_args[0]
     assert variables["input"]["name"] == "MCP default hook"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_webhook_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "bad"}])
+    )
+    service = WebhookService(
+        executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
     with pytest.raises(TransportQueryError):
         await service.create_webhook("602", "https://x.com/hook", ["card.move"])
@@ -271,7 +277,9 @@ async def test_create_webhook_transport_error(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_webhook_rejects_http_url(mock_settings):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
+    service = WebhookService(
+        executor=mock_executor(), settings=mock_settings, card_service=AsyncMock()
+    )
     with pytest.raises(ValueError, match="HTTPS"):
         await service.create_webhook("p1", "http://insecure.com/hook", ["card.create"])
 
@@ -279,7 +287,9 @@ async def test_create_webhook_rejects_http_url(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_webhook_rejects_https_loopback(mock_settings):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
+    service = WebhookService(
+        executor=mock_executor(), settings=mock_settings, card_service=AsyncMock()
+    )
     with pytest.raises(ValueError, match="127.0.0.1|private|loopback|link-local"):
         await service.create_webhook(
             "p1", "https://127.0.0.1:8080/hook", ["card.create"]
@@ -290,11 +300,11 @@ async def test_create_webhook_rejects_https_loopback(mock_settings):
 @pytest.mark.asyncio
 async def test_delete_webhook_success(mock_settings):
     payload = {"deleteWebhook": {"success": True}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     result = await service.delete_webhook("webhook-1")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_WEBHOOK_MUTATION
     assert variables["input"] == {"id": "webhook-1"}
     assert result == payload
@@ -303,9 +313,11 @@ async def test_delete_webhook_success(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_webhook_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
+    )
+    service = WebhookService(
+        executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
     with pytest.raises(TransportQueryError):
         await service.delete_webhook("w1")
@@ -328,11 +340,11 @@ async def test_get_webhooks_success(mock_settings):
             ]
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     result = await service.get_webhooks("601")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_WEBHOOKS_QUERY
     assert variables == {"pipeId": "601"}
     assert result == payload
@@ -342,7 +354,7 @@ async def test_get_webhooks_success(mock_settings):
 @pytest.mark.asyncio
 async def test_get_webhooks_empty(mock_settings):
     payload = {"pipe": {"webhooks": []}}
-    service = _make_service(mock_settings, payload)
+    service, _ = _make_service(mock_settings, payload)
     result = await service.get_webhooks("602")
     assert result["pipe"]["webhooks"] == []
 
@@ -350,9 +362,11 @@ async def test_get_webhooks_empty(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_webhooks_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "nope"}])
+    )
+    service = WebhookService(
+        executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
     with pytest.raises(TransportQueryError):
         await service.get_webhooks("p1")
@@ -372,7 +386,7 @@ async def test_update_webhook_success(mock_settings):
             }
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     result = await service.update_webhook(
         "w1",
         name="Renamed",
@@ -381,8 +395,8 @@ async def test_update_webhook_success(mock_settings):
         headers={},
     )
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_WEBHOOK_MUTATION
     assert variables["input"] == {
         "id": "w1",
@@ -398,10 +412,10 @@ async def test_update_webhook_success(mock_settings):
 @pytest.mark.asyncio
 async def test_update_webhook_ignores_id_kwarg(mock_settings):
     payload = {"updateWebhook": {"webhook": {"id": "w1"}}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     await service.update_webhook("w1", id="should-be-ignored", name="X")
 
-    _, variables = service.execute_query.call_args[0]
+    _, variables = executor.execute_query.call_args[0]
     assert variables["input"]["id"] == "w1"
     assert variables["input"]["name"] == "X"
 
@@ -409,7 +423,9 @@ async def test_update_webhook_ignores_id_kwarg(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_webhook_rejects_http_url(mock_settings):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
+    service = WebhookService(
+        executor=mock_executor(), settings=mock_settings, card_service=AsyncMock()
+    )
     with pytest.raises(ValueError, match="HTTPS"):
         await service.update_webhook("w1", url="http://insecure.example/hook")
 
@@ -417,9 +433,11 @@ async def test_update_webhook_rejects_http_url(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_webhook_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "bad"}])
+    )
+    service = WebhookService(
+        executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
     with pytest.raises(TransportQueryError):
         await service.update_webhook("w1", name="only-name")
@@ -455,11 +473,11 @@ async def test_get_card_inbox_emails_success(mock_settings):
             ],
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(mock_settings, payload)
     result = await service.get_card_inbox_emails("12345")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_CARD_INBOX_EMAILS_QUERY
     assert variables["card_id"] == "12345"
     assert result == payload
@@ -478,7 +496,7 @@ async def test_get_card_inbox_emails_filter_by_sent(mock_settings):
             ],
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, _ = _make_service(mock_settings, payload)
     result = await service.get_card_inbox_emails("12345", email_type="sent")
 
     assert result["card"]["inbox_emails"] == [
@@ -498,7 +516,7 @@ async def test_get_card_inbox_emails_filter_by_received(mock_settings):
             ],
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, _ = _make_service(mock_settings, payload)
     result = await service.get_card_inbox_emails("12345", email_type="received")
 
     assert result["card"]["inbox_emails"] == [
@@ -510,7 +528,7 @@ async def test_get_card_inbox_emails_filter_by_received(mock_settings):
 @pytest.mark.asyncio
 async def test_get_card_inbox_emails_empty_inbox(mock_settings):
     payload = {"card": {"id": "12345", "inbox_emails": []}}
-    service = _make_service(mock_settings, payload)
+    service, _ = _make_service(mock_settings, payload)
     result = await service.get_card_inbox_emails("12345")
 
     assert result["card"]["inbox_emails"] == []
@@ -519,9 +537,11 @@ async def test_get_card_inbox_emails_empty_inbox(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_card_inbox_emails_transport_error(mock_settings):
-    service = WebhookService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "not found"}])
+    )
+    service = WebhookService(
+        executor=executor, settings=mock_settings, card_service=AsyncMock()
     )
     with pytest.raises(TransportQueryError):
         await service.get_card_inbox_emails("12345")

@@ -25,9 +25,6 @@ from pipefy_sdk.models.attachment import (
     AttachmentTarget,
     AttachmentUploadResult,
 )
-from pipefy_sdk.queries.card_queries import (
-    INTERNAL_DELETE_CARD_RELATION_MUTATION,
-)
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_graphql_types import (
@@ -98,7 +95,16 @@ class PipefyClient:
             settings=settings, auth=auth, pipe_service=self._pipe_service
         )
         self._table_service = TableService(settings=settings, auth=auth)
-        self._relation_service = RelationService(settings=settings, auth=auth)
+        self._internal_api_client = InternalApiClient(
+            url=settings.internal_api_url,
+            auth=auth,
+            allow_insecure_urls=settings.allow_insecure_urls,
+        )
+        self._relation_service = RelationService(
+            settings=settings,
+            auth=auth,
+            internal_api_client=self._internal_api_client,
+        )
         self._member_service = MemberService(
             settings=settings,
             auth=auth,
@@ -123,11 +129,6 @@ class PipefyClient:
         )
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
-        )
-        self._internal_api_client = InternalApiClient(
-            url=settings.internal_api_url,
-            auth=auth,
-            allow_insecure_urls=settings.allow_insecure_urls,
         )
         self._portal_service = PortalService(
             settings=settings,
@@ -945,13 +946,8 @@ class PipefyClient:
         The ``deleteCardRelation`` mutation is not exposed on the public GraphQL
         schema, only on the internal API (core_api / internal_v1).
         """
-        return await self._internal_api_client.execute_query(
-            INTERNAL_DELETE_CARD_RELATION_MUTATION,
-            {
-                "childId": str(child_id),
-                "parentId": str(parent_id),
-                "sourceId": str(source_id),
-            },
+        return await self._relation_service.delete_card_relation(
+            child_id, parent_id, source_id
         )
 
     async def get_start_form_fields(

@@ -1,6 +1,6 @@
 """Unit tests for RelationService (relation reads)."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
@@ -12,9 +12,14 @@ from pipefy_sdk.queries.relation_queries import (
     DELETE_PIPE_RELATION_MUTATION,
     GET_PIPE_RELATIONS_QUERY,
     GET_TABLE_RELATIONS_QUERY,
+    INTERNAL_DELETE_CARD_RELATION_MUTATION,
     UPDATE_PIPE_RELATION_MUTATION,
 )
-from pipefy_sdk.services.relation_service import RelationService
+from pipefy_sdk.services.internal_api_client import InternalApiClient
+from pipefy_sdk.services.relation_service import (
+    INTERNAL_API_CLIENT_NOT_CONFIGURED,
+    RelationService,
+)
 from pipefy_sdk.settings import PipefySettings
 
 _TEST_AUTH = StaticBearerAuth("test-bearer-token")
@@ -232,3 +237,33 @@ async def test_create_card_relation_transport_error(mock_settings):
     )
     with pytest.raises(TransportQueryError):
         await service.create_card_relation(1, 2, 3)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_card_relation_routes_through_internal_api_client(mock_settings):
+    """delete_card_relation uses the injected InternalApiClient, not the public
+    execute_query, because the mutation only exists on the internal schema."""
+    internal = MagicMock(spec=InternalApiClient)
+    internal.execute_query = AsyncMock(
+        return_value={"deleteCardRelation": {"success": True}}
+    )
+    service = RelationService(
+        settings=mock_settings, auth=_TEST_AUTH, internal_api_client=internal
+    )
+
+    result = await service.delete_card_relation("c1", "p2", "src-3")
+
+    internal.execute_query.assert_awaited_once_with(
+        INTERNAL_DELETE_CARD_RELATION_MUTATION,
+        {"childId": "c1", "parentId": "p2", "sourceId": "src-3"},
+    )
+    assert result == {"deleteCardRelation": {"success": True}}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_delete_card_relation_without_internal_client_raises(mock_settings):
+    service = RelationService(settings=mock_settings, auth=_TEST_AUTH)
+    with pytest.raises(ValueError, match=INTERNAL_API_CLIENT_NOT_CONFIGURED):
+        await service.delete_card_relation(1, 2, 3)

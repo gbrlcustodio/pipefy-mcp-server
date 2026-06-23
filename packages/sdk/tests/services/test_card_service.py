@@ -561,6 +561,6 @@ async def test_get_card_relations_uses_query_and_cardId_variable(mock_settings):
     assert variables == {"cardId": "999"}
     assert result == expected
 
-    # delete_card_relation is routed through InternalApiClient (not CardService)
-    # because the mutation is only available on the internal GraphQL schema.
-    # See tests/services/test_pipefy_facade.py for the facade delegation test.
+    # delete_card_relation lives on RelationService (not CardService) and routes
+    # through InternalApiClient because the mutation is only available on the
+    # internal GraphQL schema. See tests/services/pipefy/test_relation_service.py.

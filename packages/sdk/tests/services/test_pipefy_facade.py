@@ -739,11 +739,11 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_card_relation_delegates_to_internal_api_client(mock_settings):
-    """delete_card_relation uses InternalApiClient (not CardService) because the
-    mutation is only on the internal GraphQL schema."""
+    """delete_card_relation delegates to RelationService, which routes through the
+    InternalApiClient because the mutation is only on the internal GraphQL schema."""
     from graphql import print_ast
 
-    from pipefy_sdk.queries.card_queries import (
+    from pipefy_sdk.queries.relation_queries import (
         INTERNAL_DELETE_CARD_RELATION_MUTATION,
     )
 

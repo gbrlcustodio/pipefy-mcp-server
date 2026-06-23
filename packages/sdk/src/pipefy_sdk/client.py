@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from httpx import Auth
@@ -11,7 +12,7 @@ from pipefy_sdk.automation_preflight import (
     validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
-from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
+from pipefy_sdk.graphql_executor import GraphQLExecutor, HttpxGraphQLExecutor
 from pipefy_sdk.models.ai_agent import (
     BehaviorInput,
     CreateAiAgentInput,
@@ -41,7 +42,7 @@ from pipefy_sdk.services.automation_graphql_types import (
 )
 from pipefy_sdk.services.automation_service import AutomationService
 from pipefy_sdk.services.card_service import CardService
-from pipefy_sdk.services.internal_api_client import InternalApiClient
+from pipefy_sdk.services.internal_api_errors import _format_internal_api_error
 from pipefy_sdk.services.member_service import MemberService
 from pipefy_sdk.services.observability_service import ObservabilityService
 from pipefy_sdk.services.organization_service import OrganizationService
@@ -73,6 +74,36 @@ from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
 
 
+@dataclass(frozen=True)
+class Executors:
+    """The three GraphQL executors a fully wired ``PipefyClient`` runs on."""
+
+    public: GraphQLExecutor
+    interfaces: GraphQLExecutor
+    internal: GraphQLExecutor
+
+
+def build_executors(settings: PipefySettings, auth: Auth) -> Executors:
+    """Build one executor per Pipefy endpoint from a shared ``settings``/``auth``.
+
+    All three share the one ``auth`` instance so the OAuth token cache is not
+    duplicated. The internal executor carries the ``[code=…][correlation_id=…]``
+    error envelope; the others leave gql exceptions untouched.
+    """
+    return Executors(
+        public=HttpxGraphQLExecutor(settings, auth=auth),
+        interfaces=HttpxGraphQLExecutor(
+            settings, auth=auth, url_override=settings.interfaces_graphql_url
+        ),
+        internal=HttpxGraphQLExecutor(
+            settings,
+            auth=auth,
+            url_override=settings.internal_api_url,
+            on_graphql_error=_format_internal_api_error,
+        ),
+    )
+
+
 class PipefyClient:
     """Facade client for Pipefy API operations (pure delegation)."""
 
@@ -90,47 +121,43 @@ class PipefyClient:
                 call (construct via ``pipefy_auth.resolve`` or one of the bearer
                 adapters from ``pipefy_auth``).
         """
-        public_executor = HttpxGraphQLExecutor(settings, auth=auth)
-        self._pipe_service = PipeService(executor=public_executor)
-        self._card_service = CardService(executor=public_executor)
+        ex = build_executors(settings, auth)
+        self._internal_executor = ex.internal
+        self._pipe_service = PipeService(executor=ex.public)
+        self._card_service = CardService(executor=ex.public)
         self._pipe_config_service = PipeConfigService(
-            executor=public_executor, pipe_service=self._pipe_service
+            executor=ex.public, pipe_service=self._pipe_service
         )
-        self._table_service = TableService(executor=public_executor)
-        self._internal_api_client = InternalApiClient(settings, auth=auth)
+        self._table_service = TableService(executor=ex.public)
         self._relation_service = RelationService(
-            executor=public_executor,
-            internal_executor=self._internal_api_client,
+            executor=ex.public,
+            internal_executor=ex.internal,
         )
         self._member_service = MemberService(
-            executor=public_executor,
+            executor=ex.public,
             pipe_service=self._pipe_service,
         )
         self._webhook_service = WebhookService(
-            executor=public_executor,
+            executor=ex.public,
             settings=settings,
             card_service=self._card_service,
         )
-        self._automation_service = AutomationService(executor=public_executor)
-        self._ai_agent_service = AiAgentService(executor=public_executor)
-        self._observability_service = ObservabilityService(executor=public_executor)
-        self._report_service = ReportService(executor=public_executor)
-        self._organization_service = OrganizationService(executor=public_executor)
-        self._user_service = UserService(executor=public_executor)
+        self._automation_service = AutomationService(executor=ex.public)
+        self._ai_agent_service = AiAgentService(executor=ex.public)
+        self._observability_service = ObservabilityService(executor=ex.public)
+        self._report_service = ReportService(executor=ex.public)
+        self._organization_service = OrganizationService(executor=ex.public)
+        self._user_service = UserService(executor=ex.public)
         self._attachment_service = AttachmentService(
-            executor=public_executor,
+            executor=ex.public,
             card_service=self._card_service,
             table_service=self._table_service,
         )
-        self._introspection_service = SchemaIntrospectionService(
-            executor=public_executor
-        )
+        self._introspection_service = SchemaIntrospectionService(executor=ex.public)
         self._portal_service = PortalService(
-            public_executor=public_executor,
-            interfaces_executor=HttpxGraphQLExecutor(
-                settings, auth=auth, url_override=settings.interfaces_graphql_url
-            ),
-            internal_executor=self._internal_api_client,
+            public_executor=ex.public,
+            interfaces_executor=ex.interfaces,
+            internal_executor=ex.internal,
         )
 
     async def get_pipe(self, pipe_id: str | int) -> dict:

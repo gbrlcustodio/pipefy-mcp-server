@@ -5,7 +5,7 @@ from gql import gql
 from gql.graphql_request import GraphQLRequest
 from pipefy_auth import StaticBearerAuth
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor as BasePipefyClient
 from pipefy_sdk.settings import PipefySettings
 
 

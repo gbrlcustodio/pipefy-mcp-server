@@ -1,8 +1,9 @@
-"""Unit tests for InternalApiClient and PipefySettings.internal_api_url.
+"""Unit tests for the internal_api executor and PipefySettings.internal_api_url.
 
-These tests intentionally assert the full GraphQL error text produced by
-``InternalApiClient`` (including ``[code=...]`` / ``[correlation_id=...]``
-suffixes).
+These tests intentionally assert the full GraphQL error text produced by the
+internal_api executor (the ``HttpxGraphQLExecutor`` that ``build_executors``
+aims at ``internal_api_url`` with the ``[code=...]`` / ``[correlation_id=...]``
+envelope formatter).
 """
 
 import json
@@ -14,17 +15,18 @@ from gql import gql
 from gql.transport.exceptions import TransportConnectionFailed, TransportServerError
 from pipefy_auth import StaticBearerAuth
 
-from pipefy_sdk.services.internal_api_client import InternalApiClient
+from pipefy_sdk.client import build_executors
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.settings import PipefySettings
 
 DEFAULT_INTERNAL_API_URL = "https://app.pipefy.com/internal_api"
 
 
-def _build_client() -> InternalApiClient:
-    return InternalApiClient(
+def _build_executor() -> GraphQLExecutor:
+    return build_executors(
         PipefySettings(),
-        auth=StaticBearerAuth("test-bearer-token"),
-    )
+        StaticBearerAuth("test-bearer-token"),
+    ).internal
 
 
 @pytest.mark.unit
@@ -47,7 +49,7 @@ async def test_execute_query_sends_post_with_correct_headers_and_body(respx_mock
         return_value=httpx.Response(200, json=expected_json)
     )
 
-    client = _build_client()
+    client = _build_executor()
     result = await client.execute_query(query, variables)
 
     assert route.called
@@ -73,7 +75,7 @@ async def test_execute_query_returns_parsed_json_response(respx_mock):
         return_value=httpx.Response(200, json=api_response)
     )
 
-    result = await _build_client().execute_query(gql("query { x }"), {})
+    result = await _build_executor().execute_query(gql("query { x }"), {})
     assert result == {"automation": {"id": "456"}}
 
 
@@ -89,7 +91,7 @@ async def test_execute_query_raises_on_non_2xx_response(respx_mock):
     # gql's HTTPXAsyncTransport wraps ``httpx.HTTPStatusError`` as
     # ``TransportServerError`` — same path as the public-API client.
     with pytest.raises(TransportServerError):
-        await _build_client().execute_query(gql("query { x }"), {})
+        await _build_executor().execute_query(gql("query { x }"), {})
 
 
 @pytest.mark.unit
@@ -103,7 +105,7 @@ async def test_execute_query_raises_on_graphql_errors_in_body(respx_mock):
     )
 
     with pytest.raises(ValueError, match=r"^Something went wrong$"):
-        await _build_client().execute_query(gql("query { x }"), {})
+        await _build_executor().execute_query(gql("query { x }"), {})
 
 
 @pytest.mark.unit
@@ -132,7 +134,7 @@ async def test_execute_query_error_includes_extensions_code_and_correlation_id(
         ValueError,
         match=r"Permission Denied \[code=PERMISSION_DENIED\] \[correlation_id=abc-123\]",
     ):
-        await _build_client().execute_query(gql("query { x }"), {})
+        await _build_executor().execute_query(gql("query { x }"), {})
 
 
 @pytest.mark.unit
@@ -158,7 +160,7 @@ async def test_execute_query_error_includes_correlation_id_when_code_absent(
         ValueError,
         match=r"^Rate limited \[correlation_id=corr-only-99\]$",
     ):
-        await _build_client().execute_query(gql("query { x }"), {})
+        await _build_executor().execute_query(gql("query { x }"), {})
 
 
 @pytest.mark.unit
@@ -180,7 +182,7 @@ async def test_execute_query_error_concatenates_multiple_errors(respx_mock):
         ValueError,
         match=r"^Error one; Error two \[code=BAD_INPUT\]$",
     ):
-        await _build_client().execute_query(gql("query { x }"), {})
+        await _build_executor().execute_query(gql("query { x }"), {})
 
 
 @pytest.mark.unit
@@ -199,7 +201,7 @@ async def test_execute_query_error_without_message_uses_fallback(respx_mock):
         ValueError,
         match=r"^Unknown error \[code=UNKNOWN\]$",
     ):
-        await _build_client().execute_query(gql("query { x }"), {})
+        await _build_executor().execute_query(gql("query { x }"), {})
 
 
 @pytest.mark.unit
@@ -212,4 +214,4 @@ async def test_execute_query_raises_on_timeout(respx_mock):
     )
 
     with pytest.raises(TransportConnectionFailed, match="timed out"):
-        await _build_client().execute_query(gql("query { x }"), {})
+        await _build_executor().execute_query(gql("query { x }"), {})

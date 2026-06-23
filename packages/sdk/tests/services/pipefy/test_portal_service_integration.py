@@ -28,9 +28,8 @@ from _shared.live_settings import (
 )
 from gql.transport.exceptions import TransportQueryError
 
+from pipefy_sdk.client import build_executors
 from pipefy_sdk.exceptions import PortalPermissionError
-from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
-from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.services.portal_service import PortalService
 
 _PORTAL_ORG_SKIP = (
@@ -42,14 +41,11 @@ _PORTAL_ORG_SKIP = (
 def live_portal_service() -> PortalService:
     """PortalService with live Interfaces + internal_api for sub-portal mutations."""
     require_live_creds()
-    settings = live_pipefy_settings()
-    auth = live_resolved_auth()
+    ex = build_executors(live_pipefy_settings(), live_resolved_auth())
     return PortalService(
-        public_executor=HttpxGraphQLExecutor(settings, auth=auth),
-        interfaces_executor=HttpxGraphQLExecutor(
-            settings, auth=auth, url_override=settings.interfaces_graphql_url
-        ),
-        internal_executor=InternalApiClient(settings, auth=auth),
+        public_executor=ex.public,
+        interfaces_executor=ex.interfaces,
+        internal_executor=ex.internal,
     )
 
 

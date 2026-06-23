@@ -35,7 +35,7 @@ def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
     # auth cannot drift across services.
     assert client._card_service._executor._auth is auth
     assert client._pipe_service._executor._auth is auth
-    assert client._internal_api_client._auth is auth
+    assert client._internal_executor._auth is auth
 
 
 @pytest.mark.unit
@@ -242,8 +242,8 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.update_webhook("w1", name="X") == {"ok": "update_webhook"}
     webhook_service.update_webhook.assert_awaited_once_with("w1", name="X")
 
-    # delete_card_relation delegates to InternalApiClient (not CardService)
-    # — tested separately below.
+    # delete_card_relation routes through the internal executor (not CardService),
+    # tested separately below.
 
     assert await client.get_card(4) == {"ok": "card"}
     card_service.get_card.assert_awaited_once_with(4, include_fields=False)
@@ -713,7 +713,7 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
 @pytest.mark.asyncio
 async def test_delete_card_relation_delegates_to_internal_api_client(mock_settings):
     """delete_card_relation delegates to RelationService, which routes through the
-    InternalApiClient because the mutation is only on the internal GraphQL schema."""
+    internal executor because the mutation is only on the internal GraphQL schema."""
     from graphql import print_ast
 
     from pipefy_sdk.queries.relation_queries import (
@@ -721,7 +721,7 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
     )
 
     client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
-    client._internal_api_client.execute_query = AsyncMock(
+    client._internal_executor.execute_query = AsyncMock(
         return_value={"deleteCardRelation": {"success": True}}
     )
 
@@ -733,7 +733,7 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
 
     result = await client.delete_card_relation("c1", "p2", "src-3")
 
-    client._internal_api_client.execute_query.assert_awaited_once_with(
+    client._internal_executor.execute_query.assert_awaited_once_with(
         INTERNAL_DELETE_CARD_RELATION_MUTATION,
         {"childId": "c1", "parentId": "p2", "sourceId": "src-3"},
     )
@@ -746,13 +746,13 @@ async def test_sub_portal_mutation_routes_through_internal_api_client(mock_setti
     """A sub-portal mutation reaches the internal_api client the facade builds at
     construction; PortalService and the facade share that one instance."""
     client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
-    client._internal_api_client.execute_query = AsyncMock(
+    client._internal_executor.execute_query = AsyncMock(
         return_value={"updateSubPortalElement": {"success": True}}
     )
 
     result = await client.publish_sub_portal("portal-1", "element-2", "sub-3")
 
-    client._internal_api_client.execute_query.assert_awaited()
+    client._internal_executor.execute_query.assert_awaited()
     assert result == {"updateSubPortalElement": {"success": True}}
 
 

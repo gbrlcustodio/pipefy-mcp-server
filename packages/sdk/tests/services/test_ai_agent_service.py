@@ -14,7 +14,6 @@ from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
 from graphql import print_ast
 
-from pipefy_sdk.base_client import unwrap_relay_connection_nodes
 from pipefy_sdk.models.ai_agent import CreateAiAgentInput, UpdateAiAgentInput
 from pipefy_sdk.queries.ai_agent_queries import (
     DELETE_AI_AGENT_MUTATION,
@@ -26,6 +25,7 @@ from pipefy_sdk.services.ai_agent_service import (
     AiAgentService,
     inject_reference_ids,
 )
+from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 UUID_PATTERN = re.compile(r"%\{action:([a-f0-9-]{36})\}")
 

@@ -1,10 +1,8 @@
 """Unit tests for ReportService."""
 
-from unittest.mock import AsyncMock
-
 import pytest
+from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
-from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.report_queries import (
     CREATE_ORGANIZATION_REPORT_MUTATION,
@@ -26,27 +24,17 @@ from pipefy_sdk.queries.report_queries import (
 )
 from pipefy_sdk.report_filter_preflight import EXAMPLE_PHASE_FILTER
 from pipefy_sdk.services.report_service import ReportService
-from pipefy_sdk.settings import PipefySettings
-
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
-@pytest.fixture
-def mock_settings():
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
-    )
-
-
-def _make_service(mock_settings, return_value):
-    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value=return_value)
-    return service
+def _make_service(return_value):
+    executor = mock_executor(return_value)
+    service = ReportService(executor=executor)
+    return service, executor
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_reports_success(mock_settings):
+async def test_get_pipe_reports_success():
     payload = {
         "pipeReports": {
             "edges": [
@@ -66,11 +54,11 @@ async def test_get_pipe_reports_success(mock_settings):
             "pageInfo": {"hasNextPage": False, "endCursor": "abc123"},
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_pipe_reports("uuid-123")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_PIPE_REPORTS_QUERY
     assert variables["pipeUuid"] == "uuid-123"
     assert variables["first"] == 30
@@ -79,14 +67,14 @@ async def test_get_pipe_reports_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_reports_with_optional_params(mock_settings):
+async def test_get_pipe_reports_with_optional_params():
     payload = {
         "pipeReports": {
             "edges": [],
             "pageInfo": {"hasNextPage": False, "endCursor": None},
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     await service.get_pipe_reports(
         "uuid-123",
         first=10,
@@ -96,7 +84,7 @@ async def test_get_pipe_reports_with_optional_params(mock_settings):
         order={"field": "name", "direction": "asc"},
     )
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables["first"] == 10
     assert variables["after"] == "cursor"
     assert variables["search"] == "weekly"
@@ -106,18 +94,18 @@ async def test_get_pipe_reports_with_optional_params(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_reports_transport_error(mock_settings):
-    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_pipe_reports_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
+    service = ReportService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_pipe_reports("uuid-123")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_report_columns_success(mock_settings):
+async def test_get_pipe_report_columns_success():
     payload = {
         "pipeReportColumns": [
             {
@@ -138,10 +126,10 @@ async def test_get_pipe_report_columns_success(mock_settings):
             },
         ]
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_pipe_report_columns("uuid-456")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_PIPE_REPORT_COLUMNS_QUERY
     assert variables == {"pipeUuid": "uuid-456"}
     assert len(result["pipeReportColumns"]) == 2
@@ -149,7 +137,7 @@ async def test_get_pipe_report_columns_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_report_filterable_fields_success(mock_settings):
+async def test_get_pipe_report_filterable_fields_success():
     payload = {
         "pipeReportFilterableFields": [
             {
@@ -170,10 +158,10 @@ async def test_get_pipe_report_filterable_fields_success(mock_settings):
             }
         ]
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_pipe_report_filterable_fields("uuid-789")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_PIPE_REPORT_FILTERABLE_FIELDS_QUERY
     assert variables == {"pipeUuid": "uuid-789"}
     inner = result["pipeReportFilterableFields"][0]["list"][0]["list"][0]
@@ -182,7 +170,7 @@ async def test_get_pipe_report_filterable_fields_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_organization_report_success(mock_settings):
+async def test_get_organization_report_success():
     payload = {
         "organizationReport": {
             "id": "or1",
@@ -197,10 +185,10 @@ async def test_get_organization_report_success(mock_settings):
             "lastUpdatedAt": "2025-06-01T00:00:00Z",
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_organization_report("901")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_ORGANIZATION_REPORT_QUERY
     assert variables == {"id": "901"}
     assert result["organizationReport"]["name"] == "Org Overview"
@@ -208,7 +196,7 @@ async def test_get_organization_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_organization_reports_success(mock_settings):
+async def test_get_organization_reports_success():
     payload = {
         "organizationReports": {
             "edges": [
@@ -232,10 +220,10 @@ async def test_get_organization_reports_success(mock_settings):
             "pageInfo": {"hasNextPage": True, "endCursor": "cursor-2"},
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_organization_reports("1001", first=5, after="cursor-1")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_ORGANIZATION_REPORTS_QUERY
     assert variables["organizationId"] == "1001"
     assert variables["first"] == 5
@@ -245,7 +233,7 @@ async def test_get_organization_reports_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_report_export_success(mock_settings):
+async def test_get_pipe_report_export_success():
     payload = {
         "pipeReportExport": {
             "id": "exp1",
@@ -256,10 +244,10 @@ async def test_get_pipe_report_export_success(mock_settings):
             "requestedBy": {"id": "u1", "name": "Admin"},
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_pipe_report_export("exp1")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_PIPE_REPORT_EXPORT_QUERY
     assert variables == {"id": "exp1"}
     assert result["pipeReportExport"]["state"] == "done"
@@ -270,7 +258,7 @@ async def test_get_pipe_report_export_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_organization_report_export_success(mock_settings):
+async def test_get_organization_report_export_success():
     payload = {
         "organizationReportExport": {
             "id": "exp2",
@@ -281,10 +269,10 @@ async def test_get_organization_report_export_success(mock_settings):
             "requestedBy": {"id": "u2", "name": "User"},
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_organization_report_export("exp2")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_ORGANIZATION_REPORT_EXPORT_QUERY
     assert variables == {"id": "exp2"}
     assert result["organizationReportExport"]["state"] == "processing"
@@ -293,14 +281,14 @@ async def test_get_organization_report_export_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_pipe_report_success(mock_settings):
+async def test_create_pipe_report_success():
     payload = {"createPipeReport": {"pipeReport": {"id": "r10", "name": "New Report"}}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.create_pipe_report(
         "123", "New Report", fields=["title", "status"]
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_PIPE_REPORT_MUTATION
     assert variables["input"]["pipeId"] == "123"
     assert variables["input"]["name"] == "New Report"
@@ -310,7 +298,7 @@ async def test_create_pipe_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_pipe_report_forwards_golden_phase_filter(mock_settings):
+async def test_create_pipe_report_forwards_golden_phase_filter():
     golden_filter = {
         **EXAMPLE_PHASE_FILTER,
         "queries": [
@@ -321,46 +309,46 @@ async def test_create_pipe_report_forwards_golden_phase_filter(mock_settings):
         ],
     }
     payload = {"createPipeReport": {"pipeReport": {"id": "r10", "name": "Filtered"}}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     await service.create_pipe_report("123", "Filtered", filter=golden_filter)
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables["input"]["filter"] == golden_filter
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_pipe_report_minimal(mock_settings):
+async def test_create_pipe_report_minimal():
     payload = {"createPipeReport": {"pipeReport": {"id": "r11", "name": "Minimal"}}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.create_pipe_report("456", "Minimal")
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables["input"] == {"pipeId": "456", "name": "Minimal"}
     assert result["createPipeReport"]["pipeReport"]["name"] == "Minimal"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_pipe_report_transport_error(mock_settings):
-    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_create_pipe_report_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
+    service = ReportService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.create_pipe_report("123", "Report")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_pipe_report_success(mock_settings):
+async def test_update_pipe_report_success():
     payload = {"updatePipeReport": {"pipeReport": {"id": "10", "name": "Updated"}}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.update_pipe_report(
         "10", name="Updated", color="red", fields=["title"]
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_PIPE_REPORT_MUTATION
     assert variables["input"]["id"] == "10"
     assert variables["input"]["name"] == "Updated"
@@ -371,23 +359,23 @@ async def test_update_pipe_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_pipe_report_skips_none_values(mock_settings):
+async def test_update_pipe_report_skips_none_values():
     payload = {"updatePipeReport": {"pipeReport": {"id": "10", "name": "Same"}}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     await service.update_pipe_report("10", name="Same")
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables["input"] == {"id": "10", "name": "Same"}
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_pipe_report_success(mock_settings):
+async def test_delete_pipe_report_success():
     payload = {"deletePipeReport": {"success": True}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.delete_pipe_report("10")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_PIPE_REPORT_MUTATION
     assert variables["input"] == {"id": "10"}
     assert result["deletePipeReport"]["success"] is True
@@ -395,18 +383,18 @@ async def test_delete_pipe_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_organization_report_success(mock_settings):
+async def test_create_organization_report_success():
     payload = {
         "createOrganizationReport": {
             "organizationReport": {"id": "5", "name": "Cross-Pipe"}
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.create_organization_report(
         "100", "Cross-Pipe", ["200", "300"], fields=["title"]
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_ORGANIZATION_REPORT_MUTATION
     assert variables["input"]["organizationId"] == "100"
     assert variables["input"]["name"] == "Cross-Pipe"
@@ -417,18 +405,18 @@ async def test_create_organization_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_organization_report_success(mock_settings):
+async def test_update_organization_report_success():
     payload = {
         "updateOrganizationReport": {
             "organizationReport": {"id": "5", "name": "Updated Org"}
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.update_organization_report(
         "5", name="Updated Org", pipe_ids=["200", "400"]
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_ORGANIZATION_REPORT_MUTATION
     assert variables["input"]["id"] == "5"
     assert variables["input"]["name"] == "Updated Org"
@@ -441,12 +429,12 @@ async def test_update_organization_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_organization_report_success(mock_settings):
+async def test_delete_organization_report_success():
     payload = {"deleteOrganizationReport": {"success": True}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.delete_organization_report("5")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_ORGANIZATION_REPORT_MUTATION
     assert variables["input"] == {"id": "5"}
     assert result["deleteOrganizationReport"]["success"] is True
@@ -454,14 +442,14 @@ async def test_delete_organization_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_export_pipe_report_success(mock_settings):
+async def test_export_pipe_report_success():
     payload = {
         "exportPipeReport": {"pipeReportExport": {"id": "exp1", "state": "processing"}}
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.export_pipe_report("100", "200")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is EXPORT_PIPE_REPORT_MUTATION
     assert variables["input"] == {"pipeId": "100", "pipeReportId": "200"}
     assert result["exportPipeReport"]["pipeReportExport"]["state"] == "processing"
@@ -469,29 +457,29 @@ async def test_export_pipe_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_export_pipe_report_transport_error(mock_settings):
-    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_export_pipe_report_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
+    service = ReportService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.export_pipe_report("100", "200")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_export_organization_report_success(mock_settings):
+async def test_export_organization_report_success():
     payload = {
         "exportOrganizationReport": {
             "organizationReportExport": {"id": "exp-org-1", "state": "processing"}
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.export_organization_report(
         42, organization_report_id=7, pipe_ids=[10, 11]
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is EXPORT_ORGANIZATION_REPORT_MUTATION
     assert variables["input"] == {
         "organizationId": 42,
@@ -506,12 +494,12 @@ async def test_export_organization_report_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_export_pipe_audit_logs_success(mock_settings):
+async def test_export_pipe_audit_logs_success():
     payload = {"exportPipeAuditLogsReport": {"success": True}}
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.export_pipe_audit_logs("uuid-abc", search_term="audit")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is EXPORT_PIPE_AUDIT_LOGS_MUTATION
     assert variables["input"] == {"pipeUuid": "uuid-abc", "searchTerm": "audit"}
     assert result["exportPipeAuditLogsReport"]["success"] is True
@@ -519,22 +507,22 @@ async def test_export_pipe_audit_logs_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_report_columns_transport_error(mock_settings):
-    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_pipe_report_columns_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
+    service = ReportService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_pipe_report_columns("uuid-456")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_pipe_report_transport_error(mock_settings):
-    service = ReportService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_update_pipe_report_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
     )
+    service = ReportService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.update_pipe_report("10", name="N")
 
@@ -579,15 +567,13 @@ def _filter_method_invokers():
     _filter_method_invokers(),
     ids=[name for name, _ in _filter_method_invokers()],
 )
-async def test_report_mutations_reject_invalid_filter(
-    mock_settings, method_name, invoke
-):
-    service = _make_service(mock_settings, {})
+async def test_report_mutations_reject_invalid_filter(method_name, invoke):
+    service, executor = _make_service({})
 
     with pytest.raises(ValueError, match="top-level 'current_phase'"):
         await invoke(service, {"current_phase": ["987654321"]})
 
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
@@ -597,15 +583,13 @@ async def test_report_mutations_reject_invalid_filter(
     _filter_method_invokers(),
     ids=[name for name, _ in _filter_method_invokers()],
 )
-async def test_report_mutations_reject_invalid_filter_operator(
-    mock_settings, method_name, invoke
-):
-    service = _make_service(mock_settings, {})
+async def test_report_mutations_reject_invalid_filter_operator(method_name, invoke):
+    service, executor = _make_service({})
 
     with pytest.raises(ValueError, match="operator must be one of"):
         await invoke(service, {"operator": "xor", "queries": []})
 
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
 
 
 @pytest.mark.unit
@@ -615,16 +599,14 @@ async def test_report_mutations_reject_invalid_filter_operator(
     _filter_method_invokers(),
     ids=[name for name, _ in _filter_method_invokers()],
 )
-async def test_report_mutations_normalize_integer_filter_values(
-    mock_settings, method_name, invoke
-):
+async def test_report_mutations_normalize_integer_filter_values(method_name, invoke):
     int_value_filter = {
         **EXAMPLE_PHASE_FILTER,
         "queries": [{**EXAMPLE_PHASE_FILTER["queries"][0], "value": 99}],
     }
-    service = _make_service(mock_settings, {})
+    service, executor = _make_service({})
 
     await invoke(service, int_value_filter)
 
-    variables = service.execute_query.call_args[0][1]
+    variables = executor.execute_query.call_args[0][1]
     assert variables["input"]["filter"]["queries"][0]["value"] == "99"

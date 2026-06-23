@@ -1,11 +1,9 @@
 """Unit tests for SchemaIntrospectionService."""
 
-from unittest.mock import AsyncMock
-
 import pytest
+from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
 from graphql import GraphQLError
-from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.introspection_queries import (
     INTROSPECT_MUTATION_QUERY,
@@ -16,27 +14,17 @@ from pipefy_sdk.queries.introspection_queries import (
 from pipefy_sdk.services.schema_introspection_service import (
     SchemaIntrospectionService,
 )
-from pipefy_sdk.settings import PipefySettings
-
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
-@pytest.fixture
-def mock_settings():
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
-    )
-
-
-def _make_service(mock_settings, return_value):
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value=return_value)
-    return service
+def _make_service(return_value):
+    executor = mock_executor(return_value)
+    service = SchemaIntrospectionService(executor=executor)
+    return service, executor
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_type_object_returns_fields(mock_settings):
+async def test_introspect_type_object_returns_fields():
     """Inspecting an OBJECT type returns field definitions."""
     gql_type = {
         "name": "Card",
@@ -56,11 +44,11 @@ async def test_introspect_type_object_returns_fields(mock_settings):
         "inputFields": None,
         "enumValues": None,
     }
-    service = _make_service(mock_settings, {"__type": gql_type})
+    service, executor = _make_service({"__type": gql_type})
     result = await service.introspect_type("Card")
 
-    service.execute_query.assert_called_once()
-    query_used, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_called_once()
+    query_used, variables = executor.execute_query.call_args[0]
     assert query_used is INTROSPECT_TYPE_QUERY
     assert variables == {"typeName": "Card"}
     assert result == gql_type
@@ -70,7 +58,7 @@ async def test_introspect_type_object_returns_fields(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_type_input_returns_input_fields(mock_settings):
+async def test_introspect_type_input_returns_input_fields():
     """Inspecting an INPUT_OBJECT type returns inputFields."""
     gql_type = {
         "name": "CreateCardInput",
@@ -90,7 +78,7 @@ async def test_introspect_type_input_returns_input_fields(mock_settings):
         ],
         "enumValues": None,
     }
-    service = _make_service(mock_settings, {"__type": gql_type})
+    service, _ = _make_service({"__type": gql_type})
     result = await service.introspect_type("CreateCardInput")
 
     assert result == gql_type
@@ -100,7 +88,7 @@ async def test_introspect_type_input_returns_input_fields(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_type_enum_returns_enum_values(mock_settings):
+async def test_introspect_type_enum_returns_enum_values():
     """Inspecting an ENUM type returns enumValues."""
     gql_type = {
         "name": "CardStatus",
@@ -113,7 +101,7 @@ async def test_introspect_type_enum_returns_enum_values(mock_settings):
             {"name": "DONE", "description": "Completed"},
         ],
     }
-    service = _make_service(mock_settings, {"__type": gql_type})
+    service, _ = _make_service({"__type": gql_type})
     result = await service.introspect_type("CardStatus")
 
     assert result == gql_type
@@ -123,9 +111,9 @@ async def test_introspect_type_enum_returns_enum_values(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_type_not_found_returns_clear_error(mock_settings):
+async def test_introspect_type_not_found_returns_clear_error():
     """When __type is null, return a clear error (not the raw GraphQL envelope)."""
-    service = _make_service(mock_settings, {"__type": None})
+    service, _ = _make_service({"__type": None})
     result = await service.introspect_type("NonexistentType")
 
     assert "error" in result
@@ -137,7 +125,7 @@ async def test_introspect_type_not_found_returns_clear_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_mutation_returns_name_args_and_return_type(mock_settings):
+async def test_introspect_mutation_returns_name_args_and_return_type():
     """Inspecting a valid mutation returns name, description, args, and return type."""
     fields = [
         {
@@ -163,11 +151,11 @@ async def test_introspect_mutation_returns_name_args_and_return_type(mock_settin
             "type": {"name": "CardPayload", "kind": "OBJECT"},
         },
     ]
-    service = _make_service(mock_settings, {"__type": {"fields": fields}})
+    service, executor = _make_service({"__type": {"fields": fields}})
     result = await service.introspect_mutation("createCard")
 
-    service.execute_query.assert_called_once()
-    query_used, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_called_once()
+    query_used, variables = executor.execute_query.call_args[0]
     assert query_used is INTROSPECT_MUTATION_QUERY
     assert variables == {}
     assert "error" not in result
@@ -181,7 +169,7 @@ async def test_introspect_mutation_returns_name_args_and_return_type(mock_settin
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_mutation_not_found_returns_clear_error(mock_settings):
+async def test_introspect_mutation_not_found_returns_clear_error():
     """When the mutation name is not on the Mutation type, return a clear error."""
     fields = [
         {
@@ -191,7 +179,7 @@ async def test_introspect_mutation_not_found_returns_clear_error(mock_settings):
             "type": {"name": "CardPayload", "kind": "OBJECT"},
         }
     ]
-    service = _make_service(mock_settings, {"__type": {"fields": fields}})
+    service, _ = _make_service({"__type": {"fields": fields}})
     result = await service.introspect_mutation("deleteUniverse")
 
     assert "error" in result
@@ -203,9 +191,9 @@ async def test_introspect_mutation_not_found_returns_clear_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_mutation_root_type_none_returns_clear_error(mock_settings):
+async def test_introspect_mutation_root_type_none_returns_clear_error():
     """When __type itself is None (Mutation root not found), return a clear error."""
-    service = _make_service(mock_settings, {"__type": None})
+    service, _ = _make_service({"__type": None})
     result = await service.introspect_mutation("createCard")
 
     assert "error" in result
@@ -214,7 +202,7 @@ async def test_introspect_mutation_root_type_none_returns_clear_error(mock_setti
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_query_returns_name_args_and_return_type(mock_settings):
+async def test_introspect_query_returns_name_args_and_return_type():
     """Inspecting a valid query returns name, description, args, and return type."""
     fields = [
         {
@@ -240,11 +228,11 @@ async def test_introspect_query_returns_name_args_and_return_type(mock_settings)
             "type": {"name": "Pipe", "kind": "OBJECT"},
         },
     ]
-    service = _make_service(mock_settings, {"__type": {"fields": fields}})
+    service, executor = _make_service({"__type": {"fields": fields}})
     result = await service.introspect_query("pipe")
 
-    service.execute_query.assert_called_once()
-    query_used, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_called_once()
+    query_used, variables = executor.execute_query.call_args[0]
     assert query_used is INTROSPECT_QUERY_QUERY
     assert variables == {}
     assert "error" not in result
@@ -257,7 +245,7 @@ async def test_introspect_query_returns_name_args_and_return_type(mock_settings)
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_query_not_found_returns_clear_error(mock_settings):
+async def test_introspect_query_not_found_returns_clear_error():
     """When the query name is not on the Query type, return a clear error."""
     fields = [
         {
@@ -267,7 +255,7 @@ async def test_introspect_query_not_found_returns_clear_error(mock_settings):
             "type": {"name": "User", "kind": "OBJECT"},
         }
     ]
-    service = _make_service(mock_settings, {"__type": {"fields": fields}})
+    service, _ = _make_service({"__type": {"fields": fields}})
     result = await service.introspect_query("nonexistent")
 
     assert "error" in result
@@ -276,9 +264,9 @@ async def test_introspect_query_not_found_returns_clear_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_query_root_type_none_returns_clear_error(mock_settings):
+async def test_introspect_query_root_type_none_returns_clear_error():
     """When __type itself is None (Query root not found), return a clear error."""
-    service = _make_service(mock_settings, {"__type": None})
+    service, _ = _make_service({"__type": None})
     result = await service.introspect_query("pipe")
 
     assert "error" in result
@@ -287,9 +275,7 @@ async def test_introspect_query_root_type_none_returns_clear_error(mock_settings
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_type_default_depth_is_1_no_recursive_resolution(
-    mock_settings,
-):
+async def test_introspect_type_default_depth_is_1_no_recursive_resolution():
     """Default max_depth=1 returns as-is without resolving referenced types."""
     gql_type = {
         "name": "Card",
@@ -305,16 +291,16 @@ async def test_introspect_type_default_depth_is_1_no_recursive_resolution(
         "inputFields": None,
         "enumValues": None,
     }
-    service = _make_service(mock_settings, {"__type": gql_type})
+    service, executor = _make_service({"__type": gql_type})
     result = await service.introspect_type("Card")
 
-    service.execute_query.assert_called_once()
+    executor.execute_query.assert_called_once()
     assert "resolvedType" not in result["fields"][0]
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_type_depth_2_resolves_deeply_wrapped_types(mock_settings):
+async def test_introspect_type_depth_2_resolves_deeply_wrapped_types():
     """max_depth=2 resolves types wrapped in NON_NULL(LIST(NON_NULL(...)))."""
     card_type = {
         "name": "Card",
@@ -353,15 +339,14 @@ async def test_introspect_type_depth_2_resolves_deeply_wrapped_types(mock_settin
         "enumValues": None,
     }
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-
     async def mock_execute_query(query, variables):
         type_name = variables.get("typeName", "")
         if type_name == "User":
             return {"__type": user_type}
         return {"__type": card_type}
 
-    service.execute_query = AsyncMock(side_effect=mock_execute_query)
+    executor = mock_executor(side_effect=mock_execute_query)
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.introspect_type("Card", max_depth=2)
 
     assignees_field = result["fields"][0]
@@ -371,7 +356,7 @@ async def test_introspect_type_depth_2_resolves_deeply_wrapped_types(mock_settin
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_type_depth_2_resolves_field_types(mock_settings):
+async def test_introspect_type_depth_2_resolves_field_types():
     """max_depth=2 resolves one level of referenced types."""
     card_type = {
         "name": "Card",
@@ -407,7 +392,6 @@ async def test_introspect_type_depth_2_resolves_field_types(mock_settings):
         "enumValues": None,
     }
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
     call_count = 0
 
     async def mock_execute_query(query, variables):
@@ -418,7 +402,8 @@ async def test_introspect_type_depth_2_resolves_field_types(mock_settings):
             return {"__type": user_type}
         return {"__type": card_type}
 
-    service.execute_query = AsyncMock(side_effect=mock_execute_query)
+    executor = mock_executor(side_effect=mock_execute_query)
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.introspect_type("Card", max_depth=2)
 
     assert call_count >= 2
@@ -433,7 +418,7 @@ async def test_introspect_type_depth_2_resolves_field_types(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_type_depth_1_explicit_same_as_default(mock_settings):
+async def test_introspect_type_depth_1_explicit_same_as_default():
     """Explicitly passing max_depth=1 behaves the same as default."""
     gql_type = {
         "name": "Card",
@@ -449,16 +434,16 @@ async def test_introspect_type_depth_1_explicit_same_as_default(mock_settings):
         "inputFields": None,
         "enumValues": None,
     }
-    service = _make_service(mock_settings, {"__type": gql_type})
+    service, executor = _make_service({"__type": gql_type})
     result = await service.introspect_type("Card", max_depth=1)
 
-    service.execute_query.assert_called_once()
+    executor.execute_query.assert_called_once()
     assert "resolvedType" not in result["fields"][0]
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_mutation_depth_2_resolves_arg_types(mock_settings):
+async def test_introspect_mutation_depth_2_resolves_arg_types():
     """max_depth=2 on introspect_mutation resolves argument input types."""
     mutation_fields = [
         {
@@ -493,15 +478,14 @@ async def test_introspect_mutation_depth_2_resolves_arg_types(mock_settings):
         "enumValues": None,
     }
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-
     async def mock_execute_query(query, variables):
         type_name = variables.get("typeName", "")
         if type_name == "CreateCardInput":
             return {"__type": input_type}
         return {"__type": {"fields": mutation_fields}}
 
-    service.execute_query = AsyncMock(side_effect=mock_execute_query)
+    executor = mock_executor(side_effect=mock_execute_query)
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.introspect_mutation("createCard", max_depth=2)
 
     assert result["name"] == "createCard"
@@ -512,7 +496,7 @@ async def test_introspect_mutation_depth_2_resolves_arg_types(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_introspect_query_depth_2_resolves_arg_types(mock_settings):
+async def test_introspect_query_depth_2_resolves_arg_types():
     """max_depth=2 on introspect_query resolves argument types."""
     query_fields = [
         {
@@ -529,7 +513,7 @@ async def test_introspect_query_depth_2_resolves_arg_types(mock_settings):
         }
     ]
 
-    service = _make_service(mock_settings, {"__type": {"fields": query_fields}})
+    service, _ = _make_service({"__type": {"fields": query_fields}})
     result = await service.introspect_query("pipe", max_depth=2)
 
     # Scalar args should not be resolved
@@ -543,9 +527,7 @@ def _schema_types_response(types_list):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_schema_returns_matching_types_with_name_kind_description(
-    mock_settings,
-):
+async def test_search_schema_returns_matching_types_with_name_kind_description():
     """Keyword search returns each match with name, kind, and description."""
     types_list = [
         {"name": "User", "kind": "OBJECT", "description": "A user"},
@@ -555,11 +537,11 @@ async def test_search_schema_returns_matching_types_with_name_kind_description(
             "description": "A pipe in Pipefy",
         },
     ]
-    service = _make_service(mock_settings, _schema_types_response(types_list))
+    service, executor = _make_service(_schema_types_response(types_list))
     result = await service.search_schema("pipe")
 
-    service.execute_query.assert_called_once()
-    query_used, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_called_once()
+    query_used, variables = executor.execute_query.call_args[0]
     assert query_used is SCHEMA_TYPES_QUERY
     assert variables == {}
     assert result["types"] == [
@@ -569,12 +551,12 @@ async def test_search_schema_returns_matching_types_with_name_kind_description(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_schema_no_matches_returns_empty_list(mock_settings):
+async def test_search_schema_no_matches_returns_empty_list():
     """When nothing matches the keyword, types is empty."""
     types_list = [
         {"name": "User", "kind": "OBJECT", "description": None},
     ]
-    service = _make_service(mock_settings, _schema_types_response(types_list))
+    service, _ = _make_service(_schema_types_response(types_list))
     result = await service.search_schema("zzznomatch")
 
     assert result["types"] == []
@@ -582,9 +564,9 @@ async def test_search_schema_no_matches_returns_empty_list(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_schema_missing_root_schema_returns_empty_types(mock_settings):
+async def test_search_schema_missing_root_schema_returns_empty_types():
     """When __schema is null, treat as empty schema and return no matches."""
-    service = _make_service(mock_settings, {"__schema": None})
+    service, _ = _make_service({"__schema": None})
     result = await service.search_schema("anything")
 
     assert result["types"] == []
@@ -592,7 +574,7 @@ async def test_search_schema_missing_root_schema_returns_empty_types(mock_settin
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_schema_is_case_insensitive(mock_settings):
+async def test_search_schema_is_case_insensitive():
     """Matching uses case-insensitive comparison on name and description."""
     types_list = [
         {
@@ -601,7 +583,7 @@ async def test_search_schema_is_case_insensitive(mock_settings):
             "description": "Workflow container",
         },
     ]
-    service = _make_service(mock_settings, _schema_types_response(types_list))
+    service, _ = _make_service(_schema_types_response(types_list))
     lower = await service.search_schema("pipe")
     upper = await service.search_schema("PIPE")
 
@@ -612,9 +594,7 @@ async def test_search_schema_is_case_insensitive(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_schema_excludes_introspection_types_prefixed_with_double_underscore(
-    mock_settings,
-):
+async def test_search_schema_excludes_introspection_types_prefixed_with_double_underscore():
     """Types whose name starts with __ are never returned, even if the keyword matches."""
     types_list = [
         {
@@ -628,7 +608,7 @@ async def test_search_schema_excludes_introspection_types_prefixed_with_double_u
             "description": "Custom extension",
         },
     ]
-    service = _make_service(mock_settings, _schema_types_response(types_list))
+    service, _ = _make_service(_schema_types_response(types_list))
     result = await service.search_schema("schema")
 
     names = {t["name"] for t in result["types"]}
@@ -638,14 +618,14 @@ async def test_search_schema_excludes_introspection_types_prefixed_with_double_u
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_schema_with_kind_filter_returns_only_matching_kind(mock_settings):
+async def test_search_schema_with_kind_filter_returns_only_matching_kind():
     """When kind is given, only types of that kind are returned."""
     types_list = [
         {"name": "CardStatus", "kind": "ENUM", "description": "Card status values"},
         {"name": "Card", "kind": "OBJECT", "description": "A card in Pipefy"},
         {"name": "CardInput", "kind": "INPUT_OBJECT", "description": "Card input"},
     ]
-    service = _make_service(mock_settings, _schema_types_response(types_list))
+    service, _ = _make_service(_schema_types_response(types_list))
     result = await service.search_schema("card", kind="ENUM")
 
     assert len(result["types"]) == 1
@@ -655,14 +635,14 @@ async def test_search_schema_with_kind_filter_returns_only_matching_kind(mock_se
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_schema_kind_none_returns_all_matching(mock_settings):
+async def test_search_schema_kind_none_returns_all_matching():
     """When kind is None (default), all matching types are returned regardless of kind."""
     types_list = [
         {"name": "CardStatus", "kind": "ENUM", "description": "Card status values"},
         {"name": "Card", "kind": "OBJECT", "description": "A card in Pipefy"},
         {"name": "CardInput", "kind": "INPUT_OBJECT", "description": "Card input"},
     ]
-    service = _make_service(mock_settings, _schema_types_response(types_list))
+    service, _ = _make_service(_schema_types_response(types_list))
     result = await service.search_schema("card", kind=None)
 
     assert len(result["types"]) == 3
@@ -670,12 +650,12 @@ async def test_search_schema_kind_none_returns_all_matching(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_search_schema_kind_no_matches_returns_empty(mock_settings):
+async def test_search_schema_kind_no_matches_returns_empty():
     """When kind filter excludes all keyword matches, return empty list."""
     types_list = [
         {"name": "Card", "kind": "OBJECT", "description": "A card"},
     ]
-    service = _make_service(mock_settings, _schema_types_response(types_list))
+    service, _ = _make_service(_schema_types_response(types_list))
     result = await service.search_schema("card", kind="UNION")
 
     assert result["types"] == []
@@ -683,38 +663,38 @@ async def test_search_schema_kind_no_matches_returns_empty(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_valid_query_returns_data(mock_settings):
+async def test_execute_graphql_valid_query_returns_data():
     """A syntactically valid query is executed and the data dict is returned."""
     gql_data = {"__typename": "Query"}
-    service = _make_service(mock_settings, gql_data)
+    service, executor = _make_service(gql_data)
     query = "query ExecuteGraphqlValid { __typename }"
     result = await service.execute_graphql(query, None)
 
-    service.execute_query.assert_called_once()
-    _, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_called_once()
+    _, variables = executor.execute_query.call_args[0]
     assert variables == {}
     assert result == gql_data
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_valid_mutation_returns_data(mock_settings):
+async def test_execute_graphql_valid_mutation_returns_data():
     """A syntactically valid mutation runs with variables passed through."""
     gql_data = {"__typename": "Mutation"}
-    service = _make_service(mock_settings, gql_data)
+    service, executor = _make_service(gql_data)
     mutation = "mutation ExecuteGraphqlValid($flag: Boolean) { __typename }"
     variables = {"flag": True}
     result = await service.execute_graphql(mutation, variables)
 
-    service.execute_query.assert_called_once()
-    _, vars_passed = service.execute_query.call_args[0]
+    executor.execute_query.assert_called_once()
+    _, vars_passed = executor.execute_query.call_args[0]
     assert vars_passed == variables
     assert result == gql_data
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_surfaces_graphql_errors_from_transport(mock_settings):
+async def test_execute_graphql_surfaces_graphql_errors_from_transport():
     """TransportQueryError from the GraphQL layer is turned into a clear errors payload."""
 
     async def raise_transport_error(*_args, **_kwargs):
@@ -728,8 +708,8 @@ async def test_execute_graphql_surfaces_graphql_errors_from_transport(mock_setti
             ],
         )
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=raise_transport_error)
+    executor = mock_executor(side_effect=raise_transport_error)
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.execute_graphql("query Q { __typename }", {})
 
     assert "errors" in result
@@ -742,12 +722,12 @@ async def test_execute_graphql_surfaces_graphql_errors_from_transport(mock_setti
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_surfaces_gql_client_graphql_error(mock_settings):
+async def test_execute_graphql_surfaces_gql_client_graphql_error():
     """Schema validation errors from gql (before or during execute) map to an errors payload."""
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+    executor = mock_executor(
         side_effect=GraphQLError("Cannot query field `nope` on type `Query`.")
     )
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.execute_graphql("query Q { __typename }", None)
 
     assert "errors" in result
@@ -756,7 +736,7 @@ async def test_execute_graphql_surfaces_gql_client_graphql_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_query_field_not_found_hints_mutation(mock_settings):
+async def test_execute_graphql_query_field_not_found_hints_mutation():
     """When a field doesn't exist on Query but exists on Mutation, add a hint."""
     call_count = 0
 
@@ -780,8 +760,8 @@ async def test_execute_graphql_query_field_not_found_hints_mutation(mock_setting
             }
         }
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=mock_execute)
+    executor = mock_executor(side_effect=mock_execute)
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.execute_graphql("query Q { createCard { id } }", None)
 
     assert "errors" in result
@@ -792,7 +772,7 @@ async def test_execute_graphql_query_field_not_found_hints_mutation(mock_setting
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_mutation_field_not_found_hints_query(mock_settings):
+async def test_execute_graphql_mutation_field_not_found_hints_query():
     """When a field doesn't exist on Mutation but exists on Query, add a hint."""
     call_count = 0
 
@@ -812,8 +792,8 @@ async def test_execute_graphql_mutation_field_not_found_hints_query(mock_setting
             }
         }
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=mock_execute)
+    executor = mock_executor(side_effect=mock_execute)
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.execute_graphql("mutation M { pipe(id: 1) { name } }", None)
 
     assert "errors" in result
@@ -824,7 +804,7 @@ async def test_execute_graphql_mutation_field_not_found_hints_query(mock_setting
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_no_hint_when_field_absent_from_both(mock_settings):
+async def test_execute_graphql_no_hint_when_field_absent_from_both():
     """When the field doesn't exist on either root type, no hint is added."""
     call_count = 0
 
@@ -840,8 +820,8 @@ async def test_execute_graphql_no_hint_when_field_absent_from_both(mock_settings
             )
         return {"__type": {"fields": [{"name": "pipe"}]}}
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=mock_execute)
+    executor = mock_executor(side_effect=mock_execute)
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.execute_graphql("query Q { nonexistent }", None)
 
     assert "errors" in result
@@ -850,7 +830,7 @@ async def test_execute_graphql_no_hint_when_field_absent_from_both(mock_settings
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_hint_works_with_backtick_error_format(mock_settings):
+async def test_execute_graphql_hint_works_with_backtick_error_format():
     """Hint detection works when Pipefy uses backticks in error messages."""
     call_count = 0
 
@@ -870,8 +850,8 @@ async def test_execute_graphql_hint_works_with_backtick_error_format(mock_settin
             }
         }
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=mock_execute)
+    executor = mock_executor(side_effect=mock_execute)
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.execute_graphql("query Q { createCard { id } }", None)
 
     assert "errors" in result
@@ -882,7 +862,7 @@ async def test_execute_graphql_hint_works_with_backtick_error_format(mock_settin
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_no_hint_on_unrelated_error(mock_settings):
+async def test_execute_graphql_no_hint_on_unrelated_error():
     """Errors that don't match the field-not-found pattern get no hint."""
 
     async def raise_transport_error(*_args, **_kwargs):
@@ -891,8 +871,8 @@ async def test_execute_graphql_no_hint_on_unrelated_error(mock_settings):
             errors=[{"message": "Permission denied"}],
         )
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=raise_transport_error)
+    executor = mock_executor(side_effect=raise_transport_error)
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.execute_graphql("query Q { __typename }", None)
 
     assert "errors" in result
@@ -901,7 +881,7 @@ async def test_execute_graphql_no_hint_on_unrelated_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_hint_lookup_failure_does_not_mask_error(mock_settings):
+async def test_execute_graphql_hint_lookup_failure_does_not_mask_error():
     """If the hint introspection itself fails, the original error is preserved."""
     call_count = 0
 
@@ -918,8 +898,8 @@ async def test_execute_graphql_hint_lookup_failure_does_not_mask_error(mock_sett
         # Hint lookup also fails
         raise TransportQueryError("hint lookup failed", errors=[])
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=mock_execute)
+    executor = mock_executor(side_effect=mock_execute)
+    service = SchemaIntrospectionService(executor=executor)
     result = await service.execute_graphql("query Q { createCard { id } }", None)
 
     assert "errors" in result
@@ -932,9 +912,7 @@ async def test_execute_graphql_hint_lookup_failure_does_not_mask_error(mock_sett
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_hint_lookup_unexpected_error_propagates(
-    mock_settings, caplog
-):
+async def test_execute_graphql_hint_lookup_unexpected_error_propagates(caplog):
     """Non-domain failures during hint detection are logged and not swallowed."""
     call_count = 0
 
@@ -950,8 +928,8 @@ async def test_execute_graphql_hint_lookup_unexpected_error_propagates(
             )
         raise RuntimeError("simulated bug during hint introspection")
 
-    service = SchemaIntrospectionService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=mock_execute)
+    executor = mock_executor(side_effect=mock_execute)
+    service = SchemaIntrospectionService(executor=executor)
 
     with caplog.at_level("ERROR"):
         with pytest.raises(RuntimeError, match="simulated bug"):
@@ -965,12 +943,12 @@ async def test_execute_graphql_hint_lookup_unexpected_error_propagates(
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_graphql_syntax_error_returns_validation_error(mock_settings):
+async def test_execute_graphql_syntax_error_returns_validation_error():
     """Malformed query strings fail before transport; return a clear validation error."""
-    service = _make_service(mock_settings, {})
+    service, executor = _make_service({})
     result = await service.execute_graphql("query { z", None)
 
-    service.execute_query.assert_not_called()
+    executor.execute_query.assert_not_called()
     assert "error" in result
     assert (
         "syntax" in result["error"].lower()

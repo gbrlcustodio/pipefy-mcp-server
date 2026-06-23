@@ -113,10 +113,10 @@ class PipefyClient:
             auth=auth,
             card_service=self._card_service,
         )
-        self._automation_service = AutomationService(settings=settings, auth=auth)
-        self._ai_agent_service = AiAgentService(settings=settings, auth=auth)
-        self._observability_service = ObservabilityService(settings=settings, auth=auth)
-        self._report_service = ReportService(settings=settings, auth=auth)
+        self._automation_service = AutomationService(executor=public_executor)
+        self._ai_agent_service = AiAgentService(executor=public_executor)
+        self._observability_service = ObservabilityService(executor=public_executor)
+        self._report_service = ReportService(executor=public_executor)
         self._organization_service = OrganizationService(executor=public_executor)
         self._user_service = UserService(executor=public_executor)
         self._attachment_service = AttachmentService(
@@ -126,7 +126,7 @@ class PipefyClient:
             table_service=self._table_service,
         )
         self._introspection_service = SchemaIntrospectionService(
-            settings=settings, auth=auth
+            executor=public_executor
         )
         self._portal_service = PortalService(
             settings=settings,

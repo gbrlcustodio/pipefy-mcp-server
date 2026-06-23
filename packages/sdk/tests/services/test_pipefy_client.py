@@ -36,11 +36,8 @@ def _make_facade_client(execute_return_value: dict):
     client._pipe_service = PipeService(executor=executor)
     client._card_service = CardService(executor=executor)
     client._pipe_config_service = PipeConfigService(settings=settings, auth=_TEST_AUTH)
-    client._introspection_service = SchemaIntrospectionService(
-        settings=settings, auth=_TEST_AUTH
-    )
+    client._introspection_service = SchemaIntrospectionService(executor=executor)
     client._pipe_config_service.execute_query = mock_execute
-    client._introspection_service.execute_query = mock_execute
 
     return client, mock_execute
 

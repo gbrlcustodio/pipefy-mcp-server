@@ -99,9 +99,8 @@ class PipefyClient:
         self._table_service = TableService(executor=public_executor)
         self._internal_api_client = InternalApiClient(settings, auth=auth)
         self._relation_service = RelationService(
-            settings=settings,
-            auth=auth,
-            internal_api_client=self._internal_api_client,
+            executor=public_executor,
+            internal_executor=self._internal_api_client,
         )
         self._member_service = MemberService(
             executor=public_executor,

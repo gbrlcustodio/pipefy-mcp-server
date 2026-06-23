@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import Any, ClassVar, Protocol, runtime_checkable
+from typing import Any, ClassVar, Protocol
 
 from gql import Client
 from gql.graphql_request import GraphQLRequest
@@ -14,7 +14,6 @@ from httpx import Auth, Timeout
 from pipefy_sdk.settings import PipefySettings
 
 
-@runtime_checkable
 class GraphQLExecutor(Protocol):
     """The GraphQL execution seam services depend on.
 

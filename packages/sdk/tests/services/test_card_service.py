@@ -560,7 +560,3 @@ async def test_get_card_relations_uses_query_and_cardId_variable(mock_settings):
     assert query_used is GET_CARD_RELATIONS_QUERY
     assert variables == {"cardId": "999"}
     assert result == expected
-
-    # delete_card_relation lives on RelationService (not CardService) and routes
-    # through InternalApiClient because the mutation is only available on the
-    # internal GraphQL schema. See tests/services/pipefy/test_relation_service.py.

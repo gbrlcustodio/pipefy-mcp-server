@@ -13,6 +13,7 @@ from pipefy_sdk.automation_preflight import (
     validate_traditional_automation_move_transition,
 )
 from pipefy_sdk.graphql_executor import GraphQLExecutor, HttpxGraphQLExecutor
+from pipefy_sdk.internal_api_errors import format_internal_api_error
 from pipefy_sdk.models.ai_agent import (
     BehaviorInput,
     CreateAiAgentInput,
@@ -42,7 +43,6 @@ from pipefy_sdk.services.automation_graphql_types import (
 )
 from pipefy_sdk.services.automation_service import AutomationService
 from pipefy_sdk.services.card_service import CardService
-from pipefy_sdk.services.internal_api_errors import _format_internal_api_error
 from pipefy_sdk.services.member_service import MemberService
 from pipefy_sdk.services.observability_service import ObservabilityService
 from pipefy_sdk.services.organization_service import OrganizationService
@@ -99,7 +99,7 @@ def build_executors(settings: PipefySettings, auth: Auth) -> Executors:
             settings,
             auth=auth,
             url_override=settings.internal_api_url,
-            on_graphql_error=_format_internal_api_error,
+            on_graphql_error=format_internal_api_error,
         ),
     )
 

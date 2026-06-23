@@ -8,7 +8,7 @@ assert the fully suffixed text.
 from __future__ import annotations
 
 
-def _format_internal_api_error(errors: list[dict]) -> str:
+def format_internal_api_error(errors: list[dict]) -> str:
     parts: list[str] = []
     for err in errors:
         msg = err.get("message", "Unknown error")

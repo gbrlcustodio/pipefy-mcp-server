@@ -22,36 +22,6 @@ def test_relation_pipe_list_json(runner, clean_pipefy_env, saved_cwd, oauth_env)
     mock_client.get_pipe_relations.assert_awaited_once_with("10")
 
 
-def test_relation_card_delete_requires_internal_api(
-    runner, clean_pipefy_env, saved_cwd, oauth_env
-):
-    oauth_env("rel-c")
-    mock_client = MagicMock()
-    mock_client.internal_api_available = False
-    with patch(
-        "pipefy_cli.commands._common.get_authenticated_client",
-        return_value=mock_client,
-    ):
-        result = runner.invoke(
-            app,
-            [
-                "relation",
-                "card",
-                "delete",
-                "--child",
-                "1",
-                "--parent",
-                "2",
-                "--source",
-                "3",
-                "--yes",
-                "--json",
-            ],
-        )
-    assert result.exit_code == 2
-    mock_client.delete_card_relation.assert_not_called()
-
-
 def test_member_remove_blocks_service_account(
     runner, clean_pipefy_env, saved_cwd, oauth_env, monkeypatch
 ):
@@ -177,7 +147,6 @@ def test_relation_card_delete_internal_api_json(
 ):
     oauth_env("rel-cc-del")
     mock_client = MagicMock()
-    mock_client.internal_api_available = True
     mock_client.delete_card_relation = AsyncMock(
         return_value={"deleteCardRelation": {}}
     )

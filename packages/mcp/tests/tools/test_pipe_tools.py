@@ -60,7 +60,6 @@ def mock_pipefy_client():
     client.delete_card_relation = AsyncMock(
         return_value={"deleteCardRelation": {"success": True}}
     )
-    client.internal_api_available = True
     client.update_card = AsyncMock()
     client.get_pipe_members = AsyncMock()
 
@@ -2604,31 +2603,6 @@ class TestDeleteCardRelation:
         payload = extract_payload(result)
         assert payload["success"] is False
         assert "did not succeed" in tool_error_message(payload).lower()
-
-    @pytest.mark.parametrize("client_session", [None], indirect=True)
-    async def test_not_configured_returns_service_account_message(
-        self,
-        client_session,
-        mock_pipefy_client,
-        extract_payload,
-    ) -> None:
-        """delete_card_relation requires internal API (service-account) credentials."""
-        mock_pipefy_client.internal_api_available = False
-        async with client_session as session:
-            result = await session.call_tool(
-                "delete_card_relation",
-                {
-                    "child_id": "1",
-                    "parent_id": "2",
-                    "source_id": "3",
-                    "confirm": True,
-                },
-            )
-        assert result.isError is False
-        mock_pipefy_client.delete_card_relation.assert_not_called()
-        payload = extract_payload(result)
-        assert payload["success"] is False
-        assert "service-account credentials" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

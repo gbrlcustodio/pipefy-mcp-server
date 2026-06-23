@@ -544,17 +544,6 @@ class PipeTools:
                 f"source_id={source_id}, confirm={confirm}"
             )
 
-            if not client.internal_api_available:
-                return build_relation_error_payload(
-                    message=(
-                        "delete_card_relation requires service-account credentials "
-                        "(PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
-                        "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
-                        "The deleteCardRelation mutation is only available on the "
-                        "internal API. Check .env.example for the required variables."
-                    ),
-                )
-
             cid, err = validate_tool_id(child_id, "child_id")
             if err is not None:
                 return err

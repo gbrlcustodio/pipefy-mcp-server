@@ -275,14 +275,6 @@ class PortalService:
             raise ValueError(INTERNAL_API_CLIENT_NOT_CONFIGURED)
         return await self._internal_api_client.execute_query(query, variables)
 
-    def set_internal_api_client(self, client: InternalApiClient) -> None:
-        """Attach the internal API client for sub-portal mutations.
-
-        Args:
-            client: Configured :class:`InternalApiClient` instance.
-        """
-        self._internal_api_client = client
-
     async def list_portals(
         self,
         organization_uuid: str | int,

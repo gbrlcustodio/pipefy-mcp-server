@@ -124,22 +124,16 @@ class PipefyClient:
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
-        self._internal_api_client: InternalApiClient | None = None
-        self._portal_service = PortalService(settings=settings, auth=auth)
-
-    @property
-    def internal_api_available(self) -> bool:
-        """Whether the internal API client is configured (OAuth credentials present)."""
-        return self._internal_api_client is not None
-
-    def set_internal_api_client(self, client: InternalApiClient) -> None:
-        """Attach the internal API client (requires OAuth credentials).
-
-        Args:
-            client: Configured :class:`InternalApiClient` instance.
-        """
-        self._internal_api_client = client
-        self._portal_service.set_internal_api_client(client)
+        self._internal_api_client = InternalApiClient(
+            url=settings.internal_api_url,
+            auth=auth,
+            allow_insecure_urls=settings.allow_insecure_urls,
+        )
+        self._portal_service = PortalService(
+            settings=settings,
+            auth=auth,
+            internal_api_client=self._internal_api_client,
+        )
 
     async def get_pipe(self, pipe_id: str | int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
@@ -949,9 +943,8 @@ class PipefyClient:
         """Delete a relation link between two cards (internal API, requires OAuth).
 
         The ``deleteCardRelation`` mutation is not exposed on the public GraphQL
-        schema — only on the internal API (core_api / internal_v1).
+        schema, only on the internal API (core_api / internal_v1).
         """
-        assert self._internal_api_client is not None  # noqa: S101
         return await self._internal_api_client.execute_query(
             INTERNAL_DELETE_CARD_RELATION_MUTATION,
             {

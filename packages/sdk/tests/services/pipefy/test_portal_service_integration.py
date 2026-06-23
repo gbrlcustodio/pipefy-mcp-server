@@ -41,7 +41,7 @@ def _skip_or_fail_internal_api_error(exc: BaseException, *, context: str) -> Non
     if isinstance(exc, ValueError) and str(exc) == INTERNAL_API_CLIENT_NOT_CONFIGURED:
         pytest.fail(
             f"{context}: PortalService internal_api client was not wired "
-            "(PipefyClient.set_internal_api_client must forward to PortalService).",
+            "(PortalService must receive an internal_api_client at construction).",
             pytrace=False,
         )
     if isinstance(exc, ValueError):

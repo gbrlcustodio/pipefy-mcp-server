@@ -211,8 +211,9 @@ class PortalService:
 
     Takes three executors because portal operations span three endpoints: the
     public GraphQL schema, the Interfaces schema, and the internal_api endpoint
-    for sub-portal wiring. The composition root builds all three from one shared
-    ``auth`` so OAuth token caching is not duplicated.
+    for sub-portal wiring. The executors are injected, not built here; the
+    composition root constructs all three over one shared ``auth`` so the OAuth
+    token cache is not duplicated.
     """
 
     def __init__(

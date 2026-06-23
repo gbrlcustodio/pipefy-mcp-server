@@ -46,8 +46,6 @@ from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
 
 logger = logging.getLogger(__name__)
 
-INTERNAL_API_CLIENT_NOT_CONFIGURED = "Internal API client is not configured."
-
 
 def _with_uuid_alias(record: dict[str, Any]) -> dict[str, Any]:
     """Expose GraphQL ``id`` as ``uuid`` in portal payloads."""
@@ -224,9 +222,9 @@ class PortalService:
         settings: PipefySettings,
         *,
         auth: Auth,
-        internal_api_client: InternalApiClient | None = None,
+        internal_api_client: InternalApiClient,
     ) -> None:
-        """Wire clients for Interfaces schema and optional internal_api mutations.
+        """Wire clients for the Interfaces schema and internal_api mutations.
 
         Args:
             settings: Pipefy endpoints and credentials.
@@ -267,12 +265,7 @@ class PortalService:
         Args:
             query: GraphQL document string.
             variables: Variable map for the operation.
-
-        Raises:
-            ValueError: When no internal API client was injected.
         """
-        if self._internal_api_client is None:
-            raise ValueError(INTERNAL_API_CLIENT_NOT_CONFIGURED)
         return await self._internal_api_client.execute_query(query, variables)
 
     async def list_portals(

@@ -28,8 +28,6 @@ from pipefy_sdk.queries.relation_queries import (
 from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.settings import PipefySettings
 
-INTERNAL_API_CLIENT_NOT_CONFIGURED = "Internal API client is not configured."
-
 _PIPE_RELATION_CONSTRAINT_DEFAULTS: dict[str, Any] = {
     "allChildrenMustBeDoneToFinishParent": False,
     "allChildrenMustBeDoneToMoveParent": False,
@@ -52,7 +50,7 @@ class RelationService(BasePipefyClient):
         settings: PipefySettings,
         *,
         auth: Auth,
-        internal_api_client: InternalApiClient | None = None,
+        internal_api_client: InternalApiClient,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
         self._internal_api_client = internal_api_client
@@ -192,12 +190,7 @@ class RelationService(BasePipefyClient):
             child_id: Child card ID.
             parent_id: Parent card ID.
             source_id: Pipe relation ID linking the two cards.
-
-        Raises:
-            ValueError: When no internal API client was injected.
         """
-        if self._internal_api_client is None:
-            raise ValueError(INTERNAL_API_CLIENT_NOT_CONFIGURED)
         return await self._internal_api_client.execute_query(
             INTERNAL_DELETE_CARD_RELATION_MUTATION,
             {

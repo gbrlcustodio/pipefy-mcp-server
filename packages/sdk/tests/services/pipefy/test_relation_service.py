@@ -16,13 +16,13 @@ from pipefy_sdk.queries.relation_queries import (
     UPDATE_PIPE_RELATION_MUTATION,
 )
 from pipefy_sdk.services.internal_api_client import InternalApiClient
-from pipefy_sdk.services.relation_service import (
-    INTERNAL_API_CLIENT_NOT_CONFIGURED,
-    RelationService,
-)
+from pipefy_sdk.services.relation_service import RelationService
 from pipefy_sdk.settings import PipefySettings
 
 _TEST_AUTH = StaticBearerAuth("test-bearer-token")
+# Public-relation tests fake execute_query and never touch the internal client;
+# the constructor requires one, so hand them a stand-in.
+_INTERNAL_API = MagicMock(spec=InternalApiClient)
 
 
 @pytest.fixture
@@ -33,7 +33,9 @@ def mock_settings():
 
 
 def _make_service(mock_settings, return_value: dict):
-    service = RelationService(settings=mock_settings, auth=_TEST_AUTH)
+    service = RelationService(
+        settings=mock_settings, auth=_TEST_AUTH, internal_api_client=_INTERNAL_API
+    )
     service.execute_query = AsyncMock(return_value=return_value)
     return service
 
@@ -61,7 +63,9 @@ async def test_get_pipe_relations_sends_pipe_id(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_pipe_relations_transport_error(mock_settings):
-    service = RelationService(settings=mock_settings, auth=_TEST_AUTH)
+    service = RelationService(
+        settings=mock_settings, auth=_TEST_AUTH, internal_api_client=_INTERNAL_API
+    )
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
@@ -85,7 +89,9 @@ async def test_get_table_relations_sends_ids_list(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_get_table_relations_transport_error(mock_settings):
-    service = RelationService(settings=mock_settings, auth=_TEST_AUTH)
+    service = RelationService(
+        settings=mock_settings, auth=_TEST_AUTH, internal_api_client=_INTERNAL_API
+    )
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "missing"}])
     )
@@ -129,7 +135,9 @@ async def test_create_pipe_relation_merges_attrs(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_pipe_relation_transport_error(mock_settings):
-    service = RelationService(settings=mock_settings, auth=_TEST_AUTH)
+    service = RelationService(
+        settings=mock_settings, auth=_TEST_AUTH, internal_api_client=_INTERNAL_API
+    )
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "bad"}])
     )
@@ -168,7 +176,9 @@ async def test_update_pipe_relation_merges_attrs(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_pipe_relation_transport_error(mock_settings):
-    service = RelationService(settings=mock_settings, auth=_TEST_AUTH)
+    service = RelationService(
+        settings=mock_settings, auth=_TEST_AUTH, internal_api_client=_INTERNAL_API
+    )
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "nope"}])
     )
@@ -192,7 +202,9 @@ async def test_delete_pipe_relation_sends_id(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_pipe_relation_transport_error(mock_settings):
-    service = RelationService(settings=mock_settings, auth=_TEST_AUTH)
+    service = RelationService(
+        settings=mock_settings, auth=_TEST_AUTH, internal_api_client=_INTERNAL_API
+    )
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}])
     )
@@ -231,7 +243,9 @@ async def test_create_card_relation_allows_source_type_override(mock_settings):
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_card_relation_transport_error(mock_settings):
-    service = RelationService(settings=mock_settings, auth=_TEST_AUTH)
+    service = RelationService(
+        settings=mock_settings, auth=_TEST_AUTH, internal_api_client=_INTERNAL_API
+    )
     service.execute_query = AsyncMock(
         side_effect=TransportQueryError("failed", errors=[{"message": "nope"}])
     )
@@ -259,11 +273,3 @@ async def test_delete_card_relation_routes_through_internal_api_client(mock_sett
         {"childId": "c1", "parentId": "p2", "sourceId": "src-3"},
     )
     assert result == {"deleteCardRelation": {"success": True}}
-
-
-@pytest.mark.unit
-@pytest.mark.asyncio
-async def test_delete_card_relation_without_internal_client_raises(mock_settings):
-    service = RelationService(settings=mock_settings, auth=_TEST_AUTH)
-    with pytest.raises(ValueError, match=INTERNAL_API_CLIENT_NOT_CONFIGURED):
-        await service.delete_card_relation(1, 2, 3)

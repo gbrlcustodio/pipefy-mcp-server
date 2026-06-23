@@ -30,22 +30,11 @@ from gql.transport.exceptions import TransportQueryError
 
 from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.services.internal_api_client import InternalApiClient
-from pipefy_sdk.services.portal_service import (
-    INTERNAL_API_CLIENT_NOT_CONFIGURED,
-    PortalService,
-)
+from pipefy_sdk.services.portal_service import PortalService
 
 
 def _skip_or_fail_internal_api_error(exc: BaseException, *, context: str) -> None:
-    """Skip live API flakes; fail when internal_api was never wired."""
-    if isinstance(exc, ValueError) and str(exc) == INTERNAL_API_CLIENT_NOT_CONFIGURED:
-        pytest.fail(
-            f"{context}: PortalService internal_api client was not wired "
-            "(PortalService must receive an internal_api_client at construction).",
-            pytrace=False,
-        )
-    if isinstance(exc, ValueError):
-        pytest.skip(f"{context} (internal_api): {exc}")
+    """Skip live internal_api flakes (the client is always wired at construction)."""
     pytest.skip(f"{context} (internal_api): {exc}")
 
 

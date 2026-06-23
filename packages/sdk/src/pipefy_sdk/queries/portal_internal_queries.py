@@ -1,7 +1,7 @@
 """GraphQL mutations for portal sub-portals (internal_api endpoint).
 
-These run through ``InternalApiClient``, which accepts a ``gql()`` query like
-every other client.
+These run through the internal_api executor, which accepts a ``gql()`` query like
+every other executor.
 """
 
 from __future__ import annotations

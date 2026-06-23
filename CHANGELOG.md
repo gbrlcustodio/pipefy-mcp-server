@@ -40,7 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **SDK**: the AI automation surface moved from `AiAutomationService` to `AutomationService.create_ai_automation` / `update_ai_automation`, mirroring the existing `create_send_task_automation` pattern. `AiAutomationService`, `ai_automation_queries.py`, the `ai_automation_available` property, and `set_ai_automation_service` are removed; `PipefyClient` delegates to `AutomationService`. `InternalApiClient` stays (still used by `delete_card_relation`).
+- **SDK**: the AI automation surface moved from `AiAutomationService` to `AutomationService.create_ai_automation` / `update_ai_automation`, mirroring the existing `create_send_task_automation` pattern. `AiAutomationService`, `ai_automation_queries.py`, the `ai_automation_available` property, and `set_ai_automation_service` are removed; `PipefyClient` delegates to `AutomationService`.
 
 ## [0.2.0-beta.2] - 2026-06-02
 

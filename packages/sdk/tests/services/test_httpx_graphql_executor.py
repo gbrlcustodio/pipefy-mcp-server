@@ -5,7 +5,7 @@ from gql import gql
 from gql.graphql_request import GraphQLRequest
 from pipefy_auth import StaticBearerAuth
 
-from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor as BasePipefyClient
+from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
 from pipefy_sdk.settings import PipefySettings
 
 
@@ -38,7 +38,7 @@ async def test_execute_query_builds_transport_with_tls_verification(valid_settin
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = BasePipefyClient(settings=valid_settings, auth=_bearer())
+        base = HttpxGraphQLExecutor(settings=valid_settings, auth=_bearer())
         await base.execute_query(query, variables)
 
     mock_transport_cls.assert_called_once()
@@ -59,7 +59,7 @@ async def test_execute_query_passes_variables_to_session(valid_settings):
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = BasePipefyClient(settings=valid_settings, auth=_bearer())
+        base = HttpxGraphQLExecutor(settings=valid_settings, auth=_bearer())
         result = await base.execute_query(query, variables)
 
     mock_session.execute.assert_called_once()
@@ -85,7 +85,7 @@ async def test_execute_query_omits_variable_values_for_empty_dict(valid_settings
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = BasePipefyClient(settings=valid_settings, auth=_bearer())
+        base = HttpxGraphQLExecutor(settings=valid_settings, auth=_bearer())
         await base.execute_query(query, variables)
 
     request = mock_session.execute.call_args[0][0]
@@ -120,7 +120,7 @@ async def test_execute_query_reuse_fetches_once_then_passes_cached_schema(
         second.schema = None
         mock_client_cls.side_effect = [first, second]
 
-        base = BasePipefyClient(settings=settings, auth=_bearer())
+        base = HttpxGraphQLExecutor(settings=settings, auth=_bearer())
         assert await base.execute_query(query, variables) == {"one": 1}
         assert await base.execute_query(query, variables) == {"two": 2}
 
@@ -149,7 +149,7 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged(valid_settings)
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = BasePipefyClient(settings=valid_settings, auth=_bearer())
+        base = HttpxGraphQLExecutor(settings=valid_settings, auth=_bearer())
 
         with pytest.raises(RuntimeError) as exc:
             await base.execute_query(query, variables)
@@ -159,9 +159,9 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged(valid_settings)
 
 @pytest.mark.unit
 def test_init_accepts_url_override():
-    """``url_override`` lets callers point a BasePipefyClient at a sibling endpoint."""
+    """``url_override`` lets callers point an executor at a sibling endpoint."""
     settings = PipefySettings(base_url="https://api.pipefy.com")
-    base = BasePipefyClient(
+    base = HttpxGraphQLExecutor(
         settings=settings,
         auth=_bearer(),
         url_override="https://api.pipefy.com/graphql/interfaces",
@@ -173,5 +173,5 @@ def test_init_accepts_url_override():
 def test_init_defaults_to_settings_graphql_url():
     """Without ``url_override`` the client uses ``settings.graphql_url``."""
     settings = PipefySettings(base_url="https://api.pipefy.com")
-    base = BasePipefyClient(settings=settings, auth=_bearer())
+    base = HttpxGraphQLExecutor(settings=settings, auth=_bearer())
     assert base._graphql_url == "https://api.pipefy.com/graphql"

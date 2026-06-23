@@ -1,9 +1,9 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from _shared.mock_clients import mock_executor
 
 from pipefy_sdk.client import PipefyClient
-from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.services.card_service import CardService
 from pipefy_sdk.services.pipe_config_service import PipeConfigService
 from pipefy_sdk.services.pipe_service import PipeService
@@ -17,9 +17,7 @@ def _make_facade_client(execute_return_value: dict):
 
     Returns (client, mock_execute_query) so tests can inspect call args.
     """
-    mock_execute = AsyncMock(return_value=execute_return_value)
-    executor = MagicMock(spec=GraphQLExecutor)
-    executor.execute_query = mock_execute
+    executor = mock_executor(execute_return_value)
 
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = PipeService(executor=executor)
@@ -29,7 +27,7 @@ def _make_facade_client(execute_return_value: dict):
     )
     client._introspection_service = SchemaIntrospectionService(executor=executor)
 
-    return client, mock_execute
+    return client, executor.execute_query
 
 
 @pytest.mark.unit

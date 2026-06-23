@@ -3,7 +3,7 @@
 import copy
 import re
 import uuid
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from _shared.ai_agent_test_payloads import (
@@ -66,10 +66,11 @@ def _make_action_dict(name="Move card", action_type="move_card"):
     return {"name": name, "actionType": action_type, "metadata": {}}
 
 
-def _create_mock_service(execute_return=None):
+def _create_mock_service(execute_return=None, *, side_effect=None):
     """Create an AiAgentService with a mocked executor."""
     executor = mock_executor(
-        execute_return or {"createAiAgent": {"agent": {"uuid": "abc-123"}}}
+        execute_return or {"createAiAgent": {"agent": {"uuid": "abc-123"}}},
+        side_effect=side_effect,
     )
     service = AiAgentService(executor=executor)
     return service, executor
@@ -345,8 +346,7 @@ async def test_update_agent_calls_inject_reference_ids():
 @pytest.mark.asyncio
 async def test_create_agent_propagates_execute_query_error():
     """create_agent propagates errors when execute_query raises."""
-    service, executor = _create_mock_service()
-    executor.execute_query = AsyncMock(side_effect=ValueError("GraphQL error"))
+    service, _ = _create_mock_service(side_effect=ValueError("GraphQL error"))
     inp = CreateAiAgentInput(
         name="Test",
         repo_uuid="repo-1",
@@ -362,8 +362,7 @@ async def test_create_agent_propagates_execute_query_error():
 @pytest.mark.asyncio
 async def test_update_agent_propagates_execute_query_error():
     """update_agent propagates errors when execute_query raises."""
-    service, executor = _create_mock_service()
-    executor.execute_query = AsyncMock(side_effect=RuntimeError("Network error"))
+    service, _ = _create_mock_service(side_effect=RuntimeError("Network error"))
     inp = UpdateAiAgentInput(
         uuid="agent-uuid",
         name="Agent",
@@ -438,8 +437,7 @@ async def test_toggle_agent_status_disable_returns_correct_message():
 @pytest.mark.asyncio
 async def test_toggle_agent_status_propagates_error():
     """toggle_agent_status propagates errors when execute_query raises."""
-    service, executor = _create_mock_service()
-    executor.execute_query = AsyncMock(side_effect=RuntimeError("Network error"))
+    service, _ = _create_mock_service(side_effect=RuntimeError("Network error"))
 
     with pytest.raises(RuntimeError, match="Network error"):
         await service.toggle_agent_status("agent-uuid", True)

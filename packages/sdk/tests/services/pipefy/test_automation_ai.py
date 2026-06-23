@@ -6,8 +6,6 @@ service-account credentials. These tests assert the ``aiParams`` envelope and th
 ``AutomationServiceResult`` return shape.
 """
 
-from unittest.mock import AsyncMock
-
 import pytest
 from _shared.mock_clients import mock_executor
 
@@ -19,8 +17,8 @@ from pipefy_sdk.models.ai_automation import (
 from pipefy_sdk.services.automation_service import AutomationService
 
 
-def _make_service(return_value: dict):
-    executor = mock_executor(return_value)
+def _make_service(return_value: dict, *, side_effect=None):
+    executor = mock_executor(return_value, side_effect=side_effect)
     service = AutomationService(executor=executor)
     return service, executor
 
@@ -202,8 +200,7 @@ async def test_create_raises_on_error_details():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_create_propagates_execute_query_error():
-    service, executor = _make_service({})
-    executor.execute_query = AsyncMock(side_effect=ValueError("GraphQL error"))
+    service, _ = _make_service({}, side_effect=ValueError("GraphQL error"))
 
     with pytest.raises(ValueError, match="GraphQL error"):
         await service.create_ai_automation(_create_input())
@@ -347,8 +344,7 @@ async def test_update_raises_on_error_details():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_propagates_execute_query_error():
-    service, executor = _make_service({})
-    executor.execute_query = AsyncMock(side_effect=RuntimeError("Network error"))
+    service, _ = _make_service({}, side_effect=RuntimeError("Network error"))
 
     with pytest.raises(RuntimeError, match="Network error"):
         await service.update_ai_automation(UpdateAiAutomationInput(automation_id="123"))

@@ -7,10 +7,9 @@ import logging
 from typing import Any
 
 from gql.transport.exceptions import TransportQueryError
-from httpx import Auth
 
-from pipefy_sdk.base_client import BasePipefyClient
 from pipefy_sdk.exceptions import PortalPermissionError
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.models.portal import (
     CreatePortalElementInput,
     CreatePortalInput,
@@ -40,8 +39,6 @@ from pipefy_sdk.queries.portal_queries import (
     UPDATE_PAGE_LAYOUT_MUTATION,
     UPDATE_PAGE_MUTATION,
 )
-from pipefy_sdk.services.internal_api_client import InternalApiClient
-from pipefy_sdk.settings import PipefySettings
 from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
 from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
@@ -212,36 +209,29 @@ def _normalize_portal_detail(portal: dict[str, Any]) -> dict[str, Any]:
 class PortalService:
     """GraphQL operations for Pipefy portals across multiple endpoints.
 
-    Composes two ``BasePipefyClient`` instances (Interfaces + public GraphQL) instead
-    of inheriting because the Interfaces schema lives on a separate endpoint. When
-    constructing outside ``PipefyClient``, pass a shared ``auth`` to both clients so
-    OAuth token caching is not duplicated.
+    Takes three executors because portal operations span three endpoints: the
+    public GraphQL schema, the Interfaces schema, and the internal_api endpoint
+    for sub-portal wiring. The composition root builds all three from one shared
+    ``auth`` so OAuth token caching is not duplicated.
     """
 
     def __init__(
         self,
-        settings: PipefySettings,
         *,
-        auth: Auth,
-        internal_api_client: InternalApiClient,
+        public_executor: GraphQLExecutor,
+        interfaces_executor: GraphQLExecutor,
+        internal_executor: GraphQLExecutor,
     ) -> None:
-        """Wire clients for the Interfaces schema and internal_api mutations.
+        """Wire the public, Interfaces, and internal_api executors.
 
         Args:
-            settings: Pipefy endpoints and credentials.
-            auth: Shared OAuth or bearer auth for GraphQL transports.
-            internal_api_client: Client for sub-portal element wiring mutations.
+            public_executor: Public GraphQL executor (organization-uuid resolution).
+            interfaces_executor: Executor aimed at the Interfaces schema endpoint.
+            internal_executor: Executor for sub-portal element wiring mutations.
         """
-        self._interfaces_client = BasePipefyClient(
-            settings=settings,
-            auth=auth,
-            url_override=settings.interfaces_graphql_url,
-        )
-        self._graphql_client = BasePipefyClient(
-            settings=settings,
-            auth=auth,
-        )
-        self._internal_api_client = internal_api_client
+        self._public_executor = public_executor
+        self._interfaces_executor = interfaces_executor
+        self._internal_executor = internal_executor
 
     async def execute_interfaces_query(
         self,
@@ -254,7 +244,7 @@ class PortalService:
             query: GraphQL document string.
             variables: Variable map for the operation.
         """
-        return await self._interfaces_client.execute_query(query, variables)
+        return await self._interfaces_executor.execute_query(query, variables)
 
     async def execute_internal_api_query(
         self,
@@ -267,7 +257,7 @@ class PortalService:
             query: GraphQL document string.
             variables: Variable map for the operation.
         """
-        return await self._internal_api_client.execute_query(query, variables)
+        return await self._internal_executor.execute_query(query, variables)
 
     async def list_portals(
         self,
@@ -281,7 +271,7 @@ class PortalService:
             search_term: Optional name filter forwarded as ``searchTerm``.
         """
         resolved_org_uuid = await resolve_organization_uuid(
-            self._graphql_client.execute_query,
+            self._public_executor.execute_query,
             organization_uuid,
         )
         variables: dict[str, Any] = {
@@ -325,7 +315,7 @@ class PortalService:
             {"organization_uuid": organization_uuid}
         )
         resolved_org_uuid = await resolve_organization_uuid(
-            self._graphql_client.execute_query,
+            self._public_executor.execute_query,
             portal_input.organization_uuid,
         )
         data = await _execute_interfaces_query_with_portal_errors(

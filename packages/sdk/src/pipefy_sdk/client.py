@@ -126,9 +126,11 @@ class PipefyClient:
             executor=public_executor
         )
         self._portal_service = PortalService(
-            settings=settings,
-            auth=auth,
-            internal_api_client=self._internal_api_client,
+            public_executor=public_executor,
+            interfaces_executor=HttpxGraphQLExecutor(
+                settings, auth=auth, url_override=settings.interfaces_graphql_url
+            ),
+            internal_executor=self._internal_api_client,
         )
 
     async def get_pipe(self, pipe_id: str | int) -> dict:

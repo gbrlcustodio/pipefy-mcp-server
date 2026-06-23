@@ -95,11 +95,7 @@ class PipefyClient:
             settings=settings, auth=auth, pipe_service=self._pipe_service
         )
         self._table_service = TableService(settings=settings, auth=auth)
-        self._internal_api_client = InternalApiClient(
-            url=settings.internal_api_url,
-            auth=auth,
-            allow_insecure_urls=settings.allow_insecure_urls,
-        )
+        self._internal_api_client = InternalApiClient(settings, auth=auth)
         self._relation_service = RelationService(
             settings=settings,
             auth=auth,

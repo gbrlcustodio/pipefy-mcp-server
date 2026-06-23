@@ -156,7 +156,7 @@ def relation_card_delete(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Remove a card relation (requires service-account credentials; internal API)."""
+    """Remove a card relation (internal API, requires OAuth)."""
 
     confirm_destructive(
         yes=yes,

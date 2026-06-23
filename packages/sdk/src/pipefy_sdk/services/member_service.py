@@ -5,11 +5,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from httpx import Auth
 from pydantic import ValidationError
 
-from pipefy_sdk.base_client import BasePipefyClient
-from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.models.member_invite import MemberInvite
 from pipefy_sdk.queries.member_queries import (
     INVITE_MEMBERS_MUTATION,
@@ -17,7 +15,6 @@ from pipefy_sdk.queries.member_queries import (
     SET_ROLE_MUTATION,
 )
 from pipefy_sdk.services.pipe_service import PipeService
-from pipefy_sdk.settings import PipefySettings
 
 _PIPE_UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -35,20 +32,17 @@ def _format_member_invite_error(index: int, exc: ValidationError) -> str:
     return f"Invalid members[{index}].{loc}: {detail}"
 
 
-class MemberService(BasePipefyClient):
+class MemberService:
     """Invite, remove, and set roles for pipe members."""
 
     def __init__(
         self,
-        settings: PipefySettings,
         *,
-        auth: Auth,
-        pipe_service: PipeService | None = None,
+        executor: GraphQLExecutor,
+        pipe_service: PipeService,
     ) -> None:
-        super().__init__(settings=settings, auth=auth)
-        self._pipe_service = pipe_service or PipeService(
-            executor=HttpxGraphQLExecutor(settings, auth=auth)
-        )
+        self._executor = executor
+        self._pipe_service = pipe_service
 
     async def invite_members(
         self,
@@ -70,7 +64,7 @@ class MemberService(BasePipefyClient):
             validated.append(
                 {"email": str(inv.email), "role_name": inv.role_name.strip()}
             )
-        return await self.execute_query(
+        return await self._executor.execute_query(
             INVITE_MEMBERS_MUTATION,
             {"input": {"pipe_id": str(pipe_id), "emails": validated}},
         )
@@ -119,7 +113,7 @@ class MemberService(BasePipefyClient):
                     id_to_uuid[str(u.get("id"))] = u["uuid"]
             user_uuids = [id_to_uuid.get(str(uid), uid) for uid in user_ids]
 
-        return await self.execute_query(
+        return await self._executor.execute_query(
             REMOVE_MEMBERS_FROM_PIPE_MUTATION,
             {
                 "input": {
@@ -142,7 +136,7 @@ class MemberService(BasePipefyClient):
             member_id: User ID of the member.
             role_name: New role name (e.g. 'member', 'admin').
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             SET_ROLE_MUTATION,
             {
                 "input": {

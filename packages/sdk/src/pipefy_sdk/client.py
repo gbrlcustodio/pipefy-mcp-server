@@ -104,8 +104,7 @@ class PipefyClient:
             internal_api_client=self._internal_api_client,
         )
         self._member_service = MemberService(
-            settings=settings,
-            auth=auth,
+            executor=public_executor,
             pipe_service=self._pipe_service,
         )
         self._webhook_service = WebhookService(
@@ -120,8 +119,7 @@ class PipefyClient:
         self._organization_service = OrganizationService(executor=public_executor)
         self._user_service = UserService(executor=public_executor)
         self._attachment_service = AttachmentService(
-            settings=settings,
-            auth=auth,
+            executor=public_executor,
             card_service=self._card_service,
             table_service=self._table_service,
         )

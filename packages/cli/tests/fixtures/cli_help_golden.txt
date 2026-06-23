@@ -2414,8 +2414,7 @@ Usage: pipefy relation card [OPTIONS] COMMAND [ARGS]...
 │ list     List parent and child relations for a card (raw                     │
 │          ``get_card_relations`` payload).                                    │
 │ create   Link two cards via an existing pipe relation.                       │
-│ delete   Remove a card relation (requires service-account credentials;       │
-│          internal API).                                                      │
+│ delete   Remove a card relation (internal API, requires OAuth).              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP relation/card/create
@@ -2436,7 +2435,7 @@ Usage: pipefy relation card create [OPTIONS]
 ### HELP relation/card/delete
 Usage: pipefy relation card delete [OPTIONS]
 
- Remove a card relation (requires service-account credentials; internal API).
+ Remove a card relation (internal API, requires OAuth).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --child           TEXT  Child card id. [required]                         │

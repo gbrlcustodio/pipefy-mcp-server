@@ -39,7 +39,7 @@ _PORTAL_ORG_SKIP = (
 
 @pytest.fixture
 def live_portal_service() -> PortalService:
-    """PortalService with live Interfaces + internal_api for sub-portal mutations."""
+    """PortalService with live Interfaces + Internal API for sub-portal mutations."""
     require_live_creds()
     ex = build_executors(live_pipefy_settings(), live_resolved_auth())
     return PortalService(
@@ -290,7 +290,7 @@ async def test_live_create_portal_element_on_bootstrapped_page(
 async def test_live_publish_sub_portal_cycle(
     live_portal_service: PortalService,
 ) -> None:
-    """Publish then unpublish a sub-portal on a templated forms element (internal_api)."""
+    """Publish then unpublish a sub-portal on a templated forms element (Internal API)."""
     org_uuid = _require_portal_org_uuid()
     sub_portal_uuid: str | None = None
 

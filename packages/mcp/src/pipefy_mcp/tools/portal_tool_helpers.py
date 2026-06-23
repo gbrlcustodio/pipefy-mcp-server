@@ -101,7 +101,7 @@ def finalize_internal_api_mutation(
     mutation_key: str,
     failure_message: str,
 ) -> dict[str, object]:
-    """Map an internal_api mutation result to MCP success or failure payloads.
+    """Map an Internal API mutation result to MCP success or failure payloads.
 
     Args:
         result: Raw GraphQL response dict from the SDK.
@@ -126,7 +126,7 @@ async def run_sub_portal_internal_api_tool(
     mutation_key: str,
     failure_message: str,
 ) -> dict[str, object]:
-    """Shared shell for sub-portal internal_api write tools.
+    """Shared shell for sub-portal Internal API write tools.
 
     Args:
         ids: Tool ID parameters to validate (name -> raw value).

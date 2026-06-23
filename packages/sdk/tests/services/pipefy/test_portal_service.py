@@ -28,7 +28,7 @@ from pipefy_sdk.services.portal_service import PortalService
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_interfaces_query_routes_through_interfaces_client() -> None:
-    """Representative Interfaces call delegates to the interfaces GraphQL executor."""
+    """Representative Interfaces call delegates to the Interfaces GraphQL executor."""
     interfaces = mock_executor({"interfaces": {"edges": []}})
     service = PortalService(
         public_executor=mock_executor(),
@@ -392,14 +392,14 @@ except ModuleNotFoundError:
 
 
 def _portal_internal_mutation_constant(name: str):
-    """Return the internal_api mutation constant when exported; else None (TDD)."""
+    """Return the Internal API mutation constant when exported; else None (TDD)."""
     if _portal_internal_queries_module is None:
         return None
     return getattr(_portal_internal_queries_module, name, None)
 
 
 def _assert_internal_mutation_query(query_used: object, constant_name: str) -> None:
-    """Assert internal_api mutation document matches the expected constant."""
+    """Assert Internal API mutation document matches the expected constant."""
     expected = _portal_internal_mutation_constant(constant_name)
     if expected is not None:
         assert query_used is expected
@@ -417,7 +417,7 @@ def _make_portal_service_with_clients(
     interfaces_return: dict | None = None,
     internal_return: dict | None = None,
 ) -> tuple[PortalService, MagicMock, MagicMock]:
-    """PortalService with mocked Interfaces and internal_api clients."""
+    """PortalService with mocked Interfaces and Internal API clients."""
     interfaces = mock_executor(interfaces_return)
     internal = mock_executor(internal_return)
     service = PortalService(
@@ -1142,7 +1142,7 @@ async def test_create_sub_portal_omits_name_when_not_provided() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_update_sub_portal_element_routes_through_internal_api() -> None:
-    """update_sub_portal_element uses internal_api updateSubPortalElement."""
+    """update_sub_portal_element uses Internal API updateSubPortalElement."""
     internal_response = {"updateSubPortalElement": {"success": True}}
     service, interfaces_client, internal_client = _make_portal_service_with_clients(
         internal_return=internal_response,
@@ -1215,7 +1215,7 @@ async def test_unpublish_sub_portal_sends_null_sub_portal_uuid() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_sub_portal_element_routes_through_internal_api() -> None:
-    """delete_sub_portal_element uses internal_api deleteSubPortalElement."""
+    """delete_sub_portal_element uses Internal API deleteSubPortalElement."""
     internal_response = {"deleteSubPortalElement": {"success": True}}
     service, interfaces_client, internal_client = _make_portal_service_with_clients(
         internal_return=internal_response,
@@ -1292,7 +1292,7 @@ async def test_sub_portal_internal_api_permission_denied_surfaces_actionable_mes
     method_name: str,
     call_args: tuple[str, ...],
 ) -> None:
-    """PERMISSION_DENIED from internal_api maps to portal permission guidance."""
+    """PERMISSION_DENIED from the Internal API maps to portal permission guidance."""
     service, _interfaces_client, internal_client = _make_portal_service_with_clients()
     internal_client.execute_query = AsyncMock(
         side_effect=_INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR
@@ -1305,7 +1305,7 @@ async def test_sub_portal_internal_api_permission_denied_surfaces_actionable_mes
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_sub_portal_internal_api_non_permission_value_error_propagates() -> None:
-    """Non-permission internal_api ValueError must not become PortalPermissionError."""
+    """Non-permission Internal API ValueError must not become PortalPermissionError."""
     service, _interfaces_client, internal_client = _make_portal_service_with_clients()
     bad_request = ValueError("Bad request [code=BAD_REQUEST] [correlation_id=abc-123]")
     internal_client.execute_query = AsyncMock(side_effect=bad_request)

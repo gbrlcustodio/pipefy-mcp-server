@@ -40,7 +40,7 @@ def _validate_forms_metadata(metadata: dict[str, Any]) -> None:
 
 
 def _validate_sub_portal_metadata(metadata: dict[str, Any]) -> None:
-    """Allow empty metadata until wired via internal_api; validate optional keys."""
+    """Allow empty metadata until wired via the Internal API; validate optional keys."""
     sub_portal_uuid = metadata.get("subPortalUuid")
     if sub_portal_uuid is None:
         return

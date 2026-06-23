@@ -526,7 +526,7 @@ class PipeTools:
 
             Requires service-account credentials (PIPEFY_SERVICE_ACCOUNT_CLIENT_ID,
             PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET) because the ``deleteCardRelation``
-            mutation is only available on the internal API, not the public GraphQL schema.
+            mutation is only available on the Internal API, not the public GraphQL schema.
 
             Args:
                 child_id: Child card ID in the relation.

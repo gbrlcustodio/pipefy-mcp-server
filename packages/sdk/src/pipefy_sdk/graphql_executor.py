@@ -60,14 +60,14 @@ class HttpxGraphQLExecutor:
         on_graphql_error: Callable[[list[dict]], str] | None = None,
     ) -> None:
         # ``url_override`` lets callers point this executor at a sibling endpoint
-        # (e.g. the interfaces or internal_api URL derived from the same
+        # (e.g. the Interfaces or Internal API URL derived from the same
         # ``settings``) without mutating the shared settings object. Defaults to
         # ``settings.graphql_url``.
         self.settings = settings
         self._auth = auth
         self._graphql_url = url_override or settings.graphql_url
         # When set, ``TransportQueryError`` is converted to ``ValueError`` using the
-        # formatter's output. Used by the internal_api executor to surface its
+        # formatter's output. Used by the Internal API executor to surface its
         # ``[code=…] [correlation_id=…]`` envelope; ``None`` leaves gql exceptions
         # untouched (the public executor's behaviour).
         self._on_graphql_error = on_graphql_error

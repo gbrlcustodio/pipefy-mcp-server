@@ -203,7 +203,7 @@ def build_ai_tool_error(message: str) -> AiToolErrorPayload:
     """Generic AI-tool failure envelope.
 
     Does not alter ``message``; callers must pass user-safe text (sanitized when
-    the source is the internal_api executor / GraphQL errors with diagnostic suffixes).
+    the source is the Internal API executor / GraphQL errors with diagnostic suffixes).
 
     Args:
         message: User-visible failure reason.

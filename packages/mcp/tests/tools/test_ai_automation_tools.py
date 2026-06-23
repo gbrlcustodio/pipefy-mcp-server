@@ -450,7 +450,7 @@ class TestDeleteAiAutomation:
         mock_pipefy_client_no_ai,
         extract_payload,
     ):
-        """Delete uses public GraphQL, not internal_api — OAuth is not required."""
+        """Delete uses public GraphQL, not the Internal API. OAuth is not required."""
         mock_pipefy_client_no_ai.delete_automation.return_value = {"success": True}
         async with client_session_no_ai as session:
             result = await session.call_tool(

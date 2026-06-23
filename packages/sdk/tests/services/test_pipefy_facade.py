@@ -735,7 +735,7 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
         return_value={"deleteCardRelation": {"success": True}}
     )
 
-    # Pin the snake_case input keys that the internal API expects
+    # Pin the snake_case input keys that the Internal API expects
     rendered = print_ast(INTERNAL_DELETE_CARD_RELATION_MUTATION.document)
     assert "child_id: $childId" in rendered
     assert "parent_id: $parentId" in rendered
@@ -753,7 +753,7 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_sub_portal_mutation_routes_through_internal_api_client(mock_settings):
-    """A sub-portal mutation reaches the internal_api client the facade builds at
+    """A sub-portal mutation reaches the Internal API client the facade builds at
     construction; PortalService and the facade share that one instance."""
     client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
     client._internal_executor.execute_query = AsyncMock(

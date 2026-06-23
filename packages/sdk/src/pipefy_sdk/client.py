@@ -965,7 +965,7 @@ class PipefyClient:
         parent_id: str | int,
         source_id: str | int,
     ) -> dict:
-        """Delete a relation link between two cards (internal API, requires OAuth)."""
+        """Delete a relation link between two cards (Internal API, requires OAuth)."""
         return await self._relation_service.delete_card_relation(
             child_id, parent_id, source_id
         )

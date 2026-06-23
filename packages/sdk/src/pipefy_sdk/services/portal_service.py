@@ -1,4 +1,4 @@
-"""Service for Pipefy portal operations (Interfaces + internal_api routing)."""
+"""Service for Pipefy portal operations (Interfaces + Internal API routing)."""
 
 from __future__ import annotations
 
@@ -137,7 +137,7 @@ async def _execute_internal_api_query_with_portal_errors(
     query: str,
     variables: dict[str, Any],
 ) -> dict[str, Any]:
-    """Run an internal_api operation and map portal permission failures."""
+    """Run an Internal API operation and map portal permission failures."""
     try:
         return await execute(query, variables)
     except ValueError as exc:
@@ -224,7 +224,7 @@ class PortalService:
         interfaces_executor: GraphQLExecutor,
         internal_executor: GraphQLExecutor,
     ) -> None:
-        """Wire the public, Interfaces, and internal_api executors.
+        """Wire the public, Interfaces, and Internal API executors.
 
         Args:
             public_executor: Public GraphQL executor (organization-uuid resolution).
@@ -253,7 +253,7 @@ class PortalService:
         query: DocumentNode,
         variables: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute a GraphQL query or mutation on the internal_api endpoint.
+        """Execute a GraphQL query or mutation on the Internal API endpoint.
 
         Args:
             query: Parsed GraphQL document (``gql()`` output).
@@ -694,7 +694,7 @@ class PortalService:
         element_id: str,
         sub_portal_uuid: str,
     ) -> dict[str, Any]:
-        """Attach a sub-portal to a portal page element (internal_api).
+        """Attach a sub-portal to a portal page element (Internal API).
 
         Args:
             portal_uuid: Main portal interface UUID.
@@ -764,7 +764,7 @@ class PortalService:
         portal_uuid: str,
         element_id: str,
     ) -> dict[str, Any]:
-        """Remove sub-portal wiring from a page element (internal_api).
+        """Remove sub-portal wiring from a page element (Internal API).
 
         Args:
             portal_uuid: Main portal interface UUID.
@@ -777,7 +777,7 @@ class PortalService:
         )
 
     async def delete_sub_portal(self, uuid: str) -> dict[str, Any]:
-        """Delete a sub-portal entity (irreversible; internal_api).
+        """Delete a sub-portal entity (irreversible; Internal API).
 
         Args:
             uuid: Sub-portal UUID.

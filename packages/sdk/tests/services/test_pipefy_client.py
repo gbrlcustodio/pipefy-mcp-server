@@ -527,7 +527,7 @@ async def test_update_card_incremental_mode_value_format_conversion():
 
 
 # ============================================================================
-# Regression tests for remaining public API methods (lock compatibility)
+# Regression tests for remaining Public API methods (lock compatibility)
 # ============================================================================
 
 

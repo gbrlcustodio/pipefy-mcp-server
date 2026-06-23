@@ -175,10 +175,10 @@ class RelationService:
         parent_id: str | int,
         source_id: str | int,
     ) -> dict[str, Any]:
-        """Delete a relation link between two cards (internal API, requires OAuth).
+        """Delete a relation link between two cards (Internal API, requires OAuth).
 
         The ``deleteCardRelation`` mutation is not exposed on the public GraphQL
-        schema, only on the internal API (core_api / internal_v1), so it routes
+        schema, only on the Internal API (core_api / internal_v1), so it routes
         through the injected internal executor rather than the public one.
 
         Args:

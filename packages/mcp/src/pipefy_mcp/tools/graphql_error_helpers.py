@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 
-# Suffixes appended by the internal_api executor for service-layer diagnostics;
+# Suffixes appended by the Internal API executor for service-layer diagnostics;
 # MCP tools strip these from default user-visible errors.
 _INTERNAL_API_CODE_SUFFIX_RE = re.compile(r"\s*\[code=[^\]]*\]")
 _INTERNAL_API_CORRELATION_SUFFIX_RE = re.compile(r"\s*\[correlation_id=[^\]]*\]")
@@ -76,7 +76,7 @@ def _try_extract_message_from_dict_repr(raw: str) -> str | None:
 def strip_internal_api_diagnostic_markers(message: str) -> str:
     """Remove ``[code=…]`` / ``[correlation_id=…]`` markers from a message string.
 
-    The internal_api executor appends these to GraphQL error text for logs and
+    The Internal API executor appends these to GraphQL error text for logs and
     tests. Multiple occurrences (e.g. ``; ``-joined errors) are all removed.
 
     Args:
@@ -88,7 +88,7 @@ def strip_internal_api_diagnostic_markers(message: str) -> str:
 
 
 def extract_internal_api_bracket_codes(message: str) -> list[str]:
-    """Collect distinct ``code`` values from ``[code=…]`` markers (internal_api executor).
+    """Collect distinct ``code`` values from ``[code=…]`` markers (Internal API executor).
 
     Args:
         message: Raw exception text before stripping markers.

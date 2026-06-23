@@ -1,7 +1,7 @@
-"""Unit tests for the internal_api executor and PipefySettings.internal_api_url.
+"""Unit tests for the Internal API executor and PipefySettings.internal_api_url.
 
 These tests intentionally assert the full GraphQL error text produced by the
-internal_api executor (the ``HttpxGraphQLExecutor`` that ``build_executors``
+Internal API executor (the ``HttpxGraphQLExecutor`` that ``build_executors``
 aims at ``internal_api_url`` with the ``[code=...]`` / ``[correlation_id=...]``
 envelope formatter).
 """

@@ -1,6 +1,6 @@
-"""GraphQL mutations for portal sub-portals (internal_api endpoint).
+"""GraphQL mutations for portal sub-portals (Internal API endpoint).
 
-These run through the internal_api executor, which accepts a ``gql()`` query like
+These run through the Internal API executor, which accepts a ``gql()`` query like
 every other executor.
 """
 

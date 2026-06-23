@@ -27,7 +27,7 @@ from pipefy_sdk.services.portal_service import PortalService
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_interfaces_query_routes_through_interfaces_client() -> None:
-    """Representative Interfaces call delegates to the interfaces executor."""
+    """Representative Interfaces call delegates to the interfaces GraphQL executor."""
     interfaces = mock_executor({"interfaces": {"edges": []}})
     service = PortalService(
         public_executor=mock_executor(),
@@ -49,7 +49,7 @@ async def test_interfaces_query_routes_through_interfaces_client() -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_sub_portal_element_call_routes_through_internal_api_client() -> None:
-    """Sub-portal wiring mutations delegate to the internal executor."""
+    """Sub-portal wiring mutations delegate to the internal GraphQL executor."""
     internal = mock_executor({"updateSubPortalElement": {}})
     service = PortalService(
         public_executor=mock_executor(),

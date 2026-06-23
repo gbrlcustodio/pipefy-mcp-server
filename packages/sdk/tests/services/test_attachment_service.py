@@ -36,7 +36,7 @@ def _make_service(
     """Build an AttachmentService with mocked collaborators.
 
     Wires:
-    - the injected executor to return ``presigned_payload`` if given.
+    - the injected GraphQL executor to return ``presigned_payload`` if given.
     - The injected ``S3Uploader`` to return ``status_code=s3_status``.
     - ``card_service`` / ``table_service`` to ``AsyncMock`` defaults.
     """

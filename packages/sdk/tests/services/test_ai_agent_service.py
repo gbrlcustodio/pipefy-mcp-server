@@ -67,7 +67,7 @@ def _make_action_dict(name="Move card", action_type="move_card"):
 
 
 def _create_mock_service(execute_return=None, *, side_effect=None):
-    """Create an AiAgentService with a mocked executor."""
+    """Create an AiAgentService with a mocked GraphQL executor."""
     executor = mock_executor(
         execute_return or {"createAiAgent": {"agent": {"uuid": "abc-123"}}},
         side_effect=side_effect,

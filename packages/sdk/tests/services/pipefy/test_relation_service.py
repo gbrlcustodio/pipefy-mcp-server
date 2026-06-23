@@ -17,7 +17,7 @@ from pipefy_sdk.services.relation_service import RelationService
 
 
 def _make_service(return_value: dict | None = None, *, side_effect=None):
-    """Build a RelationService whose public executor is faked.
+    """Build a RelationService whose public GraphQL executor is faked.
 
     These tests never touch the internal executor, so it gets a stand-in; the
     constructor requires one. Pass ``side_effect`` for the error-path tests.
@@ -225,7 +225,7 @@ async def test_create_card_relation_transport_error():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_card_relation_routes_through_internal_executor():
-    """delete_card_relation uses the injected internal executor, not the public
+    """delete_card_relation uses the injected internal GraphQL executor, not the public
     one, because the mutation only exists on the internal schema."""
     internal = mock_executor({"deleteCardRelation": {"success": True}})
     service = RelationService(executor=mock_executor(), internal_executor=internal)

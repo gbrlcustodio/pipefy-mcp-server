@@ -252,7 +252,7 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
     assert await client.update_webhook("w1", name="X") == {"ok": "update_webhook"}
     webhook_service.update_webhook.assert_awaited_once_with("w1", name="X")
 
-    # delete_card_relation routes through the internal executor (not CardService),
+    # delete_card_relation routes through the internal GraphQL executor (not CardService),
     # tested separately below.
 
     assert await client.get_card(4) == {"ok": "card"}
@@ -599,7 +599,7 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert isinstance(client._ai_agent_service, AiAgentService)
     assert isinstance(client._attachment_service, AttachmentService)
     assert isinstance(client._introspection_service, SchemaIntrospectionService)
-    # Converted public services share one executor instance (one token cache).
+    # Converted public services share one GraphQL executor instance (one token cache).
     shared_executor = client._pipe_service._executor
     assert client._card_service._executor is shared_executor
     assert client._table_service._executor is shared_executor

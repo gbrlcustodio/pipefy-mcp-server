@@ -14,6 +14,7 @@ from _shared.fixture_ids import (
     EXAMPLE_OTHER_ORG_UUID,
     EXAMPLE_PIPE_REPO_ID,
 )
+from _shared.mock_clients import mock_internal_api_client
 from gql.transport.exceptions import TransportQueryError
 from httpx_auth import OAuth2ClientCredentials
 from pydantic import ValidationError
@@ -21,7 +22,6 @@ from pydantic import ValidationError
 from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.queries.observability_queries import RESOLVE_ORGANIZATION_UUID_QUERY
 from pipefy_sdk.queries.portal_queries import GET_PORTAL_QUERY, LIST_PORTALS_QUERY
-from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.services.portal_service import PortalService
 from pipefy_sdk.settings import PipefySettings
 
@@ -46,9 +46,7 @@ def mock_auth() -> OAuth2ClientCredentials:
 
 
 def _mock_internal_api_client() -> MagicMock:
-    mock = MagicMock(spec=InternalApiClient)
-    mock.execute_query = AsyncMock(return_value={"updateSubPortalElement": {}})
-    return mock
+    return mock_internal_api_client({"updateSubPortalElement": {}})
 
 
 @pytest.mark.unit

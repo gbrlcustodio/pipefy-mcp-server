@@ -1,7 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.graphql_executor import GraphQLExecutor
@@ -11,15 +10,6 @@ from pipefy_sdk.services.pipe_service import PipeService
 from pipefy_sdk.services.schema_introspection_service import (
     SchemaIntrospectionService,
 )
-from pipefy_sdk.settings import PipefySettings
-
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
-
-
-def _mock_settings() -> PipefySettings:
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
-    )
 
 
 def _make_facade_client(execute_return_value: dict):
@@ -27,7 +17,6 @@ def _make_facade_client(execute_return_value: dict):
 
     Returns (client, mock_execute_query) so tests can inspect call args.
     """
-    settings = _mock_settings()
     mock_execute = AsyncMock(return_value=execute_return_value)
     executor = MagicMock(spec=GraphQLExecutor)
     executor.execute_query = mock_execute
@@ -35,9 +24,10 @@ def _make_facade_client(execute_return_value: dict):
     client = PipefyClient.__new__(PipefyClient)
     client._pipe_service = PipeService(executor=executor)
     client._card_service = CardService(executor=executor)
-    client._pipe_config_service = PipeConfigService(settings=settings, auth=_TEST_AUTH)
+    client._pipe_config_service = PipeConfigService(
+        executor=executor, pipe_service=client._pipe_service
+    )
     client._introspection_service = SchemaIntrospectionService(executor=executor)
-    client._pipe_config_service.execute_query = mock_execute
 
     return client, mock_execute
 

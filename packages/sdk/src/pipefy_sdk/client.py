@@ -94,7 +94,7 @@ class PipefyClient:
         self._pipe_service = PipeService(executor=public_executor)
         self._card_service = CardService(executor=public_executor)
         self._pipe_config_service = PipeConfigService(
-            settings=settings, auth=auth, pipe_service=self._pipe_service
+            executor=public_executor, pipe_service=self._pipe_service
         )
         self._table_service = TableService(executor=public_executor)
         self._internal_api_client = InternalApiClient(settings, auth=auth)

@@ -5,10 +5,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from httpx import Auth
 from pipefy_infra.coerce import optional_str
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.label_color import normalize_label_color
 from pipefy_sdk.queries.pipe_config_queries import (
     CLONE_PIPE_MUTATION,
@@ -31,7 +30,6 @@ from pipefy_sdk.queries.pipe_config_queries import (
     UPDATE_PIPE_MUTATION,
 )
 from pipefy_sdk.services.pipe_service import PipeService
-from pipefy_sdk.settings import PipefySettings
 from pipefy_sdk.utils import (
     normalize_field_condition_actions,
     normalize_field_condition_payload,
@@ -48,17 +46,16 @@ _PHASE_FIELD_SLUG_RESOLVE_FETCH_FAILED = (
 )
 
 
-class PipeConfigService(BasePipefyClient):
+class PipeConfigService:
     """GraphQL mutations for pipe configuration (create, update, delete, clone)."""
 
     def __init__(
         self,
-        settings: PipefySettings,
         *,
-        auth: Auth,
-        pipe_service: PipeService | None = None,
+        executor: GraphQLExecutor,
+        pipe_service: PipeService,
     ) -> None:
-        super().__init__(settings=settings, auth=auth)
+        self._executor = executor
         self._pipe_service = pipe_service
 
     async def create_pipe(self, name: str, organization_id: str | int) -> dict:
@@ -66,7 +63,7 @@ class PipeConfigService(BasePipefyClient):
         variables: dict[str, Any] = {
             "input": {"name": name, "organization_id": str(organization_id)},
         }
-        return await self.execute_query(CREATE_PIPE_MUTATION, variables)
+        return await self._executor.execute_query(CREATE_PIPE_MUTATION, variables)
 
     async def update_pipe(self, pipe_id: str | int, **attrs: Any) -> dict:
         """Update a pipe by ID. Pass only Pipefy `UpdatePipeInput` fields (e.g. name, icon, color, preferences)."""
@@ -75,12 +72,12 @@ class PipeConfigService(BasePipefyClient):
             if value is not None:
                 payload[key] = value
         variables = {"input": payload}
-        return await self.execute_query(UPDATE_PIPE_MUTATION, variables)
+        return await self._executor.execute_query(UPDATE_PIPE_MUTATION, variables)
 
     async def delete_pipe(self, pipe_id: str | int) -> dict:
         """Delete a pipe by ID (permanent). Caller must enforce preview/confirm UX."""
         variables: dict[str, Any] = {"input": {"id": str(pipe_id)}}
-        return await self.execute_query(DELETE_PIPE_MUTATION, variables)
+        return await self._executor.execute_query(DELETE_PIPE_MUTATION, variables)
 
     async def clone_pipe(
         self,
@@ -92,7 +89,7 @@ class PipeConfigService(BasePipefyClient):
         if organization_id is not None:
             input_obj["organization_id"] = str(organization_id)
         variables = {"input": input_obj}
-        return await self.execute_query(CLONE_PIPE_MUTATION, variables)
+        return await self._executor.execute_query(CLONE_PIPE_MUTATION, variables)
 
     async def create_phase(
         self,
@@ -112,7 +109,9 @@ class PipeConfigService(BasePipefyClient):
             input_obj["index"] = float(index)
         if description is not None:
             input_obj["description"] = description
-        return await self.execute_query(CREATE_PHASE_MUTATION, {"input": input_obj})
+        return await self._executor.execute_query(
+            CREATE_PHASE_MUTATION, {"input": input_obj}
+        )
 
     async def update_phase(self, phase_id: str | int, **attrs: Any) -> dict:
         """Update a phase by ID. Pass only Pipefy `UpdatePhaseInput` fields (e.g. name, description, done)."""
@@ -120,11 +119,13 @@ class PipeConfigService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 payload[key] = value
-        return await self.execute_query(UPDATE_PHASE_MUTATION, {"input": payload})
+        return await self._executor.execute_query(
+            UPDATE_PHASE_MUTATION, {"input": payload}
+        )
 
     async def delete_phase(self, phase_id: str | int) -> dict:
         """Delete a phase by ID (permanent)."""
-        return await self.execute_query(
+        return await self._executor.execute_query(
             DELETE_PHASE_MUTATION, {"input": {"id": str(phase_id)}}
         )
 
@@ -151,7 +152,7 @@ class PipeConfigService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             CREATE_PHASE_FIELD_MUTATION, {"input": input_obj}
         )
 
@@ -177,11 +178,7 @@ class PipeConfigService(BasePipefyClient):
         uuid_val = attrs.get("uuid")
         raw_token = str(field_id).strip()
 
-        if (
-            uuid_val is None
-            and self._pipe_service is not None
-            and slug_like_field_token(raw_token)
-        ):
+        if uuid_val is None and slug_like_field_token(raw_token):
             resolved_uuid: str | None = None
             if phase_id is not None:
                 resolved_uuid = await self._resolve_phase_field_uuid_with_phase(
@@ -198,7 +195,9 @@ class PipeConfigService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 payload[key] = value
-        return await self.execute_query(UPDATE_PHASE_FIELD_MUTATION, {"input": payload})
+        return await self._executor.execute_query(
+            UPDATE_PHASE_FIELD_MUTATION, {"input": payload}
+        )
 
     @staticmethod
     def _field_rows_matching_token(
@@ -295,7 +294,7 @@ class PipeConfigService(BasePipefyClient):
         input_obj: dict[str, Any] = {"id": str(field_id)}
         if pipe_uuid is not None:
             input_obj["pipeUuid"] = pipe_uuid
-        return await self.execute_query(
+        return await self._executor.execute_query(
             DELETE_PHASE_FIELD_MUTATION,
             {"input": input_obj},
         )
@@ -319,7 +318,9 @@ class PipeConfigService(BasePipefyClient):
             "name": name,
             "color": normalize_label_color(color),
         }
-        return await self.execute_query(CREATE_LABEL_MUTATION, {"input": input_obj})
+        return await self._executor.execute_query(
+            CREATE_LABEL_MUTATION, {"input": input_obj}
+        )
 
     async def update_label(self, label_id: str | int, **attrs: Any) -> dict:
         """Update a label by ID.
@@ -336,7 +337,9 @@ class PipeConfigService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 payload[key] = value
-        return await self.execute_query(UPDATE_LABEL_MUTATION, {"input": payload})
+        return await self._executor.execute_query(
+            UPDATE_LABEL_MUTATION, {"input": payload}
+        )
 
     async def delete_label(self, label_id: str | int) -> dict:
         """Delete a label by ID (permanent).
@@ -344,7 +347,7 @@ class PipeConfigService(BasePipefyClient):
         Args:
             label_id: Label ID to delete.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             DELETE_LABEL_MUTATION, {"input": {"id": str(label_id)}}
         )
 
@@ -387,7 +390,7 @@ class PipeConfigService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             CREATE_FIELD_CONDITION_MUTATION, {"input": input_obj}
         )
 
@@ -425,7 +428,7 @@ class PipeConfigService(BasePipefyClient):
                 payload[key] = normalize_field_condition_actions(value)
             else:
                 payload[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             UPDATE_FIELD_CONDITION_MUTATION, {"input": payload}
         )
 
@@ -438,7 +441,7 @@ class PipeConfigService(BasePipefyClient):
         Returns:
             Dict with ``success`` bool from ``deleteFieldCondition``.
         """
-        response = await self.execute_query(
+        response = await self._executor.execute_query(
             DELETE_FIELD_CONDITION_MUTATION,
             {"input": {"id": condition_id}},
         )
@@ -452,7 +455,7 @@ class PipeConfigService(BasePipefyClient):
             phase_id: Phase ID passed as GraphQL variable ``phaseId``.
         """
         phase_key = phase_id.strip() if isinstance(phase_id, str) else str(phase_id)
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_FIELD_CONDITIONS_QUERY,
             {"phaseId": phase_key},
         )
@@ -466,4 +469,6 @@ class PipeConfigService(BasePipefyClient):
         cid = (
             condition_id.strip() if isinstance(condition_id, str) else str(condition_id)
         )
-        return await self.execute_query(GET_FIELD_CONDITION_QUERY, {"id": cid})
+        return await self._executor.execute_query(
+            GET_FIELD_CONDITION_QUERY, {"id": cid}
+        )

@@ -7,6 +7,7 @@ import logging
 from typing import Any
 
 from gql.transport.exceptions import TransportQueryError
+from graphql import DocumentNode
 
 from pipefy_sdk.exceptions import PortalPermissionError
 from pipefy_sdk.graphql_executor import GraphQLExecutor
@@ -236,26 +237,26 @@ class PortalService:
 
     async def execute_interfaces_query(
         self,
-        query: str,
+        query: DocumentNode,
         variables: dict[str, Any],
     ) -> dict[str, Any]:
         """Execute a GraphQL query or mutation on the Interfaces schema.
 
         Args:
-            query: GraphQL document string.
+            query: Parsed GraphQL document (``gql()`` output).
             variables: Variable map for the operation.
         """
         return await self._interfaces_executor.execute_query(query, variables)
 
     async def execute_internal_api_query(
         self,
-        query: str,
+        query: DocumentNode,
         variables: dict[str, Any],
     ) -> dict[str, Any]:
         """Execute a GraphQL query or mutation on the internal_api endpoint.
 
         Args:
-            query: GraphQL document string.
+            query: Parsed GraphQL document (``gql()`` output).
             variables: Variable map for the operation.
         """
         return await self._internal_executor.execute_query(query, variables)

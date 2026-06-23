@@ -8,7 +8,7 @@ from gql import Client
 from gql.graphql_request import GraphQLRequest
 from gql.transport.exceptions import TransportQueryError
 from gql.transport.httpx import HTTPXAsyncTransport
-from graphql import GraphQLSchema
+from graphql import DocumentNode, GraphQLSchema
 from httpx import Auth, Timeout
 
 from pipefy_sdk.settings import PipefySettings
@@ -18,17 +18,19 @@ class GraphQLExecutor(Protocol):
     """The GraphQL execution seam services depend on.
 
     Narrow by design: it exposes only the operation services need and leaks
-    nothing about httpx or gql. Services receive an implementation through their
-    constructor and call ``execute_query``; tests inject a fake. ``query`` is
-    intentionally ``Any`` (a gql ``DocumentNode`` on most paths, a raw ``str`` on
-    the interfaces/internal_api paths).
+    nothing about the httpx/gql transport. Services receive an implementation
+    through their constructor and call ``execute_query``; tests inject a fake.
+    ``query`` is a parsed ``DocumentNode``: callers build one with ``gql()`` (the
+    raw ``execute_graphql`` passthrough parses its string before reaching here).
     """
 
-    async def execute_query(self, query: Any, variables: dict[str, Any]) -> dict: ...
+    async def execute_query(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> dict: ...
 
 
 def _graphql_request_with_variables(
-    query: Any, variables: dict[str, Any]
+    query: DocumentNode, variables: dict[str, Any]
 ) -> GraphQLRequest:
     """Bind variables on a fresh request so shared ``gql()`` constants stay immutable.
 
@@ -74,7 +76,9 @@ class HttpxGraphQLExecutor:
         self._fetched_gql_schema: GraphQLSchema | None = None
         self._fetched_gql_schema_lock = asyncio.Lock()
 
-    async def execute_query(self, query: Any, variables: dict[str, Any]) -> dict:
+    async def execute_query(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> dict:
         """Execute a GraphQL query/mutation with variables.
 
         A fresh HTTPXAsyncTransport is created per call so concurrent invocations

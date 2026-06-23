@@ -15,6 +15,7 @@ from _shared.fixture_ids import (
     EXAMPLE_PIPE_REPO_ID,
 )
 from _shared.mock_clients import mock_executor
+from gql import gql
 from gql.transport.exceptions import TransportQueryError
 from pydantic import ValidationError
 
@@ -35,7 +36,7 @@ async def test_interfaces_query_routes_through_interfaces_client() -> None:
         internal_executor=mock_executor(),
     )
 
-    query = "query { interfaces(orgUuid: $orgUuid) { edges { node { uuid } } } }"
+    query = gql("query { interfaces(orgUuid: $orgUuid) { edges { node { uuid } } } }")
     variables = {"orgUuid": "org-123"}
     result = await service.execute_interfaces_query(query, variables)
 
@@ -57,7 +58,7 @@ async def test_sub_portal_element_call_routes_through_internal_api_client() -> N
         internal_executor=internal,
     )
 
-    query = (
+    query = gql(
         "mutation updateSubPortalElement($input: UpdateSubPortalElementInput!) "
         "{ updateSubPortalElement(input: $input) { success } }"
     )

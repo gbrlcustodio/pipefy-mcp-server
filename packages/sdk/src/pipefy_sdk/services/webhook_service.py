@@ -10,6 +10,7 @@ from httpx import Auth
 from pipefy_infra import security
 
 from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
 from pipefy_sdk.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
     CREATE_WEBHOOK_MUTATION,
@@ -37,7 +38,9 @@ class WebhookService(BasePipefyClient):
         card_service: CardService | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
-        self._card_service = card_service or CardService(settings=settings, auth=auth)
+        self._card_service = card_service or CardService(
+            executor=HttpxGraphQLExecutor(settings, auth=auth)
+        )
 
     async def get_email_templates(
         self,

@@ -9,6 +9,7 @@ from httpx import Auth
 from pydantic import ValidationError
 
 from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
 from pipefy_sdk.models.member_invite import MemberInvite
 from pipefy_sdk.queries.member_queries import (
     INVITE_MEMBERS_MUTATION,
@@ -45,7 +46,9 @@ class MemberService(BasePipefyClient):
         pipe_service: PipeService | None = None,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
-        self._pipe_service = pipe_service or PipeService(settings=settings, auth=auth)
+        self._pipe_service = pipe_service or PipeService(
+            executor=HttpxGraphQLExecutor(settings, auth=auth)
+        )
 
     async def invite_members(
         self,

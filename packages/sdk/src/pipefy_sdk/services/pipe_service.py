@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from httpx import Auth
 from pipefy_infra.coerce import optional_int
 from rapidfuzz import fuzz
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.models.field_definition import parse_field_definitions
 from pipefy_sdk.queries.pipe_queries import (
     GET_PHASE_ALLOWED_MOVES_QUERY,
@@ -19,7 +18,6 @@ from pipefy_sdk.queries.pipe_queries import (
     GET_START_FORM_FIELDS_QUERY,
     SEARCH_PIPES_QUERY,
 )
-from pipefy_sdk.settings import PipefySettings
 
 SEARCH_PIPES_MAX_PER_ORG_CAP: int = 500
 SEARCH_PIPES_MAX_PER_ORG_MIN: int = 1
@@ -29,21 +27,16 @@ def _clamp_max_pipes_per_org(value: int) -> int:
     return max(SEARCH_PIPES_MAX_PER_ORG_MIN, min(SEARCH_PIPES_MAX_PER_ORG_CAP, value))
 
 
-class PipeService(BasePipefyClient):
+class PipeService:
     """Service for Pipe-related operations."""
 
-    def __init__(
-        self,
-        settings: PipefySettings,
-        *,
-        auth: Auth,
-    ) -> None:
-        super().__init__(settings=settings, auth=auth)
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
 
     async def get_pipe(self, pipe_id: str | int) -> dict:
         """Get a pipe by its ID, including phases, labels, and start form fields."""
         variables = {"pipe_id": str(pipe_id)}
-        return await self.execute_query(GET_PIPE_QUERY, variables)
+        return await self._executor.execute_query(GET_PIPE_QUERY, variables)
 
     async def get_pipe_with_preferences(self, pipe_id: str | int) -> dict:
         """Get a pipe including AI preferences, phases with fields, and start form fields.
@@ -52,12 +45,14 @@ class PipeService(BasePipefyClient):
             pipe_id: Pipe ID.
         """
         variables = {"pipe_id": str(pipe_id)}
-        return await self.execute_query(GET_PIPE_WITH_PREFERENCES_QUERY, variables)
+        return await self._executor.execute_query(
+            GET_PIPE_WITH_PREFERENCES_QUERY, variables
+        )
 
     async def get_pipe_members(self, pipe_id: str | int) -> dict:
         """Get the members of a pipe."""
         variables = {"pipeId": str(pipe_id)}
-        return await self.execute_query(GET_PIPE_MEMBERS_QUERY, variables)
+        return await self._executor.execute_query(GET_PIPE_MEMBERS_QUERY, variables)
 
     async def get_start_form_fields(
         self, pipe_id: str | int, required_only: bool = False
@@ -73,7 +68,9 @@ class PipeService(BasePipefyClient):
         """
 
         variables = {"pipe_id": str(pipe_id)}
-        result = await self.execute_query(GET_START_FORM_FIELDS_QUERY, variables)
+        result = await self._executor.execute_query(
+            GET_START_FORM_FIELDS_QUERY, variables
+        )
 
         fields = result.get("pipe", {}).get("start_form_fields", [])
 
@@ -134,7 +131,7 @@ class PipeService(BasePipefyClient):
         stripped = pipe_name.strip() if pipe_name else None
         name_search = stripped if stripped else None
         per_org_cap = _clamp_max_pipes_per_org(max_pipes_per_org)
-        result = await self.execute_query(
+        result = await self._executor.execute_query(
             SEARCH_PIPES_QUERY,
             {"nameSearch": name_search},
         )
@@ -223,11 +220,13 @@ class PipeService(BasePipefyClient):
             Raw GraphQL payload (``phase`` key at top level).
         """
         variables = {"phase_id": str(phase_id)}
-        return await self.execute_query(GET_PHASE_ALLOWED_MOVES_QUERY, variables)
+        return await self._executor.execute_query(
+            GET_PHASE_ALLOWED_MOVES_QUERY, variables
+        )
 
     async def _fetch_phase_row(self, phase_id: str | int) -> dict:
         variables = {"phase_id": str(phase_id)}
-        result = await self.execute_query(GET_PHASE_QUERY, variables)
+        result = await self._executor.execute_query(GET_PHASE_QUERY, variables)
         phase = (result or {}).get("phase")
         if not isinstance(phase, dict) or phase.get("cards_count") is None:
             raise ValueError("phase.cards_count missing from response")
@@ -288,7 +287,7 @@ class PipeService(BasePipefyClient):
             variables["first"] = first
         if after is not None:
             variables["after"] = after
-        return await self.execute_query(GET_PHASE_CARDS_QUERY, variables)
+        return await self._executor.execute_query(GET_PHASE_CARDS_QUERY, variables)
 
     async def get_phase_fields(
         self, phase_id: str | int, required_only: bool = False
@@ -303,7 +302,7 @@ class PipeService(BasePipefyClient):
             dict: A dictionary containing the phase info and its fields.
         """
         variables = {"phase_id": str(phase_id)}
-        result = await self.execute_query(GET_PHASE_FIELDS_QUERY, variables)
+        result = await self._executor.execute_query(GET_PHASE_FIELDS_QUERY, variables)
 
         phase = result.get("phase", {})
         fields = phase.get("fields", [])

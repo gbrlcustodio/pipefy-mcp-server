@@ -11,6 +11,7 @@ from pipefy_sdk.automation_preflight import (
     validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
+from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
 from pipefy_sdk.models.ai_agent import (
     BehaviorInput,
     CreateAiAgentInput,
@@ -89,12 +90,13 @@ class PipefyClient:
                 call (construct via ``pipefy_auth.resolve`` or one of the bearer
                 adapters from ``pipefy_auth``).
         """
-        self._pipe_service = PipeService(settings=settings, auth=auth)
-        self._card_service = CardService(settings=settings, auth=auth)
+        public_executor = HttpxGraphQLExecutor(settings, auth=auth)
+        self._pipe_service = PipeService(executor=public_executor)
+        self._card_service = CardService(executor=public_executor)
         self._pipe_config_service = PipeConfigService(
             settings=settings, auth=auth, pipe_service=self._pipe_service
         )
-        self._table_service = TableService(settings=settings, auth=auth)
+        self._table_service = TableService(executor=public_executor)
         self._internal_api_client = InternalApiClient(settings, auth=auth)
         self._relation_service = RelationService(
             settings=settings,
@@ -115,8 +117,8 @@ class PipefyClient:
         self._ai_agent_service = AiAgentService(settings=settings, auth=auth)
         self._observability_service = ObservabilityService(settings=settings, auth=auth)
         self._report_service = ReportService(settings=settings, auth=auth)
-        self._organization_service = OrganizationService(settings=settings, auth=auth)
-        self._user_service = UserService(settings=settings, auth=auth)
+        self._organization_service = OrganizationService(executor=public_executor)
+        self._user_service = UserService(executor=public_executor)
         self._attachment_service = AttachmentService(
             settings=settings,
             auth=auth,

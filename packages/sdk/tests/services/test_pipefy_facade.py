@@ -31,10 +31,10 @@ def mock_settings():
 def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
     auth = StaticBearerAuth("unit-token")
     client = PipefyClient(mock_settings, auth=auth)
-    assert client._card_service._auth is auth
-    assert client._pipe_service._auth is auth
-    # The internal API client is built in __init__ from the same auth, so GraphQL
-    # auth and the internal API client cannot drift.
+    # Public services share one executor built from the caller's auth, so GraphQL
+    # auth cannot drift across services.
+    assert client._card_service._executor._auth is auth
+    assert client._pipe_service._executor._auth is auth
     assert client._internal_api_client._auth is auth
 
 
@@ -589,38 +589,11 @@ def test_pipefy_client_creates_services_with_shared_auth():
     assert isinstance(client._ai_agent_service, AiAgentService)
     assert isinstance(client._attachment_service, AttachmentService)
     assert isinstance(client._introspection_service, SchemaIntrospectionService)
-    assert client._pipe_service._auth is not None, (
-        "PipeService should have an auth instance"
-    )
-    assert client._card_service._auth is not None, (
-        "CardService should have an auth instance"
-    )
-    assert client._introspection_service._auth is not None, (
-        "SchemaIntrospectionService should have an auth instance"
-    )
-    assert client._pipe_config_service._auth is not None, (
-        "PipeConfigService should have an auth instance"
-    )
-    assert client._table_service._auth is not None, (
-        "TableService should have an auth instance"
-    )
-    assert client._relation_service._auth is not None, (
-        "RelationService should have an auth instance"
-    )
-    assert client._automation_service._auth is not None, (
-        "AutomationService should have an auth instance"
-    )
-    assert client._ai_agent_service._auth is not None, (
-        "AiAgentService should have an auth instance"
-    )
-    assert client._pipe_config_service._auth is client._ai_agent_service._auth
-    assert client._pipe_service._auth is client._card_service._auth
-    assert client._pipe_service._auth is client._pipe_config_service._auth
-    assert client._pipe_service._auth is client._table_service._auth
-    assert client._pipe_service._auth is client._relation_service._auth
-    assert client._pipe_service._auth is client._automation_service._auth
-    assert client._pipe_service._auth is client._introspection_service._auth
-    assert client._pipe_service._auth is client._attachment_service._auth
+    # Converted public services share one executor instance (one token cache).
+    shared_executor = client._pipe_service._executor
+    assert client._card_service._executor is shared_executor
+    assert client._table_service._executor is shared_executor
+    assert shared_executor._auth is auth
 
 
 @pytest.mark.unit

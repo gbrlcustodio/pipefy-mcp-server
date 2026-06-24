@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from httpx import Auth
@@ -11,6 +12,8 @@ from pipefy_sdk.automation_preflight import (
     validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
+from pipefy_sdk.graphql_executor import GraphQLExecutor, HttpxGraphQLExecutor
+from pipefy_sdk.internal_api_errors import format_internal_api_error
 from pipefy_sdk.models.ai_agent import (
     BehaviorInput,
     CreateAiAgentInput,
@@ -40,7 +43,6 @@ from pipefy_sdk.services.automation_graphql_types import (
 )
 from pipefy_sdk.services.automation_service import AutomationService
 from pipefy_sdk.services.card_service import CardService
-from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.services.member_service import MemberService
 from pipefy_sdk.services.observability_service import ObservabilityService
 from pipefy_sdk.services.organization_service import OrganizationService
@@ -72,6 +74,41 @@ from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
 
 
+@dataclass(frozen=True)
+class Executors:
+    """The three GraphQL executors a fully wired ``PipefyClient`` runs on."""
+
+    public: GraphQLExecutor
+    interfaces: GraphQLExecutor
+    internal: GraphQLExecutor
+
+
+def build_executors(settings: PipefySettings, auth: Auth) -> Executors:
+    """Build one executor per Pipefy endpoint from a shared ``settings``/``auth``.
+
+    This is the seam that resolves each endpoint URL from settings; the executors
+    take a ready URL and stay agnostic to endpoint topology. All three share the
+    one ``auth`` instance so the OAuth token cache is not duplicated. Only the
+    internal executor carries the ``[code=…][correlation_id=…]`` error envelope;
+    the others leave gql exceptions untouched.
+    """
+    cache_schema = settings.gql_reuse_fetched_graphql_schema
+    return Executors(
+        public=HttpxGraphQLExecutor(
+            url=settings.graphql_url, auth=auth, cache_schema=cache_schema
+        ),
+        interfaces=HttpxGraphQLExecutor(
+            url=settings.interfaces_graphql_url, auth=auth, cache_schema=cache_schema
+        ),
+        internal=HttpxGraphQLExecutor(
+            url=settings.internal_api_url,
+            auth=auth,
+            cache_schema=cache_schema,
+            on_graphql_error=format_internal_api_error,
+        ),
+    )
+
+
 class PipefyClient:
     """Facade client for Pipefy API operations (pure delegation)."""
 
@@ -89,47 +126,43 @@ class PipefyClient:
                 call (construct via ``pipefy_auth.resolve`` or one of the bearer
                 adapters from ``pipefy_auth``).
         """
-        self._pipe_service = PipeService(settings=settings, auth=auth)
-        self._card_service = CardService(settings=settings, auth=auth)
+        ex = build_executors(settings, auth)
+        self._internal_executor = ex.internal
+        self._pipe_service = PipeService(executor=ex.public)
+        self._card_service = CardService(executor=ex.public)
         self._pipe_config_service = PipeConfigService(
-            settings=settings, auth=auth, pipe_service=self._pipe_service
+            executor=ex.public, pipe_service=self._pipe_service
         )
-        self._table_service = TableService(settings=settings, auth=auth)
-        self._internal_api_client = InternalApiClient(settings, auth=auth)
+        self._table_service = TableService(executor=ex.public)
         self._relation_service = RelationService(
-            settings=settings,
-            auth=auth,
-            internal_api_client=self._internal_api_client,
+            executor=ex.public,
+            internal_executor=ex.internal,
         )
         self._member_service = MemberService(
-            settings=settings,
-            auth=auth,
+            executor=ex.public,
             pipe_service=self._pipe_service,
         )
         self._webhook_service = WebhookService(
+            executor=ex.public,
             settings=settings,
-            auth=auth,
             card_service=self._card_service,
         )
-        self._automation_service = AutomationService(settings=settings, auth=auth)
-        self._ai_agent_service = AiAgentService(settings=settings, auth=auth)
-        self._observability_service = ObservabilityService(settings=settings, auth=auth)
-        self._report_service = ReportService(settings=settings, auth=auth)
-        self._organization_service = OrganizationService(settings=settings, auth=auth)
-        self._user_service = UserService(settings=settings, auth=auth)
+        self._automation_service = AutomationService(executor=ex.public)
+        self._ai_agent_service = AiAgentService(executor=ex.public)
+        self._observability_service = ObservabilityService(executor=ex.public)
+        self._report_service = ReportService(executor=ex.public)
+        self._organization_service = OrganizationService(executor=ex.public)
+        self._user_service = UserService(executor=ex.public)
         self._attachment_service = AttachmentService(
-            settings=settings,
-            auth=auth,
+            executor=ex.public,
             card_service=self._card_service,
             table_service=self._table_service,
         )
-        self._introspection_service = SchemaIntrospectionService(
-            settings=settings, auth=auth
-        )
+        self._introspection_service = SchemaIntrospectionService(executor=ex.public)
         self._portal_service = PortalService(
-            settings=settings,
-            auth=auth,
-            internal_api_client=self._internal_api_client,
+            public_executor=ex.public,
+            interfaces_executor=ex.interfaces,
+            internal_executor=ex.internal,
         )
 
     async def get_pipe(self, pipe_id: str | int) -> dict:
@@ -937,7 +970,7 @@ class PipefyClient:
         parent_id: str | int,
         source_id: str | int,
     ) -> dict:
-        """Delete a relation link between two cards (internal API, requires OAuth)."""
+        """Delete a relation link between two cards (Internal API, requires OAuth)."""
         return await self._relation_service.delete_card_relation(
             child_id, parent_id, source_id
         )

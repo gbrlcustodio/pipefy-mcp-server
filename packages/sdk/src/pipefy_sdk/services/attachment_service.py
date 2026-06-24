@@ -8,10 +8,10 @@ from typing import Any, Protocol, assert_never
 from urllib.parse import unquote, urlparse
 
 import httpx
-from httpx import Auth, Timeout
+from httpx import Timeout
 from pipefy_infra.filesystem import LocalFile, LocalFileError
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.models.attachment import (
     _MAX_ATTACHMENT_SIZE_BYTES,
     Attachment,
@@ -26,7 +26,6 @@ from pipefy_sdk.queries.attachment_queries import (
 )
 from pipefy_sdk.services.card_service import CardService
 from pipefy_sdk.services.table_service import TableService
-from pipefy_sdk.settings import PipefySettings
 
 _BODY_SNIPPET_MAX_CHARS = 500
 _ALLOWED_UPLOAD_HOST_RE = re.compile(
@@ -92,7 +91,7 @@ class HttpxS3Uploader:
         return result
 
 
-class AttachmentService(BasePipefyClient):
+class AttachmentService:
     """Run the full attachment upload pipeline.
 
     The pipeline reads the local file (enforcing the size cap), requests a
@@ -107,13 +106,12 @@ class AttachmentService(BasePipefyClient):
     def __init__(
         self,
         *,
-        settings: PipefySettings,
-        auth: Auth,
+        executor: GraphQLExecutor,
         card_service: CardService,
         table_service: TableService,
         s3_uploader: S3Uploader | None = None,
     ) -> None:
-        super().__init__(settings=settings, auth=auth)
+        self._executor = executor
         self._card_service = card_service
         self._table_service = table_service
         self._s3_uploader: S3Uploader = s3_uploader or HttpxS3Uploader(
@@ -223,7 +221,7 @@ class AttachmentService(BasePipefyClient):
         content_length: int | None = None,
     ) -> dict[str, Any]:
         """Request a presigned upload URL from Pipefy."""
-        payload = await self.execute_query(
+        payload = await self._executor.execute_query(
             CREATE_PRESIGNED_URL_MUTATION,
             {
                 "organizationId": organization_id,

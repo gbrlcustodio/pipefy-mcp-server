@@ -41,7 +41,6 @@ from pipefy_sdk.services.automation_graphql_types import (
     AutomationRuleRecord,
     AutomationRuleSummary,
 )
-from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.services.member_service import (
     format_service_account_removal_block_message,
     service_account_removal_blocked_user_ids,
@@ -85,7 +84,6 @@ __all__ = [
     "CreateSendTaskAutomationInput",
     "DeleteCommentInput",
     "download_bytes",
-    "InternalApiClient",
     "MePayload",
     "MemberInvite",
     "NonBlankStr",

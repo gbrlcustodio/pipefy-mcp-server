@@ -8,7 +8,7 @@ from zipfile import BadZipFile
 import httpx
 from openpyxl.utils.exceptions import InvalidFileException
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
     GET_AGENTS_USAGE_QUERY,
@@ -91,8 +91,11 @@ def _build_usage_variables(
     return variables
 
 
-class ObservabilityService(BasePipefyClient):
+class ObservabilityService:
     """Reads for AI agent logs, automation logs, usage stats, and credit dashboard."""
+
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
 
     async def get_ai_agent_logs(
         self,
@@ -120,7 +123,7 @@ class ObservabilityService(BasePipefyClient):
             status=status,
             search_term=search_term,
         )
-        return await self.execute_query(GET_AI_AGENT_LOGS_QUERY, variables)
+        return await self._executor.execute_query(GET_AI_AGENT_LOGS_QUERY, variables)
 
     async def get_ai_agent_log_details(self, log_uuid: str) -> dict[str, Any]:
         """Get detailed AI agent execution log with tracing nodes.
@@ -128,7 +131,7 @@ class ObservabilityService(BasePipefyClient):
         Args:
             log_uuid: UUID of the AI agent log entry.
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_AI_AGENT_LOG_DETAILS_QUERY, {"uuid": log_uuid}
         )
 
@@ -158,7 +161,7 @@ class ObservabilityService(BasePipefyClient):
             status=status,
             search_term=search_term,
         )
-        return await self.execute_query(GET_AUTOMATION_LOGS_QUERY, variables)
+        return await self._executor.execute_query(GET_AUTOMATION_LOGS_QUERY, variables)
 
     async def get_automation_logs_by_repo(
         self,
@@ -186,7 +189,9 @@ class ObservabilityService(BasePipefyClient):
             status=status,
             search_term=search_term,
         )
-        return await self.execute_query(GET_AUTOMATION_LOGS_BY_REPO_QUERY, variables)
+        return await self._executor.execute_query(
+            GET_AUTOMATION_LOGS_BY_REPO_QUERY, variables
+        )
 
     async def get_agents_usage(
         self,
@@ -208,7 +213,7 @@ class ObservabilityService(BasePipefyClient):
             sort: SortCriteria (field + direction).
         """
         resolved = await resolve_organization_uuid(
-            self.execute_query, organization_uuid
+            self._executor.execute_query, organization_uuid
         )
         variables = _build_usage_variables(
             resolved,
@@ -217,7 +222,7 @@ class ObservabilityService(BasePipefyClient):
             search=search,
             sort=sort,
         )
-        return await self.execute_query(GET_AGENTS_USAGE_QUERY, variables)
+        return await self._executor.execute_query(GET_AGENTS_USAGE_QUERY, variables)
 
     async def get_automations_usage(
         self,
@@ -239,7 +244,7 @@ class ObservabilityService(BasePipefyClient):
             sort: SortCriteria (field + direction).
         """
         resolved = await resolve_organization_uuid(
-            self.execute_query, organization_uuid
+            self._executor.execute_query, organization_uuid
         )
         variables = _build_usage_variables(
             resolved,
@@ -248,7 +253,9 @@ class ObservabilityService(BasePipefyClient):
             search=search,
             sort=sort,
         )
-        return await self.execute_query(GET_AUTOMATIONS_USAGE_QUERY, variables)
+        return await self._executor.execute_query(
+            GET_AUTOMATIONS_USAGE_QUERY, variables
+        )
 
     async def get_ai_credit_usage(
         self,
@@ -263,9 +270,9 @@ class ObservabilityService(BasePipefyClient):
             period: PeriodFilter enum value (current_month, last_month, last_3_months).
         """
         resolved = await resolve_organization_uuid(
-            self.execute_query, organization_uuid
+            self._executor.execute_query, organization_uuid
         )
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_AI_CREDIT_USAGE_QUERY,
             {"organizationUuid": resolved, "period": period},
         )
@@ -282,7 +289,7 @@ class ObservabilityService(BasePipefyClient):
             period: PeriodFilter enum value (current_month, last_month, last_3_months). Sent as
                 GraphQL input field ``filter`` (Pipefy schema no longer exposes ``period`` on this input).
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
             {"input": {"organizationId": str(organization_id), "filter": period}},
         )
@@ -293,7 +300,7 @@ class ObservabilityService(BasePipefyClient):
         Args:
             export_id: Export id returned by ``createAutomationJobsExport`` (same as ``automationJobsExport.id``).
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_AUTOMATION_JOBS_EXPORT_QUERY,
             {"id": export_id},
         )

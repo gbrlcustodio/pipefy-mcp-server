@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **SDK**: services now receive GraphQL execution through their constructor instead of inheriting it. A narrow `GraphQLExecutor` protocol is the seam; `HttpxGraphQLExecutor` (formerly `BasePipefyClient`) is the only httpx/gql adapter, and `PipefyClient` builds one executor per endpoint via `build_executors` and injects them. Tests inject a fake executor rather than monkeypatching `execute_query`.
+- **SDK (breaking)**: the `InternalApiClient` class and its `pipefy_sdk` export are removed; the internal endpoint is now an `HttpxGraphQLExecutor` configured with `internal_api_url` and the `[code=…][correlation_id=…]` error formatter (build it via `build_executors(settings, auth).internal`). Service constructors no longer take `auth`, and `RelationService`/`PortalService`/`MemberService`/`WebhookService`/`PipeConfigService` now require their collaborators (no self-construct fallbacks).
 - **SDK**: `PipefyClient` now constructs its internal API client during `__init__` (built from the same `settings` and `auth` as every other endpoint client), so `PipefyClient(settings, auth=...)` is fully wired after construction. The `set_internal_api_client` methods on `PipefyClient` and `PortalService` are removed; pass the internal API client through the `PortalService` constructor when composing it directly. The `PipefyClient.internal_api_available` property is also removed: the internal API client is always present, so the property was always `True`.
 - **Plugin (Claude Code)**: renamed the OAuth slash command from `/login` to `/pipefy-login` (`commands/login.md` → `commands/pipefy-login.md`, frontmatter `name: pipefy-login`). The old `name: login` claimed the `/login` trigger and shadowed Claude Code's built-in `/login` (Claude account sign-in): selecting the built-in entry in the command picker still ran the Pipefy command, so Claude login was unreachable via `/login` while the plugin was installed. Closes #331.
 
@@ -39,7 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **SDK**: the AI automation surface moved from `AiAutomationService` to `AutomationService.create_ai_automation` / `update_ai_automation`, mirroring the existing `create_send_task_automation` pattern. `AiAutomationService`, `ai_automation_queries.py`, the `ai_automation_available` property, and `set_ai_automation_service` are removed; `PipefyClient` delegates to `AutomationService`. `InternalApiClient` stays (still used by `delete_card_relation`).
+- **SDK**: the AI automation surface moved from `AiAutomationService` to `AutomationService.create_ai_automation` / `update_ai_automation`, mirroring the existing `create_send_task_automation` pattern. `AiAutomationService`, `ai_automation_queries.py`, the `ai_automation_available` property, and `set_ai_automation_service` are removed; `PipefyClient` delegates to `AutomationService`.
 
 ## [0.2.0-beta.2] - 2026-06-02
 

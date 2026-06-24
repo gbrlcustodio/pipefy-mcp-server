@@ -1,11 +1,8 @@
 """Unit tests for RelationService (relation reads)."""
 
-from unittest.mock import AsyncMock
-
 import pytest
-from _shared.mock_clients import mock_internal_api_client
+from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
-from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.relation_queries import (
     CREATE_CARD_RELATION_MUTATION,
@@ -17,38 +14,22 @@ from pipefy_sdk.queries.relation_queries import (
     UPDATE_PIPE_RELATION_MUTATION,
 )
 from pipefy_sdk.services.relation_service import RelationService
-from pipefy_sdk.settings import PipefySettings
-
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
-@pytest.fixture
-def mock_settings():
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
-    )
+def _make_service(return_value: dict | None = None, *, side_effect=None):
+    """Build a RelationService whose public GraphQL executor is faked.
 
-
-def _make_service(mock_settings, return_value: dict | None = None, *, side_effect=None):
-    """Build a RelationService whose public execute_query is faked.
-
-    These tests never touch the internal client, so it gets a stand-in; the
+    These tests never touch the internal executor, so it gets a stand-in; the
     constructor requires one. Pass ``side_effect`` for the error-path tests.
     """
-    service = RelationService(
-        settings=mock_settings,
-        auth=_TEST_AUTH,
-        internal_api_client=mock_internal_api_client(),
-    )
-    service.execute_query = AsyncMock(
-        return_value=return_value, side_effect=side_effect
-    )
-    return service
+    executor = mock_executor(return_value, side_effect=side_effect)
+    service = RelationService(executor=executor, internal_executor=mock_executor())
+    return service, executor
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_relations_sends_pipe_id(mock_settings):
+async def test_get_pipe_relations_sends_pipe_id():
     payload = {
         "pipe": {
             "id": "p1",
@@ -56,11 +37,11 @@ async def test_get_pipe_relations_sends_pipe_id(mock_settings):
             "childrenRelations": [],
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_pipe_relations("701")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_PIPE_RELATIONS_QUERY
     assert variables == {"pipeId": "701"}
     assert result["pipe"]["parentsRelations"][0]["name"] == "Up"
@@ -68,9 +49,8 @@ async def test_get_pipe_relations_sends_pipe_id(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_pipe_relations_transport_error(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_get_pipe_relations_transport_error():
+    service, _ = _make_service(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}]),
     )
     with pytest.raises(TransportQueryError):
@@ -79,12 +59,12 @@ async def test_get_pipe_relations_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_table_relations_sends_ids_list(mock_settings):
+async def test_get_table_relations_sends_ids_list():
     rows = [{"id": "t1", "name": "Link"}]
-    service = _make_service(mock_settings, {"table_relations": rows})
+    service, executor = _make_service({"table_relations": rows})
     result = await service.get_table_relations(["801", "802"])
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_TABLE_RELATIONS_QUERY
     assert variables == {"ids": ["801", "802"]}
     assert result["table_relations"] == rows
@@ -92,9 +72,8 @@ async def test_get_table_relations_sends_ids_list(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_table_relations_transport_error(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_get_table_relations_transport_error():
+    service, _ = _make_service(
         side_effect=TransportQueryError("failed", errors=[{"message": "missing"}]),
     )
     with pytest.raises(TransportQueryError):
@@ -103,12 +82,12 @@ async def test_get_table_relations_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_pipe_relation_builds_input_and_returns_payload(mock_settings):
+async def test_create_pipe_relation_builds_input_and_returns_payload():
     created = {"createPipeRelation": {"pipeRelation": {"id": "r1", "name": "L"}}}
-    service = _make_service(mock_settings, created)
+    service, executor = _make_service(created)
     result = await service.create_pipe_relation(10, 20, "Link")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_PIPE_RELATION_MUTATION
     inp = variables["input"]
     assert inp["parentId"] == "10"
@@ -121,24 +100,23 @@ async def test_create_pipe_relation_builds_input_and_returns_payload(mock_settin
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_pipe_relation_merges_attrs(mock_settings):
-    service = _make_service(mock_settings, {"createPipeRelation": {}})
+async def test_create_pipe_relation_merges_attrs():
+    service, executor = _make_service({"createPipeRelation": {}})
     await service.create_pipe_relation(
         1,
         2,
         "N",
         **{"canCreateNewItems": False, "ownFieldMaps": []},
     )
-    inp = service.execute_query.call_args[0][1]["input"]
+    inp = executor.execute_query.call_args[0][1]["input"]
     assert inp["canCreateNewItems"] is False
     assert inp["ownFieldMaps"] == []
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_pipe_relation_transport_error(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_create_pipe_relation_transport_error():
+    service, _ = _make_service(
         side_effect=TransportQueryError("failed", errors=[{"message": "bad"}]),
     )
     with pytest.raises(TransportQueryError):
@@ -147,12 +125,12 @@ async def test_create_pipe_relation_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_pipe_relation_builds_input(mock_settings):
+async def test_update_pipe_relation_builds_input():
     updated = {"updatePipeRelation": {"pipeRelation": {"id": "r9", "name": "New"}}}
-    service = _make_service(mock_settings, updated)
+    service, executor = _make_service(updated)
     result = await service.update_pipe_relation("r9", "New")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is UPDATE_PIPE_RELATION_MUTATION
     assert variables["input"]["id"] == "r9"
     assert variables["input"]["name"] == "New"
@@ -162,22 +140,21 @@ async def test_update_pipe_relation_builds_input(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_pipe_relation_merges_attrs(mock_settings):
-    service = _make_service(mock_settings, {"updatePipeRelation": {}})
+async def test_update_pipe_relation_merges_attrs():
+    service, executor = _make_service({"updatePipeRelation": {}})
     await service.update_pipe_relation(
         "r1",
         "N",
         **{"canConnectExistingItems": False},
     )
-    inp = service.execute_query.call_args[0][1]["input"]
+    inp = executor.execute_query.call_args[0][1]["input"]
     assert inp["canConnectExistingItems"] is False
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_update_pipe_relation_transport_error(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_update_pipe_relation_transport_error():
+    service, _ = _make_service(
         side_effect=TransportQueryError("failed", errors=[{"message": "nope"}]),
     )
     with pytest.raises(TransportQueryError):
@@ -186,12 +163,12 @@ async def test_update_pipe_relation_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_pipe_relation_sends_id(mock_settings):
+async def test_delete_pipe_relation_sends_id():
     deleted = {"deletePipeRelation": {"success": True}}
-    service = _make_service(mock_settings, deleted)
+    service, executor = _make_service(deleted)
     result = await service.delete_pipe_relation(777)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is DELETE_PIPE_RELATION_MUTATION
     assert variables["input"] == {"id": "777"}
     assert result == deleted
@@ -199,9 +176,8 @@ async def test_delete_pipe_relation_sends_id(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_pipe_relation_transport_error(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_delete_pipe_relation_transport_error():
+    service, _ = _make_service(
         side_effect=TransportQueryError("failed", errors=[{"message": "gone"}]),
     )
     with pytest.raises(TransportQueryError):
@@ -210,12 +186,12 @@ async def test_delete_pipe_relation_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_relation_builds_input(mock_settings):
+async def test_create_card_relation_builds_input():
     created = {"createCardRelation": {"cardRelation": {"id": "cr1"}}}
-    service = _make_service(mock_settings, created)
+    service, executor = _make_service(created)
     result = await service.create_card_relation(100, 200, 300)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_CARD_RELATION_MUTATION
     inp = variables["input"]
     assert inp == {
@@ -229,18 +205,17 @@ async def test_create_card_relation_builds_input(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_relation_allows_source_type_override(mock_settings):
-    service = _make_service(mock_settings, {"createCardRelation": {}})
+async def test_create_card_relation_allows_source_type_override():
+    service, executor = _make_service({"createCardRelation": {}})
     await service.create_card_relation(1, 2, 3, sourceType="Field")
-    inp = service.execute_query.call_args[0][1]["input"]
+    inp = executor.execute_query.call_args[0][1]["input"]
     assert inp["sourceType"] == "Field"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_relation_transport_error(mock_settings):
-    service = _make_service(
-        mock_settings,
+async def test_create_card_relation_transport_error():
+    service, _ = _make_service(
         side_effect=TransportQueryError("failed", errors=[{"message": "nope"}]),
     )
     with pytest.raises(TransportQueryError):
@@ -249,13 +224,11 @@ async def test_create_card_relation_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_card_relation_routes_through_internal_api_client(mock_settings):
-    """delete_card_relation uses the injected InternalApiClient, not the public
-    execute_query, because the mutation only exists on the internal schema."""
-    internal = mock_internal_api_client({"deleteCardRelation": {"success": True}})
-    service = RelationService(
-        settings=mock_settings, auth=_TEST_AUTH, internal_api_client=internal
-    )
+async def test_delete_card_relation_routes_through_internal_executor():
+    """delete_card_relation uses the injected internal GraphQL executor, not the public
+    one, because the mutation only exists on the internal schema."""
+    internal = mock_executor({"deleteCardRelation": {"success": True}})
+    service = RelationService(executor=mock_executor(), internal_executor=internal)
 
     result = await service.delete_card_relation("c1", "p2", "src-3")
 

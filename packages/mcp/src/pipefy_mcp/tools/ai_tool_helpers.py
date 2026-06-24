@@ -203,7 +203,7 @@ def build_ai_tool_error(message: str) -> AiToolErrorPayload:
     """Generic AI-tool failure envelope.
 
     Does not alter ``message``; callers must pass user-safe text (sanitized when
-    the source is ``InternalApiClient`` / GraphQL errors with diagnostic suffixes).
+    the source is the Internal API executor / GraphQL errors with diagnostic suffixes).
 
     Args:
         message: User-visible failure reason.
@@ -306,7 +306,7 @@ def enrich_behavior_error(
 ) -> str:
     """Build an enriched error message with behavior context and actionable hints.
 
-    Extracts GraphQL messages, strips InternalApiClient-style ``[code=…]`` /
+    Extracts GraphQL messages, strips internal_api-style ``[code=…]`` /
     ``[correlation_id=…]`` markers from the primary line, appends a behavior
     summary, and matches known error patterns to actionable advice.
 

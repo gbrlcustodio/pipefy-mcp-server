@@ -1,4 +1,4 @@
-"""Service for Pipefy portal operations (Interfaces + internal_api routing)."""
+"""Service for Pipefy portal operations (Interfaces + Internal API routing)."""
 
 from __future__ import annotations
 
@@ -7,10 +7,10 @@ import logging
 from typing import Any
 
 from gql.transport.exceptions import TransportQueryError
-from httpx import Auth
+from graphql import DocumentNode
 
-from pipefy_sdk.base_client import BasePipefyClient, unwrap_relay_connection_nodes
 from pipefy_sdk.exceptions import PortalPermissionError
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.models.portal import (
     CreatePortalElementInput,
     CreatePortalInput,
@@ -40,9 +40,8 @@ from pipefy_sdk.queries.portal_queries import (
     UPDATE_PAGE_LAYOUT_MUTATION,
     UPDATE_PAGE_MUTATION,
 )
-from pipefy_sdk.services.internal_api_client import InternalApiClient
-from pipefy_sdk.settings import PipefySettings
 from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
+from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 logger = logging.getLogger(__name__)
 
@@ -138,7 +137,7 @@ async def _execute_internal_api_query_with_portal_errors(
     query: str,
     variables: dict[str, Any],
 ) -> dict[str, Any]:
-    """Run an internal_api operation and map portal permission failures."""
+    """Run an Internal API operation and map portal permission failures."""
     try:
         return await execute(query, variables)
     except ValueError as exc:
@@ -211,62 +210,56 @@ def _normalize_portal_detail(portal: dict[str, Any]) -> dict[str, Any]:
 class PortalService:
     """GraphQL operations for Pipefy portals across multiple endpoints.
 
-    Composes two ``BasePipefyClient`` instances (Interfaces + public GraphQL) instead
-    of inheriting because the Interfaces schema lives on a separate endpoint. When
-    constructing outside ``PipefyClient``, pass a shared ``auth`` to both clients so
-    OAuth token caching is not duplicated.
+    Takes three executors because portal operations span three endpoints: the
+    public GraphQL schema, the Interfaces schema, and the internal_api endpoint
+    for sub-portal wiring. The executors are injected, not built here; the
+    composition root constructs all three over one shared ``auth`` so the OAuth
+    token cache is not duplicated.
     """
 
     def __init__(
         self,
-        settings: PipefySettings,
         *,
-        auth: Auth,
-        internal_api_client: InternalApiClient,
+        public_executor: GraphQLExecutor,
+        interfaces_executor: GraphQLExecutor,
+        internal_executor: GraphQLExecutor,
     ) -> None:
-        """Wire clients for the Interfaces schema and internal_api mutations.
+        """Wire the public, Interfaces, and Internal API executors.
 
         Args:
-            settings: Pipefy endpoints and credentials.
-            auth: Shared OAuth or bearer auth for GraphQL transports.
-            internal_api_client: Client for sub-portal element wiring mutations.
+            public_executor: Public GraphQL executor (organization-uuid resolution).
+            interfaces_executor: Executor aimed at the Interfaces schema endpoint.
+            internal_executor: Executor for sub-portal element wiring mutations.
         """
-        self._interfaces_client = BasePipefyClient(
-            settings=settings,
-            auth=auth,
-            url_override=settings.interfaces_graphql_url,
-        )
-        self._graphql_client = BasePipefyClient(
-            settings=settings,
-            auth=auth,
-        )
-        self._internal_api_client = internal_api_client
+        self._public_executor = public_executor
+        self._interfaces_executor = interfaces_executor
+        self._internal_executor = internal_executor
 
     async def execute_interfaces_query(
         self,
-        query: str,
+        query: DocumentNode,
         variables: dict[str, Any],
     ) -> dict[str, Any]:
         """Execute a GraphQL query or mutation on the Interfaces schema.
 
         Args:
-            query: GraphQL document string.
+            query: Parsed GraphQL document (``gql()`` output).
             variables: Variable map for the operation.
         """
-        return await self._interfaces_client.execute_query(query, variables)
+        return await self._interfaces_executor.execute_query(query, variables)
 
     async def execute_internal_api_query(
         self,
-        query: str,
+        query: DocumentNode,
         variables: dict[str, Any],
     ) -> dict[str, Any]:
-        """Execute a GraphQL query or mutation on the internal_api endpoint.
+        """Execute a GraphQL query or mutation on the Internal API endpoint.
 
         Args:
-            query: GraphQL document string.
+            query: Parsed GraphQL document (``gql()`` output).
             variables: Variable map for the operation.
         """
-        return await self._internal_api_client.execute_query(query, variables)
+        return await self._internal_executor.execute_query(query, variables)
 
     async def list_portals(
         self,
@@ -280,7 +273,7 @@ class PortalService:
             search_term: Optional name filter forwarded as ``searchTerm``.
         """
         resolved_org_uuid = await resolve_organization_uuid(
-            self._graphql_client.execute_query,
+            self._public_executor.execute_query,
             organization_uuid,
         )
         variables: dict[str, Any] = {
@@ -324,7 +317,7 @@ class PortalService:
             {"organization_uuid": organization_uuid}
         )
         resolved_org_uuid = await resolve_organization_uuid(
-            self._graphql_client.execute_query,
+            self._public_executor.execute_query,
             portal_input.organization_uuid,
         )
         data = await _execute_interfaces_query_with_portal_errors(
@@ -701,7 +694,7 @@ class PortalService:
         element_id: str,
         sub_portal_uuid: str,
     ) -> dict[str, Any]:
-        """Attach a sub-portal to a portal page element (internal_api).
+        """Attach a sub-portal to a portal page element (Internal API).
 
         Args:
             portal_uuid: Main portal interface UUID.
@@ -771,7 +764,7 @@ class PortalService:
         portal_uuid: str,
         element_id: str,
     ) -> dict[str, Any]:
-        """Remove sub-portal wiring from a page element (internal_api).
+        """Remove sub-portal wiring from a page element (Internal API).
 
         Args:
             portal_uuid: Main portal interface UUID.
@@ -784,7 +777,7 @@ class PortalService:
         )
 
     async def delete_sub_portal(self, uuid: str) -> dict[str, Any]:
-        """Delete a sub-portal entity (irreversible; internal_api).
+        """Delete a sub-portal entity (irreversible; Internal API).
 
         Args:
             uuid: Sub-portal UUID.

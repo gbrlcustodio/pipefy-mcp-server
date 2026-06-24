@@ -28,8 +28,8 @@ from _shared.live_settings import (
 )
 from gql.transport.exceptions import TransportQueryError
 
+from pipefy_sdk.client import build_executors
 from pipefy_sdk.exceptions import PortalPermissionError
-from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.services.portal_service import PortalService
 
 _PORTAL_ORG_SKIP = (
@@ -39,15 +39,13 @@ _PORTAL_ORG_SKIP = (
 
 @pytest.fixture
 def live_portal_service() -> PortalService:
-    """PortalService with live Interfaces + internal_api for sub-portal mutations."""
+    """PortalService with live Interfaces + Internal API for sub-portal mutations."""
     require_live_creds()
-    settings = live_pipefy_settings()
-    auth = live_resolved_auth()
-    internal = InternalApiClient(settings, auth=auth)
+    ex = build_executors(live_pipefy_settings(), live_resolved_auth())
     return PortalService(
-        settings=settings,
-        auth=auth,
-        internal_api_client=internal,
+        public_executor=ex.public,
+        interfaces_executor=ex.interfaces,
+        internal_executor=ex.internal,
     )
 
 
@@ -292,7 +290,7 @@ async def test_live_create_portal_element_on_bootstrapped_page(
 async def test_live_publish_sub_portal_cycle(
     live_portal_service: PortalService,
 ) -> None:
-    """Publish then unpublish a sub-portal on a templated forms element (internal_api)."""
+    """Publish then unpublish a sub-portal on a templated forms element (Internal API)."""
     org_uuid = _require_portal_org_uuid()
     sub_portal_uuid: str | None = None
 

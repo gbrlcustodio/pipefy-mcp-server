@@ -2,37 +2,33 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Protocol
 
 from gql import Client
 from gql.graphql_request import GraphQLRequest
 from gql.transport.exceptions import TransportQueryError
 from gql.transport.httpx import HTTPXAsyncTransport
-from graphql import GraphQLSchema
+from graphql import DocumentNode, GraphQLSchema
 from httpx import Auth, Timeout
 
-from pipefy_sdk.settings import PipefySettings
 
+class GraphQLExecutor(Protocol):
+    """The GraphQL execution seam services depend on.
 
-def unwrap_relay_connection_nodes(connection: Any) -> list[dict[str, Any]]:
-    """Collect ``node`` dicts from a Relay-style GraphQL connection (edges → node)."""
-    if not isinstance(connection, dict):
-        return []
-    edges = connection.get("edges")
-    if not isinstance(edges, list):
-        return []
-    nodes: list[dict[str, Any]] = []
-    for edge in edges:
-        if not isinstance(edge, dict):
-            continue
-        node = edge.get("node")
-        if isinstance(node, dict):
-            nodes.append(node)
-    return nodes
+    Narrow by design: it exposes only the operation services need and leaks
+    nothing about the httpx/gql transport. Services receive an implementation
+    through their constructor and call ``execute_query``; tests inject a fake.
+    ``query`` is a parsed ``DocumentNode``: callers build one with ``gql()`` (the
+    raw ``execute_graphql`` passthrough parses its string before reaching here).
+    """
+
+    async def execute_query(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> dict: ...
 
 
 def _graphql_request_with_variables(
-    query: Any, variables: dict[str, Any]
+    query: DocumentNode, variables: dict[str, Any]
 ) -> GraphQLRequest:
     """Bind variables on a fresh request so shared ``gql()`` constants stay immutable.
 
@@ -41,8 +37,8 @@ def _graphql_request_with_variables(
     return GraphQLRequest(query, variable_values=variables if variables else None)
 
 
-class BasePipefyClient:
-    """Base infrastructure for Pipefy GraphQL operations.
+class HttpxGraphQLExecutor:
+    """The sole httpx/gql adapter implementing :class:`GraphQLExecutor`.
 
     Creates a fresh transport per execute_query() call so parallel requests
     never share mutable transport state (avoids TransportAlreadyConnected).
@@ -55,37 +51,35 @@ class BasePipefyClient:
 
     def __init__(
         self,
-        settings: PipefySettings,
         *,
+        url: str,
         auth: Auth,
-        url_override: str | None = None,
+        cache_schema: bool = False,
         on_graphql_error: Callable[[list[dict]], str] | None = None,
     ) -> None:
-        # ``url_override`` lets callers point this client at a sibling endpoint
-        # (e.g. ``PortalService`` aims its interfaces client at
-        # ``settings.interfaces_graphql_url``) without mutating the shared
-        # settings object. Defaults to ``settings.graphql_url``.
-        self.settings = settings
+        # Fully resolved endpoint URL; the adapter does no settings resolution itself.
+        self._graphql_url = url
         self._auth = auth
-        self._graphql_url = url_override or settings.graphql_url
+        self._cache_schema = cache_schema
         # When set, ``TransportQueryError`` is converted to ``ValueError`` using the
-        # formatter's output. Used by ``InternalApiClient`` to surface its
+        # formatter's output. Used by the Internal API executor to surface its
         # ``[code=…] [correlation_id=…]`` envelope; ``None`` leaves gql exceptions
-        # untouched (PipefyClient's behaviour).
+        # untouched (the public executor's behaviour).
         self._on_graphql_error = on_graphql_error
-        # Populated when gql_reuse_fetched_graphql_schema is True; avoids repeating
-        # introspection on every new Client (see Cons5 code review).
+        # Caches the introspected schema so it is fetched once, not per Client.
         self._fetched_gql_schema: GraphQLSchema | None = None
         self._fetched_gql_schema_lock = asyncio.Lock()
 
-    async def execute_query(self, query: Any, variables: dict[str, Any]) -> dict:
+    async def execute_query(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> dict:
         """Execute a GraphQL query/mutation with variables.
 
         A fresh HTTPXAsyncTransport is created per call so concurrent invocations
         each get their own isolated connection state.
         By default the gql client does not fetch the remote schema (no introspection
-        per request). Optional ``pipefy.gql_reuse_fetched_graphql_schema`` fetches
-        once per client instance, caches the schema, and reuses it for local validation.
+        per request). When ``cache_schema`` is True the schema is fetched once per
+        executor instance, cached, and reused for local validation.
         """
         transport = HTTPXAsyncTransport(
             url=self._graphql_url,
@@ -94,7 +88,7 @@ class BasePipefyClient:
             verify=True,
         )
         try:
-            if self.settings.gql_reuse_fetched_graphql_schema:
+            if self._cache_schema:
                 if self._fetched_gql_schema is None:
                     async with self._fetched_gql_schema_lock:
                         if self._fetched_gql_schema is None:

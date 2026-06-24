@@ -16,6 +16,7 @@ from _shared.live_settings import (
     require_live_creds,
 )
 
+from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
 from pipefy_sdk.services.schema_introspection_service import (
     SchemaIntrospectionService,
 )
@@ -24,9 +25,13 @@ from pipefy_sdk.services.schema_introspection_service import (
 @pytest.fixture
 def live_svc():
     require_live_creds()
-    return SchemaIntrospectionService(
-        settings=live_pipefy_settings(), auth=live_resolved_auth()
+    settings = live_pipefy_settings()
+    executor = HttpxGraphQLExecutor(
+        url=settings.graphql_url,
+        auth=live_resolved_auth(),
+        cache_schema=settings.gql_reuse_fetched_graphql_schema,
     )
+    return SchemaIntrospectionService(executor=executor)
 
 
 @pytest.mark.integration

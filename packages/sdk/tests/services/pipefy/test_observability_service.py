@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_ORG_UUID
+from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
 from openpyxl import Workbook
-from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
@@ -23,27 +23,17 @@ from pipefy_sdk.queries.observability_queries import (
     RESOLVE_ORGANIZATION_UUID_QUERY,
 )
 from pipefy_sdk.services.observability_service import ObservabilityService
-from pipefy_sdk.settings import PipefySettings
-
-_TEST_AUTH = StaticBearerAuth("test-bearer-token")
 
 
-@pytest.fixture
-def mock_settings():
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
-    )
-
-
-def _make_service(mock_settings, return_value):
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value=return_value)
-    return service
+def _make_service(return_value):
+    executor = mock_executor(return_value)
+    service = ObservabilityService(executor=executor)
+    return service, executor
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_ai_agent_logs_success(mock_settings):
+async def test_get_ai_agent_logs_success():
     payload = {
         "aiAgentLogsByRepo": {
             "nodes": [
@@ -76,11 +66,11 @@ async def test_get_ai_agent_logs_success(mock_settings):
             "totalCount": 50,
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_ai_agent_logs("repo-uuid-1")
 
-    service.execute_query.assert_awaited_once()
-    query, variables = service.execute_query.call_args[0]
+    executor.execute_query.assert_awaited_once()
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AI_AGENT_LOGS_QUERY
     assert variables == {"repoUuid": "repo-uuid-1", "first": 30}
     assert len(result["aiAgentLogsByRepo"]["nodes"]) == 2
@@ -89,7 +79,7 @@ async def test_get_ai_agent_logs_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_ai_agent_logs_with_status_filter(mock_settings):
+async def test_get_ai_agent_logs_with_status_filter():
     payload = {
         "aiAgentLogsByRepo": {
             "nodes": [],
@@ -97,17 +87,17 @@ async def test_get_ai_agent_logs_with_status_filter(mock_settings):
             "totalCount": 0,
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     await service.get_ai_agent_logs("repo-uuid-1", status="failed", search_term="error")
 
-    _, variables = service.execute_query.call_args[0]
+    _, variables = executor.execute_query.call_args[0]
     assert variables["status"] == "failed"
     assert variables["searchTerm"] == "error"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_ai_agent_log_details_success(mock_settings):
+async def test_get_ai_agent_log_details_success():
     payload = {
         "aiAgentLogDetails": {
             "uuid": "log-1",
@@ -126,10 +116,10 @@ async def test_get_ai_agent_log_details_success(mock_settings):
             ],
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_ai_agent_log_details("log-1")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AI_AGENT_LOG_DETAILS_QUERY
     assert variables == {"uuid": "log-1"}
     assert len(result["aiAgentLogDetails"]["tracingNodes"]) == 2
@@ -137,7 +127,7 @@ async def test_get_ai_agent_log_details_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_logs_success(mock_settings):
+async def test_get_automation_logs_success():
     payload = {
         "automationLogs": {
             "nodes": [
@@ -155,10 +145,10 @@ async def test_get_automation_logs_success(mock_settings):
             "totalCount": 1,
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_automation_logs("auto-1")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATION_LOGS_QUERY
     assert variables == {"automationId": "auto-1", "first": 30}
     assert result["automationLogs"]["totalCount"] == 1
@@ -166,7 +156,7 @@ async def test_get_automation_logs_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_logs_by_repo_success(mock_settings):
+async def test_get_automation_logs_by_repo_success():
     payload = {
         "automationLogsByRepo": {
             "nodes": [
@@ -184,12 +174,12 @@ async def test_get_automation_logs_by_repo_success(mock_settings):
             "totalCount": 15,
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_automation_logs_by_repo(
         "repo-5", first=10, after="cur-0"
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATION_LOGS_BY_REPO_QUERY
     assert variables == {"repoId": "repo-5", "first": 10, "after": "cur-0"}
     assert result["automationLogsByRepo"]["totalCount"] == 15
@@ -197,18 +187,18 @@ async def test_get_automation_logs_by_repo_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_ai_agent_logs_transport_error(mock_settings):
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_ai_agent_logs_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
+    service = ObservabilityService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_ai_agent_logs("repo-uuid-1")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_agents_usage_success(mock_settings):
+async def test_get_agents_usage_success():
     payload = {
         "agentsUsageDetails": {
             "usage": 42.5,
@@ -221,11 +211,11 @@ async def test_get_agents_usage_success(mock_settings):
             },
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
     result = await service.get_agents_usage(EXAMPLE_ORG_UUID, filter_date)
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AGENTS_USAGE_QUERY
     assert variables == {
         "organizationUuid": EXAMPLE_ORG_UUID,
@@ -237,7 +227,7 @@ async def test_get_agents_usage_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_usage_success(mock_settings):
+async def test_get_automations_usage_success():
     payload = {
         "automationsUsageDetails": {
             "usage": 500,
@@ -250,13 +240,13 @@ async def test_get_automations_usage_success(mock_settings):
             },
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
     result = await service.get_automations_usage(
         EXAMPLE_ORG_UUID, filter_date, search="Rule"
     )
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATIONS_USAGE_QUERY
     assert variables["organizationUuid"] == EXAMPLE_ORG_UUID
     assert variables["filterDate"] == filter_date
@@ -266,7 +256,7 @@ async def test_get_automations_usage_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_ai_credit_usage_success(mock_settings):
+async def test_get_ai_credit_usage_success():
     payload = {
         "aiCreditUsageStats": {
             "active": True,
@@ -283,10 +273,10 @@ async def test_get_ai_credit_usage_success(mock_settings):
             },
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_ai_credit_usage(EXAMPLE_ORG_UUID, "current_month")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AI_CREDIT_USAGE_QUERY
     assert variables == {
         "organizationUuid": EXAMPLE_ORG_UUID,
@@ -297,7 +287,7 @@ async def test_get_ai_credit_usage_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_ai_credit_usage_resolves_numeric_organization_id(mock_settings):
+async def test_get_ai_credit_usage_resolves_numeric_organization_id():
     resolve_payload = {"organization": {"uuid": EXAMPLE_ORG_UUID}}
     credit_payload = {
         "aiCreditUsageStats": {
@@ -315,12 +305,12 @@ async def test_get_ai_credit_usage_resolves_numeric_organization_id(mock_setting
             },
         }
     }
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=[resolve_payload, credit_payload])
+    executor = mock_executor(side_effect=[resolve_payload, credit_payload])
+    service = ObservabilityService(executor=executor)
     result = await service.get_ai_credit_usage(EXAMPLE_NUMERIC_ORG_ID, "current_month")
 
-    assert service.execute_query.call_count == 2
-    calls = service.execute_query.call_args_list
+    assert executor.execute_query.call_count == 2
+    calls = executor.execute_query.call_args_list
     assert calls[0][0][0] is RESOLVE_ORGANIZATION_UUID_QUERY
     assert calls[0][0][1] == {"id": EXAMPLE_NUMERIC_ORG_ID}
     assert calls[1][0][0] is GET_AI_CREDIT_USAGE_QUERY
@@ -333,18 +323,16 @@ async def test_get_ai_credit_usage_resolves_numeric_organization_id(mock_setting
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_ai_credit_usage_resolve_fails_when_organization_missing(
-    mock_settings,
-):
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(return_value={"organization": None})
+async def test_get_ai_credit_usage_resolve_fails_when_organization_missing():
+    executor = mock_executor({"organization": None})
+    service = ObservabilityService(executor=executor)
     with pytest.raises(ValueError, match="Organization not found"):
         await service.get_ai_credit_usage("999999999", "current_month")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_export_automation_jobs_success(mock_settings):
+async def test_export_automation_jobs_success():
     payload = {
         "createAutomationJobsExport": {
             "automationJobsExport": {
@@ -354,10 +342,10 @@ async def test_export_automation_jobs_success(mock_settings):
             }
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.export_automation_jobs("123", "last_month")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is CREATE_AUTOMATION_JOBS_EXPORT_MUTATION
     assert variables == {"input": {"organizationId": "123", "filter": "last_month"}}
     assert result["createAutomationJobsExport"]["automationJobsExport"]["id"] == "exp-1"
@@ -365,7 +353,7 @@ async def test_export_automation_jobs_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_jobs_export_success(mock_settings):
+async def test_get_automation_jobs_export_success():
     payload = {
         "automationJobsExport": {
             "id": "25820",
@@ -373,10 +361,10 @@ async def test_get_automation_jobs_export_success(mock_settings):
             "fileUrl": None,
         }
     }
-    service = _make_service(mock_settings, payload)
+    service, executor = _make_service(payload)
     result = await service.get_automation_jobs_export("25820")
 
-    query, variables = service.execute_query.call_args[0]
+    query, variables = executor.execute_query.call_args[0]
     assert query is GET_AUTOMATION_JOBS_EXPORT_QUERY
     assert variables == {"id": "25820"}
     assert result["automationJobsExport"]["status"] == "processing"
@@ -394,11 +382,10 @@ def _tiny_xlsx_bytes() -> bytes:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_jobs_export_csv_success(mock_settings):
+async def test_get_automation_jobs_export_csv_success():
     xlsx = _tiny_xlsx_bytes()
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
-        return_value={
+    executor = mock_executor(
+        {
             "automationJobsExport": {
                 "id": "9",
                 "status": "finished",
@@ -406,6 +393,7 @@ async def test_get_automation_jobs_export_csv_success(mock_settings):
             }
         }
     )
+    service = ObservabilityService(executor=executor)
     with patch(
         "pipefy_sdk.services.observability_service.download_bytes",
         new_callable=AsyncMock,
@@ -422,10 +410,9 @@ async def test_get_automation_jobs_export_csv_success(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_jobs_export_csv_not_finished(mock_settings):
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
-        return_value={
+async def test_get_automation_jobs_export_csv_not_finished():
+    executor = mock_executor(
+        {
             "automationJobsExport": {
                 "id": "9",
                 "status": "processing",
@@ -433,16 +420,16 @@ async def test_get_automation_jobs_export_csv_not_finished(mock_settings):
             }
         }
     )
+    service = ObservabilityService(executor=executor)
     with pytest.raises(ValueError, match="finished"):
         await service.get_automation_jobs_export_csv("9")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_jobs_export_csv_download_error(mock_settings):
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
-        return_value={
+async def test_get_automation_jobs_export_csv_download_error():
+    executor = mock_executor(
+        {
             "automationJobsExport": {
                 "id": "9",
                 "status": "finished",
@@ -450,6 +437,7 @@ async def test_get_automation_jobs_export_csv_download_error(mock_settings):
             }
         }
     )
+    service = ObservabilityService(executor=executor)
     req = httpx.Request("GET", "https://app.pipefy.com/storage/x.xlsx")
     with patch(
         "pipefy_sdk.services.observability_service.download_bytes",
@@ -462,11 +450,11 @@ async def test_get_automation_jobs_export_csv_download_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_agents_usage_transport_error(mock_settings):
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_agents_usage_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "forbidden"}])
     )
+    service = ObservabilityService(executor=executor)
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
     with pytest.raises(TransportQueryError):
         await service.get_agents_usage(EXAMPLE_ORG_UUID, filter_date)
@@ -474,18 +462,18 @@ async def test_get_agents_usage_transport_error(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automation_logs_transport_error(mock_settings):
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(
+async def test_get_automation_logs_transport_error():
+    executor = mock_executor(
         side_effect=TransportQueryError("failed", errors=[{"message": "denied"}])
     )
+    service = ObservabilityService(executor=executor)
     with pytest.raises(TransportQueryError):
         await service.get_automation_logs("auto-1")
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_agents_usage_resolves_numeric_organization_id(mock_settings):
+async def test_get_agents_usage_resolves_numeric_organization_id():
     resolve_payload = {"organization": {"uuid": EXAMPLE_ORG_UUID}}
     usage_payload = {
         "agentsUsage": {
@@ -493,13 +481,13 @@ async def test_get_agents_usage_resolves_numeric_organization_id(mock_settings):
             "totalCredits": 5.0,
         }
     }
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=[resolve_payload, usage_payload])
+    executor = mock_executor(side_effect=[resolve_payload, usage_payload])
+    service = ObservabilityService(executor=executor)
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
     result = await service.get_agents_usage(EXAMPLE_NUMERIC_ORG_ID, filter_date)
 
-    assert service.execute_query.call_count == 2
-    calls = service.execute_query.call_args_list
+    assert executor.execute_query.call_count == 2
+    calls = executor.execute_query.call_args_list
     assert calls[0][0][0] is RESOLVE_ORGANIZATION_UUID_QUERY
     assert calls[0][0][1] == {"id": EXAMPLE_NUMERIC_ORG_ID}
     assert calls[1][0][0] is GET_AGENTS_USAGE_QUERY
@@ -509,7 +497,7 @@ async def test_get_agents_usage_resolves_numeric_organization_id(mock_settings):
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_get_automations_usage_resolves_numeric_organization_id(mock_settings):
+async def test_get_automations_usage_resolves_numeric_organization_id():
     resolve_payload = {"organization": {"uuid": EXAMPLE_ORG_UUID}}
     usage_payload = {
         "automationsUsage": {
@@ -517,13 +505,13 @@ async def test_get_automations_usage_resolves_numeric_organization_id(mock_setti
             "totalExecutions": 42,
         }
     }
-    service = ObservabilityService(settings=mock_settings, auth=_TEST_AUTH)
-    service.execute_query = AsyncMock(side_effect=[resolve_payload, usage_payload])
+    executor = mock_executor(side_effect=[resolve_payload, usage_payload])
+    service = ObservabilityService(executor=executor)
     filter_date = {"from": "2026-03-01T00:00:00Z", "to": "2026-03-31T23:59:59Z"}
     result = await service.get_automations_usage(EXAMPLE_NUMERIC_ORG_ID, filter_date)
 
-    assert service.execute_query.call_count == 2
-    calls = service.execute_query.call_args_list
+    assert executor.execute_query.call_count == 2
+    calls = executor.execute_query.call_args_list
     assert calls[0][0][0] is RESOLVE_ORGANIZATION_UUID_QUERY
     assert calls[0][0][1] == {"id": EXAMPLE_NUMERIC_ORG_ID}
     assert calls[1][0][0] is GET_AUTOMATIONS_USAGE_QUERY

@@ -37,7 +37,7 @@ def test_map_portal_error_permission_denied_transport_query_error() -> None:
 
 @pytest.mark.unit
 def test_map_portal_error_permission_denied_internal_api_value_error() -> None:
-    """internal_api ValueError with [code=PERMISSION_DENIED] maps to guidance."""
+    """Internal API ValueError with [code=PERMISSION_DENIED] maps to guidance."""
     exc = ValueError("User denied [code=PERMISSION_DENIED] [correlation_id=abc-123]")
     message = map_portal_error_to_message(exc)
     assert "create_portal" in message or "manage_portals" in message
@@ -47,7 +47,7 @@ def test_map_portal_error_permission_denied_internal_api_value_error() -> None:
 def test_map_portal_error_non_permission_internal_api_value_error_strips_markers() -> (
     None
 ):
-    """Non-permission internal_api ValueError returns marker-free text."""
+    """Non-permission Internal API ValueError returns marker-free text."""
     exc = ValueError("Bad request [code=BAD_REQUEST] [correlation_id=abc-123]")
     assert map_portal_error_to_message(exc) == "Bad request"
 

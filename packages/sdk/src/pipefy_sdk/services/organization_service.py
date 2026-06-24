@@ -4,25 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from httpx import Auth
-
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.organization_queries import (
     GET_ORGANIZATION_QUERY,
 )
-from pipefy_sdk.settings import PipefySettings
 
 
-class OrganizationService(BasePipefyClient):
+class OrganizationService:
     """GraphQL operations for Pipefy organizations."""
 
-    def __init__(
-        self,
-        settings: PipefySettings,
-        *,
-        auth: Auth,
-    ) -> None:
-        super().__init__(settings=settings, auth=auth)
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
 
     async def get_organization(self, organization_id: str) -> dict[str, Any]:
         """Fetch organization details by ID.
@@ -30,7 +22,7 @@ class OrganizationService(BasePipefyClient):
         Args:
             organization_id: Numeric organization ID.
         """
-        data = await self.execute_query(
+        data = await self._executor.execute_query(
             GET_ORGANIZATION_QUERY, {"id": str(organization_id)}
         )
         org = data.get("organization")

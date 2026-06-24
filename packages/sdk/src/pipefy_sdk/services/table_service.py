@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from httpx import Auth
 from rapidfuzz import fuzz
 
-from pipefy_sdk.base_client import BasePipefyClient
+from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.table_queries import (
     CREATE_TABLE_FIELD_MUTATION,
     CREATE_TABLE_MUTATION,
@@ -26,7 +25,6 @@ from pipefy_sdk.queries.table_queries import (
     UPDATE_TABLE_MUTATION,
     UPDATE_TABLE_RECORD_MUTATION,
 )
-from pipefy_sdk.settings import PipefySettings
 from pipefy_sdk.utils.formatters import convert_fields_to_array
 
 SEARCH_TABLES_FIRST_DEFAULT: int = 100
@@ -46,24 +44,21 @@ UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE = (
 )
 
 
-class TableService(BasePipefyClient):
+class TableService:
     """Database table and record operations (reads, mutations, and field CRUD)."""
 
-    def __init__(
-        self,
-        settings: PipefySettings,
-        *,
-        auth: Auth,
-    ) -> None:
-        super().__init__(settings=settings, auth=auth)
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
+        self._executor = executor
 
     async def get_table(self, table_id: str | int) -> dict[str, Any]:
         """Fetch one database table by ID (metadata and fields)."""
-        return await self.execute_query(GET_TABLE_QUERY, {"id": str(table_id)})
+        return await self._executor.execute_query(
+            GET_TABLE_QUERY, {"id": str(table_id)}
+        )
 
     async def get_tables(self, table_ids: list[str | int]) -> dict[str, Any]:
         """Fetch multiple database tables by ID."""
-        return await self.execute_query(
+        return await self._executor.execute_query(
             GET_TABLES_QUERY, {"ids": [str(t) for t in table_ids]}
         )
 
@@ -83,11 +78,13 @@ class TableService(BasePipefyClient):
         variables: dict[str, Any] = {"tableId": str(table_id), "first": first}
         if after is not None:
             variables["after"] = after
-        return await self.execute_query(GET_TABLE_RECORDS_QUERY, variables)
+        return await self._executor.execute_query(GET_TABLE_RECORDS_QUERY, variables)
 
     async def get_table_record(self, record_id: str | int) -> dict[str, Any]:
         """Fetch a single table record by ID."""
-        return await self.execute_query(GET_TABLE_RECORD_QUERY, {"id": str(record_id)})
+        return await self._executor.execute_query(
+            GET_TABLE_RECORD_QUERY, {"id": str(record_id)}
+        )
 
     async def find_records(
         self,
@@ -115,7 +112,7 @@ class TableService(BasePipefyClient):
             variables["first"] = first
         if after is not None:
             variables["after"] = after
-        return await self.execute_query(FIND_RECORDS_QUERY, variables)
+        return await self._executor.execute_query(FIND_RECORDS_QUERY, variables)
 
     async def create_table(
         self, name: str, organization_id: str | int, **attrs: Any
@@ -128,7 +125,9 @@ class TableService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(CREATE_TABLE_MUTATION, {"input": input_obj})
+        return await self._executor.execute_query(
+            CREATE_TABLE_MUTATION, {"input": input_obj}
+        )
 
     async def update_table(self, table_id: str | int, **attrs: Any) -> dict[str, Any]:
         """Update a database table by ID. Pass only `UpdateTableInput` fields (omit or None to skip)."""
@@ -136,11 +135,13 @@ class TableService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 payload[key] = value
-        return await self.execute_query(UPDATE_TABLE_MUTATION, {"input": payload})
+        return await self._executor.execute_query(
+            UPDATE_TABLE_MUTATION, {"input": payload}
+        )
 
     async def delete_table(self, table_id: str | int) -> dict[str, Any]:
         """Delete a database table by ID (permanent). Caller must enforce preview/confirm UX."""
-        return await self.execute_query(
+        return await self._executor.execute_query(
             DELETE_TABLE_MUTATION,
             {"input": {"id": str(table_id)}},
         )
@@ -165,7 +166,7 @@ class TableService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             CREATE_TABLE_RECORD_MUTATION,
             {"input": input_obj},
         )
@@ -194,14 +195,14 @@ class TableService(BasePipefyClient):
                 payload["statusId"] = value
             elif key in ("title", "due_date", "statusId"):
                 payload[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             UPDATE_TABLE_RECORD_MUTATION,
             {"input": payload},
         )
 
     async def delete_table_record(self, record_id: str | int) -> dict[str, Any]:
         """Delete a table record by ID (permanent)."""
-        return await self.execute_query(
+        return await self._executor.execute_query(
             DELETE_TABLE_RECORD_MUTATION,
             {"input": {"id": str(record_id)}},
         )
@@ -214,7 +215,7 @@ class TableService(BasePipefyClient):
     ) -> dict[str, Any]:
         """Set one field on a table record (`value` is wrapped in a list if not already a list)."""
         api_value = value if isinstance(value, list) else [value]
-        return await self.execute_query(
+        return await self._executor.execute_query(
             SET_TABLE_RECORD_FIELD_VALUE_MUTATION,
             {
                 "input": {
@@ -248,7 +249,7 @@ class TableService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 input_obj[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             CREATE_TABLE_FIELD_MUTATION,
             {"input": input_obj},
         )
@@ -269,7 +270,7 @@ class TableService(BasePipefyClient):
         for key, value in attrs.items():
             if value is not None:
                 payload[key] = value
-        return await self.execute_query(
+        return await self._executor.execute_query(
             UPDATE_TABLE_FIELD_MUTATION,
             {"input": payload},
         )
@@ -285,7 +286,7 @@ class TableService(BasePipefyClient):
             field_id: Field ID to remove from the table schema.
             table_id: Table ID containing this field (required by API).
         """
-        return await self.execute_query(
+        return await self._executor.execute_query(
             DELETE_TABLE_FIELD_MUTATION,
             {"input": {"id": field_id, "table_id": str(table_id)}},
         )
@@ -314,7 +315,7 @@ class TableService(BasePipefyClient):
             when any org's connection reports ``hasNextPage``.
         """
         first_clamped = _clamp_tables_first(first)
-        result = await self.execute_query(
+        result = await self._executor.execute_query(
             SEARCH_TABLES_QUERY,
             {"first": first_clamped},
         )

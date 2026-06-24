@@ -177,8 +177,8 @@ CREATE_CARD_RELATION_MUTATION = gql(
 )
 
 # ``deleteCardRelation`` is only available on the internal GraphQL schema
-# (core_api / internal_v1), not the public API. It runs through
-# ``InternalApiClient``, which accepts a ``gql()`` query like every other client.
+# (core_api / internal_v1), not the Public API. It runs through the Internal API
+# executor, which accepts a ``gql()`` query like every other executor.
 INTERNAL_DELETE_CARD_RELATION_MUTATION = gql(
     """
     mutation deleteCardRelation(

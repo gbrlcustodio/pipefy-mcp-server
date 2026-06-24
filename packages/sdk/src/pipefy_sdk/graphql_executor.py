@@ -11,8 +11,6 @@ from gql.transport.httpx import HTTPXAsyncTransport
 from graphql import DocumentNode, GraphQLSchema
 from httpx import Auth, Timeout
 
-from pipefy_sdk.settings import PipefySettings
-
 
 class GraphQLExecutor(Protocol):
     """The GraphQL execution seam services depend on.
@@ -53,26 +51,22 @@ class HttpxGraphQLExecutor:
 
     def __init__(
         self,
-        settings: PipefySettings,
         *,
+        url: str,
         auth: Auth,
-        url_override: str | None = None,
+        cache_schema: bool = False,
         on_graphql_error: Callable[[list[dict]], str] | None = None,
     ) -> None:
-        # ``url_override`` lets callers point this executor at a sibling endpoint
-        # (e.g. the Interfaces or Internal API URL derived from the same
-        # ``settings``) without mutating the shared settings object. Defaults to
-        # ``settings.graphql_url``.
-        self.settings = settings
+        # Fully resolved endpoint URL; the adapter does no settings resolution itself.
+        self._graphql_url = url
         self._auth = auth
-        self._graphql_url = url_override or settings.graphql_url
+        self._cache_schema = cache_schema
         # When set, ``TransportQueryError`` is converted to ``ValueError`` using the
         # formatter's output. Used by the Internal API executor to surface its
         # ``[code=…] [correlation_id=…]`` envelope; ``None`` leaves gql exceptions
         # untouched (the public executor's behaviour).
         self._on_graphql_error = on_graphql_error
-        # Populated when gql_reuse_fetched_graphql_schema is True; avoids repeating
-        # introspection on every new Client.
+        # Caches the introspected schema so it is fetched once, not per Client.
         self._fetched_gql_schema: GraphQLSchema | None = None
         self._fetched_gql_schema_lock = asyncio.Lock()
 
@@ -84,8 +78,8 @@ class HttpxGraphQLExecutor:
         A fresh HTTPXAsyncTransport is created per call so concurrent invocations
         each get their own isolated connection state.
         By default the gql client does not fetch the remote schema (no introspection
-        per request). Optional ``pipefy.gql_reuse_fetched_graphql_schema`` fetches
-        once per executor instance, caches the schema, and reuses it for local validation.
+        per request). When ``cache_schema`` is True the schema is fetched once per
+        executor instance, cached, and reused for local validation.
         """
         transport = HTTPXAsyncTransport(
             url=self._graphql_url,
@@ -94,7 +88,7 @@ class HttpxGraphQLExecutor:
             verify=True,
         )
         try:
-            if self.settings.gql_reuse_fetched_graphql_schema:
+            if self._cache_schema:
                 if self._fetched_gql_schema is None:
                     async with self._fetched_gql_schema_lock:
                         if self._fetched_gql_schema is None:

@@ -86,19 +86,24 @@ class Executors:
 def build_executors(settings: PipefySettings, auth: Auth) -> Executors:
     """Build one executor per Pipefy endpoint from a shared ``settings``/``auth``.
 
-    All three share the one ``auth`` instance so the OAuth token cache is not
-    duplicated. The internal executor carries the ``[code=…][correlation_id=…]``
-    error envelope; the others leave gql exceptions untouched.
+    This is the seam that resolves each endpoint URL from settings; the executors
+    take a ready URL and stay agnostic to endpoint topology. All three share the
+    one ``auth`` instance so the OAuth token cache is not duplicated. Only the
+    internal executor carries the ``[code=…][correlation_id=…]`` error envelope;
+    the others leave gql exceptions untouched.
     """
+    cache_schema = settings.gql_reuse_fetched_graphql_schema
     return Executors(
-        public=HttpxGraphQLExecutor(settings, auth=auth),
+        public=HttpxGraphQLExecutor(
+            url=settings.graphql_url, auth=auth, cache_schema=cache_schema
+        ),
         interfaces=HttpxGraphQLExecutor(
-            settings, auth=auth, url_override=settings.interfaces_graphql_url
+            url=settings.interfaces_graphql_url, auth=auth, cache_schema=cache_schema
         ),
         internal=HttpxGraphQLExecutor(
-            settings,
+            url=settings.internal_api_url,
             auth=auth,
-            url_override=settings.internal_api_url,
+            cache_schema=cache_schema,
             on_graphql_error=format_internal_api_error,
         ),
     )

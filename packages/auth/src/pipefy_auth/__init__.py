@@ -55,12 +55,14 @@ from pipefy_auth.storage import (
     load_session,
     store_session,
 )
+from pipefy_auth.verification import JwtValidator, TokenValidationError
 
 __all__ = [
     "AuthSettings",
     "CallableBearerAuth",
     "DEFAULT_AUTH_CLIENT_ID",
     "DiscoveryPolicy",
+    "JwtValidator",
     "LoginError",
     "LoginResult",
     "OAuthErrorResponse",
@@ -78,6 +80,7 @@ __all__ = [
     "StaticBearerAuth",
     "StoredSession",
     "TokenResponse",
+    "TokenValidationError",
     "__version__",
     "configure_keychain_backend",
     "delete_session",

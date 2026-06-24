@@ -25,9 +25,6 @@ from pipefy_sdk.models.attachment import (
     AttachmentTarget,
     AttachmentUploadResult,
 )
-from pipefy_sdk.queries.card_queries import (
-    INTERNAL_DELETE_CARD_RELATION_MUTATION,
-)
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_graphql_types import (
@@ -98,7 +95,12 @@ class PipefyClient:
             settings=settings, auth=auth, pipe_service=self._pipe_service
         )
         self._table_service = TableService(settings=settings, auth=auth)
-        self._relation_service = RelationService(settings=settings, auth=auth)
+        self._internal_api_client = InternalApiClient(settings, auth=auth)
+        self._relation_service = RelationService(
+            settings=settings,
+            auth=auth,
+            internal_api_client=self._internal_api_client,
+        )
         self._member_service = MemberService(
             settings=settings,
             auth=auth,
@@ -124,22 +126,11 @@ class PipefyClient:
         self._introspection_service = SchemaIntrospectionService(
             settings=settings, auth=auth
         )
-        self._internal_api_client: InternalApiClient | None = None
-        self._portal_service = PortalService(settings=settings, auth=auth)
-
-    @property
-    def internal_api_available(self) -> bool:
-        """Whether the internal API client is configured (OAuth credentials present)."""
-        return self._internal_api_client is not None
-
-    def set_internal_api_client(self, client: InternalApiClient) -> None:
-        """Attach the internal API client (requires OAuth credentials).
-
-        Args:
-            client: Configured :class:`InternalApiClient` instance.
-        """
-        self._internal_api_client = client
-        self._portal_service.set_internal_api_client(client)
+        self._portal_service = PortalService(
+            settings=settings,
+            auth=auth,
+            internal_api_client=self._internal_api_client,
+        )
 
     async def get_pipe(self, pipe_id: str | int) -> dict:
         """Get a pipe by ID, including phases, labels, and start form fields."""
@@ -946,19 +937,9 @@ class PipefyClient:
         parent_id: str | int,
         source_id: str | int,
     ) -> dict:
-        """Delete a relation link between two cards (internal API, requires OAuth).
-
-        The ``deleteCardRelation`` mutation is not exposed on the public GraphQL
-        schema — only on the internal API (core_api / internal_v1).
-        """
-        assert self._internal_api_client is not None  # noqa: S101
-        return await self._internal_api_client.execute_query(
-            INTERNAL_DELETE_CARD_RELATION_MUTATION,
-            {
-                "childId": str(child_id),
-                "parentId": str(parent_id),
-                "sourceId": str(source_id),
-            },
+        """Delete a relation link between two cards (internal API, requires OAuth)."""
+        return await self._relation_service.delete_card_relation(
+            child_id, parent_id, source_id
         )
 
     async def get_start_form_fields(

@@ -7,7 +7,6 @@ from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
-    authenticated_client_from_ctx,
     confirm_destructive,
     parse_json_object,
     resource_id_argument,
@@ -157,18 +156,7 @@ def relation_card_delete(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Remove a card relation (requires service-account credentials; internal API)."""
-
-    client = authenticated_client_from_ctx(ctx)
-    if not client.internal_api_available:
-        typer.echo(
-            "delete_card_relation requires service-account credentials "
-            "(PIPEFY_SERVICE_ACCOUNT_CLIENT_ID, "
-            "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET). "
-            "The deleteCardRelation mutation is only available on the internal API.",
-            err=True,
-        )
-        raise typer.Exit(2)
+    """Remove a card relation (internal API, requires OAuth)."""
 
     confirm_destructive(
         yes=yes,

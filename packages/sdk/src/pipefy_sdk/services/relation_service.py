@@ -22,8 +22,10 @@ from pipefy_sdk.queries.relation_queries import (
     DELETE_PIPE_RELATION_MUTATION,
     GET_PIPE_RELATIONS_QUERY,
     GET_TABLE_RELATIONS_QUERY,
+    INTERNAL_DELETE_CARD_RELATION_MUTATION,
     UPDATE_PIPE_RELATION_MUTATION,
 )
+from pipefy_sdk.services.internal_api_client import InternalApiClient
 from pipefy_sdk.settings import PipefySettings
 
 _PIPE_RELATION_CONSTRAINT_DEFAULTS: dict[str, Any] = {
@@ -48,8 +50,10 @@ class RelationService(BasePipefyClient):
         settings: PipefySettings,
         *,
         auth: Auth,
+        internal_api_client: InternalApiClient,
     ) -> None:
         super().__init__(settings=settings, auth=auth)
+        self._internal_api_client = internal_api_client
 
     async def get_pipe_relations(self, pipe_id: str | int) -> dict[str, Any]:
         """Fetch parent and child pipe relations for a pipe (`parentsRelations`, `childrenRelations`).
@@ -168,4 +172,30 @@ class RelationService(BasePipefyClient):
         return await self.execute_query(
             CREATE_CARD_RELATION_MUTATION,
             {"input": input_obj},
+        )
+
+    async def delete_card_relation(
+        self,
+        child_id: str | int,
+        parent_id: str | int,
+        source_id: str | int,
+    ) -> dict[str, Any]:
+        """Delete a relation link between two cards (internal API, requires OAuth).
+
+        The ``deleteCardRelation`` mutation is not exposed on the public GraphQL
+        schema, only on the internal API (core_api / internal_v1), so it routes
+        through the injected ``InternalApiClient`` rather than ``execute_query``.
+
+        Args:
+            child_id: Child card ID.
+            parent_id: Parent card ID.
+            source_id: Pipe relation ID linking the two cards.
+        """
+        return await self._internal_api_client.execute_query(
+            INTERNAL_DELETE_CARD_RELATION_MUTATION,
+            {
+                "childId": str(child_id),
+                "parentId": str(parent_id),
+                "sourceId": str(source_id),
+            },
         )

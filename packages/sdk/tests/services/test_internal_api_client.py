@@ -20,15 +20,10 @@ from pipefy_sdk.settings import PipefySettings
 DEFAULT_INTERNAL_API_URL = "https://app.pipefy.com/internal_api"
 
 
-def _build_client(
-    url: str = DEFAULT_INTERNAL_API_URL,
-    *,
-    allow_insecure_urls: bool = False,
-) -> InternalApiClient:
+def _build_client() -> InternalApiClient:
     return InternalApiClient(
-        url=url,
+        PipefySettings(),
         auth=StaticBearerAuth("test-bearer-token"),
-        allow_insecure_urls=allow_insecure_urls,
     )
 
 
@@ -218,32 +213,3 @@ async def test_execute_query_raises_on_timeout(respx_mock):
 
     with pytest.raises(TransportConnectionFailed, match="timed out"):
         await _build_client().execute_query(gql("query { x }"), {})
-
-
-@pytest.mark.unit
-def test_internal_api_client_rejects_http_url():
-    with pytest.raises(ValueError, match="HTTPS"):
-        _build_client(url="http://app.pipefy.com/internal_api")
-
-
-@pytest.mark.unit
-def test_internal_api_client_rejects_empty_hostname():
-    with pytest.raises(ValueError, match="hostname"):
-        _build_client(url="https://")
-
-
-@pytest.mark.unit
-def test_internal_api_client_rejects_localhost():
-    with pytest.raises(ValueError, match="localhost"):
-        _build_client(url="https://localhost/internal_api")
-
-
-@pytest.mark.unit
-def test_internal_api_client_rejects_private_literal_ip():
-    with pytest.raises(ValueError, match="private|loopback|link-local"):
-        _build_client(url="https://10.0.0.1/internal_api")
-
-
-@pytest.mark.unit
-def test_internal_api_client_allow_insecure_accepts_http():
-    _build_client(url="http://127.0.0.1/internal_api", allow_insecure_urls=True)

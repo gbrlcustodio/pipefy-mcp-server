@@ -29,7 +29,6 @@ from pipefy_auth import (
     tier_for,
 )
 from pipefy_sdk import (
-    InternalApiClient,
     PipefyClient,
     PipefySettings,
 )
@@ -185,12 +184,6 @@ def get_authenticated_client(
         return _cached_client
 
     client = PipefyClient(pipefy_settings, auth=resolved)
-    internal_client = InternalApiClient(
-        url=pipefy_settings.internal_api_url,
-        auth=resolved,
-        allow_insecure_urls=pipefy_settings.allow_insecure_urls,
-    )
-    client.set_internal_api_client(internal_client)
     _cached_signature = key
     _cached_client = client
     return client

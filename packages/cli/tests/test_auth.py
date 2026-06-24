@@ -77,43 +77,11 @@ def test_get_authenticated_client_passes_auth_to_pipefy_client(clean_pipefy_env)
         assert client is mock_pc.return_value
 
 
-def test_get_authenticated_client_service_account_wires_internal_api(clean_pipefy_env):
-    settings = _minimal_settings()
-    with (
-        patch("pipefy_cli.auth.PipefyClient") as mock_pc,
-        patch("pipefy_cli.auth.InternalApiClient") as mock_internal,
-    ):
-        mock_pc.return_value = MagicMock()
-        get_authenticated_client(settings, _auth())
-        mock_pc.assert_called_once()
-        mock_internal.assert_called_once()
-
-
-def test_get_authenticated_client_bearer_path_shares_auth_with_internal_api(
-    clean_pipefy_env,
-):
-    """Both clients receive the SAME ``auth`` instance on the bearer path."""
-    settings = _minimal_settings()
-    with (
-        patch("pipefy_cli.auth.PipefyClient") as mock_pc,
-        patch("pipefy_cli.auth.InternalApiClient") as mock_internal,
-    ):
-        mock_pc.return_value = MagicMock()
-        get_authenticated_client(settings, _auth(bearer_token="tok"))
-        pc_auth = mock_pc.call_args.kwargs["auth"]
-        internal_auth = mock_internal.call_args.kwargs["auth"]
-        assert isinstance(pc_auth, StaticBearerAuth)
-        assert internal_auth is pc_auth
-
-
 def test_cache_returns_same_instance_for_identical_service_account_settings(
     clean_pipefy_env,
 ):
     settings = _minimal_settings()
-    with (
-        patch("pipefy_cli.auth.PipefyClient") as mock_pc,
-        patch("pipefy_cli.auth.InternalApiClient"),
-    ):
+    with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
         first = get_authenticated_client(settings, _auth())
         second = get_authenticated_client(settings, _auth())
@@ -238,7 +206,6 @@ def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
     settings = _minimal_settings()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
-        patch("pipefy_cli.auth.InternalApiClient"),
         patch("pipefy_auth.resolver.load_session") as mock_load,
         patch("pipefy_cli.auth.ensure_fresh_session") as mock_ensure,
     ):
@@ -261,7 +228,6 @@ def test_service_account_creds_win_over_stored_session(clean_pipefy_env):
     settings = _minimal_settings()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
-        patch("pipefy_cli.auth.InternalApiClient"),
         patch("pipefy_auth.resolver.load_session") as mock_load,
         patch("pipefy_cli.auth.ensure_fresh_session") as mock_ensure,
     ):

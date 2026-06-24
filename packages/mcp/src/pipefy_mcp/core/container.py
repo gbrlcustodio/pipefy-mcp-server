@@ -12,7 +12,7 @@ from pipefy_auth import (
     resolve_pipefy_auth,
     tier_for,
 )
-from pipefy_sdk import InternalApiClient, PipefyClient
+from pipefy_sdk import PipefyClient
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.settings import Settings
@@ -81,9 +81,3 @@ class ServicesContainer:
                 raise
             logger.info("Pipefy stored session warmed up at startup")
         self.pipefy_client = PipefyClient(settings=pipefy, auth=resolved)
-        internal_client = InternalApiClient(
-            url=pipefy.internal_api_url,
-            auth=resolved,
-            allow_insecure_urls=pipefy.allow_insecure_urls,
-        )
-        self.pipefy_client.set_internal_api_client(internal_client)

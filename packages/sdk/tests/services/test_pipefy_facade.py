@@ -33,6 +33,9 @@ def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
     client = PipefyClient(mock_settings, auth=auth)
     assert client._card_service._auth is auth
     assert client._pipe_service._auth is auth
+    # The internal API client is built in __init__ from the same auth, so GraphQL
+    # auth and the internal API client cannot drift.
+    assert client._internal_api_client._auth is auth
 
 
 @pytest.mark.unit
@@ -736,21 +739,18 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_delete_card_relation_delegates_to_internal_api_client(mock_settings):
-    """delete_card_relation uses InternalApiClient (not CardService) because the
-    mutation is only on the internal GraphQL schema."""
+    """delete_card_relation delegates to RelationService, which routes through the
+    InternalApiClient because the mutation is only on the internal GraphQL schema."""
     from graphql import print_ast
 
-    from pipefy_sdk.queries.card_queries import (
+    from pipefy_sdk.queries.relation_queries import (
         INTERNAL_DELETE_CARD_RELATION_MUTATION,
     )
-    from pipefy_sdk.services.internal_api_client import InternalApiClient
 
     client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
-    internal = MagicMock(spec=InternalApiClient)
-    internal.execute_query = AsyncMock(
+    client._internal_api_client.execute_query = AsyncMock(
         return_value={"deleteCardRelation": {"success": True}}
     )
-    client.set_internal_api_client(internal)
 
     # Pin the snake_case input keys that the internal API expects
     rendered = print_ast(INTERNAL_DELETE_CARD_RELATION_MUTATION.document)
@@ -760,7 +760,7 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
 
     result = await client.delete_card_relation("c1", "p2", "src-3")
 
-    internal.execute_query.assert_awaited_once_with(
+    client._internal_api_client.execute_query.assert_awaited_once_with(
         INTERNAL_DELETE_CARD_RELATION_MUTATION,
         {"childId": "c1", "parentId": "p2", "sourceId": "src-3"},
     )
@@ -769,20 +769,17 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_set_internal_api_client_forwards_to_portal_service(mock_settings):
-    """Sub-portal mutations on PortalService use the same internal_api client as the facade."""
-    from pipefy_sdk.services.internal_api_client import InternalApiClient
-
+async def test_sub_portal_mutation_routes_through_internal_api_client(mock_settings):
+    """A sub-portal mutation reaches the internal_api client the facade builds at
+    construction; PortalService and the facade share that one instance."""
     client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
-    internal = MagicMock(spec=InternalApiClient)
-    internal.execute_query = AsyncMock(
+    client._internal_api_client.execute_query = AsyncMock(
         return_value={"updateSubPortalElement": {"success": True}}
     )
-    client.set_internal_api_client(internal)
 
     result = await client.publish_sub_portal("portal-1", "element-2", "sub-3")
 
-    internal.execute_query.assert_awaited()
+    client._internal_api_client.execute_query.assert_awaited()
     assert result == {"updateSubPortalElement": {"success": True}}
 
 

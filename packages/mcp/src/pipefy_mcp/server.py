@@ -5,10 +5,13 @@ import textwrap
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
 from mcp.server.fastmcp import FastMCP
+from pipefy_auth import JwtValidator
 
+from pipefy_mcp.auth import JwtTokenVerifier
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.settings import settings
+from pipefy_mcp.settings import ResourceServerSettings, settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
 
@@ -94,11 +97,51 @@ def _resolve_bind(host: str | None, port: int | None) -> tuple[str, int]:
     )
 
 
+def _build_resource_server_auth(
+    rs: ResourceServerSettings,
+) -> tuple[JwtTokenVerifier, FastMcpAuthSettings] | None:
+    """Build the inbound bearer verifier and FastMCP auth config, or ``None``.
+
+    Returns ``None`` unless the resource-server profile is enabled, so the
+    unauthenticated foundation profile constructs ``FastMCP`` exactly as before.
+    When enabled, the settings validator guarantees ``issuer_url`` and
+    ``resource_server_url`` are set (asserted here to satisfy the type narrowing).
+    The verifier consumes ``audience``/``verify_audience``/``allow_insecure_urls``;
+    FastMCP's ``AuthSettings`` consumes the issuer, resource, and required scopes
+    to serve RFC 9728 metadata and the ``401`` challenge.
+    """
+    if not rs.enabled:
+        return None
+    if rs.issuer_url is None or rs.resource_server_url is None:
+        # Unreachable: the settings validator requires both when enabled. Guard
+        # the invariant explicitly (and narrow the types) rather than assert.
+        raise RuntimeError(
+            "resource-server profile enabled without issuer_url/resource_server_url "
+            "(settings invariant broken)."
+        )
+    verifier = JwtTokenVerifier(
+        JwtValidator(
+            issuer_url=rs.issuer_url,
+            audience=rs.audience,
+            verify_audience=rs.verify_audience,
+            allow_insecure_urls=rs.allow_insecure_urls,
+            jwks_uri=rs.jwks_uri,
+        )
+    )
+    auth = FastMcpAuthSettings(
+        issuer_url=rs.issuer_url,
+        resource_server_url=rs.resource_server_url,
+        required_scopes=rs.required_scopes,
+    )
+    return verifier, auth
+
+
 def build_pipefy_mcp_server(
     *,
     remote_mode: bool | None = None,
     host: str | None = None,
     port: int | None = None,
+    resource_server: tuple[JwtTokenVerifier, FastMcpAuthSettings] | None = None,
 ) -> FastMCP:
     """Build the FastMCP app with its tools registered once, before serving.
 
@@ -107,37 +150,50 @@ def build_pipefy_mcp_server(
     ``PIPEFY_MCP_REMOTE_MODE``; pass an explicit value to override (used by
     tests). ``host``/``port`` default to ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``
     and matter only for the HTTP transport; stdio ignores them.
+
+    ``resource_server`` is the ``(verifier, auth)`` pair from
+    :func:`_build_resource_server_auth`. When present, FastMCP validates the
+    inbound bearer per request and serves the resource-server metadata; when
+    ``None`` (stdio, or the disabled HTTP profile) the app has no inbound auth.
     """
     resolved = settings.mcp.remote_mode if remote_mode is None else remote_mode
     resolved_host, resolved_port = _resolve_bind(host, port)
+    verifier, auth = resource_server or (None, None)
     app = FastMCP(
         "pipefy",
         instructions=PIPEFY_INSTRUCTIONS,
         lifespan=lifespan,
         host=resolved_host,
         port=resolved_port,
+        token_verifier=verifier,
+        auth=auth,
     )
     _register_pipefy_tools(app, remote_mode=resolved)
     return app
 
 
-def _assert_loopback_http_bind(*, host: str) -> None:
-    """Refuse to bind the HTTP transport to a non-loopback host.
+def _assert_loopback_http_bind(*, host: str, resource_server_enabled: bool) -> None:
+    """Refuse to bind the HTTP transport to a non-loopback host while unauthenticated.
 
-    The HTTP profile is unauthenticated: it validates no inbound bearer and
-    carries no per-request identity, so every call runs as the single identity
-    resolved at startup. A network-reachable bind would hand that identity to
-    anyone who can reach the port, so HTTP is restricted to loopback. Relax this
-    guard when inbound auth lands (#301). (The filesystem tools, e.g. the
-    attachment uploads, also only make sense on loopback, where the server shares
-    the client's disk.)
+    Without the resource-server profile the HTTP transport validates no inbound
+    bearer and carries no per-request identity, so every call runs as the single
+    identity resolved at startup. A network-reachable bind would hand that
+    identity to anyone who can reach the port, so it is restricted to loopback.
+    (The filesystem tools, e.g. the attachment uploads, also only make sense on
+    loopback, where the server shares the client's disk.)
+
+    Once the resource-server profile is enabled (#301), every request carries a
+    validated bearer, so a non-loopback bind is allowed. The configurable host /
+    Origin allowlist for a proxied deployment is #303.
     """
-    if host in _LOOPBACK_HOSTS:
+    if host in _LOOPBACK_HOSTS or resource_server_enabled:
         return
     raise RuntimeError(
         f"Refusing to serve over HTTP on a non-loopback host ({host}). The HTTP "
         f"transport is unauthenticated and is restricted to loopback "
-        f"(127.0.0.1/localhost/::1) until inbound auth lands."
+        f"(127.0.0.1/localhost/::1). Enable the resource-server profile "
+        f"(PIPEFY_MCP_RS_ENABLED=1) to validate inbound bearers and bind "
+        f"off-loopback."
     )
 
 
@@ -176,15 +232,22 @@ def run_server(
 
     resolved_remote = settings.mcp.remote_mode if remote_mode is None else remote_mode
     resolved_host, resolved_port = _resolve_bind(host, port)
+    resource_server = _build_resource_server_auth(settings.rs)
     logger.info(
-        "Starting Pipefy MCP server over HTTP on %s:%d (remote_mode=%s)",
+        "Starting Pipefy MCP server over HTTP on %s:%d (remote_mode=%s, resource_server=%s)",
         resolved_host,
         resolved_port,
         "enabled" if resolved_remote else "disabled",
+        "enabled" if resource_server is not None else "disabled",
     )
-    _assert_loopback_http_bind(host=resolved_host)
+    _assert_loopback_http_bind(
+        host=resolved_host, resource_server_enabled=resource_server is not None
+    )
 
     app = build_pipefy_mcp_server(
-        remote_mode=resolved_remote, host=resolved_host, port=resolved_port
+        remote_mode=resolved_remote,
+        host=resolved_host,
+        port=resolved_port,
+        resource_server=resource_server,
     )
     app.run("streamable-http")

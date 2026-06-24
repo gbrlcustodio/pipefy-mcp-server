@@ -18,15 +18,19 @@ _DEFAULT_TIMEOUT = 10.0
 class ProviderMetadata:
     """Subset of OIDC provider metadata the login flow needs.
 
-    ``end_session_endpoint`` is optional per OIDC Discovery 1.0 — not every IdP
+    ``end_session_endpoint`` is optional per OIDC Discovery 1.0: not every IdP
     advertises it. ``auth logout`` soft-fails when it's absent (warns + clears
-    the local session only).
+    the local session only). ``jwks_uri`` is the signing-key set the
+    resource-server bearer verifier reads; it's likewise modeled optional so
+    callers that don't validate inbound tokens (the login flow) don't depend on
+    it.
     """
 
     issuer: str
     authorization_endpoint: str
     token_endpoint: str
     end_session_endpoint: str | None = None
+    jwks_uri: str | None = None
 
 
 @dataclass(frozen=True)
@@ -110,6 +114,7 @@ def fetch_provider_metadata(
     authorization_endpoint = str(data["authorization_endpoint"])
     token_endpoint = str(data["token_endpoint"])
     end_session_endpoint = optional_str(data.get("end_session_endpoint"))
+    jwks_uri = optional_str(data.get("jwks_uri"))
 
     endpoints: list[tuple[str, str]] = [
         ("authorization_endpoint", authorization_endpoint),
@@ -117,6 +122,8 @@ def fetch_provider_metadata(
     ]
     if end_session_endpoint is not None:
         endpoints.append(("end_session_endpoint", end_session_endpoint))
+    if jwks_uri is not None:
+        endpoints.append(("jwks_uri", jwks_uri))
     for field, value in endpoints:
         try:
             security.validate_https_url(
@@ -130,6 +137,7 @@ def fetch_provider_metadata(
         authorization_endpoint=authorization_endpoint,
         token_endpoint=token_endpoint,
         end_session_endpoint=end_session_endpoint,
+        jwks_uri=jwks_uri,
     )
 
 

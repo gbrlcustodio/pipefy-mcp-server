@@ -11,7 +11,7 @@ from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.server import (
-    _assert_loopback_http_bind,
+    _assert_safe_http_bind,
     _build_resource_server_auth,
     _register_pipefy_tools,
     build_pipefy_mcp_server,
@@ -213,7 +213,7 @@ async def test_lifespan_logs_error_when_initialization_raises():
 @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
 def test_loopback_http_bind_allows_loopback_hosts(host):
     # Does not raise, regardless of the resource-server profile.
-    _assert_loopback_http_bind(host=host, resource_server_configured=False)
+    _assert_safe_http_bind(host=host, resource_server_configured=False)
 
 
 @pytest.mark.unit
@@ -221,14 +221,14 @@ def test_loopback_http_bind_allows_loopback_hosts(host):
 def test_loopback_http_bind_refuses_non_loopback_hosts(host):
     """A non-loopback bind is refused while the transport is unauthenticated."""
     with pytest.raises(RuntimeError, match="non-loopback host"):
-        _assert_loopback_http_bind(host=host, resource_server_configured=False)
+        _assert_safe_http_bind(host=host, resource_server_configured=False)
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize("host", ["0.0.0.0", "203.0.113.5"])
 def test_loopback_http_bind_allows_non_loopback_when_resource_server_configured(host):
     """With inbound bearer validation on, a non-loopback bind is allowed."""
-    _assert_loopback_http_bind(host=host, resource_server_configured=True)
+    _assert_safe_http_bind(host=host, resource_server_configured=True)
 
 
 @pytest.mark.unit

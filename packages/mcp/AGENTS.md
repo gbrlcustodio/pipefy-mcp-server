@@ -61,7 +61,7 @@ SDK's `AccessToken`. FastMCP serves the RFC 9728 protected-resource metadata and
 the `401` + `WWW-Authenticate` challenge; `_build_resource_server_auth` resolves
 the inbound issuer and wires the verifier and `AuthSettings` into the app.
 
-**Loopback bind.** `_assert_loopback_http_bind` allows a non-loopback bind only
+**Loopback bind.** `_assert_safe_http_bind` allows a non-loopback bind only
 when the resource-server profile is configured (every request then carries a
 validated bearer). Without it, the HTTP transport is unauthenticated, every call
 runs as the single startup identity, and a network-reachable port would hand that

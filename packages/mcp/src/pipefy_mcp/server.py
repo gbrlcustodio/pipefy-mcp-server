@@ -183,7 +183,7 @@ def build_pipefy_mcp_server(
     return app
 
 
-def _assert_loopback_http_bind(*, host: str, resource_server_configured: bool) -> None:
+def _assert_safe_http_bind(*, host: str, resource_server_configured: bool) -> None:
     """Refuse to bind the HTTP transport to a non-loopback host while unauthenticated.
 
     Without the resource-server profile the HTTP transport validates no inbound
@@ -221,7 +221,7 @@ def run_server(
     stdio. With ``http=True`` it serves over Streamable HTTP on ``host``/``port``,
     defaulting to the configured ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``. HTTP
     is restricted to a loopback bind while it is unauthenticated foundation work
-    (see :func:`_assert_loopback_http_bind`).
+    (see :func:`_assert_safe_http_bind`).
 
     ``remote_mode`` selects the default-deny remote tool surface and defaults to
     the configured ``PIPEFY_MCP_REMOTE_MODE``. It is orthogonal to the transport:
@@ -256,7 +256,7 @@ def run_server(
         "enabled" if resolved_remote else "disabled",
         "active" if resource_server is not None else "inactive",
     )
-    _assert_loopback_http_bind(
+    _assert_safe_http_bind(
         host=resolved_host, resource_server_configured=resource_server is not None
     )
 

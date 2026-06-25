@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pipefy_infra.config import (
@@ -236,3 +236,32 @@ def test_insecure_flag_defaults_false_and_accepts_name_kwarg(
     assert _PrefixedInsecure().allow_insecure_urls is False
     # populate_by_name lets field-name kwargs win despite the validation_alias.
     assert _PrefixedInsecure(allow_insecure_urls=True).allow_insecure_urls is True
+
+
+def test_insecure_flag_ignores_prefixed_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The prefixed form must NOT set the shared field: the validation_alias is its
+    # sole env name, so PIPEFY_SAMPLE_ALLOW_INSECURE_URLS is inert and only
+    # PIPEFY_ALLOW_INSECURE_URLS controls the posture.
+    monkeypatch.delenv("PIPEFY_ALLOW_INSECURE_URLS", raising=False)
+    monkeypatch.setenv("PIPEFY_SAMPLE_ALLOW_INSECURE_URLS", "true")
+    assert _PrefixedInsecure().allow_insecure_urls is False
+
+
+def test_explicit_alias_is_the_sole_env_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A field with a validation_alias is read only through that alias, never via
+    # the subclass prefix + field name (which populate_by_name would otherwise
+    # accept). Pin the rule the mixin enforces on an arbitrary aliased field.
+    class _Aliased(PipefyBaseSettings):
+        model_config = SettingsConfigDict(env_prefix="PIPEFY_SAMPLE_")
+
+        token: str | None = Field(
+            default=None, validation_alias=AliasChoices("PIPEFY_CANONICAL_TOKEN")
+        )
+
+    monkeypatch.setenv("PIPEFY_CANONICAL_TOKEN", "canonical")
+    monkeypatch.setenv("PIPEFY_SAMPLE_TOKEN", "shadow")
+    assert _Aliased().token == "canonical"

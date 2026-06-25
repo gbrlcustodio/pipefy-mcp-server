@@ -28,6 +28,8 @@ from pydantic import AliasChoices, Field
 from pydantic.fields import FieldInfo
 from pydantic_settings import (
     BaseSettings,
+    DotEnvSettingsSource,
+    EnvSettingsSource,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
@@ -109,6 +111,38 @@ class PipefyTomlConfigSource(PydanticBaseSettingsSource):
         return self._data()
 
 
+class _AliasOwnsEnvNameMixin:
+    """An explicit ``validation_alias`` is the only env name for its field.
+
+    With ``populate_by_name=True``, pydantic-settings reads an aliased field from
+    both its alias and the prefixed field name, so a cross-cutting field like
+    ``allow_insecure_urls`` (alias ``PIPEFY_ALLOW_INSECURE_URLS``) also loads from
+    the subclass-prefixed ``PIPEFY_JWT_ALLOW_INSECURE_URLS`` / ``PIPEFY_AUTH_…``,
+    and the shared var silently wins on conflict. These fields carry an explicit
+    alias precisely so one canonical var controls them regardless of the model's
+    prefix; honour that by reading them only through the alias.
+    """
+
+    def _extract_field_info(
+        self, field: FieldInfo, field_name: str
+    ) -> list[tuple[str, str, bool]]:
+        infos = super()._extract_field_info(field, field_name)  # type: ignore[misc]
+        if field.validation_alias is None:
+            return infos
+        # Alias candidates key on the alias string; the populate_by_name fallback
+        # keys on the bare field name (the one that picks up the env prefix). Drop
+        # only that fallback so the alias is the field's sole env source.
+        return [info for info in infos if info[0] != field_name]
+
+
+class _PipefyEnvSource(_AliasOwnsEnvNameMixin, EnvSettingsSource):
+    pass
+
+
+class _PipefyDotEnvSource(_AliasOwnsEnvNameMixin, DotEnvSettingsSource):
+    pass
+
+
 class PipefyBaseSettings(BaseSettings):
     """Shared base for every ``PIPEFY_*`` settings model across the packages.
 
@@ -139,10 +173,16 @@ class PipefyBaseSettings(BaseSettings):
         # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
         # TOML keys are bare pydantic field names; neither the env prefix nor
         # the env-only AliasChoices apply to TOML lookups.
+        #
+        # The default env/dotenv sources are replaced with prefix-isolating ones
+        # so a field's explicit validation_alias is its only env name (see
+        # _AliasOwnsEnvNameMixin); the passed-in env_settings/dotenv_settings are
+        # the unmodified equivalents and are intentionally discarded.
+        del env_settings, dotenv_settings
         return (
             init_settings,
-            env_settings,
-            dotenv_settings,
+            _PipefyEnvSource(settings_cls),
+            _PipefyDotEnvSource(settings_cls),
             PipefyTomlConfigSource(settings_cls),
             file_secret_settings,
         )
@@ -151,10 +191,10 @@ class PipefyBaseSettings(BaseSettings):
 class InsecureUrlSettings(PipefyBaseSettings):
     """Base for settings models that gate their URLs behind one shared flag.
 
-    Adds ``allow_insecure_urls``, read from ``PIPEFY_ALLOW_INSECURE_URLS``
-    regardless of the subclass's ``env_prefix`` (the explicit alias outranks the
-    prefix), so the whole deployment has a single insecure-URL posture rather
-    than a per-model toggle.
+    Adds ``allow_insecure_urls``, read only from ``PIPEFY_ALLOW_INSECURE_URLS``;
+    the subclass's ``env_prefix`` does not apply to it (the explicit alias is its
+    sole env name, enforced by the prefix-isolating env source), so the whole
+    deployment has a single insecure-URL posture rather than a per-model toggle.
     """
 
     allow_insecure_urls: bool = Field(

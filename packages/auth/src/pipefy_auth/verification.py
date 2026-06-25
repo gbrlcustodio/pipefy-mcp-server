@@ -19,6 +19,7 @@ from typing import Any
 
 import jwt
 from jwt import PyJWKClient
+from pipefy_infra import security
 
 from pipefy_auth.discovery import DiscoveryPolicy, fetch_provider_metadata
 
@@ -58,13 +59,37 @@ class JwtValidator:
         self._issuer = issuer_url
         self._audience = audience
         self._verify_audience = verify_audience
-        resolved_jwks_uri = jwks_uri or self._discover_jwks_uri(
-            issuer_url, allow_insecure_urls=allow_insecure_urls
-        )
+        if jwks_uri is not None:
+            resolved_jwks_uri = self._validate_jwks_uri(
+                jwks_uri, allow_insecure_urls=allow_insecure_urls
+            )
+        else:
+            resolved_jwks_uri = self._discover_jwks_uri(
+                issuer_url, allow_insecure_urls=allow_insecure_urls
+            )
         # cache_keys memoizes get_signing_key(kid), so the steady-state path is a
         # dict lookup; without it every validate() rebuilds the JWK set and
         # reconstructs each RSA public key (the network fetch is cached anyway).
         self._jwks = PyJWKClient(resolved_jwks_uri, cache_keys=True)
+
+    @staticmethod
+    def _validate_jwks_uri(jwks_uri: str, *, allow_insecure_urls: bool) -> str:
+        """Apply the https/SSRF gate to an explicit ``jwks_uri`` override.
+
+        The discovery path reaches the IdP through
+        :func:`fetch_provider_metadata`, which enforces this gate on the issuer
+        before trusting its advertised ``jwks_uri``. An explicit override skips
+        discovery, so the primitive enforces the same invariant here rather than
+        handing an unchecked key-fetch URL (``http://`` or an internal host) to
+        :class:`~jwt.PyJWKClient`. A realm path is allowed; only a query or
+        fragment is rejected.
+        """
+        stripped = jwks_uri.strip()
+        security.assert_url_has_no_query_or_fragment(stripped, field_label="jwks_uri")
+        security.validate_https_url(
+            stripped, "jwks_uri", allow_insecure=allow_insecure_urls
+        )
+        return stripped
 
     @staticmethod
     def _discover_jwks_uri(issuer_url: str, *, allow_insecure_urls: bool) -> str:

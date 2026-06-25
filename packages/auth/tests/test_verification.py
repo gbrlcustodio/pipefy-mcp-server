@@ -145,3 +145,52 @@ def test_discovery_without_jwks_uri_raises(monkeypatch: pytest.MonkeyPatch) -> N
     )
     with pytest.raises(ValueError, match="jwks_uri"):
         JwtValidator(issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False)
+
+
+@pytest.mark.unit
+def test_explicit_http_jwks_uri_is_rejected() -> None:
+    # An explicit jwks_uri skips discovery; the primitive still enforces the
+    # https/SSRF gate rather than handing an unchecked URL to PyJWKClient.
+    with pytest.raises(ValueError, match="jwks_uri"):
+        JwtValidator(
+            issuer_url=_ISSUER,
+            audience=_AUDIENCE,
+            verify_audience=False,
+            jwks_uri="http://idp.example.com/protocol/openid-connect/certs",
+        )
+
+
+@pytest.mark.unit
+def test_explicit_internal_host_jwks_uri_is_rejected() -> None:
+    with pytest.raises(ValueError, match="jwks_uri"):
+        JwtValidator(
+            issuer_url=_ISSUER,
+            audience=_AUDIENCE,
+            verify_audience=False,
+            jwks_uri="https://127.0.0.1/certs",
+        )
+
+
+@pytest.mark.unit
+def test_explicit_jwks_uri_with_query_is_rejected() -> None:
+    with pytest.raises(ValueError, match="jwks_uri"):
+        JwtValidator(
+            issuer_url=_ISSUER,
+            audience=_AUDIENCE,
+            verify_audience=False,
+            jwks_uri=f"{_JWKS_URI}?rotate=1",
+        )
+
+
+@pytest.mark.unit
+def test_explicit_insecure_jwks_uri_allowed_when_opted_in() -> None:
+    # allow_insecure_urls relaxes both the scheme and the internal-host gate,
+    # mirroring the discovery path's policy.
+    validator = JwtValidator(
+        issuer_url=_ISSUER,
+        audience=_AUDIENCE,
+        verify_audience=False,
+        allow_insecure_urls=True,
+        jwks_uri="http://127.0.0.1/certs",
+    )
+    assert validator._jwks.uri == "http://127.0.0.1/certs"

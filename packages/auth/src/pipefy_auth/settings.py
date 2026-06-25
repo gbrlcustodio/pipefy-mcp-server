@@ -463,8 +463,13 @@ class JwtValidationSettings(BaseSettings):
     )
 
     def resolve_issuer_url(self, default: str | None) -> str | None:
-        """The inbound issuer: the explicit override, else ``default`` (the login issuer)."""
-        return self.issuer_url or default
+        """The inbound issuer (override, else ``default``), with any trailing slash dropped.
+
+        jwt.decode compares the iss claim by exact equality, so the issuer is
+        canonicalized here, at the boundary that hands it to the validator.
+        """
+        issuer = self.issuer_url or default
+        return issuer.rstrip("/") if issuer is not None else None
 
     @model_validator(mode="after")
     def _validate_configuration(self) -> Self:

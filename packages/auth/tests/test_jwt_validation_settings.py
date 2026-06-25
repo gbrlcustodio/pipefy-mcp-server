@@ -54,6 +54,19 @@ def test_resolve_issuer_url_is_none_when_neither_set():
 
 
 @pytest.mark.unit
+def test_resolve_issuer_url_drops_trailing_slash():
+    """A trailing slash is dropped so the issuer matches the token iss exactly.
+
+    Covers both the override and the login-issuer default; jwt.decode compares
+    iss by exact equality, so a stray slash would otherwise reject every token.
+    """
+    assert JwtValidationSettings(issuer_url=f"{_ISSUER}/").resolve_issuer_url(None) == (
+        _ISSUER
+    )
+    assert JwtValidationSettings().resolve_issuer_url(f"{_ISSUER}/") == _ISSUER
+
+
+@pytest.mark.unit
 def test_verify_audience_requires_audience():
     """Turning on audience checks without an audience is a misconfiguration."""
     with pytest.raises(ValueError, match="verify_audience requires audience"):

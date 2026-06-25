@@ -22,7 +22,6 @@ class _StubValidator:
     def __init__(self, *, claims: dict[str, Any] | None = None, raises: bool = False):
         self._claims = claims or {}
         self._raises = raises
-        self.audience = _AUDIENCE
 
     def validate(self, token: str) -> dict[str, Any]:
         if self._raises:
@@ -40,7 +39,9 @@ async def test_maps_claims_to_access_token() -> None:
             "exp": 1893456000,
         }
     )
-    token = await JwtTokenVerifier(validator).verify_token("the-token")
+    token = await JwtTokenVerifier(validator, resource=_AUDIENCE).verify_token(
+        "the-token"
+    )
     assert token is not None
     assert token.token == "the-token"
     assert token.client_id == "client-abc"

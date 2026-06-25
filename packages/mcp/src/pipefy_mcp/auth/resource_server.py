@@ -44,8 +44,12 @@ def _parse_scopes(scope: Any) -> list[str]:
 class JwtTokenVerifier(TokenVerifier):
     """Adapt :class:`~pipefy_auth.JwtValidator` to FastMCP's ``TokenVerifier``."""
 
-    def __init__(self, validator: JwtValidator) -> None:
+    def __init__(self, validator: JwtValidator, *, resource: str | None = None) -> None:
         self._validator = validator
+        # The RFC 8707 resource this token targets, stamped onto every AccessToken.
+        # Injected by the wiring layer that owns the resource-server identity,
+        # rather than read back out of the validator's config.
+        self._resource = resource
 
     async def verify_token(self, token: str) -> AccessToken | None:
         """Return the validated token, or ``None`` to reject it (FastMCP -> 401).
@@ -84,5 +88,5 @@ class JwtTokenVerifier(TokenVerifier):
             # exp is an RFC 7519 NumericDate (may be fractional); AccessToken
             # wants an int. The validator requires exp, so it is present here.
             expires_at=int(exp) if exp is not None else None,
-            resource=self._validator.audience,
+            resource=self._resource,
         )

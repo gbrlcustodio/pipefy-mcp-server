@@ -137,7 +137,8 @@ def _build_resource_server_auth(
             verify_audience=jwt_validation.verify_audience,
             allow_insecure_urls=jwt_validation.allow_insecure_urls,
             jwks_uri=jwt_validation.jwks_uri,
-        )
+        ),
+        resource=jwt_validation.audience,
     )
     auth = FastMcpAuthSettings(
         issuer_url=issuer_url,

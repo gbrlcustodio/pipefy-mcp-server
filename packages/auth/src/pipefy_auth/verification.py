@@ -66,11 +66,6 @@ class JwtValidator:
         # reconstructs each RSA public key (the network fetch is cached anyway).
         self._jwks = PyJWKClient(resolved_jwks_uri, cache_keys=True)
 
-    @property
-    def audience(self) -> str | None:
-        """The expected token audience (the RFC 8707 resource), checked only when verify_audience is set."""
-        return self._audience
-
     @staticmethod
     def _discover_jwks_uri(issuer_url: str, *, allow_insecure_urls: bool) -> str:
         metadata = fetch_provider_metadata(

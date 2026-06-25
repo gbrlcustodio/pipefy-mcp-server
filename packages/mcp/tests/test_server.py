@@ -316,6 +316,26 @@ def test_build_with_resource_server_wires_inbound_auth(mocked_container):
 
 
 @pytest.mark.unit
+def test_resource_server_stamps_resource_server_url_not_audience():
+    """The verifier stamps this server's resource_server_url onto AccessToken.
+
+    The RFC 9728 metadata advertises resource_server_url as the resource, so the
+    token's stamped resource must match it, not the (often unset) audience.
+    """
+    verifier, _ = _build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RS_RESOURCE),
+        # audience set and distinct from resource_server_url: the stamped resource
+        # must follow resource_server_url, not audience.
+        JwtValidationSettings(
+            audience="urn:some-other-audience",
+            jwks_uri="https://idp.example.com/jwks",
+        ),
+        default_issuer_url=_RS_ISSUER,
+    )
+    assert verifier._resource == _RS_RESOURCE
+
+
+@pytest.mark.unit
 def test_resource_server_inactive_when_unconfigured():
     """No resource_server_url means no auth: the profile is off, not an error."""
     assert (

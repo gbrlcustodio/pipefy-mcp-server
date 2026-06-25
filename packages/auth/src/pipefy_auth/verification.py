@@ -96,12 +96,9 @@ class JwtValidator:
         :class:`~jwt.PyJWKClient`. A realm path is allowed; only a query or
         fragment is rejected.
         """
-        stripped = jwks_uri.strip()
-        security.assert_url_has_no_query_or_fragment(stripped, field_label="jwks_uri")
-        security.validate_https_url(
-            stripped, "jwks_uri", allow_insecure=allow_insecure_urls
+        return security.sanitize_url(
+            jwks_uri, field_label="jwks_uri", allow_insecure=allow_insecure_urls
         )
-        return stripped
 
     def _jwks_client(self) -> PyJWKClient:
         """Return the JWKS client, resolving it via discovery on first use.

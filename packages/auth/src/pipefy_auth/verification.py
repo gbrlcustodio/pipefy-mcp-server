@@ -61,7 +61,10 @@ class JwtValidator:
         resolved_jwks_uri = jwks_uri or self._discover_jwks_uri(
             issuer_url, allow_insecure_urls=allow_insecure_urls
         )
-        self._jwks = PyJWKClient(resolved_jwks_uri)
+        # cache_keys memoizes get_signing_key(kid), so the steady-state path is a
+        # dict lookup; without it every validate() rebuilds the JWK set and
+        # reconstructs each RSA public key (the network fetch is cached anyway).
+        self._jwks = PyJWKClient(resolved_jwks_uri, cache_keys=True)
 
     @property
     def audience(self) -> str | None:
@@ -96,7 +99,9 @@ class JwtValidator:
                 algorithms=_ALGORITHMS,
                 issuer=self._issuer,
                 audience=self._audience if self._verify_audience else None,
-                options={"verify_aud": self._verify_audience},
+                # require exp so a token that simply omits it is rejected rather
+                # than treated as never-expiring (PyJWT only checks exp when present).
+                options={"verify_aud": self._verify_audience, "require": ["exp"]},
             )
         except Exception as exc:
             raise TokenValidationError(str(exc)) from exc

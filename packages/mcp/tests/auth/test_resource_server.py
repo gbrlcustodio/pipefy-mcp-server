@@ -71,6 +71,36 @@ async def test_missing_scope_claim_yields_empty_scopes() -> None:
 
 
 @pytest.mark.unit
+async def test_scope_claim_as_list_maps_to_scopes() -> None:
+    # RFC 9068 specifies a space-delimited string, but some IdPs emit an array;
+    # it must map rather than crash (a list has no .split()).
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"sub": "user-123", "scope": ["read", "write"]})
+    ).verify_token("t")
+    assert token is not None and token.scopes == ["read", "write"]
+
+
+@pytest.mark.unit
+async def test_fractional_exp_is_coerced_to_int() -> None:
+    # exp is an RFC 7519 NumericDate and may be fractional; AccessToken wants an
+    # int, so it is truncated rather than crashing the mapping.
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"sub": "user-123", "exp": 1893456000.5})
+    ).verify_token("t")
+    assert token is not None and token.expires_at == 1893456000
+
+
+@pytest.mark.unit
+async def test_unmappable_claims_return_none() -> None:
+    # A validly-signed token whose claims can't map onto an AccessToken is a
+    # rejection (None -> 401), never an escaping exception (500).
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"sub": "user-123", "exp": "not-a-number"})
+    ).verify_token("t")
+    assert token is None
+
+
+@pytest.mark.unit
 async def test_validation_failure_returns_none() -> None:
     token = await JwtTokenVerifier(_StubValidator(raises=True)).verify_token("t")
     assert token is None

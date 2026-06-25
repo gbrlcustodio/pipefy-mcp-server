@@ -19,11 +19,26 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from pipefy_auth import JwtValidator
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_scopes(scope: Any) -> list[str]:
+    """Normalize the ``scope`` claim to a list of strings.
+
+    RFC 9068 specifies a space-delimited string, but some IdPs emit a JSON
+    array. Accept both and treat anything else as no scopes, so a non-string
+    ``scope`` can't raise out of the claims mapping.
+    """
+    if isinstance(scope, str):
+        return scope.split()
+    if isinstance(scope, list):
+        return [str(item) for item in scope]
+    return []
 
 
 class JwtTokenVerifier(TokenVerifier):
@@ -35,9 +50,11 @@ class JwtTokenVerifier(TokenVerifier):
     async def verify_token(self, token: str) -> AccessToken | None:
         """Return the validated token, or ``None`` to reject it (FastMCP -> 401).
 
-        The validator is synchronous, so it runs off the event loop. A
-        ``ValueError`` (the base of ``TokenValidationError``) is a rejection, not
-        a raise: the SDK turns ``None`` into the ``401`` challenge.
+        The validator is synchronous, so it runs off the event loop. Both a
+        failed signature/claim check (``ValueError``, the base of
+        ``TokenValidationError``) and an unmappable claim set are rejections, not
+        raises: the SDK turns ``None`` into the ``401`` challenge, so a malformed
+        token must never escape as a 500.
         """
         try:
             claims = await asyncio.to_thread(self._validator.validate, token)
@@ -45,6 +62,17 @@ class JwtTokenVerifier(TokenVerifier):
             logger.warning("Inbound bearer rejected: %s", exc)
             return None
 
+        try:
+            return self._to_access_token(token, claims)
+        except (ValueError, TypeError) as exc:
+            # A validly-signed token can still carry claims we can't map onto an
+            # AccessToken (e.g. an exp outside int range). Reject rather than let
+            # the mapping error escape verify_token as a 500.
+            logger.warning("Inbound bearer rejected (unmappable claims): %s", exc)
+            return None
+
+    def _to_access_token(self, token: str, claims: dict[str, Any]) -> AccessToken:
+        exp = claims.get("exp")
         return AccessToken(
             token=token,
             # OAuth/OIDC precedence: azp (authorized party) over client_id over
@@ -52,7 +80,9 @@ class JwtTokenVerifier(TokenVerifier):
             client_id=(
                 claims.get("azp") or claims.get("client_id") or claims.get("sub", "")
             ),
-            scopes=(claims.get("scope") or "").split(),
-            expires_at=claims.get("exp"),
+            scopes=_parse_scopes(claims.get("scope")),
+            # exp is an RFC 7519 NumericDate (may be fractional); AccessToken
+            # wants an int. The validator requires exp, so it is present here.
+            expires_at=int(exp) if exp is not None else None,
             resource=self._validator.audience,
         )

@@ -1,4 +1,4 @@
-"""Unit tests for ``pipefy_auth.verification`` — inbound RS256 bearer validation."""
+"""Unit tests for ``pipefy_auth.verification``: inbound RS256 bearer validation."""
 
 from __future__ import annotations
 

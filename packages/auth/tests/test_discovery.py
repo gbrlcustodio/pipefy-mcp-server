@@ -1,4 +1,4 @@
-"""Unit tests for ``pipefy_auth.discovery`` — OIDC ``.well-known`` parsing."""
+"""Unit tests for ``pipefy_auth.discovery``: OIDC ``.well-known`` parsing."""
 
 from __future__ import annotations
 

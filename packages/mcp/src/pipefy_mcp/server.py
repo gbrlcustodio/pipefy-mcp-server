@@ -132,29 +132,27 @@ def build_pipefy_mcp_server(
     return app
 
 
-def _assert_safe_http_bind(*, host: str, resource_server_configured: bool) -> None:
-    """Refuse to bind the HTTP transport to a non-loopback host while unauthenticated.
+def _assert_safe_http_bind(*, host: str) -> None:
+    """Refuse to bind the HTTP transport to a non-loopback host.
 
-    Without the resource-server profile the HTTP transport validates no inbound
-    bearer and carries no per-request identity, so every call runs as the single
-    identity resolved at startup. A network-reachable bind would hand that
-    identity to anyone who can reach the port, so it is restricted to loopback.
-    (The filesystem tools, e.g. the attachment uploads, also only make sense on
-    loopback, where the server shares the client's disk.)
+    The HTTP transport is restricted to loopback for now. Even with the
+    resource-server profile validating an inbound bearer, there is no
+    per-request on-behalf-of identity yet, so every call still runs as the
+    single identity resolved at startup. A network-reachable bind would hand
+    that identity to anyone who can reach the port. (The filesystem tools, e.g.
+    the attachment uploads, also only make sense on loopback, where the server
+    shares the client's disk.)
 
-    Once the resource-server profile is configured, every request carries a
-    validated bearer, so a non-loopback bind is allowed. A configurable host /
-    Origin allowlist for a proxied deployment (DNS-rebinding protection) is
-    still to come.
+    Off-loopback binding stays off until the hosted on-behalf-of profile lands
+    (per-request identity and the DNS-rebinding host/Origin allowlist); see
+    experiments/hosted-obo/RFC-OUTLINE.md.
     """
-    if host in _LOOPBACK_HOSTS or resource_server_configured:
+    if host in _LOOPBACK_HOSTS:
         return
     raise RuntimeError(
         f"Refusing to serve over HTTP on a non-loopback host ({host}). The HTTP "
-        f"transport is unauthenticated and is restricted to loopback "
-        f"(127.0.0.1/localhost/::1). Set PIPEFY_MCP_RS_RESOURCE_SERVER_URL to "
-        f"activate the resource-server profile, which validates inbound bearers "
-        f"and may bind off-loopback."
+        f"transport is restricted to loopback (127.0.0.1/localhost/::1) until "
+        f"the hosted on-behalf-of profile lands."
     )
 
 
@@ -170,7 +168,7 @@ def run_server(
     With ``http=False`` (the default, local profile) the process speaks MCP over
     stdio. With ``http=True`` it serves over Streamable HTTP on ``host``/``port``,
     defaulting to the configured ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``. HTTP
-    is restricted to a loopback bind while it is unauthenticated foundation work
+    is restricted to a loopback bind until the hosted on-behalf-of profile lands
     (see :func:`_assert_safe_http_bind`).
 
     ``remote_mode`` selects the default-deny remote tool surface and defaults to
@@ -206,9 +204,7 @@ def run_server(
         "enabled" if resolved_remote else "disabled",
         "active" if resource_server is not None else "inactive",
     )
-    _assert_safe_http_bind(
-        host=resolved_host, resource_server_configured=resource_server is not None
-    )
+    _assert_safe_http_bind(host=resolved_host)
 
     app = build_pipefy_mcp_server(
         remote_mode=resolved_remote,

@@ -62,14 +62,17 @@ the `401` + `WWW-Authenticate` challenge; `build_resource_server_auth` (same
 module, the composition root) resolves the inbound issuer and pairs the verifier
 with `AuthSettings`, which `server.py` wires into the app.
 
-**Loopback bind.** `_assert_safe_http_bind` allows a non-loopback bind only
-when the resource-server profile is configured (every request then carries a
-validated bearer). Without it, the HTTP transport is unauthenticated, every call
-runs as the single startup identity, and a network-reachable port would hand that
-identity to anyone who can reach it, so the bind is restricted to loopback. The
-configurable host / Origin allowlist for a proxied deployment (DNS-rebinding
-protection) is #303; the attachment tools' local `file_path` inputs still assume a
-loopback peer that shares the client's disk (remote-safe file inputs are #305).
+**Loopback bind.** `_assert_safe_http_bind` restricts the HTTP transport to a
+loopback bind, unconditionally for now. Even with the resource-server profile
+validating an inbound bearer, there is no per-request on-behalf-of identity yet
+(#302), so every call runs as the single startup identity; a network-reachable
+port would hand that identity to anyone who can reach it. Off-loopback binding
+stays off until the hosted on-behalf-of profile lands (see
+`experiments/hosted-obo/RFC-OUTLINE.md`), which brings per-request identity and
+the configurable host / Origin allowlist for a proxied deployment (DNS-rebinding
+protection, #303). The attachment tools' local `file_path` inputs also still
+assume a loopback peer that shares the client's disk (remote-safe file inputs are
+#305).
 
 ## Tool registration
 

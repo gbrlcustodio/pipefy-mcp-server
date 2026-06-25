@@ -212,23 +212,15 @@ async def test_lifespan_logs_error_when_initialization_raises():
 @pytest.mark.unit
 @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
 def test_loopback_http_bind_allows_loopback_hosts(host):
-    # Does not raise, regardless of the resource-server profile.
-    _assert_safe_http_bind(host=host, resource_server_configured=False)
+    _assert_safe_http_bind(host=host)
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize("host", ["0.0.0.0", "203.0.113.5"])
 def test_loopback_http_bind_refuses_non_loopback_hosts(host):
-    """A non-loopback bind is refused while the transport is unauthenticated."""
+    """A non-loopback bind is refused until the hosted on-behalf-of profile lands."""
     with pytest.raises(RuntimeError, match="non-loopback host"):
-        _assert_safe_http_bind(host=host, resource_server_configured=False)
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("host", ["0.0.0.0", "203.0.113.5"])
-def test_loopback_http_bind_allows_non_loopback_when_resource_server_configured(host):
-    """With inbound bearer validation on, a non-loopback bind is allowed."""
-    _assert_safe_http_bind(host=host, resource_server_configured=True)
+        _assert_safe_http_bind(host=host)
 
 
 @pytest.mark.unit

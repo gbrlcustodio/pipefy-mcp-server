@@ -110,12 +110,11 @@ def _build_resource_server_auth(
     ``None`` and the unauthenticated foundation profile constructs ``FastMCP``
     exactly as before.
 
-    The inbound issuer is ``jwt_validation.issuer_url`` if set, else ``default_issuer_url``
-    (the issuer this process logs into): in a single-realm deployment the IdP that
-    signs caller tokens is the one we authenticate to, so it need not be configured
-    twice. With ``resource_server_url`` set but no issuer resolvable (the
-    stored-session login is disabled and no override is given), validation is
-    impossible, so this raises rather than serve an open endpoint.
+    The inbound issuer is ``jwt_validation.issuer_url`` if set, else
+    ``default_issuer_url`` (see :class:`JwtValidationSettings` for why the login
+    issuer is the fallback). With ``resource_server_url`` set but no issuer
+    resolvable (the stored-session login is disabled and no override is given),
+    validation is impossible, so this raises rather than serve an open endpoint.
 
     The verifier consumes the inbound validation knobs (audience, verify_audience,
     jwks_uri); FastMCP's ``AuthSettings`` consumes the issuer, resource, and

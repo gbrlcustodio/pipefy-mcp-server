@@ -68,7 +68,7 @@ class JwtValidator:
 
     @property
     def audience(self) -> str | None:
-        """The audience the token is validated for (the RFC 8707 resource)."""
+        """The expected token audience (the RFC 8707 resource), checked only when verify_audience is set."""
         return self._audience
 
     @staticmethod

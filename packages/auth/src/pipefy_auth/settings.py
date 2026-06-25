@@ -475,13 +475,13 @@ class JwtValidationSettings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_configuration(self) -> Self:
-        # issuer_url may carry a realm path (Keycloak-style), so only a query or
-        # fragment that would corrupt the .well-known concatenation is forbidden.
-        # The stripped value is persisted: surrounding whitespace in an env var
-        # would otherwise survive into jwt.decode(issuer=...), which compares the
-        # iss claim exactly and would reject every token.
         if self.verify_audience and not self.audience:
             raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
+        # Strip and shape-check both URL fields. Env-var whitespace would otherwise
+        # survive into the consumer: issuer_url into jwt.decode(issuer=...), which
+        # compares iss exactly, and jwks_uri into the JWKS fetch. A realm path is
+        # allowed, so only a query or fragment (which would corrupt URL building)
+        # is rejected.
         for label in ("issuer_url", "jwks_uri"):
             value = getattr(self, label)
             if value is None:

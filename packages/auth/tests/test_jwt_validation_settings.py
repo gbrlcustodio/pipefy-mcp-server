@@ -7,6 +7,7 @@ import pytest
 from pipefy_auth import JwtValidationSettings
 
 _ISSUER = "https://idp.example.com/realms/x"
+_JWKS_URI = "https://idp.example.com/protocol/openid-connect/certs"
 
 
 @pytest.fixture(autouse=True)
@@ -101,3 +102,35 @@ def test_insecure_issuer_allowed_with_shared_env_flag(monkeypatch: pytest.Monkey
     settings = JwtValidationSettings(issuer_url="http://127.0.0.1:8080/realms/x")
     assert settings.allow_insecure_urls is True
     assert settings.issuer_url == "http://127.0.0.1:8080/realms/x"
+
+
+@pytest.mark.unit
+def test_jwks_uri_is_stripped():
+    """The override is sanitized here so the validator can trust it as given."""
+    settings = JwtValidationSettings(jwks_uri=f"  {_JWKS_URI}  ")
+    assert settings.jwks_uri == _JWKS_URI
+
+
+@pytest.mark.unit
+def test_jwks_uri_rejects_query_or_fragment():
+    """A query/fragment is rejected at the boundary, not deep in the validator."""
+    with pytest.raises(ValueError):
+        JwtValidationSettings(jwks_uri=f"{_JWKS_URI}?rotate=1")
+
+
+@pytest.mark.unit
+def test_insecure_jwks_uri_rejected_without_allow_flag():
+    """http:// and internal-host JWKS URLs are rejected unless the flag is set."""
+    with pytest.raises(ValueError):
+        JwtValidationSettings(jwks_uri="http://127.0.0.1/certs")
+
+
+@pytest.mark.unit
+def test_insecure_jwks_uri_allowed_with_shared_env_flag(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """allow_insecure_urls relaxes the scheme and internal-host gate for jwks_uri."""
+    monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
+    settings = JwtValidationSettings(jwks_uri="http://127.0.0.1/certs")
+    assert settings.allow_insecure_urls is True
+    assert settings.jwks_uri == "http://127.0.0.1/certs"

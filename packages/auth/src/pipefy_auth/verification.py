@@ -20,7 +20,6 @@ from typing import Any
 
 import jwt
 from jwt import PyJWKClient
-from pipefy_infra import security
 
 from pipefy_auth.discovery import DiscoveryPolicy, fetch_provider_metadata
 
@@ -39,13 +38,15 @@ class TokenValidationError(ValueError):
 class JwtValidator:
     """Validate an RS256 access token against an issuer's JWKS.
 
-    When an explicit ``jwks_uri`` override is supplied it is validated and the
-    :class:`~jwt.PyJWKClient` is built at construction (no network). Otherwise the
-    JWKS URL is resolved from the issuer's OIDC discovery document lazily, on the
-    first :meth:`validate`, so construction does no network I/O and process boot
-    never blocks on the IdP. A failed discovery is not cached, so the next
-    ``validate`` retries (the validator self-heals once the IdP is reachable). The
-    underlying ``PyJWKClient`` caches signing keys across calls.
+    When an explicit ``jwks_uri`` override is supplied it is used as given and the
+    :class:`~jwt.PyJWKClient` is built at construction (no network): the caller
+    (e.g. :class:`JwtValidationSettings`) sanitizes it at the config boundary, so
+    the primitive trusts it rather than re-running the gate. Otherwise the JWKS URL
+    is resolved from the issuer's OIDC discovery document lazily, on the first
+    :meth:`validate`, so construction does no network I/O and process boot never
+    blocks on the IdP. A failed discovery is not cached, so the next ``validate``
+    retries (the validator self-heals once the IdP is reachable). The underlying
+    ``PyJWKClient`` caches signing keys across calls.
 
     ``verify_audience`` is off by default: the same-audience interim runs before
     the IdP issues an ``aud`` claim. Turn it on once the audience mapper is in
@@ -70,35 +71,15 @@ class JwtValidator:
         # each request firing its own discovery fetch at the IdP.
         self._lock = threading.Lock()
         if jwks_uri is not None:
-            # Explicit override: validated and built eagerly (no network) so a
-            # misconfigured override fails at startup, not on the first request.
-            resolved_jwks_uri = self._validate_jwks_uri(
-                jwks_uri, allow_insecure_urls=allow_insecure_urls
-            )
+            # Explicit override: built eagerly (no network) so it is ready on the
+            # first request. It is sanitized at the config boundary
+            # (JwtValidationSettings), so the primitive trusts it as given.
             # cache_keys memoizes get_signing_key(kid), so the steady-state path is
             # a dict lookup; without it every validate() rebuilds the JWK set and
             # reconstructs each RSA public key (the network fetch is cached anyway).
-            self._jwks: PyJWKClient | None = PyJWKClient(
-                resolved_jwks_uri, cache_keys=True
-            )
+            self._jwks: PyJWKClient | None = PyJWKClient(jwks_uri, cache_keys=True)
         else:
             self._jwks = None
-
-    @staticmethod
-    def _validate_jwks_uri(jwks_uri: str, *, allow_insecure_urls: bool) -> str:
-        """Apply the https/SSRF gate to an explicit ``jwks_uri`` override.
-
-        The discovery path reaches the IdP through
-        :func:`fetch_provider_metadata`, which enforces this gate on the issuer
-        before trusting its advertised ``jwks_uri``. An explicit override skips
-        discovery, so the primitive enforces the same invariant here rather than
-        handing an unchecked key-fetch URL (``http://`` or an internal host) to
-        :class:`~jwt.PyJWKClient`. A realm path is allowed; only a query or
-        fragment is rejected.
-        """
-        return security.sanitize_url(
-            jwks_uri, field_label="jwks_uri", allow_insecure=allow_insecure_urls
-        )
 
     def _jwks_client(self) -> PyJWKClient:
         """Return the JWKS client, resolving it via discovery on first use.

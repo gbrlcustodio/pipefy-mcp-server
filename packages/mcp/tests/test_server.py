@@ -10,9 +10,9 @@ from mcp.shared.memory import (
 from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_sdk import PipefySettings
 
+from pipefy_mcp.auth import build_resource_server_auth
 from pipefy_mcp.server import (
     _assert_safe_http_bind,
-    _build_resource_server_auth,
     _register_pipefy_tools,
     build_pipefy_mcp_server,
     lifespan,
@@ -33,7 +33,7 @@ def _resource_server_pair():
     inbound issuer comes from ``default_issuer_url`` (the login issuer) to exercise
     the same-realm default rather than an explicit override.
     """
-    return _build_resource_server_auth(
+    return build_resource_server_auth(
         ResourceServerSettings(resource_server_url=_RS_RESOURCE),
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
         default_issuer_url=_RS_ISSUER,
@@ -313,75 +313,6 @@ def test_build_with_resource_server_wires_inbound_auth(mocked_container):
     )
     assert app.settings.auth is not None
     assert str(app.settings.auth.resource_server_url).rstrip("/") == _RS_RESOURCE
-
-
-@pytest.mark.unit
-def test_resource_server_stamps_resource_server_url_not_audience():
-    """The verifier stamps this server's resource_server_url onto AccessToken.
-
-    The RFC 9728 metadata advertises resource_server_url as the resource, so the
-    token's stamped resource must match it, not the (often unset) audience.
-    """
-    verifier, _ = _build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RS_RESOURCE),
-        # audience set and distinct from resource_server_url: the stamped resource
-        # must follow resource_server_url, not audience.
-        JwtValidationSettings(
-            audience="urn:some-other-audience",
-            jwks_uri="https://idp.example.com/jwks",
-        ),
-        default_issuer_url=_RS_ISSUER,
-    )
-    assert verifier._resource == _RS_RESOURCE
-
-
-@pytest.mark.unit
-def test_resource_server_inactive_when_unconfigured():
-    """No resource_server_url means no auth: the profile is off, not an error."""
-    assert (
-        _build_resource_server_auth(
-            ResourceServerSettings(),
-            JwtValidationSettings(),
-            default_issuer_url=_RS_ISSUER,
-        )
-        is None
-    )
-
-
-@pytest.mark.unit
-def test_resource_server_issuer_defaults_to_login_issuer():
-    """With no inbound override, the inbound issuer is the login issuer."""
-    _, auth = _build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RS_RESOURCE),
-        JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
-        default_issuer_url=_RS_ISSUER,
-    )
-    assert str(auth.issuer_url).rstrip("/") == _RS_ISSUER
-
-
-@pytest.mark.unit
-def test_resource_server_inbound_issuer_overrides_login_issuer():
-    """An explicit inbound issuer wins over the login issuer."""
-    override = "https://other-idp.example.com/realms/y"
-    _, auth = _build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RS_RESOURCE),
-        JwtValidationSettings(
-            issuer_url=override, jwks_uri="https://other-idp.example.com/jwks"
-        ),
-        default_issuer_url=_RS_ISSUER,
-    )
-    assert str(auth.issuer_url).rstrip("/") == override
-
-
-@pytest.mark.unit
-def test_resource_server_without_resolvable_issuer_raises():
-    """resource_server_url set but no issuer (override or login) is a misconfiguration."""
-    with pytest.raises(RuntimeError, match="no inbound issuer"):
-        _build_resource_server_auth(
-            ResourceServerSettings(resource_server_url=_RS_RESOURCE),
-            JwtValidationSettings(),
-            default_issuer_url=None,
-        )
 
 
 def _asgi_client(app):

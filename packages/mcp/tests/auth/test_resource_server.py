@@ -1,9 +1,11 @@
-"""Unit tests for the resource-server adapter: claims -> AccessToken, reject -> None.
+"""Unit tests for the resource-server adapter and its composition root.
 
-The JWT/JWKS validation itself is covered in ``pipefy_auth``'s
-``test_verification.py``. These tests use a stub validator to pin the adapter's
-two jobs: mapping validated claims onto the SDK ``AccessToken`` and turning a
-validation failure into ``None`` (which FastMCP renders as a 401).
+The adapter tests (claims -> AccessToken, reject -> None) use a stub validator to
+pin :class:`JwtTokenVerifier`'s two jobs: mapping validated claims onto the SDK
+``AccessToken`` and turning a validation failure into ``None`` (which FastMCP
+renders as a 401). The JWT/JWKS validation itself is covered in ``pipefy_auth``'s
+``test_verification.py``. The builder tests pin
+:func:`build_resource_server_auth`'s issuer resolution and active/inactive gating.
 """
 
 from __future__ import annotations
@@ -11,11 +13,13 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from pipefy_auth import TokenValidationError
+from pipefy_auth import JwtValidationSettings, TokenValidationError
 
-from pipefy_mcp.auth import JwtTokenVerifier
+from pipefy_mcp.auth import JwtTokenVerifier, build_resource_server_auth
+from pipefy_mcp.settings import ResourceServerSettings
 
 _RESOURCE = "https://mcp.example.com/mcp"
+_ISSUER = "https://idp.example.com/realms/x"
 _EXP = 1893456000
 
 
@@ -138,3 +142,75 @@ async def test_unmappable_claims_return_none() -> None:
 async def test_validation_failure_returns_none() -> None:
     token = await JwtTokenVerifier(_StubValidator(raises=True)).verify_token("t")
     assert token is None
+
+
+# --- build_resource_server_auth: the composition root ---
+
+
+@pytest.mark.unit
+def test_build_stamps_resource_server_url_not_audience() -> None:
+    """The verifier stamps this server's resource_server_url onto AccessToken.
+
+    The RFC 9728 metadata advertises resource_server_url as the resource, so the
+    token's stamped resource must match it, not the (often unset) audience.
+    """
+    verifier, _ = build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RESOURCE),
+        # audience set and distinct from resource_server_url: the stamped resource
+        # must follow resource_server_url, not audience.
+        JwtValidationSettings(
+            audience="urn:some-other-audience",
+            jwks_uri="https://idp.example.com/jwks",
+        ),
+        default_issuer_url=_ISSUER,
+    )
+    assert verifier._resource == _RESOURCE
+
+
+@pytest.mark.unit
+def test_build_inactive_when_unconfigured() -> None:
+    """No resource_server_url means no auth: the profile is off, not an error."""
+    assert (
+        build_resource_server_auth(
+            ResourceServerSettings(),
+            JwtValidationSettings(),
+            default_issuer_url=_ISSUER,
+        )
+        is None
+    )
+
+
+@pytest.mark.unit
+def test_build_issuer_defaults_to_login_issuer() -> None:
+    """With no inbound override, the inbound issuer is the login issuer."""
+    _, auth = build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RESOURCE),
+        JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
+        default_issuer_url=_ISSUER,
+    )
+    assert str(auth.issuer_url).rstrip("/") == _ISSUER
+
+
+@pytest.mark.unit
+def test_build_inbound_issuer_overrides_login_issuer() -> None:
+    """An explicit inbound issuer wins over the login issuer."""
+    override = "https://other-idp.example.com/realms/y"
+    _, auth = build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RESOURCE),
+        JwtValidationSettings(
+            issuer_url=override, jwks_uri="https://other-idp.example.com/jwks"
+        ),
+        default_issuer_url=_ISSUER,
+    )
+    assert str(auth.issuer_url).rstrip("/") == override
+
+
+@pytest.mark.unit
+def test_build_without_resolvable_issuer_raises() -> None:
+    """resource_server_url set but no issuer (override or login) is a misconfiguration."""
+    with pytest.raises(RuntimeError, match="no inbound issuer"):
+        build_resource_server_auth(
+            ResourceServerSettings(resource_server_url=_RESOURCE),
+            JwtValidationSettings(),
+            default_issuer_url=None,
+        )

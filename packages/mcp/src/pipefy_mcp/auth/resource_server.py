@@ -7,10 +7,15 @@ before any tool runs. :class:`JwtTokenVerifier` implements FastMCP's
 emits the ``401`` + ``WWW-Authenticate`` challenge and serves the RFC 9728
 protected-resource metadata around it.
 
-This is a thin adapter: the JWKS resolution and RS256 decoding live in
-``pipefy_auth`` (:class:`~pipefy_auth.JwtValidator`, a transport-agnostic auth
-primitive). This class maps the validated claims onto the SDK's ``AccessToken``
-and turns a validation failure into the ``None`` the protocol reads as "reject".
+:class:`JwtTokenVerifier` is a thin adapter: the JWKS resolution and RS256
+decoding live in ``pipefy_auth`` (:class:`~pipefy_auth.JwtValidator`, a
+transport-agnostic auth primitive). This class maps the validated claims onto
+the SDK's ``AccessToken`` and turns a validation failure into the ``None`` the
+protocol reads as "reject".
+
+:func:`build_resource_server_auth` is the composition root for this profile: it
+resolves the inbound issuer, constructs the verifier over a ``JwtValidator``,
+and pairs it with FastMCP's ``AuthSettings`` for the server to wire in.
 """
 
 from __future__ import annotations
@@ -20,7 +25,10 @@ import logging
 from typing import Any
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
-from pipefy_auth import JwtValidator
+from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
+from pipefy_auth import JwtValidationSettings, JwtValidator
+
+from pipefy_mcp.settings import ResourceServerSettings
 
 logger = logging.getLogger(__name__)
 
@@ -99,3 +107,56 @@ class JwtTokenVerifier(TokenVerifier):
             expires_at=int(exp),
             resource=self._resource,
         )
+
+
+# The (verifier, auth) pair the server threads into FastMCP for the
+# resource-server profile: the inbound bearer verifier and FastMCP's matching
+# AuthSettings (RFC 9728 metadata + the 401 challenge).
+ResourceServerAuth = tuple[JwtTokenVerifier, FastMcpAuthSettings]
+
+
+def build_resource_server_auth(
+    rs: ResourceServerSettings,
+    jwt_validation: JwtValidationSettings,
+    *,
+    default_issuer_url: str | None,
+) -> ResourceServerAuth | None:
+    """Build the inbound bearer verifier and FastMCP auth config, or ``None``.
+
+    The resource-server profile has no enable flag: it is active when this
+    server's ``resource_server_url`` is configured. Absent it, this returns
+    ``None`` and the unauthenticated foundation profile constructs ``FastMCP``
+    exactly as before.
+
+    The inbound issuer is ``jwt_validation.issuer_url`` if set, else
+    ``default_issuer_url`` (see :class:`JwtValidationSettings` for why the login
+    issuer is the fallback). With ``resource_server_url`` set but no issuer
+    resolvable (the stored-session login is disabled and no override is given),
+    validation is impossible, so this raises rather than serve an open endpoint.
+    """
+    if rs.resource_server_url is None:
+        return None
+    issuer_url = jwt_validation.resolve_issuer_url(default_issuer_url)
+    if issuer_url is None:
+        raise RuntimeError(
+            "The resource-server profile is active "
+            "(PIPEFY_MCP_RS_RESOURCE_SERVER_URL is set) but no inbound issuer is "
+            "resolvable: set PIPEFY_JWT_ISSUER_URL, or leave the stored-session "
+            "login enabled so its issuer can be reused."
+        )
+    verifier = JwtTokenVerifier(
+        JwtValidator(
+            issuer_url=issuer_url,
+            audience=jwt_validation.audience,
+            verify_audience=jwt_validation.verify_audience,
+            allow_insecure_urls=jwt_validation.allow_insecure_urls,
+            jwks_uri=jwt_validation.jwks_uri,
+        ),
+        resource=rs.resource_server_url,
+    )
+    auth = FastMcpAuthSettings(
+        issuer_url=issuer_url,
+        resource_server_url=rs.resource_server_url,
+        required_scopes=rs.required_scopes,
+    )
+    return verifier, auth

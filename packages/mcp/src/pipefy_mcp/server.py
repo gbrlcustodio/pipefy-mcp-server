@@ -5,13 +5,11 @@ import textwrap
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
 from mcp.server.fastmcp import FastMCP
-from pipefy_auth import JwtValidationSettings, JwtValidator
 
-from pipefy_mcp.auth import JwtTokenVerifier
+from pipefy_mcp.auth import ResourceServerAuth, build_resource_server_auth
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.settings import ResourceServerSettings, settings
+from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
 
@@ -97,59 +95,12 @@ def _resolve_bind(host: str | None, port: int | None) -> tuple[str, int]:
     )
 
 
-def _build_resource_server_auth(
-    rs: ResourceServerSettings,
-    jwt_validation: JwtValidationSettings,
-    *,
-    default_issuer_url: str | None,
-) -> tuple[JwtTokenVerifier, FastMcpAuthSettings] | None:
-    """Build the inbound bearer verifier and FastMCP auth config, or ``None``.
-
-    The resource-server profile has no enable flag: it is active when this
-    server's ``resource_server_url`` is configured. Absent it, this returns
-    ``None`` and the unauthenticated foundation profile constructs ``FastMCP``
-    exactly as before.
-
-    The inbound issuer is ``jwt_validation.issuer_url`` if set, else
-    ``default_issuer_url`` (see :class:`JwtValidationSettings` for why the login
-    issuer is the fallback). With ``resource_server_url`` set but no issuer
-    resolvable (the stored-session login is disabled and no override is given),
-    validation is impossible, so this raises rather than serve an open endpoint.
-    """
-    if rs.resource_server_url is None:
-        return None
-    issuer_url = jwt_validation.resolve_issuer_url(default_issuer_url)
-    if issuer_url is None:
-        raise RuntimeError(
-            "The resource-server profile is active "
-            "(PIPEFY_MCP_RS_RESOURCE_SERVER_URL is set) but no inbound issuer is "
-            "resolvable: set PIPEFY_JWT_ISSUER_URL, or leave the stored-session "
-            "login enabled so its issuer can be reused."
-        )
-    verifier = JwtTokenVerifier(
-        JwtValidator(
-            issuer_url=issuer_url,
-            audience=jwt_validation.audience,
-            verify_audience=jwt_validation.verify_audience,
-            allow_insecure_urls=jwt_validation.allow_insecure_urls,
-            jwks_uri=jwt_validation.jwks_uri,
-        ),
-        resource=rs.resource_server_url,
-    )
-    auth = FastMcpAuthSettings(
-        issuer_url=issuer_url,
-        resource_server_url=rs.resource_server_url,
-        required_scopes=rs.required_scopes,
-    )
-    return verifier, auth
-
-
 def build_pipefy_mcp_server(
     *,
     remote_mode: bool | None = None,
     host: str | None = None,
     port: int | None = None,
-    resource_server: tuple[JwtTokenVerifier, FastMcpAuthSettings] | None = None,
+    resource_server: ResourceServerAuth | None = None,
 ) -> FastMCP:
     """Build the FastMCP app with its tools registered once, before serving.
 
@@ -160,9 +111,10 @@ def build_pipefy_mcp_server(
     and matter only for the HTTP transport; stdio ignores them.
 
     ``resource_server`` is the ``(verifier, auth)`` pair from
-    :func:`_build_resource_server_auth`. When present, FastMCP validates the
-    inbound bearer per request and serves the resource-server metadata; when
-    ``None`` (stdio, or the disabled HTTP profile) the app has no inbound auth.
+    :func:`pipefy_mcp.auth.build_resource_server_auth`. When present, FastMCP
+    validates the inbound bearer per request and serves the resource-server
+    metadata; when ``None`` (stdio, or the disabled HTTP profile) the app has no
+    inbound auth.
     """
     resolved = settings.mcp.remote_mode if remote_mode is None else remote_mode
     resolved_host, resolved_port = _resolve_bind(host, port)
@@ -242,7 +194,7 @@ def run_server(
     resolved_remote = settings.mcp.remote_mode if remote_mode is None else remote_mode
     resolved_host, resolved_port = _resolve_bind(host, port)
     oidc_client = settings.auth.to_oidc_client()
-    resource_server = _build_resource_server_auth(
+    resource_server = build_resource_server_auth(
         settings.rs,
         settings.jwt,
         default_issuer_url=oidc_client.issuer_url if oidc_client else None,

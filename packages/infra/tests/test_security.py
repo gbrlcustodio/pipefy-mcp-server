@@ -274,6 +274,40 @@ async def test_validate_and_assert_public_url_rejects_internal_via_sync_gate():
         )
 
 
+@pytest.mark.unit
+def test_sanitize_url_strips_and_returns_cleaned_value() -> None:
+    assert (
+        security.sanitize_url("  https://idp.example.com/realms/x  ", field_label="u")
+        == "https://idp.example.com/realms/x"
+    )
+
+
+@pytest.mark.unit
+def test_sanitize_url_path_allowed_by_default() -> None:
+    security.sanitize_url("https://idp.example.com/realms/x", field_label="u")
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad_url", ["https://h/p?q=1", "https://h/p#frag"])
+def test_sanitize_url_rejects_query_or_fragment(bad_url: str) -> None:
+    with pytest.raises(ValueError, match="query string or fragment"):
+        security.sanitize_url(bad_url, field_label="u")
+
+
+@pytest.mark.unit
+def test_sanitize_url_require_host_root_rejects_path() -> None:
+    with pytest.raises(ValueError, match="host root"):
+        security.sanitize_url(
+            "https://h/oauth", field_label="base_url", require_host_root=True
+        )
+
+
+@pytest.mark.unit
+def test_sanitize_url_enforces_https() -> None:
+    with pytest.raises(ValueError, match="HTTPS"):
+        security.sanitize_url("http://idp.example.com", field_label="u")
+
+
 @pytest.mark.asyncio
 async def test_validate_and_assert_public_url_allow_insecure_skips_literal_ip():
     # ``allow_insecure=True`` skips the sync literal-IP gate; the async DNS

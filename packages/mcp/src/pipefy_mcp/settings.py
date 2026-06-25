@@ -170,16 +170,10 @@ class ResourceServerSettings(BaseSettings):
     def _validate_configuration(self) -> Self:
         if self.resource_server_url is None:
             return self
-        # Persist the stripped value: surrounding whitespace in an env var would
-        # otherwise survive into the RFC 9728 resource identifier. The /mcp
-        # endpoint path is expected, so only a query or fragment is forbidden.
-        stripped = self.resource_server_url.strip()
-        self.resource_server_url = stripped
-        security.assert_url_has_no_query_or_fragment(
-            stripped, field_label="resource_server_url"
-        )
-        security.validate_https_url(
-            stripped, "resource_server_url", allow_insecure=self.allow_insecure_urls
+        self.resource_server_url = security.sanitize_url(
+            self.resource_server_url,
+            field_label="resource_server_url",
+            allow_insecure=self.allow_insecure_urls,
         )
         return self
 

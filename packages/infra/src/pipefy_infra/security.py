@@ -24,6 +24,8 @@ Surface:
 * :func:`assert_url_has_no_query_or_fragment`: shape helper, allows a
   path but rejects query/fragment. For URLs that may carry a path but
   whose downstream still concatenates additional path segments.
+* :func:`sanitize_url`: composite a settings validator calls to strip,
+  shape-check, and HTTPS/SSRF-gate a URL field, returning the cleaned value.
 
 Import the module (``from pipefy_infra import security``) and call
 through it (``security.validate_https_url(...)``) so call sites are
@@ -182,6 +184,34 @@ def assert_url_has_no_query_or_fragment(url: str, *, field_label: str) -> None:
         )
 
 
+def sanitize_url(
+    url: str,
+    *,
+    field_label: str,
+    allow_insecure: bool = False,
+    require_host_root: bool = False,
+) -> str:
+    """Strip the URL, enforce its shape and the HTTPS/SSRF gate, return the cleaned value.
+
+    The single chokepoint a settings ``model_validator`` calls to both sanitize a
+    URL field (surrounding whitespace would survive into downstream concatenation)
+    and gate it. ``require_host_root`` swaps the shape check from
+    :func:`assert_url_has_no_query_or_fragment` (a path is allowed) to
+    :func:`assert_url_is_host_root` (no path at all), for URLs that downstream
+    concatenates a fixed suffix onto.
+
+    Raises:
+        ValueError: Same conditions as the composed gates.
+    """
+    stripped = url.strip()
+    if require_host_root:
+        assert_url_is_host_root(stripped, field_label=field_label)
+    else:
+        assert_url_has_no_query_or_fragment(stripped, field_label=field_label)
+    validate_https_url(stripped, field_label, allow_insecure=allow_insecure)
+    return stripped
+
+
 async def assert_hostname_resolves_to_public_ips(hostname: str) -> None:
     """Resolve ``hostname`` and ensure no address is in a blocked range.
 
@@ -246,6 +276,7 @@ __all__ = [
     "assert_hostname_resolves_to_public_ips",
     "assert_url_has_no_query_or_fragment",
     "assert_url_is_host_root",
+    "sanitize_url",
     "validate_and_assert_public_url",
     "validate_https_url",
 ]

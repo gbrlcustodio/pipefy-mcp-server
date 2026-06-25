@@ -352,24 +352,17 @@ class AuthSettings(BaseSettings):
     def _validate_endpoint_urls(self) -> Self:
         # Self-validate so direct ``AuthSettings()`` construction (outside
         # ``CliSettings`` / ``Settings``) is safe. ``base_url`` derives the
-        # OAuth token endpoint via ``<base_url>/oauth/token`` so it must be
-        # a host root; ``auth_url`` is the OIDC issuer and may carry a
-        # realm path (Keycloak-style), but a stray query or fragment would
-        # corrupt the ``.well-known/openid-configuration`` concatenation.
-        stripped_base = self.base_url.strip()
-        security.assert_url_is_host_root(stripped_base, field_label="base_url")
-        security.validate_https_url(
-            stripped_base,
-            "base_url",
+        # OAuth token endpoint via ``<base_url>/oauth/token`` so it must be a
+        # host root; ``auth_url`` is the OIDC issuer and may carry a realm path.
+        self.base_url = security.sanitize_url(
+            self.base_url,
+            field_label="base_url",
             allow_insecure=self.allow_insecure_urls,
+            require_host_root=True,
         )
-        stripped_auth = self.auth_url.strip()
-        security.assert_url_has_no_query_or_fragment(
-            stripped_auth, field_label="auth_url"
-        )
-        security.validate_https_url(
-            stripped_auth,
-            "auth_url",
+        self.auth_url = security.sanitize_url(
+            self.auth_url,
+            field_label="auth_url",
             allow_insecure=self.allow_insecure_urls,
         )
         return self
@@ -477,20 +470,16 @@ class JwtValidationSettings(BaseSettings):
     def _validate_configuration(self) -> Self:
         if self.verify_audience and not self.audience:
             raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
-        # Strip and shape-check both URL fields. Env-var whitespace would otherwise
-        # survive into the consumer: issuer_url into jwt.decode(issuer=...), which
-        # compares iss exactly, and jwks_uri into the JWKS fetch. A realm path is
-        # allowed, so only a query or fragment (which would corrupt URL building)
-        # is rejected.
         for label in ("issuer_url", "jwks_uri"):
             value = getattr(self, label)
             if value is None:
                 continue
-            stripped = value.strip()
-            setattr(self, label, stripped)
-            security.assert_url_has_no_query_or_fragment(stripped, field_label=label)
-            security.validate_https_url(
-                stripped, label, allow_insecure=self.allow_insecure_urls
+            setattr(
+                self,
+                label,
+                security.sanitize_url(
+                    value, field_label=label, allow_insecure=self.allow_insecure_urls
+                ),
             )
         return self
 

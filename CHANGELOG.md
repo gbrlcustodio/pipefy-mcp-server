@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **MCP**: opt-in OAuth 2.0 resource-server profile for the `--remote` HTTP transport. Setting `PIPEFY_MCP_RS_RESOURCE_SERVER_URL` activates it (no separate enable flag): the server validates an inbound `Authorization: Bearer` on every request (RS256 against the issuer's JWKS, issuer and expiry, optional audience), serves RFC 9728 protected-resource metadata, and returns `401` with a `WWW-Authenticate` challenge on a missing or invalid token. Token-validation knobs live in `pipefy_auth.JwtValidationSettings` (`PIPEFY_JWT_ISSUER_URL`, which defaults to the login issuer, plus `PIPEFY_JWT_AUDIENCE` / `PIPEFY_JWT_VERIFY_AUDIENCE` / `PIPEFY_JWT_JWKS_URI`); resource identity (`PIPEFY_MCP_RS_RESOURCE_SERVER_URL`, `PIPEFY_MCP_RS_REQUIRED_SCOPES`) stays in `pipefy_mcp.ResourceServerSettings`; `PIPEFY_ALLOW_INSECURE_URLS` covers both. The stdio profile is unchanged. Per-request on-behalf-of identity is not yet wired (#302), so even with a validated bearer every call runs as the single startup identity. Closes #301.
+
 ### Changed
 
 - **SDK**: services now receive GraphQL execution through their constructor instead of inheriting it. A narrow `GraphQLExecutor` protocol is the seam; `HttpxGraphQLExecutor` (formerly `BasePipefyClient`) is the only httpx/gql adapter, and `PipefyClient` builds one executor per endpoint via `build_executors` and injects them. Tests inject a fake executor rather than monkeypatching `execute_query`.

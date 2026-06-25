@@ -1,23 +1,44 @@
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_auth import AuthSettings
+from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_sdk import PipefySettings
 
+from pipefy_mcp.auth import build_resource_server_auth
 from pipefy_mcp.server import (
-    _assert_loopback_http_bind,
+    _assert_safe_http_bind,
     _register_pipefy_tools,
     build_pipefy_mcp_server,
     lifespan,
     run_server,
 )
-from pipefy_mcp.settings import Settings
+from pipefy_mcp.settings import ResourceServerSettings, Settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
+
+_RS_ISSUER = "https://idp.example.com/realms/x"
+_RS_RESOURCE = "https://mcp.example.com/mcp"
+
+
+def _resource_server_pair():
+    """A configured resource-server (verifier, auth) pair with no network at build.
+
+    The explicit ``jwks_uri`` skips OIDC discovery; the unauthenticated-request
+    and metadata tests never decode a token, so the JWKS is never fetched. The
+    inbound issuer comes from ``default_issuer_url`` (the login issuer) to exercise
+    the same-realm default rather than an explicit override.
+    """
+    return build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RS_RESOURCE),
+        JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
+        default_issuer_url=_RS_ISSUER,
+    )
+
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
     pipefy=PipefySettings(base_url="https://api.pipefy.com"),
@@ -191,16 +212,15 @@ async def test_lifespan_logs_error_when_initialization_raises():
 @pytest.mark.unit
 @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
 def test_loopback_http_bind_allows_loopback_hosts(host):
-    # Does not raise.
-    _assert_loopback_http_bind(host=host)
+    _assert_safe_http_bind(host=host)
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize("host", ["0.0.0.0", "203.0.113.5"])
 def test_loopback_http_bind_refuses_non_loopback_hosts(host):
-    """A non-loopback bind is refused outright; the tool profile cannot exempt it."""
+    """A non-loopback bind is refused until the hosted on-behalf-of profile lands."""
     with pytest.raises(RuntimeError, match="non-loopback host"):
-        _assert_loopback_http_bind(host=host)
+        _assert_safe_http_bind(host=host)
 
 
 @pytest.mark.unit
@@ -215,7 +235,9 @@ def test_run_server_http_builds_the_app_and_serves_over_streamable_http():
     ):
         run_server(http=True, host="127.0.0.1", port=9123, remote_mode=True)
 
-    mock_build.assert_called_once_with(remote_mode=True, host="127.0.0.1", port=9123)
+    mock_build.assert_called_once_with(
+        remote_mode=True, host="127.0.0.1", port=9123, resource_server=None
+    )
     fake_app.run.assert_called_once_with("streamable-http")
 
 
@@ -263,3 +285,61 @@ def test_run_server_http_refuses_non_loopback_before_building():
             run_server(http=True, host="0.0.0.0", port=9123, remote_mode=True)
 
     mock_build.assert_not_called()
+
+
+# --- Resource-server role (OAuth 2.0 inbound bearer validation) --------------
+
+
+@pytest.mark.unit
+def test_stdio_build_has_no_inbound_auth(mocked_container):
+    """The stdio profile builds with no inbound auth wired into FastMCP."""
+    app = build_pipefy_mcp_server(remote_mode=False)
+    assert app.settings.auth is None
+
+
+@pytest.mark.unit
+def test_build_with_resource_server_wires_inbound_auth(mocked_container):
+    """An enabled resource-server pair wires FastMCP's auth + token verifier."""
+    app = build_pipefy_mcp_server(
+        remote_mode=True, resource_server=_resource_server_pair()
+    )
+    assert app.settings.auth is not None
+    assert str(app.settings.auth.resource_server_url).rstrip("/") == _RS_RESOURCE
+
+
+def _asgi_client(app):
+    transport = httpx.ASGITransport(app=app.streamable_http_app())
+    return httpx.AsyncClient(transport=transport, base_url="http://testserver")
+
+
+@pytest.mark.unit
+async def test_http_unauthenticated_request_gets_401_challenge(mocked_container):
+    """A request with no bearer is rejected with a 401 + WWW-Authenticate challenge.
+
+    The auth middleware runs before the MCP handler, so no session (and no
+    network) is needed: the challenge points at the protected-resource metadata.
+    """
+    app = build_pipefy_mcp_server(
+        remote_mode=True, resource_server=_resource_server_pair()
+    )
+    async with _asgi_client(app) as client:
+        resp = await client.post(
+            "/mcp", json={"jsonrpc": "2.0", "method": "ping", "id": 1}
+        )
+    assert resp.status_code == 401
+    assert "resource_metadata=" in resp.headers["www-authenticate"]
+
+
+@pytest.mark.unit
+async def test_http_serves_protected_resource_metadata(mocked_container):
+    """The RFC 9728 metadata route is served at the resource's well-known path."""
+    app = build_pipefy_mcp_server(
+        remote_mode=True, resource_server=_resource_server_pair()
+    )
+    async with _asgi_client(app) as client:
+        resp = await client.get("/.well-known/oauth-protected-resource/mcp")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["resource"].rstrip("/") == _RS_RESOURCE
+    advertised = [s.rstrip("/") for s in body["authorization_servers"]]
+    assert _RS_ISSUER in advertised

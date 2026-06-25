@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from pipefy_auth import AuthSettings
+from typing import Self
+
+from pipefy_auth import AuthSettings, JwtValidationSettings
+from pipefy_infra import security
 from pipefy_infra.config import PipefyTomlConfigSource
 from pipefy_sdk import PipefySettings
-from pydantic import Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -88,6 +91,99 @@ class McpSettings(BaseSettings):
     )
 
 
+class ResourceServerSettings(BaseSettings):
+    """This MCP server's identity as an OAuth protected resource (HTTP profile).
+
+    The resource-server profile activates when ``resource_server_url`` is set: the
+    ``--remote`` transport then validates inbound bearers and serves RFC 9728
+    metadata, and the unauthenticated foundation profile is left untouched.
+
+    Token *validation* knobs (issuer, audience, JWKS) are an auth concern and live
+    in :class:`pipefy_auth.JwtValidationSettings`, alongside the validator they
+    feed. This model carries only what is specific to *this* server's resource
+    identity: its public URL and the scopes it requires.
+
+    ``env_prefix="PIPEFY_MCP_RS_"`` does not collide with ``McpSettings``'
+    ``PIPEFY_MCP_``: that model has no ``rs_*`` fields, so ``PIPEFY_MCP_RS_*``
+    vars fall through its ``extra="ignore"`` gate. ``allow_insecure_urls`` is
+    aliased to the shared ``PIPEFY_ALLOW_INSECURE_URLS`` so the whole deployment
+    has a single insecure-URL posture.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="PIPEFY_MCP_RS_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            PipefyTomlConfigSource(settings_cls),
+            file_secret_settings,
+        )
+
+    resource_server_url: str | None = Field(
+        default=None,
+        description=(
+            "Public canonical URL of this MCP server as an OAuth protected "
+            "resource (env: PIPEFY_MCP_RS_RESOURCE_SERVER_URL). Decoupled from the "
+            "bind host, so behind a proxy it is the public origin, not host/port. "
+            "Include the /mcp endpoint path, e.g. https://mcp.pipefy.com/mcp: it "
+            "becomes the RFC 9728 resource identifier and the base for the "
+            "protected-resource metadata route. Setting it activates the profile."
+        ),
+    )
+
+    required_scopes: list[str] | None = Field(
+        default=None,
+        description=(
+            "Scopes a token must carry (env: PIPEFY_MCP_RS_REQUIRED_SCOPES as "
+            "JSON). FastMCP returns 403 when any is missing."
+        ),
+    )
+
+    allow_insecure_urls: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
+        description=(
+            "When true (env: PIPEFY_ALLOW_INSECURE_URLS, shared across the "
+            "deployment), resource_server_url may use http:// and internal hosts; "
+            "local development only."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_configuration(self) -> Self:
+        if self.resource_server_url is None:
+            return self
+        # Persist the stripped value: surrounding whitespace in an env var would
+        # otherwise survive into the RFC 9728 resource identifier. The /mcp
+        # endpoint path is expected, so only a query or fragment is forbidden.
+        stripped = self.resource_server_url.strip()
+        self.resource_server_url = stripped
+        security.assert_url_has_no_query_or_fragment(
+            stripped, field_label="resource_server_url"
+        )
+        security.validate_https_url(
+            stripped, "resource_server_url", allow_insecure=self.allow_insecure_urls
+        )
+        return self
+
+
 class Settings(BaseSettings):
     """Application configuration via pydantic-settings.
 
@@ -104,8 +200,18 @@ class Settings(BaseSettings):
     pipefy: PipefySettings = Field(default_factory=PipefySettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     mcp: McpSettings = Field(default_factory=McpSettings)
+    jwt: JwtValidationSettings = Field(default_factory=JwtValidationSettings)
+    rs: ResourceServerSettings = Field(default_factory=ResourceServerSettings)
 
 
 settings = Settings()
 
-__all__ = ["AuthSettings", "McpSettings", "PipefySettings", "Settings", "settings"]
+__all__ = [
+    "AuthSettings",
+    "JwtValidationSettings",
+    "McpSettings",
+    "PipefySettings",
+    "ResourceServerSettings",
+    "Settings",
+    "settings",
+]

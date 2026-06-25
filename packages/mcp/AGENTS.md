@@ -33,21 +33,46 @@ Two ways to launch `pipefy-mcp-server`:
   surface. Bind host/port come from `PIPEFY_MCP_HOST` / `PIPEFY_MCP_PORT` (defaults
   `127.0.0.1:8000`), overridable with `--host` / `--port`.
 
-The HTTP profile is foundation work behind the flag (issue #300). It does **not**
-yet validate inbound bearers (resource-server role, #301) or carry per-request
-on-behalf-of identity (#302); until those land it is unauthenticated and uses the
-single identity resolved at startup. Treat `--remote` as local/validation only, not
-a production hosted endpoint.
+The HTTP transport (issue #300) optionally runs as an OAuth 2.0 resource server
+(issue #301): with the resource-server profile configured it validates an inbound
+bearer on every request. It does not yet carry per-request on-behalf-of identity
+(#302), so even with a validated bearer every call still runs as the single
+identity resolved at startup; treat `--remote` as local/validation until #302
+lands.
 
-**Loopback-only bind.** While the HTTP transport is unauthenticated, the HTTP path
-of `run_server` refuses any non-loopback bind (`_assert_loopback_http_bind`): every
-call would run as the single startup identity, so a network-reachable port would
-hand that identity to anyone who can reach it. This is independent of the tool
-profile, the remote-safe subset is no safer over an unauthenticated network bind.
-It also keeps the filesystem tools coherent: the attachment uploads read a local
-`file_path`, which only resolves when the server shares the client's disk, i.e. on
-loopback (remote-safe file inputs are tracked in #305). When inbound auth lands
-(#301), revisit allowing a network bind.
+**Resource-server profile.** Config is split by domain. *Token validation* is an
+auth concern and lives in `pipefy_auth.JwtValidationSettings` (`settings.jwt`,
+env `PIPEFY_JWT_*`): `ISSUER_URL` (an override; absent it, the inbound issuer
+defaults to the one this process logs into, the `OidcClient` issuer, since in a
+single-realm deployment they are the same IdP), optional `AUDIENCE` /
+`VERIFY_AUDIENCE` (off by default, the same-audience interim), and `JWKS_URI`.
+*Resource identity* is MCP-specific and stays in `pipefy_mcp.ResourceServerSettings`
+(`settings.rs`, env `PIPEFY_MCP_RS_*`): `RESOURCE_SERVER_URL` (this server's public
+canonical URL, e.g. `https://host/mcp`) and `REQUIRED_SCOPES`. The shared
+`PIPEFY_ALLOW_INSECURE_URLS` covers both. The profile activates when
+`RESOURCE_SERVER_URL` is set (the one value that cannot default); there is no
+separate enable flag, just `--remote` plus this URL. Set `RESOURCE_SERVER_URL`
+with the stored-session login disabled and no `ISSUER_URL` override and startup
+fails (no issuer to validate against).
+
+The JWKS/RS256 validation lives in `pipefy_auth` (`JwtValidator`); the MCP adapter
+`auth/resource_server.py` (`JwtTokenVerifier`) maps validated claims onto the
+SDK's `AccessToken`. FastMCP serves the RFC 9728 protected-resource metadata and
+the `401` + `WWW-Authenticate` challenge; `build_resource_server_auth` (same
+module, the composition root) resolves the inbound issuer and pairs the verifier
+with `AuthSettings`, which `server.py` wires into the app.
+
+**Loopback bind.** `_assert_safe_http_bind` restricts the HTTP transport to a
+loopback bind, unconditionally for now. Even with the resource-server profile
+validating an inbound bearer, there is no per-request on-behalf-of identity yet
+(#302), so every call runs as the single startup identity; a network-reachable
+port would hand that identity to anyone who can reach it. Off-loopback binding
+stays off until the hosted on-behalf-of profile lands (see
+`experiments/hosted-obo/RFC-OUTLINE.md`), which brings per-request identity and
+the configurable host / Origin allowlist for a proxied deployment (DNS-rebinding
+protection, #303). The attachment tools' local `file_path` inputs also still
+assume a loopback peer that shares the client's disk (remote-safe file inputs are
+#305).
 
 ## Tool registration
 

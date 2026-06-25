@@ -96,8 +96,7 @@ class ResourceServerSettings(BaseSettings):
 
     The resource-server profile activates when ``resource_server_url`` is set: the
     ``--remote`` transport then validates inbound bearers and serves RFC 9728
-    metadata, and the unauthenticated foundation profile is left untouched. There
-    is no separate enable flag, just ``--remote`` plus this URL.
+    metadata, and the unauthenticated foundation profile is left untouched.
 
     Token *validation* knobs (issuer, audience, JWKS) are an auth concern and live
     in :class:`pipefy_auth.JwtValidationSettings`, alongside the validator they

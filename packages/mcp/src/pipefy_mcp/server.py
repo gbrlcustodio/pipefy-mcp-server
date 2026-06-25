@@ -115,10 +115,6 @@ def _build_resource_server_auth(
     issuer is the fallback). With ``resource_server_url`` set but no issuer
     resolvable (the stored-session login is disabled and no override is given),
     validation is impossible, so this raises rather than serve an open endpoint.
-
-    The verifier consumes the inbound validation knobs (audience, verify_audience,
-    jwks_uri); FastMCP's ``AuthSettings`` consumes the issuer, resource, and
-    required scopes to serve RFC 9728 metadata and the ``401`` challenge.
     """
     if rs.resource_server_url is None:
         return None

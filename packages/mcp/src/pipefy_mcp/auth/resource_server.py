@@ -11,8 +11,6 @@ This is a thin adapter: the JWKS resolution and RS256 decoding live in
 ``pipefy_auth`` (:class:`~pipefy_auth.JwtValidator`, a transport-agnostic auth
 primitive). This class maps the validated claims onto the SDK's ``AccessToken``
 and turns a validation failure into the ``None`` the protocol reads as "reject".
-The validated token then lands in the MCP auth context for the per-request
-on-behalf-of work tracked separately.
 """
 
 from __future__ import annotations

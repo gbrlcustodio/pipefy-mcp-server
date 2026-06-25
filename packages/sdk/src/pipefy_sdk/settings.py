@@ -3,13 +3,9 @@ from __future__ import annotations
 from typing import Self
 
 from pipefy_infra import security
-from pipefy_infra.config import PipefyTomlConfigSource
+from pipefy_infra.config import InsecureUrlSettings
 from pydantic import Field, computed_field, field_validator, model_validator
-from pydantic_settings import (
-    BaseSettings,
-    PydanticBaseSettingsSource,
-    SettingsConfigDict,
-)
+from pydantic_settings import SettingsConfigDict
 
 # Canonical Pipefy production API host root.
 DEFAULT_BASE_URL = "https://app.pipefy.com"
@@ -20,7 +16,7 @@ DEFAULT_BASE_URL = "https://app.pipefy.com"
 _ORG_ID_PATTERN = r"^[0-9]+$"
 
 
-class PipefySettings(BaseSettings):
+class PipefySettings(InsecureUrlSettings):
     """Pipefy API connection and shared runtime knobs (CLI, scripts).
 
     Endpoint configuration only — credentials live on
@@ -37,41 +33,7 @@ class PipefySettings(BaseSettings):
     operators on prod leave it unset (default Pipefy production).
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="PIPEFY_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        populate_by_name=True,
-    )
-
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
-        # TOML keys are bare pydantic field names; the ``PIPEFY_`` env prefix
-        # does not apply to TOML lookups.
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            PipefyTomlConfigSource(settings_cls),
-            file_secret_settings,
-        )
-
-    allow_insecure_urls: bool = Field(
-        default=False,
-        description=(
-            "When true (env: PIPEFY_ALLOW_INSECURE_URLS), GraphQL/auth/internal API URLs "
-            "may use http:// and internal hosts; local development only; do not enable in production."
-        ),
-    )
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
     base_url: str = Field(
         default=DEFAULT_BASE_URL,

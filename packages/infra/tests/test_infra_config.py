@@ -10,6 +10,8 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pipefy_infra.config import (
+    InsecureUrlSettings,
+    PipefyBaseSettings,
     PipefyTomlConfigSource,
     config_dir,
     config_file_path,
@@ -179,3 +181,58 @@ def test_lazy_path_resolution_picks_up_env_change(
 
     monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(second))
     assert _Settings().alpha == "second"
+
+
+class _PrefixedSettings(PipefyBaseSettings):
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_SAMPLE_")
+
+    alpha: str = Field(default="default-alpha")
+
+
+class _PrefixedInsecure(InsecureUrlSettings):
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_SAMPLE_")
+
+
+def test_base_subclass_merges_config_keys() -> None:
+    # A subclass declares only its prefix; the shared keys merge along the MRO.
+    config = _PrefixedSettings.model_config
+    assert config["env_prefix"] == "PIPEFY_SAMPLE_"
+    assert config["extra"] == "ignore"
+    assert config["populate_by_name"] is True
+
+
+def test_base_subclass_inherits_toml_source(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # No per-class settings_customise_sources: TOML is wired in by the base.
+    path = _write_config(tmp_path / "config.toml", 'alpha = "from-toml"\n')
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(path))
+    monkeypatch.delenv("PIPEFY_SAMPLE_ALPHA", raising=False)
+    assert _PrefixedSettings().alpha == "from-toml"
+
+
+def test_base_subclass_env_overrides_toml(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _write_config(tmp_path / "config.toml", 'alpha = "from-toml"\n')
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(path))
+    monkeypatch.setenv("PIPEFY_SAMPLE_ALPHA", "from-env")
+    assert _PrefixedSettings().alpha == "from-env"
+
+
+def test_insecure_flag_reads_shared_var_under_any_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The alias outranks the subclass prefix: not PIPEFY_SAMPLE_ALLOW_INSECURE_URLS.
+    monkeypatch.delenv("PIPEFY_SAMPLE_ALLOW_INSECURE_URLS", raising=False)
+    monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
+    assert _PrefixedInsecure().allow_insecure_urls is True
+
+
+def test_insecure_flag_defaults_false_and_accepts_name_kwarg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PIPEFY_ALLOW_INSECURE_URLS", raising=False)
+    assert _PrefixedInsecure().allow_insecure_urls is False
+    # populate_by_name lets field-name kwargs win despite the validation_alias.
+    assert _PrefixedInsecure(allow_insecure_urls=True).allow_insecure_urls is True

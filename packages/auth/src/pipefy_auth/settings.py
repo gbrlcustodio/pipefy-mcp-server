@@ -28,7 +28,7 @@ import sys
 from typing import Literal, Self
 
 from pipefy_infra import security
-from pipefy_infra.config import PipefyTomlConfigSource
+from pipefy_infra.config import InsecureUrlSettings
 from pydantic import (
     AliasChoices,
     Field,
@@ -36,11 +36,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import (
-    BaseSettings,
-    PydanticBaseSettingsSource,
-    SettingsConfigDict,
-)
+from pydantic_settings import SettingsConfigDict
 
 from pipefy_auth.identity import (
     DEFAULT_AUTH_CLIENT_ID,
@@ -118,51 +114,19 @@ def _reset_legacy_oauth_warning_state() -> None:
     _warned_dropped_env_keys.clear()
 
 
-class AuthSettings(BaseSettings):
+class AuthSettings(InsecureUrlSettings):
     """Auth-related configuration loaded from env / config files.
 
     Reads its own ``PIPEFY_*`` env vars directly (with the ``PIPEFY_`` prefix
     folded into the field names). Self-contained: SSRF validation runs inline
     as a ``model_validator(mode="after")`` hook, so direct construction
     (`AuthSettings()`) is safe even when not composed under
-    :class:`CliSettings` / :class:`Settings`. The ``allow_insecure_urls``
-    field mirrors :class:`pipefy_sdk.PipefySettings`'s field of the same name
-    and is read from ``PIPEFY_ALLOW_INSECURE_URLS``; the ``base_url`` field
-    likewise mirrors PipefySettings via ``PIPEFY_BASE_URL`` and drives the
-    OAuth token endpoint.
+    :class:`CliSettings` / :class:`Settings`. The ``base_url`` field mirrors
+    :class:`pipefy_sdk.PipefySettings` via ``PIPEFY_BASE_URL`` (both models load
+    it independently so they stay in sync) and drives the OAuth token endpoint.
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="PIPEFY_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        # Required so ``env_prefix`` is applied to the field name on top of the
-        # ``AliasChoices`` lookups (otherwise env lookups would only consider
-        # the aliases, and ``PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`` would be ignored).
-        populate_by_name=True,
-    )
-
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
-        # TOML keys are bare pydantic field names (e.g. ``static_token``); the
-        # ``PIPEFY_`` env prefix and the ``AliasChoices`` env-only aliases on
-        # individual fields do not apply to TOML lookups.
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            PipefyTomlConfigSource(settings_cls),
-            file_secret_settings,
-        )
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
     @model_validator(mode="before")
     @classmethod
@@ -263,10 +227,10 @@ class AuthSettings(BaseSettings):
         ),
     )
 
-    # ``base_url`` and ``allow_insecure_urls`` use the ``env_prefix="PIPEFY_"``
-    # mapping directly (env name = ``PIPEFY_<FIELD_NAME>``) — no ``AliasChoices``
-    # needed. Field-name init kwargs (``AuthSettings(base_url=...)``) win over
-    # env on the source chain, matching the natural call site.
+    # ``base_url`` uses the ``env_prefix="PIPEFY_"`` mapping directly (env name =
+    # ``PIPEFY_BASE_URL``) — no ``AliasChoices`` needed. Field-name init kwargs
+    # (``AuthSettings(base_url=...)``) win over env on the source chain, matching
+    # the natural call site. ``allow_insecure_urls`` comes from the base.
     base_url: str = Field(
         default=DEFAULT_BASE_URL,
         pattern=security.URL_SHAPE_PATTERN,
@@ -276,17 +240,6 @@ class AuthSettings(BaseSettings):
             "``service_account_url`` computed property. Mirrors the field of "
             "the same name on :class:`pipefy_sdk.PipefySettings`; both models "
             "load it independently from the same env var so they stay in sync."
-        ),
-    )
-
-    allow_insecure_urls: bool = Field(
-        default=False,
-        description=(
-            "When true (env: PIPEFY_ALLOW_INSECURE_URLS), auth-related URLs "
-            "may use http:// and internal hosts; local development only; do "
-            "not enable in production. Mirrors the field of the same name on "
-            ":class:`pipefy_sdk.PipefySettings` so this model can run its own "
-            "inline SSRF check without consulting the parent composition."
         ),
     )
 
@@ -368,7 +321,7 @@ class AuthSettings(BaseSettings):
         return self
 
 
-class JwtValidationSettings(BaseSettings):
+class JwtValidationSettings(InsecureUrlSettings):
     """How this process validates an inbound bearer when it acts as a resource server.
 
     :class:`AuthSettings` configures the *outbound* side: how this process
@@ -385,36 +338,11 @@ class JwtValidationSettings(BaseSettings):
     and outbound issuers diverge (token exchange, multi-tenant federation).
 
     ``env_prefix="PIPEFY_JWT_"`` keeps these distinct from ``AuthSettings``'
-    ``PIPEFY_*`` vars; ``allow_insecure_urls`` is the one exception, aliased to the
-    shared ``PIPEFY_ALLOW_INSECURE_URLS`` so the whole auth domain has a single
-    insecure-URL posture rather than a per-model toggle.
+    ``PIPEFY_*`` vars; ``allow_insecure_urls`` (from the base) is the one
+    exception, reading the shared ``PIPEFY_ALLOW_INSECURE_URLS``.
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="PIPEFY_JWT_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        populate_by_name=True,
-    )
-
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            PipefyTomlConfigSource(settings_cls),
-            file_secret_settings,
-        )
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_JWT_")
 
     issuer_url: str | None = Field(
         default=None,
@@ -449,16 +377,6 @@ class JwtValidationSettings(BaseSettings):
         description=(
             "Explicit JWKS endpoint override (env: PIPEFY_JWT_JWKS_URI). When "
             "unset, resolved from the issuer's discovery document."
-        ),
-    )
-
-    allow_insecure_urls: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
-        description=(
-            "When true (env: PIPEFY_ALLOW_INSECURE_URLS, shared with the outbound "
-            "side), inbound-validation URLs may use http:// and internal hosts; "
-            "local development only."
         ),
     )
 

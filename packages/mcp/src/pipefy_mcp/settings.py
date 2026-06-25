@@ -4,17 +4,13 @@ from typing import Self
 
 from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_infra import security
-from pipefy_infra.config import PipefyTomlConfigSource
+from pipefy_infra.config import InsecureUrlSettings, PipefyBaseSettings
 from pipefy_sdk import PipefySettings
-from pydantic import AliasChoices, Field, model_validator
-from pydantic_settings import (
-    BaseSettings,
-    PydanticBaseSettingsSource,
-    SettingsConfigDict,
-)
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class McpSettings(BaseSettings):
+class McpSettings(PipefyBaseSettings):
     """MCP-server runtime knobs: transport, tool exposure, and envelope shape.
 
     These are consumed only by the MCP server, so they live here rather than in
@@ -26,32 +22,7 @@ class McpSettings(BaseSettings):
     ``port``.
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="PIPEFY_MCP_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        populate_by_name=True,
-    )
-
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
-        # Reads the shared config.toml; keys are this class's bare field names.
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            PipefyTomlConfigSource(settings_cls),
-            file_secret_settings,
-        )
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_MCP_")
 
     unified_envelope: bool = Field(
         default=True,
@@ -91,7 +62,7 @@ class McpSettings(BaseSettings):
     )
 
 
-class ResourceServerSettings(BaseSettings):
+class ResourceServerSettings(InsecureUrlSettings):
     """This MCP server's identity as an OAuth protected resource (HTTP profile).
 
     The resource-server profile activates when ``resource_server_url`` is set: the
@@ -105,36 +76,11 @@ class ResourceServerSettings(BaseSettings):
 
     ``env_prefix="PIPEFY_MCP_RS_"`` does not collide with ``McpSettings``'
     ``PIPEFY_MCP_``: that model has no ``rs_*`` fields, so ``PIPEFY_MCP_RS_*``
-    vars fall through its ``extra="ignore"`` gate. ``allow_insecure_urls`` is
-    aliased to the shared ``PIPEFY_ALLOW_INSECURE_URLS`` so the whole deployment
-    has a single insecure-URL posture.
+    vars fall through its ``extra="ignore"`` gate. ``allow_insecure_urls`` (from
+    the base) reads the shared ``PIPEFY_ALLOW_INSECURE_URLS``.
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="PIPEFY_MCP_RS_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        populate_by_name=True,
-    )
-
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            PipefyTomlConfigSource(settings_cls),
-            file_secret_settings,
-        )
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_MCP_RS_")
 
     resource_server_url: str | None = Field(
         default=None,
@@ -153,16 +99,6 @@ class ResourceServerSettings(BaseSettings):
         description=(
             "Scopes a token must carry (env: PIPEFY_MCP_RS_REQUIRED_SCOPES as "
             "JSON). FastMCP returns 403 when any is missing."
-        ),
-    )
-
-    allow_insecure_urls: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
-        description=(
-            "When true (env: PIPEFY_ALLOW_INSECURE_URLS, shared across the "
-            "deployment), resource_server_url may use http:// and internal hosts; "
-            "local development only."
         ),
     )
 

@@ -24,8 +24,13 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from pydantic import AliasChoices, Field
 from pydantic.fields import FieldInfo
-from pydantic_settings import PydanticBaseSettingsSource
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 _CONFIG_FILE_ENV = "PIPEFY_CONFIG_FILE"
 
@@ -104,4 +109,69 @@ class PipefyTomlConfigSource(PydanticBaseSettingsSource):
         return self._data()
 
 
-__all__ = ["PipefyTomlConfigSource", "config_dir", "config_file_path"]
+class PipefyBaseSettings(BaseSettings):
+    """Shared base for every ``PIPEFY_*`` settings model across the packages.
+
+    Carries the config and source chain each leaf model otherwise repeats:
+    env + ``.env`` loading, ``extra="ignore"`` so foreign vars fall through the
+    prefix gate rather than erroring, and ``populate_by_name=True`` so
+    field-name kwargs work alongside per-field ``AliasChoices``. Subclasses set
+    only their own ``env_prefix``; pydantic merges it onto these defaults along
+    the MRO.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
+        # TOML keys are bare pydantic field names; neither the env prefix nor
+        # the env-only AliasChoices apply to TOML lookups.
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            PipefyTomlConfigSource(settings_cls),
+            file_secret_settings,
+        )
+
+
+class InsecureUrlSettings(PipefyBaseSettings):
+    """Base for settings models that gate their URLs behind one shared flag.
+
+    Adds ``allow_insecure_urls``, read from ``PIPEFY_ALLOW_INSECURE_URLS``
+    regardless of the subclass's ``env_prefix`` (the explicit alias outranks the
+    prefix), so the whole deployment has a single insecure-URL posture rather
+    than a per-model toggle.
+    """
+
+    allow_insecure_urls: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
+        description=(
+            "When true (env: PIPEFY_ALLOW_INSECURE_URLS), URLs may use http:// "
+            "and internal hosts; local development only, do not enable in "
+            "production."
+        ),
+    )
+
+
+__all__ = [
+    "InsecureUrlSettings",
+    "PipefyBaseSettings",
+    "PipefyTomlConfigSource",
+    "config_dir",
+    "config_file_path",
+]

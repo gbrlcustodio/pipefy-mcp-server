@@ -44,7 +44,7 @@ from pipefy_auth.revoke import (
     RevocationUnsupportedError,
     revoke_session,
 )
-from pipefy_auth.settings import AuthSettings
+from pipefy_auth.settings import AuthSettings, JwtValidationSettings
 from pipefy_auth.storage import (
     SessionDeleteError,
     StoredSession,
@@ -59,6 +59,7 @@ from pipefy_auth.verification import JwtValidator, TokenValidationError
 
 __all__ = [
     "AuthSettings",
+    "JwtValidationSettings",
     "CallableBearerAuth",
     "DEFAULT_AUTH_CLIENT_ID",
     "DiscoveryPolicy",

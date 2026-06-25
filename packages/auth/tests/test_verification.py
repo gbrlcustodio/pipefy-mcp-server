@@ -125,7 +125,7 @@ def test_wrong_audience_passes_when_not_verifying(
 @pytest.mark.unit
 def test_jwks_uri_resolved_from_discovery(monkeypatch: pytest.MonkeyPatch) -> None:
     # With no explicit jwks_uri, the validator reads it from the issuer's
-    # discovery document.
+    # discovery document, lazily on first use rather than at construction.
     metadata = SimpleNamespace(jwks_uri=_JWKS_URI)
     monkeypatch.setattr(
         "pipefy_auth.verification.fetch_provider_metadata",
@@ -134,17 +134,72 @@ def test_jwks_uri_resolved_from_discovery(monkeypatch: pytest.MonkeyPatch) -> No
     validator = JwtValidator(
         issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
     )
-    assert validator._jwks.uri == _JWKS_URI
+    assert validator._jwks is None  # deferred, not resolved at construction
+    assert validator._jwks_client().uri == _JWKS_URI
+
+
+@pytest.mark.unit
+def test_discovery_path_does_no_network_at_construction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Construction must not touch the IdP, so process boot never blocks on it.
+    # A discovery that would raise leaves construction untouched; the failure
+    # only surfaces on validate().
+    def _fail(issuer_url: str, policy: Any) -> SimpleNamespace:
+        raise AssertionError("discovery must not run at construction")
+
+    monkeypatch.setattr("pipefy_auth.verification.fetch_provider_metadata", _fail)
+    validator = JwtValidator(
+        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+    )
+    assert validator._jwks is None
 
 
 @pytest.mark.unit
 def test_discovery_without_jwks_uri_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The discovery failure now surfaces on validate() (lazy), folded into
+    # TokenValidationError, not at construction.
     monkeypatch.setattr(
         "pipefy_auth.verification.fetch_provider_metadata",
         lambda issuer_url, policy: SimpleNamespace(jwks_uri=None),
     )
-    with pytest.raises(ValueError, match="jwks_uri"):
-        JwtValidator(issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False)
+    validator = JwtValidator(
+        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+    )
+    with pytest.raises(TokenValidationError, match="jwks_uri"):
+        validator.validate(_sign(_claims()))
+
+
+@pytest.mark.unit
+def test_discovery_failure_is_not_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A transient discovery failure must not be cached: the next validate()
+    # retries, so the validator self-heals once the IdP is reachable again.
+    calls = {"n": 0}
+
+    def _flaky(issuer_url: str, policy: Any) -> SimpleNamespace:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ValueError("transient discovery outage")
+        return SimpleNamespace(jwks_uri=_JWKS_URI)
+
+    monkeypatch.setattr("pipefy_auth.verification.fetch_provider_metadata", _flaky)
+    validator = JwtValidator(
+        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+    )
+
+    with pytest.raises(TokenValidationError, match="transient discovery outage"):
+        validator.validate(_sign(_claims()))
+    assert validator._jwks is None  # failure not cached
+
+    # Second attempt: discovery succeeds and the resolved client is reused.
+    monkeypatch.setattr(
+        validator._jwks_client(),
+        "get_signing_key_from_jwt",
+        lambda token: SimpleNamespace(key=_PRIVATE_KEY.public_key()),
+    )
+    assert calls["n"] == 2
+    claims = validator.validate(_sign(_claims()))
+    assert claims["sub"] == "user-123"
 
 
 @pytest.mark.unit

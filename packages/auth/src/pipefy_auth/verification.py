@@ -15,6 +15,7 @@ offload :meth:`JwtValidator.validate` to a thread.
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import jwt
@@ -38,9 +39,13 @@ class TokenValidationError(ValueError):
 class JwtValidator:
     """Validate an RS256 access token against an issuer's JWKS.
 
-    The JWKS URL is resolved once from the issuer's OIDC discovery document
-    (``jwks_uri``) unless an explicit ``jwks_uri`` override is supplied. The
-    underlying :class:`~jwt.PyJWKClient` caches signing keys across calls.
+    When an explicit ``jwks_uri`` override is supplied it is validated and the
+    :class:`~jwt.PyJWKClient` is built at construction (no network). Otherwise the
+    JWKS URL is resolved from the issuer's OIDC discovery document lazily, on the
+    first :meth:`validate`, so construction does no network I/O and process boot
+    never blocks on the IdP. A failed discovery is not cached, so the next
+    ``validate`` retries (the validator self-heals once the IdP is reachable). The
+    underlying ``PyJWKClient`` caches signing keys across calls.
 
     ``verify_audience`` is off by default: the same-audience interim runs before
     the IdP issues an ``aud`` claim. Turn it on once the audience mapper is in
@@ -59,18 +64,25 @@ class JwtValidator:
         self._issuer = issuer_url
         self._audience = audience
         self._verify_audience = verify_audience
+        self._allow_insecure_urls = allow_insecure_urls
+        # Guards the one-time lazy discovery in _jwks_client: validate() can run
+        # concurrently, and a cold burst should resolve jwks_uri once rather than
+        # each request firing its own discovery fetch at the IdP.
+        self._lock = threading.Lock()
         if jwks_uri is not None:
+            # Explicit override: validated and built eagerly (no network) so a
+            # misconfigured override fails at startup, not on the first request.
             resolved_jwks_uri = self._validate_jwks_uri(
                 jwks_uri, allow_insecure_urls=allow_insecure_urls
             )
-        else:
-            resolved_jwks_uri = self._discover_jwks_uri(
-                issuer_url, allow_insecure_urls=allow_insecure_urls
+            # cache_keys memoizes get_signing_key(kid), so the steady-state path is
+            # a dict lookup; without it every validate() rebuilds the JWK set and
+            # reconstructs each RSA public key (the network fetch is cached anyway).
+            self._jwks: PyJWKClient | None = PyJWKClient(
+                resolved_jwks_uri, cache_keys=True
             )
-        # cache_keys memoizes get_signing_key(kid), so the steady-state path is a
-        # dict lookup; without it every validate() rebuilds the JWK set and
-        # reconstructs each RSA public key (the network fetch is cached anyway).
-        self._jwks = PyJWKClient(resolved_jwks_uri, cache_keys=True)
+        else:
+            self._jwks = None
 
     @staticmethod
     def _validate_jwks_uri(jwks_uri: str, *, allow_insecure_urls: bool) -> str:
@@ -90,6 +102,24 @@ class JwtValidator:
             stripped, "jwks_uri", allow_insecure=allow_insecure_urls
         )
         return stripped
+
+    def _jwks_client(self) -> PyJWKClient:
+        """Return the JWKS client, resolving it via discovery on first use.
+
+        A discovery failure raises without assigning ``self._jwks``, so the next
+        call retries rather than caching the failure. The pre-lock read is the
+        fast path: once resolved, every call returns without taking the lock.
+        """
+        client = self._jwks
+        if client is not None:
+            return client
+        with self._lock:
+            if self._jwks is None:
+                resolved_jwks_uri = self._discover_jwks_uri(
+                    self._issuer, allow_insecure_urls=self._allow_insecure_urls
+                )
+                self._jwks = PyJWKClient(resolved_jwks_uri, cache_keys=True)
+            return self._jwks
 
     @staticmethod
     def _discover_jwks_uri(issuer_url: str, *, allow_insecure_urls: bool) -> str:
@@ -112,7 +142,7 @@ class JwtValidator:
         :class:`TokenValidationError` so the caller has a single type to catch.
         """
         try:
-            signing_key = self._jwks.get_signing_key_from_jwt(token)
+            signing_key = self._jwks_client().get_signing_key_from_jwt(token)
             return jwt.decode(
                 token,
                 signing_key.key,

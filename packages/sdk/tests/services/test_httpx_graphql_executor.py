@@ -1,11 +1,15 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from gql import gql
 from gql.graphql_request import GraphQLRequest
+from gql.transport.httpx import HTTPXAsyncTransport
 from pipefy_auth import StaticBearerAuth
 
+from pipefy_sdk import __version__
 from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
+from pipefy_sdk.telemetry import telemetry_headers
 
 GRAPHQL_URL = "https://api.pipefy.com/graphql"
 
@@ -161,3 +165,45 @@ def test_init_defaults_cache_schema_to_false():
     """Schema caching is off unless explicitly enabled."""
     base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
     assert base._cache_schema is False
+
+
+@pytest.mark.unit
+def test_init_defaults_headers_to_none():
+    """No telemetry headers unless the executor is handed them."""
+    base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
+    assert base._headers is None
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_sends_telemetry_headers_on_the_request():
+    """Headers handed to the executor ride the real outbound GraphQL request.
+
+    Runs the real gql Client and httpx client, swapping only the network
+    transport for an ``httpx.MockTransport`` that captures the sent headers; the
+    telemetry headers must land and the bearer auth must still apply.
+    """
+    headers = telemetry_headers(surface="mcp", version=__version__)
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["headers"] = dict(request.headers)
+        return httpx.Response(200, json={"data": {"__typename": "Query"}})
+
+    def transport_factory(**kwargs):
+        kwargs.pop("verify", None)
+        return HTTPXAsyncTransport(**kwargs, transport=httpx.MockTransport(handler))
+
+    with patch(
+        "pipefy_sdk.graphql_executor.HTTPXAsyncTransport", side_effect=transport_factory
+    ):
+        executor = HttpxGraphQLExecutor(
+            url=GRAPHQL_URL, auth=_bearer(), headers=headers
+        )
+        await executor.execute_query(_sample_query(), {})
+
+    sent = captured["headers"]
+    assert sent["user-agent"] == f"pipefy-sdk/{__version__} (mcp)"
+    assert sent["x-client-name"] == "mcp"
+    assert sent["x-client-version"] == __version__
+    assert sent["authorization"] == "Bearer test-token"

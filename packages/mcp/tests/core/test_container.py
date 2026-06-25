@@ -90,6 +90,7 @@ class TestServicesContainer:
         mock_pipefy_client_class.assert_called_once()
         kwargs = mock_pipefy_client_class.call_args.kwargs
         assert kwargs["settings"] is settings.pipefy
+        assert kwargs["surface"] == "mcp"
         assert "auth" in kwargs
         assert container.pipefy_client is mock_client
 

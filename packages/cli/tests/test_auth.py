@@ -74,6 +74,7 @@ def test_get_authenticated_client_passes_auth_to_pipefy_client(clean_pipefy_env)
         kwargs = mock_pc.call_args.kwargs
         assert mock_pc.call_args.args == (settings,)
         assert isinstance(kwargs["auth"], StaticBearerAuth)
+        assert kwargs["surface"] == "cli"
         assert client is mock_pc.return_value
 
 

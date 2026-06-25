@@ -55,12 +55,14 @@ class HttpxGraphQLExecutor:
         url: str,
         auth: Auth,
         cache_schema: bool = False,
+        headers: dict[str, str] | None = None,
         on_graphql_error: Callable[[list[dict]], str] | None = None,
     ) -> None:
         # Fully resolved endpoint URL; the adapter does no settings resolution itself.
         self._graphql_url = url
         self._auth = auth
         self._cache_schema = cache_schema
+        self._headers = headers
         # When set, ``TransportQueryError`` is converted to ``ValueError`` using the
         # formatter's output. Used by the Internal API executor to surface its
         # ``[code=…] [correlation_id=…]`` envelope; ``None`` leaves gql exceptions
@@ -86,6 +88,7 @@ class HttpxGraphQLExecutor:
             auth=self._auth,
             timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
             verify=True,
+            headers=self._headers,
         )
         try:
             if self._cache_schema:

@@ -74,17 +74,28 @@ class JwtTokenVerifier(TokenVerifier):
             return None
 
     def _to_access_token(self, token: str, claims: dict[str, Any]) -> AccessToken:
+        # OAuth/OIDC precedence: azp (authorized party) over client_id over sub,
+        # so a token minted via exchange reports the acting client. A token
+        # carrying none of the three has no usable identity; reject it rather
+        # than stamp an anonymous "" client_id that AccessToken would accept.
+        client_id = claims.get("azp") or claims.get("client_id") or claims.get("sub")
+        if not client_id:
+            raise ValueError("token carries no azp, client_id, or sub claim")
+
+        # The validator requires exp, so a missing one cannot reach here through
+        # the real path; reject defensively rather than emit a never-expiring
+        # token (the bearer middleware reads a falsy expires_at as "no expiry")
+        # if that invariant ever changes.
         exp = claims.get("exp")
+        if exp is None:
+            raise ValueError("token has no exp claim")
+
         return AccessToken(
             token=token,
-            # OAuth/OIDC precedence: azp (authorized party) over client_id over
-            # sub, so a token minted via exchange reports the acting client.
-            client_id=(
-                claims.get("azp") or claims.get("client_id") or claims.get("sub", "")
-            ),
+            client_id=client_id,
             scopes=_parse_scopes(claims.get("scope")),
             # exp is an RFC 7519 NumericDate (may be fractional); AccessToken
-            # wants an int. The validator requires exp, so it is present here.
-            expires_at=int(exp) if exp is not None else None,
+            # wants an int.
+            expires_at=int(exp),
             resource=self._resource,
         )

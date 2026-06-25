@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Self
 
-from pipefy_auth import AuthSettings
+from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_infra import security
 from pipefy_infra.config import PipefyTomlConfigSource
 from pipefy_sdk import PipefySettings
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -92,18 +92,23 @@ class McpSettings(BaseSettings):
 
 
 class ResourceServerSettings(BaseSettings):
-    """OAuth resource-server knobs for inbound bearer validation (HTTP profile).
+    """This MCP server's identity as an OAuth protected resource (HTTP profile).
 
-    Off by default: only the ``--remote`` HTTP transport consults these, and
-    only when ``enabled`` so the unauthenticated foundation profile is
-    unaffected. Kept separate from :class:`McpSettings` (transport knobs) and the
-    repo ``AuthSettings`` (outbound: how this process authenticates *to* Pipefy):
-    ``issuer_url`` here is the *inbound* issuer that signs caller tokens, which
-    can differ from the issuer this process logs into.
+    The resource-server profile activates when ``resource_server_url`` is set: the
+    ``--remote`` transport then validates inbound bearers and serves RFC 9728
+    metadata, and the unauthenticated foundation profile is left untouched. There
+    is no separate enable flag, just ``--remote`` plus this URL.
+
+    Token *validation* knobs (issuer, audience, JWKS) are an auth concern and live
+    in :class:`pipefy_auth.JwtValidationSettings`, alongside the validator they
+    feed. This model carries only what is specific to *this* server's resource
+    identity: its public URL and the scopes it requires.
 
     ``env_prefix="PIPEFY_MCP_RS_"`` does not collide with ``McpSettings``'
     ``PIPEFY_MCP_``: that model has no ``rs_*`` fields, so ``PIPEFY_MCP_RS_*``
-    vars fall through its ``extra="ignore"`` gate.
+    vars fall through its ``extra="ignore"`` gate. ``allow_insecure_urls`` is
+    aliased to the shared ``PIPEFY_ALLOW_INSECURE_URLS`` so the whole deployment
+    has a single insecure-URL posture.
     """
 
     model_config = SettingsConfigDict(
@@ -132,39 +137,15 @@ class ResourceServerSettings(BaseSettings):
             file_secret_settings,
         )
 
-    enabled: bool = Field(
-        default=False,
-        description=(
-            "Master switch (env: PIPEFY_MCP_RS_ENABLED). When true, the HTTP "
-            "transport validates an inbound bearer on every request and may bind "
-            "off-loopback. When false (default), the HTTP profile stays "
-            "unauthenticated and loopback-only."
-        ),
-    )
-
-    issuer_url: str | None = Field(
+    resource_server_url: str | None = Field(
         default=None,
         description=(
-            "Inbound OIDC issuer that signs caller tokens (env: "
-            "PIPEFY_MCP_RS_ISSUER_URL). The JWKS endpoint is resolved from its "
-            "discovery document. Required when enabled."
-        ),
-    )
-
-    audience: str | None = Field(
-        default=None,
-        description=(
-            "Expected token audience (env: PIPEFY_MCP_RS_AUDIENCE). Required when "
-            "verify_audience is true."
-        ),
-    )
-
-    verify_audience: bool = Field(
-        default=False,
-        description=(
-            "When true (env: PIPEFY_MCP_RS_VERIFY_AUDIENCE), reject tokens whose "
-            "aud does not include audience. Defaults false for the same-audience "
-            "interim, which runs before the IdP issues an aud claim."
+            "Public canonical URL of this MCP server as an OAuth protected "
+            "resource (env: PIPEFY_MCP_RS_RESOURCE_SERVER_URL). Decoupled from the "
+            "bind host, so behind a proxy it is the public origin, not host/port. "
+            "Include the /mcp endpoint path, e.g. https://mcp.pipefy.com/mcp: it "
+            "becomes the RFC 9728 resource identifier and the base for the "
+            "protected-resource metadata route. Setting it activates the profile."
         ),
     )
 
@@ -176,64 +157,31 @@ class ResourceServerSettings(BaseSettings):
         ),
     )
 
-    resource_server_url: str | None = Field(
-        default=None,
-        description=(
-            "Public canonical URL of this MCP server as an OAuth protected "
-            "resource (env: PIPEFY_MCP_RS_RESOURCE_SERVER_URL). Decoupled from the "
-            "bind host, so behind a proxy it is the public origin, not host/port. "
-            "Include the /mcp endpoint path, e.g. https://mcp.pipefy.com/mcp: it "
-            "becomes the RFC 9728 resource identifier and the base for the "
-            "protected-resource metadata route. Required when enabled."
-        ),
-    )
-
     allow_insecure_urls: bool = Field(
         default=False,
+        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
         description=(
-            "When true (env: PIPEFY_MCP_RS_ALLOW_INSECURE_URLS), resource-server "
-            "URLs may use http:// and internal hosts; local development only."
-        ),
-    )
-
-    jwks_uri: str | None = Field(
-        default=None,
-        description=(
-            "Explicit JWKS endpoint override (env: PIPEFY_MCP_RS_JWKS_URI). When "
-            "unset, resolved from the issuer's discovery document."
+            "When true (env: PIPEFY_ALLOW_INSECURE_URLS, shared across the "
+            "deployment), resource_server_url may use http:// and internal hosts; "
+            "local development only."
         ),
     )
 
     @model_validator(mode="after")
-    def _validate_when_enabled(self) -> Self:
-        # Inert unless enabled, so the default (disabled) profile never trips on
-        # absent URLs. ``issuer_url`` and ``resource_server_url`` may carry a path
-        # (a Keycloak realm; the /mcp endpoint), so they only forbid a query or
-        # fragment that would corrupt downstream concatenation, not any path.
-        if not self.enabled:
+    def _validate_configuration(self) -> Self:
+        if self.resource_server_url is None:
             return self
-        if not self.issuer_url or not self.resource_server_url:
-            raise ValueError(
-                "resource-server profile requires issuer_url and "
-                "resource_server_url when enabled "
-                "(PIPEFY_MCP_RS_ISSUER_URL / PIPEFY_MCP_RS_RESOURCE_SERVER_URL)."
-            )
-        if self.verify_audience and not self.audience:
-            raise ValueError(
-                "verify_audience requires audience (PIPEFY_MCP_RS_AUDIENCE)."
-            )
-        for value, label in (
-            (self.issuer_url, "issuer_url"),
-            (self.resource_server_url, "resource_server_url"),
-            (self.jwks_uri, "jwks_uri"),
-        ):
-            if value is None:
-                continue
-            stripped = value.strip()
-            security.assert_url_has_no_query_or_fragment(stripped, field_label=label)
-            security.validate_https_url(
-                stripped, label, allow_insecure=self.allow_insecure_urls
-            )
+        # Persist the stripped value: surrounding whitespace in an env var would
+        # otherwise survive into the RFC 9728 resource identifier. The /mcp
+        # endpoint path is expected, so only a query or fragment is forbidden.
+        stripped = self.resource_server_url.strip()
+        self.resource_server_url = stripped
+        security.assert_url_has_no_query_or_fragment(
+            stripped, field_label="resource_server_url"
+        )
+        security.validate_https_url(
+            stripped, "resource_server_url", allow_insecure=self.allow_insecure_urls
+        )
         return self
 
 
@@ -253,6 +201,7 @@ class Settings(BaseSettings):
     pipefy: PipefySettings = Field(default_factory=PipefySettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     mcp: McpSettings = Field(default_factory=McpSettings)
+    jwt: JwtValidationSettings = Field(default_factory=JwtValidationSettings)
     rs: ResourceServerSettings = Field(default_factory=ResourceServerSettings)
 
 
@@ -260,6 +209,7 @@ settings = Settings()
 
 __all__ = [
     "AuthSettings",
+    "JwtValidationSettings",
     "McpSettings",
     "PipefySettings",
     "ResourceServerSettings",

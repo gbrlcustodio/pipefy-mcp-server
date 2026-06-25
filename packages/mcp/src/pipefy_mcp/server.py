@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
 from mcp.server.fastmcp import FastMCP
-from pipefy_auth import JwtValidator
+from pipefy_auth import JwtValidationSettings, JwtValidator
 
 from pipefy_mcp.auth import JwtTokenVerifier
 from pipefy_mcp.core.container import ServicesContainer
@@ -99,37 +99,49 @@ def _resolve_bind(host: str | None, port: int | None) -> tuple[str, int]:
 
 def _build_resource_server_auth(
     rs: ResourceServerSettings,
+    jwt_validation: JwtValidationSettings,
+    *,
+    default_issuer_url: str | None,
 ) -> tuple[JwtTokenVerifier, FastMcpAuthSettings] | None:
     """Build the inbound bearer verifier and FastMCP auth config, or ``None``.
 
-    Returns ``None`` unless the resource-server profile is enabled, so the
-    unauthenticated foundation profile constructs ``FastMCP`` exactly as before.
-    When enabled, the settings validator guarantees ``issuer_url`` and
-    ``resource_server_url`` are set (asserted here to satisfy the type narrowing).
-    The verifier consumes ``audience``/``verify_audience``/``allow_insecure_urls``;
-    FastMCP's ``AuthSettings`` consumes the issuer, resource, and required scopes
-    to serve RFC 9728 metadata and the ``401`` challenge.
+    The resource-server profile has no enable flag: it is active when this
+    server's ``resource_server_url`` is configured. Absent it, this returns
+    ``None`` and the unauthenticated foundation profile constructs ``FastMCP``
+    exactly as before.
+
+    The inbound issuer is ``jwt_validation.issuer_url`` if set, else ``default_issuer_url``
+    (the issuer this process logs into): in a single-realm deployment the IdP that
+    signs caller tokens is the one we authenticate to, so it need not be configured
+    twice. With ``resource_server_url`` set but no issuer resolvable (the
+    stored-session login is disabled and no override is given), validation is
+    impossible, so this raises rather than serve an open endpoint.
+
+    The verifier consumes the inbound validation knobs (audience, verify_audience,
+    jwks_uri); FastMCP's ``AuthSettings`` consumes the issuer, resource, and
+    required scopes to serve RFC 9728 metadata and the ``401`` challenge.
     """
-    if not rs.enabled:
+    if rs.resource_server_url is None:
         return None
-    if rs.issuer_url is None or rs.resource_server_url is None:
-        # Unreachable: the settings validator requires both when enabled. Guard
-        # the invariant explicitly (and narrow the types) rather than assert.
+    issuer_url = jwt_validation.resolve_issuer_url(default_issuer_url)
+    if issuer_url is None:
         raise RuntimeError(
-            "resource-server profile enabled without issuer_url/resource_server_url "
-            "(settings invariant broken)."
+            "The resource-server profile is active "
+            "(PIPEFY_MCP_RS_RESOURCE_SERVER_URL is set) but no inbound issuer is "
+            "resolvable: set PIPEFY_JWT_ISSUER_URL, or leave the stored-session "
+            "login enabled so its issuer can be reused."
         )
     verifier = JwtTokenVerifier(
         JwtValidator(
-            issuer_url=rs.issuer_url,
-            audience=rs.audience,
-            verify_audience=rs.verify_audience,
-            allow_insecure_urls=rs.allow_insecure_urls,
-            jwks_uri=rs.jwks_uri,
+            issuer_url=issuer_url,
+            audience=jwt_validation.audience,
+            verify_audience=jwt_validation.verify_audience,
+            allow_insecure_urls=jwt_validation.allow_insecure_urls,
+            jwks_uri=jwt_validation.jwks_uri,
         )
     )
     auth = FastMcpAuthSettings(
-        issuer_url=rs.issuer_url,
+        issuer_url=issuer_url,
         resource_server_url=rs.resource_server_url,
         required_scopes=rs.required_scopes,
     )
@@ -172,7 +184,7 @@ def build_pipefy_mcp_server(
     return app
 
 
-def _assert_loopback_http_bind(*, host: str, resource_server_enabled: bool) -> None:
+def _assert_loopback_http_bind(*, host: str, resource_server_configured: bool) -> None:
     """Refuse to bind the HTTP transport to a non-loopback host while unauthenticated.
 
     Without the resource-server profile the HTTP transport validates no inbound
@@ -182,18 +194,18 @@ def _assert_loopback_http_bind(*, host: str, resource_server_enabled: bool) -> N
     (The filesystem tools, e.g. the attachment uploads, also only make sense on
     loopback, where the server shares the client's disk.)
 
-    Once the resource-server profile is enabled (#301), every request carries a
+    Once the resource-server profile is configured, every request carries a
     validated bearer, so a non-loopback bind is allowed. The configurable host /
     Origin allowlist for a proxied deployment is #303.
     """
-    if host in _LOOPBACK_HOSTS or resource_server_enabled:
+    if host in _LOOPBACK_HOSTS or resource_server_configured:
         return
     raise RuntimeError(
         f"Refusing to serve over HTTP on a non-loopback host ({host}). The HTTP "
         f"transport is unauthenticated and is restricted to loopback "
-        f"(127.0.0.1/localhost/::1). Enable the resource-server profile "
-        f"(PIPEFY_MCP_RS_ENABLED=1) to validate inbound bearers and bind "
-        f"off-loopback."
+        f"(127.0.0.1/localhost/::1). Set PIPEFY_MCP_RS_RESOURCE_SERVER_URL to "
+        f"activate the resource-server profile, which validates inbound bearers "
+        f"and may bind off-loopback."
     )
 
 
@@ -232,16 +244,21 @@ def run_server(
 
     resolved_remote = settings.mcp.remote_mode if remote_mode is None else remote_mode
     resolved_host, resolved_port = _resolve_bind(host, port)
-    resource_server = _build_resource_server_auth(settings.rs)
+    oidc_client = settings.auth.to_oidc_client()
+    resource_server = _build_resource_server_auth(
+        settings.rs,
+        settings.jwt,
+        default_issuer_url=oidc_client.issuer_url if oidc_client else None,
+    )
     logger.info(
         "Starting Pipefy MCP server over HTTP on %s:%d (remote_mode=%s, resource_server=%s)",
         resolved_host,
         resolved_port,
         "enabled" if resolved_remote else "disabled",
-        "enabled" if resource_server is not None else "disabled",
+        "active" if resource_server is not None else "inactive",
     )
     _assert_loopback_http_bind(
-        host=resolved_host, resource_server_enabled=resource_server is not None
+        host=resolved_host, resource_server_configured=resource_server is not None
     )
 
     app = build_pipefy_mcp_server(

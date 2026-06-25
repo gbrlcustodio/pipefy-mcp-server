@@ -7,7 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_auth import AuthSettings
+from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.server import (
@@ -26,18 +26,18 @@ _RS_RESOURCE = "https://mcp.example.com/mcp"
 
 
 def _resource_server_pair():
-    """An enabled resource-server (verifier, auth) pair with no network at build.
+    """A configured resource-server (verifier, auth) pair with no network at build.
 
     The explicit ``jwks_uri`` skips OIDC discovery; the unauthenticated-request
-    and metadata tests never decode a token, so the JWKS is never fetched.
+    and metadata tests never decode a token, so the JWKS is never fetched. The
+    inbound issuer comes from ``default_issuer_url`` (the login issuer) to exercise
+    the same-realm default rather than an explicit override.
     """
-    rs = ResourceServerSettings(
-        enabled=True,
-        issuer_url=_RS_ISSUER,
-        resource_server_url=_RS_RESOURCE,
-        jwks_uri="https://idp.example.com/jwks",
+    return _build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RS_RESOURCE),
+        JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
+        default_issuer_url=_RS_ISSUER,
     )
-    return _build_resource_server_auth(rs)
 
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
@@ -213,7 +213,7 @@ async def test_lifespan_logs_error_when_initialization_raises():
 @pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
 def test_loopback_http_bind_allows_loopback_hosts(host):
     # Does not raise, regardless of the resource-server profile.
-    _assert_loopback_http_bind(host=host, resource_server_enabled=False)
+    _assert_loopback_http_bind(host=host, resource_server_configured=False)
 
 
 @pytest.mark.unit
@@ -221,14 +221,14 @@ def test_loopback_http_bind_allows_loopback_hosts(host):
 def test_loopback_http_bind_refuses_non_loopback_hosts(host):
     """A non-loopback bind is refused while the transport is unauthenticated."""
     with pytest.raises(RuntimeError, match="non-loopback host"):
-        _assert_loopback_http_bind(host=host, resource_server_enabled=False)
+        _assert_loopback_http_bind(host=host, resource_server_configured=False)
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize("host", ["0.0.0.0", "203.0.113.5"])
-def test_loopback_http_bind_allows_non_loopback_when_resource_server_enabled(host):
-    """With inbound bearer validation on, a non-loopback bind is allowed (#301)."""
-    _assert_loopback_http_bind(host=host, resource_server_enabled=True)
+def test_loopback_http_bind_allows_non_loopback_when_resource_server_configured(host):
+    """With inbound bearer validation on, a non-loopback bind is allowed."""
+    _assert_loopback_http_bind(host=host, resource_server_configured=True)
 
 
 @pytest.mark.unit
@@ -295,7 +295,7 @@ def test_run_server_http_refuses_non_loopback_before_building():
     mock_build.assert_not_called()
 
 
-# --- Resource-server role (OAuth 2.0 inbound bearer validation, #301) --------
+# --- Resource-server role (OAuth 2.0 inbound bearer validation) --------------
 
 
 @pytest.mark.unit
@@ -313,6 +313,55 @@ def test_build_with_resource_server_wires_inbound_auth(mocked_container):
     )
     assert app.settings.auth is not None
     assert str(app.settings.auth.resource_server_url).rstrip("/") == _RS_RESOURCE
+
+
+@pytest.mark.unit
+def test_resource_server_inactive_when_unconfigured():
+    """No resource_server_url means no auth: the profile is off, not an error."""
+    assert (
+        _build_resource_server_auth(
+            ResourceServerSettings(),
+            JwtValidationSettings(),
+            default_issuer_url=_RS_ISSUER,
+        )
+        is None
+    )
+
+
+@pytest.mark.unit
+def test_resource_server_issuer_defaults_to_login_issuer():
+    """With no inbound override, the inbound issuer is the login issuer."""
+    _, auth = _build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RS_RESOURCE),
+        JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
+        default_issuer_url=_RS_ISSUER,
+    )
+    assert str(auth.issuer_url).rstrip("/") == _RS_ISSUER
+
+
+@pytest.mark.unit
+def test_resource_server_inbound_issuer_overrides_login_issuer():
+    """An explicit inbound issuer wins over the login issuer."""
+    override = "https://other-idp.example.com/realms/y"
+    _, auth = _build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RS_RESOURCE),
+        JwtValidationSettings(
+            issuer_url=override, jwks_uri="https://other-idp.example.com/jwks"
+        ),
+        default_issuer_url=_RS_ISSUER,
+    )
+    assert str(auth.issuer_url).rstrip("/") == override
+
+
+@pytest.mark.unit
+def test_resource_server_without_resolvable_issuer_raises():
+    """resource_server_url set but no issuer (override or login) is a misconfiguration."""
+    with pytest.raises(RuntimeError, match="no inbound issuer"):
+        _build_resource_server_auth(
+            ResourceServerSettings(resource_server_url=_RS_RESOURCE),
+            JwtValidationSettings(),
+            default_issuer_url=None,
+        )
 
 
 def _asgi_client(app):

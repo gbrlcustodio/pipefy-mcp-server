@@ -34,26 +34,35 @@ Two ways to launch `pipefy-mcp-server`:
   `127.0.0.1:8000`), overridable with `--host` / `--port`.
 
 The HTTP transport (issue #300) optionally runs as an OAuth 2.0 resource server
-(issue #301): with the resource-server profile enabled it validates an inbound
+(issue #301): with the resource-server profile configured it validates an inbound
 bearer on every request. It does not yet carry per-request on-behalf-of identity
 (#302), so even with a validated bearer every call still runs as the single
 identity resolved at startup; treat `--remote` as local/validation until #302
 lands.
 
-**Resource-server profile.** Enabled with `PIPEFY_MCP_RS_ENABLED=1` and configured
-via the `PIPEFY_MCP_RS_*` env vars (`ResourceServerSettings`, settings namespace
-`settings.rs`): `ISSUER_URL` (inbound issuer that signs caller tokens),
-`RESOURCE_SERVER_URL` (this server's public canonical URL, e.g.
-`https://host/mcp`), and optional `AUDIENCE` / `VERIFY_AUDIENCE` (off by default,
-the same-audience interim), `REQUIRED_SCOPES`, `JWKS_URI`, `ALLOW_INSECURE_URLS`.
+**Resource-server profile.** Config is split by domain. *Token validation* is an
+auth concern and lives in `pipefy_auth.JwtValidationSettings` (`settings.jwt`,
+env `PIPEFY_JWT_*`): `ISSUER_URL` (an override; absent it, the inbound issuer
+defaults to the one this process logs into, the `OidcClient` issuer, since in a
+single-realm deployment they are the same IdP), optional `AUDIENCE` /
+`VERIFY_AUDIENCE` (off by default, the same-audience interim), and `JWKS_URI`.
+*Resource identity* is MCP-specific and stays in `pipefy_mcp.ResourceServerSettings`
+(`settings.rs`, env `PIPEFY_MCP_RS_*`): `RESOURCE_SERVER_URL` (this server's public
+canonical URL, e.g. `https://host/mcp`) and `REQUIRED_SCOPES`. The shared
+`PIPEFY_ALLOW_INSECURE_URLS` covers both. The profile activates when
+`RESOURCE_SERVER_URL` is set (the one value that cannot default); there is no
+separate enable flag, just `--remote` plus this URL. Set `RESOURCE_SERVER_URL`
+with the stored-session login disabled and no `ISSUER_URL` override and startup
+fails (no issuer to validate against).
+
 The JWKS/RS256 validation lives in `pipefy_auth` (`JwtValidator`); the MCP adapter
 `auth/resource_server.py` (`JwtTokenVerifier`) maps validated claims onto the
 SDK's `AccessToken`. FastMCP serves the RFC 9728 protected-resource metadata and
-the `401` + `WWW-Authenticate` challenge; `_build_resource_server_auth` wires the
-verifier and `AuthSettings` into the app.
+the `401` + `WWW-Authenticate` challenge; `_build_resource_server_auth` resolves
+the inbound issuer and wires the verifier and `AuthSettings` into the app.
 
 **Loopback bind.** `_assert_loopback_http_bind` allows a non-loopback bind only
-when the resource-server profile is enabled (every request then carries a
+when the resource-server profile is configured (every request then carries a
 validated bearer). Without it, the HTTP transport is unauthenticated, every call
 runs as the single startup identity, and a network-reachable port would hand that
 identity to anyone who can reach it, so the bind is restricted to loopback. The

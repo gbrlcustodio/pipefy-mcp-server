@@ -25,10 +25,10 @@ PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=your_client_id
 PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=your_client_secret
 # Non-prod environments only:
 # PIPEFY_BASE_URL=https://<your-api-host>
-# PIPEFY_AUTH_URL=https://<your-signin-host>/realms/<realm>
+# PIPEFY_AUTH_ISSUER_URL=https://<your-signin-host>/realms/<realm>
 ```
 
-`PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Set them only for non-prod environments.
+`PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_ISSUER_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Set them only for non-prod environments.
 
 Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, precedence chain): [`docs/config.md`](../../docs/config.md).
 
@@ -58,7 +58,7 @@ claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_ID <YOUR_CLIENT_ID>
 claude mcp add-env pipefy PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET <YOUR_CLIENT_SECRET>
 # Non-prod environments only:
 # claude mcp add-env pipefy PIPEFY_BASE_URL https://<your-api-host>
-# claude mcp add-env pipefy PIPEFY_AUTH_URL https://<your-signin-host>/realms/<realm>
+# claude mcp add-env pipefy PIPEFY_AUTH_ISSUER_URL https://<your-signin-host>/realms/<realm>
 ```
 
 ### Claude Code: settings edit (post-plugin install)
@@ -106,9 +106,9 @@ If you have a clone of this repo and want the MCP server to use it directly (wit
 
 This form also works as a per-project `.mcp.json` if your team shares a clone. Committing `.mcp.json` without secrets (placeholders or env injection) keeps team setups consistent.
 
-### Legacy environment variables
+### Removed environment variables
 
-`PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` still resolve to the new `PIPEFY_SERVICE_ACCOUNT_*` names with a one-shot stderr deprecation warning. The aliases will be removed in a later `0.2.0-beta.x` release. The `PIPEFY_OAUTH_URL` alias was dropped — set `PIPEFY_BASE_URL` instead. Migration notes: [`docs/MIGRATION.md#service-account-env-var-rename`](../../docs/MIGRATION.md#service-account-env-var-rename).
+`PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` are removed outright (no alias, no deprecation warning) and are ignored if set; use `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` / `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`. `PIPEFY_OAUTH_URL` has no replacement: set `PIPEFY_BASE_URL` instead. The interactive-login and keychain vars are namespaced under `PIPEFY_AUTH_*` (`PIPEFY_AUTH_URL` → `PIPEFY_AUTH_ISSUER_URL`, `PIPEFY_DISABLE_STORED_SESSION` → `PIPEFY_AUTH_DISABLE_STORED_SESSION`, `PIPEFY_KEYCHAIN_BACKEND` → `PIPEFY_AUTH_KEYCHAIN_BACKEND`). Migration notes: [`docs/MIGRATION.md#service-account-env-var-rename`](../../docs/MIGRATION.md#service-account-env-var-rename).
 
 ## Tools
 

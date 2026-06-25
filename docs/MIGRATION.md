@@ -81,32 +81,43 @@ npx skills add pipefy/ai-toolkit --skill pipefy-pipes-and-cards
 
 The same `PIPEFY_*` variables work for both MCP and CLI. A working `.env` for `pipefy-mcp-server` gives you `pipefy-cli` auth immediately. See [`docs/config.md#environment-variables`](config.md#environment-variables) for the full list.
 
-One rename in the upcoming `0.2.0-beta.x` line is covered below.
+Two breaking env-var changes in the `0.2.0-beta.x` line are covered below: the `PIPEFY_AUTH_*` namespacing and the service-account rename.
 
 ---
 
-## Service-account env-var rename
+## `PIPEFY_AUTH_*` namespacing (breaking)
 
-The three OAuth 2.0 client-credentials vars used by the service-account auth path are being renamed for clarity (and to remove the one-letter footgun against `PIPEFY_AUTH_URL`, the new OIDC user-login issuer):
+The interactive-login and keychain env vars are now namespaced under `PIPEFY_AUTH_*`. There is no alias and no grace period: the old names are ignored.
+
+| Old | New | TOML key |
+|---|---|---|
+| `PIPEFY_AUTH_URL` | `PIPEFY_AUTH_ISSUER_URL` | `issuer_url` (was `auth_url`) |
+| `PIPEFY_AUTH_CLIENT_ID` | `PIPEFY_AUTH_CLIENT_ID` (unchanged) | `client_id` (was `auth_client_id`) |
+| `PIPEFY_DISABLE_STORED_SESSION` | `PIPEFY_AUTH_DISABLE_STORED_SESSION` | `disable_stored_session` (unchanged) |
+| `PIPEFY_KEYCHAIN_BACKEND` | `PIPEFY_AUTH_KEYCHAIN_BACKEND` | `keychain_backend` (unchanged) |
+
+`PIPEFY_AUTH_ISSUER_URL` defaults to `https://signin.pipefy.com/realms/pipefy`. The settings models use `extra="ignore"`, so a stale `PIPEFY_AUTH_URL` / `PIPEFY_DISABLE_STORED_SESSION` / `PIPEFY_KEYCHAIN_BACKEND` is dropped silently (no exception, no warning) and the prod default applies. Audit your shell, `.env`, MCP client JSON, and CI secrets per the table above before upgrading.
+
+---
+
+## Service-account env-var rename (breaking)
+
+The two OAuth 2.0 client-credentials vars used by the service-account auth path are renamed for clarity (and to remove the one-letter footgun against the OIDC user-login issuer):
 
 | Old | New |
 |---|---|
-| `PIPEFY_OAUTH_URL` | _dropped_ — set `PIPEFY_BASE_URL` instead (the OAuth token endpoint derives from `<base>/oauth/token`) |
+| `PIPEFY_OAUTH_URL` | _removed_ — set `PIPEFY_BASE_URL` instead (the OAuth token endpoint derives from `<base>/oauth/token`) |
 | `PIPEFY_OAUTH_CLIENT` | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` |
 | `PIPEFY_OAUTH_SECRET` | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` |
 
-**No immediate action required for `_CLIENT` / `_SECRET`.** The legacy `PIPEFY_OAUTH_CLIENT` / `_SECRET` env vars flow through an alias shim and populate the renamed fields. The first command run with a legacy name set prints a one-shot stderr deprecation warning naming the replacement.
+**The legacy `PIPEFY_OAUTH_*` names are removed outright.** There is no alias shim and no deprecation warning. `PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` are ignored if set; the service account stays unconfigured unless you use the new `PIPEFY_SERVICE_ACCOUNT_*` names. `PIPEFY_OAUTH_URL` has no replacement: the OAuth token endpoint derives from `<PIPEFY_BASE_URL>/oauth/token` (default `https://app.pipefy.com/oauth/token`). Set `PIPEFY_BASE_URL` to your API host root for non-prod environments.
 
-**`PIPEFY_OAUTH_URL` is gone.** It has no alias. Operators with this env var set will see the OAuth token endpoint silently fall back to `<PIPEFY_BASE_URL>/oauth/token` (default `https://app.pipefy.com/oauth/token`). Set `PIPEFY_BASE_URL` to your API host root for non-prod environments.
-
-When you're ready to update:
+When you upgrade:
 
 1. Search-and-replace your shell, `.env`, MCP client JSON, and CI secrets per the table above.
-2. Optionally re-run any command (e.g. `pipefy org get --json`) to confirm the deprecation warning is gone.
+2. Re-run any command (e.g. `pipefy org get --json`) to confirm the credentials still resolve.
 
-The legacy names will be removed in a later `0.2.0-beta.x` release; the change will carry an explicit breaking-change callout in the changelog at that time.
-
-`PIPEFY_TOKEN` (static bearer override) and `PIPEFY_AUTH_URL` / `PIPEFY_AUTH_CLIENT_ID` (interactive user-login flow) are **not** affected.
+`PIPEFY_TOKEN` (static bearer override) is **not** affected.
 
 ---
 
@@ -124,7 +135,7 @@ Auth-related fields have moved from `PipefySettings` (which now owns endpoint co
 | `service_account_url` (settable) | `@computed_field` on `AuthSettings`, derived from `base_url` |
 | `service_account_client_id` | `AuthSettings.service_account_client_id` |
 | `service_account_client_secret` | `AuthSettings.service_account_client_secret` |
-| (read from env only) | `AuthSettings.auth_url`, `auth_client_id`, `static_token` |
+| (read from env only) | `AuthSettings.issuer_url`, `client_id`, `static_token` |
 
 Because `PipefySettings` / `AuthSettings` are configured with `extra="ignore"`, code that still passes the old kwargs (`PipefySettings(graphql_url=...)`, `AuthSettings(service_account_url=...)`) **silently drops them** — no exception, no warning. Migrate by using `base_url` and composing the two models side by side:
 
@@ -150,7 +161,7 @@ from pipefy_mcp.settings import Settings
 s = Settings()  # s.pipefy + s.auth, env-loaded
 ```
 
-The legacy `PIPEFY_OAUTH_*` env-var aliases and the deprecation warning live on `AuthSettings`; behaviour is preserved through the rename window above.
+The legacy `PIPEFY_OAUTH_*` env-var aliases have been removed from `AuthSettings`; use the `PIPEFY_SERVICE_ACCOUNT_*` names per the rename above.
 
 ---
 

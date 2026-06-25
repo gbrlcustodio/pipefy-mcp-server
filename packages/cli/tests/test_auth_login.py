@@ -547,11 +547,11 @@ class TestAuthLoginCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        """``PIPEFY_AUTH_URL=""`` is rejected at settings load and surfaces as exit 2."""
-        monkeypatch.setenv("PIPEFY_AUTH_URL", "")
+        """``PIPEFY_AUTH_ISSUER_URL=""`` is rejected at settings load and surfaces as exit 2."""
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "")
         result = cli_runner.invoke(cli_app, ["auth", "login"])
         assert result.exit_code == 2
-        assert "auth_url" in result.stderr
+        assert "issuer_url" in result.stderr
         assert "should match pattern" in result.stderr
 
     def test_disable_stored_session_refuses_with_exit_2(
@@ -561,8 +561,8 @@ class TestAuthLoginCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        """``PIPEFY_DISABLE_STORED_SESSION=1`` short-circuits login before any OAuth work."""
-        monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", "1")
+        """``PIPEFY_AUTH_DISABLE_STORED_SESSION=1`` short-circuits login before any OAuth work."""
+        monkeypatch.setenv("PIPEFY_AUTH_DISABLE_STORED_SESSION", "1")
 
         from pipefy_cli.commands import auth as auth_module
 
@@ -585,7 +585,7 @@ class TestAuthLoginCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "https://x.test/realms/foo")
         monkeypatch.setenv("PIPEFY_AUTH_CLIENT_ID", "pipefy-cli")
 
         # Stub the entire OAuth flow at the run_login boundary so we don't need
@@ -622,7 +622,7 @@ class TestAuthLoginCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "https://x.test/realms/foo")
         monkeypatch.setenv("PIPEFY_TOKEN", "static-bearer-from-shell")
 
         from pipefy_cli.commands import auth as auth_module
@@ -650,7 +650,7 @@ class TestAuthLoginCommand:
         saved_cwd,
     ) -> None:
         """``--no-browser`` wires ``on_url`` and short-circuits ``webbrowser.open``."""
-        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "https://x.test/realms/foo")
 
         from pipefy_cli.commands import auth as auth_module
 
@@ -700,7 +700,7 @@ class TestAuthLoginCommand:
         """When ``webbrowser.open`` returns ``False`` (no GUI session, locked
         sandbox, etc.) the auth URL must still reach the user, with a hint
         about ``--no-browser``."""
-        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "https://x.test/realms/foo")
 
         from pipefy_cli.commands import auth as auth_module
 
@@ -736,7 +736,7 @@ class TestAuthLoginCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "https://x.test/realms/foo")
 
         def _boom(**_kwargs: object) -> flow.LoginResult:
             raise flow.LoginError("Token exchange failed (400): invalid_grant")
@@ -760,7 +760,7 @@ class TestAuthLoginCommand:
     ) -> None:
         """A keychain write failure on the default OS backend surfaces the
         Secret Service hint and the file-backend escape hatch."""
-        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "https://x.test/realms/foo")
 
         from keyring.errors import KeyringError
 
@@ -784,7 +784,7 @@ class TestAuthLoginCommand:
         assert result.exit_code == 1
         assert "could not be stored in your keychain" in result.stderr
         assert "Secret Service" in result.stderr
-        assert "PIPEFY_KEYCHAIN_BACKEND=file" in result.stderr
+        assert "PIPEFY_AUTH_KEYCHAIN_BACKEND=file" in result.stderr
 
     def test_store_failure_file_backend_hints_at_config_dir(
         self,
@@ -796,7 +796,7 @@ class TestAuthLoginCommand:
     ) -> None:
         """With the file backend active, a store failure surfaces a config-dir
         writability hint instead of the Secret Service one."""
-        monkeypatch.setenv("PIPEFY_AUTH_URL", "https://x.test/realms/foo")
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "https://x.test/realms/foo")
 
         from pipefy_cli.commands import auth as auth_module
 

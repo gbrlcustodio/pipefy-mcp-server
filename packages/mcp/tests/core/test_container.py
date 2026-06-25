@@ -21,12 +21,10 @@ _AUTH_ENV_KEYS = (
     "PIPEFY_TOKEN",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-    "PIPEFY_OAUTH_CLIENT",
-    "PIPEFY_OAUTH_SECRET",
-    "PIPEFY_AUTH_URL",
+    "PIPEFY_AUTH_ISSUER_URL",
     "PIPEFY_BASE_URL",
-    "PIPEFY_DISABLE_STORED_SESSION",
-    "PIPEFY_KEYCHAIN_BACKEND",
+    "PIPEFY_AUTH_DISABLE_STORED_SESSION",
+    "PIPEFY_AUTH_KEYCHAIN_BACKEND",
 )
 
 
@@ -38,7 +36,7 @@ def _service_account_auth_settings() -> AuthSettings:
 
 
 def _stored_session_auth_settings() -> AuthSettings:
-    return AuthSettings(auth_url="https://signin.pipefy.com/realms/pipefy")
+    return AuthSettings(issuer_url="https://signin.pipefy.com/realms/pipefy")
 
 
 def _fresh_stored_session() -> StoredSession:
@@ -112,7 +110,7 @@ class TestServicesContainer:
         pc_auth = mock_pipefy_client_class.call_args.kwargs["auth"]
         assert isinstance(pc_auth, StaticBearerAuth)
 
-    # Patch ``load_session``: ``auth_url``'s prod default makes the stored-session
+    # Patch ``load_session``: ``issuer_url``'s prod default makes the stored-session
     # tier always reachable, so a host with a real keychain entry would otherwise
     # satisfy resolution and break the assertion.
     @patch("pipefy_auth.resolver.load_session", lambda **_: None)
@@ -155,7 +153,7 @@ class TestServicesContainer:
         assert isinstance(pc_auth, RefreshableBearerAuth)
         mock_ensure_fresh_session.assert_called_once_with(
             issuer="https://signin.pipefy.com/realms/pipefy",
-            client_id=settings.auth.auth_client_id,
+            client_id=settings.auth.client_id,
         )
 
     @patch("pipefy_mcp.core.container.ensure_fresh_session")
@@ -165,13 +163,13 @@ class TestServicesContainer:
         mock_pipefy_client_class,
         mock_ensure_fresh_session,
     ):
-        """A configured ``PIPEFY_AUTH_URL`` is ignored at warm-up when a higher tier wins."""
+        """A configured ``PIPEFY_AUTH_ISSUER_URL`` is ignored at warm-up when a higher tier wins."""
         mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
         settings = Settings(
             pipefy=PipefySettings(base_url="https://api.pipefy.com"),
             auth=AuthSettings(
                 static_token="env-bearer",
-                auth_url="https://signin.pipefy.com/realms/pipefy",
+                issuer_url="https://signin.pipefy.com/realms/pipefy",
             ),
         )
         # Force a detectable stored session so we prove precedence, not absence.

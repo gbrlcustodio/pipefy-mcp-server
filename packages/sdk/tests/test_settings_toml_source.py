@@ -77,13 +77,13 @@ def test_invalid_toml_raises_value_error_quoting_path(tmp_path: Path) -> None:
 
 
 def test_unknown_keys_ignored(tmp_path: Path) -> None:
-    # Both auth-only keys (e.g. ``auth_url``) and arbitrary keys should be
+    # Both auth-only keys (e.g. ``issuer_url``) and arbitrary keys should be
     # silently dropped by PipefySettings via ``extra="ignore"``.
     _write(
         tmp_path / "config.toml",
         """
         base_url = "https://staging.pipefy.com"
-        auth_url = "https://signin-staging.pipefy.com/realms/pipefy"
+        issuer_url = "https://signin-staging.pipefy.com/realms/pipefy"
         completely_unrelated = 42
         """,
     )

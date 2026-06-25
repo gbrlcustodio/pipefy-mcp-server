@@ -59,8 +59,8 @@ class AuthContext:
     ``PIPEFY_TOKEN`` resolution.
 
     ``oidc_client`` is ``None`` only when ``AuthSettings.disable_stored_session``
-    is set (env: PIPEFY_DISABLE_STORED_SESSION); the stored-session tier is
-    then skipped end-to-end. Otherwise ``auth_url`` defaults to the prod IdP
+    is set (env: PIPEFY_AUTH_DISABLE_STORED_SESSION); the stored-session tier is
+    then skipped end-to-end. Otherwise ``issuer_url`` defaults to the prod IdP
     and the client is always present.
     """
 

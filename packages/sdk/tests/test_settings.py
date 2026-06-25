@@ -52,7 +52,6 @@ def test_pipefy_settings_base_url_env_drives_derived_urls(
         "PIPEFY_INTERNAL_API_URL",
         "PIPEFY_INTERFACES_GRAPHQL_URL",
         "PIPEFY_SERVICE_ACCOUNT_URL",
-        "PIPEFY_OAUTH_URL",
     ],
 )
 def test_pipefy_settings_ignores_removed_per_url_env_vars(

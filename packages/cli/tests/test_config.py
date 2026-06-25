@@ -252,13 +252,13 @@ def test_auth_url_validation(
     allow_insecure: bool,
     expect_error: str | None,
 ):
-    monkeypatch.setenv("PIPEFY_AUTH_URL", url)
+    monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", url)
     if expect_error is None:
         resolved = resolve_cli_settings(
             base_url_flag=None,
             allow_insecure_urls_flag=True if allow_insecure else None,
         ).auth
-        assert resolved.auth_url == url
+        assert resolved.issuer_url == url
     else:
         with pytest.raises(ValueError, match=expect_error):
             resolve_cli_settings(

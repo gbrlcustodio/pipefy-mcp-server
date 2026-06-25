@@ -46,10 +46,10 @@ PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=your_client_id
 PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=your_client_secret
 # Non-prod environments only:
 # PIPEFY_BASE_URL=https://<your-api-host>
-# PIPEFY_AUTH_URL=https://<your-signin-host>/realms/<realm>
+# PIPEFY_AUTH_ISSUER_URL=https://<your-signin-host>/realms/<realm>
 ```
 
-`PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Set them only for non-prod environments.
+`PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_ISSUER_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Set them only for non-prod environments.
 
 ### Authentication paths
 

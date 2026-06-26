@@ -41,7 +41,6 @@ class ServicesContainer:
         Args:
             settings: Application settings with Pipefy credentials.
         """
-        pipefy = settings.pipefy
         # Swap the keyring backend before any keychain probe (no-op when ``auto``).
         configure_keychain_backend(settings.auth.keychain_backend)
         oidc_client = settings.auth.to_oidc_client()
@@ -80,4 +79,6 @@ class ServicesContainer:
                 )
                 raise
             logger.info("Pipefy stored session warmed up at startup")
-        self.pipefy_client = PipefyClient(settings=pipefy, auth=resolved)
+        self.pipefy_client = PipefyClient(
+            settings=settings.pipefy, auth=resolved, surface="mcp"
+        )

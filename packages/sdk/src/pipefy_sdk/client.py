@@ -7,6 +7,7 @@ from typing import Any
 
 from httpx import Auth
 
+from pipefy_sdk import __version__
 from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
 from pipefy_sdk.automation_preflight import (
     validate_automation_field_map_field_ids,
@@ -72,6 +73,7 @@ from pipefy_sdk.services.types import (
 from pipefy_sdk.services.user_service import UserService
 from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.telemetry import ClientSurface, telemetry_headers
 
 
 @dataclass(frozen=True)
@@ -83,7 +85,9 @@ class Executors:
     internal: GraphQLExecutor
 
 
-def build_executors(settings: PipefySettings, auth: Auth) -> Executors:
+def build_executors(
+    settings: PipefySettings, auth: Auth, *, surface: ClientSurface = "sdk"
+) -> Executors:
     """Build one executor per Pipefy endpoint from a shared ``settings``/``auth``.
 
     This is the seam that resolves each endpoint URL from settings; the executors
@@ -91,19 +95,33 @@ def build_executors(settings: PipefySettings, auth: Auth) -> Executors:
     one ``auth`` instance so the OAuth token cache is not duplicated. Only the
     internal executor carries the ``[code=…][correlation_id=…]`` error envelope;
     the others leave gql exceptions untouched.
+
+    The client telemetry headers are resolved once here from ``surface`` and the
+    package version, then shared by all three executors: every endpoint targets a
+    Pipefy API host, so each carries the same surface/version stamp. ``surface`` is
+    the caller's identity (the MCP server passes ``mcp``, the CLI ``cli``); direct
+    SDK use keeps the ``sdk`` default.
     """
     cache_schema = settings.gql_reuse_fetched_graphql_schema
+    headers = telemetry_headers(surface=surface, version=__version__)
     return Executors(
         public=HttpxGraphQLExecutor(
-            url=settings.graphql_url, auth=auth, cache_schema=cache_schema
+            url=settings.graphql_url,
+            auth=auth,
+            cache_schema=cache_schema,
+            headers=headers,
         ),
         interfaces=HttpxGraphQLExecutor(
-            url=settings.interfaces_graphql_url, auth=auth, cache_schema=cache_schema
+            url=settings.interfaces_graphql_url,
+            auth=auth,
+            cache_schema=cache_schema,
+            headers=headers,
         ),
         internal=HttpxGraphQLExecutor(
             url=settings.internal_api_url,
             auth=auth,
             cache_schema=cache_schema,
+            headers=headers,
             on_graphql_error=format_internal_api_error,
         ),
     )
@@ -117,6 +135,7 @@ class PipefyClient:
         settings: PipefySettings,
         *,
         auth: Auth,
+        surface: ClientSurface = "sdk",
     ) -> None:
         """Build a facade wired with a pre-constructed ``httpx.Auth``.
 
@@ -125,8 +144,11 @@ class PipefyClient:
             auth: ``httpx.Auth`` that supplies the credentials for every GraphQL
                 call (construct via ``pipefy_auth.resolve`` or one of the bearer
                 adapters from ``pipefy_auth``).
+            surface: Client surface stamped into the telemetry headers. The
+                composition root passes its own (``mcp``/``cli``); direct SDK use
+                keeps the ``sdk`` default.
         """
-        ex = build_executors(settings, auth)
+        ex = build_executors(settings, auth, surface=surface)
         self._internal_executor = ex.internal
         self._pipe_service = PipeService(executor=ex.public)
         self._card_service = CardService(executor=ex.public)

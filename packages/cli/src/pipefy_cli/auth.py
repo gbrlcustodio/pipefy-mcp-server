@@ -183,7 +183,7 @@ def get_authenticated_client(
     if _cached_client is not None and _cached_signature == key:
         return _cached_client
 
-    client = PipefyClient(pipefy_settings, auth=resolved)
+    client = PipefyClient(pipefy_settings, auth=resolved, surface="cli")
     _cached_signature = key
     _cached_client = client
     return client

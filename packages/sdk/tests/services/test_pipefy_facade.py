@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pipefy_auth import StaticBearerAuth
 
+from pipefy_sdk import __version__
 from pipefy_sdk.client import PipefyClient, build_executors
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
@@ -18,6 +19,7 @@ from pipefy_sdk.services.schema_introspection_service import (
 from pipefy_sdk.services.table_service import TableService
 from pipefy_sdk.services.webhook_service import WebhookService
 from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.telemetry import telemetry_headers
 
 
 @pytest.fixture
@@ -46,6 +48,59 @@ def test_build_executors_routes_each_endpoint_to_its_url(mock_settings):
     assert ex.public._graphql_url == mock_settings.graphql_url
     assert ex.interfaces._graphql_url == mock_settings.interfaces_graphql_url
     assert ex.internal._graphql_url == mock_settings.internal_api_url
+
+
+@pytest.mark.unit
+def test_build_executors_stamps_each_executor_with_telemetry_headers():
+    settings = PipefySettings(base_url="https://api.pipefy.com")
+    ex = build_executors(settings, StaticBearerAuth("unit-token"), surface="mcp")
+    expected = telemetry_headers(surface="mcp", version=__version__)
+    assert ex.public._headers == expected
+    assert ex.interfaces._headers == expected
+    assert ex.internal._headers == expected
+
+
+@pytest.mark.unit
+def test_build_executors_defaults_surface_to_sdk():
+    """Direct SDK use passes no surface, so the executors stamp the 'sdk' default."""
+    ex = build_executors(
+        PipefySettings(base_url="https://api.pipefy.com"),
+        StaticBearerAuth("unit-token"),
+    )
+    expected = telemetry_headers(surface="sdk", version=__version__)
+    assert ex.public._headers == expected
+    assert ex.interfaces._headers == expected
+    assert ex.internal._headers == expected
+
+
+@pytest.mark.unit
+def test_pipefy_client_threads_surface_to_executors():
+    """The surface passed to the facade reaches the executors it builds."""
+    client = PipefyClient(
+        PipefySettings(base_url="https://api.pipefy.com"),
+        auth=StaticBearerAuth("unit-token"),
+        surface="cli",
+    )
+    assert client._internal_executor._headers == telemetry_headers(
+        surface="cli", version=__version__
+    )
+
+
+@pytest.mark.unit
+def test_env_var_cannot_forge_surface(monkeypatch: pytest.MonkeyPatch):
+    """``PIPEFY_CLIENT_SURFACE`` cannot forge the surface.
+
+    The surface is a constructor argument, not a setting, so it is never read
+    from the environment: a default client stamps 'sdk' regardless of the env var.
+    """
+    monkeypatch.setenv("PIPEFY_CLIENT_SURFACE", "mcp")
+    client = PipefyClient(
+        PipefySettings(base_url="https://api.pipefy.com"),
+        auth=StaticBearerAuth("unit-token"),
+    )
+    assert client._internal_executor._headers == telemetry_headers(
+        surface="sdk", version=__version__
+    )
 
 
 @pytest.mark.unit

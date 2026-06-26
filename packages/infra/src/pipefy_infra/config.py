@@ -207,10 +207,90 @@ class InsecureUrlSettings(PipefyBaseSettings):
     )
 
 
+class _ClientEnv(PipefyBaseSettings):
+    """Reads the ``PIPEFY_*`` SDK-client knobs from env / ``.env`` / TOML.
+
+    A dumb env reader, not a value object: it imports no domain type and runs no
+    SSRF / shape gate. Every field is optional and loosely typed so unset keys
+    fall through and domain normalization (URL sanitizing, the keychain-backend
+    lowering) stays on the value object the caller builds from
+    :func:`read_client_env`.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_")
+
+    base_url: str | None = Field(default=None)
+    allow_insecure_urls: bool | None = Field(
+        default=None, validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS")
+    )
+    gql_reuse_fetched_graphql_schema: bool | None = Field(default=None)
+    default_webhook_name: str | None = Field(default=None)
+
+
+class _AuthEnv(PipefyBaseSettings):
+    """Reads the ``PIPEFY_AUTH_*`` knobs (plus the canonical credential aliases).
+
+    Same contract as :class:`_ClientEnv`: a loosely-typed env reader, no domain
+    import, no validation. ``base_url`` and ``allow_insecure_urls`` are absent on
+    purpose: the caller injects the deployment-derived OAuth token URL and the
+    shared insecure-URL posture into the auth value object rather than reading
+    them here, so the host root is read once (via :func:`read_client_env`).
+    """
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_AUTH_")
+
+    issuer_url: str | None = Field(default=None)
+    client_id: str | None = Field(default=None)
+    disable_stored_session: bool | None = Field(default=None)
+    keychain_backend: str | None = Field(default=None)
+    static_token: str | None = Field(
+        default=None, validation_alias=AliasChoices("PIPEFY_TOKEN")
+    )
+    service_account_client_id: str | None = Field(
+        default=None, validation_alias=AliasChoices("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID")
+    )
+    service_account_client_secret: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET"),
+    )
+
+
+def read_client_env(
+    *, base_url: str | None = None, allow_insecure: bool | None = None
+) -> dict[str, Any]:
+    """Read the ``PIPEFY_*`` client knobs, flags overriding env, as a raw mapping.
+
+    Returns only the keys an operator actually set (``exclude_unset``) so the
+    value object the caller constructs (``pipefy_sdk.ClientSettings``) supplies
+    every default in one place. ``base_url`` / ``allow_insecure`` are the CLI
+    flag overrides; passing ``None`` leaves the env / file value (or the value
+    object's default) in force. This is the single point where ``--base-url`` is
+    applied.
+    """
+    overrides: dict[str, Any] = {}
+    if base_url is not None:
+        overrides["base_url"] = base_url.strip()
+    if allow_insecure is not None:
+        overrides["allow_insecure_urls"] = allow_insecure
+    return _ClientEnv(**overrides).model_dump(exclude_unset=True)
+
+
+def read_auth_env() -> dict[str, Any]:
+    """Read the ``PIPEFY_AUTH_*`` knobs (and the credential aliases) as a raw mapping.
+
+    Returns only operator-set keys (``exclude_unset``); ``pipefy_auth.AuthSettings``
+    supplies the defaults. The deployment-derived ``service_account_token_url`` and
+    ``allow_insecure_urls`` are injected by the caller, not read here.
+    """
+    return _AuthEnv().model_dump(exclude_unset=True)
+
+
 __all__ = [
     "InsecureUrlSettings",
     "PipefyBaseSettings",
     "PipefyTomlConfigSource",
     "config_dir",
     "config_file_path",
+    "read_auth_env",
+    "read_client_env",
 ]

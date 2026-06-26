@@ -20,7 +20,7 @@ from pipefy_sdk.queries.webhook_queries import (
     UPDATE_WEBHOOK_MUTATION,
 )
 from pipefy_sdk.services.card_service import CardService
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.settings import ClientSettings
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class WebhookService:
         self,
         *,
         executor: GraphQLExecutor,
-        settings: PipefySettings,
+        settings: ClientSettings,
         card_service: CardService,
     ) -> None:
         self._executor = executor

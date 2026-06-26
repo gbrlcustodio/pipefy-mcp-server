@@ -16,17 +16,17 @@ from __future__ import annotations
 from typing import Any
 
 from pipefy_auth import AuthSettings
-from pipefy_sdk import PipefySettings
+from pipefy_sdk import ClientSettings
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class CliSettings(BaseSettings):
-    """Composes :class:`PipefySettings` + :class:`AuthSettings` for CLI use."""
+    """Composes :class:`ClientSettings` + :class:`AuthSettings` for CLI use."""
 
     model_config = SettingsConfigDict(extra="ignore")
 
-    pipefy: PipefySettings = Field(default_factory=PipefySettings)
+    sdk: ClientSettings = Field(default_factory=ClientSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
 
 
@@ -57,7 +57,7 @@ def resolve_cli_settings(
 
     try:
         return CliSettings(
-            pipefy=PipefySettings(**pipefy_init),
+            sdk=ClientSettings(**pipefy_init),
             auth=AuthSettings(**auth_init),
         )
     except ValidationError as exc:

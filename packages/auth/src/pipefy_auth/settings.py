@@ -14,7 +14,7 @@ The service-account credentials keep their established names
 (``PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`` / ``_SECRET``), as does the static bearer
 (``PIPEFY_TOKEN``). ``PIPEFY_BASE_URL`` (API host root that drives the OAuth
 token endpoint) and ``PIPEFY_ALLOW_INSECURE_URLS`` are deployment-wide: the same
-vars drive :class:`pipefy_sdk.PipefySettings`, and both models load them
+vars drive :class:`pipefy_sdk.ClientSettings`, and both models load them
 independently so they stay in sync without cross-package coupling.
 """
 
@@ -151,7 +151,7 @@ class AuthSettings(InsecureUrlSettings):
             "Pipefy API host root (env: PIPEFY_BASE_URL, shared with the SDK). "
             "Drives the service-account OAuth token endpoint via the "
             "``service_account_url`` computed property. Mirrors the field of "
-            "the same name on :class:`pipefy_sdk.PipefySettings`; both models "
+            "the same name on :class:`pipefy_sdk.ClientSettings`; both models "
             "load it independently from the same env var so they stay in sync."
         ),
     )

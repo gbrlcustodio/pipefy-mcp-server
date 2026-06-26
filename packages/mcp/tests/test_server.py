@@ -8,7 +8,7 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 from pipefy_auth import AuthSettings, JwtValidationSettings
-from pipefy_sdk import PipefySettings
+from pipefy_sdk import ClientSettings
 
 from pipefy_mcp.auth import build_resource_server_auth
 from pipefy_mcp.server import (
@@ -41,7 +41,7 @@ def _resource_server_pair():
 
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
-    pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+    sdk=ClientSettings(base_url="https://api.pipefy.com"),
     auth=AuthSettings(),
 )
 

@@ -31,7 +31,7 @@ from pipefy_auth import (
     run_login,
     store_session,
 )
-from pipefy_sdk import MePayload, PipefySettings
+from pipefy_sdk import ClientSettings, MePayload
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
@@ -392,7 +392,7 @@ def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None
 
 
 def _fetch_identity(
-    report: AuthStatusReport, settings: PipefySettings, auth: AuthContext
+    report: AuthStatusReport, settings: ClientSettings, auth: AuthContext
 ) -> None:
     """Populate ``report.identity``; raise ``_StatusExit`` on transport / 401."""
     client = get_authenticated_client(settings, auth)

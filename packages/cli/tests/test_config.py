@@ -26,11 +26,9 @@ def test_env_only_resolution(
         allow_insecure_urls_flag=None,
     )
 
-    assert resolved.pipefy.base_url == "https://env-only.example.com"
-    assert resolved.pipefy.graphql_url == "https://env-only.example.com/graphql"
-    assert (
-        resolved.pipefy.internal_api_url == "https://env-only.example.com/internal_api"
-    )
+    assert resolved.sdk.base_url == "https://env-only.example.com"
+    assert resolved.sdk.graphql_url == "https://env-only.example.com/graphql"
+    assert resolved.sdk.internal_api_url == "https://env-only.example.com/internal_api"
     assert (
         resolved.auth.service_account_url == "https://env-only.example.com/oauth/token"
     )
@@ -60,7 +58,7 @@ def test_dotenv_only_resolution(
         allow_insecure_urls_flag=None,
     )
 
-    assert resolved.pipefy.base_url == "https://dotenv.example.com"
+    assert resolved.sdk.base_url == "https://dotenv.example.com"
     assert resolved.auth.service_account_client_id == "dotenv-client"
 
 
@@ -79,7 +77,7 @@ def test_process_env_overrides_dotenv(
     resolved = resolve_cli_settings(
         base_url_flag=None,
         allow_insecure_urls_flag=None,
-    ).pipefy
+    ).sdk
 
     assert resolved.base_url == "https://from-process.example.com"
 
@@ -97,7 +95,7 @@ def test_base_url_flag_overrides_env(
         allow_insecure_urls_flag=None,
     )
 
-    assert resolved.pipefy.base_url == "https://from-flag.example.com"
+    assert resolved.sdk.base_url == "https://from-flag.example.com"
     # ``AuthSettings.model_validate`` re-reads env on revalidate; without the
     # env-hold this would still report the env host and ``service_account_url``
     # would drift from the SDK side.
@@ -129,7 +127,7 @@ def test_base_url_defaults_to_pipefy_prod(
     resolved = resolve_cli_settings(
         base_url_flag=None,
         allow_insecure_urls_flag=None,
-    ).pipefy
+    ).sdk
 
     assert resolved.base_url == "https://app.pipefy.com"
     assert resolved.graphql_url == "https://app.pipefy.com/graphql"
@@ -164,9 +162,9 @@ def test_allow_insecure_urls_flag_overrides_env(
         allow_insecure_urls_flag=True,
     )
 
-    assert resolved.pipefy.allow_insecure_urls is True
+    assert resolved.sdk.allow_insecure_urls is True
     assert resolved.auth.allow_insecure_urls is True
-    assert resolved.pipefy.base_url == "http://127.0.0.1:9999"
+    assert resolved.sdk.base_url == "http://127.0.0.1:9999"
 
 
 def test_allow_insecure_urls_flag_false_overrides_env_true(
@@ -177,7 +175,7 @@ def test_allow_insecure_urls_flag_false_overrides_env_true(
     """Flag ``False`` must override ``PIPEFY_ALLOW_INSECURE_URLS=true`` on both nested models.
 
     Without the env-hold for the False branch, ``AuthSettings.model_validate``
-    would re-read the env and keep ``True`` while ``PipefySettings`` (a plain
+    would re-read the env and keep ``True`` while ``ClientSettings`` (a plain
     ``BaseModel``) honored the patch, desynchronizing the two SSRF gates.
     """
     monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
@@ -187,7 +185,7 @@ def test_allow_insecure_urls_flag_false_overrides_env_true(
         allow_insecure_urls_flag=False,
     )
 
-    assert resolved.pipefy.allow_insecure_urls is False
+    assert resolved.sdk.allow_insecure_urls is False
     assert resolved.auth.allow_insecure_urls is False
 
 
@@ -209,7 +207,7 @@ def test_base_url_flag_localhost_allowed_with_insecure_flag(
     resolved = resolve_cli_settings(
         base_url_flag="http://localhost:3000",
         allow_insecure_urls_flag=True,
-    ).pipefy
+    ).sdk
 
     assert resolved.base_url == "http://localhost:3000"
     assert resolved.graphql_url == "http://localhost:3000/graphql"

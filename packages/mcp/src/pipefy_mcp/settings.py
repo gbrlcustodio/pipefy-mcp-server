@@ -5,7 +5,7 @@ from typing import Self
 from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_infra import security
 from pipefy_infra.config import InsecureUrlSettings, PipefyBaseSettings
-from pipefy_sdk import PipefySettings
+from pipefy_sdk import ClientSettings
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -127,7 +127,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(extra="ignore")
 
-    pipefy: PipefySettings = Field(default_factory=PipefySettings)
+    sdk: ClientSettings = Field(default_factory=ClientSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
     mcp: McpSettings = Field(default_factory=McpSettings)
     jwt: JwtValidationSettings = Field(default_factory=JwtValidationSettings)
@@ -139,8 +139,8 @@ settings = Settings()
 __all__ = [
     "AuthSettings",
     "JwtValidationSettings",
+    "ClientSettings",
     "McpSettings",
-    "PipefySettings",
     "ResourceServerSettings",
     "Settings",
     "settings",

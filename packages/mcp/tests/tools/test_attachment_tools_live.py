@@ -32,7 +32,7 @@ mcp_server = build_pipefy_mcp_server()
 
 def _live_pipefy_client() -> PipefyClient:
     """PipefyClient wired with auth via the production precedence chain."""
-    return PipefyClient(settings=settings.pipefy, auth=live_resolved_auth())
+    return PipefyClient(settings=settings.sdk, auth=live_resolved_auth())
 
 
 def _card_upload_env():

@@ -1,7 +1,7 @@
-"""Tests for ``Settings`` / ``PipefySettings`` (env loading and coercion)."""
+"""Tests for ``Settings`` / ``ClientSettings`` (env loading and coercion)."""
 
 import pytest
-from pipefy_sdk import PipefySettings
+from pipefy_sdk import ClientSettings
 from pydantic import ValidationError
 
 from pipefy_mcp.settings import McpSettings, Settings
@@ -12,24 +12,24 @@ def test_internal_api_url_derived_from_base_url(monkeypatch):
     """``PIPEFY_BASE_URL`` flows into the computed ``internal_api_url``."""
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://custom.pipefy.com")
     settings = Settings()
-    assert settings.pipefy.internal_api_url == "https://custom.pipefy.com/internal_api"
+    assert settings.sdk.internal_api_url == "https://custom.pipefy.com/internal_api"
 
 
 @pytest.mark.unit
 def test_pipefy_settings_rejects_http_base_when_secure():
     with pytest.raises(ValueError, match="base_url.*HTTPS"):
-        PipefySettings(base_url="http://app.pipefy.com")
+        ClientSettings(base_url="http://app.pipefy.com")
 
 
 @pytest.mark.unit
 def test_pipefy_settings_rejects_loopback_base():
     with pytest.raises(ValueError, match="base_url.*localhost|127"):
-        PipefySettings(base_url="https://127.0.0.1")
+        ClientSettings(base_url="https://127.0.0.1")
 
 
 @pytest.mark.unit
 def test_pipefy_settings_allow_insecure_urls_permits_http_localhost():
-    s = PipefySettings(allow_insecure_urls=True, base_url="http://localhost")
+    s = ClientSettings(allow_insecure_urls=True, base_url="http://localhost")
     assert s.base_url == "http://localhost"
     assert s.graphql_url == "http://localhost/graphql"
     assert s.internal_api_url == "http://localhost/internal_api"
@@ -39,55 +39,55 @@ def test_pipefy_settings_allow_insecure_urls_permits_http_localhost():
 def test_allow_insecure_urls_from_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
     settings = Settings()
-    assert settings.pipefy.allow_insecure_urls is True
+    assert settings.sdk.allow_insecure_urls is True
 
 
 @pytest.mark.unit
 def test_permission_denied_enrichment_timeout_defaults_to_five():
-    assert PipefySettings().permission_denied_enrichment_timeout_seconds == 5.0
+    assert ClientSettings().permission_denied_enrichment_timeout_seconds == 5.0
 
 
 @pytest.mark.unit
 def test_permission_denied_enrichment_timeout_rejects_too_low():
     with pytest.raises(ValidationError):
-        PipefySettings(permission_denied_enrichment_timeout_seconds=0.05)
+        ClientSettings(permission_denied_enrichment_timeout_seconds=0.05)
 
 
 @pytest.mark.unit
 def test_permission_denied_enrichment_timeout_from_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS", "8.5")
     settings = Settings()
-    assert settings.pipefy.permission_denied_enrichment_timeout_seconds == 8.5
+    assert settings.sdk.permission_denied_enrichment_timeout_seconds == 8.5
 
 
 @pytest.mark.unit
 def test_gql_reuse_fetched_graphql_schema_defaults_to_false():
-    assert PipefySettings().gql_reuse_fetched_graphql_schema is False
+    assert ClientSettings().gql_reuse_fetched_graphql_schema is False
 
 
 @pytest.mark.unit
 def test_gql_reuse_fetched_graphql_schema_from_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_GQL_REUSE_FETCHED_GRAPHQL_SCHEMA", "true")
     settings = Settings()
-    assert settings.pipefy.gql_reuse_fetched_graphql_schema is True
+    assert settings.sdk.gql_reuse_fetched_graphql_schema is True
 
 
 @pytest.mark.unit
 def test_default_webhook_name_defaults():
-    assert PipefySettings().default_webhook_name == "Pipefy Webhook"
+    assert ClientSettings().default_webhook_name == "Pipefy Webhook"
 
 
 @pytest.mark.unit
 def test_default_webhook_name_from_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_DEFAULT_WEBHOOK_NAME", "ACME Inbound")
     settings = Settings()
-    assert settings.pipefy.default_webhook_name == "ACME Inbound"
+    assert settings.sdk.default_webhook_name == "ACME Inbound"
 
 
 @pytest.mark.unit
 def test_default_webhook_name_rejects_empty_string():
     with pytest.raises(ValidationError):
-        PipefySettings(default_webhook_name="")
+        ClientSettings(default_webhook_name="")
 
 
 @pytest.mark.unit
@@ -165,7 +165,7 @@ def test_mcp_settings_defaults():
 
 @pytest.mark.unit
 def test_mcp_settings_loads_from_pipefy_mcp_env(monkeypatch):
-    """The ``PIPEFY_MCP_*`` env vars keep working after the move out of PipefySettings."""
+    """The ``PIPEFY_MCP_*`` env vars keep working after the move out of ClientSettings."""
     monkeypatch.setenv("PIPEFY_MCP_REMOTE_MODE", "true")
     monkeypatch.setenv("PIPEFY_MCP_HOST", "0.0.0.0")
     monkeypatch.setenv("PIPEFY_MCP_PORT", "9100")

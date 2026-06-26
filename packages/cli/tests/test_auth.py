@@ -15,7 +15,7 @@ from pipefy_auth import (
     StoredSession,
     TokenResponse,
 )
-from pipefy_sdk import PipefySettings
+from pipefy_sdk import ClientSettings
 
 from pipefy_cli.auth import (
     AuthContext,
@@ -26,8 +26,8 @@ from pipefy_cli.auth import (
 from pipefy_cli.main import app
 
 
-def _minimal_settings() -> PipefySettings:
-    return PipefySettings(base_url="https://unit.example.com")
+def _minimal_settings() -> ClientSettings:
+    return ClientSettings(base_url="https://unit.example.com")
 
 
 def _service_account() -> ServiceAccount:
@@ -179,9 +179,9 @@ def _fresh_stored_session(*, access_token: str = "SESSION_ACCESS") -> StoredSess
     )
 
 
-def _public_only_settings() -> PipefySettings:
+def _public_only_settings() -> ClientSettings:
     """``PIPEFY_SERVICE_ACCOUNT_*`` triple absent → service-account tier unavailable, stored session wins."""
-    return PipefySettings(base_url="https://unit.example.com")
+    return ClientSettings(base_url="https://unit.example.com")
 
 
 def _public_only_auth(

@@ -8,7 +8,7 @@ from pipefy_auth import AuthSettings, missing_auth_message, resolve_pipefy_auth
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.settings import ClientSettings
 
 _MISSING_CREDS_MESSAGE = (
     "Pipefy credentials not configured: set PIPEFY_BASE_URL to your "
@@ -26,15 +26,15 @@ class _LiveEnvSettings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    pipefy: PipefySettings = Field(default_factory=PipefySettings)
+    sdk: ClientSettings = Field(default_factory=ClientSettings)
 
 
-def _resolved_pipefy() -> PipefySettings:
-    return _LiveEnvSettings().pipefy
+def _resolved_pipefy() -> ClientSettings:
+    return _LiveEnvSettings().sdk
 
 
-def live_pipefy_settings() -> PipefySettings:
-    """Load ``PipefySettings`` from the process environment and optional ``.env`` file."""
+def live_pipefy_settings() -> ClientSettings:
+    """Load ``ClientSettings`` from the process environment and optional ``.env`` file."""
     return _resolved_pipefy()
 
 
@@ -64,7 +64,7 @@ def live_resolved_auth() -> Auth:
 
 def pipefy_live_configured() -> bool:
     """Return True when a Pipefy host and a resolvable auth tier are both configured."""
-    # ``PipefySettings.base_url`` carries a prod default; consulting the
+    # ``ClientSettings.base_url`` carries a prod default; consulting the
     # resolved field would flip live tests on for every dev machine that
     # has *any* auth tier configured. Gate on the env var instead so live
     # tests stay opt-in.

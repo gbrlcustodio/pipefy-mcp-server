@@ -1,11 +1,11 @@
-"""Unit tests for ``PipefySettings`` (defaults, env loading, SSRF validation)."""
+"""Unit tests for ``ClientSettings`` (defaults, env loading, SSRF validation)."""
 
 from __future__ import annotations
 
 import pytest
 from _shared.live_settings import live_pipefy_settings
 
-from pipefy_sdk.settings import DEFAULT_BASE_URL, PipefySettings
+from pipefy_sdk.settings import DEFAULT_BASE_URL, ClientSettings
 
 PROD_GRAPHQL_URL = "https://app.pipefy.com/graphql"
 PROD_INTERNAL_API_URL = "https://app.pipefy.com/internal_api"
@@ -15,14 +15,14 @@ PROD_INTERFACES_GRAPHQL_URL = "https://app.pipefy.com/graphql/interfaces"
 @pytest.mark.unit
 def test_pipefy_settings_default_base_url():
     """No env / kwarg → base_url defaults to the Pipefy prod API host."""
-    settings = PipefySettings()
+    settings = ClientSettings()
     assert settings.base_url == DEFAULT_BASE_URL == "https://app.pipefy.com"
 
 
 @pytest.mark.unit
 def test_pipefy_settings_default_derives_prod_urls():
     """All three computed URLs follow the default base_url."""
-    settings = PipefySettings()
+    settings = ClientSettings()
     assert settings.graphql_url == PROD_GRAPHQL_URL
     assert settings.internal_api_url == PROD_INTERNAL_API_URL
     assert settings.interfaces_graphql_url == PROD_INTERFACES_GRAPHQL_URL
@@ -94,7 +94,7 @@ def test_pipefy_settings_empty_base_url_raises(monkeypatch: pytest.MonkeyPatch):
 def test_pipefy_settings_rejects_http_base_url():
     """``base_url`` must use HTTPS unless ``allow_insecure_urls``."""
     with pytest.raises(ValueError, match="base_url.*HTTPS"):
-        PipefySettings(base_url="http://app.pipefy.com")
+        ClientSettings(base_url="http://app.pipefy.com")
 
 
 @pytest.mark.unit
@@ -113,13 +113,13 @@ def test_pipefy_settings_rejects_internal_hosts(unsafe_base_url: str, expected: 
     endpoint clients trust it rather than re-checking.
     """
     with pytest.raises(ValueError, match=expected):
-        PipefySettings(base_url=unsafe_base_url)
+        ClientSettings(base_url=unsafe_base_url)
 
 
 @pytest.mark.unit
 def test_pipefy_settings_accepts_http_base_url_when_insecure():
     """`allow_insecure_urls=True` opens the door to http:// + localhost."""
-    settings = PipefySettings(
+    settings = ClientSettings(
         base_url="http://localhost:3000",
         allow_insecure_urls=True,
     )

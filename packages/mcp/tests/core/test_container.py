@@ -11,7 +11,7 @@ from pipefy_auth import (
     TokenResponse,
 )
 from pipefy_auth.storage import StoredSession
-from pipefy_sdk import PipefyClient, PipefySettings
+from pipefy_sdk import ClientSettings, PipefyClient
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.core.container import ServicesContainer
@@ -78,7 +78,7 @@ class TestServicesContainer:
         mock_pipefy_client_class.return_value = mock_client
 
         settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            sdk=ClientSettings(base_url="https://api.pipefy.com"),
             auth=_service_account_auth_settings(),
         )
 
@@ -87,7 +87,7 @@ class TestServicesContainer:
 
         mock_pipefy_client_class.assert_called_once()
         kwargs = mock_pipefy_client_class.call_args.kwargs
-        assert kwargs["settings"] is settings.pipefy
+        assert kwargs["settings"] is settings.sdk
         assert "auth" in kwargs
         assert container.pipefy_client is mock_client
 
@@ -101,7 +101,7 @@ class TestServicesContainer:
         mock_client.client = Mock()
         mock_pipefy_client_class.return_value = mock_client
         settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            sdk=ClientSettings(base_url="https://api.pipefy.com"),
             auth=AuthSettings(
                 static_token="env-bearer",
             ),
@@ -121,7 +121,7 @@ class TestServicesContainer:
     ):
         """No PIPEFY_TOKEN and no service-account triple → runtime error."""
         settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            sdk=ClientSettings(base_url="https://api.pipefy.com"),
             auth=AuthSettings(),
         )
         with pytest.raises(
@@ -140,7 +140,7 @@ class TestServicesContainer:
         """When the resolved tier is the stored session, the refresh is pre-warmed."""
         mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
         settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            sdk=ClientSettings(base_url="https://api.pipefy.com"),
             auth=_stored_session_auth_settings(),
         )
         with patch(
@@ -166,7 +166,7 @@ class TestServicesContainer:
         """A configured ``PIPEFY_AUTH_ISSUER_URL`` is ignored at warm-up when a higher tier wins."""
         mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
         settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            sdk=ClientSettings(base_url="https://api.pipefy.com"),
             auth=AuthSettings(
                 static_token="env-bearer",
                 issuer_url="https://signin.pipefy.com/realms/pipefy",
@@ -192,7 +192,7 @@ class TestServicesContainer:
         """A failed warm-up logs the ``pipefy auth login`` hint and surfaces ``RefreshError`` *before* ``PipefyClient`` is constructed."""
         mock_ensure_fresh_session.side_effect = RefreshError("invalid_grant")
         settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            sdk=ClientSettings(base_url="https://api.pipefy.com"),
             auth=_stored_session_auth_settings(),
         )
         with patch(

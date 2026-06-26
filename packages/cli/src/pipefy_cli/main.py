@@ -88,7 +88,7 @@ def main(
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
-    ctx.obj["pipefy_settings"] = cli_settings.pipefy
+    ctx.obj["client_settings"] = cli_settings.sdk
     ctx.obj["auth_settings"] = cli_settings.auth
     # Swap the keyring backend before any keychain probe (resolver tier
     # detection, ``auth login``, ``auth status``). No-op when ``auto``.

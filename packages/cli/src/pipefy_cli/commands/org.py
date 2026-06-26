@@ -42,10 +42,10 @@ def org_get(
 ) -> None:
     """Fetch organization details (``get_organization``)."""
 
-    pipefy_settings, _token = settings_and_token(ctx)
+    client_settings, _token = settings_and_token(ctx)
     resolved = (organization_id or "").strip()
     if not resolved:
-        env_default = pipefy_settings.org_id
+        env_default = client_settings.org_id
         resolved = env_default.strip() if env_default else ""
 
     if not resolved:

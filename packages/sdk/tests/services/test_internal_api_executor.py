@@ -1,4 +1,4 @@
-"""Unit tests for the Internal API executor and PipefySettings.internal_api_url.
+"""Unit tests for the Internal API executor and ClientSettings.internal_api_url.
 
 These tests intentionally assert the full GraphQL error text produced by the
 Internal API executor (the ``HttpxGraphQLExecutor`` that ``build_executors``
@@ -17,22 +17,22 @@ from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.client import build_executors
 from pipefy_sdk.graphql_executor import GraphQLExecutor
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.settings import ClientSettings
 
 DEFAULT_INTERNAL_API_URL = "https://app.pipefy.com/internal_api"
 
 
 def _build_executor() -> GraphQLExecutor:
     return build_executors(
-        PipefySettings(),
+        ClientSettings(),
         StaticBearerAuth("test-bearer-token"),
     ).internal
 
 
 @pytest.mark.unit
 def test_pipefy_settings_internal_api_url_default():
-    """Test that PipefySettings.internal_api_url defaults to the expected URL."""
-    settings = PipefySettings()
+    """Test that ClientSettings.internal_api_url defaults to the expected URL."""
+    settings = ClientSettings()
     assert settings.internal_api_url == DEFAULT_INTERNAL_API_URL
 
 

@@ -1,4 +1,4 @@
-"""``PipefySettings`` end-to-end TOML loading via ``PipefyTomlConfigSource``."""
+"""``ClientSettings`` end-to-end TOML loading via ``PipefyTomlConfigSource``."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.settings import ClientSettings
 
 
 def _write(path: Path, content: str) -> Path:
@@ -34,7 +34,7 @@ def test_field_name_keys_load_from_toml(tmp_path: Path) -> None:
         default_webhook_name = "Test Hook"
         """,
     )
-    settings = PipefySettings()
+    settings = ClientSettings()
     assert settings.base_url == "https://staging.pipefy.com"
     assert settings.org_id == "300123"
     assert settings.default_webhook_name == "Test Hook"
@@ -43,7 +43,7 @@ def test_field_name_keys_load_from_toml(tmp_path: Path) -> None:
 def test_env_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://from-env.example")
-    assert PipefySettings().base_url == "https://from-env.example"
+    assert ClientSettings().base_url == "https://from-env.example"
 
 
 def test_dotenv_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -53,19 +53,19 @@ def test_dotenv_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     monkeypatch.chdir(tmp_path)
     _write(tmp_path / ".env", "PIPEFY_BASE_URL=https://from-dotenv.example\n")
     _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
-    assert PipefySettings().base_url == "https://from-dotenv.example"
+    assert ClientSettings().base_url == "https://from-dotenv.example"
 
 
 def test_init_kwargs_win_over_toml(tmp_path: Path) -> None:
     _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
     assert (
-        PipefySettings(base_url="https://from-init.example").base_url
+        ClientSettings(base_url="https://from-init.example").base_url
         == "https://from-init.example"
     )
 
 
 def test_missing_file_uses_defaults() -> None:
-    settings = PipefySettings()
+    settings = ClientSettings()
     assert settings.base_url == "https://app.pipefy.com"
     assert settings.org_id is None
 
@@ -73,12 +73,12 @@ def test_missing_file_uses_defaults() -> None:
 def test_invalid_toml_raises_value_error_quoting_path(tmp_path: Path) -> None:
     path = _write(tmp_path / "config.toml", "base_url = \n")
     with pytest.raises(ValueError, match=str(path)):
-        PipefySettings()
+        ClientSettings()
 
 
 def test_unknown_keys_ignored(tmp_path: Path) -> None:
     # Both auth-only keys (e.g. ``issuer_url``) and arbitrary keys should be
-    # silently dropped by PipefySettings via ``extra="ignore"``.
+    # silently dropped by ClientSettings via ``extra="ignore"``.
     _write(
         tmp_path / "config.toml",
         """
@@ -87,15 +87,15 @@ def test_unknown_keys_ignored(tmp_path: Path) -> None:
         completely_unrelated = 42
         """,
     )
-    assert PipefySettings().base_url == "https://staging.pipefy.com"
+    assert ClientSettings().base_url == "https://staging.pipefy.com"
 
 
 def test_shared_base_url_loads_into_both_models(tmp_path: Path) -> None:
     # Single ``base_url`` key in TOML must populate both AuthSettings and
-    # PipefySettings symmetrically — the operator's single-source-of-truth
+    # ClientSettings symmetrically — the operator's single-source-of-truth
     # expectation.
     from pipefy_auth.settings import AuthSettings
 
     _write(tmp_path / "config.toml", 'base_url = "https://shared.example"\n')
-    assert PipefySettings().base_url == "https://shared.example"
+    assert ClientSettings().base_url == "https://shared.example"
     assert AuthSettings().base_url == "https://shared.example"

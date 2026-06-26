@@ -16,7 +16,7 @@ DEFAULT_BASE_URL = "https://app.pipefy.com"
 _ORG_ID_PATTERN = r"^[0-9]+$"
 
 
-class PipefySettings(InsecureUrlSettings):
+class ClientSettings(InsecureUrlSettings):
     """Pipefy API connection and shared runtime knobs (CLI, scripts).
 
     Endpoint configuration only — credentials live on
@@ -130,3 +130,8 @@ class PipefySettings(InsecureUrlSettings):
             require_host_root=True,
         )
         return self
+
+
+# Deprecated alias kept one release for external SDK consumers importing the old
+# name; in-repo code uses ClientSettings.
+PipefySettings = ClientSettings

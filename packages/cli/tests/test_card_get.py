@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from _shared.live_settings import live_pipefy_settings, require_live_creds
 from gql.transport.exceptions import TransportQueryError
-from pipefy_sdk import PipefySettings
+from pipefy_sdk import ClientSettings
 from pipefy_sdk.exceptions import PipefyAPIError
 
 from pipefy_cli.main import app
@@ -97,7 +97,7 @@ def test_card_get_permission_denied_hint_on_stderr(
     assert "deleted or is not visible" in err
 
 
-def _apply_settings_to_env(monkeypatch: pytest.MonkeyPatch, s: PipefySettings) -> None:
+def _apply_settings_to_env(monkeypatch: pytest.MonkeyPatch, s: ClientSettings) -> None:
     # Service-account credentials live on AuthSettings; the live test inherits
     # them from the operator's existing shell env. Only the API host needs to
     # flow into the subprocess CLI invocation.

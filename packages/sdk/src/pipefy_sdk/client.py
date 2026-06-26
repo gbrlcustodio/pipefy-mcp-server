@@ -71,7 +71,7 @@ from pipefy_sdk.services.types import (
 )
 from pipefy_sdk.services.user_service import UserService
 from pipefy_sdk.services.webhook_service import WebhookService
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.settings import ClientSettings
 
 
 @dataclass(frozen=True)
@@ -83,7 +83,7 @@ class Executors:
     internal: GraphQLExecutor
 
 
-def build_executors(settings: PipefySettings, auth: Auth) -> Executors:
+def build_executors(settings: ClientSettings, auth: Auth) -> Executors:
     """Build one executor per Pipefy endpoint from a shared ``settings``/``auth``.
 
     This is the seam that resolves each endpoint URL from settings; the executors
@@ -114,7 +114,7 @@ class PipefyClient:
 
     def __init__(
         self,
-        settings: PipefySettings,
+        settings: ClientSettings,
         *,
         auth: Auth,
     ) -> None:

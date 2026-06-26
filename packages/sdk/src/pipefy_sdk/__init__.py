@@ -52,7 +52,7 @@ from pipefy_sdk.services.types import (
     MePayload,
     copy_card_search,
 )
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.settings import ClientSettings, PipefySettings
 
 __all__ = [
     "__version__",
@@ -73,6 +73,7 @@ __all__ = [
     "BehaviorInput",
     "CardSearch",
     "CardTarget",
+    "ClientSettings",
     "CommentInput",
     "CreateAiAgentInput",
     "CreateAiAutomationInput",

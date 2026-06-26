@@ -516,20 +516,23 @@ async def enrich_permission_denied_error(
     pipe_ids: list[str],
     client: PipefyClient,
 ) -> str | None:
-    """Enrich PERMISSION_DENIED errors with membership guidance.
+    """Enrich PERMISSION_DENIED errors with membership guidance for the caller.
 
     When the exception contains a ``PERMISSION_DENIED`` GraphQL error code,
-    checks each ``pipe_id`` for membership and returns an actionable message
-    identifying which pipe(s) the service account is not a member of.
+    resolves the acting (authenticated) identity via ``get_me`` and checks each
+    ``pipe_id`` for that identity's membership, returning an actionable message
+    naming the pipe(s) it is not a member of. The failed call was made as the
+    acting identity, so keying on the caller (rather than a configured list) is
+    what makes "you are not a member of pipe X" accurate.
 
-    Returns ``None`` when the error is not PERMISSION_DENIED, when the service
-    account is already a member, or when enrichment itself fails (timeout,
-    network error). The caller falls back to its standard error path.
+    Returns ``None`` when the error is not PERMISSION_DENIED, when the caller is
+    already a member, or when enrichment itself fails (timeout, network error).
+    The caller falls back to its standard error path.
 
     Args:
         exc: GraphQL exception from a cross-pipe operation.
         pipe_ids: Pipe IDs involved in the operation (source + target).
-        client: PipefyClient for membership lookups.
+        client: PipefyClient for the caller identity and membership lookups.
     """
     codes = extract_graphql_error_codes(exc)
     if _PERMISSION_DENIED_CODE not in codes:
@@ -541,8 +544,10 @@ async def enrich_permission_denied_error(
 
     timeout = _settings_mod.settings.mcp.permission_denied_enrichment_timeout_seconds
     try:
-        results = await asyncio.wait_for(
+        # Resolve the caller identity and the pipe memberships under one budget.
+        gathered = await asyncio.wait_for(
             asyncio.gather(
+                client.get_me(),
                 *(client.get_pipe_members(pid) for pid in unique_ids),
                 return_exceptions=True,
             ),
@@ -551,21 +556,37 @@ async def enrich_permission_denied_error(
     except (TimeoutError, asyncio.TimeoutError):
         return None
 
+    me_result, *results = gathered
+    caller_id: str | None = None
+    if not isinstance(me_result, BaseException) and me_result:
+        caller_id = str(me_result["id"]) if me_result.get("id") else None
+
     missing_pipes: list[str] = []
     for pid, result in zip(unique_ids, results):
         if isinstance(result, BaseException):
             missing_pipes.append(
-                f"Could not verify membership for pipe {pid}. "
-                f"Check if the service account is a member; use invite_members if not."
+                f"Could not verify your membership for pipe {pid}. "
+                f"Check if the acting identity is a member; use invite_members if not."
             )
             continue
         members = result.get("pipe", {}).get("members") or []
         pipe_name = result.get("pipe", {}).get("name") or f"pipe {pid}"
         if not members:
             missing_pipes.append(
-                f"Service account may not be a member of {pipe_name} (ID: {pid}). "
-                f"Use invite_members to add it."
+                f"You may not be a member of {pipe_name} (ID: {pid}). "
+                f"Use invite_members to add the acting identity."
             )
+        elif caller_id is not None:
+            member_ids = {
+                str(m.get("user", {}).get("id", ""))
+                for m in members
+                if isinstance(m, dict)
+            }
+            if caller_id not in member_ids:
+                missing_pipes.append(
+                    f"You are not a member of {pipe_name} (ID: {pid}). "
+                    f"Use invite_members to add the acting identity."
+                )
 
     if not missing_pipes:
         return None

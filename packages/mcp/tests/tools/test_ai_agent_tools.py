@@ -41,6 +41,9 @@ def mock_pipefy_client():
     client.get_pipe_members = AsyncMock(return_value={"pipe": {"members": []}})
     client.get_phase_allowed_move_targets = AsyncMock()
     client.get_phase_fields = AsyncMock(return_value={"fields": []})
+    client.get_me = AsyncMock(
+        return_value={"id": "caller", "email": "c@example.com", "name": "Caller"}
+    )
     return client
 
 

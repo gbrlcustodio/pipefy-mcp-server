@@ -10,7 +10,6 @@ from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pipefy_infra.config import (
-    InsecureUrlSettings,
     PipefyBaseSettings,
     PipefyTomlConfigSource,
     config_dir,
@@ -189,8 +188,16 @@ class _PrefixedSettings(PipefyBaseSettings):
     alpha: str = Field(default="default-alpha")
 
 
-class _PrefixedInsecure(InsecureUrlSettings):
+class _PrefixedInsecure(PipefyBaseSettings):
+    # Mirrors the shared-flag pattern (a cross-cutting field pinned to one
+    # canonical env var via an explicit alias) on top of the prefix-isolating
+    # base, exercising _AliasOwnsEnvNameMixin under a non-matching prefix.
     model_config = SettingsConfigDict(env_prefix="PIPEFY_SAMPLE_")
+
+    allow_insecure_urls: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
+    )
 
 
 def test_base_subclass_merges_config_keys() -> None:

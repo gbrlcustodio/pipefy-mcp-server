@@ -187,26 +187,6 @@ class PipefyBaseSettings(BaseSettings):
         )
 
 
-class InsecureUrlSettings(PipefyBaseSettings):
-    """Base for settings models that gate their URLs behind one shared flag.
-
-    Adds ``allow_insecure_urls``, read only from ``PIPEFY_ALLOW_INSECURE_URLS``;
-    the subclass's ``env_prefix`` does not apply to it (the explicit alias is its
-    sole env name, enforced by the prefix-isolating env source), so the whole
-    deployment has a single insecure-URL posture rather than a per-model toggle.
-    """
-
-    allow_insecure_urls: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
-        description=(
-            "When true (env: PIPEFY_ALLOW_INSECURE_URLS), URLs may use http:// "
-            "and internal hosts; local development only, do not enable in "
-            "production."
-        ),
-    )
-
-
 class _ClientEnv(PipefyBaseSettings):
     """Reads the ``PIPEFY_*`` SDK-client knobs from env / ``.env`` / TOML.
 
@@ -286,7 +266,6 @@ def read_auth_env() -> dict[str, Any]:
 
 
 __all__ = [
-    "InsecureUrlSettings",
     "PipefyBaseSettings",
     "PipefyTomlConfigSource",
     "config_dir",

@@ -29,9 +29,13 @@ _AUTH_ENV_KEYS = (
 
 
 def _service_account_auth_settings() -> AuthSettings:
+    # ``service_account_token_url`` is injected by the edge (from the SDK
+    # ``base_url``); supply it here so ``to_service_account()`` yields a complete
+    # triple and the service-account tier resolves.
     return AuthSettings(
         service_account_client_id="client_id",
         service_account_client_secret="client_secret",
+        service_account_token_url="https://api.pipefy.com/oauth/token",
     )
 
 

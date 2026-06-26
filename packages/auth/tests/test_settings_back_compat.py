@@ -1,8 +1,12 @@
-"""Env-var resolution and normalization for the renamed ``PIPEFY_AUTH_*`` knobs.
+"""Auth settings: the pure value object plus the ``PIPEFY_AUTH_*`` env contract.
 
-Covers the issuer default and its env override, the ``disable_stored_session``
-kill-switch, and ``keychain_backend`` normalization / validation. These pin the
-env-var names and value handling after the ``PIPEFY_AUTH_`` prefix rename.
+``AuthSettings`` is a pure value object now: it validates kwargs but reads no env.
+The ``PIPEFY_AUTH_*`` / ``PIPEFY_TOKEN`` / ``PIPEFY_SERVICE_ACCOUNT_*`` env-name
+contract (and the no-leak guarantee) lives in the edge reader
+:func:`pipefy_infra.config.read_auth_env`, exercised here against the auth field
+names it feeds. ``base_url`` is no longer an auth field: the OAuth token URL is
+injected as ``service_account_token_url`` (derived from the SDK base_url and
+covered by the CLI / MCP resolver tests).
 """
 
 from __future__ import annotations
@@ -11,6 +15,7 @@ import os
 from pathlib import Path
 
 import pytest
+from pipefy_infra.config import read_auth_env
 
 from pipefy_auth.settings import AuthSettings
 
@@ -19,10 +24,9 @@ from pipefy_auth.settings import AuthSettings
 def _clean_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Clear every ``PIPEFY_*`` env and pin ``PIPEFY_CONFIG_FILE`` at a tmp path.
 
-    These tests assert prod defaults (issuer, base_url, kill-switch off) and the
-    absence of leaked credentials, so any ambient ``PIPEFY_*`` var or a stray
-    ``~/.config/pipefy/config.toml`` on a dev machine would otherwise bleed in
-    and fail them. Mirrors ``test_settings_toml_source.py::_isolate_env``.
+    The reader tests assert prod defaults and the absence of leaked credentials,
+    so any ambient ``PIPEFY_*`` var or a stray ``~/.config/pipefy/config.toml``
+    on a dev machine would otherwise bleed in.
     """
     for key in list(os.environ):
         if key.startswith("PIPEFY_") or key in {"XDG_CONFIG_HOME", "APPDATA"}:
@@ -30,37 +34,12 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(tmp_path / "config.toml"))
 
 
-@pytest.mark.unit
-def test_bare_name_env_vars_do_not_leak_into_auth_settings(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """Unprefixed env vars (``BASE_URL``, ``STATIC_TOKEN``, ...) must not be honored.
-
-    pydantic-settings env loading is case-insensitive by default, so an
-    unprefixed alias on ``AliasChoices`` would let any bare-name env var
-    on the host bleed into Pipefy auth settings, an auth-redirect /
-    credential-leak primitive.
-    """
-    monkeypatch.setenv("BASE_URL", "https://evil.example.com")
-    monkeypatch.setenv("STATIC_TOKEN", "leaked")
-    monkeypatch.setenv("ALLOW_INSECURE_URLS", "true")
-    settings = AuthSettings()
-    assert settings.base_url == "https://app.pipefy.com"  # default, not leaked
-    assert settings.static_token is None
-    assert settings.allow_insecure_urls is False
-
-
-@pytest.mark.unit
-def test_base_url_defaults_to_prod():
-    """``AuthSettings()`` with no env defaults to the Pipefy prod API host."""
-    settings = AuthSettings()
-    assert settings.base_url == "https://app.pipefy.com"
-    assert settings.service_account_url == "https://app.pipefy.com/oauth/token"
-
-
+# --------------------------------------------------------------------------- #
+# Pure value object: validation, normalization, projection (kwargs, no env).
+# --------------------------------------------------------------------------- #
 @pytest.mark.unit
 def test_issuer_url_defaults_to_pipefy_prod_idp():
-    """``AuthSettings()`` with no env defaults to the Pipefy prod IdP."""
+    """``AuthSettings()`` with no kwargs defaults to the Pipefy prod IdP."""
     settings = AuthSettings()
     assert settings.issuer_url == "https://signin.pipefy.com/realms/pipefy"
     oidc = settings.to_oidc_client()
@@ -68,75 +47,56 @@ def test_issuer_url_defaults_to_pipefy_prod_idp():
 
 
 @pytest.mark.unit
-def test_pipefy_base_url_env_drives_service_account_url(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """``PIPEFY_BASE_URL`` flows into the ``service_account_url`` computed field."""
-    monkeypatch.setenv("PIPEFY_BASE_URL", "https://staging.example.com")
-    settings = AuthSettings()
-    assert settings.base_url == "https://staging.example.com"
-    assert settings.service_account_url == "https://staging.example.com/oauth/token"
+def test_service_account_token_url_is_injected_not_derived():
+    """The token URL is injected (from the SDK base_url), not read off auth."""
+    settings = AuthSettings(
+        service_account_token_url="https://staging.example.com/oauth/token",
+        service_account_client_id="cid",
+        service_account_client_secret="sec",
+    )
+    sa = settings.to_service_account()
+    assert sa is not None
+    assert sa.token_url == "https://staging.example.com/oauth/token"
 
 
 @pytest.mark.unit
-def test_pipefy_auth_issuer_url_env_overrides_default(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """``PIPEFY_AUTH_ISSUER_URL`` overrides the default issuer URL."""
-    monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "https://other.example.com/realms/x")
-    settings = AuthSettings()
-    assert settings.issuer_url == "https://other.example.com/realms/x"
+def test_to_service_account_is_none_without_token_url():
+    """An incomplete triple (no injected token URL) projects to None."""
+    settings = AuthSettings(
+        service_account_client_id="cid", service_account_client_secret="sec"
+    )
+    assert settings.to_service_account() is None
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    "env_key",
-    ["PIPEFY_BASE_URL", "PIPEFY_AUTH_ISSUER_URL"],
-)
-def test_empty_url_env_raises(monkeypatch: pytest.MonkeyPatch, env_key: str):
-    """Empty URL env values are rejected at construction (no opt-out overload)."""
+def test_empty_issuer_url_rejected():
+    """An empty ``issuer_url`` is rejected by pattern validation at construction."""
     from pydantic import ValidationError
 
-    monkeypatch.setenv(env_key, "")
     with pytest.raises(ValidationError, match="should match pattern"):
-        AuthSettings()
+        AuthSettings(issuer_url="")
 
 
 @pytest.mark.unit
-def test_base_url_strips_surrounding_whitespace(monkeypatch: pytest.MonkeyPatch):
-    """Whitespace-padded env values from copy-paste are stripped before pattern."""
-    monkeypatch.setenv("PIPEFY_BASE_URL", "  https://staging.example.com\t")
-    settings = AuthSettings()
-    assert settings.base_url == "https://staging.example.com"
+def test_insecure_issuer_rejected_without_injected_flag():
+    """http:// issuers are rejected unless the injected insecure flag is set."""
+    with pytest.raises(ValueError):
+        AuthSettings(issuer_url="http://idp.internal/realms/x")
 
 
 @pytest.mark.unit
-def test_base_url_accepts_uppercase_scheme(monkeypatch: pytest.MonkeyPatch):
-    """RFC 3986 section 3.1: URL scheme is case-insensitive."""
-    monkeypatch.setenv("PIPEFY_BASE_URL", "HTTPS://staging.example.com")
-    settings = AuthSettings()
-    assert settings.base_url == "HTTPS://staging.example.com"
+def test_insecure_issuer_allowed_with_injected_flag():
+    """The injected allow_insecure_urls relaxes the issuer scheme / host gate."""
+    settings = AuthSettings(
+        issuer_url="http://127.0.0.1:8080/realms/x", allow_insecure_urls=True
+    )
+    assert settings.issuer_url == "http://127.0.0.1:8080/realms/x"
 
 
 @pytest.mark.unit
-def test_service_account_url_strips_trailing_slash_on_base(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """A trailing slash on ``PIPEFY_BASE_URL`` doesn't double the joiner."""
-    monkeypatch.setenv("PIPEFY_BASE_URL", "https://staging.example.com/")
-    settings = AuthSettings()
-    assert settings.service_account_url == "https://staging.example.com/oauth/token"
-
-
-@pytest.mark.unit
-def test_disable_stored_session_env_var_parses_true(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """``PIPEFY_AUTH_DISABLE_STORED_SESSION=1`` flips the kill-switch on."""
-    monkeypatch.setenv("PIPEFY_AUTH_DISABLE_STORED_SESSION", "1")
-    settings = AuthSettings()
-    assert settings.disable_stored_session is True
-    assert settings.to_oidc_client() is None
+def test_disable_stored_session_projects_to_no_oidc_client():
+    """The kill-switch turns off the stored-session tier."""
+    assert AuthSettings(disable_stored_session=True).to_oidc_client() is None
 
 
 @pytest.mark.unit
@@ -148,14 +108,6 @@ def test_disable_stored_session_defaults_to_false_with_oidc_client_present():
 
 
 @pytest.mark.unit
-def test_keychain_backend_env_var_parses_file(monkeypatch: pytest.MonkeyPatch):
-    """``PIPEFY_AUTH_KEYCHAIN_BACKEND=file`` picks the file backend choice."""
-    monkeypatch.setenv("PIPEFY_AUTH_KEYCHAIN_BACKEND", "file")
-    settings = AuthSettings()
-    assert settings.keychain_backend == "file"
-
-
-@pytest.mark.unit
 def test_keychain_backend_defaults_to_auto():
     """Default settings preserve the OS-keyring auto-discovery."""
     assert AuthSettings().keychain_backend == "auto"
@@ -163,20 +115,17 @@ def test_keychain_backend_defaults_to_auto():
 
 @pytest.mark.unit
 @pytest.mark.parametrize("bad", ["plaintext", "", "   "])
-def test_keychain_backend_rejects_unknown_value(
-    monkeypatch: pytest.MonkeyPatch, bad: str
-):
-    """Only ``auto`` and ``file`` are valid; anything else (including empty / whitespace-only) raises."""
+def test_keychain_backend_rejects_unknown_value(bad: str):
+    """Only ``auto`` and ``file`` are valid; anything else (incl. empty/blank) raises."""
     from pydantic import ValidationError
 
-    monkeypatch.setenv("PIPEFY_AUTH_KEYCHAIN_BACKEND", bad)
     with pytest.raises(ValidationError):
-        AuthSettings()
+        AuthSettings(keychain_backend=bad)
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(
-    ("env_value", "expected"),
+    ("value", "expected"),
     [
         ("AUTO", "auto"),
         (" AUTO ", "auto"),
@@ -185,21 +134,62 @@ def test_keychain_backend_rejects_unknown_value(
         ("\tauto\n", "auto"),
     ],
 )
-def test_keychain_backend_normalizes_case_and_whitespace(
-    monkeypatch: pytest.MonkeyPatch, env_value: str, expected: str
-):
-    """``_normalize_keychain_backend`` strip+lowers so copy-paste env values still match the Literal."""
-    monkeypatch.setenv("PIPEFY_AUTH_KEYCHAIN_BACKEND", env_value)
-    settings = AuthSettings()
-    assert settings.keychain_backend == expected
+def test_keychain_backend_normalizes_case_and_whitespace(value: str, expected: str):
+    """``_normalize_keychain_backend`` strip+lowers so copy-paste values still match."""
+    assert AuthSettings(keychain_backend=value).keychain_backend == expected
+
+
+# --------------------------------------------------------------------------- #
+# Env-name contract: read_auth_env owns PIPEFY_AUTH_* / PIPEFY_TOKEN / ...
+# --------------------------------------------------------------------------- #
+@pytest.mark.unit
+def test_reader_maps_pipefy_auth_issuer_url(monkeypatch: pytest.MonkeyPatch):
+    """``PIPEFY_AUTH_ISSUER_URL`` feeds the ``issuer_url`` field."""
+    monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "https://other.example.com/realms/x")
+    raw = read_auth_env()
+    assert raw["issuer_url"] == "https://other.example.com/realms/x"
+    assert AuthSettings(**raw).issuer_url == "https://other.example.com/realms/x"
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("padded", [" 1 ", " true ", "\tfalse\n"])
-def test_keychain_backend_and_kill_switch_strip_whitespace(
-    monkeypatch: pytest.MonkeyPatch, padded: str
-):
-    """Stray whitespace on env values is stripped before Literal / bool parsing."""
-    monkeypatch.setenv("PIPEFY_AUTH_DISABLE_STORED_SESSION", padded)
-    # No raise: bool parser sees the stripped value.
-    AuthSettings()
+def test_reader_maps_canonical_credential_vars(monkeypatch: pytest.MonkeyPatch):
+    """The credentials keep their canonical (unprefixed) env names through the reader."""
+    monkeypatch.setenv("PIPEFY_TOKEN", "tok")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
+    raw = read_auth_env()
+    assert raw["static_token"] == "tok"
+    assert raw["service_account_client_id"] == "cid"
+    assert raw["service_account_client_secret"] == "sec"
+
+
+@pytest.mark.unit
+def test_reader_parses_disable_stored_session(monkeypatch: pytest.MonkeyPatch):
+    """``PIPEFY_AUTH_DISABLE_STORED_SESSION=1`` parses to a bool at the reader."""
+    monkeypatch.setenv("PIPEFY_AUTH_DISABLE_STORED_SESSION", "1")
+    assert read_auth_env()["disable_stored_session"] is True
+
+
+@pytest.mark.unit
+def test_reader_reads_keychain_backend(monkeypatch: pytest.MonkeyPatch):
+    """``PIPEFY_AUTH_KEYCHAIN_BACKEND`` is read raw (the model normalizes it)."""
+    monkeypatch.setenv("PIPEFY_AUTH_KEYCHAIN_BACKEND", "file")
+    assert read_auth_env()["keychain_backend"] == "file"
+
+
+@pytest.mark.unit
+def test_bare_name_env_vars_do_not_leak_through_reader(monkeypatch: pytest.MonkeyPatch):
+    """Unprefixed / wrong-prefixed env vars must not be honored by the reader.
+
+    pydantic-settings env loading is case-insensitive, so an unprefixed alias
+    would let any bare-name host var bleed into Pipefy auth, an auth-redirect /
+    credential-leak primitive. The canonical aliases are the sole env names.
+    """
+    monkeypatch.setenv("BASE_URL", "https://evil.example.com")
+    monkeypatch.setenv("STATIC_TOKEN", "leaked")
+    monkeypatch.setenv("TOKEN", "leaked")
+    monkeypatch.setenv("ISSUER_URL", "https://evil.example.com/realms/x")
+    # Prefixed forms of the alias-pinned credential are inert too (the alias is
+    # the sole env name, per _AliasOwnsEnvNameMixin).
+    monkeypatch.setenv("PIPEFY_AUTH_STATIC_TOKEN", "leaked")
+    assert read_auth_env() == {}

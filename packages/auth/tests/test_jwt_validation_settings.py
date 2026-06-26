@@ -96,10 +96,11 @@ def test_insecure_issuer_rejected_without_allow_flag():
 
 
 @pytest.mark.unit
-def test_insecure_issuer_allowed_with_shared_env_flag(monkeypatch: pytest.MonkeyPatch):
-    """allow_insecure_urls reads the shared PIPEFY_ALLOW_INSECURE_URLS var."""
-    monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
-    settings = JwtValidationSettings(issuer_url="http://127.0.0.1:8080/realms/x")
+def test_insecure_issuer_allowed_with_injected_flag():
+    """The injected allow_insecure_urls relaxes the scheme / internal-host gate."""
+    settings = JwtValidationSettings(
+        issuer_url="http://127.0.0.1:8080/realms/x", allow_insecure_urls=True
+    )
     assert settings.allow_insecure_urls is True
     assert settings.issuer_url == "http://127.0.0.1:8080/realms/x"
 
@@ -126,11 +127,10 @@ def test_insecure_jwks_uri_rejected_without_allow_flag():
 
 
 @pytest.mark.unit
-def test_insecure_jwks_uri_allowed_with_shared_env_flag(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    """allow_insecure_urls relaxes the scheme and internal-host gate for jwks_uri."""
-    monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
-    settings = JwtValidationSettings(jwks_uri="http://127.0.0.1/certs")
+def test_insecure_jwks_uri_allowed_with_injected_flag():
+    """The injected allow_insecure_urls relaxes the scheme / internal-host gate for jwks_uri."""
+    settings = JwtValidationSettings(
+        jwks_uri="http://127.0.0.1/certs", allow_insecure_urls=True
+    )
     assert settings.allow_insecure_urls is True
     assert settings.jwks_uri == "http://127.0.0.1/certs"

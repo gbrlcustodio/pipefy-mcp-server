@@ -1,28 +1,41 @@
+"""MCP application settings: pure value objects built at the edge by a resolver.
+
+The shared SDK / auth value objects are constructed from the ``pipefy_infra``
+edge readers (:func:`read_client_env`, :func:`read_auth_env`); the MCP-only
+models (``McpSettings``, ``JwtValidationSettings``, ``ResourceServerSettings``)
+are built from MCP-owned readers in this module. ``base_url`` is read once (into
+the SDK settings) and the auth OAuth token URL plus the shared insecure-URL
+posture follow by injection.
+
+The module-level ``settings`` is a lazily-built singleton (PEP 562
+``__getattr__``): the first attribute access resolves it once, so importing this
+module does no env / file IO and tests can set env before the first read.
+"""
+
 from __future__ import annotations
 
-from typing import Self
+from typing import Any, Self
 
 from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_infra import security
-from pipefy_infra.config import InsecureUrlSettings, PipefyBaseSettings
+from pipefy_infra.config import (
+    PipefyBaseSettings,
+    read_auth_env,
+    read_client_env,
+)
 from pipefy_sdk import ClientSettings
-from pydantic import Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import AliasChoices, BaseModel, Field, ValidationError, model_validator
+from pydantic_settings import SettingsConfigDict
 
 
-class McpSettings(PipefyBaseSettings):
+class McpSettings(BaseModel):
     """MCP-server runtime knobs: transport, tool exposure, and envelope shape.
 
-    These are consumed only by the MCP server, so they live here rather than in
-    the SDK's API-connection settings. Fields drop the ``mcp_`` prefix because
-    the ``settings.mcp`` namespace already supplies it; ``env_prefix="PIPEFY_MCP_"``
-    re-attaches it so the operator-facing ``PIPEFY_MCP_*`` env vars stay
-    byte-identical. The shared ``config.toml`` source keys off the bare field
-    names, so TOML keys are ``unified_envelope``, ``remote_mode``, ``host``,
-    ``port``.
+    A pure value object consumed only by the MCP server. The edge builds it from
+    :func:`read_mcp_env`; see that reader for the ``PIPEFY_MCP_*`` env-name
+    contract (and the one exception, the enrichment timeout, which keeps its
+    historical ``PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS`` name).
     """
-
-    model_config = SettingsConfigDict(env_prefix="PIPEFY_MCP_")
 
     unified_envelope: bool = Field(
         default=True,
@@ -61,8 +74,20 @@ class McpSettings(PipefyBaseSettings):
         ),
     )
 
+    permission_denied_enrichment_timeout_seconds: float = Field(
+        default=5.0,
+        ge=0.1,
+        le=120.0,
+        description=(
+            "Max wall time (seconds) for membership lookups when enriching GraphQL "
+            "PERMISSION_DENIED errors (env: "
+            "PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS). The enrichment "
+            "code is MCP-only, so this lives here rather than on the SDK settings."
+        ),
+    )
 
-class ResourceServerSettings(InsecureUrlSettings):
+
+class ResourceServerSettings(BaseModel):
     """This MCP server's identity as an OAuth protected resource (HTTP profile).
 
     The resource-server profile activates when ``resource_server_url`` is set: the
@@ -72,14 +97,14 @@ class ResourceServerSettings(InsecureUrlSettings):
     Token *validation* knobs (issuer, audience, JWKS) are an auth concern and live
     in :class:`pipefy_auth.JwtValidationSettings`, alongside the validator they
     feed. This model carries only what is specific to *this* server's resource
-    identity: its public URL and the scopes it requires.
-
-    ``env_prefix="PIPEFY_MCP_RS_"`` does not collide with ``McpSettings``'
-    ``PIPEFY_MCP_``: that model has no ``rs_*`` fields, so ``PIPEFY_MCP_RS_*``
-    vars fall through its ``extra="ignore"`` gate.
+    identity: its public URL and the scopes it requires. A pure value object;
+    ``allow_insecure_urls`` is injected.
     """
 
-    model_config = SettingsConfigDict(env_prefix="PIPEFY_MCP_RS_")
+    allow_insecure_urls: bool = Field(
+        default=False,
+        description="Shared insecure-URL posture, injected from PIPEFY_ALLOW_INSECURE_URLS.",
+    )
 
     resource_server_url: str | None = Field(
         default=None,
@@ -113,19 +138,13 @@ class ResourceServerSettings(InsecureUrlSettings):
         return self
 
 
-class Settings(BaseSettings):
-    """Application configuration via pydantic-settings.
+class Settings(BaseModel):
+    """Composite of the MCP application's settings (pure value object).
 
-    Each nested model owns its own env loading under its own ``env_prefix``
-    (``PIPEFY_``, ``PIPEFY_AUTH_``, ``PIPEFY_MCP_``, ``PIPEFY_JWT_``,
-    ``PIPEFY_MCP_RS_``). The composition deliberately does NOT set
-    ``env_nested_delimiter``: that flag would split a matching env var (e.g.
-    ``AUTH_BASE_URL``) into a nested path, bypassing each model's prefix gate and
-    letting unprefixed env vars hijack auth fields. Each nested model runs its
-    own SSRF / shape checks at construction.
+    Built by :func:`resolve_settings` at the edge; it reads no env itself. The
+    fields default to bare value objects so partial construction (e.g. in tests)
+    works, but the resolver always supplies all five explicitly.
     """
-
-    model_config = SettingsConfigDict(extra="ignore")
 
     sdk: ClientSettings = Field(default_factory=ClientSettings)
     auth: AuthSettings = Field(default_factory=AuthSettings)
@@ -134,14 +153,126 @@ class Settings(BaseSettings):
     rs: ResourceServerSettings = Field(default_factory=ResourceServerSettings)
 
 
-settings = Settings()
+# --------------------------------------------------------------------------- #
+# Edge readers (MCP-owned): import no domain type, run no SSRF / shape gate.
+# --------------------------------------------------------------------------- #
+class _McpEnv(PipefyBaseSettings):
+    """Reads the ``PIPEFY_MCP_*`` knobs (plus the historical enrichment-timeout var)."""
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_MCP_")
+
+    unified_envelope: bool | None = Field(default=None)
+    remote_mode: bool | None = Field(default=None)
+    host: str | None = Field(default=None)
+    port: int | None = Field(default=None)
+    # Keeps its pre-relocation env name (not PIPEFY_MCP_*) so the move from the
+    # SDK settings to McpSettings is structural, with no operator-facing change.
+    permission_denied_enrichment_timeout_seconds: float | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS"
+        ),
+    )
+
+
+class _RsEnv(PipefyBaseSettings):
+    """Reads the ``PIPEFY_MCP_RS_*`` resource-server identity knobs."""
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_MCP_RS_")
+
+    resource_server_url: str | None = Field(default=None)
+    required_scopes: list[str] | None = Field(default=None)
+
+
+class _JwtEnv(PipefyBaseSettings):
+    """Reads the ``PIPEFY_JWT_*`` inbound-validation knobs.
+
+    The inbound issuer override is read from the distinct TOML key
+    ``jwt_issuer_url`` (env still ``PIPEFY_JWT_ISSUER_URL``) so it no longer
+    collides with auth's outbound ``issuer_url`` TOML key; :func:`read_jwt_env`
+    maps it back onto the model's ``issuer_url`` field.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_JWT_")
+
+    jwt_issuer_url: str | None = Field(
+        default=None, validation_alias=AliasChoices("PIPEFY_JWT_ISSUER_URL")
+    )
+    audience: str | None = Field(default=None)
+    verify_audience: bool | None = Field(default=None)
+    jwks_uri: str | None = Field(default=None)
+
+
+def read_mcp_env() -> dict[str, Any]:
+    """Read the ``PIPEFY_MCP_*`` knobs as a raw mapping (operator-set keys only)."""
+    return _McpEnv().model_dump(exclude_unset=True)
+
+
+def read_rs_env() -> dict[str, Any]:
+    """Read the ``PIPEFY_MCP_RS_*`` knobs as a raw mapping (operator-set keys only)."""
+    return _RsEnv().model_dump(exclude_unset=True)
+
+
+def read_jwt_env() -> dict[str, Any]:
+    """Read the ``PIPEFY_JWT_*`` knobs, mapping ``jwt_issuer_url`` -> ``issuer_url``."""
+    raw = _JwtEnv().model_dump(exclude_unset=True)
+    if "jwt_issuer_url" in raw:
+        raw["issuer_url"] = raw.pop("jwt_issuer_url")
+    return raw
+
+
+def resolve_settings() -> Settings:
+    """Build the composite settings from the edge readers, with injection.
+
+    Raises:
+        ValueError: When validation fails (e.g. SSRF guard); message is user-facing.
+    """
+    try:
+        sdk = ClientSettings(**read_client_env())
+        auth = AuthSettings(
+            **read_auth_env(),
+            service_account_token_url=sdk.oauth_token_url,
+            allow_insecure_urls=sdk.allow_insecure_urls,
+        )
+        mcp = McpSettings(**read_mcp_env())
+        jwt = JwtValidationSettings(
+            **read_jwt_env(), allow_insecure_urls=sdk.allow_insecure_urls
+        )
+        rs = ResourceServerSettings(
+            **read_rs_env(), allow_insecure_urls=sdk.allow_insecure_urls
+        )
+        return Settings(sdk=sdk, auth=auth, mcp=mcp, jwt=jwt, rs=rs)
+    except ValidationError as exc:
+        raise ValueError(str(exc)) from exc
+
+
+_settings: Settings | None = None
+
+
+def __getattr__(name: str) -> Any:
+    # Lazily build and cache the singleton on first access, so importing this
+    # module does no IO. ``from pipefy_mcp.settings import settings`` and
+    # ``pipefy_mcp.settings.settings`` both route through here.
+    if name == "settings":
+        global _settings
+        if _settings is None:
+            _settings = resolve_settings()
+        return _settings
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "AuthSettings",
-    "JwtValidationSettings",
     "ClientSettings",
+    "JwtValidationSettings",
     "McpSettings",
     "ResourceServerSettings",
     "Settings",
-    "settings",
+    "read_jwt_env",
+    "read_mcp_env",
+    "read_rs_env",
+    "resolve_settings",
 ]
+# ``settings`` is intentionally omitted: it is a lazily-built singleton served by
+# the module ``__getattr__`` above, not a module-level binding. Import it
+# explicitly (``from pipefy_mcp.settings import settings``).

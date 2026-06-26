@@ -1,17 +1,24 @@
-"""Tests for ``Settings`` / ``ClientSettings`` (env loading and coercion)."""
+"""Tests for ``Settings`` / ``ClientSettings`` (env loading and coercion).
+
+The settings models are pure value objects; env / ``.env`` / TOML reading lives
+in :func:`resolve_settings` (via the edge readers). Env-driven behavior is
+therefore exercised through ``resolve_settings()``, the real end-to-end path,
+while pure value-object behavior (defaults, coercion, SSRF gates) is exercised by
+constructing the models directly.
+"""
 
 import pytest
 from pipefy_sdk import ClientSettings
 from pydantic import ValidationError
 
-from pipefy_mcp.settings import McpSettings, Settings
+from pipefy_mcp.settings import McpSettings, resolve_settings
 
 
 @pytest.mark.unit
 def test_internal_api_url_derived_from_base_url(monkeypatch):
     """``PIPEFY_BASE_URL`` flows into the computed ``internal_api_url``."""
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://custom.pipefy.com")
-    settings = Settings()
+    settings = resolve_settings()
     assert settings.sdk.internal_api_url == "https://custom.pipefy.com/internal_api"
 
 
@@ -38,26 +45,27 @@ def test_pipefy_settings_allow_insecure_urls_permits_http_localhost():
 @pytest.mark.unit
 def test_allow_insecure_urls_from_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
-    settings = Settings()
+    settings = resolve_settings()
     assert settings.sdk.allow_insecure_urls is True
 
 
 @pytest.mark.unit
 def test_permission_denied_enrichment_timeout_defaults_to_five():
-    assert ClientSettings().permission_denied_enrichment_timeout_seconds == 5.0
+    assert McpSettings().permission_denied_enrichment_timeout_seconds == 5.0
 
 
 @pytest.mark.unit
 def test_permission_denied_enrichment_timeout_rejects_too_low():
     with pytest.raises(ValidationError):
-        ClientSettings(permission_denied_enrichment_timeout_seconds=0.05)
+        McpSettings(permission_denied_enrichment_timeout_seconds=0.05)
 
 
 @pytest.mark.unit
 def test_permission_denied_enrichment_timeout_from_env(monkeypatch):
+    """The historical (non-``PIPEFY_MCP_*``) env name still feeds ``settings.mcp``."""
     monkeypatch.setenv("PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS", "8.5")
-    settings = Settings()
-    assert settings.sdk.permission_denied_enrichment_timeout_seconds == 8.5
+    settings = resolve_settings()
+    assert settings.mcp.permission_denied_enrichment_timeout_seconds == 8.5
 
 
 @pytest.mark.unit
@@ -68,7 +76,7 @@ def test_gql_reuse_fetched_graphql_schema_defaults_to_false():
 @pytest.mark.unit
 def test_gql_reuse_fetched_graphql_schema_from_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_GQL_REUSE_FETCHED_GRAPHQL_SCHEMA", "true")
-    settings = Settings()
+    settings = resolve_settings()
     assert settings.sdk.gql_reuse_fetched_graphql_schema is True
 
 
@@ -80,7 +88,7 @@ def test_default_webhook_name_defaults():
 @pytest.mark.unit
 def test_default_webhook_name_from_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_DEFAULT_WEBHOOK_NAME", "ACME Inbound")
-    settings = Settings()
+    settings = resolve_settings()
     assert settings.sdk.default_webhook_name == "ACME Inbound"
 
 
@@ -96,8 +104,8 @@ def test_settings_rejects_link_local_base_url(monkeypatch):
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://169.254.169.254")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "csecret")
-    with pytest.raises(ValidationError, match="link-local|private|loopback"):
-        Settings()
+    with pytest.raises(ValueError, match="link-local|private|loopback"):
+        resolve_settings()
 
 
 @pytest.mark.unit
@@ -106,7 +114,7 @@ def test_settings_picks_up_pipefy_token_from_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_TOKEN", "env-bearer")
     monkeypatch.delenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", raising=False)
     monkeypatch.delenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", raising=False)
-    assert Settings().auth.static_token == "env-bearer"
+    assert resolve_settings().auth.static_token == "env-bearer"
 
 
 @pytest.mark.unit
@@ -128,10 +136,11 @@ def test_settings_picks_up_pipefy_token_from_env(monkeypatch):
     ],
 )
 def test_settings_does_not_route_unprefixed_env_into_auth(monkeypatch, leak_env_var):
-    """``env_nested_delimiter`` must NOT be set on the parent, otherwise unprefixed
+    """``env_nested_delimiter`` must NOT be set on the readers, otherwise unprefixed
     env vars like ``AUTH_BASE_URL`` would split into ``auth.base_url`` and bypass
-    :class:`AuthSettings`'s ``env_prefix="PIPEFY_AUTH_"`` gate, enabling a credential /
-    auth-redirect leak. Locks in the security fix that closes the leak.
+    the ``env_prefix="PIPEFY_AUTH_"`` gate, enabling a credential / auth-redirect
+    leak. Asserted against :func:`resolve_settings` (the real env-to-auth path)
+    so the end-to-end reader chain is covered. Locks in the security fix.
     """
     # Clear any host-side ``PIPEFY_*`` env to isolate the leak check.
     for var in (
@@ -145,9 +154,15 @@ def test_settings_does_not_route_unprefixed_env_into_auth(monkeypatch, leak_env_
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv(leak_env_var, "https://attacker.example.com")
-    settings = Settings()
-    assert settings.auth.base_url == "https://app.pipefy.com"
-    assert settings.auth.service_account_url == "https://app.pipefy.com/oauth/token"
+    settings = resolve_settings()
+    # ``base_url`` and the OAuth token endpoint live on the SDK side now; auth no
+    # longer carries ``base_url`` / ``service_account_url``. The leak invariant is
+    # that none of the attacker-controlled vars reach the auth credentials/issuer.
+    assert settings.sdk.base_url == "https://app.pipefy.com"
+    assert (
+        settings.auth.service_account_token_url == "https://app.pipefy.com/oauth/token"
+    )
+    assert settings.auth.issuer_url == "https://signin.pipefy.com/realms/pipefy"
     assert settings.auth.static_token is None
     assert settings.auth.service_account_client_id is None
     assert settings.auth.service_account_client_secret is None
@@ -170,9 +185,11 @@ def test_mcp_settings_loads_from_pipefy_mcp_env(monkeypatch):
     monkeypatch.setenv("PIPEFY_MCP_HOST", "0.0.0.0")
     monkeypatch.setenv("PIPEFY_MCP_PORT", "9100")
     monkeypatch.setenv("PIPEFY_MCP_UNIFIED_ENVELOPE", "false")
+    monkeypatch.setenv("PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS", "7.0")
 
-    mcp = Settings().mcp
+    mcp = resolve_settings().mcp
     assert mcp.remote_mode is True
     assert mcp.host == "0.0.0.0"
     assert mcp.port == 9100
     assert mcp.unified_envelope is False
+    assert mcp.permission_denied_enrichment_timeout_seconds == 7.0

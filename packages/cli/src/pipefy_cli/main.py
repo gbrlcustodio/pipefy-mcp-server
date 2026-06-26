@@ -90,6 +90,7 @@ def main(
         raise typer.Exit(2) from exc
     ctx.obj["client_settings"] = cli_settings.sdk
     ctx.obj["auth_settings"] = cli_settings.auth
+    ctx.obj["org_id"] = cli_settings.org_id
     # Swap the keyring backend before any keychain probe (resolver tier
     # detection, ``auth login``, ``auth status``). No-op when ``auto``.
     configure_keychain_backend(cli_settings.auth.keychain_backend)

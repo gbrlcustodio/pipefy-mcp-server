@@ -1,21 +1,17 @@
-"""Pydantic model for auth-related settings (env vars, config file fields).
+"""Pure value objects for auth settings (outbound auth + inbound JWT validation).
 
-Owns every value that describes *how* to authenticate against Pipefy. Its own
-knobs are namespaced under ``PIPEFY_AUTH_*``:
+Owns every value that describes *how* to authenticate against Pipefy. These are
+plain :class:`pydantic.BaseModel` value objects: they validate themselves but
+read no env / file. The application edge builds them from
+:func:`pipefy_infra.config.read_auth_env` (which owns the ``PIPEFY_AUTH_*`` /
+``PIPEFY_TOKEN`` / ``PIPEFY_SERVICE_ACCOUNT_*`` env-name contract) and injects the
+deployment-derived values:
 
-* ``PIPEFY_AUTH_ISSUER_URL``: full OIDC issuer URL for the stored-session tier
-  (default ``https://signin.pipefy.com/realms/pipefy``).
-* ``PIPEFY_AUTH_CLIENT_ID``: OIDC public client id (defaults to
-  :data:`pipefy_auth.identity.DEFAULT_AUTH_CLIENT_ID`).
-* ``PIPEFY_AUTH_DISABLE_STORED_SESSION`` / ``PIPEFY_AUTH_KEYCHAIN_BACKEND``:
-  stored-session tier opt-out and keyring backend selection.
-
-The service-account credentials keep their established names
-(``PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`` / ``_SECRET``), as does the static bearer
-(``PIPEFY_TOKEN``). ``PIPEFY_BASE_URL`` (API host root that drives the OAuth
-token endpoint) and ``PIPEFY_ALLOW_INSECURE_URLS`` are deployment-wide: the same
-vars drive :class:`pipefy_sdk.ClientSettings`, and both models load them
-independently so they stay in sync without cross-package coupling.
+* ``service_account_token_url``: the OAuth token endpoint, derived from the SDK's
+  ``base_url`` (``ClientSettings.oauth_token_url``). Auth never references the SDK
+  type; the caller passes the resolved URL in, so the host root is read once.
+* ``allow_insecure_urls``: the shared insecure-URL posture, injected so the whole
+  deployment toggles together.
 """
 
 from __future__ import annotations
@@ -23,15 +19,12 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pipefy_infra import security
-from pipefy_infra.config import InsecureUrlSettings
 from pydantic import (
-    AliasChoices,
+    BaseModel,
     Field,
-    computed_field,
     field_validator,
     model_validator,
 )
-from pydantic_settings import SettingsConfigDict
 
 from pipefy_auth.identity import (
     DEFAULT_AUTH_CLIENT_ID,
@@ -39,70 +32,45 @@ from pipefy_auth.identity import (
 )
 from pipefy_auth.resolver import ServiceAccount
 
-# Production defaults.
+# Production default.
 DEFAULT_ISSUER_URL = "https://signin.pipefy.com/realms/pipefy"
-DEFAULT_BASE_URL = "https://app.pipefy.com"
 
 # Opaque secret / identifier strings: reject leading / trailing whitespace and
 # blank values. Anything in between is opaque to us (the IdP defines the format).
 _OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
 
 
-class AuthSettings(InsecureUrlSettings):
-    """Auth-related configuration loaded from env / config files.
+class AuthSettings(BaseModel):
+    """Outbound auth configuration: how this process authenticates *to* Pipefy.
 
-    Auth-domain knobs are namespaced under ``PIPEFY_AUTH_*``; the credentials and
-    the deployment-wide ``base_url`` / ``allow_insecure_urls`` keep their canonical
-    names through explicit aliases (see the module docstring). Self-contained: SSRF
-    validation runs inline as a ``model_validator(mode="after")`` hook, so direct
-    construction (`AuthSettings()`) is safe even when not composed under
-    :class:`CliSettings` / :class:`Settings`.
+    A pure value object. The credentials and OIDC knobs are this model's own
+    values (the edge sources them from ``PIPEFY_AUTH_*`` / ``PIPEFY_TOKEN`` /
+    ``PIPEFY_SERVICE_ACCOUNT_*``); ``service_account_token_url`` and
+    ``allow_insecure_urls`` are injected by the caller (see the module docstring).
+    SSRF validation runs inline as a ``model_validator(mode="after")`` so direct
+    construction is safe.
     """
 
-    model_config = SettingsConfigDict(env_prefix="PIPEFY_AUTH_")
-
-    @field_validator(
-        "static_token",
-        "service_account_client_id",
-        "service_account_client_secret",
-        "issuer_url",
-        "client_id",
-        "base_url",
-        "disable_stored_session",
-        mode="before",
+    # Injected by the caller (host topology + shared flag).
+    service_account_token_url: str | None = Field(
+        default=None,
+        description=(
+            "OAuth 2.0 token endpoint for the service-account tier, derived from the "
+            "SDK base_url (ClientSettings.oauth_token_url) and injected by the edge."
+        ),
     )
-    @classmethod
-    def _strip_str(cls, value: object) -> object:
-        if isinstance(value, str):
-            return value.strip()
-        return value
 
-    @field_validator("keychain_backend", mode="before")
-    @classmethod
-    def _normalize_keychain_backend(cls, value: object) -> object:
-        # ``keychain_backend`` is ``Literal["auto", "file"]``; copy-pasted env
-        # values like ``PIPEFY_AUTH_KEYCHAIN_BACKEND=' AUTO '`` should normalize to
-        # ``"auto"`` rather than fail Literal validation with a cryptic enum
-        # error. Case is meaningful for credential fields (kept strict via
-        # ``_strip_str``), so the lowering applies only here.
-        if isinstance(value, str):
-            return value.strip().lower()
-        return value
+    allow_insecure_urls: bool = Field(
+        default=False,
+        description=(
+            "Shared insecure-URL posture, injected from PIPEFY_ALLOW_INSECURE_URLS "
+            "so http:// and internal hosts are gated the same way deployment-wide."
+        ),
+    )
 
-    # The credentials and the shared ``base_url`` carry explicit ``AliasChoices``
-    # so their canonical names survive the ``PIPEFY_AUTH_`` prefix (which would
-    # otherwise mangle them into ``PIPEFY_AUTH_STATIC_TOKEN`` etc.). The aliases
-    # list ONLY the fully-qualified env names: an unprefixed entry would let
-    # pydantic-settings pick up a bare-name env var (``TOKEN``, ``BASE_URL``),
-    # a credential-leak primitive for any host whose env carries those common
-    # names. Kwarg construction by field name (``AuthSettings(static_token=...)``)
-    # still works via ``populate_by_name=True``. The remaining fields
-    # (``issuer_url``, ``client_id``, ``disable_stored_session``,
-    # ``keychain_backend``) take their env names from the prefix.
     static_token: str | None = Field(
         default=None,
         pattern=_OPAQUE_CREDENTIAL_PATTERN,
-        validation_alias=AliasChoices("PIPEFY_TOKEN"),
         description=(
             "Pre-issued bearer for the static-token tier (env: PIPEFY_TOKEN). "
             "When set, outranks both the service-account triple and any stored session."
@@ -112,14 +80,12 @@ class AuthSettings(InsecureUrlSettings):
     service_account_client_id: str | None = Field(
         default=None,
         pattern=_OPAQUE_CREDENTIAL_PATTERN,
-        validation_alias=AliasChoices("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID"),
         description="Service-account OAuth client_id (env: PIPEFY_SERVICE_ACCOUNT_CLIENT_ID).",
     )
 
     service_account_client_secret: str | None = Field(
         default=None,
         pattern=_OPAQUE_CREDENTIAL_PATTERN,
-        validation_alias=AliasChoices("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET"),
         description="Service-account OAuth client_secret (env: PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET).",
     )
 
@@ -140,19 +106,6 @@ class AuthSettings(InsecureUrlSettings):
         description=(
             "OIDC public client id registered at the issuer "
             "(env: PIPEFY_AUTH_CLIENT_ID; rarely overridden)."
-        ),
-    )
-
-    base_url: str = Field(
-        default=DEFAULT_BASE_URL,
-        pattern=security.URL_SHAPE_PATTERN,
-        validation_alias=AliasChoices("PIPEFY_BASE_URL"),
-        description=(
-            "Pipefy API host root (env: PIPEFY_BASE_URL, shared with the SDK). "
-            "Drives the service-account OAuth token endpoint via the "
-            "``service_account_url`` computed property. Mirrors the field of "
-            "the same name on :class:`pipefy_sdk.ClientSettings`; both models "
-            "load it independently from the same env var so they stay in sync."
         ),
     )
 
@@ -179,21 +132,42 @@ class AuthSettings(InsecureUrlSettings):
         ),
     )
 
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def service_account_url(self) -> str:
-        """OAuth 2.0 token endpoint for the service-account tier."""
-        return f"{self.base_url.rstrip('/')}/oauth/token"
+    @field_validator(
+        "static_token",
+        "service_account_client_id",
+        "service_account_client_secret",
+        "issuer_url",
+        "client_id",
+        "disable_stored_session",
+        mode="before",
+    )
+    @classmethod
+    def _strip_str(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @field_validator("keychain_backend", mode="before")
+    @classmethod
+    def _normalize_keychain_backend(cls, value: object) -> object:
+        # ``keychain_backend`` is ``Literal["auto", "file"]``; copy-pasted env
+        # values like ``PIPEFY_AUTH_KEYCHAIN_BACKEND=' AUTO '`` should normalize to
+        # ``"auto"`` rather than fail Literal validation with a cryptic enum
+        # error. Case is meaningful for credential fields (kept strict via
+        # ``_strip_str``), so the lowering applies only here.
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
     def to_service_account(self) -> ServiceAccount | None:
         """Project the triple into a :class:`ServiceAccount`, or ``None`` if incomplete."""
         if (
-            self.service_account_url
+            self.service_account_token_url
             and self.service_account_client_id
             and self.service_account_client_secret
         ):
             return ServiceAccount(
-                token_url=self.service_account_url,
+                token_url=self.service_account_token_url,
                 client_id=self.service_account_client_id,
                 client_secret=self.service_account_client_secret,
             )
@@ -216,16 +190,9 @@ class AuthSettings(InsecureUrlSettings):
 
     @model_validator(mode="after")
     def _validate_endpoint_urls(self) -> Self:
-        # Self-validate so direct ``AuthSettings()`` construction (outside
-        # ``CliSettings`` / ``Settings``) is safe. ``base_url`` derives the
-        # OAuth token endpoint via ``<base_url>/oauth/token`` so it must be a
-        # host root; ``issuer_url`` is the OIDC issuer and may carry a realm path.
-        self.base_url = security.sanitize_url(
-            self.base_url,
-            field_label="base_url",
-            allow_insecure=self.allow_insecure_urls,
-            require_host_root=True,
-        )
+        # ``issuer_url`` is the OIDC issuer and may carry a realm path. The
+        # service-account token URL is injected already-derived from the SDK
+        # base_url (validated there), so it is not re-gated here.
         self.issuer_url = security.sanitize_url(
             self.issuer_url,
             field_label="issuer_url",
@@ -234,28 +201,27 @@ class AuthSettings(InsecureUrlSettings):
         return self
 
 
-class JwtValidationSettings(InsecureUrlSettings):
+class JwtValidationSettings(BaseModel):
     """How this process validates an inbound bearer when it acts as a resource server.
 
     :class:`AuthSettings` configures the *outbound* side: how this process
     authenticates *to* Pipefy. This is the inbound counterpart that feeds
-    :class:`~pipefy_auth.JwtValidator`. It is a separate model, not fields on
-    :class:`AuthSettings`, because only a transport running the OAuth
-    resource-server profile (today, the MCP ``--remote`` HTTP transport) consumes
-    it: a CLI that only authenticates outbound never carries resource-server knobs.
+    :class:`~pipefy_auth.JwtValidator`. A pure value object; the edge sources its
+    fields from ``PIPEFY_JWT_*`` and injects ``allow_insecure_urls``.
 
     ``issuer_url`` is an override. Left unset, the consumer falls back to the
     issuer this process already logs into (the :class:`OidcClient` issuer): in a
     single-realm deployment the IdP that signs caller tokens is the same one we
     authenticate to, so it need not be configured twice. Set it only when inbound
     and outbound issuers diverge (token exchange, multi-tenant federation).
-
-    ``env_prefix="PIPEFY_JWT_"`` keeps these distinct from ``AuthSettings``'
-    ``PIPEFY_AUTH_*`` vars: ``PIPEFY_JWT_ISSUER_URL`` is the inbound override,
-    ``PIPEFY_AUTH_ISSUER_URL`` the outbound issuer.
     """
 
-    model_config = SettingsConfigDict(env_prefix="PIPEFY_JWT_")
+    allow_insecure_urls: bool = Field(
+        default=False,
+        description=(
+            "Shared insecure-URL posture, injected from PIPEFY_ALLOW_INSECURE_URLS."
+        ),
+    )
 
     issuer_url: str | None = Field(
         default=None,

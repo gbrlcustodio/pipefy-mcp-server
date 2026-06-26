@@ -3,69 +3,45 @@ from __future__ import annotations
 from typing import Self
 
 from pipefy_infra import security
-from pipefy_infra.config import InsecureUrlSettings
-from pydantic import Field, computed_field, field_validator, model_validator
-from pydantic_settings import SettingsConfigDict
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 # Canonical Pipefy production API host root.
 DEFAULT_BASE_URL = "https://app.pipefy.com"
 
-# Pipefy organization IDs are ASCII numeric strings (matches the docstring).
-# ``\d`` is Unicode-aware in Python ``re`` (Arabic-Indic ١٢٣, Devanagari १२३,
-# etc. would pass), so pin to ``[0-9]`` for the wire format the API expects.
-_ORG_ID_PATTERN = r"^[0-9]+$"
 
+class ClientSettings(BaseModel):
+    """Pipefy API connection and SDK client-behavior knobs.
 
-class ClientSettings(InsecureUrlSettings):
-    """Pipefy API connection and shared runtime knobs (CLI, scripts).
+    A pure value object: it validates itself but reads no env / file. The
+    application edge constructs it from
+    :func:`pipefy_infra.config.read_client_env` (or explicit kwargs); see that
+    reader for the ``PIPEFY_*`` env-name contract. Credentials live on
+    :class:`pipefy_auth.AuthSettings`, which the caller builds alongside this and
+    injects ``oauth_token_url`` into.
 
-    Endpoint configuration only — credentials live on
-    :class:`pipefy_auth.AuthSettings`. Consumers compose both side by side in
-    their own settings type; each model owns its own env loading so the parent
-    composition does not need ``env_nested_delimiter`` (which routes any
-    matching env var into a nested field — a credential-leak primitive when
-    multiple nested models share field names).
-
-    A single ``PIPEFY_BASE_URL`` drives every API endpoint via
-    :data:`@computed_field` properties (``graphql_url``,
-    ``internal_api_url``, ``interfaces_graphql_url``). Operators on
-    non-prod environments set ``PIPEFY_BASE_URL=https://<api-host>``;
-    operators on prod leave it unset (default Pipefy production).
+    A single ``base_url`` drives every API endpoint via :data:`@computed_field`
+    properties (``graphql_url``, ``internal_api_url``, ``interfaces_graphql_url``,
+    and ``oauth_token_url`` for the auth model to consume).
     """
-
-    model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
     base_url: str = Field(
         default=DEFAULT_BASE_URL,
         pattern=security.URL_SHAPE_PATTERN,
         description=(
-            "Pipefy API host root (env: PIPEFY_BASE_URL). Drives ``graphql_url`` / "
-            "``internal_api_url`` / ``interfaces_graphql_url`` (and the OAuth "
-            "token endpoint on :class:`pipefy_auth.AuthSettings`). Defaults to "
-            f"'{DEFAULT_BASE_URL}' (canonical Pipefy production). Set to a "
-            "different host for non-prod environments, regional / proxy "
-            "deployments, or local development (with PIPEFY_ALLOW_INSECURE_URLS)."
+            "Pipefy API host root. Drives ``graphql_url`` / ``internal_api_url`` / "
+            "``interfaces_graphql_url`` and ``oauth_token_url`` (injected into "
+            ":class:`pipefy_auth.AuthSettings`). Defaults to "
+            f"'{DEFAULT_BASE_URL}' (canonical Pipefy production)."
         ),
     )
 
-    org_id: str | None = Field(
-        default=None,
-        pattern=_ORG_ID_PATTERN,
+    allow_insecure_urls: bool = Field(
+        default=False,
         description=(
-            "Optional default organization id (numeric string) for CLI commands that "
-            "allow an implicit org, e.g. ``pipefy org get`` when the id argument is "
-            "omitted (env: PIPEFY_ORG_ID). Must be a numeric string; empty or "
-            "non-numeric values are rejected."
-        ),
-    )
-
-    permission_denied_enrichment_timeout_seconds: float = Field(
-        default=5.0,
-        ge=0.1,
-        le=120.0,
-        description=(
-            "Max wall time (seconds) for membership lookups when enriching GraphQL "
-            "PERMISSION_DENIED errors (env: PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS)."
+            "When true, URLs may use http:// and internal hosts; local development "
+            "only. Sourced from PIPEFY_ALLOW_INSECURE_URLS at the edge and shared "
+            "(injected) with the auth / JWT / resource-server models so the whole "
+            "deployment has one insecure-URL posture."
         ),
     )
 
@@ -92,7 +68,7 @@ class ClientSettings(InsecureUrlSettings):
         ),
     )
 
-    @field_validator("base_url", "org_id", mode="before")
+    @field_validator("base_url", mode="before")
     @classmethod
     def _strip_str(cls, value: object) -> object:
         if isinstance(value, str):
@@ -117,12 +93,23 @@ class ClientSettings(InsecureUrlSettings):
         """Interfaces GraphQL endpoint (portals/pages/elements), derived from ``base_url``."""
         return f"{self.base_url.rstrip('/')}/graphql/interfaces"
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def oauth_token_url(self) -> str:
+        """OAuth 2.0 token endpoint, derived from ``base_url``.
+
+        The application edge injects this into :class:`pipefy_auth.AuthSettings`
+        as ``service_account_token_url`` so the host root is read once and the
+        auth model never references the SDK type.
+        """
+        return f"{self.base_url.rstrip('/')}/oauth/token"
+
     @model_validator(mode="after")
     def _validate_pipefy_endpoint_urls(self) -> Self:
         # ``base_url`` is the host root that drives ``/graphql``,
-        # ``/internal_api``, ``/graphql/interfaces`` via the computed
-        # properties above; any non-root path/query/fragment would corrupt
-        # the f-string concatenation.
+        # ``/internal_api``, ``/graphql/interfaces``, ``/oauth/token`` via the
+        # computed properties above; any non-root path/query/fragment would
+        # corrupt the f-string concatenation.
         self.base_url = security.sanitize_url(
             self.base_url,
             field_label="base_url",

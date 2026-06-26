@@ -8,7 +8,6 @@ from pipefy_sdk import PipefyClient
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     run_cli_command,
-    settings_and_token,
     validate_positional_id,
 )
 
@@ -42,10 +41,9 @@ def org_get(
 ) -> None:
     """Fetch organization details (``get_organization``)."""
 
-    client_settings, _token = settings_and_token(ctx)
     resolved = (organization_id or "").strip()
     if not resolved:
-        env_default = client_settings.org_id
+        env_default = ctx.find_root().obj.get("org_id")
         resolved = env_default.strip() if env_default else ""
 
     if not resolved:

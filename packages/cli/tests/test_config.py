@@ -6,10 +6,7 @@ import textwrap
 
 import pytest
 
-from pipefy_cli.config import (
-    CliSettings,
-    resolve_cli_settings,
-)
+from pipefy_cli.config import resolve_cli_settings
 
 
 def test_env_only_resolution(
@@ -29,8 +26,10 @@ def test_env_only_resolution(
     assert resolved.sdk.base_url == "https://env-only.example.com"
     assert resolved.sdk.graphql_url == "https://env-only.example.com/graphql"
     assert resolved.sdk.internal_api_url == "https://env-only.example.com/internal_api"
+    # The SDK base_url is read once and its oauth_token_url is injected into auth.
     assert (
-        resolved.auth.service_account_url == "https://env-only.example.com/oauth/token"
+        resolved.auth.service_account_token_url
+        == "https://env-only.example.com/oauth/token"
     )
     assert resolved.auth.service_account_client_id == "env-client"
     assert resolved.auth.service_account_client_secret == "env-secret"
@@ -96,12 +95,11 @@ def test_base_url_flag_overrides_env(
     )
 
     assert resolved.sdk.base_url == "https://from-flag.example.com"
-    # ``AuthSettings.model_validate`` re-reads env on revalidate; without the
-    # env-hold this would still report the env host and ``service_account_url``
-    # would drift from the SDK side.
-    assert resolved.auth.base_url == "https://from-flag.example.com"
+    # base_url is applied once on the SDK reader call; the auth token URL follows
+    # by injection, so it cannot drift from the SDK host.
     assert (
-        resolved.auth.service_account_url == "https://from-flag.example.com/oauth/token"
+        resolved.auth.service_account_token_url
+        == "https://from-flag.example.com/oauth/token"
     )
 
 
@@ -146,7 +144,7 @@ def test_localhost_base_url_rejected_without_insecure_flag(
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://localhost")
 
     with pytest.raises(ValueError, match="localhost"):
-        CliSettings()
+        resolve_cli_settings(base_url_flag=None, allow_insecure_urls_flag=None)
 
 
 def test_allow_insecure_urls_flag_overrides_env(

@@ -55,8 +55,10 @@ class ToggleAgentStatusResult(TypedDict):
 class MePayload(TypedDict):
     """Authenticated user identity returned by the GraphQL ``me`` query.
 
-    ``name`` is nullable in the Pipefy schema (verified via introspection).
+    ``id`` is the caller's Pipefy user id (non-null in the schema); ``name`` is
+    nullable (both verified via introspection).
     """
 
+    id: str
     email: str
     name: str | None

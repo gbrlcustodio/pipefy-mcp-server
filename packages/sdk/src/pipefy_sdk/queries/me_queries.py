@@ -6,6 +6,7 @@ GET_ME_QUERY = gql(
     """
     query GetMe {
         me {
+            id
             email
             name
         }

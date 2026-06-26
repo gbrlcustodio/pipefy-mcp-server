@@ -16,7 +16,7 @@ def _make_service(return_value):
 @pytest.mark.asyncio
 async def test_get_me_returns_identity():
     """`me` payload is unwrapped into the `MePayload` shape."""
-    me_data = {"email": "user@pipefy.com", "name": "Pipefy User"}
+    me_data = {"id": "301", "email": "user@pipefy.com", "name": "Pipefy User"}
     service, executor = _make_service({"me": me_data})
 
     result = await service.get_me()
@@ -41,8 +41,10 @@ async def test_get_me_null_returns_none():
 @pytest.mark.asyncio
 async def test_get_me_null_name_is_passed_through():
     """`User.name` is nullable; the SDK preserves it rather than coercing."""
-    service, _ = _make_service({"me": {"email": "user@pipefy.com", "name": None}})
+    service, _ = _make_service(
+        {"me": {"id": "301", "email": "user@pipefy.com", "name": None}}
+    )
 
     result = await service.get_me()
 
-    assert result == {"email": "user@pipefy.com", "name": None}
+    assert result == {"id": "301", "email": "user@pipefy.com", "name": None}

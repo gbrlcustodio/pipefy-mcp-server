@@ -23,4 +23,4 @@ class UserService:
         me = data["me"]
         if me is None:
             return None
-        return {"email": me["email"], "name": me.get("name")}
+        return {"id": me["id"], "email": me["email"], "name": me.get("name")}

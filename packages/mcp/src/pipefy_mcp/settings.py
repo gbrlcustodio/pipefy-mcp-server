@@ -76,8 +76,7 @@ class ResourceServerSettings(InsecureUrlSettings):
 
     ``env_prefix="PIPEFY_MCP_RS_"`` does not collide with ``McpSettings``'
     ``PIPEFY_MCP_``: that model has no ``rs_*`` fields, so ``PIPEFY_MCP_RS_*``
-    vars fall through its ``extra="ignore"`` gate. ``allow_insecure_urls`` (from
-    the base) reads the shared ``PIPEFY_ALLOW_INSECURE_URLS``.
+    vars fall through its ``extra="ignore"`` gate.
     """
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_MCP_RS_")
@@ -117,12 +116,13 @@ class ResourceServerSettings(InsecureUrlSettings):
 class Settings(BaseSettings):
     """Application configuration via pydantic-settings.
 
-    Each nested model owns its own env loading (``env_prefix="PIPEFY_"``).
-    The composition deliberately does NOT set ``env_nested_delimiter`` — that
-    flag splits any matching env var (e.g. ``AUTH_BASE_URL``) into a nested
-    path, which would bypass each model's prefix gate and let unprefixed env
-    vars hijack auth fields. Both nested models run their own SSRF / shape
-    checks at construction; no parent-side ``_validate_*`` validator is needed.
+    Each nested model owns its own env loading under its own ``env_prefix``
+    (``PIPEFY_``, ``PIPEFY_AUTH_``, ``PIPEFY_MCP_``, ``PIPEFY_JWT_``,
+    ``PIPEFY_MCP_RS_``). The composition deliberately does NOT set
+    ``env_nested_delimiter``: that flag would split a matching env var (e.g.
+    ``AUTH_BASE_URL``) into a nested path, bypassing each model's prefix gate and
+    letting unprefixed env vars hijack auth fields. Each nested model runs its
+    own SSRF / shape checks at construction.
     """
 
     model_config = SettingsConfigDict(extra="ignore")

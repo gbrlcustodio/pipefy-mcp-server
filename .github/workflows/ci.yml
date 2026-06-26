@@ -39,12 +39,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      # Valid https:// URLs (required by Settings URL validation; values are dummies for unit tests)
-      PIPEFY_GRAPHQL_URL: 'https://app.pipefy.com/graphql'
-      PIPEFY_INTERNAL_API_URL: 'https://app.pipefy.com/internal_api'
-      PIPEFY_OAUTH_URL: 'https://app.pipefy.com/oauth/token'
-      PIPEFY_OAUTH_CLIENT: 'CI_DUMMY_CLIENT'
-      PIPEFY_OAUTH_SECRET: 'CI_DUMMY_SECRET'
+      # Dummy service-account credentials so unit tests see a configured tier.
+      PIPEFY_SERVICE_ACCOUNT_CLIENT_ID: 'CI_DUMMY_CLIENT'
+      PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET: 'CI_DUMMY_SECRET'
     steps:
     - uses: actions/checkout@v6
     - name: Set up Python

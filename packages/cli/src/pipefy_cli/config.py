@@ -6,8 +6,9 @@ files or a system-wide ``.env``.
 
 The composition deliberately does NOT use ``env_nested_delimiter``: that flag
 splits any matching env var (e.g. ``AUTH_BASE_URL``) into a nested-field path,
-which would let unprefixed env vars bypass each nested model's own
-``env_prefix="PIPEFY_"`` gate. Each nested model loads its env independently.
+which would let unprefixed env vars bypass each nested model's own env-prefix
+gate (``PIPEFY_`` for the SDK, ``PIPEFY_AUTH_`` for auth). Each nested model
+loads its env independently.
 """
 
 from __future__ import annotations
@@ -36,10 +37,10 @@ def resolve_cli_settings(
 ) -> CliSettings:
     """Resolve :class:`CliSettings` honoring CLI flags as init kwargs.
 
-    Flags become init kwargs on each nested model's own source chain, where
-    they outrank env. ``base_url`` and ``allow_insecure_urls`` are mapped by
-    ``env_prefix="PIPEFY_"`` (no ``AliasChoices``), so field-name kwargs win
-    over env without the alias-key dance.
+    Flags become init kwargs on each nested model's own source chain, where they
+    outrank env. ``base_url`` and ``allow_insecure_urls`` carry explicit
+    ``AliasChoices`` (``PIPEFY_BASE_URL`` / ``PIPEFY_ALLOW_INSECURE_URLS``), but
+    ``populate_by_name=True`` still lets these field-name kwargs win.
 
     Raises:
         ValueError: When validation fails (e.g. SSRF guard); message is user-facing.

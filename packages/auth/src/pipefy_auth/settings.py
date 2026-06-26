@@ -3,11 +3,11 @@
 Owns every value that describes *how* to authenticate against Pipefy. Its own
 knobs are namespaced under ``PIPEFY_AUTH_*``:
 
-* ``PIPEFY_AUTH_ISSUER_URL`` — full OIDC issuer URL for the stored-session tier
+* ``PIPEFY_AUTH_ISSUER_URL``: full OIDC issuer URL for the stored-session tier
   (default ``https://signin.pipefy.com/realms/pipefy``).
-* ``PIPEFY_AUTH_CLIENT_ID`` — OIDC public client id (defaults to
+* ``PIPEFY_AUTH_CLIENT_ID``: OIDC public client id (defaults to
   :data:`pipefy_auth.identity.DEFAULT_AUTH_CLIENT_ID`).
-* ``PIPEFY_AUTH_DISABLE_STORED_SESSION`` / ``PIPEFY_AUTH_KEYCHAIN_BACKEND`` —
+* ``PIPEFY_AUTH_DISABLE_STORED_SESSION`` / ``PIPEFY_AUTH_KEYCHAIN_BACKEND``:
   stored-session tier opt-out and keyring backend selection.
 
 The service-account credentials keep their established names
@@ -51,14 +51,12 @@ _OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
 class AuthSettings(InsecureUrlSettings):
     """Auth-related configuration loaded from env / config files.
 
-    Auth-domain knobs are namespaced under ``PIPEFY_AUTH_*`` via the env prefix;
-    the credentials and the deployment-wide ``base_url`` / ``allow_insecure_urls``
-    keep their canonical names through explicit aliases. Self-contained: SSRF
+    Auth-domain knobs are namespaced under ``PIPEFY_AUTH_*``; the credentials and
+    the deployment-wide ``base_url`` / ``allow_insecure_urls`` keep their canonical
+    names through explicit aliases (see the module docstring). Self-contained: SSRF
     validation runs inline as a ``model_validator(mode="after")`` hook, so direct
     construction (`AuthSettings()`) is safe even when not composed under
-    :class:`CliSettings` / :class:`Settings`. The ``base_url`` field mirrors
-    :class:`pipefy_sdk.PipefySettings` via ``PIPEFY_BASE_URL`` (both models load
-    it independently so they stay in sync) and drives the OAuth token endpoint.
+    :class:`CliSettings` / :class:`Settings`.
     """
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_AUTH_")
@@ -95,7 +93,7 @@ class AuthSettings(InsecureUrlSettings):
     # so their canonical names survive the ``PIPEFY_AUTH_`` prefix (which would
     # otherwise mangle them into ``PIPEFY_AUTH_STATIC_TOKEN`` etc.). The aliases
     # list ONLY the fully-qualified env names: an unprefixed entry would let
-    # pydantic-settings pick up a bare-name env var (``TOKEN``, ``BASE_URL``) —
+    # pydantic-settings pick up a bare-name env var (``TOKEN``, ``BASE_URL``),
     # a credential-leak primitive for any host whose env carries those common
     # names. Kwarg construction by field name (``AuthSettings(static_token=...)``)
     # still works via ``populate_by_name=True``. The remaining fields
@@ -253,9 +251,8 @@ class JwtValidationSettings(InsecureUrlSettings):
     and outbound issuers diverge (token exchange, multi-tenant federation).
 
     ``env_prefix="PIPEFY_JWT_"`` keeps these distinct from ``AuthSettings``'
-    ``PIPEFY_AUTH_*`` vars (so ``PIPEFY_JWT_ISSUER_URL`` is the inbound override,
-    ``PIPEFY_AUTH_ISSUER_URL`` the outbound issuer); ``allow_insecure_urls`` (from
-    the base) is the one exception, reading the shared ``PIPEFY_ALLOW_INSECURE_URLS``.
+    ``PIPEFY_AUTH_*`` vars: ``PIPEFY_JWT_ISSUER_URL`` is the inbound override,
+    ``PIPEFY_AUTH_ISSUER_URL`` the outbound issuer.
     """
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_JWT_")

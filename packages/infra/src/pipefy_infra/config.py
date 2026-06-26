@@ -116,11 +116,11 @@ class _AliasOwnsEnvNameMixin:
 
     With ``populate_by_name=True``, pydantic-settings reads an aliased field from
     both its alias and the prefixed field name, so a cross-cutting field like
-    ``allow_insecure_urls`` (alias ``PIPEFY_ALLOW_INSECURE_URLS``) also loads from
-    the subclass-prefixed ``PIPEFY_JWT_ALLOW_INSECURE_URLS`` / ``PIPEFY_AUTH_…``,
-    and the shared var silently wins on conflict. These fields carry an explicit
-    alias precisely so one canonical var controls them regardless of the model's
-    prefix; honour that by reading them only through the alias.
+    ``allow_insecure_urls`` (alias ``PIPEFY_ALLOW_INSECURE_URLS``) would also load
+    from the subclass-prefixed ``PIPEFY_JWT_ALLOW_INSECURE_URLS`` / ``PIPEFY_AUTH_…``,
+    and the shared var would silently win on conflict. Reading such fields only
+    through their alias keeps one canonical var in control regardless of the
+    model's prefix.
     """
 
     def _extract_field_info(
@@ -176,8 +176,7 @@ class PipefyBaseSettings(BaseSettings):
         #
         # The default env/dotenv sources are replaced with prefix-isolating ones
         # so a field's explicit validation_alias is its only env name (see
-        # _AliasOwnsEnvNameMixin); the passed-in env_settings/dotenv_settings are
-        # the unmodified equivalents and are intentionally discarded.
+        # _AliasOwnsEnvNameMixin); the passed-in equivalents are discarded.
         del env_settings, dotenv_settings
         return (
             init_settings,

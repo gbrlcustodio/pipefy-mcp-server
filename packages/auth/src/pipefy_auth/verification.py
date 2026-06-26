@@ -38,15 +38,14 @@ class TokenValidationError(ValueError):
 class JwtValidator:
     """Validate an RS256 access token against an issuer's JWKS.
 
-    When an explicit ``jwks_uri`` override is supplied it is used as given and the
-    :class:`~jwt.PyJWKClient` is built at construction (no network): the caller
-    (e.g. :class:`JwtValidationSettings`) sanitizes it at the config boundary, so
-    the primitive trusts it rather than re-running the gate. Otherwise the JWKS URL
-    is resolved from the issuer's OIDC discovery document lazily, on the first
-    :meth:`validate`, so construction does no network I/O and process boot never
-    blocks on the IdP. A failed discovery is not cached, so the next ``validate``
-    retries (the validator self-heals once the IdP is reachable). The underlying
-    ``PyJWKClient`` caches signing keys across calls.
+    When an explicit ``jwks_uri`` override is supplied, the
+    :class:`~jwt.PyJWKClient` is built at construction (no network); the caller
+    (e.g. :class:`JwtValidationSettings`) is responsible for sanitizing it at the
+    config boundary. Otherwise the JWKS URL is resolved from the issuer's OIDC
+    discovery document lazily, on the first :meth:`validate`, so construction does
+    no network I/O and process boot never blocks on the IdP. A failed discovery is
+    not cached, so the next ``validate`` retries. The underlying ``PyJWKClient``
+    caches signing keys across calls.
 
     ``verify_audience`` is off by default: the same-audience interim runs before
     the IdP issues an ``aud`` claim. Turn it on once the audience mapper is in

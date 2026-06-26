@@ -120,6 +120,11 @@ def test_settings_picks_up_pipefy_token_from_env(monkeypatch):
         "AUTH_ISSUER_URL",
         "AUTH_CLIENT_ID",
         "AUTH_ALLOW_INSECURE_URLS",
+        # Prefixed forms of the alias-pinned fields: the PIPEFY_AUTH_ prefix plus
+        # populate_by_name must NOT shadow the canonical PIPEFY_BASE_URL / PIPEFY_TOKEN
+        # aliases (the invariant _AliasOwnsEnvNameMixin enforces).
+        "PIPEFY_AUTH_BASE_URL",
+        "PIPEFY_AUTH_STATIC_TOKEN",
     ],
 )
 def test_settings_does_not_route_unprefixed_env_into_auth(monkeypatch, leak_env_var):

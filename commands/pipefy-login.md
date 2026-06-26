@@ -13,4 +13,4 @@ Otherwise prompt the user to confirm running:
 pipefy auth login $ARGUMENTS
 ```
 
-Requires `PIPEFY_AUTH_URL` set in the shell environment (the OIDC issuer URL).
+For a non-prod IdP, set `PIPEFY_AUTH_ISSUER_URL` (the OIDC issuer URL) in the shell environment; it defaults to the Pipefy production issuer.

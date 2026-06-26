@@ -123,9 +123,10 @@ class PipefySettings(InsecureUrlSettings):
         # ``/internal_api``, ``/graphql/interfaces`` via the computed
         # properties above; any non-root path/query/fragment would corrupt
         # the f-string concatenation.
-        stripped = self.base_url.strip()
-        security.assert_url_is_host_root(stripped, field_label="base_url")
-        security.validate_https_url(
-            stripped, "base_url", allow_insecure=self.allow_insecure_urls
+        self.base_url = security.sanitize_url(
+            self.base_url,
+            field_label="base_url",
+            allow_insecure=self.allow_insecure_urls,
+            require_host_root=True,
         )
         return self

@@ -7,19 +7,27 @@ env-var names and value handling after the ``PIPEFY_AUTH_`` prefix rename.
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
 
 from pipefy_auth.settings import AuthSettings
 
 
 @pytest.fixture(autouse=True)
-def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Each test sees a clean process env for the vars it exercises."""
-    monkeypatch.delenv("PIPEFY_SERVICE_ACCOUNT_URL", raising=False)
-    monkeypatch.delenv("PIPEFY_BASE_URL", raising=False)
-    monkeypatch.delenv("PIPEFY_AUTH_ISSUER_URL", raising=False)
-    monkeypatch.delenv("PIPEFY_AUTH_DISABLE_STORED_SESSION", raising=False)
-    monkeypatch.delenv("PIPEFY_AUTH_KEYCHAIN_BACKEND", raising=False)
+def _clean_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Clear every ``PIPEFY_*`` env and pin ``PIPEFY_CONFIG_FILE`` at a tmp path.
+
+    These tests assert prod defaults (issuer, base_url, kill-switch off) and the
+    absence of leaked credentials, so any ambient ``PIPEFY_*`` var or a stray
+    ``~/.config/pipefy/config.toml`` on a dev machine would otherwise bleed in
+    and fail them. Mirrors ``test_settings_toml_source.py::_isolate_env``.
+    """
+    for key in list(os.environ):
+        if key.startswith("PIPEFY_") or key in {"XDG_CONFIG_HOME", "APPDATA"}:
+            monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(tmp_path / "config.toml"))
 
 
 @pytest.mark.unit

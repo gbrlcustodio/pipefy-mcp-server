@@ -200,7 +200,7 @@ pick_system_python() {
         [ -d "$brew_dir" ] && probe_path="$brew_dir:$probe_path"
     done
 
-    keychain_hint="if 'pipefy auth login' later fails with keychain error -25244, set PIPEFY_KEYCHAIN_BACKEND=file or install Homebrew python3."
+    keychain_hint="if 'pipefy auth login' later fails with keychain error -25244, set PIPEFY_AUTH_KEYCHAIN_BACKEND=file or install Homebrew python3."
 
     for cmd in python3.14 python3.13 python3.12 python3.11 python3; do
         path=$(PATH="$probe_path"; command -v "$cmd" 2>/dev/null) || continue

@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pipefy_infra import security
+from pipefy_infra.coerce import strip_if_str
 from pydantic import (
     BaseModel,
     Field,
@@ -132,20 +133,14 @@ class AuthSettings(BaseModel):
         ),
     )
 
-    @field_validator(
+    _strip = field_validator(
         "static_token",
         "service_account_client_id",
         "service_account_client_secret",
         "issuer_url",
         "client_id",
-        "disable_stored_session",
         mode="before",
-    )
-    @classmethod
-    def _strip_str(cls, value: object) -> object:
-        if isinstance(value, str):
-            return value.strip()
-        return value
+    )(strip_if_str)
 
     @field_validator("keychain_backend", mode="before")
     @classmethod
@@ -184,8 +179,8 @@ class AuthSettings(BaseModel):
         if self.disable_stored_session:
             return None
         return OidcClient(
-            issuer_url=self.issuer_url.strip(),
-            client_id=self.client_id.strip(),
+            issuer_url=self.issuer_url,
+            client_id=self.client_id,
         )
 
     @model_validator(mode="after")

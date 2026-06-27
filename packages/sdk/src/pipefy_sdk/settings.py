@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Self
 
 from pipefy_infra import security
+from pipefy_infra.coerce import strip_if_str
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 # Canonical Pipefy production API host root.
@@ -68,12 +69,7 @@ class ClientSettings(BaseModel):
         ),
     )
 
-    @field_validator("base_url", mode="before")
-    @classmethod
-    def _strip_str(cls, value: object) -> object:
-        if isinstance(value, str):
-            return value.strip()
-        return value
+    _strip = field_validator("base_url", mode="before")(strip_if_str)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

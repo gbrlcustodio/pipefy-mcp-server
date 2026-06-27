@@ -75,6 +75,19 @@ def optional_float(value: object) -> float | None:
     return result
 
 
+def strip_if_str(value: object) -> object:
+    """Return ``value.strip()`` if ``value`` is a ``str``, else ``value`` unchanged.
+
+    A ``mode="before"`` field-validator helper for settings whose env / TOML
+    source may carry surrounding whitespace. Non-string inputs (already-typed
+    bools, ints, ``None``) pass through so each field's own validation still
+    sees them in their native shape.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
+
 def try_int(value: T) -> T | int:
     """Return ``int(value)``, or ``value`` unchanged if conversion fails.
 
@@ -92,4 +105,4 @@ def try_int(value: T) -> T | int:
         return value
 
 
-__all__ = ["optional_float", "optional_int", "optional_str", "try_int"]
+__all__ = ["optional_float", "optional_int", "optional_str", "strip_if_str", "try_int"]

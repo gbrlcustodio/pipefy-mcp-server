@@ -14,6 +14,7 @@ and is sourced from ``PIPEFY_ORG_ID`` by a small CLI-owned reader.
 from __future__ import annotations
 
 from pipefy_auth import AuthSettings
+from pipefy_infra.coerce import strip_if_str
 from pipefy_infra.config import PipefyBaseSettings, read_auth_env, read_client_env
 from pipefy_sdk import ClientSettings
 from pydantic import BaseModel, Field, ValidationError, field_validator
@@ -51,12 +52,7 @@ class CliSettings(BaseModel):
         ),
     )
 
-    @field_validator("org_id", mode="before")
-    @classmethod
-    def _strip_org_id(cls, value: object) -> object:
-        if isinstance(value, str):
-            return value.strip()
-        return value
+    _strip_org_id = field_validator("org_id", mode="before")(strip_if_str)
 
 
 def resolve_cli_settings(

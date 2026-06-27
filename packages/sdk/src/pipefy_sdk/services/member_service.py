@@ -145,38 +145,3 @@ class MemberService:
                 }
             },
         )
-
-
-def service_account_removal_blocked_user_ids(
-    user_ids: list[str],
-    protected_ids: list[str],
-) -> list[str]:
-    """Return user ids that cannot be removed because they appear in ``protected_ids``.
-
-    Args:
-        user_ids: Candidate user IDs to remove from a pipe.
-        protected_ids: Service account IDs from settings (e.g. ``PIPEFY_SERVICE_ACCOUNT_IDS``).
-    """
-    if not protected_ids:
-        return []
-    protected_set = set(protected_ids)
-    return [uid for uid in user_ids if uid.strip() in protected_set]
-
-
-def format_service_account_removal_block_message(blocked: list[str]) -> str:
-    """Format the user-facing error when removal targets protected service accounts.
-
-    Args:
-        blocked: Non-empty list of user ids that matched the protected set.
-    """
-    if len(blocked) == 1:
-        return (
-            f"Cannot remove service account {blocked[0]} - "
-            "this would break all write operations for this pipe. "
-            "Remove it via the Pipefy UI if intentional."
-        )
-    return (
-        f"Cannot remove service accounts {', '.join(blocked)} - "
-        "this would break all write operations for this pipe. "
-        "Remove it via the Pipefy UI if intentional."
-    )

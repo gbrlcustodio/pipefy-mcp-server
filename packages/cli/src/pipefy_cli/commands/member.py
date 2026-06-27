@@ -6,16 +6,11 @@ import json
 from typing import Any
 
 import typer
-from pipefy_sdk import (
-    PipefyClient,
-    format_service_account_removal_block_message,
-    service_account_removal_blocked_user_ids,
-)
+from pipefy_sdk import PipefyClient
 
 from pipefy_cli.commands._common import (
     confirm_destructive,
     run_cli_command,
-    settings_and_token,
 )
 
 member_app = typer.Typer(help="Pipe member operations.", no_args_is_help=True)
@@ -94,19 +89,9 @@ def member_remove(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Remove users from a pipe (same service-account guard as MCP when env is set)."""
+    """Remove users from a pipe."""
 
-    pipefy_settings, _token = settings_and_token(ctx)
     ids = _parse_user_ids(user_ids)
-    blocked = service_account_removal_blocked_user_ids(
-        ids, pipefy_settings.service_account_ids
-    )
-    if blocked:
-        typer.echo(
-            format_service_account_removal_block_message(blocked),
-            err=True,
-        )
-        raise typer.Exit(2)
 
     confirm_destructive(
         yes=yes, verb="remove", description=f"{len(ids)} member(s) from pipe {pipe_id}"
@@ -128,31 +113,14 @@ def member_set_role(
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Set a member's role on a pipe.
-
-    When ``PIPEFY_SERVICE_ACCOUNT_IDS`` includes ``--member``, the response gains
-    a ``warning`` field reminding callers to preserve write permissions on that
-    account (parity with the MCP ``set_role`` tool).
-    """
+    """Set a member's role on a pipe."""
 
     rn = role_name.strip()
     if not rn:
         typer.echo("--role must be non-empty.", err=True)
         raise typer.Exit(2)
 
-    pipefy_settings, _ = settings_and_token(ctx)
-    protected_ids = pipefy_settings.service_account_ids
-
     async def factory(client: PipefyClient):
-        raw = await client.set_role(pipe_id, member_id, rn)
-        if protected_ids and member_id in protected_ids:
-            return {
-                "setRole": raw.get("setRole", raw) if isinstance(raw, dict) else raw,
-                "warning": (
-                    "Warning: you changed the role of a service account. "
-                    "Ensure the new role retains write permissions."
-                ),
-            }
-        return raw
+        return await client.set_role(pipe_id, member_id, rn)
 
     run_cli_command(ctx, json_out, factory)

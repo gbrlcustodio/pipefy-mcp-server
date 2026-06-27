@@ -29,7 +29,6 @@ _PROMPT_FIELD_TOKEN_RE = re.compile(r"%\{(\d+)\}")
 GENERATE_WITH_AI_ACTION_ID = "generate_with_ai"
 
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30.0
-MEMBERSHIP_CHECK_TIMEOUT_SECONDS = 5.0
 MAX_CROSS_PIPE_FIELD_FETCH = 100
 
 
@@ -246,7 +245,6 @@ async def validate_ai_agent_behaviors_sdk(
     pipe_id: str,
     behaviors: list[dict[str, Any]],
     *,
-    service_account_ids: list[str] | None = None,
     strict_unknown_action_types: bool = True,
 ) -> dict[str, Any]:
     """Mirror MCP ``validate_ai_agent_behaviors`` (read-only).
@@ -255,7 +253,6 @@ async def validate_ai_agent_behaviors_sdk(
         client: Authenticated Pipefy client.
         pipe_id: Numeric pipe id for field/phase/relation context.
         behaviors: Raw behavior dicts (1-5).
-        service_account_ids: Optional user ids for cross-pipe membership checks.
         strict_unknown_action_types: When False, unknown action types become warnings only.
     """
     pid = str(pipe_id).strip()
@@ -396,36 +393,6 @@ async def validate_ai_agent_behaviors_sdk(
                         phase_field_fetch_warning(failed_phases, pipe_id=tpid)
                     )
 
-    membership_problems: list[str] = []
-    sa_ids = service_account_ids or []
-    sa_set = set(sa_ids)
-    if sa_set and target_pipe_list:
-        try:
-            member_results = await asyncio.wait_for(
-                asyncio.gather(
-                    *(client.get_pipe_members(tpid) for tpid in target_pipe_list),
-                    return_exceptions=True,
-                ),
-                timeout=MEMBERSHIP_CHECK_TIMEOUT_SECONDS,
-            )
-            for tpid, mresult in zip(target_pipe_list, member_results):
-                if isinstance(mresult, BaseException):
-                    continue
-                members = (mresult.get("pipe") or {}).get("members") or []
-                member_ids = {
-                    str(m.get("user", {}).get("id", ""))
-                    for m in members
-                    if isinstance(m, dict)
-                }
-                if not sa_set & member_ids:
-                    membership_problems.append(
-                        f"Service account is not a member of target pipe "
-                        f"{tpid}. Use invite_members to add it before "
-                        f"creating the agent."
-                    )
-        except (TimeoutError, asyncio.TimeoutError):
-            logger.debug("Membership check timed out; skipping SA verification")
-
     unknown_action_types = "error" if strict_unknown_action_types else "warning"
     problems, helper_warnings = validate_behaviors_against_pipe(
         behaviors,
@@ -439,7 +406,7 @@ async def validate_ai_agent_behaviors_sdk(
     transition_problems = await collect_ai_behavior_move_transition_problems(
         client, behaviors
     )
-    problems = [*problems, *transition_problems, *membership_problems]
+    problems = [*problems, *transition_problems]
     warnings = [*tool_warnings, *helper_warnings]
 
     if problems:

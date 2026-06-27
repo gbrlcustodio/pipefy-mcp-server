@@ -10,11 +10,8 @@ from mcp.types import ToolAnnotations
 from pipefy_sdk import (
     PipefyClient,
     PipefyId,
-    format_service_account_removal_block_message,
-    service_account_removal_blocked_user_ids,
 )
 
-from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.member_tool_helpers import (
     build_member_error_payload,
@@ -104,10 +101,6 @@ class MemberTools:
             ``confirm=True`` after explicit human approval. Elicitation does not authorize
             deletion (only ``confirm=True`` does).
 
-            Service account guard: when ``PIPEFY_SERVICE_ACCOUNT_IDS`` is set, user IDs in
-            that list cannot be removed via this tool (returns an error); use the Pipefy UI
-            if intentional. When the env var is unset or empty, the guard is not applied.
-
             Args:
                 pipe_id: ID of the pipe.
                 user_ids: List of user IDs to remove.
@@ -125,15 +118,6 @@ class MemberTools:
             if not all(uid.strip() for uid in user_ids):
                 return build_member_error_payload(
                     message="Invalid 'user_ids': each ID must be a non-empty string.",
-                )
-
-            protected_ids = settings.pipefy.service_account_ids
-            blocked = service_account_removal_blocked_user_ids(
-                list(user_ids), list(protected_ids)
-            )
-            if blocked:
-                return build_member_error_payload(
-                    message=format_service_account_removal_block_message(blocked),
                 )
 
             guard = await check_destructive_confirmation(
@@ -188,10 +172,6 @@ class MemberTools:
         ) -> dict[str, Any]:
             """Set a member's role on a pipe.
 
-            Service account warning: when ``PIPEFY_SERVICE_ACCOUNT_IDS`` includes ``member_id``,
-            the success payload may include a ``warning`` field reminding you to keep write
-            permissions for that account. When the env var is unset or empty, no warning is added.
-
             Args:
                 pipe_id: ID of the pipe.
                 member_id: User ID of the member.
@@ -219,17 +199,9 @@ class MemberTools:
                     resource_kind="pipe",
                     resource_id=str(pipe_id),
                 )
-            warning: str | None = None
-            protected_ids = settings.pipefy.service_account_ids
-            if protected_ids and member_id in protected_ids:
-                warning = (
-                    "Warning: you changed the role of a service account. "
-                    "Ensure the new role retains write permissions."
-                )
             return build_member_success_payload(
                 message="Role updated.",
                 data=raw,
-                warning=warning,
             )
 
 

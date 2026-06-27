@@ -40,14 +40,6 @@ def test_field_name_keys_load_from_toml(tmp_path: Path) -> None:
     assert settings.default_webhook_name == "Test Hook"
 
 
-def test_service_account_ids_list_from_toml(tmp_path: Path) -> None:
-    _write(
-        tmp_path / "config.toml",
-        'service_account_ids = ["42", "43", "44"]\n',
-    )
-    assert PipefySettings().service_account_ids == ["42", "43", "44"]
-
-
 def test_env_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://from-env.example")
@@ -76,7 +68,6 @@ def test_missing_file_uses_defaults() -> None:
     settings = PipefySettings()
     assert settings.base_url == "https://app.pipefy.com"
     assert settings.org_id is None
-    assert settings.service_account_ids == []
 
 
 def test_invalid_toml_raises_value_error_quoting_path(tmp_path: Path) -> None:

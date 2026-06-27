@@ -41,10 +41,6 @@ from pipefy_sdk.services.automation_graphql_types import (
     AutomationRuleRecord,
     AutomationRuleSummary,
 )
-from pipefy_sdk.services.member_service import (
-    format_service_account_removal_block_message,
-    service_account_removal_blocked_user_ids,
-)
 from pipefy_sdk.services.observability_export_csv import download_bytes, stream_bytes
 from pipefy_sdk.services.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
@@ -101,8 +97,6 @@ __all__ = [
     "UploadAttachmentToTableRecordInput",
     "copy_card_search",
     "create_form_model",
-    "format_service_account_removal_block_message",
     "infer_content_type",
-    "service_account_removal_blocked_user_ids",
     "stream_bytes",
 ]

@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **SDK**: `PipefyClient` now constructs its internal API client during `__init__` (built from the same `settings` and `auth` as every other endpoint client), so `PipefyClient(settings, auth=...)` is fully wired after construction. The `set_internal_api_client` methods on `PipefyClient` and `PortalService` are removed; pass the internal API client through the `PortalService` constructor when composing it directly. The `PipefyClient.internal_api_available` property is also removed: the internal API client is always present, so the property was always `True`.
 - **Plugin (Claude Code)**: renamed the OAuth slash command from `/login` to `/pipefy-login` (`commands/login.md` → `commands/pipefy-login.md`, frontmatter `name: pipefy-login`). The old `name: login` claimed the `/login` trigger and shadowed Claude Code's built-in `/login` (Claude account sign-in): selecting the built-in entry in the command picker still ran the Pipefy command, so Claude login was unreachable via `/login` while the plugin was installed. Closes #331.
 
+### Removed
+
+- **SDK / MCP / CLI (breaking)**: retired the `PIPEFY_SERVICE_ACCOUNT_IDS` env var and the `service_account_ids` setting (and its TOML key). This drops the advisory features it fed: the guard that blocked `remove_member_from_pipe` from removing a configured service account, the `set_role` write-permission warning, and the proactive cross-pipe membership check in `validate_ai_agent_behaviors`. The Pipefy API still authorizes every mutation, so removing a service account is recoverable via the Pipefy UI, and the cross-pipe membership requirement now surfaces as a bare `PERMISSION_DENIED` at call time (recover with `get_pipe_members` + `invite_members`). The field was an advisory, single-tenant shadow of a missing platform attribute and had no place in the remote multi-user profile.
+
 ## [0.2.0-beta.4] - 2026-06-19
 
 ### Added

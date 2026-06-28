@@ -23,7 +23,7 @@ from mcp.shared.memory import (
 from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.server import build_pipefy_mcp_server
-from pipefy_mcp.settings import settings
+from pipefy_mcp.settings import get_settings
 from pipefy_mcp.tools.attachment_tools import AttachmentTools
 from tools.conftest import build_tool_test_server
 
@@ -32,7 +32,7 @@ mcp_server = build_pipefy_mcp_server()
 
 def _live_pipefy_client() -> PipefyClient:
     """PipefyClient wired with auth via the production precedence chain."""
-    return PipefyClient(settings=settings.pipefy, auth=live_resolved_auth())
+    return PipefyClient(settings=get_settings().pipefy, auth=live_resolved_auth())
 
 
 def _card_upload_env():
@@ -200,7 +200,7 @@ async def test_live_pipeclaw_mcp_upload_attachment_to_card(
     file_path = tmp_path / file_name
     file_path.write_bytes(body)
 
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.get_settings", get_settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=120),

@@ -6,7 +6,6 @@ import pytest
 from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk import PipefyClient
 
-import pipefy_mcp.settings as settings_mod
 from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
 
 
@@ -45,8 +44,11 @@ def mock_client():
 def _mock_settings(monkeypatch):
     """Stub settings so enrichment reads a fixed timeout budget."""
     mock_settings = MagicMock()
-    mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 5.0
-    monkeypatch.setattr(settings_mod, "settings", mock_settings)
+    mock_settings.mcp.permission_denied_enrichment_timeout_seconds = 5.0
+    monkeypatch.setattr(
+        "pipefy_mcp.tools.graphql_error_helpers.get_settings",
+        lambda: mock_settings,
+    )
 
 
 @pytest.mark.anyio
@@ -100,12 +102,15 @@ class TestEnrichPermissionDeniedError:
         assert result is None
 
     async def test_uses_configured_enrichment_timeout(self, mock_client, monkeypatch):
-        """Waits for ``settings.pipefy.permission_denied_enrichment_timeout_seconds``."""
+        """Waits for ``settings.mcp.permission_denied_enrichment_timeout_seconds``."""
         import asyncio
 
         mock_settings = MagicMock()
-        mock_settings.pipefy.permission_denied_enrichment_timeout_seconds = 0.1
-        monkeypatch.setattr(settings_mod, "settings", mock_settings)
+        mock_settings.mcp.permission_denied_enrichment_timeout_seconds = 0.1
+        monkeypatch.setattr(
+            "pipefy_mcp.tools.graphql_error_helpers.get_settings",
+            lambda: mock_settings,
+        )
 
         exc = _make_permission_denied_exc()
 

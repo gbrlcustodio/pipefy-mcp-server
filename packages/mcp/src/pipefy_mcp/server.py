@@ -9,7 +9,7 @@ from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.auth import ResourceServerAuth, build_resource_server_auth
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.settings import settings
+from pipefy_mcp.settings import get_settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
 
@@ -47,17 +47,18 @@ async def lifespan(app: FastMCP) -> AsyncIterator[ServicesContainer]:
     here, so re-entry cannot race the tool table.
     """
     try:
+        s = get_settings()
         logger.info("Initializing services")
         logger.info(
             "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
-            "enabled" if settings.mcp.unified_envelope else "disabled",
+            "enabled" if s.mcp.unified_envelope else "disabled",
         )
         logger.info(
             "PIPEFY_MCP_REMOTE_MODE=%s",
-            "enabled" if settings.mcp.remote_mode else "disabled",
+            "enabled" if s.mcp.remote_mode else "disabled",
         )
         container = ServicesContainer()
-        await container.initialize_services(settings)
+        await container.initialize_services(s)
     except Exception:
         logger.exception("Fatal error during server lifespan initialization")
         raise
@@ -89,9 +90,10 @@ def _resolve_bind(host: str | None, port: int | None) -> tuple[str, int]:
     needs the resolved values for its log line and the loopback guard) and
     :func:`build_pipefy_mcp_server` (which passes them to ``FastMCP``).
     """
+    mcp = get_settings().mcp
     return (
-        host if host is not None else settings.mcp.host,
-        port if port is not None else settings.mcp.port,
+        host if host is not None else mcp.host,
+        port if port is not None else mcp.port,
     )
 
 
@@ -116,7 +118,7 @@ def build_pipefy_mcp_server(
     metadata; when ``None`` (stdio, or the disabled HTTP profile) the app has no
     inbound auth.
     """
-    resolved = settings.mcp.remote_mode if remote_mode is None else remote_mode
+    resolved = get_settings().mcp.remote_mode if remote_mode is None else remote_mode
     resolved_host, resolved_port = _resolve_bind(host, port)
     verifier, auth = resource_server or (None, None)
     app = FastMCP(
@@ -189,12 +191,13 @@ def run_server(
         build_pipefy_mcp_server(remote_mode=remote_mode).run()
         return
 
-    resolved_remote = settings.mcp.remote_mode if remote_mode is None else remote_mode
+    s = get_settings()
+    resolved_remote = s.mcp.remote_mode if remote_mode is None else remote_mode
     resolved_host, resolved_port = _resolve_bind(host, port)
-    oidc_client = settings.auth.to_oidc_client()
+    oidc_client = s.auth.to_oidc_client()
     resource_server = build_resource_server_auth(
-        settings.rs,
-        settings.jwt,
+        s.rs,
+        s.jwt,
         default_issuer_url=oidc_client.issuer_url if oidc_client else None,
     )
     logger.info(

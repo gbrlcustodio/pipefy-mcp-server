@@ -4,18 +4,25 @@ from unittest.mock import Mock, patch
 
 import pytest
 from pipefy_auth import (
-    AuthSettings,
+    AuthConfig,
     RefreshableBearerAuth,
     RefreshError,
+    ServiceAccountCredentials,
     StaticBearerAuth,
     TokenResponse,
 )
 from pipefy_auth.storage import StoredSession
-from pipefy_sdk import PipefyClient, PipefySettings
+from pipefy_infra.deployment import DeploymentConfig
+from pipefy_sdk import PipefyClient, SdkConfig
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.settings import Settings
+from pipefy_mcp.settings import (
+    JwtValidationConfig,
+    McpSettings,
+    ResourceServerSettings,
+    Settings,
+)
 
 _AUTH_ENV_KEYS = (
     "PIPEFY_TOKEN",
@@ -23,22 +30,41 @@ _AUTH_ENV_KEYS = (
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
     "PIPEFY_OAUTH_CLIENT",
     "PIPEFY_OAUTH_SECRET",
-    "PIPEFY_AUTH_URL",
+    "PIPEFY_AUTH_ISSUER_URL",
     "PIPEFY_BASE_URL",
-    "PIPEFY_DISABLE_STORED_SESSION",
-    "PIPEFY_KEYCHAIN_BACKEND",
+    "PIPEFY_AUTH_DISABLE_STORED_SESSION",
+    "PIPEFY_AUTH_KEYCHAIN_BACKEND",
 )
 
+# One shared deployment, injected by reference like the application edge does.
+_DEPLOYMENT = DeploymentConfig(base_url="https://api.pipefy.com")
 
-def _service_account_auth_settings() -> AuthSettings:
-    return AuthSettings(
-        service_account_client_id="client_id",
-        service_account_client_secret="client_secret",
+
+def _settings(auth: AuthConfig) -> Settings:
+    """Build a complete MCP ``Settings`` composite around the given auth config."""
+    return Settings(
+        pipefy=SdkConfig(deployment=_DEPLOYMENT),
+        auth=auth,
+        mcp=McpSettings(),
+        jwt=JwtValidationConfig(deployment=_DEPLOYMENT),
+        rs=ResourceServerSettings(deployment=_DEPLOYMENT),
     )
 
 
-def _stored_session_auth_settings() -> AuthSettings:
-    return AuthSettings(auth_url="https://signin.pipefy.com/realms/pipefy")
+def _service_account_auth_settings() -> AuthConfig:
+    return AuthConfig(
+        deployment=_DEPLOYMENT,
+        service_account=ServiceAccountCredentials(
+            client_id="client_id", client_secret="client_secret"
+        ),
+    )
+
+
+def _stored_session_auth_settings() -> AuthConfig:
+    return AuthConfig(
+        deployment=_DEPLOYMENT,
+        issuer_url="https://signin.pipefy.com/realms/pipefy",
+    )
 
 
 def _fresh_stored_session() -> StoredSession:
@@ -59,7 +85,7 @@ class TestServicesContainer:
 
     @pytest.fixture(autouse=True)
     def clear_auth_env(self, monkeypatch):
-        """Strip ambient ``PIPEFY_*`` auth env so ``AuthSettings()`` is hermetic."""
+        """Strip ambient ``PIPEFY_*`` auth env so the readers are hermetic."""
         for key in _AUTH_ENV_KEYS:
             monkeypatch.delenv(key, raising=False)
 
@@ -79,10 +105,7 @@ class TestServicesContainer:
         mock_client.client = Mock()
         mock_pipefy_client_class.return_value = mock_client
 
-        settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-            auth=_service_account_auth_settings(),
-        )
+        settings = _settings(_service_account_auth_settings())
 
         container = ServicesContainer()
         await container.initialize_services(settings)
@@ -102,17 +125,14 @@ class TestServicesContainer:
         mock_client = Mock(spec=PipefyClient)
         mock_client.client = Mock()
         mock_pipefy_client_class.return_value = mock_client
-        settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-            auth=AuthSettings(
-                static_token="env-bearer",
-            ),
+        settings = _settings(
+            AuthConfig(deployment=_DEPLOYMENT, static_token="env-bearer")
         )
         await ServicesContainer().initialize_services(settings)
         pc_auth = mock_pipefy_client_class.call_args.kwargs["auth"]
         assert isinstance(pc_auth, StaticBearerAuth)
 
-    # Patch ``load_session``: ``auth_url``'s prod default makes the stored-session
+    # Patch ``load_session``: ``issuer_url``'s prod default makes the stored-session
     # tier always reachable, so a host with a real keychain entry would otherwise
     # satisfy resolution and break the assertion.
     @patch("pipefy_auth.resolver.load_session", lambda **_: None)
@@ -121,11 +141,8 @@ class TestServicesContainer:
         self,
         mock_pipefy_client_class,
     ):
-        """No PIPEFY_TOKEN and no service-account triple → runtime error."""
-        settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-            auth=AuthSettings(),
-        )
+        """No PIPEFY_TOKEN and no service-account pair -> runtime error."""
+        settings = _settings(AuthConfig(deployment=_DEPLOYMENT))
         with pytest.raises(
             RuntimeError, match="Missing Pipefy authentication"
         ) as exc_info:
@@ -141,10 +158,7 @@ class TestServicesContainer:
     ):
         """When the resolved tier is the stored session, the refresh is pre-warmed."""
         mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
-        settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-            auth=_stored_session_auth_settings(),
-        )
+        settings = _settings(_stored_session_auth_settings())
         with patch(
             "pipefy_auth.resolver.load_session",
             return_value=_fresh_stored_session(),
@@ -155,7 +169,7 @@ class TestServicesContainer:
         assert isinstance(pc_auth, RefreshableBearerAuth)
         mock_ensure_fresh_session.assert_called_once_with(
             issuer="https://signin.pipefy.com/realms/pipefy",
-            client_id=settings.auth.auth_client_id,
+            client_id=settings.auth.public_client_id,
         )
 
     @patch("pipefy_mcp.core.container.ensure_fresh_session")
@@ -165,14 +179,14 @@ class TestServicesContainer:
         mock_pipefy_client_class,
         mock_ensure_fresh_session,
     ):
-        """A configured ``PIPEFY_AUTH_URL`` is ignored at warm-up when a higher tier wins."""
+        """A configured ``PIPEFY_AUTH_ISSUER_URL`` is ignored at warm-up when a higher tier wins."""
         mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
-        settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-            auth=AuthSettings(
+        settings = _settings(
+            AuthConfig(
+                deployment=_DEPLOYMENT,
                 static_token="env-bearer",
-                auth_url="https://signin.pipefy.com/realms/pipefy",
-            ),
+                issuer_url="https://signin.pipefy.com/realms/pipefy",
+            )
         )
         # Force a detectable stored session so we prove precedence, not absence.
         with patch(
@@ -193,10 +207,7 @@ class TestServicesContainer:
     ):
         """A failed warm-up logs the ``pipefy auth login`` hint and surfaces ``RefreshError`` *before* ``PipefyClient`` is constructed."""
         mock_ensure_fresh_session.side_effect = RefreshError("invalid_grant")
-        settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-            auth=_stored_session_auth_settings(),
-        )
+        settings = _settings(_stored_session_auth_settings())
         with patch(
             "pipefy_auth.resolver.load_session",
             return_value=_fresh_stored_session(),

@@ -1,57 +1,107 @@
+"""Resolve Pipefy + auth + MCP settings (the MCP application's env edge).
+
+One of the two composition roots that own env reading (the other is
+``pipefy_cli``). The library value objects read no env; here each concept gets a
+thin ``pydantic-settings`` reader that adds only its ``env_prefix`` (and TOML
+section) on top of :class:`~pipefy_infra.settings_base.PipefyBaseSettings`.
+
+``resolve_mcp_settings`` builds ONE :class:`DeploymentConfig` and injects it by
+reference into the SDK / auth / jwt / resource-server readers, so host topology
+and the insecure-URL posture cannot diverge. Resolution is lazy: importing this
+module does no env / file IO; :func:`get_settings` resolves on first call and
+caches; :func:`reset_settings` clears the cache (tests).
+"""
+
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Self
 
-from pipefy_auth import AuthSettings, JwtValidationSettings
+from pipefy_auth import AuthConfig, JwtValidationConfig, ServiceAccountCredentials
 from pipefy_infra import security
-from pipefy_infra.config import PipefyTomlConfigSource
-from pipefy_sdk import PipefySettings
-from pydantic import AliasChoices, Field, model_validator
-from pydantic_settings import (
-    BaseSettings,
-    PydanticBaseSettingsSource,
-    SettingsConfigDict,
-)
+from pipefy_infra.coerce import strip_if_str
+from pipefy_infra.deployment import DeploymentConfig
+from pipefy_infra.settings_base import PipefyBaseSettings
+from pipefy_sdk import SdkConfig
+from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic_settings import SettingsConfigDict
+
+# Opaque secret / identifier strings: reject leading / trailing whitespace and
+# blank values (mirrors the library models' field constraint).
+_OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
 
 
-class McpSettings(BaseSettings):
-    """MCP-server runtime knobs: transport, tool exposure, and envelope shape.
+class DeploymentSettings(DeploymentConfig, PipefyBaseSettings):
+    """Reads the deployment values under the ``PIPEFY_`` prefix / top-level TOML."""
 
-    These are consumed only by the MCP server, so they live here rather than in
-    the SDK's API-connection settings. Fields drop the ``mcp_`` prefix because
-    the ``settings.mcp`` namespace already supplies it; ``env_prefix="PIPEFY_MCP_"``
-    re-attaches it so the operator-facing ``PIPEFY_MCP_*`` env vars stay
-    byte-identical. The shared ``config.toml`` source keys off the bare field
-    names, so TOML keys are ``unified_envelope``, ``remote_mode``, ``host``,
-    ``port``.
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_")
+
+
+class SdkEnvSettings(SdkConfig, PipefyBaseSettings):
+    """Reads the SDK knobs under ``PIPEFY_``; ``deployment`` is injected."""
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_")
+
+
+class AuthEnvSettings(AuthConfig, PipefyBaseSettings):
+    """Reads the login-subsystem fields under ``PIPEFY_AUTH_`` / ``[auth]``.
+
+    ``static_token`` keeps its product-root env name (``PIPEFY_TOKEN``) via a
+    cross-prefix alias; ``deployment`` / ``service_account`` are injected.
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="PIPEFY_MCP_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        populate_by_name=True,
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_AUTH_")
+    _toml_section = "auth"
+
+    static_token: str | None = Field(
+        default=None,
+        pattern=_OPAQUE_CREDENTIAL_PATTERN,
+        validation_alias=AliasChoices("PIPEFY_TOKEN"),
     )
 
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
-        # Reads the shared config.toml; keys are this class's bare field names.
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            PipefyTomlConfigSource(settings_cls),
-            file_secret_settings,
+    _strip_static = field_validator("static_token", mode="before")(strip_if_str)
+
+
+class JwtEnvSettings(JwtValidationConfig, PipefyBaseSettings):
+    """Reads the inbound-validation fields under ``PIPEFY_JWT_`` / ``[jwt]``."""
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_JWT_")
+    _toml_section = "jwt"
+
+
+class ServiceAccountEnvSettings(PipefyBaseSettings):
+    """Reads the service-account credentials under ``PIPEFY_SERVICE_ACCOUNT_`` / ``[service_account]``.
+
+    Fields are optional so absence is representable; ``to_credentials()`` builds
+    the both-required :class:`ServiceAccountCredentials`, ``None`` when both are
+    unset, and raises when exactly one is set (fail-loud on partial config).
+    """
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_SERVICE_ACCOUNT_")
+    _toml_section = "service_account"
+
+    client_id: str | None = None
+    client_secret: str | None = None
+
+    def to_credentials(self) -> ServiceAccountCredentials | None:
+        if self.client_id is None and self.client_secret is None:
+            return None
+        return ServiceAccountCredentials(
+            client_id=self.client_id,  # type: ignore[arg-type]
+            client_secret=self.client_secret,  # type: ignore[arg-type]
         )
+
+
+class McpSettings(PipefyBaseSettings):
+    """MCP-server runtime knobs: transport, tool exposure, and envelope shape.
+
+    Consumed only by the MCP server. ``env_prefix="PIPEFY_MCP_"`` keeps the
+    operator-facing ``PIPEFY_MCP_*`` env vars; the shared ``config.toml`` source
+    keys off the bare field names. ``permission_denied_enrichment_timeout_seconds``
+    is MCP-only but keeps its un-prefixed env name via a ``validation_alias``.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_MCP_")
 
     unified_envelope: bool = Field(
         default=True,
@@ -90,51 +140,37 @@ class McpSettings(BaseSettings):
         ),
     )
 
+    permission_denied_enrichment_timeout_seconds: float = Field(
+        default=5.0,
+        ge=0.1,
+        le=120.0,
+        validation_alias=AliasChoices(
+            "PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS"
+        ),
+        description=(
+            "Max wall time (seconds) for membership lookups when enriching GraphQL "
+            "PERMISSION_DENIED errors (env: PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS, "
+            "kept un-prefixed for back-compat)."
+        ),
+    )
 
-class ResourceServerSettings(BaseSettings):
+
+class ResourceServerSettings(PipefyBaseSettings):
     """This MCP server's identity as an OAuth protected resource (HTTP profile).
 
     The resource-server profile activates when ``resource_server_url`` is set: the
     ``--remote`` transport then validates inbound bearers and serves RFC 9728
-    metadata, and the unauthenticated foundation profile is left untouched.
-
-    Token *validation* knobs (issuer, audience, JWKS) are an auth concern and live
-    in :class:`pipefy_auth.JwtValidationSettings`, alongside the validator they
-    feed. This model carries only what is specific to *this* server's resource
-    identity: its public URL and the scopes it requires.
-
-    ``env_prefix="PIPEFY_MCP_RS_"`` does not collide with ``McpSettings``'
-    ``PIPEFY_MCP_``: that model has no ``rs_*`` fields, so ``PIPEFY_MCP_RS_*``
-    vars fall through its ``extra="ignore"`` gate. ``allow_insecure_urls`` is
-    aliased to the shared ``PIPEFY_ALLOW_INSECURE_URLS`` so the whole deployment
-    has a single insecure-URL posture.
+    metadata. Token *validation* knobs (issuer, audience, JWKS) are an auth
+    concern and live in :class:`pipefy_auth.JwtValidationConfig`; this model
+    carries only this server's resource identity. ``deployment`` is injected so
+    the insecure-URL posture forwards off the one shared instance.
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="PIPEFY_MCP_RS_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        populate_by_name=True,
-    )
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_MCP_RS_")
 
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            PipefyTomlConfigSource(settings_cls),
-            file_secret_settings,
-        )
+    deployment: DeploymentConfig = Field(
+        description="Host topology + insecure-URL posture, injected by reference.",
+    )
 
     resource_server_url: str | None = Field(
         default=None,
@@ -156,15 +192,10 @@ class ResourceServerSettings(BaseSettings):
         ),
     )
 
-    allow_insecure_urls: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
-        description=(
-            "When true (env: PIPEFY_ALLOW_INSECURE_URLS, shared across the "
-            "deployment), resource_server_url may use http:// and internal hosts; "
-            "local development only."
-        ),
-    )
+    @property
+    def allow_insecure_urls(self) -> bool:
+        """Shared insecure-URL posture (forwarded from ``deployment``)."""
+        return self.deployment.allow_insecure_urls
 
     @model_validator(mode="after")
     def _validate_configuration(self) -> Self:
@@ -179,39 +210,73 @@ class ResourceServerSettings(BaseSettings):
             stripped, field_label="resource_server_url"
         )
         security.validate_https_url(
-            stripped, "resource_server_url", allow_insecure=self.allow_insecure_urls
+            stripped,
+            "resource_server_url",
+            allow_insecure=self.deployment.allow_insecure_urls,
         )
         return self
 
 
-class Settings(BaseSettings):
-    """Application configuration via pydantic-settings.
+@dataclass(frozen=True)
+class Settings:
+    """The resolved MCP configuration: the library value objects + MCP-edge models.
 
-    Each nested model owns its own env loading (``env_prefix="PIPEFY_"``).
-    The composition deliberately does NOT set ``env_nested_delimiter`` — that
-    flag splits any matching env var (e.g. ``AUTH_BASE_URL``) into a nested
-    path, which would bypass each model's prefix gate and let unprefixed env
-    vars hijack auth fields. Both nested models run their own SSRF / shape
-    checks at construction; no parent-side ``_validate_*`` validator is needed.
+    A plain composite built by :func:`resolve_mcp_settings`; ``pipefy`` / ``auth``
+    / ``jwt`` / ``rs`` all share the one injected DeploymentConfig.
     """
 
-    model_config = SettingsConfigDict(extra="ignore")
-
-    pipefy: PipefySettings = Field(default_factory=PipefySettings)
-    auth: AuthSettings = Field(default_factory=AuthSettings)
-    mcp: McpSettings = Field(default_factory=McpSettings)
-    jwt: JwtValidationSettings = Field(default_factory=JwtValidationSettings)
-    rs: ResourceServerSettings = Field(default_factory=ResourceServerSettings)
+    pipefy: SdkConfig
+    auth: AuthConfig
+    mcp: McpSettings
+    jwt: JwtValidationConfig
+    rs: ResourceServerSettings
 
 
-settings = Settings()
+def resolve_mcp_settings() -> Settings:
+    """Build the MCP :class:`Settings`, reading env / dotenv / config.toml.
+
+    Raises:
+        ValueError / ValidationError: When any reader fails validation (SSRF guard,
+            partial service-account pair, bad URL shape).
+    """
+    deployment = DeploymentSettings()
+    service_account = ServiceAccountEnvSettings().to_credentials()
+    return Settings(
+        pipefy=SdkEnvSettings(deployment=deployment),
+        auth=AuthEnvSettings(deployment=deployment, service_account=service_account),
+        mcp=McpSettings(),
+        jwt=JwtEnvSettings(deployment=deployment),
+        rs=ResourceServerSettings(deployment=deployment),
+    )
+
+
+_settings: Settings | None = None
+
+
+def get_settings() -> Settings:
+    """Return the process-wide MCP settings, resolving + caching on first call."""
+    global _settings
+    if _settings is None:
+        _settings = resolve_mcp_settings()
+    return _settings
+
+
+def reset_settings() -> None:
+    """Clear the cached settings so the next :func:`get_settings` re-resolves (tests)."""
+    global _settings
+    _settings = None
+
 
 __all__ = [
-    "AuthSettings",
-    "JwtValidationSettings",
+    "AuthEnvSettings",
+    "DeploymentSettings",
+    "JwtEnvSettings",
     "McpSettings",
-    "PipefySettings",
     "ResourceServerSettings",
+    "SdkEnvSettings",
+    "ServiceAccountEnvSettings",
     "Settings",
-    "settings",
+    "get_settings",
+    "reset_settings",
+    "resolve_mcp_settings",
 ]

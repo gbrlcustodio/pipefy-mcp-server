@@ -7,7 +7,7 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.settings import settings
+from pipefy_mcp.settings import get_settings
 
 
 def build_tool_test_server(name, register, client):
@@ -33,21 +33,21 @@ def build_tool_test_server(name, register, client):
 @pytest.fixture
 def legacy_envelope(monkeypatch):
     """Disable unified envelope (``PIPEFY_MCP_UNIFIED_ENVELOPE`` off)."""
-    monkeypatch.setattr(settings.mcp, "unified_envelope", False)
+    monkeypatch.setattr(get_settings().mcp, "unified_envelope", False)
     return False
 
 
 @pytest.fixture
 def unified_envelope(monkeypatch):
     """Enable unified envelope (explicit)."""
-    monkeypatch.setattr(settings.mcp, "unified_envelope", True)
+    monkeypatch.setattr(get_settings().mcp, "unified_envelope", True)
     return True
 
 
 @pytest.fixture(params=[True, False], ids=["flag-on", "flag-off"])
 def envelope_flag(request, monkeypatch):
     """Runs the test twice: unified envelope on, then off."""
-    monkeypatch.setattr(settings.mcp, "unified_envelope", request.param)
+    monkeypatch.setattr(get_settings().mcp, "unified_envelope", request.param)
     return request.param
 
 

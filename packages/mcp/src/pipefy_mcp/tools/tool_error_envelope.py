@@ -26,7 +26,7 @@ from typing import Any, Literal, Mapping
 
 from typing_extensions import NotRequired, TypedDict
 
-from pipefy_mcp.settings import settings
+from pipefy_mcp.settings import get_settings
 
 __all__ = [
     "ToolErrorDetail",
@@ -44,7 +44,7 @@ def is_unified_envelope_enabled() -> bool:
 
     Read from settings at call time so tests and toggles apply without restart.
     """
-    return settings.mcp.unified_envelope
+    return get_settings().mcp.unified_envelope
 
 
 class ToolErrorDetail(TypedDict):

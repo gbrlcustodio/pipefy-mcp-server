@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pipefy_sdk import PipefyClient
 
-import pipefy_mcp.settings as _settings_mod
+from pipefy_mcp.settings import get_settings
 from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 # Suffixes appended by the Internal API executor for service-layer diagnostics;
@@ -539,7 +539,7 @@ async def enrich_permission_denied_error(
     if not unique_ids:
         return None
 
-    timeout = _settings_mod.settings.pipefy.permission_denied_enrichment_timeout_seconds
+    timeout = get_settings().mcp.permission_denied_enrichment_timeout_seconds
     try:
         results = await asyncio.wait_for(
             asyncio.gather(

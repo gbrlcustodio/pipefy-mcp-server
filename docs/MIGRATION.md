@@ -85,72 +85,62 @@ One rename in the upcoming `0.2.0-beta.x` line is covered below.
 
 ---
 
-## Service-account env-var rename
+## Auth env-var rename and removed legacy names
 
-The three OAuth 2.0 client-credentials vars used by the service-account auth path are being renamed for clarity (and to remove the one-letter footgun against `PIPEFY_AUTH_URL`, the new OIDC user-login issuer):
+The login subsystem is namespaced under `PIPEFY_AUTH_*`; the API credentials stay at the product root (matching `PIPEFY_TOKEN`). These non-namespaced names are gone:
 
-| Old | New |
+| Removed | Use instead |
 |---|---|
-| `PIPEFY_OAUTH_URL` | _dropped_ — set `PIPEFY_BASE_URL` instead (the OAuth token endpoint derives from `<base>/oauth/token`) |
+| `PIPEFY_OAUTH_URL` | _dropped_ — set `PIPEFY_BASE_URL` (the OAuth token endpoint derives from `<base>/oauth/token`) |
 | `PIPEFY_OAUTH_CLIENT` | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` |
 | `PIPEFY_OAUTH_SECRET` | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` |
+| `PIPEFY_AUTH_URL` | `PIPEFY_AUTH_ISSUER_URL` |
+| `PIPEFY_AUTH_CLIENT_ID` | `PIPEFY_AUTH_PUBLIC_CLIENT_ID` |
+| `PIPEFY_DISABLE_STORED_SESSION` | `PIPEFY_AUTH_DISABLE_STORED_SESSION` |
+| `PIPEFY_KEYCHAIN_BACKEND` | `PIPEFY_AUTH_KEYCHAIN_BACKEND` |
 
-**No immediate action required for `_CLIENT` / `_SECRET`.** The legacy `PIPEFY_OAUTH_CLIENT` / `_SECRET` env vars flow through an alias shim and populate the renamed fields. The first command run with a legacy name set prints a one-shot stderr deprecation warning naming the replacement.
+**There is no alias shim and no deprecation warning.** A removed name is silently ignored (`extra="ignore"`): an operator who still sets `PIPEFY_OAUTH_CLIENT` gets the unconfigured-tier behavior, and a stale `PIPEFY_AUTH_URL` lets the issuer fall back to the prod default. Search-and-replace your shell, `.env`, MCP client JSON, and CI secrets per the table above.
 
-**`PIPEFY_OAUTH_URL` is gone.** It has no alias. Operators with this env var set will see the OAuth token endpoint silently fall back to `<PIPEFY_BASE_URL>/oauth/token` (default `https://app.pipefy.com/oauth/token`). Set `PIPEFY_BASE_URL` to your API host root for non-prod environments.
-
-When you're ready to update:
-
-1. Search-and-replace your shell, `.env`, MCP client JSON, and CI secrets per the table above.
-2. Optionally re-run any command (e.g. `pipefy org get --json`) to confirm the deprecation warning is gone.
-
-The legacy names will be removed in a later `0.2.0-beta.x` release; the change will carry an explicit breaking-change callout in the changelog at that time.
-
-`PIPEFY_TOKEN` (static bearer override) and `PIPEFY_AUTH_URL` / `PIPEFY_AUTH_CLIENT_ID` (interactive user-login flow) are **not** affected.
+`PIPEFY_TOKEN` (static bearer override) and `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` / `_SECRET` keep their names.
 
 ---
 
-## Settings model split (library / script users only)
+## Settings architecture (library / script users only)
 
-End users of `pipefy-cli` and `pipefy-mcp-server` are unaffected — every `PIPEFY_*` env var and `.env` entry keeps loading exactly as before. The split matters only if you construct settings types directly in Python code that depends on `pipefy-sdk`.
+End users of `pipefy-cli` and `pipefy-mcp-server` are unaffected by the internals; the env contract is the table above. The split below matters only if you construct settings types directly in Python.
 
-Auth-related fields have moved from `PipefySettings` (which now owns endpoint config only) to `pipefy_auth.AuthSettings`. URL endpoints (graphql, internal_api, interfaces, service_account) are now `@computed_field` properties derived from `base_url`:
+The libraries are now pure, env-free `pydantic.BaseModel` value objects (they do not import `pydantic-settings`); the applications own all env reading. Host topology and the insecure-URL posture live on one `pipefy_infra.deployment.DeploymentConfig`, injected by reference into the SDK and auth configs so they cannot diverge.
 
-| Was on `pipefy_sdk.PipefySettings` | Now |
+| Was | Now |
 |---|---|
-| `graphql_url` (settable) | `@computed_field` on `PipefySettings`, derived from `base_url` |
-| `internal_api_url` (settable) | `@computed_field` on `PipefySettings`, derived from `base_url` |
-| `interfaces_graphql_url` (settable) | `@computed_field` on `PipefySettings`, derived from `base_url` |
-| `service_account_url` (settable) | `@computed_field` on `AuthSettings`, derived from `base_url` |
-| `service_account_client_id` | `AuthSettings.service_account_client_id` |
-| `service_account_client_secret` | `AuthSettings.service_account_client_secret` |
-| (read from env only) | `AuthSettings.auth_url`, `auth_client_id`, `static_token` |
+| `pipefy_sdk.PipefySettings` | `pipefy_sdk.SdkConfig` (required injected `deployment`) |
+| `PipefySettings.base_url` / `allow_insecure_urls` | `DeploymentConfig.base_url` / `allow_insecure_urls` (forwarded on `SdkConfig`) |
+| `pipefy_auth.AuthSettings` | `pipefy_auth.AuthConfig` (required injected `deployment`) |
+| `AuthSettings.auth_url` / `auth_client_id` | `AuthConfig.issuer_url` / `public_client_id` |
+| `AuthSettings.service_account_url` | `deployment.oauth_token_url` |
+| `service_account_client_id` / `_secret` (flat) | nested `AuthConfig.service_account` (a `ServiceAccountCredentials`, or `None`) |
+| `pipefy_auth.JwtValidationSettings` | `pipefy_auth.JwtValidationConfig` (required injected `deployment`) |
+| `PipefySettings.org_id` | CLI edge only (`PIPEFY_ORG_ID`) |
+| `PipefySettings.permission_denied_enrichment_timeout_seconds` | MCP edge only (`pipefy_mcp.McpSettings`) |
 
-Because `PipefySettings` / `AuthSettings` are configured with `extra="ignore"`, code that still passes the old kwargs (`PipefySettings(graphql_url=...)`, `AuthSettings(service_account_url=...)`) **silently drops them** — no exception, no warning. Migrate by using `base_url` and composing the two models side by side:
+Compose by building one `DeploymentConfig` and injecting it:
 
 ```python
-from pipefy_auth import AuthSettings
-from pipefy_sdk import PipefySettings
+from pipefy_auth import AuthConfig, ServiceAccountCredentials
+from pipefy_infra.deployment import DeploymentConfig
+from pipefy_sdk import SdkConfig
 
-pipefy = PipefySettings(base_url="https://app.pipefy.com")
-auth = AuthSettings(
-    service_account_client_id="...",
-    service_account_client_secret="...",
+deployment = DeploymentConfig(base_url="https://app.pipefy.com")
+sdk = SdkConfig(deployment=deployment)
+auth = AuthConfig(
+    deployment=deployment,
+    service_account=ServiceAccountCredentials(client_id="...", client_secret="..."),
 )
-# Computed properties:
-pipefy.graphql_url            # "https://app.pipefy.com/graphql"
-auth.service_account_url      # "https://app.pipefy.com/oauth/token"
+sdk.graphql_url               # "https://app.pipefy.com/graphql"
+auth.to_service_account().token_url  # "https://app.pipefy.com/oauth/token"
 ```
 
-If you already build a `pipefy-mcp-server` or `pipefy-cli` settings object, the application-level `Settings` / `CliSettings` already nests both:
-
-```python
-from pipefy_mcp.settings import Settings
-
-s = Settings()  # s.pipefy + s.auth, env-loaded
-```
-
-The legacy `PIPEFY_OAUTH_*` env-var aliases and the deprecation warning live on `AuthSettings`; behaviour is preserved through the rename window above.
+The application composition roots do this for you from the environment: `pipefy_cli.config.resolve_cli_settings(...)` and `pipefy_mcp.settings.resolve_mcp_settings()` (the MCP server resolves lazily via `get_settings()`).
 
 ---
 

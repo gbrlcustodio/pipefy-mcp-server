@@ -42,7 +42,7 @@ Use this when you want commands to run **as your Pipefy user** — useful for pa
 uv run pipefy auth login
 ```
 
-`PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Export non-prod values only when targeting a non-prod environment.
+`PIPEFY_BASE_URL` defaults to `https://app.pipefy.com` (drives the four API endpoints) and `PIPEFY_AUTH_ISSUER_URL` defaults to `https://signin.pipefy.com/realms/pipefy` (the OIDC issuer). Export non-prod values only when targeting a non-prod environment.
 
 This opens your browser, completes an OAuth 2.0 Authorization Code + PKCE flow against the Pipefy identity provider, and writes the resulting session (access token + refresh token + minimal metadata) into your OS keychain.
 
@@ -57,12 +57,12 @@ PIPEFY_SERVICE_ACCOUNT_CLIENT_ID=<SERVICE_ACCOUNT_CLIENT_ID>
 PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET=<SERVICE_ACCOUNT_CLIENT_SECRET>
 # Non-prod environments only:
 # PIPEFY_BASE_URL=https://<your-api-host>
-# PIPEFY_AUTH_URL=https://<your-signin-host>/realms/<realm>
+# PIPEFY_AUTH_ISSUER_URL=https://<your-signin-host>/realms/<realm>
 ```
 
 The CLI loads `.env` from the current working directory; see [`docs/config.md#precedence`](../config.md#precedence) for the full pydantic-settings precedence rules.
 
-> **Legacy names:** `PIPEFY_OAUTH_CLIENT` and `PIPEFY_OAUTH_SECRET` are still honored (with a one-shot stderr deprecation warning) for back-compat. They will be removed in a future beta. `PIPEFY_OAUTH_URL` has no alias — the OAuth token endpoint now derives from `PIPEFY_BASE_URL`. See [`docs/MIGRATION.md`](../MIGRATION.md#service-account-env-var-rename).
+> **Removed names:** `PIPEFY_OAUTH_CLIENT`, `PIPEFY_OAUTH_SECRET`, and `PIPEFY_OAUTH_URL` are no longer recognized. Use `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` / `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET`; the OAuth token endpoint derives from `PIPEFY_BASE_URL`. See [`docs/MIGRATION.md`](../MIGRATION.md#service-account-env-var-rename).
 
 ### Static bearer (one-off)
 
@@ -85,13 +85,13 @@ PIPEFY_TOKEN="$MY_BEARER" uv run pipefy pipe list
 | Key | Used by | Effect |
 |-----|---------|--------|
 | `PIPEFY_BASE_URL` | All commands | Pipefy API host root. Defaults to `https://app.pipefy.com`. Drives the GraphQL, internal-API, interfaces, and service-account OAuth token URLs (all four are computed from this base). Set to a different host for non-prod / regional / proxy / local-dev deployments. |
-| `PIPEFY_AUTH_URL` | Tier 4 | Full OIDC issuer URL for interactive login. The CLI appends `/.well-known/openid-configuration` to discover the authorization and token endpoints. Defaults to `https://signin.pipefy.com/realms/pipefy`. Set to the full issuer URL for a non-prod IdP. |
+| `PIPEFY_AUTH_ISSUER_URL` | Tier 4 | Full OIDC issuer URL for interactive login. The CLI appends `/.well-known/openid-configuration` to discover the authorization and token endpoints. Defaults to `https://signin.pipefy.com/realms/pipefy`. Set to the full issuer URL for a non-prod IdP. |
 | `PIPEFY_TOKEN` | Tier 2 | Direct bearer token. Overridden by `--token`. |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` | Tier 3 | Service-account client id. |
 | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` | Tier 3 | Service-account client secret. |
-| `PIPEFY_AUTH_CLIENT_ID` | Tier 4 | Public client id registered for the CLI. Defaults to `pipefy-cli`. |
-| `PIPEFY_DISABLE_STORED_SESSION` | Tier 4 | When `1` / `true`, the stored-session tier is skipped end-to-end: tier resolution never probes the keychain, and `pipefy auth login` / `pipefy auth logout` refuse with exit code 2. Use to avoid the keyring backend-discovery cost on cold start (headless Linux, CI) or to opt out of OS-keychain storage entirely. TOML key: `disable_stored_session`. |
-| `PIPEFY_KEYCHAIN_BACKEND` | Tier 4 | Active `keyring` backend. `auto` (default) uses OS-keyring discovery; `file` swaps to a plaintext on-disk keyring under `~/.config/pipefy/keyring.cfg` (POSIX) / `%APPDATA%/pipefy/keyring.cfg` (Windows). TOML key: `keychain_backend`. |
+| `PIPEFY_AUTH_PUBLIC_CLIENT_ID` | Tier 4 | Public client id registered for the CLI. Defaults to `pipefy-cli`. |
+| `PIPEFY_AUTH_DISABLE_STORED_SESSION` | Tier 4 | When `1` / `true`, the stored-session tier is skipped end-to-end: tier resolution never probes the keychain, and `pipefy auth login` / `pipefy auth logout` refuse with exit code 2. Use to avoid the keyring backend-discovery cost on cold start (headless Linux, CI) or to opt out of OS-keychain storage entirely. TOML key: `disable_stored_session`. |
+| `PIPEFY_AUTH_KEYCHAIN_BACKEND` | Tier 4 | Active `keyring` backend. `auto` (default) uses OS-keyring discovery; `file` swaps to a plaintext on-disk keyring under `~/.config/pipefy/keyring.cfg` (POSIX) / `%APPDATA%/pipefy/keyring.cfg` (Windows). TOML key: `keychain_backend`. |
 
 The service-account OAuth token URL (Tier 3) and the OIDC issuer URL (Tier 4) are **not** interchangeable: the first is `<base>/oauth/token` for client-credentials, the second is the full OIDC discovery root for the user-login flow.
 
@@ -172,13 +172,13 @@ When no session is stored, `pipefy auth logout` prints `Not signed in. Nothing t
 
 | Case | Exit |
 |------|------|
-| `PIPEFY_AUTH_URL=""` (or any other `PIPEFY_*` env var set to empty) | **2** — pydantic rejects empty values at settings load. Unset the var to fall back to the prod default. |
+| `PIPEFY_AUTH_ISSUER_URL=""` (or any other `PIPEFY_*` env var set to empty) | **2** — pydantic rejects empty values at settings load. Unset the var to fall back to the prod default. |
 | No session stored (no-op) | **0** |
 | Session cleared (revoke succeeded, failed, or unsupported) | **0** |
 
 ### Pipefy issuer URLs
 
-Production: `https://signin.pipefy.com/realms/pipefy` (the `PIPEFY_AUTH_URL` default). For a non-prod IdP, set `PIPEFY_AUTH_URL` to the full issuer URL (host + realm) directly — the CLI doesn't try to derive it from any tenant convention.
+Production: `https://signin.pipefy.com/realms/pipefy` (the `PIPEFY_AUTH_ISSUER_URL` default). For a non-prod IdP, set `PIPEFY_AUTH_ISSUER_URL` to the full issuer URL (host + realm) directly — the CLI doesn't try to derive it from any tenant convention.
 
 ---
 
@@ -204,21 +204,21 @@ The keychain has a session but its refresh token won't exchange. Most common cau
 
 ### `String should match pattern '<regex>'` (any `PIPEFY_*` env var)
 
-Every `PIPEFY_*` env var is validated against a semantically meaningful regex at settings load — URL env vars (`PIPEFY_BASE_URL`, `PIPEFY_AUTH_URL`) must start with `http(s)://`, credentials must not begin/end with whitespace, `PIPEFY_ORG_ID` must be a numeric string. Empty / blank / specially-charactered values are rejected at construction — there's no overload of `PIPEFY_<NAME>=""` for opt-out semantics. To turn the stored-session tier off without unsetting `PIPEFY_AUTH_URL`, use `PIPEFY_DISABLE_STORED_SESSION=1` (see [Keychain backends](#keychain-backends)). Otherwise unset the variable to fall back to the prod default (for URLs) or to leave the tier unconfigured (for credentials). The error message names the offending field plus the violated pattern.
+Every `PIPEFY_*` env var is validated against a semantically meaningful regex at settings load — URL env vars (`PIPEFY_BASE_URL`, `PIPEFY_AUTH_ISSUER_URL`) must start with `http(s)://`, credentials must not begin/end with whitespace, `PIPEFY_ORG_ID` must be a numeric string. Empty / blank / specially-charactered values are rejected at construction — there's no overload of `PIPEFY_<NAME>=""` for opt-out semantics. To turn the stored-session tier off without unsetting `PIPEFY_AUTH_ISSUER_URL`, use `PIPEFY_AUTH_DISABLE_STORED_SESSION=1` (see [Keychain backends](#keychain-backends)). Otherwise unset the variable to fall back to the prod default (for URLs) or to leave the tier unconfigured (for credentials). The error message names the offending field plus the violated pattern.
 
-> **`VAR= command` is not "unset".** A shell command-prefix assignment (`PIPEFY_AUTH_URL= pipefy auth status`) sets the variable to the empty string for the child process; it does **not** unset it. Pydantic then rejects the empty value and the command exits with a `ValidationError`. To actually unset a variable for a single command, use `env -u VAR command` (POSIX one-shot, leaves the parent shell untouched):
+> **`VAR= command` is not "unset".** A shell command-prefix assignment (`PIPEFY_AUTH_ISSUER_URL= pipefy auth status`) sets the variable to the empty string for the child process; it does **not** unset it. Pydantic then rejects the empty value and the command exits with a `ValidationError`. To actually unset a variable for a single command, use `env -u VAR command` (POSIX one-shot, leaves the parent shell untouched):
 >
 > ```sh
-> env -u PIPEFY_AUTH_URL pipefy auth status
+> env -u PIPEFY_AUTH_ISSUER_URL pipefy auth status
 > ```
 >
-> To unset for the remainder of the current shell session, `unset PIPEFY_AUTH_URL` (bash / zsh) or `set -e PIPEFY_AUTH_URL` (fish).
+> To unset for the remainder of the current shell session, `unset PIPEFY_AUTH_ISSUER_URL` (bash / zsh) or `set -e PIPEFY_AUTH_ISSUER_URL` (fish).
 
 ### `Login succeeded but the session could not be stored in your keychain (<backend>)`
 
-The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running — install `gnome-keyring` or `kwallet`, set `PIPEFY_KEYCHAIN_BACKEND=file` to use a plaintext file backend under the Pipefy config directory, or fall back to a static `PIPEFY_TOKEN`.
+The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running — install `gnome-keyring` or `kwallet`, set `PIPEFY_AUTH_KEYCHAIN_BACKEND=file` to use a plaintext file backend under the Pipefy config directory, or fall back to a static `PIPEFY_TOKEN`.
 
-When `PIPEFY_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory).
+When `PIPEFY_AUTH_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory).
 
 ### `Missing Pipefy authentication. Set PIPEFY_TOKEN, configure PIPEFY_SERVICE_ACCOUNT_*, or run \`pipefy auth login\`.`
 
@@ -226,11 +226,11 @@ No source resolved. Pick one from [Credential precedence](#credential-precedence
 
 ### `Note: PIPEFY_SERVICE_ACCOUNT_* is set in your environment; other pipefy commands will continue to use it ...`
 
-You ran `pipefy auth login` successfully, but a higher-precedence source is set in your shell. That source will keep being used until you unset it. Common when a `.env` file sets `PIPEFY_SERVICE_ACCOUNT_*` and the user expects the stored session to take over. During the deprecation window the warning fires identically for the legacy `PIPEFY_OAUTH_*` triple, naming whichever form is actually set.
+You ran `pipefy auth login` successfully, but a higher-precedence source is set in your shell. That source will keep being used until you unset it. Common when a `.env` file sets `PIPEFY_SERVICE_ACCOUNT_*` and the user expects the stored session to take over.
 
 ### Identity mismatch (commands run as the wrong user)
 
-Run `whoami`-style queries (e.g. `pipefy graphql exec --query '{ me { email name } }'`) to confirm which identity the CLI is actually using. If you expected your own user but see a service account, check whether `--token`, `PIPEFY_TOKEN`, or a complete `PIPEFY_SERVICE_ACCOUNT_*` triple (or the legacy `PIPEFY_OAUTH_*` form) is set in your environment — any of them outranks the stored session.
+Run `whoami`-style queries (e.g. `pipefy graphql exec --query '{ me { email name } }'`) to confirm which identity the CLI is actually using. If you expected your own user but see a service account, check whether `--token`, `PIPEFY_TOKEN`, or a complete `PIPEFY_SERVICE_ACCOUNT_*` pair is set in your environment; any of them outranks the stored session.
 
 ### `State mismatch on OAuth callback (possible CSRF)`
 
@@ -242,7 +242,7 @@ The browser came back with a different `state` than the CLI sent. Re-run `pipefy
 
 ### Login (`pipefy auth login`)
 
-1. Read `PIPEFY_AUTH_URL` (issuer) and `PIPEFY_AUTH_CLIENT_ID` (default `pipefy-cli`).
+1. Read `PIPEFY_AUTH_ISSUER_URL` (issuer) and `PIPEFY_AUTH_PUBLIC_CLIENT_ID` (default `pipefy-cli`).
 2. Fetch `<issuer>/.well-known/openid-configuration` to discover the authorization and token endpoints.
 3. Bind a loopback socket on `127.0.0.1:<ephemeral>` **before** opening the browser (so no other process can grab the port mid-flight).
 4. Open the browser at the authorization URL with `code_challenge_method=S256` and scopes `openid profile email offline_access` (the last one is what makes the IdP issue a refresh token).
@@ -265,8 +265,8 @@ Reactive refresh-on-401 (for tokens revoked mid-session) is a separate slice, tr
 
 Two env vars (mirrored as TOML keys) override the default behaviour:
 
-- `PIPEFY_DISABLE_STORED_SESSION=1` skips the keychain entirely. `pipefy auth login` refuses with exit 2, tier resolution never probes the backend, and `pipefy auth status` omits the `stored-session` tier. Use when only `PIPEFY_TOKEN` / `PIPEFY_SERVICE_ACCOUNT_*` matter (CI runners, automation) and the cold-start keyring backend-discovery cost (~30-80 ms on Darwin, more on a Linux box with no Secret Service daemon) is undesirable.
+- `PIPEFY_AUTH_DISABLE_STORED_SESSION=1` skips the keychain entirely. `pipefy auth login` refuses with exit 2, tier resolution never probes the backend, and `pipefy auth status` omits the `stored-session` tier. Use when only `PIPEFY_TOKEN` / `PIPEFY_SERVICE_ACCOUNT_*` matter (CI runners, automation) and the cold-start keyring backend-discovery cost (~30-80 ms on Darwin, more on a Linux box with no Secret Service daemon) is undesirable.
 
-- `PIPEFY_KEYCHAIN_BACKEND=file` swaps the active backend to a plaintext on-disk keyring under `config_dir() / "keyring.cfg"` (`~/.config/pipefy/keyring.cfg` on POSIX, `%APPDATA%/pipefy/keyring.cfg` on Windows). Unblocks headless Linux without Secret Service. **The file is plaintext, not OS-secured**: anyone with read access to the file (including a co-tenant on a shared CI runner) reads the refresh token. Opt-in only.
+- `PIPEFY_AUTH_KEYCHAIN_BACKEND=file` swaps the active backend to a plaintext on-disk keyring under `config_dir() / "keyring.cfg"` (`~/.config/pipefy/keyring.cfg` on POSIX, `%APPDATA%/pipefy/keyring.cfg` on Windows). Unblocks headless Linux without Secret Service. **The file is plaintext, not OS-secured**: anyone with read access to the file (including a co-tenant on a shared CI runner) reads the refresh token. Opt-in only.
 
-These are independent: `PIPEFY_DISABLE_STORED_SESSION=1` takes precedence (the file backend is never read or written). `pipefy auth status` will reflect the active backend name regardless (`Keyring`, `PlaintextKeyring`, etc.).
+These are independent: `PIPEFY_AUTH_DISABLE_STORED_SESSION=1` takes precedence (the file backend is never read or written). `pipefy auth status` will reflect the active backend name regardless (`Keyring`, `PlaintextKeyring`, etc.).

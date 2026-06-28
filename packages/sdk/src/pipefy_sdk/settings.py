@@ -79,9 +79,4 @@ class SdkConfig(BaseModel):
         return self.deployment.allow_insecure_urls
 
 
-# Transitional re-export alias so cross-package imports stay valid across the
-# library refactor commits; dropped in the final settings-cleanup commit.
-PipefySettings = SdkConfig
-
-
-__all__ = ["PipefySettings", "SdkConfig"]
+__all__ = ["SdkConfig"]

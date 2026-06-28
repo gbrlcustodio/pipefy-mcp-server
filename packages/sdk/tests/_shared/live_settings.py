@@ -100,7 +100,7 @@ def live_resolved_auth() -> Auth:
 
 def pipefy_live_configured() -> bool:
     """Return True when a Pipefy host and a resolvable auth tier are both configured."""
-    # ``PipefySettings.base_url`` carries a prod default; consulting the
+    # ``SdkConfig.base_url`` carries a prod default; consulting the
     # resolved field would flip live tests on for every dev machine that
     # has *any* auth tier configured. Gate on the env var instead so live
     # tests stay opt-in.

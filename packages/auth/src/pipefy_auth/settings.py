@@ -302,16 +302,8 @@ class JwtValidationConfig(BaseModel):
         return self
 
 
-# Transitional re-export aliases so cross-package imports stay valid across the
-# library refactor commits; dropped in the final settings-cleanup commit.
-AuthSettings = AuthConfig
-JwtValidationSettings = JwtValidationConfig
-
-
 __all__ = [
     "AuthConfig",
-    "AuthSettings",
     "JwtValidationConfig",
-    "JwtValidationSettings",
     "ServiceAccountCredentials",
 ]

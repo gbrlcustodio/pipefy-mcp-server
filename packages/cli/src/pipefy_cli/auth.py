@@ -30,7 +30,7 @@ from pipefy_auth import (
 )
 from pipefy_sdk import (
     PipefyClient,
-    PipefySettings,
+    SdkConfig,
 )
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
@@ -112,7 +112,7 @@ def detect_cli_sources(auth: AuthContext) -> list[str]:
 
 
 def _cache_key(
-    pipefy_settings: PipefySettings,
+    pipefy_settings: SdkConfig,
     auth: AuthContext,
     tier: str,
 ) -> str:
@@ -121,7 +121,7 @@ def _cache_key(
     Hashed (not stored as plaintext) so the dump's secrets — the bearer
     token, the service-account ``client_secret`` — don't linger in module
     state for the process lifetime. Adding a new field to
-    :class:`PipefySettings` or :class:`AuthContext` automatically participates
+    :class:`SdkConfig` or :class:`AuthContext` automatically participates
     in the key without touching this function.
     """
     payload = json.dumps(
@@ -137,7 +137,7 @@ def _cache_key(
 
 
 def get_authenticated_client(
-    pipefy_settings: PipefySettings,
+    pipefy_settings: SdkConfig,
     auth: AuthContext,
 ) -> PipefyClient:
     """Return a facade client using the highest-precedence available auth source.

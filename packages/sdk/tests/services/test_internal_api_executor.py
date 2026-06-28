@@ -1,4 +1,4 @@
-"""Unit tests for the Internal API executor and PipefySettings.internal_api_url.
+"""Unit tests for the Internal API executor and SdkConfig.internal_api_url.
 
 These tests intentionally assert the full GraphQL error text produced by the
 Internal API executor (the ``HttpxGraphQLExecutor`` that ``build_executors``

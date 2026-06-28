@@ -26,7 +26,7 @@ from typing import Any
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
-from pipefy_auth import JwtValidationSettings, JwtValidator
+from pipefy_auth import JwtValidationConfig, JwtValidator
 
 from pipefy_mcp.settings import ResourceServerSettings
 
@@ -117,7 +117,7 @@ ResourceServerAuth = tuple[JwtTokenVerifier, FastMcpAuthSettings]
 
 def build_resource_server_auth(
     rs: ResourceServerSettings,
-    jwt_validation: JwtValidationSettings,
+    jwt_validation: JwtValidationConfig,
     *,
     default_issuer_url: str | None,
 ) -> ResourceServerAuth | None:
@@ -129,7 +129,7 @@ def build_resource_server_auth(
     exactly as before.
 
     The inbound issuer is ``jwt_validation.issuer_url`` if set, else
-    ``default_issuer_url`` (see :class:`JwtValidationSettings` for why the login
+    ``default_issuer_url`` (see :class:`JwtValidationConfig` for why the login
     issuer is the fallback). With ``resource_server_url`` set but no issuer
     resolvable (the stored-session login is disabled and no override is given),
     validation is impossible, so this raises rather than serve an open endpoint.

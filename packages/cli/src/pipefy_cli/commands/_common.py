@@ -11,7 +11,7 @@ from typing import Any, TypeVar
 
 import typer
 from gql.transport.exceptions import TransportError, TransportQueryError
-from pipefy_sdk import PipefyClient, PipefySettings, stream_bytes
+from pipefy_sdk import PipefyClient, SdkConfig, stream_bytes
 from pipefy_sdk.exceptions import PipefyError
 from pipefy_sdk.label_color import normalize_label_color
 from pipefy_sdk.report_filter_preflight import prepare_report_cards_filter
@@ -256,7 +256,7 @@ def format_card_get_transport_query_error(exc: TransportQueryError) -> str:
 
 def settings_and_token(
     ctx: typer.Context,
-) -> tuple[PipefySettings, BearerToken | None]:
+) -> tuple[SdkConfig, BearerToken | None]:
     """Resolve root CLI context object into settings and optional bearer token."""
     root = ctx.find_root()
     obj = root.obj
@@ -270,7 +270,7 @@ def org_id_from_ctx(ctx: typer.Context) -> str | None:
 
 def settings_and_auth_from_ctx(
     ctx: typer.Context,
-) -> tuple[PipefySettings, AuthContext]:
+) -> tuple[SdkConfig, AuthContext]:
     """Resolve root ``ctx.obj`` into the (settings, auth) pair the client boundary needs."""
     obj = ctx.find_root().obj
     auth_settings = obj["auth_settings"]

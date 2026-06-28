@@ -19,16 +19,12 @@ from typing import Self
 
 from pipefy_auth import AuthConfig, JwtValidationConfig, ServiceAccountCredentials
 from pipefy_infra import security
-from pipefy_infra.coerce import strip_if_str
+from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN, strip_if_str
 from pipefy_infra.deployment import DeploymentConfig
 from pipefy_infra.settings_base import PipefyBaseSettings
 from pipefy_sdk import SdkConfig
 from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import SettingsConfigDict
-
-# Opaque secret / identifier strings: reject leading / trailing whitespace and
-# blank values (mirrors the library models' field constraint).
-_OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
 
 
 class DeploymentSettings(DeploymentConfig, PipefyBaseSettings):
@@ -55,7 +51,7 @@ class AuthEnvSettings(AuthConfig, PipefyBaseSettings):
 
     static_token: str | None = Field(
         default=None,
-        pattern=_OPAQUE_CREDENTIAL_PATTERN,
+        pattern=OPAQUE_CREDENTIAL_PATTERN,
         validation_alias=AliasChoices("PIPEFY_TOKEN"),
     )
 

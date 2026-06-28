@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pipefy_infra import security
-from pipefy_infra.coerce import strip_if_str
+from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN, strip_if_str
 from pipefy_infra.deployment import DeploymentConfig
 from pydantic import (
     BaseModel,
@@ -40,10 +40,6 @@ from pipefy_auth.resolver import ServiceAccount
 # Production default OIDC issuer.
 DEFAULT_ISSUER_URL = "https://signin.pipefy.com/realms/pipefy"
 
-# Opaque secret / identifier strings: reject leading / trailing whitespace and
-# blank values. Anything in between is opaque to us (the IdP defines the format).
-_OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
-
 
 class ServiceAccountCredentials(BaseModel):
     """The OAuth client-credentials pair for the service-account tier.
@@ -56,12 +52,12 @@ class ServiceAccountCredentials(BaseModel):
     """
 
     client_id: str = Field(
-        pattern=_OPAQUE_CREDENTIAL_PATTERN,
+        pattern=OPAQUE_CREDENTIAL_PATTERN,
         description="Service-account OAuth client_id (env: PIPEFY_SERVICE_ACCOUNT_CLIENT_ID).",
     )
 
     client_secret: str = Field(
-        pattern=_OPAQUE_CREDENTIAL_PATTERN,
+        pattern=OPAQUE_CREDENTIAL_PATTERN,
         description="Service-account OAuth client_secret (env: PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET).",
     )
 
@@ -94,7 +90,7 @@ class AuthConfig(BaseModel):
 
     static_token: str | None = Field(
         default=None,
-        pattern=_OPAQUE_CREDENTIAL_PATTERN,
+        pattern=OPAQUE_CREDENTIAL_PATTERN,
         description=(
             "Pre-issued bearer for the static-token tier (env: PIPEFY_TOKEN). "
             "When set, outranks both the service-account tier and any stored session."
@@ -114,7 +110,7 @@ class AuthConfig(BaseModel):
 
     public_client_id: str = Field(
         default=DEFAULT_AUTH_CLIENT_ID,
-        pattern=_OPAQUE_CREDENTIAL_PATTERN,
+        pattern=OPAQUE_CREDENTIAL_PATTERN,
         description=(
             "OIDC public client id registered at the issuer "
             "(env: PIPEFY_AUTH_PUBLIC_CLIENT_ID; rarely overridden)."

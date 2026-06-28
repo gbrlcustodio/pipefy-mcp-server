@@ -26,6 +26,13 @@ from typing import TypeVar
 
 T = TypeVar("T")
 
+# Opaque secret / identifier strings (tokens, OAuth client ids/secrets): reject
+# leading / trailing whitespace and blank values. Anything in between is opaque
+# to us (the issuer defines the format). Shared as a pydantic ``pattern=`` across
+# the settings value objects and the app-edge readers that mirror their fields,
+# so the shape rule lives in one place. Pairs with :func:`strip_if_str`.
+OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
+
 
 def optional_int(value: object) -> int | None:
     """Return ``int(value)``, or ``None`` for None/bool/bytes/unparseable input.
@@ -107,6 +114,7 @@ def try_int(value: T) -> T | int:
 
 
 __all__ = [
+    "OPAQUE_CREDENTIAL_PATTERN",
     "optional_float",
     "optional_int",
     "optional_str",

@@ -17,16 +17,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from pipefy_auth import AuthConfig, ServiceAccountCredentials
-from pipefy_infra.coerce import strip_if_str
+from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN, strip_if_str
 from pipefy_infra.deployment import DeploymentConfig
 from pipefy_infra.settings_base import PipefyBaseSettings
 from pipefy_sdk import SdkConfig
 from pydantic import AliasChoices, Field, ValidationError, field_validator
 from pydantic_settings import SettingsConfigDict
-
-# Opaque secret / identifier strings: reject leading / trailing whitespace and
-# blank values (mirrors the library models' field constraint).
-_OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
 
 # Pipefy organization IDs are ASCII numeric strings. ``\d`` is Unicode-aware in
 # Python ``re`` (Arabic-Indic / Devanagari would pass), so pin to ``[0-9]``.
@@ -57,7 +53,7 @@ class AuthEnvSettings(AuthConfig, PipefyBaseSettings):
 
     static_token: str | None = Field(
         default=None,
-        pattern=_OPAQUE_CREDENTIAL_PATTERN,
+        pattern=OPAQUE_CREDENTIAL_PATTERN,
         validation_alias=AliasChoices("PIPEFY_TOKEN"),
     )
 

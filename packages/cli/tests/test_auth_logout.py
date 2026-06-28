@@ -151,11 +151,11 @@ class TestAuthLogoutCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        """``PIPEFY_AUTH_URL=""`` is rejected at settings load and surfaces as exit 2."""
-        monkeypatch.setenv("PIPEFY_AUTH_URL", "")
+        """``PIPEFY_AUTH_ISSUER_URL=""`` is rejected at settings load and surfaces as exit 2."""
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "")
         result = runner.invoke(cli_app, ["auth", "logout"])
         assert result.exit_code == 2
-        assert "auth_url" in result.stderr
+        assert "issuer_url" in result.stderr
         assert "should match pattern" in result.stderr
 
     def test_disable_stored_session_refuses_with_exit_2(
@@ -165,8 +165,8 @@ class TestAuthLogoutCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        """``PIPEFY_DISABLE_STORED_SESSION=1`` makes logout refuse before any keychain probe."""
-        monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", "1")
+        """``PIPEFY_AUTH_DISABLE_STORED_SESSION=1`` makes logout refuse before any keychain probe."""
+        monkeypatch.setenv("PIPEFY_AUTH_DISABLE_STORED_SESSION", "1")
 
         def _poison(**_kwargs: object):
             raise AssertionError(
@@ -187,7 +187,7 @@ class TestAuthLogoutCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", _ISSUER)
 
         result = runner.invoke(cli_app, ["auth", "logout"])
         assert result.exit_code == 0, result.stderr
@@ -202,7 +202,7 @@ class TestAuthLogoutCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", _ISSUER)
         _store_test_session()
 
         revoke_calls: list[tuple[str, str, str]] = []
@@ -234,7 +234,7 @@ class TestAuthLogoutCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", _ISSUER)
         _store_test_session()
 
         def _boom(**_kwargs: object) -> None:
@@ -258,7 +258,7 @@ class TestAuthLogoutCommand:
         saved_cwd,
     ) -> None:
         """Revoke succeeds but keychain rejects delete: warn, don't claim sign-out, exit 1."""
-        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", _ISSUER)
         _store_test_session()
 
         def _ok_revoke(**_kwargs: object) -> None:
@@ -284,7 +284,7 @@ class TestAuthLogoutCommand:
         clean_pipefy_env,
         saved_cwd,
     ) -> None:
-        monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
+        monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", _ISSUER)
         _store_test_session()
 
         def _unsupported(**_kwargs: object) -> None:

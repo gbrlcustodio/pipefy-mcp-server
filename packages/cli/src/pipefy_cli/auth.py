@@ -55,12 +55,12 @@ class AuthContext:
 
     Each field maps to one resolver tier (bearer-token, service-account,
     stored-session). Built once at startup from the loaded
-    :class:`pipefy_auth.AuthSettings` plus the per-invocation ``--token`` /
+    :class:`pipefy_auth.AuthConfig` plus the per-invocation ``--token`` /
     ``PIPEFY_TOKEN`` resolution.
 
-    ``oidc_client`` is ``None`` only when ``AuthSettings.disable_stored_session``
-    is set (env: PIPEFY_DISABLE_STORED_SESSION); the stored-session tier is
-    then skipped end-to-end. Otherwise ``auth_url`` defaults to the prod IdP
+    ``oidc_client`` is ``None`` only when ``AuthConfig.disable_stored_session``
+    is set (env: PIPEFY_AUTH_DISABLE_STORED_SESSION); the stored-session tier is
+    then skipped end-to-end. Otherwise ``issuer_url`` defaults to the prod IdP
     and the client is always present.
     """
 

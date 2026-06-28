@@ -263,6 +263,11 @@ def settings_and_token(
     return obj["pipefy_settings"], obj.get("token")
 
 
+def org_id_from_ctx(ctx: typer.Context) -> str | None:
+    """The default organization id resolved at the CLI edge (env: PIPEFY_ORG_ID)."""
+    return ctx.find_root().obj.get("org_id")
+
+
 def settings_and_auth_from_ctx(
     ctx: typer.Context,
 ) -> tuple[PipefySettings, AuthContext]:

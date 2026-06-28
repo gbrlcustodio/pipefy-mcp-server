@@ -31,7 +31,6 @@ from pipefy_auth import (
     run_login,
     store_session,
 )
-from pipefy_auth.settings import _LEGACY_ENV_KEYS_TO_NEW
 from pipefy_sdk import MePayload, PipefySettings
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
@@ -88,26 +87,23 @@ auth_app = typer.Typer(
     no_args_is_help=True,
 )
 
-_SERVICE_ACCOUNT_ENV_KEYS = tuple(_LEGACY_ENV_KEYS_TO_NEW.values())
-_LEGACY_SERVICE_ACCOUNT_ENV_KEYS = tuple(_LEGACY_ENV_KEYS_TO_NEW.keys())
+_SERVICE_ACCOUNT_ENV_KEYS = (
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
+)
 
 
 def _session_masking_env_vars() -> list[str]:
     """Env vars in ``os.environ`` that outrank a stored session.
 
-    A service-account triple counts only when *complete* (otherwise the
+    A service-account pair counts only when *complete* (otherwise the
     client-credentials path wouldn't activate and the warning would mislead).
-    Both the canonical and legacy forms are accepted during the deprecation
-    window, and the label echoes whichever the user actually set so they know
-    which keys to unset.
     """
     env_vars: list[str] = []
     if os.environ.get("PIPEFY_TOKEN"):
         env_vars.append("PIPEFY_TOKEN")
     if all(os.environ.get(k) for k in _SERVICE_ACCOUNT_ENV_KEYS):
         env_vars.append("PIPEFY_SERVICE_ACCOUNT_*")
-    elif all(os.environ.get(k) for k in _LEGACY_SERVICE_ACCOUNT_ENV_KEYS):
-        env_vars.append("PIPEFY_OAUTH_*")
     return env_vars
 
 
@@ -144,7 +140,7 @@ def auth_login(
     settings, auth = settings_and_auth_from_ctx(ctx)
     if auth.oidc_client is None:
         typer.echo(
-            "Stored sessions are disabled (PIPEFY_DISABLE_STORED_SESSION=1 or "
+            "Stored sessions are disabled (PIPEFY_AUTH_DISABLE_STORED_SESSION=1 or "
             "disable_stored_session=true in config.toml). Unset to log in, or "
             "use PIPEFY_TOKEN / PIPEFY_SERVICE_ACCOUNT_* for non-interactive auth.",
             err=True,
@@ -213,7 +209,7 @@ def auth_login(
             hint = (
                 "On headless Linux, ensure a Secret Service daemon "
                 "(gnome-keyring, kwallet) is running, set "
-                "PIPEFY_KEYCHAIN_BACKEND=file to use a plaintext file backend, "
+                "PIPEFY_AUTH_KEYCHAIN_BACKEND=file to use a plaintext file backend, "
                 "or use a static PIPEFY_TOKEN."
             )
         typer.echo(
@@ -473,7 +469,7 @@ def auth_logout(ctx: typer.Context) -> None:
     settings, auth = settings_and_auth_from_ctx(ctx)
     if auth.oidc_client is None:
         typer.echo(
-            "Stored sessions are disabled (PIPEFY_DISABLE_STORED_SESSION=1 or "
+            "Stored sessions are disabled (PIPEFY_AUTH_DISABLE_STORED_SESSION=1 or "
             "disable_stored_session=true in config.toml). Nothing to do.",
             err=True,
         )

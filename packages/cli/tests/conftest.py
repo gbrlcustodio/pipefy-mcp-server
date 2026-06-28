@@ -11,9 +11,8 @@ _PIPEFY_ENV_KEYS = (
     "PIPEFY_BASE_URL",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-    # Legacy aliases — kept so tests that opt into back-compat coverage start
-    # from a clean slate even when the dropped names linger in the developer
-    # shell.
+    # Removed legacy aliases — kept here only so a dev shell's stale values are
+    # cleared before a test runs; the settings layer no longer reads them.
     "PIPEFY_OAUTH_CLIENT",
     "PIPEFY_OAUTH_SECRET",
     "PIPEFY_ALLOW_INSECURE_URLS",
@@ -23,10 +22,10 @@ _PIPEFY_ENV_KEYS = (
     "PIPEFY_DEFAULT_WEBHOOK_NAME",
     "PIPEFY_MCP_UNIFIED_ENVELOPE",
     "PIPEFY_ORG_ID",
-    "PIPEFY_AUTH_URL",
-    "PIPEFY_AUTH_CLIENT_ID",
-    "PIPEFY_DISABLE_STORED_SESSION",
-    "PIPEFY_KEYCHAIN_BACKEND",
+    "PIPEFY_AUTH_ISSUER_URL",
+    "PIPEFY_AUTH_PUBLIC_CLIENT_ID",
+    "PIPEFY_AUTH_DISABLE_STORED_SESSION",
+    "PIPEFY_AUTH_KEYCHAIN_BACKEND",
 )
 
 

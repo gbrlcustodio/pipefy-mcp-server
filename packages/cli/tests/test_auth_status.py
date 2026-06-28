@@ -46,8 +46,8 @@ def _seed_session(
 
 
 def _set_auth_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PIPEFY_AUTH_URL", _ISSUER)
-    monkeypatch.setenv("PIPEFY_AUTH_CLIENT_ID", _CLIENT_ID)
+    monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", _ISSUER)
+    monkeypatch.setenv("PIPEFY_AUTH_PUBLIC_CLIENT_ID", _CLIENT_ID)
 
 
 def _mock_client_with_me(me_payload: dict | None = _ME) -> MagicMock:
@@ -327,12 +327,12 @@ def test_status_service_account_wins_over_stored_session(
 
 
 # --------------------------------------------------------------------------- #
-# Scenario 5b: stored-session masked by legacy PIPEFY_OAUTH_* triple          #
+# Scenario 5b: the removed PIPEFY_OAUTH_* names no longer mask                 #
 # --------------------------------------------------------------------------- #
-def test_status_legacy_service_account_triple_masks_stored_session(
+def test_status_legacy_oauth_env_vars_do_not_mask_stored_session(
     clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
 ):
-    """During the alias window a legacy triple still masks — diagnostic must reflect it."""
+    """The dropped legacy names no longer configure (or mask via) the service-account tier."""
     _set_auth_env(monkeypatch)
     _seed_session(monkeypatch)
     monkeypatch.setenv("PIPEFY_OAUTH_CLIENT", "cid")
@@ -343,10 +343,9 @@ def test_status_legacy_service_account_triple_masks_stored_session(
 
     assert result.exit_code == 0, (result.stdout or "") + (result.stderr or "")
     payload = json.loads(result.stdout)
-    assert payload["auth_source"] == "service-account"
-    assert "service-account" in payload["detected_sources"]
-    assert "stored-session" in payload["detected_sources"]
-    assert payload["masking_env_vars"] == ["PIPEFY_OAUTH_*"]
+    assert payload["auth_source"] == "stored-session"
+    assert "service-account" not in payload["detected_sources"]
+    assert payload["masking_env_vars"] == []
 
 
 # --------------------------------------------------------------------------- #
@@ -454,11 +453,11 @@ def test_status_none_text_mentions_onboarding(
 def test_status_with_disable_stored_session_omits_tier(
     clean_pipefy_env, saved_cwd, monkeypatch, runner, fake_keyring
 ):
-    """``PIPEFY_DISABLE_STORED_SESSION=1`` keeps stored-session out of ``detected_sources``.
+    """``PIPEFY_AUTH_DISABLE_STORED_SESSION=1`` keeps stored-session out of ``detected_sources``.
 
     Higher tiers still resolve normally; only the keychain probe is skipped.
     """
-    monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", "1")
+    monkeypatch.setenv("PIPEFY_AUTH_DISABLE_STORED_SESSION", "1")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "csecret")
     # Seed a session that would otherwise be detected; the kill-switch must

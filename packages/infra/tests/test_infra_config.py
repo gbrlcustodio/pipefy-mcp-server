@@ -14,6 +14,7 @@ from pipefy_infra.config import (
     config_dir,
     config_file_path,
 )
+from pipefy_infra.settings_base import PipefyBaseSettings
 
 
 def test_config_dir_posix_default(
@@ -179,3 +180,95 @@ def test_lazy_path_resolution_picks_up_env_change(
 
     monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(second))
     assert _Settings().alpha == "second"
+
+
+class _SectionedSettings(BaseSettings):
+    """Reads its keys from a named TOML sub-table rather than the top level."""
+
+    model_config = SettingsConfigDict(extra="ignore", populate_by_name=True)
+
+    alpha: str = Field(default="default-alpha")
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            PipefyTomlConfigSource(settings_cls, section="auth"),
+            file_secret_settings,
+        )
+
+
+def test_section_reads_only_its_sub_table(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _write_config(
+        tmp_path / "config.toml",
+        'alpha = "top-level"\n[auth]\nalpha = "from-auth"\n[jwt]\nalpha = "from-jwt"\n',
+    )
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(path))
+    assert _SectionedSettings().alpha == "from-auth"
+
+
+def test_section_ignores_top_level_keys(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # A top-level ``alpha`` must not feed a sectioned reader: this is the
+    # collision guard that lets two readers each own an ``alpha`` / ``issuer_url``.
+    path = _write_config(tmp_path / "config.toml", 'alpha = "top-level"\n')
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(path))
+    assert _SectionedSettings().alpha == "default-alpha"
+
+
+def test_section_missing_yields_defaults(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _write_config(tmp_path / "config.toml", '[jwt]\nalpha = "from-jwt"\n')
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(path))
+    assert _SectionedSettings().alpha == "default-alpha"
+
+
+def test_section_non_table_value_raises_quoting_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _write_config(tmp_path / "config.toml", 'auth = "not-a-table"\n')
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(path))
+    with pytest.raises(ValueError, match=str(path)):
+        _SectionedSettings()
+
+
+class _PrefixedReader(PipefyBaseSettings):
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_X_")
+    _toml_section = "xtable"
+
+    alpha: str = Field(default="default-alpha")
+
+
+def test_base_settings_merges_shared_config_with_subclass_prefix(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # The subclass declares only ``env_prefix``; ``extra="ignore"`` /
+    # ``populate_by_name`` / the source chain come from PipefyBaseSettings.
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(tmp_path / "missing.toml"))
+    monkeypatch.setenv("PIPEFY_X_ALPHA", "from-env")
+    assert _PrefixedReader().alpha == "from-env"
+
+
+def test_base_settings_reads_its_toml_section(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _write_config(
+        tmp_path / "config.toml",
+        'alpha = "top-level"\n[xtable]\nalpha = "from-section"\n',
+    )
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(path))
+    monkeypatch.delenv("PIPEFY_X_ALPHA", raising=False)
+    assert _PrefixedReader().alpha == "from-section"

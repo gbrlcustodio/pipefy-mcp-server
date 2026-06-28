@@ -61,14 +61,27 @@ def config_file_path() -> Path:
 
 
 class PipefyTomlConfigSource(PydanticBaseSettingsSource):
-    """Load top-level TOML keys from :func:`config_file_path` as a settings source.
+    """Load TOML keys from :func:`config_file_path` as a settings source.
 
-    Missing file produces an empty mapping (no error). Malformed TOML
-    produces ``ValueError`` quoting the file path, chained from the
-    original ``tomllib.TOMLDecodeError`` so the parser context is preserved.
+    Reads top-level keys by default; pass ``section`` to read a named sub-table
+    instead (so readers whose bare field names would collide in one flat
+    namespace, e.g. two ``issuer_url`` fields, each get their own ``[section]``).
+
+    Missing file produces an empty mapping (no error). Malformed TOML, or a
+    ``section`` key whose value is not a table, produces ``ValueError`` quoting
+    the file path; the malformed-TOML case is chained from the original
+    ``tomllib.TOMLDecodeError`` so the parser context is preserved.
     """
 
     _cache: dict[str, Any] | None = None
+
+    def __init__(
+        self,
+        settings_cls: type[Any],
+        section: str | None = None,
+    ) -> None:
+        super().__init__(settings_cls)
+        self._section = section
 
     def _data(self) -> dict[str, Any]:
         # Pydantic-settings constructs a fresh source per ``BaseSettings.__init__``,
@@ -87,6 +100,12 @@ class PipefyTomlConfigSource(PydanticBaseSettingsSource):
         except tomllib.TOMLDecodeError as exc:
             msg = f"invalid TOML in {path}"
             raise ValueError(msg) from exc
+        if self._section is not None:
+            section_value = raw.get(self._section, {})
+            if not isinstance(section_value, dict):
+                msg = f"invalid TOML in {path}: [{self._section}] must be a table"
+                raise ValueError(msg)
+            raw = section_value
         known = set(self.settings_cls.model_fields)
         self._cache = {key: value for key, value in raw.items() if key in known}
         return self._cache

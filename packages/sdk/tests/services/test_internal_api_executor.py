@@ -14,25 +14,26 @@ import respx
 from gql import gql
 from gql.transport.exceptions import TransportConnectionFailed, TransportServerError
 from pipefy_auth import StaticBearerAuth
+from pipefy_infra.deployment import DeploymentConfig
 
 from pipefy_sdk.client import build_executors
 from pipefy_sdk.graphql_executor import GraphQLExecutor
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.settings import SdkConfig
 
 DEFAULT_INTERNAL_API_URL = "https://app.pipefy.com/internal_api"
 
 
 def _build_executor() -> GraphQLExecutor:
     return build_executors(
-        PipefySettings(),
+        SdkConfig(deployment=DeploymentConfig()),
         StaticBearerAuth("test-bearer-token"),
     ).internal
 
 
 @pytest.mark.unit
-def test_pipefy_settings_internal_api_url_default():
-    """Test that PipefySettings.internal_api_url defaults to the expected URL."""
-    settings = PipefySettings()
+def test_sdk_config_internal_api_url_default():
+    """Test that SdkConfig.internal_api_url defaults to the expected URL."""
+    settings = SdkConfig(deployment=DeploymentConfig())
     assert settings.internal_api_url == DEFAULT_INTERNAL_API_URL
 
 

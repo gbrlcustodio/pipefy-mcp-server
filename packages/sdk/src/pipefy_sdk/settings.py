@@ -1,109 +1,37 @@
+"""Pure value object for SDK runtime configuration.
+
+:class:`SdkConfig` is a plain :class:`pydantic.BaseModel`: it validates itself
+but reads no env / file. Endpoint topology and insecure-URL posture live on the
+injected :class:`~pipefy_infra.deployment.DeploymentConfig` (the one instance the
+application edge shares across SDK and auth); the URLs and posture are forwarded
+off it so consumers (``build_executors``, ``WebhookService``) read them off the
+SDK config unchanged. ``gql_reuse_fetched_graphql_schema`` and
+``default_webhook_name`` are the SDK's own runtime knobs.
+
+The application edge owns env reading (it subclasses this model into a
+``pydantic-settings`` reader and injects ``deployment``); this module imports no
+``pydantic-settings`` so the SDK stays env-free.
+"""
+
 from __future__ import annotations
 
-from typing import Self
-
-from pipefy_infra import security
-from pipefy_infra.config import PipefyTomlConfigSource
-from pydantic import Field, computed_field, field_validator, model_validator
-from pydantic_settings import (
-    BaseSettings,
-    PydanticBaseSettingsSource,
-    SettingsConfigDict,
-)
-
-# Canonical Pipefy production API host root.
-DEFAULT_BASE_URL = "https://app.pipefy.com"
-
-# Pipefy organization IDs are ASCII numeric strings (matches the docstring).
-# ``\d`` is Unicode-aware in Python ``re`` (Arabic-Indic ١٢٣, Devanagari १२३,
-# etc. would pass), so pin to ``[0-9]`` for the wire format the API expects.
-_ORG_ID_PATTERN = r"^[0-9]+$"
+from pipefy_infra.deployment import DeploymentConfig
+from pydantic import BaseModel, Field
 
 
-class PipefySettings(BaseSettings):
-    """Pipefy API connection and shared runtime knobs (CLI, scripts).
+class SdkConfig(BaseModel):
+    """Pipefy API connection (injected) plus shared SDK runtime knobs.
 
-    Endpoint configuration only — credentials live on
-    :class:`pipefy_auth.AuthSettings`. Consumers compose both side by side in
-    their own settings type; each model owns its own env loading so the parent
-    composition does not need ``env_nested_delimiter`` (which routes any
-    matching env var into a nested field — a credential-leak primitive when
-    multiple nested models share field names).
-
-    A single ``PIPEFY_BASE_URL`` drives every API endpoint via
-    :data:`@computed_field` properties (``graphql_url``,
-    ``internal_api_url``, ``interfaces_graphql_url``). Operators on
-    non-prod environments set ``PIPEFY_BASE_URL=https://<api-host>``;
-    operators on prod leave it unset (default Pipefy production).
+    ``deployment`` is required and injected by the application edge; the
+    forwarding properties keep the prior ``settings.graphql_url`` /
+    ``settings.allow_insecure_urls`` call sites working without those consumers
+    reaching into ``settings.deployment``.
     """
 
-    model_config = SettingsConfigDict(
-        env_prefix="PIPEFY_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        populate_by_name=True,
-    )
-
-    @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls: type[BaseSettings],
-        init_settings: PydanticBaseSettingsSource,
-        env_settings: PydanticBaseSettingsSource,
-        dotenv_settings: PydanticBaseSettingsSource,
-        file_secret_settings: PydanticBaseSettingsSource,
-    ) -> tuple[PydanticBaseSettingsSource, ...]:
-        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
-        # TOML keys are bare pydantic field names; the ``PIPEFY_`` env prefix
-        # does not apply to TOML lookups.
-        return (
-            init_settings,
-            env_settings,
-            dotenv_settings,
-            PipefyTomlConfigSource(settings_cls),
-            file_secret_settings,
-        )
-
-    allow_insecure_urls: bool = Field(
-        default=False,
+    deployment: DeploymentConfig = Field(
         description=(
-            "When true (env: PIPEFY_ALLOW_INSECURE_URLS), GraphQL/auth/internal API URLs "
-            "may use http:// and internal hosts; local development only; do not enable in production."
-        ),
-    )
-
-    base_url: str = Field(
-        default=DEFAULT_BASE_URL,
-        pattern=security.URL_SHAPE_PATTERN,
-        description=(
-            "Pipefy API host root (env: PIPEFY_BASE_URL). Drives ``graphql_url`` / "
-            "``internal_api_url`` / ``interfaces_graphql_url`` (and the OAuth "
-            "token endpoint on :class:`pipefy_auth.AuthSettings`). Defaults to "
-            f"'{DEFAULT_BASE_URL}' (canonical Pipefy production). Set to a "
-            "different host for non-prod environments, regional / proxy "
-            "deployments, or local development (with PIPEFY_ALLOW_INSECURE_URLS)."
-        ),
-    )
-
-    org_id: str | None = Field(
-        default=None,
-        pattern=_ORG_ID_PATTERN,
-        description=(
-            "Optional default organization id (numeric string) for CLI commands that "
-            "allow an implicit org, e.g. ``pipefy org get`` when the id argument is "
-            "omitted (env: PIPEFY_ORG_ID). Must be a numeric string; empty or "
-            "non-numeric values are rejected."
-        ),
-    )
-
-    permission_denied_enrichment_timeout_seconds: float = Field(
-        default=5.0,
-        ge=0.1,
-        le=120.0,
-        description=(
-            "Max wall time (seconds) for membership lookups when enriching GraphQL "
-            "PERMISSION_DENIED errors (env: PIPEFY_PERMISSION_DENIED_ENRICHMENT_TIMEOUT_SECONDS)."
+            "Host topology + insecure-URL posture, injected by reference from the "
+            "one DeploymentConfig the application edge builds (shared with auth)."
         ),
     )
 
@@ -130,40 +58,30 @@ class PipefySettings(BaseSettings):
         ),
     )
 
-    @field_validator("base_url", "org_id", mode="before")
-    @classmethod
-    def _strip_str(cls, value: object) -> object:
-        if isinstance(value, str):
-            return value.strip()
-        return value
-
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def graphql_url(self) -> str:
-        """Pipefy GraphQL endpoint, derived from ``base_url``."""
-        return f"{self.base_url.rstrip('/')}/graphql"
+        """Pipefy GraphQL endpoint (forwarded from ``deployment``)."""
+        return self.deployment.graphql_url
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def internal_api_url(self) -> str:
-        """Internal API endpoint for AI Automation, derived from ``base_url``."""
-        return f"{self.base_url.rstrip('/')}/internal_api"
+        """Internal API endpoint for AI Automation (forwarded from ``deployment``)."""
+        return self.deployment.internal_api_url
 
-    @computed_field  # type: ignore[prop-decorator]
     @property
     def interfaces_graphql_url(self) -> str:
-        """Interfaces GraphQL endpoint (portals/pages/elements), derived from ``base_url``."""
-        return f"{self.base_url.rstrip('/')}/graphql/interfaces"
+        """Interfaces GraphQL endpoint (forwarded from ``deployment``)."""
+        return self.deployment.interfaces_graphql_url
 
-    @model_validator(mode="after")
-    def _validate_pipefy_endpoint_urls(self) -> Self:
-        # ``base_url`` is the host root that drives ``/graphql``,
-        # ``/internal_api``, ``/graphql/interfaces`` via the computed
-        # properties above; any non-root path/query/fragment would corrupt
-        # the f-string concatenation.
-        stripped = self.base_url.strip()
-        security.assert_url_is_host_root(stripped, field_label="base_url")
-        security.validate_https_url(
-            stripped, "base_url", allow_insecure=self.allow_insecure_urls
-        )
-        return self
+    @property
+    def allow_insecure_urls(self) -> bool:
+        """Shared insecure-URL posture (forwarded from ``deployment``)."""
+        return self.deployment.allow_insecure_urls
+
+
+# Transitional re-export alias so cross-package imports stay valid across the
+# library refactor commits; dropped in the final settings-cleanup commit.
+PipefySettings = SdkConfig
+
+
+__all__ = ["PipefySettings", "SdkConfig"]

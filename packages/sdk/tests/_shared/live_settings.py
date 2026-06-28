@@ -5,10 +5,15 @@ from __future__ import annotations
 import pytest
 from httpx import Auth
 from pipefy_auth import AuthSettings, missing_auth_message, resolve_pipefy_auth
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pipefy_infra.deployment import DeploymentConfig
+from pipefy_infra.settings_base import PipefyBaseSettings
 
-from pipefy_sdk.settings import PipefySettings
+# These test readers stand in for the application edge (pipefy_cli / pipefy_mcp),
+# which is the one layer allowed to read env. The library SRC ban on
+# pydantic_settings does not apply to this test-only edge stand-in.
+from pydantic_settings import SettingsConfigDict  # noqa: TID251
+
+from pipefy_sdk.settings import SdkConfig
 
 _MISSING_CREDS_MESSAGE = (
     "Pipefy credentials not configured: set PIPEFY_BASE_URL to your "
@@ -16,26 +21,21 @@ _MISSING_CREDS_MESSAGE = (
 )
 
 
-class _LiveEnvSettings(BaseSettings):
-    """Minimal env loader mirroring MCP nested PIPEFY_* layout."""
+class _DeploymentEnv(DeploymentConfig, PipefyBaseSettings):
+    """Test-only env reader for the deployment values (mirrors the app edge)."""
 
-    model_config = SettingsConfigDict(
-        env_nested_delimiter="_",
-        env_nested_max_split=1,
-        env_file=".env",
-        env_file_encoding="utf-8",
-    )
-
-    pipefy: PipefySettings = Field(default_factory=PipefySettings)
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
 
-def _resolved_pipefy() -> PipefySettings:
-    return _LiveEnvSettings().pipefy
+class _SdkEnv(SdkConfig, PipefyBaseSettings):
+    """Test-only env reader for the SDK knobs; ``deployment`` is injected."""
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
 
-def live_pipefy_settings() -> PipefySettings:
-    """Load ``PipefySettings`` from the process environment and optional ``.env`` file."""
-    return _resolved_pipefy()
+def live_pipefy_settings() -> SdkConfig:
+    """Load ``SdkConfig`` from the process environment and optional ``.env`` file."""
+    return _SdkEnv(deployment=_DeploymentEnv())
 
 
 def live_auth_settings() -> AuthSettings:

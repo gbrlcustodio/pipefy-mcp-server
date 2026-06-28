@@ -50,3 +50,4 @@ lint.extend-select = ["TID251"]
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "pipefy_mcp".msg = "pipefy_sdk must not import the MCP package."
 "pipefy_cli".msg = "pipefy_sdk must not import the CLI package."
+"pydantic_settings".msg = "pipefy_sdk is env-free; env reading lives at the application edge (pipefy_cli / pipefy_mcp)."

@@ -52,7 +52,7 @@ from pipefy_sdk.services.types import (
     MePayload,
     copy_card_search,
 )
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.settings import PipefySettings, SdkConfig
 
 __all__ = [
     "__version__",
@@ -88,6 +88,7 @@ __all__ = [
     "PipefyError",
     "PipefyId",
     "PipefySettings",
+    "SdkConfig",
     "TableRecordTarget",
     "UpdateAiAgentInput",
     "UpdateAiAutomationInput",

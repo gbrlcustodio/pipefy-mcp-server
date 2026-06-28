@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pipefy_auth import StaticBearerAuth
+from pipefy_infra.deployment import DeploymentConfig
 
 from pipefy_sdk.client import PipefyClient, build_executors
 from pipefy_sdk.services.ai_agent_service import AiAgentService
@@ -17,13 +18,13 @@ from pipefy_sdk.services.schema_introspection_service import (
 )
 from pipefy_sdk.services.table_service import TableService
 from pipefy_sdk.services.webhook_service import WebhookService
-from pipefy_sdk.settings import PipefySettings
+from pipefy_sdk.settings import SdkConfig
 
 
 @pytest.fixture
 def mock_settings():
-    return PipefySettings(
-        base_url="https://api.pipefy.com",
+    return SdkConfig(
+        deployment=DeploymentConfig(base_url="https://api.pipefy.com"),
     )
 
 
@@ -580,8 +581,8 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 def test_pipefy_client_creates_services_with_shared_auth():
     """Test PipefyClient creates services that share the same auth instance."""
 
-    settings = PipefySettings(
-        base_url="https://api.pipefy.com",
+    settings = SdkConfig(
+        deployment=DeploymentConfig(base_url="https://api.pipefy.com"),
     )
     auth = StaticBearerAuth("shared-token")
     client = PipefyClient(settings=settings, auth=auth)
@@ -802,7 +803,7 @@ async def test_pipefy_client_upload_attachment_delegates_to_attachment_service()
 @pytest.mark.unit
 def test_attachment_service_receives_card_and_table_services_from_facade():
     """PipefyClient wires its own card_service and table_service into AttachmentService."""
-    settings = PipefySettings(base_url="https://api.pipefy.com")
+    settings = SdkConfig(deployment=DeploymentConfig(base_url="https://api.pipefy.com"))
     client = PipefyClient(settings=settings, auth=StaticBearerAuth("t"))
     assert client._attachment_service._card_service is client._card_service
     assert client._attachment_service._table_service is client._table_service

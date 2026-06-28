@@ -1,4 +1,11 @@
-"""``PipefySettings`` end-to-end TOML loading via ``PipefyTomlConfigSource``."""
+"""SDK reader end-to-end TOML / env / dotenv loading via ``PipefyTomlConfigSource``.
+
+The SDK value object is env-free; ``live_pipefy_settings()`` is the test reader
+that mirrors the application edge (a DeploymentConfig env reader injected into an
+SdkConfig env reader). These tests lock the source precedence as observed through
+that reader. The TOML-source mechanic itself (sections, init-over-toml) is unit
+tested in the infra package.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +13,7 @@ import os
 from pathlib import Path
 
 import pytest
-
-from pipefy_sdk.settings import PipefySettings
+from _shared.live_settings import live_pipefy_settings
 
 
 def _write(path: Path, content: str) -> Path:
@@ -30,20 +36,18 @@ def test_field_name_keys_load_from_toml(tmp_path: Path) -> None:
         tmp_path / "config.toml",
         """
         base_url = "https://staging.pipefy.com"
-        org_id = "300123"
         default_webhook_name = "Test Hook"
         """,
     )
-    settings = PipefySettings()
-    assert settings.base_url == "https://staging.pipefy.com"
-    assert settings.org_id == "300123"
+    settings = live_pipefy_settings()
+    assert settings.deployment.base_url == "https://staging.pipefy.com"
     assert settings.default_webhook_name == "Test Hook"
 
 
 def test_env_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://from-env.example")
-    assert PipefySettings().base_url == "https://from-env.example"
+    assert live_pipefy_settings().deployment.base_url == "https://from-env.example"
 
 
 def test_dotenv_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -53,49 +57,38 @@ def test_dotenv_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
     monkeypatch.chdir(tmp_path)
     _write(tmp_path / ".env", "PIPEFY_BASE_URL=https://from-dotenv.example\n")
     _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
-    assert PipefySettings().base_url == "https://from-dotenv.example"
-
-
-def test_init_kwargs_win_over_toml(tmp_path: Path) -> None:
-    _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
-    assert (
-        PipefySettings(base_url="https://from-init.example").base_url
-        == "https://from-init.example"
-    )
+    assert live_pipefy_settings().deployment.base_url == "https://from-dotenv.example"
 
 
 def test_missing_file_uses_defaults() -> None:
-    settings = PipefySettings()
-    assert settings.base_url == "https://app.pipefy.com"
-    assert settings.org_id is None
+    settings = live_pipefy_settings()
+    assert settings.deployment.base_url == "https://app.pipefy.com"
 
 
 def test_invalid_toml_raises_value_error_quoting_path(tmp_path: Path) -> None:
     path = _write(tmp_path / "config.toml", "base_url = \n")
     with pytest.raises(ValueError, match=str(path)):
-        PipefySettings()
+        live_pipefy_settings()
 
 
 def test_unknown_keys_ignored(tmp_path: Path) -> None:
-    # Both auth-only keys (e.g. ``auth_url``) and arbitrary keys should be
-    # silently dropped by PipefySettings via ``extra="ignore"``.
+    # Auth-only keys and arbitrary keys are silently dropped via ``extra="ignore"``.
     _write(
         tmp_path / "config.toml",
         """
         base_url = "https://staging.pipefy.com"
-        auth_url = "https://signin-staging.pipefy.com/realms/pipefy"
         completely_unrelated = 42
         """,
     )
-    assert PipefySettings().base_url == "https://staging.pipefy.com"
+    assert live_pipefy_settings().deployment.base_url == "https://staging.pipefy.com"
 
 
-def test_shared_base_url_loads_into_both_models(tmp_path: Path) -> None:
-    # Single ``base_url`` key in TOML must populate both AuthSettings and
-    # PipefySettings symmetrically — the operator's single-source-of-truth
-    # expectation.
-    from pipefy_auth.settings import AuthSettings
-
+def test_base_url_is_single_sourced(tmp_path: Path) -> None:
+    # A single ``base_url`` key feeds the one DeploymentConfig the edge injects;
+    # there is no second model reading it independently (the prior dual-model
+    # symmetry collapsed into the injected instance). The SDK reads the host off
+    # ``deployment``; auth shares the same instance at the application edge.
     _write(tmp_path / "config.toml", 'base_url = "https://shared.example"\n')
-    assert PipefySettings().base_url == "https://shared.example"
-    assert AuthSettings().base_url == "https://shared.example"
+    settings = live_pipefy_settings()
+    assert settings.deployment.base_url == "https://shared.example"
+    assert settings.graphql_url == "https://shared.example/graphql"

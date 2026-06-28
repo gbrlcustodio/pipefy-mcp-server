@@ -48,3 +48,4 @@ lint.extend-select = ["TID251"]
 "pipefy_cli".msg = "pipefy_auth must not import the CLI package."
 "pipefy_mcp".msg = "pipefy_auth must not import the MCP package."
 "pipefy_sdk".msg = "pipefy_auth must not import the SDK package."
+"pydantic_settings".msg = "pipefy_auth is env-free; env reading lives at the application edge (pipefy_cli / pipefy_mcp)."

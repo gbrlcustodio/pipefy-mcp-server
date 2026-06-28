@@ -154,9 +154,11 @@ def test_auth_settings_kill_switch_returns_none_oidc_client(
         if key.startswith("PIPEFY_"):
             monkeypatch.delenv(key, raising=False)
 
-    from pipefy_auth.settings import AuthSettings
+    from pipefy_infra.deployment import DeploymentConfig
 
-    settings = AuthSettings(disable_stored_session=True)
+    from pipefy_auth.settings import AuthConfig
+
+    settings = AuthConfig(deployment=DeploymentConfig(), disable_stored_session=True)
     assert settings.to_oidc_client() is None
 
 

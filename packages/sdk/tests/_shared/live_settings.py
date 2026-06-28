@@ -4,9 +4,15 @@ from __future__ import annotations
 
 import pytest
 from httpx import Auth
-from pipefy_auth import AuthSettings, missing_auth_message, resolve_pipefy_auth
+from pipefy_auth import (
+    AuthConfig,
+    ServiceAccountCredentials,
+    missing_auth_message,
+    resolve_pipefy_auth,
+)
 from pipefy_infra.deployment import DeploymentConfig
 from pipefy_infra.settings_base import PipefyBaseSettings
+from pydantic import AliasChoices, Field
 
 # These test readers stand in for the application edge (pipefy_cli / pipefy_mcp),
 # which is the one layer allowed to read env. The library SRC ban on
@@ -33,14 +39,44 @@ class _SdkEnv(SdkConfig, PipefyBaseSettings):
     model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
 
+class _AuthEnv(AuthConfig, PipefyBaseSettings):
+    """Test-only env reader for the login subsystem; deployment + sa are injected."""
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_AUTH_")
+
+    static_token: str | None = Field(
+        default=None, validation_alias=AliasChoices("PIPEFY_TOKEN")
+    )
+
+
+class _ServiceAccountEnv(PipefyBaseSettings):
+    """Test-only env reader for the service-account credential pair."""
+
+    model_config = SettingsConfigDict(env_prefix="PIPEFY_SERVICE_ACCOUNT_")
+
+    client_id: str | None = None
+    client_secret: str | None = None
+
+    def to_credentials(self) -> ServiceAccountCredentials | None:
+        if self.client_id is None and self.client_secret is None:
+            return None
+        return ServiceAccountCredentials(
+            client_id=self.client_id,  # type: ignore[arg-type]
+            client_secret=self.client_secret,  # type: ignore[arg-type]
+        )
+
+
 def live_pipefy_settings() -> SdkConfig:
     """Load ``SdkConfig`` from the process environment and optional ``.env`` file."""
     return _SdkEnv(deployment=_DeploymentEnv())
 
 
-def live_auth_settings() -> AuthSettings:
-    """Load ``AuthSettings`` from the process environment and optional ``.env`` file."""
-    return AuthSettings()
+def live_auth_settings() -> AuthConfig:
+    """Load ``AuthConfig`` from the process environment and optional ``.env`` file."""
+    return _AuthEnv(
+        deployment=_DeploymentEnv(),
+        service_account=_ServiceAccountEnv().to_credentials(),
+    )
 
 
 def _try_resolve_live_auth() -> Auth | None:

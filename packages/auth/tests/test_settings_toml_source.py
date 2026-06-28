@@ -1,4 +1,11 @@
-"""``AuthSettings`` end-to-end TOML loading via ``PipefyTomlConfigSource``."""
+"""Auth edge-reader end-to-end loading: ``[auth]`` / ``[service_account]`` / ``[jwt]`` TOML.
+
+The auth library is env-free; ``_edge_readers`` provides the test stand-ins for
+the application edge. These tests lock the sectioned-TOML layout that resolves
+the ``issuer_url`` key collision (an ``[auth]`` issuer must not feed the inbound
+``[jwt]`` reader, and vice versa) and the env / dotenv precedence as observed
+through those readers.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +13,9 @@ import os
 from pathlib import Path
 
 import pytest
+from _edge_readers import AuthEnv, DeploymentEnv, JwtEnv, ServiceAccountEnv
 
-from pipefy_auth.settings import AuthSettings
+from pipefy_auth.settings import DEFAULT_ISSUER_URL
 
 
 def _write(path: Path, content: str) -> Path:
@@ -22,128 +30,160 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     for key in list(os.environ):
         if key.startswith("PIPEFY_") or key in {"XDG_CONFIG_HOME", "APPDATA"}:
             monkeypatch.delenv(key, raising=False)
-    # PIPEFY_CONFIG_FILE points at a tmp file even when the test doesn't write
-    # one, so a stale ``~/.config/pipefy/config.toml`` on the dev machine
-    # cannot bleed into the model.
     monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(tmp_path / "config.toml"))
 
 
-def test_field_name_keys_load_from_toml(tmp_path: Path) -> None:
+def _auth() -> AuthEnv:
+    return AuthEnv(deployment=DeploymentEnv())
+
+
+def test_auth_section_keys_load_from_toml(tmp_path: Path) -> None:
     _write(
         tmp_path / "config.toml",
         """
-        base_url = "https://staging.pipefy.com"
-        auth_url = "https://signin-staging.pipefy.com/realms/pipefy"
-        auth_client_id = "staging-client"
+        [auth]
+        issuer_url = "https://signin-staging.pipefy.com/realms/pipefy"
+        public_client_id = "staging-client"
         """,
     )
-    settings = AuthSettings()
-    assert settings.base_url == "https://staging.pipefy.com"
-    assert settings.auth_url == "https://signin-staging.pipefy.com/realms/pipefy"
-    assert settings.auth_client_id == "staging-client"
+    settings = _auth()
+    assert settings.issuer_url == "https://signin-staging.pipefy.com/realms/pipefy"
+    assert settings.public_client_id == "staging-client"
 
 
-def test_credentials_load_from_toml(tmp_path: Path) -> None:
-    # TOML keys are bare field names — ``static_token``, not ``PIPEFY_TOKEN``.
+def test_base_url_loads_top_level_into_deployment(tmp_path: Path) -> None:
+    _write(tmp_path / "config.toml", 'base_url = "https://staging.pipefy.com"\n')
+    assert DeploymentEnv().base_url == "https://staging.pipefy.com"
+
+
+def test_static_token_loads_from_auth_section_bare_key(tmp_path: Path) -> None:
+    # TOML uses the bare field name; the PIPEFY_TOKEN alias is env-only.
+    _write(tmp_path / "config.toml", '[auth]\nstatic_token = "tom-token"\n')
+    assert _auth().static_token == "tom-token"
+
+
+def test_static_token_loads_from_env_alias(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PIPEFY_TOKEN", "env-token")
+    assert _auth().static_token == "env-token"
+
+
+def test_service_account_section_builds_credentials(tmp_path: Path) -> None:
     _write(
         tmp_path / "config.toml",
         """
-        static_token = "tom-token"
-        service_account_client_id = "svc-id"
-        service_account_client_secret = "svc-secret"
+        [service_account]
+        client_id = "svc-id"
+        client_secret = "svc-secret"
         """,
     )
-    settings = AuthSettings()
-    assert settings.static_token == "tom-token"
-    assert settings.service_account_client_id == "svc-id"
-    assert settings.service_account_client_secret == "svc-secret"
+    creds = ServiceAccountEnv().to_credentials()
+    assert creds is not None
+    assert creds.client_id == "svc-id"
+    assert creds.client_secret == "svc-secret"
 
 
 def test_env_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
-    monkeypatch.setenv("PIPEFY_BASE_URL", "https://from-env.example")
-    assert AuthSettings().base_url == "https://from-env.example"
+    _write(
+        tmp_path / "config.toml",
+        '[auth]\nissuer_url = "https://from-toml.example"\n',
+    )
+    monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "https://from-env.example")
+    assert _auth().issuer_url == "https://from-env.example"
 
 
 def test_dotenv_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    # chdir so ``env_file=".env"`` resolves to tmp_path. ``test_env_wins_over_toml``
-    # does NOT cover this tier: a reorder sliding TOML between env and dotenv
-    # would pass while silently flipping dotenv > toml precedence.
     monkeypatch.chdir(tmp_path)
-    _write(tmp_path / ".env", "PIPEFY_BASE_URL=https://from-dotenv.example\n")
-    _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
-    assert AuthSettings().base_url == "https://from-dotenv.example"
-
-
-def test_init_kwargs_win_over_toml(tmp_path: Path) -> None:
-    _write(tmp_path / "config.toml", 'base_url = "https://from-toml.example"\n')
-    assert (
-        AuthSettings(base_url="https://from-init.example").base_url
-        == "https://from-init.example"
+    _write(tmp_path / ".env", "PIPEFY_AUTH_ISSUER_URL=https://from-dotenv.example\n")
+    _write(
+        tmp_path / "config.toml",
+        '[auth]\nissuer_url = "https://from-toml.example"\n',
     )
+    assert _auth().issuer_url == "https://from-dotenv.example"
 
 
-def test_missing_file_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
-    # PIPEFY_CONFIG_FILE points at a non-existent path; defaults apply.
-    settings = AuthSettings()
-    assert settings.base_url == "https://app.pipefy.com"
-    assert settings.auth_url == "https://signin.pipefy.com/realms/pipefy"
+def test_missing_file_uses_defaults() -> None:
+    assert _auth().issuer_url == DEFAULT_ISSUER_URL
+    assert DeploymentEnv().base_url == "https://app.pipefy.com"
 
 
 def test_invalid_toml_raises_value_error_quoting_path(tmp_path: Path) -> None:
-    path = _write(tmp_path / "config.toml", "base_url = \n")
+    path = _write(tmp_path / "config.toml", "[auth]\nissuer_url = \n")
     with pytest.raises(ValueError, match=str(path)):
-        AuthSettings()
+        _auth()
 
 
-def test_unknown_keys_ignored(tmp_path: Path) -> None:
+def test_kill_switch_and_backend_load_from_auth_section(tmp_path: Path) -> None:
     _write(
         tmp_path / "config.toml",
         """
-        base_url = "https://staging.pipefy.com"
-        not_a_known_field = "ignored"
-        """,
-    )
-    assert AuthSettings().base_url == "https://staging.pipefy.com"
-
-
-def test_kill_switch_and_backend_load_from_toml(tmp_path: Path) -> None:
-    """Both new fields populate from bare TOML keys."""
-    _write(
-        tmp_path / "config.toml",
-        """
+        [auth]
         disable_stored_session = true
         keychain_backend = "file"
         """,
     )
-    settings = AuthSettings()
+    settings = _auth()
     assert settings.disable_stored_session is True
     assert settings.keychain_backend == "file"
     assert settings.to_oidc_client() is None
 
 
-def test_env_wins_over_toml_for_kill_switch(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """``PIPEFY_DISABLE_STORED_SESSION=0`` flips the TOML-set ``true`` back off."""
-    _write(tmp_path / "config.toml", "disable_stored_session = true\n")
-    monkeypatch.setenv("PIPEFY_DISABLE_STORED_SESSION", "0")
-    settings = AuthSettings()
-    assert settings.disable_stored_session is False
-    assert settings.to_oidc_client() is not None
-
-
-def test_legacy_env_var_names_not_picked_up_from_toml(tmp_path: Path) -> None:
-    # ``AliasChoices`` lists env-only names (PIPEFY_TOKEN, PIPEFY_OAUTH_CLIENT).
-    # TOML uses field names. Pasting the env-shaped key into TOML must NOT
-    # populate the field — exercises the "TOML keys are bare field names" rule.
+def test_issuer_url_collision_top_level_does_not_feed_auth(tmp_path: Path) -> None:
+    # A top-level ``issuer_url`` (or one under ``[jwt]``) must NOT populate the
+    # ``[auth]`` reader: this is the collision guard the sectioning buys.
     _write(
         tmp_path / "config.toml",
         """
-        PIPEFY_TOKEN = "should-be-ignored"
-        PIPEFY_OAUTH_CLIENT = "should-be-ignored"
+        issuer_url = "https://top-level.example"
+        [jwt]
+        issuer_url = "https://jwt-only.example"
         """,
     )
-    settings = AuthSettings()
-    assert settings.static_token is None
-    assert settings.service_account_client_id is None
+    assert _auth().issuer_url == DEFAULT_ISSUER_URL
+
+
+def test_jwt_section_feeds_only_jwt_reader(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "config.toml",
+        """
+        [auth]
+        issuer_url = "https://auth-only.example/realms/x"
+        [jwt]
+        issuer_url = "https://jwt-only.example/realms/x"
+        """,
+    )
+    assert _auth().issuer_url == "https://auth-only.example/realms/x"
+    assert (
+        JwtEnv(deployment=DeploymentEnv()).issuer_url
+        == "https://jwt-only.example/realms/x"
+    )
+
+
+# --- ServiceAccountEnv.to_credentials() both-or-neither rule ---------------
+
+
+def test_to_credentials_both_unset_returns_none() -> None:
+    assert ServiceAccountEnv().to_credentials() is None
+
+
+def test_to_credentials_both_set_returns_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "id")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "secret")
+    creds = ServiceAccountEnv().to_credentials()
+    assert creds is not None
+    assert (creds.client_id, creds.client_secret) == ("id", "secret")
+
+
+@pytest.mark.parametrize(
+    "env_key",
+    ["PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET"],
+)
+def test_to_credentials_exactly_one_set_raises(
+    monkeypatch: pytest.MonkeyPatch, env_key: str
+) -> None:
+    from pydantic import ValidationError
+
+    monkeypatch.setenv(env_key, "only-one")
+    with pytest.raises(ValidationError):
+        ServiceAccountEnv().to_credentials()

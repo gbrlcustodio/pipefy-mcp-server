@@ -112,7 +112,7 @@ def detect_cli_sources(auth: AuthContext) -> list[str]:
 
 
 def _cache_key(
-    pipefy_settings: SdkConfig,
+    sdk_config: SdkConfig,
     auth: AuthContext,
     tier: str,
 ) -> str:
@@ -126,7 +126,7 @@ def _cache_key(
     """
     payload = json.dumps(
         {
-            "settings": pipefy_settings.model_dump(mode="json"),
+            "settings": sdk_config.model_dump(mode="json"),
             "auth": asdict(auth),
             "tier": tier,
         },
@@ -137,7 +137,7 @@ def _cache_key(
 
 
 def get_authenticated_client(
-    pipefy_settings: SdkConfig,
+    sdk_config: SdkConfig,
     auth: AuthContext,
 ) -> PipefyClient:
     """Return a facade client using the highest-precedence available auth source.
@@ -179,11 +179,11 @@ def get_authenticated_client(
             )
             raise typer.Exit(2) from exc
 
-    key = _cache_key(pipefy_settings, auth, tier)
+    key = _cache_key(sdk_config, auth, tier)
     if _cached_client is not None and _cached_signature == key:
         return _cached_client
 
-    client = PipefyClient(pipefy_settings, auth=resolved)
+    client = PipefyClient(sdk_config, auth=resolved)
     _cached_signature = key
     _cached_client = client
     return client

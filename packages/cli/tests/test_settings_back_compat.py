@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from pipefy_cli.config import resolve_cli_settings
+from pipefy_cli.settings import resolve_cli_settings
 
 
 def test_legacy_oauth_env_vars_are_ignored(
@@ -29,6 +29,6 @@ def test_legacy_oauth_env_vars_are_ignored(
 
     # The legacy names do not populate the service-account tier, and there is
     # no deprecation warning (the shim is gone).
-    assert resolved.service_account is None
+    assert resolved.service_account_credentials is None
     assert resolved.to_service_account() is None
     assert "deprecated" not in capsys.readouterr().err

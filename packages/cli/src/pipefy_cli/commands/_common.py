@@ -203,10 +203,10 @@ def run_pipefy_client_coroutine(
     Raises:
         typer.Exit: On :class:`PipefyError` (exit code 1), optional ``ValueError`` mapping, or ``BrokenPipeError`` (exit 0).
     """
-    pipefy_settings, auth = settings_and_auth_from_ctx(ctx)
+    sdk_config, auth = settings_and_auth_from_ctx(ctx)
 
     async def _run() -> _T:
-        client = get_authenticated_client(pipefy_settings, auth)
+        client = get_authenticated_client(sdk_config, auth)
         return await coro_factory(client)
 
     try:
@@ -260,7 +260,7 @@ def settings_and_token(
     """Resolve root CLI context object into settings and optional bearer token."""
     root = ctx.find_root()
     obj = root.obj
-    return obj["pipefy_settings"], obj.get("token")
+    return obj["sdk_config"], obj.get("token")
 
 
 def org_id_from_ctx(ctx: typer.Context) -> str | None:
@@ -273,19 +273,19 @@ def settings_and_auth_from_ctx(
 ) -> tuple[SdkConfig, AuthContext]:
     """Resolve root ``ctx.obj`` into the (settings, auth) pair the client boundary needs."""
     obj = ctx.find_root().obj
-    auth_settings = obj["auth_settings"]
+    auth_config = obj["auth_config"]
     auth = AuthContext(
         bearer_token=obj.get("token"),
-        service_account=auth_settings.to_service_account(),
-        oidc_client=auth_settings.to_oidc_client(),
+        service_account=auth_config.to_service_account(),
+        oidc_client=auth_config.to_oidc_client(),
     )
-    return obj["pipefy_settings"], auth
+    return obj["sdk_config"], auth
 
 
 def authenticated_client_from_ctx(ctx: typer.Context) -> PipefyClient:
     """Build a :class:`PipefyClient` using the same auth path as ``run_cli_command``."""
-    pipefy_settings, auth = settings_and_auth_from_ctx(ctx)
-    return get_authenticated_client(pipefy_settings, auth)
+    sdk_config, auth = settings_and_auth_from_ctx(ctx)
+    return get_authenticated_client(sdk_config, auth)
 
 
 def parse_json_value(raw: str | None, option_name: str) -> Any:
@@ -334,11 +334,11 @@ def run_cli_command(
         format_transport_query_error: Optional override for GraphQL transport errors
             (defaults to a single-line formatter).
     """
-    pipefy_settings, auth = settings_and_auth_from_ctx(ctx)
+    sdk_config, auth = settings_and_auth_from_ctx(ctx)
     transport_fmt = format_transport_query_error or _format_transport_query_error
 
     async def _run() -> _R:
-        client = get_authenticated_client(pipefy_settings, auth)
+        client = get_authenticated_client(sdk_config, auth)
         return await coro_factory(client)
 
     try:

@@ -54,7 +54,7 @@ def _settings(auth: AuthConfig) -> Settings:
 def _service_account_auth_settings() -> AuthConfig:
     return AuthConfig(
         deployment=_DEPLOYMENT,
-        service_account=ServiceAccountCredentials(
+        service_account_credentials=ServiceAccountCredentials(
             client_id="client_id", client_secret="client_secret"
         ),
     )

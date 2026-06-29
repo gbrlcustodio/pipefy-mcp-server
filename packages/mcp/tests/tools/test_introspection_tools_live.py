@@ -11,7 +11,7 @@ from datetime import timedelta
 
 import pytest
 from _shared.live_settings import (
-    live_pipefy_settings,
+    live_pipefy_config,
     live_resolved_auth,
     require_live_creds,
 )
@@ -27,7 +27,7 @@ from tools.conftest import build_tool_test_server
 @pytest.fixture
 def live_pipefy_client():
     require_live_creds()
-    return PipefyClient(settings=live_pipefy_settings(), auth=live_resolved_auth())
+    return PipefyClient(settings=live_pipefy_config(), auth=live_resolved_auth())
 
 
 @pytest.fixture

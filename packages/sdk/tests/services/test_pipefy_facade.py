@@ -5,6 +5,7 @@ from pipefy_auth import StaticBearerAuth
 from pipefy_infra.deployment import DeploymentConfig
 
 from pipefy_sdk.client import PipefyClient, build_executors
+from pipefy_sdk.config import SdkConfig
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_service import AutomationService
@@ -18,7 +19,6 @@ from pipefy_sdk.services.schema_introspection_service import (
 )
 from pipefy_sdk.services.table_service import TableService
 from pipefy_sdk.services.webhook_service import WebhookService
-from pipefy_sdk.settings import SdkConfig
 
 
 @pytest.fixture

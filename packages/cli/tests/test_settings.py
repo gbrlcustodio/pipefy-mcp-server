@@ -6,7 +6,7 @@ import textwrap
 
 import pytest
 
-from pipefy_cli.config import resolve_cli_settings
+from pipefy_cli.settings import resolve_cli_settings
 
 
 def test_env_only_resolution(
@@ -31,8 +31,8 @@ def test_env_only_resolution(
     sa = resolved.auth.to_service_account()
     assert sa is not None
     assert sa.token_url == "https://env-only.example.com/oauth/token"
-    assert resolved.auth.service_account.client_id == "env-client"
-    assert resolved.auth.service_account.client_secret == "env-secret"
+    assert resolved.auth.service_account_credentials.client_id == "env-client"
+    assert resolved.auth.service_account_credentials.client_secret == "env-secret"
 
 
 def test_pipefy_and_auth_share_one_deployment(
@@ -69,7 +69,7 @@ def test_dotenv_only_resolution(
     )
 
     assert resolved.pipefy.deployment.base_url == "https://dotenv.example.com"
-    assert resolved.auth.service_account.client_id == "dotenv-client"
+    assert resolved.auth.service_account_credentials.client_id == "dotenv-client"
 
 
 def test_process_env_overrides_dotenv(

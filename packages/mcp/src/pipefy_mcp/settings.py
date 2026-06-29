@@ -33,17 +33,18 @@ class DeploymentSettings(DeploymentConfig, PipefyBaseSettings):
     model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
 
-class SdkEnvSettings(SdkConfig, PipefyBaseSettings):
+class SdkSettings(SdkConfig, PipefyBaseSettings):
     """Reads the SDK knobs under ``PIPEFY_``; ``deployment`` is injected."""
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
 
-class AuthEnvSettings(AuthConfig, PipefyBaseSettings):
+class AuthSettings(AuthConfig, PipefyBaseSettings):
     """Reads the login-subsystem fields under ``PIPEFY_AUTH_`` / ``[auth]``.
 
     ``static_token`` keeps its product-root env name (``PIPEFY_TOKEN``) via a
-    cross-prefix alias; ``deployment`` / ``service_account`` are injected.
+    cross-prefix alias; ``deployment`` / ``service_account_credentials`` are
+    injected.
     """
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_AUTH_")
@@ -60,14 +61,14 @@ class AuthEnvSettings(AuthConfig, PipefyBaseSettings):
     )
 
 
-class JwtEnvSettings(JwtValidationConfig, PipefyBaseSettings):
+class JwtValidationSettings(JwtValidationConfig, PipefyBaseSettings):
     """Reads the inbound-validation fields under ``PIPEFY_JWT_`` / ``[jwt]``."""
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_JWT_")
     _toml_section = "jwt"
 
 
-class ServiceAccountEnvSettings(PipefyBaseSettings):
+class ServiceAccountSettings(PipefyBaseSettings):
     """Reads the service-account credentials under ``PIPEFY_SERVICE_ACCOUNT_`` / ``[service_account]``.
 
     Fields are optional so absence is representable; ``to_credentials()`` builds
@@ -236,12 +237,14 @@ def resolve_mcp_settings() -> Settings:
             partial service-account pair, bad URL shape).
     """
     deployment = DeploymentSettings()
-    service_account = ServiceAccountEnvSettings().to_credentials()
+    service_account = ServiceAccountSettings().to_credentials()
     return Settings(
-        pipefy=SdkEnvSettings(deployment=deployment),
-        auth=AuthEnvSettings(deployment=deployment, service_account=service_account),
+        pipefy=SdkSettings(deployment=deployment),
+        auth=AuthSettings(
+            deployment=deployment, service_account_credentials=service_account
+        ),
         mcp=McpSettings(),
-        jwt=JwtEnvSettings(deployment=deployment),
+        jwt=JwtValidationSettings(deployment=deployment),
         rs=ResourceServerSettings(deployment=deployment),
     )
 
@@ -264,13 +267,13 @@ def reset_settings() -> None:
 
 
 __all__ = [
-    "AuthEnvSettings",
+    "AuthSettings",
     "DeploymentSettings",
-    "JwtEnvSettings",
+    "JwtValidationSettings",
     "McpSettings",
     "ResourceServerSettings",
-    "SdkEnvSettings",
-    "ServiceAccountEnvSettings",
+    "SdkSettings",
+    "ServiceAccountSettings",
     "Settings",
     "get_settings",
     "reset_settings",

@@ -6,8 +6,8 @@ import asyncio
 
 import pytest
 from _shared.live_settings import (
-    live_auth_settings,
-    live_pipefy_settings,
+    live_auth_config,
+    live_pipefy_config,
     require_live_creds,
 )
 
@@ -19,8 +19,8 @@ def test_live_oauth_round_trip_triggers_graphql_auth():
     """First GraphQL request obtains an OAuth token (same stack as MCP)."""
 
     require_live_creds()
-    settings = live_pipefy_settings()
-    auth_settings = live_auth_settings()
+    settings = live_pipefy_config()
+    auth_settings = live_auth_config()
 
     async def run():
         client = get_authenticated_client(

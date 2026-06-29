@@ -15,24 +15,25 @@ from pipefy_infra.settings_base import PipefyBaseSettings
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import SettingsConfigDict  # noqa: TID251
 
-from pipefy_auth.settings import (
+from pipefy_auth.config import (
     AuthConfig,
     JwtValidationConfig,
     ServiceAccountCredentials,
 )
 
 
-class DeploymentEnv(DeploymentConfig, PipefyBaseSettings):
+class DeploymentSettings(DeploymentConfig, PipefyBaseSettings):
     """Reads the deployment values under the ``PIPEFY_`` prefix / top-level TOML."""
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
 
-class AuthEnv(AuthConfig, PipefyBaseSettings):
+class AuthSettings(AuthConfig, PipefyBaseSettings):
     """Reads the login-subsystem fields under ``PIPEFY_AUTH_`` / ``[auth]``.
 
     ``static_token`` keeps its product-root env name (``PIPEFY_TOKEN``) via a
-    cross-prefix alias; ``deployment`` / ``service_account`` are injected.
+    cross-prefix alias; ``deployment`` / ``service_account_credentials`` are
+    injected.
     """
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_AUTH_")
@@ -49,14 +50,14 @@ class AuthEnv(AuthConfig, PipefyBaseSettings):
     )
 
 
-class JwtEnv(JwtValidationConfig, PipefyBaseSettings):
+class JwtValidationSettings(JwtValidationConfig, PipefyBaseSettings):
     """Reads the inbound-validation fields under ``PIPEFY_JWT_`` / ``[jwt]``."""
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_JWT_")
     _toml_section = "jwt"
 
 
-class ServiceAccountEnv(PipefyBaseSettings):
+class ServiceAccountSettings(PipefyBaseSettings):
     """Reads the service-account credentials under ``PIPEFY_SERVICE_ACCOUNT_`` / ``[service_account]``.
 
     Fields are optional so absence is representable; ``to_credentials()`` builds
@@ -79,4 +80,9 @@ class ServiceAccountEnv(PipefyBaseSettings):
         )
 
 
-__all__ = ["AuthEnv", "DeploymentEnv", "JwtEnv", "ServiceAccountEnv"]
+__all__ = [
+    "AuthSettings",
+    "DeploymentSettings",
+    "JwtValidationSettings",
+    "ServiceAccountSettings",
+]

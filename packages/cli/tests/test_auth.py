@@ -27,7 +27,7 @@ from pipefy_cli.auth import (
 from pipefy_cli.main import app
 
 
-def _minimal_settings() -> SdkConfig:
+def _minimal_config() -> SdkConfig:
     return SdkConfig(deployment=DeploymentConfig(base_url="https://unit.example.com"))
 
 
@@ -68,12 +68,12 @@ def _auth(
 
 
 def test_get_authenticated_client_passes_auth_to_pipefy_client(clean_pipefy_env):
-    settings = _minimal_settings()
+    sdk_config = _minimal_config()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
-        client = get_authenticated_client(settings, _auth(bearer_token="tok"))
+        client = get_authenticated_client(sdk_config, _auth(bearer_token="tok"))
         kwargs = mock_pc.call_args.kwargs
-        assert mock_pc.call_args.args == (settings,)
+        assert mock_pc.call_args.args == (sdk_config,)
         assert isinstance(kwargs["auth"], StaticBearerAuth)
         assert client is mock_pc.return_value
 
@@ -81,11 +81,11 @@ def test_get_authenticated_client_passes_auth_to_pipefy_client(clean_pipefy_env)
 def test_cache_returns_same_instance_for_identical_service_account_settings(
     clean_pipefy_env,
 ):
-    settings = _minimal_settings()
+    sdk_config = _minimal_config()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
-        first = get_authenticated_client(settings, _auth())
-        second = get_authenticated_client(settings, _auth())
+        first = get_authenticated_client(sdk_config, _auth())
+        second = get_authenticated_client(sdk_config, _auth())
         assert first is second
         assert mock_pc.call_count == 1
 
@@ -180,7 +180,7 @@ def _fresh_stored_session(*, access_token: str = "SESSION_ACCESS") -> StoredSess
     )
 
 
-def _public_only_settings() -> SdkConfig:
+def _public_only_config() -> SdkConfig:
     """``PIPEFY_SERVICE_ACCOUNT_*`` pair absent -> service-account tier unavailable, stored session wins."""
     return SdkConfig(deployment=DeploymentConfig(base_url="https://unit.example.com"))
 
@@ -204,7 +204,7 @@ def _public_only_auth(
 
 def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
     """The static-token tier MUST short-circuit before the keychain is even consulted."""
-    settings = _minimal_settings()
+    sdk_config = _minimal_config()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_auth.resolver.load_session") as mock_load,
@@ -212,7 +212,7 @@ def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(
-            settings,
+            sdk_config,
             _auth(
                 bearer_token="explicit-bearer",
                 issuer_url=_ISSUER,
@@ -226,7 +226,7 @@ def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
 
 def test_service_account_creds_win_over_stored_session(clean_pipefy_env):
     """The service-account tier MUST short-circuit before the keychain is consulted."""
-    settings = _minimal_settings()
+    sdk_config = _minimal_config()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_auth.resolver.load_session") as mock_load,
@@ -234,7 +234,7 @@ def test_service_account_creds_win_over_stored_session(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(
-            settings,
+            sdk_config,
             _auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         mock_pc.assert_called_once()
@@ -244,7 +244,7 @@ def test_service_account_creds_win_over_stored_session(clean_pipefy_env):
 
 def test_stored_session_used_when_no_other_source(clean_pipefy_env):
     """Stored-session tier activates when bearer absent and service-account triple incomplete."""
-    settings = _public_only_settings()
+    sdk_config = _public_only_config()
     session = _fresh_stored_session()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
@@ -253,7 +253,7 @@ def test_stored_session_used_when_no_other_source(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(
-            settings,
+            sdk_config,
             _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         mock_pc.assert_called_once()
@@ -262,7 +262,7 @@ def test_stored_session_used_when_no_other_source(clean_pipefy_env):
 
 def test_cache_reuses_resolved_auth_for_stored_session(clean_pipefy_env):
     """Two stored-session calls with identical OIDC inputs reuse the cached client."""
-    settings = _public_only_settings()
+    sdk_config = _public_only_config()
     stored = _fresh_stored_session()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
@@ -271,11 +271,11 @@ def test_cache_reuses_resolved_auth_for_stored_session(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         first = get_authenticated_client(
-            settings,
+            sdk_config,
             _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         second = get_authenticated_client(
-            settings,
+            sdk_config,
             _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         assert first is second
@@ -286,7 +286,7 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
     """RefreshError from the eager warmup surfaces as exit(2) + relogin message."""
     from pipefy_auth import RefreshError
 
-    settings = _public_only_settings()
+    sdk_config = _public_only_config()
     with (
         patch(
             "pipefy_auth.resolver.load_session", return_value=_fresh_stored_session()
@@ -305,7 +305,7 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
         )
         with pytest.raises(typer.Exit) as excinfo:
             get_authenticated_client(
-                settings,
+                sdk_config,
                 _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
             )
         assert excinfo.value.exit_code == 2

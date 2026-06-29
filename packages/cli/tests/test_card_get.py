@@ -7,7 +7,7 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from _shared.live_settings import live_pipefy_settings, require_live_creds
+from _shared.live_settings import live_pipefy_config, require_live_creds
 from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk import SdkConfig
 from pipefy_sdk.exceptions import PipefyAPIError
@@ -116,7 +116,7 @@ def test_card_get_live_json(runner, monkeypatch, tmp_path):
         pytest.skip(
             "Set PIPEFY_CLI_LIVE_CARD_ID to a card id your service account can read"
         )
-    settings = live_pipefy_settings()
+    settings = live_pipefy_config()
     monkeypatch.chdir(tmp_path)
     _apply_settings_to_env(monkeypatch, settings)
 

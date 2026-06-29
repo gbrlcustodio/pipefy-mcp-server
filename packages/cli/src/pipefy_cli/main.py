@@ -33,7 +33,7 @@ from pipefy_cli.commands.report_pipe import report_pipe_app
 from pipefy_cli.commands.table import table_app
 from pipefy_cli.commands.usage import usage_app
 from pipefy_cli.commands.webhook import webhook_app
-from pipefy_cli.config import resolve_cli_settings
+from pipefy_cli.settings import resolve_cli_settings
 
 app = typer.Typer(
     name="pipefy",
@@ -88,8 +88,8 @@ def main(
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
-    ctx.obj["pipefy_settings"] = cli_settings.pipefy
-    ctx.obj["auth_settings"] = cli_settings.auth
+    ctx.obj["sdk_config"] = cli_settings.pipefy
+    ctx.obj["auth_config"] = cli_settings.auth
     ctx.obj["org_id"] = cli_settings.org_id
     # Swap the keyring backend before any keychain probe (resolver tier
     # detection, ``auth login``, ``auth status``). No-op when ``auto``.

@@ -107,7 +107,7 @@ def test_settings_picks_up_pipefy_token_from_env(monkeypatch):
         "AUTH_AUTH_ISSUER_URL",
         "AUTH_AUTH_PUBLIC_CLIENT_ID",
         "AUTH_ALLOW_INSECURE_URLS",
-        # base_url is not an AuthEnvSettings field (it lives on the injected
+        # base_url is not an AuthSettings field (it lives on the injected
         # deployment), so even the correct PIPEFY_AUTH_ prefix routes nowhere.
         "PIPEFY_AUTH_BASE_URL",
     ],
@@ -125,7 +125,7 @@ def test_settings_does_not_route_unprefixed_env_into_auth(monkeypatch, leak_env_
         settings.auth.deployment.oauth_token_url == "https://app.pipefy.com/oauth/token"
     )
     assert settings.auth.static_token is None
-    assert settings.auth.service_account is None
+    assert settings.auth.service_account_credentials is None
 
 
 @pytest.mark.unit

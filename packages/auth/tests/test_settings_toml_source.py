@@ -13,9 +13,14 @@ import os
 from pathlib import Path
 
 import pytest
-from _edge_readers import AuthEnv, DeploymentEnv, JwtEnv, ServiceAccountEnv
+from _edge_readers import (
+    AuthSettings,
+    DeploymentSettings,
+    JwtValidationSettings,
+    ServiceAccountSettings,
+)
 
-from pipefy_auth.settings import DEFAULT_ISSUER_URL
+from pipefy_auth.config import DEFAULT_ISSUER_URL
 
 
 def _write(path: Path, content: str) -> Path:
@@ -33,8 +38,8 @@ def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(tmp_path / "config.toml"))
 
 
-def _auth() -> AuthEnv:
-    return AuthEnv(deployment=DeploymentEnv())
+def _auth() -> AuthSettings:
+    return AuthSettings(deployment=DeploymentSettings())
 
 
 def test_auth_section_keys_load_from_toml(tmp_path: Path) -> None:
@@ -53,7 +58,7 @@ def test_auth_section_keys_load_from_toml(tmp_path: Path) -> None:
 
 def test_base_url_loads_top_level_into_deployment(tmp_path: Path) -> None:
     _write(tmp_path / "config.toml", 'base_url = "https://staging.pipefy.com"\n')
-    assert DeploymentEnv().base_url == "https://staging.pipefy.com"
+    assert DeploymentSettings().base_url == "https://staging.pipefy.com"
 
 
 def test_static_token_loads_from_auth_section_bare_key(tmp_path: Path) -> None:
@@ -85,7 +90,7 @@ def test_edge_strips_whitespace_before_building_service_account(
 ) -> None:
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "  svc-id  ")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "svc-secret\n")
-    creds = ServiceAccountEnv().to_credentials()
+    creds = ServiceAccountSettings().to_credentials()
     assert creds is not None
     assert creds.client_id == "svc-id"
     assert creds.client_secret == "svc-secret"
@@ -109,7 +114,7 @@ def test_service_account_section_builds_credentials(tmp_path: Path) -> None:
         client_secret = "svc-secret"
         """,
     )
-    creds = ServiceAccountEnv().to_credentials()
+    creds = ServiceAccountSettings().to_credentials()
     assert creds is not None
     assert creds.client_id == "svc-id"
     assert creds.client_secret == "svc-secret"
@@ -136,7 +141,7 @@ def test_dotenv_wins_over_toml(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
 
 def test_missing_file_uses_defaults() -> None:
     assert _auth().issuer_url == DEFAULT_ISSUER_URL
-    assert DeploymentEnv().base_url == "https://app.pipefy.com"
+    assert DeploymentSettings().base_url == "https://app.pipefy.com"
 
 
 def test_invalid_toml_raises_value_error_quoting_path(tmp_path: Path) -> None:
@@ -186,16 +191,16 @@ def test_jwt_section_feeds_only_jwt_reader(tmp_path: Path) -> None:
     )
     assert _auth().issuer_url == "https://auth-only.example/realms/x"
     assert (
-        JwtEnv(deployment=DeploymentEnv()).issuer_url
+        JwtValidationSettings(deployment=DeploymentSettings()).issuer_url
         == "https://jwt-only.example/realms/x"
     )
 
 
-# --- ServiceAccountEnv.to_credentials() both-or-neither rule ---------------
+# --- ServiceAccountSettings.to_credentials() both-or-neither rule ---------------
 
 
 def test_to_credentials_both_unset_returns_none() -> None:
-    assert ServiceAccountEnv().to_credentials() is None
+    assert ServiceAccountSettings().to_credentials() is None
 
 
 def test_to_credentials_both_set_returns_object(
@@ -203,7 +208,7 @@ def test_to_credentials_both_set_returns_object(
 ) -> None:
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "id")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "secret")
-    creds = ServiceAccountEnv().to_credentials()
+    creds = ServiceAccountSettings().to_credentials()
     assert creds is not None
     assert (creds.client_id, creds.client_secret) == ("id", "secret")
 
@@ -219,4 +224,4 @@ def test_to_credentials_exactly_one_set_raises(
 
     monkeypatch.setenv(env_key, "only-one")
     with pytest.raises(ValidationError):
-        ServiceAccountEnv().to_credentials()
+        ServiceAccountSettings().to_credentials()

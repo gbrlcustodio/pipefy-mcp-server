@@ -1,7 +1,8 @@
 """Value-object tests for ``AuthConfig`` / ``ServiceAccountCredentials``.
 
 ``AuthConfig`` is now a pure ``pydantic.BaseModel``: it reads no env (the
-application edge owns that and injects ``deployment`` + ``service_account``).
+application edge owns that and injects ``deployment`` +
+``service_account_credentials``).
 These tests construct it directly with kwargs and assert defaults, the tier
 projections (``to_oidc_client`` / ``to_service_account``), and the inline SSRF
 gate. Env-name / precedence coverage lives at the application edge
@@ -14,7 +15,7 @@ import pytest
 from pipefy_infra.deployment import DeploymentConfig
 from pydantic import ValidationError
 
-from pipefy_auth.settings import (
+from pipefy_auth.config import (
     DEFAULT_ISSUER_URL,
     AuthConfig,
     ServiceAccountCredentials,
@@ -91,14 +92,14 @@ def test_issuer_url_http_allowed_when_deployment_insecure():
 
 @pytest.mark.unit
 def test_service_account_none_yields_no_service_account():
-    assert _auth().service_account is None
+    assert _auth().service_account_credentials is None
     assert _auth().to_service_account() is None
 
 
 @pytest.mark.unit
 def test_service_account_projects_with_deployment_token_url():
     settings = _auth(
-        service_account=ServiceAccountCredentials(
+        service_account_credentials=ServiceAccountCredentials(
             client_id="sa-client", client_secret="sa-secret"
         )
     )
@@ -113,7 +114,7 @@ def test_service_account_projects_with_deployment_token_url():
 def test_service_account_token_url_follows_custom_deployment():
     settings = AuthConfig(
         deployment=DeploymentConfig(base_url="https://staging.example.com"),
-        service_account=ServiceAccountCredentials(
+        service_account_credentials=ServiceAccountCredentials(
             client_id="sa-client", client_secret="sa-secret"
         ),
     )

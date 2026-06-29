@@ -35,17 +35,18 @@ class DeploymentSettings(DeploymentConfig, PipefyBaseSettings):
     model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
 
-class SdkEnvSettings(SdkConfig, PipefyBaseSettings):
+class SdkSettings(SdkConfig, PipefyBaseSettings):
     """Reads the SDK knobs under ``PIPEFY_``; ``deployment`` is injected."""
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
 
-class AuthEnvSettings(AuthConfig, PipefyBaseSettings):
+class AuthSettings(AuthConfig, PipefyBaseSettings):
     """Reads the login-subsystem fields under ``PIPEFY_AUTH_`` / ``[auth]``.
 
     ``static_token`` keeps its product-root env name (``PIPEFY_TOKEN``) via a
-    cross-prefix alias; ``deployment`` / ``service_account`` are injected.
+    cross-prefix alias; ``deployment`` / ``service_account_credentials`` are
+    injected.
     """
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_AUTH_")
@@ -62,7 +63,7 @@ class AuthEnvSettings(AuthConfig, PipefyBaseSettings):
     )
 
 
-class ServiceAccountEnvSettings(PipefyBaseSettings):
+class ServiceAccountSettings(PipefyBaseSettings):
     """Reads the service-account credentials under ``PIPEFY_SERVICE_ACCOUNT_`` / ``[service_account]``.
 
     Fields are optional so absence is representable; ``to_credentials()`` builds
@@ -124,9 +125,11 @@ def resolve_cli_settings(
 
     try:
         deployment = DeploymentSettings(**deploy_init)
-        pipefy = SdkEnvSettings(deployment=deployment)
-        service_account = ServiceAccountEnvSettings().to_credentials()
-        auth = AuthEnvSettings(deployment=deployment, service_account=service_account)
+        pipefy = SdkSettings(deployment=deployment)
+        service_account = ServiceAccountSettings().to_credentials()
+        auth = AuthSettings(
+            deployment=deployment, service_account_credentials=service_account
+        )
         edge = CliEdgeSettings()
     except ValidationError as exc:
         raise ValueError(str(exc)) from exc
@@ -135,11 +138,11 @@ def resolve_cli_settings(
 
 
 __all__ = [
-    "AuthEnvSettings",
+    "AuthSettings",
     "CliEdgeSettings",
     "CliSettings",
     "DeploymentSettings",
-    "SdkEnvSettings",
-    "ServiceAccountEnvSettings",
+    "SdkSettings",
+    "ServiceAccountSettings",
     "resolve_cli_settings",
 ]

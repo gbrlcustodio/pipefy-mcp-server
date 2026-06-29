@@ -156,7 +156,7 @@ def test_auth_settings_kill_switch_returns_none_oidc_client(
 
     from pipefy_infra.deployment import DeploymentConfig
 
-    from pipefy_auth.settings import AuthConfig
+    from pipefy_auth.config import AuthConfig
 
     settings = AuthConfig(deployment=DeploymentConfig(), disable_stored_session=True)
     assert settings.to_oidc_client() is None

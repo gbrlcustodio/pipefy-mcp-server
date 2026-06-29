@@ -17,8 +17,8 @@ from pipefy_auth import StaticBearerAuth
 from pipefy_infra.deployment import DeploymentConfig
 
 from pipefy_sdk.client import build_executors
+from pipefy_sdk.config import SdkConfig
 from pipefy_sdk.graphql_executor import GraphQLExecutor
-from pipefy_sdk.settings import SdkConfig
 
 DEFAULT_INTERNAL_API_URL = "https://app.pipefy.com/internal_api"
 

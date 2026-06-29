@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 from _shared.live_settings import (
-    live_pipefy_settings,
+    live_pipefy_config,
     live_resolved_auth,
     require_live_creds,
 )
@@ -25,7 +25,7 @@ from pipefy_sdk.services.schema_introspection_service import (
 @pytest.fixture
 def live_svc():
     require_live_creds()
-    settings = live_pipefy_settings()
+    settings = live_pipefy_config()
     executor = HttpxGraphQLExecutor(
         url=settings.graphql_url,
         auth=live_resolved_auth(),

@@ -19,7 +19,7 @@ from pydantic import AliasChoices, Field
 # pydantic_settings does not apply to this test-only edge stand-in.
 from pydantic_settings import SettingsConfigDict  # noqa: TID251
 
-from pipefy_sdk.settings import SdkConfig
+from pipefy_sdk.config import SdkConfig
 
 _MISSING_CREDS_MESSAGE = (
     "Pipefy credentials not configured: set PIPEFY_BASE_URL to your "
@@ -27,19 +27,19 @@ _MISSING_CREDS_MESSAGE = (
 )
 
 
-class _DeploymentEnv(DeploymentConfig, PipefyBaseSettings):
+class _DeploymentSettings(DeploymentConfig, PipefyBaseSettings):
     """Test-only env reader for the deployment values (mirrors the app edge)."""
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
 
-class _SdkEnv(SdkConfig, PipefyBaseSettings):
+class _SdkSettings(SdkConfig, PipefyBaseSettings):
     """Test-only env reader for the SDK knobs; ``deployment`` is injected."""
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_")
 
 
-class _AuthEnv(AuthConfig, PipefyBaseSettings):
+class _AuthSettings(AuthConfig, PipefyBaseSettings):
     """Test-only env reader for the login subsystem; deployment + sa are injected."""
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_AUTH_")
@@ -49,7 +49,7 @@ class _AuthEnv(AuthConfig, PipefyBaseSettings):
     )
 
 
-class _ServiceAccountEnv(PipefyBaseSettings):
+class _ServiceAccountSettings(PipefyBaseSettings):
     """Test-only env reader for the service-account credential pair."""
 
     model_config = SettingsConfigDict(env_prefix="PIPEFY_SERVICE_ACCOUNT_")
@@ -66,21 +66,21 @@ class _ServiceAccountEnv(PipefyBaseSettings):
         )
 
 
-def live_pipefy_settings() -> SdkConfig:
+def live_pipefy_config() -> SdkConfig:
     """Load ``SdkConfig`` from the process environment and optional ``.env`` file."""
-    return _SdkEnv(deployment=_DeploymentEnv())
+    return _SdkSettings(deployment=_DeploymentSettings())
 
 
-def live_auth_settings() -> AuthConfig:
+def live_auth_config() -> AuthConfig:
     """Load ``AuthConfig`` from the process environment and optional ``.env`` file."""
-    return _AuthEnv(
-        deployment=_DeploymentEnv(),
-        service_account=_ServiceAccountEnv().to_credentials(),
+    return _AuthSettings(
+        deployment=_DeploymentSettings(),
+        service_account_credentials=_ServiceAccountSettings().to_credentials(),
     )
 
 
 def _try_resolve_live_auth() -> Auth | None:
-    a = live_auth_settings()
+    a = live_auth_config()
     # ``oidc_client=None``: a stray ``pipefy auth login`` on a dev machine would
     # otherwise satisfy live-creds detection via the developer's personal session.
     return resolve_pipefy_auth(

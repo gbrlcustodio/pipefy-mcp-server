@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 
 import pytest
-from _edge_readers import DeploymentEnv, JwtEnv
+from _edge_readers import DeploymentSettings, JwtValidationSettings
 from pipefy_infra.deployment import DeploymentConfig
 
 from pipefy_auth import JwtValidationConfig
@@ -125,7 +125,7 @@ def test_jwt_section_loads_from_toml(tmp_path: Path) -> None:
         """,
         encoding="utf-8",
     )
-    settings = JwtEnv(deployment=DeploymentEnv())
+    settings = JwtValidationSettings(deployment=DeploymentSettings())
     assert settings.issuer_url == _ISSUER
     assert settings.audience == "pipefy-api"
     assert settings.verify_audience is True
@@ -138,6 +138,6 @@ def test_jwt_edge_strips_surrounding_whitespace_from_env(
     """The edge reader trims env whitespace before the value reaches the model."""
     monkeypatch.setenv("PIPEFY_JWT_ISSUER_URL", f"  {_ISSUER} \n")
     monkeypatch.setenv("PIPEFY_JWT_AUDIENCE", "  pipefy-api  ")
-    settings = JwtEnv(deployment=DeploymentEnv())
+    settings = JwtValidationSettings(deployment=DeploymentSettings())
     assert settings.issuer_url == _ISSUER
     assert settings.audience == "pipefy-api"

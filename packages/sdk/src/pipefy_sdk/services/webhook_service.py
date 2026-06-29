@@ -8,6 +8,7 @@ from typing import Any
 from gql.transport.exceptions import TransportQueryError
 from pipefy_infra import security
 
+from pipefy_sdk.config import SdkConfig
 from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
@@ -20,7 +21,6 @@ from pipefy_sdk.queries.webhook_queries import (
     UPDATE_WEBHOOK_MUTATION,
 )
 from pipefy_sdk.services.card_service import CardService
-from pipefy_sdk.settings import SdkConfig
 
 logger = logging.getLogger(__name__)
 

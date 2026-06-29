@@ -12,6 +12,7 @@ from pipefy_sdk.automation_preflight import (
     validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
+from pipefy_sdk.config import SdkConfig
 from pipefy_sdk.graphql_executor import GraphQLExecutor, HttpxGraphQLExecutor
 from pipefy_sdk.internal_api_errors import format_internal_api_error
 from pipefy_sdk.models.ai_agent import (
@@ -71,7 +72,6 @@ from pipefy_sdk.services.types import (
 )
 from pipefy_sdk.services.user_service import UserService
 from pipefy_sdk.services.webhook_service import WebhookService
-from pipefy_sdk.settings import SdkConfig
 
 
 @dataclass(frozen=True)

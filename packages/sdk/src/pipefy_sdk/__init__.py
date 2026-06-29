@@ -5,6 +5,7 @@ from __future__ import annotations
 __version__ = "0.2.0-beta.4"
 
 from pipefy_sdk.client import PipefyClient
+from pipefy_sdk.config import SdkConfig
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
 from pipefy_sdk.models import (
     Attachment,
@@ -52,7 +53,6 @@ from pipefy_sdk.services.types import (
     MePayload,
     copy_card_search,
 )
-from pipefy_sdk.settings import SdkConfig
 
 __all__ = [
     "__version__",

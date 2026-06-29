@@ -9,11 +9,11 @@ it, and the SDK's own knobs load from the environment via the reader.
 from __future__ import annotations
 
 import pytest
-from _shared.live_settings import live_pipefy_settings
+from _shared.live_settings import live_pipefy_config
 from pipefy_infra.deployment import DEFAULT_BASE_URL, DeploymentConfig
 from pydantic import ValidationError
 
-from pipefy_sdk.settings import SdkConfig
+from pipefy_sdk.config import SdkConfig
 
 PROD_GRAPHQL_URL = "https://app.pipefy.com/graphql"
 PROD_INTERNAL_API_URL = "https://app.pipefy.com/internal_api"
@@ -63,7 +63,7 @@ def test_sdk_config_knob_defaults():
 def test_reader_base_url_env_drives_forwarded_urls(monkeypatch: pytest.MonkeyPatch):
     """``PIPEFY_BASE_URL`` flows through the reader into all forwarded URLs."""
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://staging.example.com")
-    settings = live_pipefy_settings()
+    settings = live_pipefy_config()
     assert settings.graphql_url == "https://staging.example.com/graphql"
     assert settings.internal_api_url == "https://staging.example.com/internal_api"
     assert (
@@ -92,7 +92,7 @@ def test_reader_ignores_removed_per_url_env_vars(
     off the prod default. Operators have to migrate to ``PIPEFY_BASE_URL``.
     """
     monkeypatch.setenv(legacy_env_var, "https://stale.example.com/whatever")
-    settings = live_pipefy_settings()
+    settings = live_pipefy_config()
     assert settings.graphql_url == PROD_GRAPHQL_URL
     assert settings.internal_api_url == PROD_INTERNAL_API_URL
     assert settings.interfaces_graphql_url == PROD_INTERFACES_GRAPHQL_URL
@@ -103,7 +103,7 @@ def test_reader_empty_base_url_raises(monkeypatch: pytest.MonkeyPatch):
     """Empty PIPEFY_BASE_URL is rejected at construction (no opt-out overload)."""
     monkeypatch.setenv("PIPEFY_BASE_URL", "")
     with pytest.raises(ValidationError, match="should match pattern"):
-        live_pipefy_settings()
+        live_pipefy_config()
 
 
 @pytest.mark.unit
@@ -112,7 +112,7 @@ def test_reader_base_url_strips_surrounding_whitespace(
 ):
     """Operator copy-paste sometimes carries surrounding whitespace - strip before pattern."""
     monkeypatch.setenv("PIPEFY_BASE_URL", "  https://app.pipefy.com\t")
-    settings = live_pipefy_settings()
+    settings = live_pipefy_config()
     assert settings.graphql_url == PROD_GRAPHQL_URL
 
 
@@ -120,4 +120,4 @@ def test_reader_base_url_strips_surrounding_whitespace(
 def test_reader_gql_reuse_schema_env(monkeypatch: pytest.MonkeyPatch):
     """The SDK knob loads from its ``PIPEFY_`` env var through the reader."""
     monkeypatch.setenv("PIPEFY_GQL_REUSE_FETCHED_GRAPHQL_SCHEMA", "true")
-    assert live_pipefy_settings().gql_reuse_fetched_graphql_schema is True
+    assert live_pipefy_config().gql_reuse_fetched_graphql_schema is True

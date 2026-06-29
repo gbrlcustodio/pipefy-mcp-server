@@ -8,6 +8,7 @@ from _shared.pagination_test_defaults import DEFAULT_FIRST
 from gql.transport.exceptions import TransportQueryError
 from pipefy_infra.deployment import DeploymentConfig
 
+from pipefy_sdk.config import SdkConfig
 from pipefy_sdk.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
     CREATE_WEBHOOK_MUTATION,
@@ -19,7 +20,6 @@ from pipefy_sdk.queries.webhook_queries import (
     UPDATE_WEBHOOK_MUTATION,
 )
 from pipefy_sdk.services.webhook_service import WebhookService
-from pipefy_sdk.settings import SdkConfig
 
 
 @pytest.fixture

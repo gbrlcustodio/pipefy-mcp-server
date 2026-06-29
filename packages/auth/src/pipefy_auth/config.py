@@ -65,8 +65,9 @@ class AuthConfig(BaseModel):
     """Outbound auth configuration: how this process authenticates *to* Pipefy.
 
     A pure value object. ``deployment`` (host topology + posture) and
-    ``service_account`` (the credential pair, or ``None``) are injected by the
-    edge; the OIDC login knobs are this model's own values. SSRF validation runs
+    ``service_account_credentials`` (the credential pair, or ``None``) are
+    injected by the edge; the OIDC login knobs are this model's own values.
+    SSRF validation runs
     inline as a ``model_validator(mode="after")`` so direct construction is safe.
     """
 
@@ -77,7 +78,7 @@ class AuthConfig(BaseModel):
         ),
     )
 
-    service_account: ServiceAccountCredentials | None = Field(
+    service_account_credentials: ServiceAccountCredentials | None = Field(
         default=None,
         description=(
             "The service-account tier's OAuth client-credentials pair, injected "
@@ -150,12 +151,12 @@ class AuthConfig(BaseModel):
         Returns ``None`` when the service-account tier is unconfigured; otherwise
         pairs the credentials with the token endpoint derived from ``deployment``.
         """
-        if self.service_account is None:
+        if self.service_account_credentials is None:
             return None
         return ServiceAccount(
             token_url=self.deployment.oauth_token_url,
-            client_id=self.service_account.client_id,
-            client_secret=self.service_account.client_secret,
+            client_id=self.service_account_credentials.client_id,
+            client_secret=self.service_account_credentials.client_secret,
         )
 
     def to_oidc_client(self) -> OidcClient | None:

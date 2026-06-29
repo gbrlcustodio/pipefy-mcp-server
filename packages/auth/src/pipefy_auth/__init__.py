@@ -16,6 +16,11 @@ from pipefy_auth.bearer import (
     RefreshableBearerAuth,
     StaticBearerAuth,
 )
+from pipefy_auth.config import (
+    AuthConfig,
+    JwtValidationConfig,
+    ServiceAccountCredentials,
+)
 from pipefy_auth.discovery import (
     DiscoveryPolicy,
     ProviderMetadata,
@@ -43,11 +48,6 @@ from pipefy_auth.revoke import (
     RevocationError,
     RevocationUnsupportedError,
     revoke_session,
-)
-from pipefy_auth.settings import (
-    AuthConfig,
-    JwtValidationConfig,
-    ServiceAccountCredentials,
 )
 from pipefy_auth.storage import (
     SessionDeleteError,

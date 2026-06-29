@@ -28,9 +28,13 @@ def test_trailing_slash_does_not_double_up_in_derived_urls() -> None:
     assert config.oauth_token_url == "https://example.test/oauth/token"
 
 
-def test_surrounding_whitespace_is_stripped() -> None:
-    config = DeploymentConfig(base_url="  https://example.test  ")
-    assert config.base_url == "https://example.test"
+def test_surrounding_whitespace_is_rejected() -> None:
+    # The value object validates but does not normalize: surrounding whitespace
+    # is trimmed at the application edge (PipefyBaseSettings) before construction,
+    # so a padded value reaching the model directly is a programmer error and is
+    # rejected by URL_SHAPE_PATTERN.
+    with pytest.raises(ValidationError):
+        DeploymentConfig(base_url="  https://example.test  ")
 
 
 def test_non_root_path_is_rejected() -> None:

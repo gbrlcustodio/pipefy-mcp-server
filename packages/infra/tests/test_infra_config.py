@@ -272,3 +272,23 @@ def test_base_settings_reads_its_toml_section(
     monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(path))
     monkeypatch.delenv("PIPEFY_X_ALPHA", raising=False)
     assert _PrefixedReader().alpha == "from-section"
+
+
+def test_base_settings_strips_surrounding_whitespace_from_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # Trimming env values is a boundary concern owned here, not in the library
+    # value objects. A trailing newline (from ``$(...)``) or a padded value
+    # is normalized as it is read.
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(tmp_path / "missing.toml"))
+    monkeypatch.setenv("PIPEFY_X_ALPHA", "  spaced \n")
+    assert _PrefixedReader().alpha == "spaced"
+
+
+def test_base_settings_strips_surrounding_whitespace_from_toml(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = _write_config(tmp_path / "config.toml", '[xtable]\nalpha = "  padded  "\n')
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(path))
+    monkeypatch.delenv("PIPEFY_X_ALPHA", raising=False)
+    assert _PrefixedReader().alpha == "padded"

@@ -67,6 +67,30 @@ def test_static_token_loads_from_env_alias(monkeypatch: pytest.MonkeyPatch) -> N
     assert _auth().static_token == "env-token"
 
 
+def test_edge_strips_surrounding_whitespace_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The edge readers own whitespace trimming (the library value objects
+    # reject a padded value). A trailing newline from ``$(...)`` or a padded
+    # value is normalized as it is read, so the clean value reaches the model.
+    monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", "  https://idp.example/realms/x \n")
+    monkeypatch.setenv("PIPEFY_TOKEN", "\ttok\t")
+    settings = _auth()
+    assert settings.issuer_url == "https://idp.example/realms/x"
+    assert settings.static_token == "tok"
+
+
+def test_edge_strips_whitespace_before_building_service_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "  svc-id  ")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "svc-secret\n")
+    creds = ServiceAccountEnv().to_credentials()
+    assert creds is not None
+    assert creds.client_id == "svc-id"
+    assert creds.client_secret == "svc-secret"
+
+
 def test_service_account_section_builds_credentials(tmp_path: Path) -> None:
     _write(
         tmp_path / "config.toml",

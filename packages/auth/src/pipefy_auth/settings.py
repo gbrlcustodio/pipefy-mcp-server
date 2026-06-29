@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Literal, Self
 
 from pipefy_infra import security
-from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN, strip_if_str
+from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN
 from pipefy_infra.deployment import DeploymentConfig
 from pydantic import (
     BaseModel,
@@ -60,8 +60,6 @@ class ServiceAccountCredentials(BaseModel):
         pattern=OPAQUE_CREDENTIAL_PATTERN,
         description="Service-account OAuth client_secret (env: PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET).",
     )
-
-    _strip = field_validator("client_id", "client_secret", mode="before")(strip_if_str)
 
 
 class AuthConfig(BaseModel):
@@ -140,13 +138,6 @@ class AuthConfig(BaseModel):
         ),
     )
 
-    _strip = field_validator(
-        "static_token",
-        "issuer_url",
-        "public_client_id",
-        mode="before",
-    )(strip_if_str)
-
     @property
     def allow_insecure_urls(self) -> bool:
         """Shared insecure-URL posture (forwarded from ``deployment``)."""
@@ -156,10 +147,10 @@ class AuthConfig(BaseModel):
     @classmethod
     def _normalize_keychain_backend(cls, value: object) -> object:
         # ``keychain_backend`` is ``Literal["auto", "file"]``; copy-pasted env
-        # values like ``PIPEFY_AUTH_KEYCHAIN_BACKEND=' AUTO '`` should normalize to
-        # ``"auto"`` rather than fail Literal validation with a cryptic enum
-        # error. Case is meaningful for credential fields (kept strict via
-        # ``strip_if_str``), so the lowering applies only here.
+        # values like ``PIPEFY_AUTH_KEYCHAIN_BACKEND=' AUTO '`` should normalize
+        # to ``"auto"`` rather than fail Literal validation with a cryptic enum
+        # error. Case-fold only here: case is meaningful for the credential
+        # fields, so they are validated as-is and never lowered.
         if isinstance(value, str):
             return value.strip().lower()
         return value
@@ -199,12 +190,14 @@ class AuthConfig(BaseModel):
         # (Keycloak-style), but a stray query or fragment would corrupt the
         # ``.well-known/openid-configuration`` concatenation. The token endpoint
         # is derived (and gated) on the injected deployment, not re-checked here.
-        stripped = self.issuer_url.strip()
-        security.assert_url_has_no_query_or_fragment(stripped, field_label="issuer_url")
-        security.validate_https_url(
-            stripped, "issuer_url", allow_insecure=self.deployment.allow_insecure_urls
+        security.assert_url_has_no_query_or_fragment(
+            self.issuer_url, field_label="issuer_url"
         )
-        self.issuer_url = stripped
+        security.validate_https_url(
+            self.issuer_url,
+            "issuer_url",
+            allow_insecure=self.deployment.allow_insecure_urls,
+        )
         return self
 
 
@@ -233,6 +226,7 @@ class JwtValidationConfig(BaseModel):
 
     issuer_url: str | None = Field(
         default=None,
+        pattern=security.URL_SHAPE_PATTERN,
         description=(
             "Override for the inbound OIDC issuer that signs caller tokens "
             "(env: PIPEFY_JWT_ISSUER_URL). Left unset, the consumer falls back "
@@ -261,6 +255,7 @@ class JwtValidationConfig(BaseModel):
 
     jwks_uri: str | None = Field(
         default=None,
+        pattern=security.URL_SHAPE_PATTERN,
         description=(
             "Explicit JWKS endpoint override (env: PIPEFY_JWT_JWKS_URI). When "
             "unset, resolved from the issuer's discovery document."
@@ -280,21 +275,19 @@ class JwtValidationConfig(BaseModel):
     def _validate_configuration(self) -> Self:
         if self.verify_audience and not self.audience:
             raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
-        # Strip and shape-check both URL fields. Env-var whitespace would otherwise
-        # survive into the consumer: issuer_url into jwt.decode(issuer=...), which
-        # compares iss exactly, and jwks_uri into the JWKS fetch. A realm path is
-        # allowed, so only a query or fragment (which would corrupt URL building)
-        # is rejected.
-        for label in ("issuer_url", "jwks_uri"):
-            value = getattr(self, label)
+
+        # Shape-check the URL fields: a realm path is allowed, so only a query
+        # or fragment (which would corrupt URL building) is rejected.
+        def _gate(value: str | None, label: str) -> None:
             if value is None:
-                continue
-            stripped = value.strip()
-            security.assert_url_has_no_query_or_fragment(stripped, field_label=label)
+                return
+            security.assert_url_has_no_query_or_fragment(value, field_label=label)
             security.validate_https_url(
-                stripped, label, allow_insecure=self.deployment.allow_insecure_urls
+                value, label, allow_insecure=self.deployment.allow_insecure_urls
             )
-            setattr(self, label, stripped)
+
+        _gate(self.issuer_url, "issuer_url")
+        _gate(self.jwks_uri, "jwks_uri")
         return self
 
 

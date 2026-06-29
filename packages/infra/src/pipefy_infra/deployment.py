@@ -14,10 +14,9 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 
 from pipefy_infra import security
-from pipefy_infra.coerce import strip_if_str
 
 # Canonical Pipefy production API host root.
 DEFAULT_BASE_URL = "https://app.pipefy.com"
@@ -55,8 +54,6 @@ class DeploymentConfig(BaseModel):
             "PIPEFY_ALLOW_INSECURE_URLS)."
         ),
     )
-
-    _strip = field_validator("base_url", mode="before")(strip_if_str)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

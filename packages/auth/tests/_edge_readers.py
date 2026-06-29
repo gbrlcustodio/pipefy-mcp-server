@@ -9,10 +9,10 @@ stand-in.
 
 from __future__ import annotations
 
-from pipefy_infra.coerce import strip_if_str
+from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN
 from pipefy_infra.deployment import DeploymentConfig
 from pipefy_infra.settings_base import PipefyBaseSettings
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field
 from pydantic_settings import SettingsConfigDict  # noqa: TID251
 
 from pipefy_auth.settings import (
@@ -20,8 +20,6 @@ from pipefy_auth.settings import (
     JwtValidationConfig,
     ServiceAccountCredentials,
 )
-
-_OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
 
 
 class DeploymentEnv(DeploymentConfig, PipefyBaseSettings):
@@ -42,11 +40,9 @@ class AuthEnv(AuthConfig, PipefyBaseSettings):
 
     static_token: str | None = Field(
         default=None,
-        pattern=_OPAQUE_CREDENTIAL_PATTERN,
+        pattern=OPAQUE_CREDENTIAL_PATTERN,
         validation_alias=AliasChoices("PIPEFY_TOKEN"),
     )
-
-    _strip_static = field_validator("static_token", mode="before")(strip_if_str)
 
 
 class JwtEnv(JwtValidationConfig, PipefyBaseSettings):

@@ -19,11 +19,11 @@ from typing import Self
 
 from pipefy_auth import AuthConfig, JwtValidationConfig, ServiceAccountCredentials
 from pipefy_infra import security
-from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN, strip_if_str
+from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN
 from pipefy_infra.deployment import DeploymentConfig
 from pipefy_infra.settings_base import PipefyBaseSettings
 from pipefy_sdk import SdkConfig
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import SettingsConfigDict
 
 
@@ -54,8 +54,6 @@ class AuthEnvSettings(AuthConfig, PipefyBaseSettings):
         pattern=OPAQUE_CREDENTIAL_PATTERN,
         validation_alias=AliasChoices("PIPEFY_TOKEN"),
     )
-
-    _strip_static = field_validator("static_token", mode="before")(strip_if_str)
 
 
 class JwtEnvSettings(JwtValidationConfig, PipefyBaseSettings):
@@ -170,6 +168,7 @@ class ResourceServerSettings(PipefyBaseSettings):
 
     resource_server_url: str | None = Field(
         default=None,
+        pattern=security.URL_SHAPE_PATTERN,
         description=(
             "Public canonical URL of this MCP server as an OAuth protected "
             "resource (env: PIPEFY_MCP_RS_RESOURCE_SERVER_URL). Decoupled from the "
@@ -197,16 +196,13 @@ class ResourceServerSettings(PipefyBaseSettings):
     def _validate_configuration(self) -> Self:
         if self.resource_server_url is None:
             return self
-        # Persist the stripped value: surrounding whitespace in an env var would
-        # otherwise survive into the RFC 9728 resource identifier. The /mcp
-        # endpoint path is expected, so only a query or fragment is forbidden.
-        stripped = self.resource_server_url.strip()
-        self.resource_server_url = stripped
+        # The /mcp endpoint path is expected in the RFC 9728 resource identifier,
+        # so only a query or fragment is forbidden.
         security.assert_url_has_no_query_or_fragment(
-            stripped, field_label="resource_server_url"
+            self.resource_server_url, field_label="resource_server_url"
         )
         security.validate_https_url(
-            stripped,
+            self.resource_server_url,
             "resource_server_url",
             allow_insecure=self.deployment.allow_insecure_urls,
         )

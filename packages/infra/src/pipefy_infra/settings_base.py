@@ -16,12 +16,14 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from pydantic import field_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
 
+from pipefy_infra.coerce import strip_if_str
 from pipefy_infra.config import PipefyTomlConfigSource
 
 
@@ -44,6 +46,15 @@ class PipefyBaseSettings(BaseSettings):
     # keys (today's behaviour). Set on readers whose bare field names would
     # otherwise collide across concepts in one flat TOML namespace.
     _toml_section: ClassVar[str | None] = None
+
+    # Trim surrounding whitespace off every value at the edge: a trailing
+    # newline from ``$(...)``, a padded .env line, a copy-pasted Docker/k8s
+    # value. Normalizing here rather than in the library value objects is
+    # deliberate: those validate but do not normalize, and reject a padded
+    # value as a programmer error. Safe because no settings field treats
+    # surrounding whitespace as significant (credentials are opaque single-line
+    # tokens, URLs reject whitespace outright).
+    _strip_strings = field_validator("*", mode="before")(strip_if_str)
 
     @classmethod
     def settings_customise_sources(

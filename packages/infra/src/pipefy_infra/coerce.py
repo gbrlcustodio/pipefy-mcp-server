@@ -30,7 +30,7 @@ T = TypeVar("T")
 # leading / trailing whitespace and blank values. Anything in between is opaque
 # to us (the issuer defines the format). Shared as a pydantic ``pattern=`` across
 # the settings value objects and the app-edge readers that mirror their fields,
-# so the shape rule lives in one place. Pairs with :func:`strip_if_str`.
+# so the shape rule lives in one place.
 OPAQUE_CREDENTIAL_PATTERN = r"^\S(?:.*\S)?$"
 
 
@@ -85,11 +85,13 @@ def optional_float(value: object) -> float | None:
 def strip_if_str(value: object) -> object:
     """Return ``value.strip()`` for strings, anything else unchanged.
 
-    A ``mode="before"`` field-validator helper shared across the settings
-    value objects: env vars and TOML values arrive with stray surrounding
-    whitespace that would otherwise survive into URLs (corrupting exact ``iss``
-    comparison) or credentials (a token with a trailing newline). Non-string
-    inputs pass through so the field's own type coercion still runs.
+    A ``mode="before"`` field-validator helper applied once at the application
+    edge, on every field of
+    :class:`~pipefy_infra.settings_base.PipefyBaseSettings`: env and TOML values
+    arrive with stray surrounding whitespace that would otherwise survive into
+    URLs (corrupting exact ``iss`` comparison) or credentials (a token with a
+    trailing newline). Non-string inputs pass through so the field's own type
+    coercion still runs.
     """
     if isinstance(value, str):
         return value.strip()

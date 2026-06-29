@@ -25,6 +25,15 @@ def _jwt(**kwargs) -> JwtValidationConfig:
     return JwtValidationConfig(**kwargs)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Clear ambient PIPEFY_* env and point the config file at the tmpdir."""
+    for key in list(os.environ):
+        if key.startswith("PIPEFY_") or key in {"XDG_CONFIG_HOME", "APPDATA"}:
+            monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(tmp_path / "config.toml"))
+
+
 @pytest.mark.unit
 def test_defaults_are_inactive_and_safe():
     """Unset is a valid, empty config: no issuer override, audience off."""
@@ -71,10 +80,10 @@ def test_verify_audience_requires_audience():
 
 
 @pytest.mark.unit
-def test_issuer_url_is_stripped():
-    """Surrounding whitespace is stripped so it cannot survive into jwt.decode."""
-    settings = _jwt(issuer_url=f"  {_ISSUER}  ")
-    assert settings.issuer_url == _ISSUER
+def test_issuer_url_rejects_surrounding_whitespace():
+    """The value object rejects padding (the edge trims env input upstream)."""
+    with pytest.raises(ValueError):
+        _jwt(issuer_url=f"  {_ISSUER}  ")
 
 
 @pytest.mark.unit
@@ -105,15 +114,9 @@ def test_insecure_issuer_allowed_when_deployment_insecure():
 
 
 @pytest.mark.unit
-def test_jwt_section_loads_from_toml(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_jwt_section_loads_from_toml(tmp_path: Path) -> None:
     """The ``[jwt]`` reader loads its fields end-to-end through the TOML source."""
-    for key in list(os.environ):
-        if key.startswith("PIPEFY_") or key in {"XDG_CONFIG_HOME", "APPDATA"}:
-            monkeypatch.delenv(key, raising=False)
-    path = tmp_path / "config.toml"
-    path.write_text(
+    (tmp_path / "config.toml").write_text(
         """
         [jwt]
         issuer_url = "https://idp.example.com/realms/x"
@@ -122,8 +125,19 @@ def test_jwt_section_loads_from_toml(
         """,
         encoding="utf-8",
     )
-    monkeypatch.setenv("PIPEFY_CONFIG_FILE", str(path))
     settings = JwtEnv(deployment=DeploymentEnv())
     assert settings.issuer_url == _ISSUER
     assert settings.audience == "pipefy-api"
     assert settings.verify_audience is True
+
+
+@pytest.mark.unit
+def test_jwt_edge_strips_surrounding_whitespace_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The edge reader trims env whitespace before the value reaches the model."""
+    monkeypatch.setenv("PIPEFY_JWT_ISSUER_URL", f"  {_ISSUER} \n")
+    monkeypatch.setenv("PIPEFY_JWT_AUDIENCE", "  pipefy-api  ")
+    settings = JwtEnv(deployment=DeploymentEnv())
+    assert settings.issuer_url == _ISSUER
+    assert settings.audience == "pipefy-api"

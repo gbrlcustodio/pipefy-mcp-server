@@ -60,9 +60,12 @@ def test_issuer_url_override_and_shape_gate():
 
 
 @pytest.mark.unit
-def test_issuer_url_strips_surrounding_whitespace():
-    settings = _auth(issuer_url="  https://other.example.com/realms/x\t")
-    assert settings.issuer_url == "https://other.example.com/realms/x"
+def test_issuer_url_rejects_surrounding_whitespace():
+    # The value object validates but does not normalize: the edge trims env
+    # whitespace, so a padded value reaching the model directly is rejected by
+    # the URL shape constraint.
+    with pytest.raises(ValidationError):
+        _auth(issuer_url="  https://other.example.com/realms/x\t")
 
 
 @pytest.mark.unit
@@ -129,10 +132,17 @@ def test_service_account_credentials_require_both_fields():
 
 
 @pytest.mark.unit
-def test_service_account_credentials_strip_whitespace():
-    creds = ServiceAccountCredentials(client_id="  id  ", client_secret="\tsecret\n")
-    assert creds.client_id == "id"
-    assert creds.client_secret == "secret"
+@pytest.mark.parametrize(
+    ("client_id", "client_secret"),
+    [("  id  ", "secret"), ("id", "\tsecret\n")],
+)
+def test_service_account_credentials_reject_surrounding_whitespace(
+    client_id: str, client_secret: str
+):
+    # The credential pair validates but does not normalize; the edge trims env
+    # whitespace before building it, so a padded value here is rejected.
+    with pytest.raises(ValidationError):
+        ServiceAccountCredentials(client_id=client_id, client_secret=client_secret)
 
 
 @pytest.mark.unit
@@ -188,7 +198,10 @@ def test_keychain_backend_rejects_unknown_value(bad: str):
 
 
 @pytest.mark.unit
-def test_static_token_strips_and_rejects_blank():
-    assert _auth(static_token="  tok  ").static_token == "tok"
+def test_static_token_rejects_padded_and_blank():
+    # Normalization is the edge's job; the value object rejects both a padded
+    # token and a blank one via the opaque-credential shape constraint.
+    with pytest.raises(ValidationError):
+        _auth(static_token="  tok  ")
     with pytest.raises(ValidationError):
         _auth(static_token="   ")

@@ -16,13 +16,17 @@
 ## Project structure
 
 ```
-packages/sdk/   → pipefy-sdk        (Vendor API SDK — GraphQL, models, services)
-packages/mcp/   → pipefy-mcp-server (MCP tools, server lifecycle; depends on pipefy-sdk)
-packages/cli/   → pipefy-cli        (Typer CLI; depends on pipefy-sdk)
+packages/infra/ → pipefy-infra      (leaf shared helpers: DeploymentConfig, settings base, security, coerce)
+packages/sdk/   → pipefy-sdk        (Vendor API SDK: GraphQL, models, services; depends on pipefy-infra)
+packages/auth/  → pipefy-auth       (auth value objects + resolver; depends on pipefy-infra)
+packages/mcp/   → pipefy-mcp-server (MCP tools, server lifecycle; depends on pipefy-sdk + pipefy-auth)
+packages/cli/   → pipefy-cli        (Typer CLI; depends on pipefy-sdk + pipefy-auth)
 skills/         → agent skills catalog (Markdown; no Python package)
 ```
 
 **Vendor API SDK** means the GraphQL-facing library (`pipefy-sdk`) used by both MCP and CLI, distinct from app glue or generic shared helpers.
+
+Dependency direction is strict and one-way: `infra` is a leaf (imports only third-party + its own modules), `sdk` and `auth` build on `infra` and never import each other, and the applications (`mcp`, `cli`) sit on top. Per-package ruff `flake8-tidy-imports.banned-api` rules enforce these edges, so a forbidden upward or sideways import fails lint.
 
 ## Build, test, and development
 
@@ -53,6 +57,38 @@ Runtime type checks belong only at a trust boundary, where untyped or external d
 - A `dict`-typed tool arg (for example `filter: dict | None`) validates the container but not its nested values. Validating that nested, un-schema'd structure (the job of `validate_report_cards_filter`) is legitimate boundary work, not defensive noise.
 
 When a type-related failure looks plausible, the fix is a type checker in CI, not a per-function guard.
+
+## Settings and configuration architecture
+
+How `PIPEFY_*` env vars, `.env`, and `config.toml` become typed config. The operator-facing contract (every var, the precedence chain, the TOML schema) lives in `docs/config.md`; this section is the internal design contract.
+
+### Library / application split
+
+The library packages (`infra`, `sdk`, `auth`) are pure `pydantic.BaseModel` value objects: they validate themselves but read no env or file. Reading the environment is an application concern owned by exactly one composition root per app: `pipefy_cli.config.resolve_cli_settings` and `pipefy_mcp.settings.resolve_mcp_settings`. Libraries MUST NOT import `pydantic_settings` (a per-package ruff rule enforces it). New config knobs are declared as fields on the relevant library value object, and the edge reads them; do not add a second env-reading path.
+
+### One DeploymentConfig, injected by reference
+
+`pipefy_infra.deployment.DeploymentConfig` is the single source of host topology (`base_url` plus the derived `graphql_url` / `internal_api_url` / `interfaces_graphql_url` / `oauth_token_url` properties) and the single SSRF posture (`allow_insecure_urls`). The composition root builds ONE instance and injects it by reference into the SDK / auth / jwt / resource-server configs, so they cannot structurally diverge on host or posture. Injected fields (`deployment`, `service_account`) are required (no default) on the library models, so the type system forces the edge to supply them. Models that hold a `deployment` forward `allow_insecure_urls` (and the SDK its URL properties) off it rather than storing their own copy.
+
+### PipefyBaseSettings owns the source chain
+
+Each edge reader subclasses its library model plus `pipefy_infra.settings_base.PipefyBaseSettings`, which owns the one precedence chain (init > env > dotenv > `config.toml` > file secret) and the shared `SettingsConfigDict`. A reader shell therefore adds only its `env_prefix`, any cross-prefix `validation_alias` (for example `PIPEFY_TOKEN`, kept at the product root), and `_toml_section`. `PipefyBaseSettings` is generic machinery (imports only `pydantic_settings` and the TOML source), so `infra` stays a leaf.
+
+### Normalize at the boundary, validate in the value object
+
+Trimming surrounding whitespace off settings values is a boundary concern: a single wildcard `field_validator("*", mode="before")(strip_if_str)` on `PipefyBaseSettings` trims every value as it is read (env, `.env`, TOML). The library value objects do NOT normalize: they validate and reject a padded value as a programmer error (credential and URL fields carry a `pattern=` that excludes leading/trailing whitespace). Do not add per-field `strip_if_str` validators to library models, and do not re-strip a value inside a `model_validator`. The lone deliberate exception is enum case-folding (for example `AuthConfig.keychain_backend` lower-cases its `Literal`), which is a semantic value-object concern distinct from whitespace hygiene. Tests assert the layering: edge readers strip env input; direct construction of a library model with a padded value raises.
+
+### SSRF gating at construction
+
+URL *shape* is a field-level constraint (`security.URL_SHAPE_PATTERN`); URL *policy* (HTTPS-or-insecure, blocked IP ranges, host-root vs no-query/fragment) runs in a `model_validator(mode="after")` using the injected `allow_insecure_urls`. `DeploymentConfig` gates `base_url` as a host root, which covers every derived suffix; `AuthConfig` gates `issuer_url`, `JwtValidationConfig` gates `issuer_url` + `jwks_uri`, and `ResourceServerSettings` gates `resource_server_url`. There is one source of `allow_insecure_urls` (the injected `DeploymentConfig`); no reader re-reads `PIPEFY_ALLOW_INSECURE_URLS`.
+
+### Sectioned TOML
+
+When the same bare field name appears across concepts (`issuer_url` lives in both `[auth]` and `[jwt]`), the reader sets `_toml_section` so `PipefyTomlConfigSource` reads from that sub-table instead of the top level. Credentials stay at the product root (`PIPEFY_TOKEN`, `PIPEFY_SERVICE_ACCOUNT_*`); the login subsystem is namespaced under `PIPEFY_AUTH_*`.
+
+### Lazy resolution (MCP)
+
+Importing the settings module does no env or file IO. `pipefy_mcp.settings.get_settings()` resolves and caches on first call; `reset_settings()` clears the cache and an autouse test fixture calls it so the process-wide cache does not leak across tests.
 
 ## Testing
 - `pytest-asyncio`, `pytest-cov`, `pytest-mock`.

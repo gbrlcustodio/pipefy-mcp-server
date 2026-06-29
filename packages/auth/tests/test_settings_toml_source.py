@@ -91,6 +91,15 @@ def test_edge_strips_whitespace_before_building_service_account(
     assert creds.client_secret == "svc-secret"
 
 
+def test_edge_folds_keychain_backend_case_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The inherited whitespace trim and the per-field fold compose, so a padded
+    # uppercase value still lands clean.
+    monkeypatch.setenv("PIPEFY_AUTH_KEYCHAIN_BACKEND", " FILE ")
+    assert _auth().keychain_backend == "file"
+
+
 def test_service_account_section_builds_credentials(tmp_path: Path) -> None:
     _write(
         tmp_path / "config.toml",

@@ -19,11 +19,11 @@ from typing import Self
 
 from pipefy_auth import AuthConfig, JwtValidationConfig, ServiceAccountCredentials
 from pipefy_infra import security
-from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN
+from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN, lower_if_str
 from pipefy_infra.deployment import DeploymentConfig
 from pipefy_infra.settings_base import PipefyBaseSettings
 from pipefy_sdk import SdkConfig
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import SettingsConfigDict
 
 
@@ -53,6 +53,10 @@ class AuthEnvSettings(AuthConfig, PipefyBaseSettings):
         default=None,
         pattern=OPAQUE_CREDENTIAL_PATTERN,
         validation_alias=AliasChoices("PIPEFY_TOKEN"),
+    )
+
+    _fold_keychain_backend = field_validator("keychain_backend", mode="before")(
+        lower_if_str
     )
 
 

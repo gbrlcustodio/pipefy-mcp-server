@@ -98,6 +98,19 @@ def strip_if_str(value: object) -> object:
     return value
 
 
+def lower_if_str(value: object) -> object:
+    """Return ``value.lower()`` for strings, anything else unchanged.
+
+    A ``mode="before"`` helper the edge readers wire onto a case-insensitive
+    enum field (e.g. ``keychain_backend``) so ``FILE`` folds to ``file`` before
+    it reaches the ``Literal``. Non-string inputs pass through so the field's
+    own coercion still runs.
+    """
+    if isinstance(value, str):
+        return value.lower()
+    return value
+
+
 def try_int(value: T) -> T | int:
     """Return ``int(value)``, or ``value`` unchanged if conversion fails.
 
@@ -117,6 +130,7 @@ def try_int(value: T) -> T | int:
 
 __all__ = [
     "OPAQUE_CREDENTIAL_PATTERN",
+    "lower_if_str",
     "optional_float",
     "optional_int",
     "optional_str",

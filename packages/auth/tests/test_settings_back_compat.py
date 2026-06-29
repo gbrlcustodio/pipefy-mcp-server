@@ -175,19 +175,17 @@ def test_keychain_backend_defaults_to_auto():
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [
-        ("AUTO", "auto"),
-        (" AUTO ", "auto"),
-        ("File", "file"),
-        ("FILE", "file"),
-        ("\tauto\n", "auto"),
-    ],
-)
-def test_keychain_backend_normalizes_case_and_whitespace(value: str, expected: str):
-    """``_normalize_keychain_backend`` strip+lowers so copy-paste values still match the Literal."""
-    assert _auth(keychain_backend=value).keychain_backend == expected
+@pytest.mark.parametrize("value", ["auto", "file"])
+def test_keychain_backend_accepts_canonical_value(value: str):
+    assert _auth(keychain_backend=value).keychain_backend == value
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("value", ["AUTO", "File", "FILE", " auto ", "\tauto\n"])
+def test_keychain_backend_rejects_non_canonical_value(value: str):
+    # "AUTO" / " auto " look valid but are not: the edge folds case, not this model.
+    with pytest.raises(ValidationError):
+        _auth(keychain_backend=value)
 
 
 @pytest.mark.unit

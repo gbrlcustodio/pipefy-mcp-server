@@ -27,7 +27,6 @@ from pipefy_infra.deployment import DeploymentConfig
 from pydantic import (
     BaseModel,
     Field,
-    field_validator,
     model_validator,
 )
 
@@ -126,6 +125,8 @@ class AuthConfig(BaseModel):
         ),
     )
 
+    # Bare lowercase Literal: the edge readers fold human-typed case
+    # (KEYCHAIN_BACKEND=FILE), the value object does not.
     keychain_backend: Literal["auto", "file"] = Field(
         default="auto",
         description=(
@@ -142,18 +143,6 @@ class AuthConfig(BaseModel):
     def allow_insecure_urls(self) -> bool:
         """Shared insecure-URL posture (forwarded from ``deployment``)."""
         return self.deployment.allow_insecure_urls
-
-    @field_validator("keychain_backend", mode="before")
-    @classmethod
-    def _normalize_keychain_backend(cls, value: object) -> object:
-        # ``keychain_backend`` is ``Literal["auto", "file"]``; copy-pasted env
-        # values like ``PIPEFY_AUTH_KEYCHAIN_BACKEND=' AUTO '`` should normalize
-        # to ``"auto"`` rather than fail Literal validation with a cryptic enum
-        # error. Case-fold only here: case is meaningful for the credential
-        # fields, so they are validated as-is and never lowered.
-        if isinstance(value, str):
-            return value.strip().lower()
-        return value
 
     def to_service_account(self) -> ServiceAccount | None:
         """Project the injected credentials into a :class:`ServiceAccount`, or ``None``.

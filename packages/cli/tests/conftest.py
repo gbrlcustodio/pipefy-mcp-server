@@ -11,7 +11,7 @@ _PIPEFY_ENV_KEYS = (
     "PIPEFY_BASE_URL",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
     "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-    # Removed legacy aliases — kept here only so a dev shell's stale values are
+    # Removed legacy aliases, kept here only so a dev shell's stale values are
     # cleared before a test runs; the settings layer no longer reads them.
     "PIPEFY_OAUTH_CLIENT",
     "PIPEFY_OAUTH_SECRET",

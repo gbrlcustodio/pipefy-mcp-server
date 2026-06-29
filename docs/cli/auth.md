@@ -172,13 +172,13 @@ When no session is stored, `pipefy auth logout` prints `Not signed in. Nothing t
 
 | Case | Exit |
 |------|------|
-| `PIPEFY_AUTH_ISSUER_URL=""` (or any other `PIPEFY_*` env var set to empty) | **2** — pydantic rejects empty values at settings load. Unset the var to fall back to the prod default. |
+| `PIPEFY_AUTH_ISSUER_URL=""` (or any other `PIPEFY_*` env var set to empty) | **2**. Pydantic rejects empty values at settings load. Unset the var to fall back to the prod default. |
 | No session stored (no-op) | **0** |
 | Session cleared (revoke succeeded, failed, or unsupported) | **0** |
 
 ### Pipefy issuer URLs
 
-Production: `https://signin.pipefy.com/realms/pipefy` (the `PIPEFY_AUTH_ISSUER_URL` default). For a non-prod IdP, set `PIPEFY_AUTH_ISSUER_URL` to the full issuer URL (host + realm) directly — the CLI doesn't try to derive it from any tenant convention.
+Production: `https://signin.pipefy.com/realms/pipefy` (the `PIPEFY_AUTH_ISSUER_URL` default). For a non-prod IdP, set `PIPEFY_AUTH_ISSUER_URL` to the full issuer URL (host + realm) directly; the CLI doesn't try to derive it from any tenant convention.
 
 ---
 
@@ -204,7 +204,7 @@ The keychain has a session but its refresh token won't exchange. Most common cau
 
 ### `String should match pattern '<regex>'` (any `PIPEFY_*` env var)
 
-Every `PIPEFY_*` env var is validated against a semantically meaningful regex at settings load — URL env vars (`PIPEFY_BASE_URL`, `PIPEFY_AUTH_ISSUER_URL`) must start with `http(s)://`, credentials must not begin/end with whitespace, `PIPEFY_ORG_ID` must be a numeric string. Empty / blank / specially-charactered values are rejected at construction — there's no overload of `PIPEFY_<NAME>=""` for opt-out semantics. To turn the stored-session tier off without unsetting `PIPEFY_AUTH_ISSUER_URL`, use `PIPEFY_AUTH_DISABLE_STORED_SESSION=1` (see [Keychain backends](#keychain-backends)). Otherwise unset the variable to fall back to the prod default (for URLs) or to leave the tier unconfigured (for credentials). The error message names the offending field plus the violated pattern.
+Every `PIPEFY_*` env var is validated against a semantically meaningful regex at settings load: URL env vars (`PIPEFY_BASE_URL`, `PIPEFY_AUTH_ISSUER_URL`) must start with `http(s)://`, credentials must not begin/end with whitespace, `PIPEFY_ORG_ID` must be a numeric string. Empty / blank / specially-charactered values are rejected at construction; there's no overload of `PIPEFY_<NAME>=""` for opt-out semantics. To turn the stored-session tier off without unsetting `PIPEFY_AUTH_ISSUER_URL`, use `PIPEFY_AUTH_DISABLE_STORED_SESSION=1` (see [Keychain backends](#keychain-backends)). Otherwise unset the variable to fall back to the prod default (for URLs) or to leave the tier unconfigured (for credentials). The error message names the offending field plus the violated pattern.
 
 > **`VAR= command` is not "unset".** A shell command-prefix assignment (`PIPEFY_AUTH_ISSUER_URL= pipefy auth status`) sets the variable to the empty string for the child process; it does **not** unset it. Pydantic then rejects the empty value and the command exits with a `ValidationError`. To actually unset a variable for a single command, use `env -u VAR command` (POSIX one-shot, leaves the parent shell untouched):
 >
@@ -216,7 +216,7 @@ Every `PIPEFY_*` env var is validated against a semantically meaningful regex at
 
 ### `Login succeeded but the session could not be stored in your keychain (<backend>)`
 
-The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running — install `gnome-keyring` or `kwallet`, set `PIPEFY_AUTH_KEYCHAIN_BACKEND=file` to use a plaintext file backend under the Pipefy config directory, or fall back to a static `PIPEFY_TOKEN`.
+The login worked but `keyring` couldn't write the entry. On macOS / Windows this is rare. On headless Linux it usually means no Secret Service daemon is running: install `gnome-keyring` or `kwallet`, set `PIPEFY_AUTH_KEYCHAIN_BACKEND=file` to use a plaintext file backend under the Pipefy config directory, or fall back to a static `PIPEFY_TOKEN`.
 
 When `PIPEFY_AUTH_KEYCHAIN_BACKEND=file` is active the backend reports as `PlaintextKeyring` and the hint switches to a config-directory writability check (the file backend writes to `keyring.cfg` under the resolved config directory).
 

@@ -91,7 +91,7 @@ The login subsystem is namespaced under `PIPEFY_AUTH_*`; the API credentials sta
 
 | Removed | Use instead |
 |---|---|
-| `PIPEFY_OAUTH_URL` | _dropped_ — set `PIPEFY_BASE_URL` (the OAuth token endpoint derives from `<base>/oauth/token`) |
+| `PIPEFY_OAUTH_URL` | _dropped_. Set `PIPEFY_BASE_URL` (the OAuth token endpoint derives from `<base>/oauth/token`) |
 | `PIPEFY_OAUTH_CLIENT` | `PIPEFY_SERVICE_ACCOUNT_CLIENT_ID` |
 | `PIPEFY_OAUTH_SECRET` | `PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET` |
 | `PIPEFY_AUTH_URL` | `PIPEFY_AUTH_ISSUER_URL` |

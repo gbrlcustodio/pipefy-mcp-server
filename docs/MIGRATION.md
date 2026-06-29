@@ -140,7 +140,7 @@ sdk.graphql_url               # "https://app.pipefy.com/graphql"
 auth.to_service_account().token_url  # "https://app.pipefy.com/oauth/token"
 ```
 
-The application composition roots do this for you from the environment: `pipefy_cli.config.resolve_cli_settings(...)` and `pipefy_mcp.settings.resolve_mcp_settings()` (the MCP server resolves lazily via `get_settings()`).
+The application composition roots do this for you from the environment: `pipefy_cli.settings.resolve_cli_settings(...)` and `pipefy_mcp.settings.resolve_mcp_settings()` (the MCP server resolves lazily via `get_settings()`).
 
 ---
 

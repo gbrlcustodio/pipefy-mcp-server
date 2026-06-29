@@ -141,7 +141,7 @@ def auth_login(
     if auth.oidc_client is None:
         typer.echo(
             "Stored sessions are disabled (PIPEFY_AUTH_DISABLE_STORED_SESSION=1 or "
-            "disable_stored_session=true in config.toml). Unset to log in, or "
+            "disable_stored_session=true under [auth] in config.toml). Unset to log in, or "
             "use PIPEFY_TOKEN / PIPEFY_SERVICE_ACCOUNT_* for non-interactive auth.",
             err=True,
         )
@@ -470,7 +470,7 @@ def auth_logout(ctx: typer.Context) -> None:
     if auth.oidc_client is None:
         typer.echo(
             "Stored sessions are disabled (PIPEFY_AUTH_DISABLE_STORED_SESSION=1 or "
-            "disable_stored_session=true in config.toml). Nothing to do.",
+            "disable_stored_session=true under [auth] in config.toml). Nothing to do.",
             err=True,
         )
         raise typer.Exit(2)

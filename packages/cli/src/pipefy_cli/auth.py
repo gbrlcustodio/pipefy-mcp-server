@@ -11,22 +11,22 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 import typer
-from httpx import Auth
 from pipefy_auth import (
     STATIC_TOKEN_TIER,
-    STORED_SESSION_TIER,
     OidcClient,
     RefreshError,
+    ResolvedAuth,
     ServiceAccount,
+    StoredSessionAuth,
+    build_httpx_auth,
     detect_pipefy_tiers,
     ensure_fresh_session,
     missing_auth_message,
     resolve_pipefy_auth,
-    tier_for,
 )
 from pipefy_sdk import (
     PipefyClient,
@@ -45,7 +45,7 @@ ENV_TOKEN_SOURCE = "env-token"
 class BearerToken:
     """Static bearer token plus the surface that produced it (``--token`` or env)."""
 
-    value: str
+    value: str = field(repr=False)
     source: Literal["flag", "env"]
 
 
@@ -82,7 +82,7 @@ def clear_authenticated_client_cache() -> None:
     _cached_client = None
 
 
-def _resolve(auth: AuthContext) -> Auth | None:
+def _resolve(auth: AuthContext) -> ResolvedAuth | None:
     return resolve_pipefy_auth(
         static_token=auth.bearer_token.value if auth.bearer_token else None,
         service_account=auth.service_account,
@@ -114,7 +114,6 @@ def detect_cli_sources(auth: AuthContext) -> list[str]:
 def _cache_key(
     pipefy_settings: PipefySettings,
     auth: AuthContext,
-    tier: str,
 ) -> str:
     """SHA-256 digest of every input that could change the cached client.
 
@@ -122,13 +121,13 @@ def _cache_key(
     token, the service-account ``client_secret`` — don't linger in module
     state for the process lifetime. Adding a new field to
     :class:`PipefySettings` or :class:`AuthContext` automatically participates
-    in the key without touching this function.
+    in the key without touching this function. The resolved tier is omitted: it
+    is a pure function of the auth fields above, so it adds no distinction.
     """
     payload = json.dumps(
         {
             "settings": pipefy_settings.model_dump(mode="json"),
             "auth": asdict(auth),
-            "tier": tier,
         },
         sort_keys=True,
         default=str,
@@ -152,24 +151,15 @@ def get_authenticated_client(
     if resolved is None:
         typer.echo(f"{missing_auth_message()} See {DOCS_CLI_AUTH_REF}.", err=True)
         raise typer.Exit(2)
-    tier = tier_for(resolved)
 
     # Stored-session: warm up eagerly so refresh failures surface as a clean
     # exit(2) with a "run `pipefy auth login` again" hint instead of leaking
     # out as a transport error on the first GraphQL call.
-    if tier == STORED_SESSION_TIER:
-        oidc = auth.oidc_client
-        if oidc is None:
-            # Resolver only picks STORED_SESSION_TIER when oidc_client is non-None;
-            # reaching here means that invariant is broken.
-            raise RuntimeError(
-                "STORED_SESSION_TIER resolved without an OIDC client "
-                "(resolver invariant broken)."
-            )
+    if isinstance(resolved, StoredSessionAuth):
         try:
             ensure_fresh_session(
-                issuer=oidc.issuer_url,
-                client_id=oidc.client_id,
+                issuer=resolved.oidc_client.issuer_url,
+                client_id=resolved.oidc_client.client_id,
             )
         except RefreshError as exc:
             typer.echo(
@@ -179,11 +169,13 @@ def get_authenticated_client(
             )
             raise typer.Exit(2) from exc
 
-    key = _cache_key(pipefy_settings, auth, tier)
+    key = _cache_key(pipefy_settings, auth)
     if _cached_client is not None and _cached_signature == key:
         return _cached_client
 
-    client = PipefyClient(pipefy_settings, auth=resolved, surface="cli")
+    client = PipefyClient(
+        pipefy_settings, auth=build_httpx_auth(resolved), surface="cli"
+    )
     _cached_signature = key
     _cached_client = client
     return client

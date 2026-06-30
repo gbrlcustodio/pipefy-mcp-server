@@ -8,7 +8,6 @@ import pytest
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_auth.bearer import (
-    CallableBearerAuth,
     RefreshableBearerAuth,
     StaticBearerAuth,
 )
@@ -19,10 +18,13 @@ from pipefy_auth.resolver import (
     STATIC_TOKEN_TIER,
     STORED_SESSION_TIER,
     ServiceAccount,
+    ServiceAccountAuth,
+    StaticTokenAuth,
+    StoredSessionAuth,
+    build_httpx_auth,
     detect_pipefy_tiers,
     missing_auth_message,
     resolve_pipefy_auth,
-    tier_for,
 )
 from pipefy_auth.responses import TokenResponse
 from pipefy_auth.storage import StoredSession
@@ -68,8 +70,7 @@ def test_static_token_wins_and_short_circuits_lower_tiers(monkeypatch):
         service_account=_service_account(),
         oidc_client=_oidc(),
     )
-    assert isinstance(resolved, StaticBearerAuth)
-    assert tier_for(resolved) == STATIC_TOKEN_TIER
+    assert isinstance(resolved, StaticTokenAuth)
     assert mock_load.calls == 0
 
 
@@ -77,7 +78,16 @@ def test_static_token_wins_and_short_circuits_lower_tiers(monkeypatch):
 def test_static_token_trimmed_and_blank_treated_as_absent():
     assert resolve_pipefy_auth(static_token="   ") is None
     resolved = resolve_pipefy_auth(static_token="  ABC  ")
-    assert isinstance(resolved, StaticBearerAuth)
+    assert isinstance(resolved, StaticTokenAuth)
+    assert resolved.token == "ABC"
+
+
+@pytest.mark.unit
+def test_build_httpx_auth_maps_static_token_to_static_bearer():
+    """The static-token tier's transport is a ``StaticBearerAuth``."""
+    resolved = resolve_pipefy_auth(static_token="TOKEN")
+    assert isinstance(resolved, StaticTokenAuth)
+    assert isinstance(build_httpx_auth(resolved), StaticBearerAuth)
 
 
 @pytest.mark.unit
@@ -89,9 +99,17 @@ def test_service_account_wins_when_no_static_token_and_short_circuits_stored(
     resolved = resolve_pipefy_auth(
         service_account=_service_account(), oidc_client=_oidc()
     )
-    assert isinstance(resolved, OAuth2ClientCredentials)
-    assert tier_for(resolved) == SERVICE_ACCOUNT_TIER
+    assert isinstance(resolved, ServiceAccountAuth)
+    assert resolved.credentials == _service_account()
     assert mock_load.calls == 0
+
+
+@pytest.mark.unit
+def test_build_httpx_auth_maps_service_account_to_client_credentials():
+    """The service-account tier's transport is an ``OAuth2ClientCredentials``."""
+    resolved = resolve_pipefy_auth(service_account=_service_account())
+    assert isinstance(resolved, ServiceAccountAuth)
+    assert isinstance(build_httpx_auth(resolved), OAuth2ClientCredentials)
 
 
 @pytest.mark.unit
@@ -100,8 +118,7 @@ def test_stored_session_wins_when_nothing_else_configured(monkeypatch):
         "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
     )
     resolved = resolve_pipefy_auth(oidc_client=_oidc())
-    assert isinstance(resolved, RefreshableBearerAuth)
-    assert tier_for(resolved) == STORED_SESSION_TIER
+    assert isinstance(resolved, StoredSessionAuth)
 
 
 @pytest.mark.unit
@@ -200,23 +217,6 @@ def test_missing_auth_message_custom_login_command():
 
 
 @pytest.mark.unit
-def test_tier_for_raises_on_foreign_auth_class():
-    """``tier_for`` only recognises auth produced by ``resolve_pipefy_auth``."""
-
-    class CustomAuth:
-        pass
-
-    with pytest.raises(ValueError, match="No resolver-tier name"):
-        tier_for(CustomAuth())  # type: ignore[arg-type]
-
-
-@pytest.mark.unit
-def test_tier_for_recognises_callable_bearer_auth_as_stored_session():
-    auth = CallableBearerAuth(lambda: "TOKEN")
-    assert tier_for(auth) == STORED_SESSION_TIER
-
-
-@pytest.mark.unit
 def test_stored_session_provider_raises_when_session_vanishes(monkeypatch):
     """The callable provider raises if the keychain entry disappears after detect."""
     monkeypatch.setattr(
@@ -224,8 +224,10 @@ def test_stored_session_provider_raises_when_session_vanishes(monkeypatch):
     )
     monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", lambda **_: None)
     resolved = resolve_pipefy_auth(oidc_client=_oidc())
-    assert isinstance(resolved, RefreshableBearerAuth)
-    provider = resolved._token_provider  # type: ignore[attr-defined]
+    assert isinstance(resolved, StoredSessionAuth)
+    auth = build_httpx_auth(resolved)
+    assert isinstance(auth, RefreshableBearerAuth)
+    provider = auth._token_provider  # type: ignore[attr-defined]
     with pytest.raises(RuntimeError, match="session was removed"):
         provider()
 
@@ -257,8 +259,10 @@ def test_stored_session_force_refresh_calls_ensure_fresh_session_with_force(
 
     monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", fake_ensure)
     resolved = resolve_pipefy_auth(oidc_client=_oidc())
-    assert isinstance(resolved, RefreshableBearerAuth)
-    new_token = resolved._force_refresh()  # type: ignore[attr-defined]
+    assert isinstance(resolved, StoredSessionAuth)
+    auth = build_httpx_auth(resolved)
+    assert isinstance(auth, RefreshableBearerAuth)
+    new_token = auth._force_refresh()  # type: ignore[attr-defined]
     assert new_token == "ROTATED"
     assert captured.get("force") is True
 
@@ -274,8 +278,10 @@ def test_stored_session_force_refresh_returns_none_on_refresh_error(monkeypatch)
 
     monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", fake_ensure)
     resolved = resolve_pipefy_auth(oidc_client=_oidc())
-    assert isinstance(resolved, RefreshableBearerAuth)
-    assert resolved._force_refresh() is None  # type: ignore[attr-defined]
+    assert isinstance(resolved, StoredSessionAuth)
+    auth = build_httpx_auth(resolved)
+    assert isinstance(auth, RefreshableBearerAuth)
+    assert auth._force_refresh() is None  # type: ignore[attr-defined]
 
 
 @pytest.mark.unit
@@ -285,8 +291,10 @@ def test_stored_session_force_refresh_returns_none_when_session_vanished(monkeyp
     )
     monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", lambda **_: None)
     resolved = resolve_pipefy_auth(oidc_client=_oidc())
-    assert isinstance(resolved, RefreshableBearerAuth)
-    assert resolved._force_refresh() is None  # type: ignore[attr-defined]
+    assert isinstance(resolved, StoredSessionAuth)
+    auth = build_httpx_auth(resolved)
+    assert isinstance(auth, RefreshableBearerAuth)
+    assert auth._force_refresh() is None  # type: ignore[attr-defined]
 
 
 class MockCounter:

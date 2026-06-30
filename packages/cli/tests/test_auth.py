@@ -13,6 +13,7 @@ from pipefy_auth import (
     ServiceAccount,
     StaticBearerAuth,
     StoredSession,
+    StoredSessionAuth,
     TokenResponse,
 )
 from pipefy_sdk import PipefySettings
@@ -297,11 +298,9 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
             side_effect=RefreshError("invalid_grant"),
         ),
     ):
-        # Use a real ``RefreshableBearerAuth`` so ``tier_for`` recognises it as
-        # the stored-session tier and triggers the eager warmup.
-        mock_resolve.return_value = RefreshableBearerAuth(
-            token_provider=lambda: "ACCESS",
-            force_refresh=lambda: None,
+        # Return the stored-session variant so the eager warmup path runs.
+        mock_resolve.return_value = StoredSessionAuth(
+            OidcClient(issuer_url=_ISSUER, client_id="pipefy-cli")
         )
         with pytest.raises(typer.Exit) as excinfo:
             get_authenticated_client(

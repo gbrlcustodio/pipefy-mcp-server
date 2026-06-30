@@ -54,6 +54,18 @@ Runtime type checks belong only at a trust boundary, where untyped or external d
 
 When a type-related failure looks plausible, the fix is a type checker in CI, not a per-function guard.
 
+### Parse, don't validate
+
+The boundary check should return a type that carries its result, not a bool or a bare raise that the interior re-derives. Validation that only raises throws away what it learned: the value flows on with its original loose type, so every downstream caller re-checks or re-normalizes it. Parsing turns loose input into a precise type once, and that type carries the proof, so the interior is total.
+
+In practice:
+
+- pydantic-settings models are the parse step for env vars: raw `os.environ` strings in, a typed `PipefySettings` / `AuthSettings` out, illegal values rejected at construction. Normalize there (strip, `rstrip('/')`, lowercase) so no consumer re-normalizes the same field later.
+- Prefer a closed sum type over a bag of optionals when inputs are mutually exclusive or co-dependent. `pipefy_auth.resolve_pipefy_auth` returns a `ResolvedAuth` (`StaticTokenAuth | ServiceAccountAuth | StoredSessionAuth`), so the winning credential tier is kept in the type; `build_httpx_auth` is then total over it, with no `None` branch and no fallthrough. Recovering the decision after the fact (an `isinstance` reverse lookup that maps a built `httpx.Auth` back to its tier name) is the anti-pattern this replaces.
+- Make illegal states unrepresentable instead of checking for them downstream. A cross-field rule such as "verify_audience requires audience" is a sum type wearing two fields; co-dependent credentials are one optional value, not two independent optionals that a helper later re-assembles.
+
+A function that accepts the parsed type may assume the guarantee and must not re-check it. This pairs with the boundary rule above: that one says where to validate, this one says what the check should hand back.
+
 ## Testing
 - `pytest-asyncio`, `pytest-cov`, `pytest-mock`.
 - Unit tests: default (no marker needed). Integration tests: `@pytest.mark.integration` (needs `PIPEFY_*` credentials).

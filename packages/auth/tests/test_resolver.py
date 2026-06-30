@@ -159,31 +159,6 @@ def test_detect_omits_stored_session_when_oidc_client_is_none(monkeypatch):
 
 
 @pytest.mark.unit
-def test_auth_settings_kill_switch_returns_none_oidc_client(
-    monkeypatch: "pytest.MonkeyPatch",
-):
-    """``disable_stored_session=True`` makes ``to_oidc_client()`` return ``None``.
-
-    Resolver tests above already cover that ``oidc_client=None`` skips
-    ``load_session``; this asserts the settings → resolver hand-off contract.
-    """
-    # Clear every ``PIPEFY_*`` env var so the model loads from defaults only.
-    # Same pattern as ``_isolate_env`` in ``test_settings_toml_source.py``.
-    import os as _os
-
-    for key in list(_os.environ):
-        if key.startswith("PIPEFY_"):
-            monkeypatch.delenv(key, raising=False)
-
-    from pipefy_infra.deployment import DeploymentConfig
-
-    from pipefy_auth.config import AuthConfig
-
-    settings = AuthConfig(deployment=DeploymentConfig(), disable_stored_session=True)
-    assert settings.to_oidc_client() is None
-
-
-@pytest.mark.unit
 def test_detect_lists_every_configured_tier_in_precedence_order(monkeypatch):
     monkeypatch.setattr(
         "pipefy_auth.resolver.load_session", lambda **_: _stored_session()

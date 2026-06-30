@@ -1,14 +1,11 @@
-"""Pipefy on-disk configuration: where it lives and how it's read.
+"""Pipefy on-disk configuration: the ``pydantic-settings`` TOML source.
 
-Bounded context: the operator-editable Pipefy config file. Owns path
-discovery (where the OS expects the config directory and the
-``config.toml`` file to live) and the ``pydantic-settings`` source that
-reads top-level TOML keys at settings construction.
-
-Path discovery is intentionally hand-rolled. Adopting ``platformdirs``
-would land config under ``~/Library/Application Support/pipefy`` on
-macOS, breaking parity with the CLI tools operators expect to share that
-location (``gh``, ``uv``, ``gcloud``).
+Bounded context: the operator-editable Pipefy config file. Owns the
+``pydantic-settings`` source that reads top-level TOML keys at settings
+construction. Path discovery (``config_dir`` / ``config_file_path``) lives in
+:mod:`pipefy_infra.paths` (stdlib only); it is re-exported here for the consumers
+that read TOML, but path-only consumers should import it from there to stay off
+the ``pydantic-settings`` import path.
 
 The TOML source is schema-agnostic: it returns the full top-level mapping
 filtered to the consuming ``BaseSettings`` subclass's field names
@@ -18,46 +15,13 @@ TOML keys; operators get one canonical TOML schema).
 
 from __future__ import annotations
 
-import os
-import sys
 import tomllib
-from pathlib import Path
 from typing import Any
 
 from pydantic.fields import FieldInfo
 from pydantic_settings import PydanticBaseSettingsSource
 
-_CONFIG_FILE_ENV = "PIPEFY_CONFIG_FILE"
-
-
-def config_dir() -> Path:
-    """Resolve the shared Pipefy configuration directory.
-
-    On POSIX honours ``XDG_CONFIG_HOME`` (per the XDG Base Directory
-    Specification) and falls back to ``~/.config``. On Windows uses
-    ``%APPDATA%`` with a ``~/AppData/Roaming`` fallback. Returns the path
-    unconditionally; the directory may not yet exist.
-    """
-    if sys.platform == "win32":
-        appdata = os.environ.get("APPDATA")
-        base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
-        return base / "pipefy"
-    xdg = os.environ.get("XDG_CONFIG_HOME")
-    base = Path(xdg) if xdg else Path.home() / ".config"
-    return base / "pipefy"
-
-
-def config_file_path() -> Path:
-    """Resolve the operator-editable ``config.toml`` path.
-
-    Honours the ``PIPEFY_CONFIG_FILE`` env override (useful for tests, ops
-    automation, and multi-environment workflows). Returns the path
-    unconditionally; the file may not yet exist; consumers must tolerate that.
-    """
-    override = os.environ.get(_CONFIG_FILE_ENV)
-    if override:
-        return Path(override)
-    return config_dir() / "config.toml"
+from pipefy_infra.paths import config_dir, config_file_path
 
 
 class PipefyTomlConfigSource(PydanticBaseSettingsSource):

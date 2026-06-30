@@ -47,9 +47,12 @@ markers = [
 [tool.ruff]
 extend = "../../pyproject.toml"
 lint.extend-select = ["TID251"]
+# env.py is the auth package's sanctioned env-reading edge (behind the [env]
+# extra); it is the one module allowed to import pydantic_settings.
+lint.per-file-ignores = { "**/env.py" = ["TID251"], "**/tests/**" = ["S101"] }
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "pipefy_cli".msg = "pipefy_auth must not import the CLI package."
 "pipefy_mcp".msg = "pipefy_auth must not import the MCP package."
 "pipefy_sdk".msg = "pipefy_auth must not import the SDK package."
-"pydantic_settings".msg = "pipefy_auth is env-free; env reading lives at the application edge (pipefy_cli / pipefy_mcp)."
+"pydantic_settings".msg = "pipefy_auth is env-free; env reading lives in pipefy_auth.env (the [env] extra), not the library import path."

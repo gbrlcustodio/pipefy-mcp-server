@@ -21,7 +21,7 @@ def _phase_id() -> str | None:
 
 # Tests do not chdir to ``tmp_path`` and do not override ``env=`` on
 # ``runner.invoke`` so the CLI loads ``.env`` from the repo root via
-# ``SdkConfig`` (the same source ``require_live_creds`` reads).
+# ``load_deployment`` (the same source ``require_live_creds`` reads).
 
 
 @pytest.mark.integration

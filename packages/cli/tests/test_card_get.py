@@ -7,9 +7,9 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from _shared.live_settings import live_pipefy_config, require_live_creds
+from _shared.live_settings import live_deployment, require_live_creds
 from gql.transport.exceptions import TransportQueryError
-from pipefy_sdk import SdkConfig
+from pipefy_infra.deployment import DeploymentConfig
 from pipefy_sdk.exceptions import PipefyAPIError
 
 from pipefy_cli.main import app
@@ -97,12 +97,14 @@ def test_card_get_permission_denied_hint_on_stderr(
     assert "deleted or is not visible" in err
 
 
-def _apply_settings_to_env(monkeypatch: pytest.MonkeyPatch, s: SdkConfig) -> None:
-    # Service-account credentials live on AuthConfig; the live test inherits
+def _apply_deployment_to_env(
+    monkeypatch: pytest.MonkeyPatch, deployment: DeploymentConfig
+) -> None:
+    # Service-account credentials are resolved separately; the live test inherits
     # them from the operator's existing shell env. Only the API host needs to
     # flow into the subprocess CLI invocation.
-    monkeypatch.setenv("PIPEFY_BASE_URL", str(s.base_url))
-    if s.allow_insecure_urls:
+    monkeypatch.setenv("PIPEFY_BASE_URL", str(deployment.base_url))
+    if deployment.allow_insecure_urls:
         monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
 
 
@@ -116,9 +118,9 @@ def test_card_get_live_json(runner, monkeypatch, tmp_path):
         pytest.skip(
             "Set PIPEFY_CLI_LIVE_CARD_ID to a card id your service account can read"
         )
-    settings = live_pipefy_config()
+    deployment = live_deployment()
     monkeypatch.chdir(tmp_path)
-    _apply_settings_to_env(monkeypatch, settings)
+    _apply_deployment_to_env(monkeypatch, deployment)
 
     result = runner.invoke(
         app,

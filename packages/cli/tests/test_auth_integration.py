@@ -6,11 +6,11 @@ import asyncio
 
 import pytest
 from _shared.live_settings import (
-    live_auth_config,
+    live_deployment,
     live_endpoints,
     require_live_creds,
 )
-from pipefy_auth import CredentialSources
+from pipefy_auth.env import load_auth
 
 from pipefy_cli.auth import get_authenticated_client
 from pipefy_cli.runtime import CliRuntime
@@ -21,19 +21,16 @@ def test_live_oauth_round_trip_triggers_graphql_auth():
     """First GraphQL request obtains an OAuth token (same stack as MCP)."""
 
     require_live_creds()
-    auth_settings = live_auth_config()
+    deployment = live_deployment()
+    sources, keychain_backend = load_auth(deployment)
     runtime = CliRuntime(
         endpoints=live_endpoints(),
-        allow_insecure_urls=auth_settings.allow_insecure_urls,
+        allow_insecure_urls=deployment.allow_insecure_urls,
         reuse_schema=False,
         default_webhook_name="Pipefy Webhook",
-        credentials=CredentialSources(
-            static_token=None,
-            service_account=auth_settings.to_service_account(),
-            oidc_client=auth_settings.to_oidc_client(),
-        ),
+        credentials=sources,
         token_source=None,
-        keychain_backend=auth_settings.keychain_backend,
+        keychain_backend=keychain_backend,
         org_id=None,
     )
 

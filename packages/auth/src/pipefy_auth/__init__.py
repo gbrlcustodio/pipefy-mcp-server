@@ -16,11 +16,6 @@ from pipefy_auth.bearer import (
     RefreshableBearerAuth,
     StaticBearerAuth,
 )
-from pipefy_auth.config import (
-    AuthConfig,
-    JwtValidationConfig,
-    ServiceAccountCredentials,
-)
 from pipefy_auth.discovery import (
     DiscoveryPolicy,
     ProviderMetadata,
@@ -67,9 +62,6 @@ from pipefy_auth.verification import (
 )
 
 __all__ = [
-    "AuthConfig",
-    "JwtValidationConfig",
-    "ServiceAccountCredentials",
     "CallableBearerAuth",
     "CredentialSources",
     "DEFAULT_AUTH_CLIENT_ID",

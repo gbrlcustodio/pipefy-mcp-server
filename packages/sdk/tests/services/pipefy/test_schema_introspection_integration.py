@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import pytest
 from _shared.live_settings import (
-    live_pipefy_config,
     live_resolved_auth,
     require_live_creds,
 )
+from pipefy_infra.env import load_deployment
 
+from pipefy_sdk.env import load_sdk
 from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
 from pipefy_sdk.services.schema_introspection_service import (
     SchemaIntrospectionService,
@@ -25,11 +26,11 @@ from pipefy_sdk.services.schema_introspection_service import (
 @pytest.fixture
 def live_svc():
     require_live_creds()
-    settings = live_pipefy_config()
+    endpoints, _allow_insecure, reuse_schema, _name = load_sdk(load_deployment())
     executor = HttpxGraphQLExecutor(
-        url=settings.graphql_url,
+        url=endpoints.graphql_url,
         auth=live_resolved_auth(),
-        cache_schema=settings.gql_reuse_fetched_graphql_schema,
+        cache_schema=reuse_schema,
     )
     return SchemaIntrospectionService(executor=executor)
 

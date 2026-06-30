@@ -5,7 +5,6 @@ from __future__ import annotations
 __version__ = "0.2.0-beta.4"
 
 from pipefy_sdk.client import PipefyClient
-from pipefy_sdk.config import SdkConfig
 from pipefy_sdk.endpoints import PipefyEndpoints
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
 from pipefy_sdk.models import (
@@ -89,7 +88,6 @@ __all__ = [
     "PipefyEndpoints",
     "PipefyError",
     "PipefyId",
-    "SdkConfig",
     "TableRecordTarget",
     "UpdateAiAgentInput",
     "UpdateAiAutomationInput",

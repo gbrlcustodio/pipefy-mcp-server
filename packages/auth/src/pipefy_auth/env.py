@@ -24,7 +24,7 @@ from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN, lower_if_str
 from pipefy_infra.deployment import DeploymentConfig
 from pipefy_infra.settings_base import PipefyBaseSettings
 from pydantic import AliasChoices, Field, field_validator
-from pydantic_settings import SettingsConfigDict  # noqa: TID251
+from pydantic_settings import SettingsConfigDict
 
 from pipefy_auth.identity import DEFAULT_AUTH_CLIENT_ID, OidcClient
 from pipefy_auth.resolver import CredentialSources, ServiceAccount

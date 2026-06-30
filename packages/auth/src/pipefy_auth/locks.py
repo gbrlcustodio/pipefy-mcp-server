@@ -7,7 +7,7 @@ managed, FD-bound, released on process exit including SIGKILL). Windows uses
 
 The advisory `fcntl.flock` guarantee is cross-process on local filesystems
 but historically unreliable over NFS; the lock file lives under
-:func:`pipefy_infra.config.config_dir` (typically ``~/.config/pipefy``) which is
+:func:`pipefy_infra.paths.config_dir` (typically ``~/.config/pipefy``) which is
 typically local. NFS-home users silently lose the cross-process
 serialisation but the refresh still works.
 """
@@ -21,7 +21,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from pipefy_infra.config import config_dir
+from pipefy_infra.paths import config_dir
 
 _POLL_INTERVAL_S = 0.05
 
@@ -35,7 +35,7 @@ def refresh_lock_path() -> Path:
 
     One global lock per host, not per ``(issuer, client_id)`` — multi-account
     isn't a current goal. Sits next to ``config.toml`` under
-    :func:`pipefy_infra.config.config_dir`.
+    :func:`pipefy_infra.paths.config_dir`.
     """
     return config_dir() / "refresh.lock"
 

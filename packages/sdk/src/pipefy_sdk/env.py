@@ -16,7 +16,7 @@ from __future__ import annotations
 from pipefy_infra.deployment import DeploymentConfig
 from pipefy_infra.settings_base import PipefyBaseSettings
 from pydantic import Field
-from pydantic_settings import SettingsConfigDict  # noqa: TID251
+from pydantic_settings import SettingsConfigDict
 
 from pipefy_sdk.endpoints import PipefyEndpoints
 

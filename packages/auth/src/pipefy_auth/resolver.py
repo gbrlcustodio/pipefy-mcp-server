@@ -13,7 +13,7 @@ display concern handled in CLI code, not a tier here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import assert_never
 
 from httpx import Auth
@@ -38,14 +38,14 @@ class ServiceAccount:
 
     token_url: str
     client_id: str
-    client_secret: str
+    client_secret: str = field(repr=False)
 
 
 @dataclass(frozen=True)
 class StaticTokenAuth:
     """Resolved static-token tier: a pre-issued bearer, stripped and non-blank."""
 
-    token: str
+    token: str = field(repr=False)
 
 
 @dataclass(frozen=True)

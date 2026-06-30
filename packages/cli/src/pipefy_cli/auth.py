@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 import typer
@@ -45,7 +45,7 @@ ENV_TOKEN_SOURCE = "env-token"
 class BearerToken:
     """Static bearer token plus the surface that produced it (``--token`` or env)."""
 
-    value: str
+    value: str = field(repr=False)
     source: Literal["flag", "env"]
 
 

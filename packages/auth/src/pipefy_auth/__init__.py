@@ -56,11 +56,24 @@ from pipefy_auth.storage import (
     load_session,
     store_session,
 )
-from pipefy_auth.verification import JwtValidator, TokenValidationError
+from pipefy_auth.verification import (
+    AudiencePolicy,
+    JwtValidator,
+    RequireAudience,
+    ResolvedJwtValidation,
+    SkipAudience,
+    TokenValidationError,
+    resolve_jwt_validation,
+)
 
 __all__ = [
+    "AudiencePolicy",
     "AuthSettings",
     "JwtValidationSettings",
+    "RequireAudience",
+    "ResolvedJwtValidation",
+    "SkipAudience",
+    "resolve_jwt_validation",
     "CallableBearerAuth",
     "DEFAULT_AUTH_CLIENT_ID",
     "DiscoveryPolicy",

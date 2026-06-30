@@ -16,7 +16,8 @@ offload :meth:`JwtValidator.validate` to a thread.
 from __future__ import annotations
 
 import threading
-from typing import Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, assert_never
 
 import jwt
 from jwt import PyJWKClient
@@ -24,7 +25,49 @@ from pipefy_infra import security
 
 from pipefy_auth.discovery import DiscoveryPolicy, fetch_provider_metadata
 
+if TYPE_CHECKING:
+    from pipefy_auth.settings import JwtValidationSettings
+
 _ALGORITHMS = ["RS256"]
+
+
+@dataclass(frozen=True)
+class SkipAudience:
+    """Do not check the ``aud`` claim.
+
+    The same-audience interim: it runs before the IdP issues an ``aud``, so
+    there is nothing to check against yet.
+    """
+
+
+@dataclass(frozen=True)
+class RequireAudience:
+    """Reject a token whose ``aud`` does not include ``audience``."""
+
+    audience: str
+
+
+# The two legal audience postures. "verify but against nothing" is unrepresentable:
+# RequireAudience cannot exist without its value, so JwtValidator is total over this
+# with no None branch and no separate verify flag.
+AudiencePolicy = SkipAudience | RequireAudience
+
+
+@dataclass(frozen=True)
+class ResolvedJwtValidation:
+    """Inbound-validation config after parsing, ready to build a :class:`JwtValidator`.
+
+    The frozen counterpart to the loose :class:`~pipefy_auth.JwtValidationSettings`
+    env reader: the audience posture is the :data:`AudiencePolicy` sum type (the
+    loose ``audience``/``verify_audience`` pair does not survive into this type),
+    and ``issuer_url`` is the resolved inbound issuer, not an override. Code holding
+    this may assume the cross-field rules already hold.
+    """
+
+    audience: AudiencePolicy
+    issuer_url: str
+    jwks_uri: str | None
+    allow_insecure_urls: bool
 
 
 class TokenValidationError(ValueError):
@@ -47,23 +90,30 @@ class JwtValidator:
     ``validate`` retries (the validator self-heals once the IdP is reachable). The
     underlying ``PyJWKClient`` caches signing keys across calls.
 
-    ``verify_audience`` is off by default: the same-audience interim runs before
-    the IdP issues an ``aud`` claim. Turn it on once the audience mapper is in
-    place; ``audience`` is then required by the caller.
+    The audience check is carried by ``audience_policy``: :class:`RequireAudience`
+    pins the expected ``aud``, :class:`SkipAudience` is the same-audience interim
+    (the default, before the IdP issues ``aud``). "Verify against a missing
+    audience" is unrepresentable, so :meth:`validate` needs no guard for it.
     """
 
     def __init__(
         self,
         *,
         issuer_url: str,
-        audience: str | None,
-        verify_audience: bool,
+        audience_policy: AudiencePolicy,
         allow_insecure_urls: bool = False,
         jwks_uri: str | None = None,
     ) -> None:
         self._issuer = issuer_url
-        self._audience = audience
-        self._verify_audience = verify_audience
+        # Resolve the fixed policy into jwt.decode kwargs once; validate() is the
+        # per-request hot path and the policy never changes after construction.
+        match audience_policy:
+            case RequireAudience(audience=expected):
+                self._audience, self._verify_aud = expected, True
+            case SkipAudience():
+                self._audience, self._verify_aud = None, False
+            case _:
+                assert_never(audience_policy)
         self._allow_insecure_urls = allow_insecure_urls
         # Guards the one-time lazy discovery in _jwks_client: validate() can run
         # concurrently, and a cold burst should resolve jwks_uri once rather than
@@ -148,10 +198,36 @@ class JwtValidator:
                 signing_key.key,
                 algorithms=_ALGORITHMS,
                 issuer=self._issuer,
-                audience=self._audience if self._verify_audience else None,
+                audience=self._audience,
                 # require exp so a token that simply omits it is rejected rather
                 # than treated as never-expiring (PyJWT only checks exp when present).
-                options={"verify_aud": self._verify_audience, "require": ["exp"]},
+                options={"verify_aud": self._verify_aud, "require": ["exp"]},
             )
         except Exception as exc:
             raise TokenValidationError(str(exc)) from exc
+
+
+def resolve_jwt_validation(
+    settings: JwtValidationSettings, *, issuer_url: str
+) -> ResolvedJwtValidation:
+    """Parse the loose env reader into the frozen inbound-validation config.
+
+    The audience parse step: the ``verify_audience`` / ``audience`` pair collapses
+    into an :data:`AudiencePolicy`, and the cross-field rule is enforced here once
+    (verifying against no audience is rejected) rather than re-checked downstream.
+    ``issuer_url`` is supplied already resolved: the override-vs-login-issuer
+    fallback and the "no issuer" error are the caller's concern (for the MCP
+    resource server, an inactive-vs-misconfigured distinction it must raise on).
+    """
+    if settings.verify_audience:
+        if not (settings.audience and settings.audience.strip()):
+            raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
+        audience: AudiencePolicy = RequireAudience(settings.audience.strip())
+    else:
+        audience = SkipAudience()
+    return ResolvedJwtValidation(
+        audience=audience,
+        issuer_url=issuer_url,
+        jwks_uri=settings.jwks_uri,
+        allow_insecure_urls=settings.allow_insecure_urls,
+    )

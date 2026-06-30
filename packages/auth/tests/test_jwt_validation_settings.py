@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from pipefy_auth import JwtValidationSettings
+from pipefy_auth import (
+    JwtValidationSettings,
+    RequireAudience,
+    SkipAudience,
+    resolve_jwt_validation,
+)
 
 _ISSUER = "https://idp.example.com/realms/x"
 
@@ -54,10 +59,27 @@ def test_resolve_issuer_url_is_none_when_neither_set():
 
 
 @pytest.mark.unit
-def test_verify_audience_requires_audience():
-    """Turning on audience checks without an audience is a misconfiguration."""
+def test_resolve_defaults_to_skip_audience():
+    """No audience config parses to the skip posture, carrying the resolved issuer."""
+    resolved = resolve_jwt_validation(JwtValidationSettings(), issuer_url=_ISSUER)
+    assert resolved.audience == SkipAudience()
+    assert resolved.issuer_url == _ISSUER
+
+
+@pytest.mark.unit
+def test_resolve_verify_audience_requires_audience():
+    """Verifying without an audience is a misconfiguration, caught at the parse step."""
+    settings = JwtValidationSettings(verify_audience=True)
     with pytest.raises(ValueError, match="verify_audience requires audience"):
-        JwtValidationSettings(verify_audience=True)
+        resolve_jwt_validation(settings, issuer_url=_ISSUER)
+
+
+@pytest.mark.unit
+def test_resolve_carries_the_required_audience():
+    """The valid pair parses into the sum type, so consumers never re-derive it."""
+    settings = JwtValidationSettings(audience="api://x", verify_audience=True)
+    resolved = resolve_jwt_validation(settings, issuer_url=_ISSUER)
+    assert resolved.audience == RequireAudience("api://x")
 
 
 @pytest.mark.unit

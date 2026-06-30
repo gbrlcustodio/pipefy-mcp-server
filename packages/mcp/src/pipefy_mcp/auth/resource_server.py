@@ -26,7 +26,7 @@ from typing import Any
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
-from pipefy_auth import JwtValidationSettings, JwtValidator
+from pipefy_auth import JwtValidationSettings, JwtValidator, resolve_jwt_validation
 
 from pipefy_mcp.settings import ResourceServerSettings
 
@@ -144,13 +144,13 @@ def build_resource_server_auth(
             "resolvable: set PIPEFY_JWT_ISSUER_URL, or leave the stored-session "
             "login enabled so its issuer can be reused."
         )
+    validation = resolve_jwt_validation(jwt_validation, issuer_url=issuer_url)
     verifier = JwtTokenVerifier(
         JwtValidator(
-            issuer_url=issuer_url,
-            audience=jwt_validation.audience,
-            verify_audience=jwt_validation.verify_audience,
-            allow_insecure_urls=jwt_validation.allow_insecure_urls,
-            jwks_uri=jwt_validation.jwks_uri,
+            issuer_url=validation.issuer_url,
+            audience_policy=validation.audience,
+            allow_insecure_urls=validation.allow_insecure_urls,
+            jwks_uri=validation.jwks_uri,
         ),
         resource=rs.resource_server_url,
     )

@@ -474,9 +474,7 @@ class JwtValidationSettings(BaseSettings):
         return self.issuer_url or default
 
     @model_validator(mode="after")
-    def _validate_configuration(self) -> Self:
-        if self.verify_audience and not self.audience:
-            raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
+    def _validate_urls(self) -> Self:
         # Strip and shape-check both URL fields. Env-var whitespace would otherwise
         # survive into the consumer: issuer_url into jwt.decode(issuer=...), which
         # compares iss exactly, and jwks_uri into the JWKS fetch. A realm path is

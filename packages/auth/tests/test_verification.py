@@ -10,7 +10,12 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from pipefy_auth.verification import JwtValidator, TokenValidationError
+from pipefy_auth.verification import (
+    JwtValidator,
+    RequireAudience,
+    SkipAudience,
+    TokenValidationError,
+)
 
 _ISSUER = "https://idp.example.com/realms/pipefy"
 _AUDIENCE = "https://mcp.example.com/mcp"
@@ -45,8 +50,7 @@ def _validator(monkeypatch: pytest.MonkeyPatch, **kwargs: Any) -> JwtValidator:
     """
     defaults = {
         "issuer_url": _ISSUER,
-        "audience": _AUDIENCE,
-        "verify_audience": False,
+        "audience_policy": SkipAudience(),
         "jwks_uri": _JWKS_URI,
     }
     defaults.update(kwargs)
@@ -106,7 +110,7 @@ def test_wrong_issuer_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_wrong_audience_is_rejected_when_verifying(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    validator = _validator(monkeypatch, verify_audience=True)
+    validator = _validator(monkeypatch, audience_policy=RequireAudience(_AUDIENCE))
     with pytest.raises(TokenValidationError):
         validator.validate(_sign(_claims(aud="https://other.example.com")))
 
@@ -116,8 +120,8 @@ def test_wrong_audience_passes_when_not_verifying(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # The toggle: the same wrong-aud token the previous test rejects is accepted
-    # when verify_audience is off (the same-audience interim).
-    validator = _validator(monkeypatch, verify_audience=False)
+    # when audience verification is off (the same-audience interim).
+    validator = _validator(monkeypatch, audience_policy=SkipAudience())
     claims = validator.validate(_sign(_claims(aud="https://other.example.com")))
     assert claims["aud"] == "https://other.example.com"
 
@@ -131,9 +135,7 @@ def test_jwks_uri_resolved_from_discovery(monkeypatch: pytest.MonkeyPatch) -> No
         "pipefy_auth.verification.fetch_provider_metadata",
         lambda issuer_url, policy: metadata,
     )
-    validator = JwtValidator(
-        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
-    )
+    validator = JwtValidator(issuer_url=_ISSUER, audience_policy=SkipAudience())
     assert validator._jwks is None  # deferred, not resolved at construction
     assert validator._jwks_client().uri == _JWKS_URI
 
@@ -149,9 +151,7 @@ def test_discovery_path_does_no_network_at_construction(
         raise AssertionError("discovery must not run at construction")
 
     monkeypatch.setattr("pipefy_auth.verification.fetch_provider_metadata", _fail)
-    validator = JwtValidator(
-        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
-    )
+    validator = JwtValidator(issuer_url=_ISSUER, audience_policy=SkipAudience())
     assert validator._jwks is None
 
 
@@ -163,9 +163,7 @@ def test_discovery_without_jwks_uri_raises(monkeypatch: pytest.MonkeyPatch) -> N
         "pipefy_auth.verification.fetch_provider_metadata",
         lambda issuer_url, policy: SimpleNamespace(jwks_uri=None),
     )
-    validator = JwtValidator(
-        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
-    )
+    validator = JwtValidator(issuer_url=_ISSUER, audience_policy=SkipAudience())
     with pytest.raises(TokenValidationError, match="jwks_uri"):
         validator.validate(_sign(_claims()))
 
@@ -183,9 +181,7 @@ def test_discovery_failure_is_not_cached(monkeypatch: pytest.MonkeyPatch) -> Non
         return SimpleNamespace(jwks_uri=_JWKS_URI)
 
     monkeypatch.setattr("pipefy_auth.verification.fetch_provider_metadata", _flaky)
-    validator = JwtValidator(
-        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
-    )
+    validator = JwtValidator(issuer_url=_ISSUER, audience_policy=SkipAudience())
 
     with pytest.raises(TokenValidationError, match="transient discovery outage"):
         validator.validate(_sign(_claims()))
@@ -209,8 +205,7 @@ def test_explicit_http_jwks_uri_is_rejected() -> None:
     with pytest.raises(ValueError, match="jwks_uri"):
         JwtValidator(
             issuer_url=_ISSUER,
-            audience=_AUDIENCE,
-            verify_audience=False,
+            audience_policy=SkipAudience(),
             jwks_uri="http://idp.example.com/protocol/openid-connect/certs",
         )
 
@@ -220,8 +215,7 @@ def test_explicit_internal_host_jwks_uri_is_rejected() -> None:
     with pytest.raises(ValueError, match="jwks_uri"):
         JwtValidator(
             issuer_url=_ISSUER,
-            audience=_AUDIENCE,
-            verify_audience=False,
+            audience_policy=SkipAudience(),
             jwks_uri="https://127.0.0.1/certs",
         )
 
@@ -231,8 +225,7 @@ def test_explicit_jwks_uri_with_query_is_rejected() -> None:
     with pytest.raises(ValueError, match="jwks_uri"):
         JwtValidator(
             issuer_url=_ISSUER,
-            audience=_AUDIENCE,
-            verify_audience=False,
+            audience_policy=SkipAudience(),
             jwks_uri=f"{_JWKS_URI}?rotate=1",
         )
 
@@ -243,8 +236,7 @@ def test_explicit_insecure_jwks_uri_allowed_when_opted_in() -> None:
     # mirroring the discovery path's policy.
     validator = JwtValidator(
         issuer_url=_ISSUER,
-        audience=_AUDIENCE,
-        verify_audience=False,
+        audience_policy=SkipAudience(),
         allow_insecure_urls=True,
         jwks_uri="http://127.0.0.1/certs",
     )

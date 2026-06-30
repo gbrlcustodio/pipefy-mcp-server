@@ -13,7 +13,7 @@ from pipefy_auth import (
 )
 from pipefy_auth.storage import StoredSession
 from pipefy_infra.deployment import DeploymentConfig
-from pipefy_sdk import PipefyClient, SdkConfig
+from pipefy_sdk import PipefyClient, PipefyEndpoints, SdkConfig
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.core.container import ServicesContainer
@@ -112,7 +112,9 @@ class TestServicesContainer:
 
         mock_pipefy_client_class.assert_called_once()
         kwargs = mock_pipefy_client_class.call_args.kwargs
-        assert kwargs["settings"] is settings.pipefy
+        endpoints = mock_pipefy_client_class.call_args.args[0]
+        assert isinstance(endpoints, PipefyEndpoints)
+        assert endpoints.graphql_url == settings.pipefy.graphql_url
         assert "auth" in kwargs
         assert container.pipefy_client is mock_client
 

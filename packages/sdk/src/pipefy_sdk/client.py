@@ -12,7 +12,7 @@ from pipefy_sdk.automation_preflight import (
     validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
-from pipefy_sdk.config import SdkConfig
+from pipefy_sdk.endpoints import PipefyEndpoints
 from pipefy_sdk.graphql_executor import GraphQLExecutor, HttpxGraphQLExecutor
 from pipefy_sdk.internal_api_errors import format_internal_api_error
 from pipefy_sdk.models.ai_agent import (
@@ -83,27 +83,28 @@ class Executors:
     internal: GraphQLExecutor
 
 
-def build_executors(settings: SdkConfig, auth: Auth) -> Executors:
-    """Build one executor per Pipefy endpoint from a shared ``settings``/``auth``.
+def build_executors(
+    endpoints: PipefyEndpoints, auth: Auth, *, reuse_schema: bool = False
+) -> Executors:
+    """Build one executor per Pipefy endpoint from ``endpoints``/``auth``.
 
-    This is the seam that resolves each endpoint URL from settings; the executors
+    This is the seam that hands each endpoint URL to its executor; the executors
     take a ready URL and stay agnostic to endpoint topology. All three share the
     one ``auth`` instance so the OAuth token cache is not duplicated. Only the
     internal executor carries the ``[code=…][correlation_id=…]`` error envelope;
     the others leave gql exceptions untouched.
     """
-    cache_schema = settings.gql_reuse_fetched_graphql_schema
     return Executors(
         public=HttpxGraphQLExecutor(
-            url=settings.graphql_url, auth=auth, cache_schema=cache_schema
+            url=endpoints.graphql_url, auth=auth, cache_schema=reuse_schema
         ),
         interfaces=HttpxGraphQLExecutor(
-            url=settings.interfaces_graphql_url, auth=auth, cache_schema=cache_schema
+            url=endpoints.interfaces_graphql_url, auth=auth, cache_schema=reuse_schema
         ),
         internal=HttpxGraphQLExecutor(
-            url=settings.internal_api_url,
+            url=endpoints.internal_api_url,
             auth=auth,
-            cache_schema=cache_schema,
+            cache_schema=reuse_schema,
             on_graphql_error=format_internal_api_error,
         ),
     )
@@ -114,19 +115,25 @@ class PipefyClient:
 
     def __init__(
         self,
-        settings: SdkConfig,
+        endpoints: PipefyEndpoints,
         *,
         auth: Auth,
+        allow_insecure_urls: bool = False,
+        reuse_schema: bool = False,
+        default_webhook_name: str = "Pipefy Webhook",
     ) -> None:
         """Build a facade wired with a pre-constructed ``httpx.Auth``.
 
         Args:
-            settings: Pipefy endpoint configuration.
+            endpoints: The Pipefy GraphQL endpoint URLs to connect to.
             auth: ``httpx.Auth`` that supplies the credentials for every GraphQL
                 call (construct via ``pipefy_auth.resolve`` or one of the bearer
                 adapters from ``pipefy_auth``).
+            allow_insecure_urls: Shared SSRF posture for webhook-URL validation.
+            reuse_schema: Reuse the introspected GraphQL schema across requests.
+            default_webhook_name: ``name`` for ``create_webhook`` when unset.
         """
-        ex = build_executors(settings, auth)
+        ex = build_executors(endpoints, auth, reuse_schema=reuse_schema)
         self._internal_executor = ex.internal
         self._pipe_service = PipeService(executor=ex.public)
         self._card_service = CardService(executor=ex.public)
@@ -144,7 +151,8 @@ class PipefyClient:
         )
         self._webhook_service = WebhookService(
             executor=ex.public,
-            settings=settings,
+            allow_insecure_urls=allow_insecure_urls,
+            default_webhook_name=default_webhook_name,
             card_service=self._card_service,
         )
         self._automation_service = AutomationService(executor=ex.public)

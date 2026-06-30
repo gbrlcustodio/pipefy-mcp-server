@@ -22,7 +22,7 @@ import uuid
 
 import pytest
 from _shared.live_settings import (
-    live_pipefy_config,
+    live_endpoints,
     live_resolved_auth,
     require_live_creds,
 )
@@ -41,7 +41,7 @@ _PORTAL_ORG_SKIP = (
 def live_portal_service() -> PortalService:
     """PortalService with live Interfaces + Internal API for sub-portal mutations."""
     require_live_creds()
-    ex = build_executors(live_pipefy_config(), live_resolved_auth())
+    ex = build_executors(live_endpoints(), live_resolved_auth())
     return PortalService(
         public_executor=ex.public,
         interfaces_executor=ex.interfaces,

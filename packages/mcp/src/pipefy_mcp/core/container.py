@@ -12,7 +12,7 @@ from pipefy_auth import (
     resolve_pipefy_auth,
     tier_for,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyEndpoints
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.settings import Settings
@@ -80,4 +80,14 @@ class ServicesContainer:
                 )
                 raise
             logger.info("Pipefy stored session warmed up at startup")
-        self.pipefy_client = PipefyClient(settings=pipefy, auth=resolved)
+        self.pipefy_client = PipefyClient(
+            PipefyEndpoints(
+                graphql_url=pipefy.graphql_url,
+                interfaces_graphql_url=pipefy.interfaces_graphql_url,
+                internal_api_url=pipefy.internal_api_url,
+            ),
+            auth=resolved,
+            allow_insecure_urls=pipefy.allow_insecure_urls,
+            reuse_schema=pipefy.gql_reuse_fetched_graphql_schema,
+            default_webhook_name=pipefy.default_webhook_name,
+        )

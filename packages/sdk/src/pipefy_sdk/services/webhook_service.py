@@ -8,7 +8,6 @@ from typing import Any
 from gql.transport.exceptions import TransportQueryError
 from pipefy_infra import security
 
-from pipefy_sdk.config import SdkConfig
 from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
@@ -32,11 +31,13 @@ class WebhookService:
         self,
         *,
         executor: GraphQLExecutor,
-        settings: SdkConfig,
+        allow_insecure_urls: bool,
+        default_webhook_name: str,
         card_service: CardService,
     ) -> None:
         self._executor = executor
-        self._settings = settings
+        self._allow_insecure_urls = allow_insecure_urls
+        self._default_webhook_name = default_webhook_name
         self._card_service = card_service
 
     async def get_email_templates(
@@ -220,13 +221,13 @@ class WebhookService:
             **attrs: Extra CreateWebhookInput fields (name, filters, headers, etc.).
         """
         security.validate_https_url(
-            url, "url", allow_insecure=self._settings.allow_insecure_urls
+            url, "url", allow_insecure=self._allow_insecure_urls
         )
         input_obj: dict[str, Any] = {
             "pipe_id": str(pipe_id),
             "url": url,
             "actions": actions,
-            "name": attrs.get("name", self._settings.default_webhook_name),
+            "name": attrs.get("name", self._default_webhook_name),
         }
         for key, value in attrs.items():
             if key == "name":
@@ -266,7 +267,7 @@ class WebhookService:
             security.validate_https_url(
                 str(url_val),
                 "url",
-                allow_insecure=self._settings.allow_insecure_urls,
+                allow_insecure=self._allow_insecure_urls,
             )
         for key, value in attrs.items():
             if key == "id":

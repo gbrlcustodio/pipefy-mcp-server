@@ -11,6 +11,7 @@ from pipefy_auth import (
     resolve_pipefy_auth,
 )
 from pipefy_infra.deployment import DeploymentConfig
+from pipefy_infra.env import load_deployment
 from pipefy_infra.settings_base import PipefyBaseSettings
 from pydantic import AliasChoices, Field
 
@@ -20,6 +21,8 @@ from pydantic import AliasChoices, Field
 from pydantic_settings import SettingsConfigDict  # noqa: TID251
 
 from pipefy_sdk.config import SdkConfig
+from pipefy_sdk.endpoints import PipefyEndpoints
+from pipefy_sdk.env import load_sdk
 
 _MISSING_CREDS_MESSAGE = (
     "Pipefy credentials not configured: set PIPEFY_BASE_URL to your "
@@ -69,6 +72,11 @@ class _ServiceAccountSettings(PipefyBaseSettings):
 def live_pipefy_config() -> SdkConfig:
     """Load ``SdkConfig`` from the process environment and optional ``.env`` file."""
     return _SdkSettings(deployment=_DeploymentSettings())
+
+
+def live_endpoints() -> PipefyEndpoints:
+    """Resolve the live ``PipefyEndpoints`` from the environment (integration tests)."""
+    return load_sdk(load_deployment())[0]
 
 
 def live_auth_config() -> AuthConfig:

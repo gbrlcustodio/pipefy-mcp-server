@@ -11,9 +11,13 @@ dependencies = [
     "openpyxl>=3.1.5",
     "pipefy-infra",
     "pydantic>=2.13.4,<3",
-    "pydantic-settings>=2.8.1",
     "rapidfuzz>=3.14.3",
 ]
+
+[project.optional-dependencies]
+# Env-reading edge (pipefy_sdk.env). The core SDK is env-free; only callers
+# that parse the environment into the SDK's value objects need this.
+env = ["pydantic-settings>=2.8.1"]
 
 [dependency-groups]
 dev = [

@@ -2,10 +2,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pipefy_auth import StaticBearerAuth
-from pipefy_infra.deployment import DeploymentConfig
 
 from pipefy_sdk.client import PipefyClient, build_executors
-from pipefy_sdk.config import SdkConfig
+from pipefy_sdk.endpoints import PipefyEndpoints
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_service import AutomationService
@@ -22,16 +21,18 @@ from pipefy_sdk.services.webhook_service import WebhookService
 
 
 @pytest.fixture
-def mock_settings():
-    return SdkConfig(
-        deployment=DeploymentConfig(base_url="https://api.pipefy.com"),
+def endpoints():
+    return PipefyEndpoints(
+        graphql_url="https://api.pipefy.com/graphql",
+        interfaces_graphql_url="https://api.pipefy.com/graphql/interfaces",
+        internal_api_url="https://api.pipefy.com/internal_api",
     )
 
 
 @pytest.mark.unit
-def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
+def test_pipefy_client_forwards_caller_provided_auth(endpoints):
     auth = StaticBearerAuth("unit-token")
-    client = PipefyClient(mock_settings, auth=auth)
+    client = PipefyClient(endpoints, auth=auth)
     # Public services share one executor built from the caller's auth, so GraphQL
     # auth cannot drift across services.
     assert client._card_service._executor._auth is auth
@@ -40,22 +41,22 @@ def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
 
 
 @pytest.mark.unit
-def test_build_executors_routes_each_endpoint_to_its_url(mock_settings):
-    ex = build_executors(mock_settings, StaticBearerAuth("unit-token"))
+def test_build_executors_routes_each_endpoint_to_its_url(endpoints):
+    ex = build_executors(endpoints, StaticBearerAuth("unit-token"))
     # Each executor must target its own endpoint; a copy-paste that aimed
     # interfaces or internal at the public graphql_url would route silently.
-    assert ex.public._graphql_url == mock_settings.graphql_url
-    assert ex.interfaces._graphql_url == mock_settings.interfaces_graphql_url
-    assert ex.internal._graphql_url == mock_settings.internal_api_url
+    assert ex.public._graphql_url == endpoints.graphql_url
+    assert ex.interfaces._graphql_url == endpoints.interfaces_graphql_url
+    assert ex.internal._graphql_url == endpoints.internal_api_url
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_create_card_forwards_phase_id_and_title(mock_settings):
+async def test_create_card_forwards_phase_id_and_title(endpoints):
     """PipefyClient.create_card passes optional phase_id and title to CardService."""
     card_service = AsyncMock()
     card_service.create_card = AsyncMock(return_value={"ok": "create"})
-    client = PipefyClient(mock_settings, auth=StaticBearerAuth("unit-token"))
+    client = PipefyClient(endpoints, auth=StaticBearerAuth("unit-token"))
     client._card_service = card_service
 
     await client.create_card(10, {}, phase_id=20, title="Seed")
@@ -581,11 +582,15 @@ async def test_pipefy_client_facade_delegates_to_services_without_modifying_args
 def test_pipefy_client_creates_services_with_shared_auth():
     """Test PipefyClient creates services that share the same auth instance."""
 
-    settings = SdkConfig(
-        deployment=DeploymentConfig(base_url="https://api.pipefy.com"),
-    )
     auth = StaticBearerAuth("shared-token")
-    client = PipefyClient(settings=settings, auth=auth)
+    client = PipefyClient(
+        PipefyEndpoints(
+            graphql_url="https://api.pipefy.com/graphql",
+            interfaces_graphql_url="https://api.pipefy.com/graphql/interfaces",
+            internal_api_url="https://api.pipefy.com/internal_api",
+        ),
+        auth=auth,
+    )
 
     assert isinstance(client._pipe_service, PipeService)
     assert isinstance(client._card_service, CardService)
@@ -722,7 +727,7 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_delete_card_relation_delegates_to_internal_api_client(mock_settings):
+async def test_delete_card_relation_delegates_to_internal_api_client(endpoints):
     """delete_card_relation delegates to RelationService, which routes through the
     internal executor because the mutation is only on the internal GraphQL schema."""
     from graphql import print_ast
@@ -731,7 +736,7 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
         INTERNAL_DELETE_CARD_RELATION_MUTATION,
     )
 
-    client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
+    client = PipefyClient(endpoints, auth=StaticBearerAuth("t"))
     client._internal_executor.execute_query = AsyncMock(
         return_value={"deleteCardRelation": {"success": True}}
     )
@@ -753,10 +758,10 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_sub_portal_mutation_routes_through_internal_api_client(mock_settings):
+async def test_sub_portal_mutation_routes_through_internal_api_client(endpoints):
     """A sub-portal mutation reaches the Internal API client the facade builds at
     construction; PortalService and the facade share that one instance."""
-    client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
+    client = PipefyClient(endpoints, auth=StaticBearerAuth("t"))
     client._internal_executor.execute_query = AsyncMock(
         return_value={"updateSubPortalElement": {"success": True}}
     )
@@ -803,15 +808,21 @@ async def test_pipefy_client_upload_attachment_delegates_to_attachment_service()
 @pytest.mark.unit
 def test_attachment_service_receives_card_and_table_services_from_facade():
     """PipefyClient wires its own card_service and table_service into AttachmentService."""
-    settings = SdkConfig(deployment=DeploymentConfig(base_url="https://api.pipefy.com"))
-    client = PipefyClient(settings=settings, auth=StaticBearerAuth("t"))
+    client = PipefyClient(
+        PipefyEndpoints(
+            graphql_url="https://api.pipefy.com/graphql",
+            interfaces_graphql_url="https://api.pipefy.com/graphql/interfaces",
+            internal_api_url="https://api.pipefy.com/internal_api",
+        ),
+        auth=StaticBearerAuth("t"),
+    )
     assert client._attachment_service._card_service is client._card_service
     assert client._attachment_service._table_service is client._table_service
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_pipefy_client_invite_members_propagates_value_error(mock_settings):
+async def test_pipefy_client_invite_members_propagates_value_error(endpoints):
     member_service = AsyncMock()
     member_service.invite_members = AsyncMock(
         side_effect=ValueError("Invalid members[0]: expected valid email")

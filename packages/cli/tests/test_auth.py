@@ -16,7 +16,7 @@ from pipefy_auth import (
     TokenResponse,
 )
 from pipefy_infra.deployment import DeploymentConfig
-from pipefy_sdk import SdkConfig
+from pipefy_sdk import PipefyEndpoints, SdkConfig
 
 from pipefy_cli.auth import (
     AuthContext,
@@ -73,7 +73,9 @@ def test_get_authenticated_client_passes_auth_to_pipefy_client(clean_pipefy_env)
         mock_pc.return_value = MagicMock()
         client = get_authenticated_client(sdk_config, _auth(bearer_token="tok"))
         kwargs = mock_pc.call_args.kwargs
-        assert mock_pc.call_args.args == (sdk_config,)
+        endpoints = mock_pc.call_args.args[0]
+        assert isinstance(endpoints, PipefyEndpoints)
+        assert endpoints.graphql_url == sdk_config.graphql_url
         assert isinstance(kwargs["auth"], StaticBearerAuth)
         assert client is mock_pc.return_value
 

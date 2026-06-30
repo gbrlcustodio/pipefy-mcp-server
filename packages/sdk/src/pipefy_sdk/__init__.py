@@ -6,6 +6,7 @@ __version__ = "0.2.0-beta.4"
 
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.config import SdkConfig
+from pipefy_sdk.endpoints import PipefyEndpoints
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
 from pipefy_sdk.models import (
     Attachment,
@@ -85,6 +86,7 @@ __all__ = [
     "NonBlankStr",
     "PipefyAPIError",
     "PipefyClient",
+    "PipefyEndpoints",
     "PipefyError",
     "PipefyId",
     "SdkConfig",

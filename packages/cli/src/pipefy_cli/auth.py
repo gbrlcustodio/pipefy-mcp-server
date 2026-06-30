@@ -30,6 +30,7 @@ from pipefy_auth import (
 )
 from pipefy_sdk import (
     PipefyClient,
+    PipefyEndpoints,
     SdkConfig,
 )
 
@@ -183,7 +184,17 @@ def get_authenticated_client(
     if _cached_client is not None and _cached_signature == key:
         return _cached_client
 
-    client = PipefyClient(sdk_config, auth=resolved)
+    client = PipefyClient(
+        PipefyEndpoints(
+            graphql_url=sdk_config.graphql_url,
+            interfaces_graphql_url=sdk_config.interfaces_graphql_url,
+            internal_api_url=sdk_config.internal_api_url,
+        ),
+        auth=resolved,
+        allow_insecure_urls=sdk_config.allow_insecure_urls,
+        reuse_schema=sdk_config.gql_reuse_fetched_graphql_schema,
+        default_webhook_name=sdk_config.default_webhook_name,
+    )
     _cached_signature = key
     _cached_client = client
     return client

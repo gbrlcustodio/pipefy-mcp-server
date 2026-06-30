@@ -34,8 +34,8 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
+from pipefy_mcp.runtime import get_runtime
 from pipefy_mcp.server import build_pipefy_mcp_server
-from pipefy_mcp.settings import get_settings
 
 mcp_server = build_pipefy_mcp_server()
 
@@ -62,7 +62,7 @@ async def test_live_create_ai_automation_omits_condition_uses_default_placeholde
     token = uuid.uuid4().hex[:10]
     name = f"MCP AI auto live {token}"
 
-    with patch("pipefy_mcp.settings.get_settings", get_settings):
+    with patch("pipefy_mcp.runtime.get_runtime", get_runtime):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=120),
@@ -84,7 +84,7 @@ async def test_live_create_ai_automation_omits_condition_uses_default_placeholde
     automation_id = str(payload.get("automation_id") or "").strip()
     assert automation_id, f"Missing automation_id in payload: {payload!r}"
 
-    with patch("pipefy_mcp.settings.get_settings", get_settings):
+    with patch("pipefy_mcp.runtime.get_runtime", get_runtime):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=120),

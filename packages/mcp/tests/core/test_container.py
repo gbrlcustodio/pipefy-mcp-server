@@ -4,25 +4,22 @@ from unittest.mock import Mock, patch
 
 import pytest
 from pipefy_auth import (
-    AuthConfig,
+    DEFAULT_AUTH_CLIENT_ID,
+    CredentialSources,
+    OidcClient,
     RefreshableBearerAuth,
     RefreshError,
-    ServiceAccountCredentials,
+    ServiceAccount,
     StaticBearerAuth,
     TokenResponse,
 )
 from pipefy_auth.storage import StoredSession
 from pipefy_infra.deployment import DeploymentConfig
-from pipefy_sdk import PipefyClient, PipefyEndpoints, SdkConfig
+from pipefy_sdk import PipefyClient, PipefyEndpoints
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.settings import (
-    JwtValidationConfig,
-    McpSettings,
-    ResourceServerSettings,
-    Settings,
-)
+from pipefy_mcp.runtime import McpRuntime, McpSettings, ResourceServerIdentity
 
 _AUTH_ENV_KEYS = (
     "PIPEFY_TOKEN",
@@ -36,34 +33,44 @@ _AUTH_ENV_KEYS = (
     "PIPEFY_AUTH_KEYCHAIN_BACKEND",
 )
 
-# One shared deployment, injected by reference like the application edge does.
+# One deployment, the source of the parsed endpoints the runtime carries.
 _DEPLOYMENT = DeploymentConfig(base_url="https://api.pipefy.com")
+_ENDPOINTS = PipefyEndpoints(
+    graphql_url=_DEPLOYMENT.graphql_url,
+    interfaces_graphql_url=_DEPLOYMENT.interfaces_graphql_url,
+    internal_api_url=_DEPLOYMENT.internal_api_url,
+)
+_ISSUER = "https://signin.pipefy.com/realms/pipefy"
 
 
-def _settings(auth: AuthConfig) -> Settings:
-    """Build a complete MCP ``Settings`` composite around the given auth config."""
-    return Settings(
-        pipefy=SdkConfig(deployment=_DEPLOYMENT),
-        auth=auth,
+def _runtime(credentials: CredentialSources) -> McpRuntime:
+    """Build a complete MCP ``McpRuntime`` around the given parsed credentials."""
+    return McpRuntime(
+        endpoints=_ENDPOINTS,
+        allow_insecure_urls=False,
+        reuse_schema=False,
+        default_webhook_name="Pipefy Webhook",
+        credentials=credentials,
+        keychain_backend="auto",
         mcp=McpSettings(),
-        jwt=JwtValidationConfig(deployment=_DEPLOYMENT),
-        rs=ResourceServerSettings(deployment=_DEPLOYMENT),
+        jwt=None,
+        resource_server=ResourceServerIdentity(),
     )
 
 
-def _service_account_auth_settings() -> AuthConfig:
-    return AuthConfig(
-        deployment=_DEPLOYMENT,
-        service_account_credentials=ServiceAccountCredentials(
-            client_id="client_id", client_secret="client_secret"
-        ),
+def _service_account_credentials() -> CredentialSources:
+    return CredentialSources(
+        service_account=ServiceAccount(
+            token_url=_DEPLOYMENT.oauth_token_url,
+            client_id="client_id",
+            client_secret="client_secret",
+        )
     )
 
 
-def _stored_session_auth_settings() -> AuthConfig:
-    return AuthConfig(
-        deployment=_DEPLOYMENT,
-        issuer_url="https://signin.pipefy.com/realms/pipefy",
+def _stored_session_credentials() -> CredentialSources:
+    return CredentialSources(
+        oidc_client=OidcClient(issuer_url=_ISSUER, client_id=DEFAULT_AUTH_CLIENT_ID)
     )
 
 
@@ -105,16 +112,16 @@ class TestServicesContainer:
         mock_client.client = Mock()
         mock_pipefy_client_class.return_value = mock_client
 
-        settings = _settings(_service_account_auth_settings())
+        runtime = _runtime(_service_account_credentials())
 
         container = ServicesContainer()
-        await container.initialize_services(settings)
+        await container.initialize_services(runtime)
 
         mock_pipefy_client_class.assert_called_once()
         kwargs = mock_pipefy_client_class.call_args.kwargs
         endpoints = mock_pipefy_client_class.call_args.args[0]
         assert isinstance(endpoints, PipefyEndpoints)
-        assert endpoints.graphql_url == settings.pipefy.graphql_url
+        assert endpoints.graphql_url == runtime.endpoints.graphql_url
         assert "auth" in kwargs
         assert container.pipefy_client is mock_client
 
@@ -127,10 +134,8 @@ class TestServicesContainer:
         mock_client = Mock(spec=PipefyClient)
         mock_client.client = Mock()
         mock_pipefy_client_class.return_value = mock_client
-        settings = _settings(
-            AuthConfig(deployment=_DEPLOYMENT, static_token="env-bearer")
-        )
-        await ServicesContainer().initialize_services(settings)
+        runtime = _runtime(CredentialSources(static_token="env-bearer"))
+        await ServicesContainer().initialize_services(runtime)
         pc_auth = mock_pipefy_client_class.call_args.kwargs["auth"]
         assert isinstance(pc_auth, StaticBearerAuth)
 
@@ -144,11 +149,11 @@ class TestServicesContainer:
         mock_pipefy_client_class,
     ):
         """No PIPEFY_TOKEN and no service-account pair -> runtime error."""
-        settings = _settings(AuthConfig(deployment=_DEPLOYMENT))
+        runtime = _runtime(CredentialSources())
         with pytest.raises(
             RuntimeError, match="Missing Pipefy authentication"
         ) as exc_info:
-            await ServicesContainer().initialize_services(settings)
+            await ServicesContainer().initialize_services(runtime)
         assert DOCS_SETUP_REF in str(exc_info.value)
 
     @patch("pipefy_mcp.core.container.ensure_fresh_session")
@@ -160,18 +165,18 @@ class TestServicesContainer:
     ):
         """When the resolved tier is the stored session, the refresh is pre-warmed."""
         mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
-        settings = _settings(_stored_session_auth_settings())
+        runtime = _runtime(_stored_session_credentials())
         with patch(
             "pipefy_auth.resolver.load_session",
             return_value=_fresh_stored_session(),
         ):
-            await ServicesContainer().initialize_services(settings)
+            await ServicesContainer().initialize_services(runtime)
 
         pc_auth = mock_pipefy_client_class.call_args.kwargs["auth"]
         assert isinstance(pc_auth, RefreshableBearerAuth)
         mock_ensure_fresh_session.assert_called_once_with(
             issuer="https://signin.pipefy.com/realms/pipefy",
-            client_id=settings.auth.public_client_id,
+            client_id=DEFAULT_AUTH_CLIENT_ID,
         )
 
     @patch("pipefy_mcp.core.container.ensure_fresh_session")
@@ -183,11 +188,12 @@ class TestServicesContainer:
     ):
         """A configured ``PIPEFY_AUTH_ISSUER_URL`` is ignored at warm-up when a higher tier wins."""
         mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
-        settings = _settings(
-            AuthConfig(
-                deployment=_DEPLOYMENT,
+        runtime = _runtime(
+            CredentialSources(
                 static_token="env-bearer",
-                issuer_url="https://signin.pipefy.com/realms/pipefy",
+                oidc_client=OidcClient(
+                    issuer_url=_ISSUER, client_id=DEFAULT_AUTH_CLIENT_ID
+                ),
             )
         )
         # Force a detectable stored session so we prove precedence, not absence.
@@ -195,7 +201,7 @@ class TestServicesContainer:
             "pipefy_auth.resolver.load_session",
             return_value=_fresh_stored_session(),
         ):
-            await ServicesContainer().initialize_services(settings)
+            await ServicesContainer().initialize_services(runtime)
 
         mock_ensure_fresh_session.assert_not_called()
 
@@ -209,14 +215,14 @@ class TestServicesContainer:
     ):
         """A failed warm-up logs the ``pipefy auth login`` hint and surfaces ``RefreshError`` *before* ``PipefyClient`` is constructed."""
         mock_ensure_fresh_session.side_effect = RefreshError("invalid_grant")
-        settings = _settings(_stored_session_auth_settings())
+        runtime = _runtime(_stored_session_credentials())
         with patch(
             "pipefy_auth.resolver.load_session",
             return_value=_fresh_stored_session(),
         ):
             with caplog.at_level(logging.ERROR, logger="pipefy_mcp.core.container"):
                 with pytest.raises(RefreshError, match="invalid_grant"):
-                    await ServicesContainer().initialize_services(settings)
+                    await ServicesContainer().initialize_services(runtime)
 
         mock_pipefy_client_class.assert_not_called()
         hint_records = [

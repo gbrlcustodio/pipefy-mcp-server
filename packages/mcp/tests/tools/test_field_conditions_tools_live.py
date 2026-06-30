@@ -29,8 +29,8 @@ from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
+from pipefy_mcp.runtime import get_runtime
 from pipefy_mcp.server import build_pipefy_mcp_server
-from pipefy_mcp.settings import get_settings
 
 mcp_server = build_pipefy_mcp_server()
 
@@ -48,7 +48,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
         )
     phase_id = int(phase_raw)
 
-    with patch("pipefy_mcp.settings.get_settings", get_settings):
+    with patch("pipefy_mcp.runtime.get_runtime", get_runtime):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=120),
@@ -98,7 +98,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
     condition_id_created: str | None = None
     deleted_successfully = False
     try:
-        with patch("pipefy_mcp.settings.get_settings", get_settings):
+        with patch("pipefy_mcp.runtime.get_runtime", get_runtime):
             async with create_client_session(
                 mcp_server,
                 read_timeout_seconds=timedelta(seconds=120),
@@ -120,7 +120,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
         condition_id_created = created.get("condition_id")
         assert condition_id_created, created
 
-        with patch("pipefy_mcp.settings.get_settings", get_settings):
+        with patch("pipefy_mcp.runtime.get_runtime", get_runtime):
             async with create_client_session(
                 mcp_server,
                 read_timeout_seconds=timedelta(seconds=120),
@@ -136,7 +136,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
         deleted_successfully = True
     finally:
         if condition_id_created and not deleted_successfully:
-            with patch("pipefy_mcp.settings.get_settings", get_settings):
+            with patch("pipefy_mcp.runtime.get_runtime", get_runtime):
                 async with create_client_session(
                     mcp_server,
                     read_timeout_seconds=timedelta(seconds=120),

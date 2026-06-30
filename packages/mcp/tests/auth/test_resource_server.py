@@ -13,14 +13,12 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from pipefy_auth import JwtValidationConfig, TokenValidationError
-from pipefy_infra.deployment import DeploymentConfig
+from pipefy_auth import JwtValidationInputs, TokenValidationError
 
 from pipefy_mcp.auth import JwtTokenVerifier, build_resource_server_auth
-from pipefy_mcp.settings import ResourceServerSettings
+from pipefy_mcp.runtime import ResourceServerIdentity
 
 _RESOURCE = "https://mcp.example.com/mcp"
-_DEPLOYMENT = DeploymentConfig()
 _ISSUER = "https://idp.example.com/realms/x"
 _EXP = 1893456000
 
@@ -157,15 +155,15 @@ def test_build_stamps_resource_server_url_not_audience() -> None:
     token's stamped resource must match it, not the (often unset) audience.
     """
     verifier, _ = build_resource_server_auth(
-        ResourceServerSettings(deployment=_DEPLOYMENT, resource_server_url=_RESOURCE),
+        ResourceServerIdentity(resource_server_url=_RESOURCE),
         # audience set and distinct from resource_server_url: the stamped resource
         # must follow resource_server_url, not audience.
-        JwtValidationConfig(
-            deployment=_DEPLOYMENT,
+        JwtValidationInputs(
+            issuer_url=_ISSUER,
             audience="urn:some-other-audience",
+            verify_audience=True,
             jwks_uri="https://idp.example.com/jwks",
         ),
-        default_issuer_url=_ISSUER,
     )
     assert verifier._resource == _RESOURCE
 
@@ -175,57 +173,38 @@ def test_build_inactive_when_unconfigured() -> None:
     """No resource_server_url means no auth: the profile is off, not an error."""
     assert (
         build_resource_server_auth(
-            ResourceServerSettings(
-                deployment=_DEPLOYMENT,
-            ),
-            JwtValidationConfig(
-                deployment=_DEPLOYMENT,
-            ),
-            default_issuer_url=_ISSUER,
+            ResourceServerIdentity(),
+            JwtValidationInputs(issuer_url=_ISSUER),
         )
         is None
     )
 
 
 @pytest.mark.unit
-def test_build_issuer_defaults_to_login_issuer() -> None:
-    """With no inbound override, the inbound issuer is the login issuer."""
+def test_build_uses_the_resolved_inbound_issuer() -> None:
+    """The inbound issuer carried by the validation witness flows to AuthSettings.
+
+    The override-or-login-issuer fallback is resolved at the runtime edge, so the
+    builder simply trusts ``JwtValidationInputs.issuer_url``.
+    """
     _, auth = build_resource_server_auth(
-        ResourceServerSettings(deployment=_DEPLOYMENT, resource_server_url=_RESOURCE),
-        JwtValidationConfig(
-            deployment=_DEPLOYMENT, jwks_uri="https://idp.example.com/jwks"
+        ResourceServerIdentity(resource_server_url=_RESOURCE),
+        JwtValidationInputs(
+            issuer_url=_ISSUER, jwks_uri="https://idp.example.com/jwks"
         ),
-        default_issuer_url=_ISSUER,
     )
     assert str(auth.issuer_url).rstrip("/") == _ISSUER
 
 
 @pytest.mark.unit
-def test_build_inbound_issuer_overrides_login_issuer() -> None:
-    """An explicit inbound issuer wins over the login issuer."""
-    override = "https://other-idp.example.com/realms/y"
-    _, auth = build_resource_server_auth(
-        ResourceServerSettings(deployment=_DEPLOYMENT, resource_server_url=_RESOURCE),
-        JwtValidationConfig(
-            deployment=_DEPLOYMENT,
-            issuer_url=override,
-            jwks_uri="https://other-idp.example.com/jwks",
-        ),
-        default_issuer_url=_ISSUER,
-    )
-    assert str(auth.issuer_url).rstrip("/") == override
-
-
-@pytest.mark.unit
 def test_build_without_resolvable_issuer_raises() -> None:
-    """resource_server_url set but no issuer (override or login) is a misconfiguration."""
+    """resource_server_url set but no validation witness is a misconfiguration.
+
+    The runtime edge passes ``None`` when no issuer (override or login) could be
+    resolved; the builder refuses to serve an open endpoint.
+    """
     with pytest.raises(RuntimeError, match="no inbound issuer"):
         build_resource_server_auth(
-            ResourceServerSettings(
-                deployment=_DEPLOYMENT, resource_server_url=_RESOURCE
-            ),
-            JwtValidationConfig(
-                deployment=_DEPLOYMENT,
-            ),
-            default_issuer_url=None,
+            ResourceServerIdentity(resource_server_url=_RESOURCE),
+            None,
         )

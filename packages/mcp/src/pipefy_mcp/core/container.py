@@ -5,7 +5,6 @@ import logging
 
 from pipefy_auth import (
     STORED_SESSION_TIER,
-    CredentialSources,
     RefreshError,
     configure_keychain_backend,
     ensure_fresh_session,
@@ -13,10 +12,10 @@ from pipefy_auth import (
     resolve_pipefy_auth,
     tier_for,
 )
-from pipefy_sdk import PipefyClient, PipefyEndpoints
+from pipefy_sdk import PipefyClient
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
-from pipefy_mcp.settings import Settings
+from pipefy_mcp.runtime import McpRuntime
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class ServicesContainer:
     def __init__(self) -> None:
         self.pipefy_client: PipefyClient | None = None
 
-    async def initialize_services(self, settings: Settings) -> None:
+    async def initialize_services(self, runtime: McpRuntime) -> None:
         """Create and wire all services.
 
         When the resolved auth tier is the keychain-backed stored session,
@@ -40,19 +39,12 @@ class ServicesContainer:
         session surfaces at server startup rather than on first tool call.
 
         Args:
-            settings: Application settings with Pipefy credentials.
+            runtime: The resolved MCP runtime with Pipefy endpoints + credentials.
         """
-        pipefy = settings.pipefy
         # Swap the keyring backend before any keychain probe (no-op when ``auto``).
-        configure_keychain_backend(settings.auth.keychain_backend)
-        oidc_client = settings.auth.to_oidc_client()
-        resolved = resolve_pipefy_auth(
-            CredentialSources(
-                static_token=settings.auth.static_token,
-                service_account=settings.auth.to_service_account(),
-                oidc_client=oidc_client,
-            )
-        )
+        configure_keychain_backend(runtime.keychain_backend)
+        oidc_client = runtime.credentials.oidc_client
+        resolved = resolve_pipefy_auth(runtime.credentials)
         if resolved is None:
             raise RuntimeError(
                 f"{missing_auth_message()} "
@@ -84,13 +76,9 @@ class ServicesContainer:
                 raise
             logger.info("Pipefy stored session warmed up at startup")
         self.pipefy_client = PipefyClient(
-            PipefyEndpoints(
-                graphql_url=pipefy.graphql_url,
-                interfaces_graphql_url=pipefy.interfaces_graphql_url,
-                internal_api_url=pipefy.internal_api_url,
-            ),
+            runtime.endpoints,
             auth=resolved,
-            allow_insecure_urls=pipefy.allow_insecure_urls,
-            reuse_schema=pipefy.gql_reuse_fetched_graphql_schema,
-            default_webhook_name=pipefy.default_webhook_name,
+            allow_insecure_urls=runtime.allow_insecure_urls,
+            reuse_schema=runtime.reuse_schema,
+            default_webhook_name=runtime.default_webhook_name,
         )

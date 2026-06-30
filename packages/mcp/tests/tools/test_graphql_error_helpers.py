@@ -46,7 +46,7 @@ def _mock_settings(monkeypatch):
     mock_settings = MagicMock()
     mock_settings.mcp.permission_denied_enrichment_timeout_seconds = 5.0
     monkeypatch.setattr(
-        "pipefy_mcp.tools.graphql_error_helpers.get_settings",
+        "pipefy_mcp.tools.graphql_error_helpers.get_runtime",
         lambda: mock_settings,
     )
 
@@ -108,7 +108,7 @@ class TestEnrichPermissionDeniedError:
         mock_settings = MagicMock()
         mock_settings.mcp.permission_denied_enrichment_timeout_seconds = 0.1
         monkeypatch.setattr(
-            "pipefy_mcp.tools.graphql_error_helpers.get_settings",
+            "pipefy_mcp.tools.graphql_error_helpers.get_runtime",
             lambda: mock_settings,
         )
 

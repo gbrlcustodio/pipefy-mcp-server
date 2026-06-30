@@ -26,9 +26,9 @@ from typing import Any
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
-from pipefy_auth import JwtValidationConfig, JwtValidationInputs, JwtValidator
+from pipefy_auth import JwtValidationInputs, JwtValidator
 
-from pipefy_mcp.settings import ResourceServerSettings
+from pipefy_mcp.runtime import ResourceServerIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -116,10 +116,8 @@ ResourceServerAuth = tuple[JwtTokenVerifier, FastMcpAuthSettings]
 
 
 def build_resource_server_auth(
-    rs: ResourceServerSettings,
-    jwt_validation: JwtValidationConfig,
-    *,
-    default_issuer_url: str | None,
+    rs: ResourceServerIdentity,
+    jwt_validation: JwtValidationInputs | None,
 ) -> ResourceServerAuth | None:
     """Build the inbound bearer verifier and FastMCP auth config, or ``None``.
 
@@ -128,16 +126,15 @@ def build_resource_server_auth(
     ``None`` and the unauthenticated foundation profile constructs ``FastMCP``
     exactly as before.
 
-    The inbound issuer is ``jwt_validation.issuer_url`` if set, else
-    ``default_issuer_url`` (see :class:`JwtValidationConfig` for why the login
-    issuer is the fallback). With ``resource_server_url`` set but no issuer
-    resolvable (the stored-session login is disabled and no override is given),
-    validation is impossible, so this raises rather than serve an open endpoint.
+    ``jwt_validation`` is the already-resolved inbound-validation witness (the
+    issuer override-or-login-fallback was resolved at the runtime edge). With
+    ``resource_server_url`` set but no issuer resolvable (the stored-session
+    login is disabled and no override is given), ``jwt_validation`` is ``None``,
+    so this raises rather than serve an open endpoint.
     """
     if rs.resource_server_url is None:
         return None
-    issuer_url = jwt_validation.resolve_issuer_url(default_issuer_url)
-    if issuer_url is None:
+    if jwt_validation is None:
         raise RuntimeError(
             "The resource-server profile is active "
             "(PIPEFY_MCP_RS_RESOURCE_SERVER_URL is set) but no inbound issuer is "
@@ -145,19 +142,11 @@ def build_resource_server_auth(
             "login enabled so its issuer can be reused."
         )
     verifier = JwtTokenVerifier(
-        JwtValidator(
-            JwtValidationInputs(
-                issuer_url=issuer_url,
-                audience=jwt_validation.audience,
-                verify_audience=jwt_validation.verify_audience,
-                allow_insecure_urls=jwt_validation.allow_insecure_urls,
-                jwks_uri=jwt_validation.jwks_uri,
-            )
-        ),
+        JwtValidator(jwt_validation),
         resource=rs.resource_server_url,
     )
     auth = FastMcpAuthSettings(
-        issuer_url=issuer_url,
+        issuer_url=jwt_validation.issuer_url,
         resource_server_url=rs.resource_server_url,
         required_scopes=rs.required_scopes,
     )

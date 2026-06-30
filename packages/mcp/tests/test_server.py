@@ -7,11 +7,12 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_auth import AuthConfig, JwtValidationConfig
+from pipefy_auth import CredentialSources, JwtValidationInputs
 from pipefy_infra.deployment import DeploymentConfig
-from pipefy_sdk import SdkConfig
+from pipefy_sdk import PipefyEndpoints
 
 from pipefy_mcp.auth import build_resource_server_auth
+from pipefy_mcp.runtime import McpRuntime, McpSettings, ResourceServerIdentity
 from pipefy_mcp.server import (
     _assert_safe_http_bind,
     _register_pipefy_tools,
@@ -19,14 +20,18 @@ from pipefy_mcp.server import (
     lifespan,
     run_server,
 )
-from pipefy_mcp.settings import McpSettings, ResourceServerSettings, Settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 
 _RS_ISSUER = "https://idp.example.com/realms/x"
 _RS_RESOURCE = "https://mcp.example.com/mcp"
 
-# One shared deployment, injected by reference like the application edge does.
+# One deployment, the source of the parsed endpoints the runtime carries.
 _DEPLOYMENT = DeploymentConfig(base_url="https://api.pipefy.com")
+_ENDPOINTS = PipefyEndpoints(
+    graphql_url=_DEPLOYMENT.graphql_url,
+    interfaces_graphql_url=_DEPLOYMENT.interfaces_graphql_url,
+    internal_api_url=_DEPLOYMENT.internal_api_url,
+)
 
 
 def _resource_server_pair():
@@ -34,26 +39,27 @@ def _resource_server_pair():
 
     The explicit ``jwks_uri`` skips OIDC discovery; the unauthenticated-request
     and metadata tests never decode a token, so the JWKS is never fetched. The
-    inbound issuer comes from ``default_issuer_url`` (the login issuer) to exercise
-    the same-realm default rather than an explicit override.
+    inbound issuer is already resolved into the ``JwtValidationInputs`` witness
+    (the loader applies the override-or-login-issuer fallback before this point).
     """
     return build_resource_server_auth(
-        ResourceServerSettings(
-            deployment=_DEPLOYMENT, resource_server_url=_RS_RESOURCE
+        ResourceServerIdentity(resource_server_url=_RS_RESOURCE),
+        JwtValidationInputs(
+            issuer_url=_RS_ISSUER, jwks_uri="https://idp.example.com/jwks"
         ),
-        JwtValidationConfig(
-            deployment=_DEPLOYMENT, jwks_uri="https://idp.example.com/jwks"
-        ),
-        default_issuer_url=_RS_ISSUER,
     )
 
 
-_MINIMAL_PIPEFY_SETTINGS = Settings(
-    pipefy=SdkConfig(deployment=_DEPLOYMENT),
-    auth=AuthConfig(deployment=_DEPLOYMENT),
+_MINIMAL_RUNTIME = McpRuntime(
+    endpoints=_ENDPOINTS,
+    allow_insecure_urls=False,
+    reuse_schema=False,
+    default_webhook_name="Pipefy Webhook",
+    credentials=CredentialSources(),
+    keychain_backend="auto",
     mcp=McpSettings(),
-    jwt=JwtValidationConfig(deployment=_DEPLOYMENT),
-    rs=ResourceServerSettings(deployment=_DEPLOYMENT),
+    jwt=None,
+    resource_server=ResourceServerIdentity(),
 )
 
 
@@ -157,7 +163,7 @@ async def test_lifespan_initializes_services_and_yields_container_without_regist
         """Pre-existing tool; the lifespan must not touch the tool table."""
         return "ok"
 
-    with patch("pipefy_mcp.server.get_settings", lambda: _MINIMAL_PIPEFY_SETTINGS):
+    with patch("pipefy_mcp.server.get_runtime", lambda: _MINIMAL_RUNTIME):
         async with lifespan(app) as yielded:
             names = {t.name for t in app._tool_manager.list_tools()}
 
@@ -183,7 +189,7 @@ async def test_repeat_lifespan_reinitializes_each_visit_and_leaves_tools_untouch
         """Must survive both visits untouched."""
         return "ok"
 
-    with patch("pipefy_mcp.server.get_settings", lambda: _MINIMAL_PIPEFY_SETTINGS):
+    with patch("pipefy_mcp.server.get_runtime", lambda: _MINIMAL_RUNTIME):
         async with lifespan(app):
             first = {t.name for t in app._tool_manager.list_tools()}
         async with lifespan(app):
@@ -204,7 +210,7 @@ async def test_lifespan_logs_error_when_initialization_raises():
         side_effect=ValueError("init failed")
     )
     with (
-        patch("pipefy_mcp.server.get_settings", lambda: _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.get_runtime", lambda: _MINIMAL_RUNTIME),
         patch("pipefy_mcp.server.ServicesContainer", return_value=mock_container),
         patch("pipefy_mcp.server.logger") as mock_logger,
     ):
@@ -239,7 +245,7 @@ def test_run_server_http_builds_the_app_and_serves_over_streamable_http():
     """The HTTP path builds through the shared builder and serves streamable-http."""
     fake_app = MagicMock()
     with (
-        patch("pipefy_mcp.server.get_settings", lambda: _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.get_runtime", lambda: _MINIMAL_RUNTIME),
         patch(
             "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
         ) as mock_build,
@@ -257,7 +263,7 @@ def test_run_server_http_fills_host_and_port_from_settings_when_unset():
     """Unset host/port resolve to the configured PIPEFY_MCP_HOST / PIPEFY_MCP_PORT."""
     fake_app = MagicMock()
     with (
-        patch("pipefy_mcp.server.get_settings", lambda: _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.get_runtime", lambda: _MINIMAL_RUNTIME),
         patch(
             "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
         ) as mock_build,
@@ -274,7 +280,7 @@ def test_run_server_http_respects_an_explicit_zero_port():
     """``port=0`` (let the OS pick) must not be swallowed as a falsy default."""
     fake_app = MagicMock()
     with (
-        patch("pipefy_mcp.server.get_settings", lambda: _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.get_runtime", lambda: _MINIMAL_RUNTIME),
         patch(
             "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
         ) as mock_build,
@@ -289,7 +295,7 @@ def test_run_server_http_respects_an_explicit_zero_port():
 def test_run_server_http_refuses_non_loopback_before_building():
     """The loopback guard fires before the app is built or served."""
     with (
-        patch("pipefy_mcp.server.get_settings", lambda: _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.get_runtime", lambda: _MINIMAL_RUNTIME),
         patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build,
     ):
         with pytest.raises(RuntimeError, match="Refusing to serve"):

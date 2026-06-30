@@ -5,9 +5,11 @@ from __future__ import annotations
 import time
 
 import pytest
+from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_auth.bearer import (
     RefreshableBearerAuth,
+    StaticBearerAuth,
 )
 from pipefy_auth.identity import OidcClient
 from pipefy_auth.refresh import RefreshError
@@ -81,6 +83,14 @@ def test_static_token_trimmed_and_blank_treated_as_absent():
 
 
 @pytest.mark.unit
+def test_build_httpx_auth_maps_static_token_to_static_bearer():
+    """The static-token tier's transport is a ``StaticBearerAuth``."""
+    resolved = resolve_pipefy_auth(static_token="TOKEN")
+    assert isinstance(resolved, StaticTokenAuth)
+    assert isinstance(build_httpx_auth(resolved), StaticBearerAuth)
+
+
+@pytest.mark.unit
 def test_service_account_wins_when_no_static_token_and_short_circuits_stored(
     monkeypatch,
 ):
@@ -92,6 +102,14 @@ def test_service_account_wins_when_no_static_token_and_short_circuits_stored(
     assert isinstance(resolved, ServiceAccountAuth)
     assert resolved.credentials == _service_account()
     assert mock_load.calls == 0
+
+
+@pytest.mark.unit
+def test_build_httpx_auth_maps_service_account_to_client_credentials():
+    """The service-account tier's transport is an ``OAuth2ClientCredentials``."""
+    resolved = resolve_pipefy_auth(service_account=_service_account())
+    assert isinstance(resolved, ServiceAccountAuth)
+    assert isinstance(build_httpx_auth(resolved), OAuth2ClientCredentials)
 
 
 @pytest.mark.unit

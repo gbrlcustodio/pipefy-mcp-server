@@ -17,11 +17,11 @@ from typing import Literal
 import typer
 from pipefy_auth import (
     STATIC_TOKEN_TIER,
-    STORED_SESSION_TIER,
     OidcClient,
     RefreshError,
     ResolvedAuth,
     ServiceAccount,
+    StoredSessionAuth,
     build_httpx_auth,
     detect_pipefy_tiers,
     ensure_fresh_session,
@@ -156,20 +156,13 @@ def get_authenticated_client(
 
     # Stored-session: warm up eagerly so refresh failures surface as a clean
     # exit(2) with a "run `pipefy auth login` again" hint instead of leaking
-    # out as a transport error on the first GraphQL call.
-    if tier == STORED_SESSION_TIER:
-        oidc = auth.oidc_client
-        if oidc is None:
-            # Resolver only picks STORED_SESSION_TIER when oidc_client is non-None;
-            # reaching here means that invariant is broken.
-            raise RuntimeError(
-                "STORED_SESSION_TIER resolved without an OIDC client "
-                "(resolver invariant broken)."
-            )
+    # out as a transport error on the first GraphQL call. The variant carries a
+    # non-None oidc_client by construction, so no presence check is needed.
+    if isinstance(resolved, StoredSessionAuth):
         try:
             ensure_fresh_session(
-                issuer=oidc.issuer_url,
-                client_id=oidc.client_id,
+                issuer=resolved.oidc_client.issuer_url,
+                client_id=resolved.oidc_client.client_id,
             )
         except RefreshError as exc:
             typer.echo(

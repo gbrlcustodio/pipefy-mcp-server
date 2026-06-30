@@ -4,8 +4,8 @@ import asyncio
 import logging
 
 from pipefy_auth import (
-    STORED_SESSION_TIER,
     RefreshError,
+    StoredSessionAuth,
     build_httpx_auth,
     configure_keychain_backend,
     ensure_fresh_session,
@@ -54,20 +54,14 @@ class ServicesContainer:
                 f"{missing_auth_message()} "
                 f"See {DOCS_SETUP_REF} for host-specific install steps."
             )
-        # ``oidc_client`` is None only when ``disable_stored_session`` is set;
-        # the resolver then can't return STORED_SESSION_TIER, so this branch is
-        # unreachable in that case.
-        if resolved.tier == STORED_SESSION_TIER:
-            if oidc_client is None:
-                raise RuntimeError(
-                    "STORED_SESSION_TIER resolved without an OIDC client "
-                    "(resolver invariant broken)."
-                )
+        # The variant carries a non-None oidc_client by construction, so the
+        # stored-session tier needs no separate presence check here.
+        if isinstance(resolved, StoredSessionAuth):
             try:
                 await asyncio.to_thread(
                     ensure_fresh_session,
-                    issuer=oidc_client.issuer_url,
-                    client_id=oidc_client.client_id,
+                    issuer=resolved.oidc_client.issuer_url,
+                    client_id=resolved.oidc_client.client_id,
                 )
             except RefreshError as exc:
                 logger.error(

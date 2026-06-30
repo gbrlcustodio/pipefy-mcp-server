@@ -15,18 +15,18 @@ from dataclasses import asdict, dataclass
 from typing import Literal
 
 import typer
-from httpx import Auth
 from pipefy_auth import (
     STATIC_TOKEN_TIER,
     STORED_SESSION_TIER,
     OidcClient,
     RefreshError,
+    ResolvedAuth,
     ServiceAccount,
+    build_httpx_auth,
     detect_pipefy_tiers,
     ensure_fresh_session,
     missing_auth_message,
     resolve_pipefy_auth,
-    tier_for,
 )
 from pipefy_sdk import (
     PipefyClient,
@@ -82,7 +82,7 @@ def clear_authenticated_client_cache() -> None:
     _cached_client = None
 
 
-def _resolve(auth: AuthContext) -> Auth | None:
+def _resolve(auth: AuthContext) -> ResolvedAuth | None:
     return resolve_pipefy_auth(
         static_token=auth.bearer_token.value if auth.bearer_token else None,
         service_account=auth.service_account,
@@ -152,7 +152,7 @@ def get_authenticated_client(
     if resolved is None:
         typer.echo(f"{missing_auth_message()} See {DOCS_CLI_AUTH_REF}.", err=True)
         raise typer.Exit(2)
-    tier = tier_for(resolved)
+    tier = resolved.tier
 
     # Stored-session: warm up eagerly so refresh failures surface as a clean
     # exit(2) with a "run `pipefy auth login` again" hint instead of leaking
@@ -183,7 +183,9 @@ def get_authenticated_client(
     if _cached_client is not None and _cached_signature == key:
         return _cached_client
 
-    client = PipefyClient(pipefy_settings, auth=resolved, surface="cli")
+    client = PipefyClient(
+        pipefy_settings, auth=build_httpx_auth(resolved), surface="cli"
+    )
     _cached_signature = key
     _cached_client = client
     return client

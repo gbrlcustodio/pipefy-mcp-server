@@ -6,11 +6,11 @@ import logging
 from pipefy_auth import (
     STORED_SESSION_TIER,
     RefreshError,
+    build_httpx_auth,
     configure_keychain_backend,
     ensure_fresh_session,
     missing_auth_message,
     resolve_pipefy_auth,
-    tier_for,
 )
 from pipefy_sdk import PipefyClient
 
@@ -57,7 +57,7 @@ class ServicesContainer:
         # ``oidc_client`` is None only when ``disable_stored_session`` is set;
         # the resolver then can't return STORED_SESSION_TIER, so this branch is
         # unreachable in that case.
-        if tier_for(resolved) == STORED_SESSION_TIER:
+        if resolved.tier == STORED_SESSION_TIER:
             if oidc_client is None:
                 raise RuntimeError(
                     "STORED_SESSION_TIER resolved without an OIDC client "
@@ -80,5 +80,5 @@ class ServicesContainer:
                 raise
             logger.info("Pipefy stored session warmed up at startup")
         self.pipefy_client = PipefyClient(
-            settings=settings.pipefy, auth=resolved, surface="mcp"
+            settings=settings.pipefy, auth=build_httpx_auth(resolved), surface="mcp"
         )

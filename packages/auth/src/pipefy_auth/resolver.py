@@ -14,6 +14,7 @@ display concern handled in CLI code, not a tier here.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from httpx import Auth
 from httpx_auth import OAuth2ClientCredentials
@@ -41,6 +42,37 @@ class ServiceAccount:
     client_secret: str
 
 
+@dataclass(frozen=True)
+class StaticTokenAuth:
+    """Resolved static-token tier: a pre-issued bearer, stripped and non-blank."""
+
+    token: str
+    tier: ClassVar[str] = STATIC_TOKEN_TIER
+
+
+@dataclass(frozen=True)
+class ServiceAccountAuth:
+    """Resolved service-account tier: the OAuth2 client-credentials inputs."""
+
+    credentials: ServiceAccount
+    tier: ClassVar[str] = SERVICE_ACCOUNT_TIER
+
+
+@dataclass(frozen=True)
+class StoredSessionAuth:
+    """Resolved stored-session tier: the OIDC client whose keychain session was found."""
+
+    oidc_client: OidcClient
+    tier: ClassVar[str] = STORED_SESSION_TIER
+
+
+# The credential precedence chain, parsed into the tier that won. ``resolve_auth_tier``
+# is the parser; the ``tier`` attribute on each variant carries the wire-schema name
+# (e.g. ``"stored-session"``) so consumers read it directly instead of recovering it
+# from a built ``httpx.Auth`` via ``tier_for``.
+ResolvedAuth = StaticTokenAuth | ServiceAccountAuth | StoredSessionAuth
+
+
 # Maps each ``httpx.Auth`` implementation back to the resolver-tier name that
 # produced it. ``tier_for`` is the public lookup; the mapping itself is the
 # single source of truth so the wire-schema strings (e.g. ``"stored-session"``)
@@ -58,10 +90,15 @@ _TIER_BY_AUTH_TYPE: dict[type[Auth], str] = {
 def tier_for(auth: Auth) -> str:
     """Return the resolver-tier name that produced ``auth``.
 
+    Recovers the tier from a built ``httpx.Auth``. New callers that already
+    hold the :data:`ResolvedAuth` from :func:`resolve_pipefy_auth` should read
+    its ``tier`` attribute directly instead; this reverse lookup remains only
+    for callers that have an ``httpx.Auth`` and no longer carry the variant.
+
     Raises:
         ValueError: When ``auth`` is not an instance produced by
-            :func:`resolve_pipefy_auth` (e.g. a consumer-provided
-            ``httpx.Auth`` for tests or a custom integration).
+            :func:`build_httpx_auth` (e.g. a consumer-provided ``httpx.Auth``
+            for tests or a custom integration).
     """
     for cls, source in _TIER_BY_AUTH_TYPE.items():
         if isinstance(auth, cls):
@@ -108,13 +145,15 @@ def resolve_pipefy_auth(
     static_token: str | None = None,
     service_account: ServiceAccount | None = None,
     oidc_client: OidcClient | None = None,
-) -> Auth | None:
-    """Resolve the highest-precedence tier with credentials available.
+) -> ResolvedAuth | None:
+    """Parse the available credentials into the highest-precedence tier that resolves.
 
-    Short-circuits at the first tier that resolves — lower tiers are never
-    inspected. The returned ``httpx.Auth`` carries the tier identity in its
-    concrete type; use :func:`tier_for` to recover the resolver-tier name
-    (e.g. for the ``pipefy auth status`` wire schema).
+    Short-circuits at the first tier that resolves; lower tiers are never
+    inspected. The returned :data:`ResolvedAuth` variant carries the tier
+    identity in its type (and its ``tier`` attribute), so callers read the
+    decision directly rather than recovering it from a built ``httpx.Auth``.
+    Pass the result to :func:`build_httpx_auth` to obtain the transport's
+    ``httpx.Auth``.
 
     For an enumeration of every detected tier (e.g. for diagnostics), call
     :func:`detect_pipefy_tiers` instead.
@@ -125,22 +164,37 @@ def resolve_pipefy_auth(
             vs ``PIPEFY_TOKEN`` env var) into one value before calling.
         service_account: Service-account client-credentials inputs.
         oidc_client: OIDC client identity for the stored-session tier; the
-            session is loaded from the keychain at detection time, and a fresh
-            access token is fetched per request via
-            :class:`pipefy_auth.bearer.RefreshableBearerAuth`, which also
-            forces a refresh + retry on a 401 response.
+            session is loaded from the keychain at detection time.
     """
     if static_token and static_token.strip():
-        return StaticBearerAuth(static_token.strip())
+        return StaticTokenAuth(static_token.strip())
     if service_account is not None:
-        return OAuth2ClientCredentials(
-            token_url=service_account.token_url,
-            client_id=service_account.client_id,
-            client_secret=service_account.client_secret,
-        )
+        return ServiceAccountAuth(service_account)
     if oidc_client is not None and _has_stored_session(oidc_client):
-        return _stored_session_provider(oidc_client)
+        return StoredSessionAuth(oidc_client)
     return None
+
+
+def build_httpx_auth(resolved: ResolvedAuth) -> Auth:
+    """Construct the ``httpx.Auth`` for an already-resolved tier.
+
+    Total over :data:`ResolvedAuth`: the "no credentials" case is decided once,
+    in :func:`resolve_pipefy_auth`, so this function has no ``None`` branch. The
+    stored-session tier fetches a fresh access token per request via
+    :class:`pipefy_auth.bearer.RefreshableBearerAuth`, which also forces a
+    refresh + retry on a 401 response.
+    """
+    match resolved:
+        case StaticTokenAuth(token):
+            return StaticBearerAuth(token)
+        case ServiceAccountAuth(credentials):
+            return OAuth2ClientCredentials(
+                token_url=credentials.token_url,
+                client_id=credentials.client_id,
+                client_secret=credentials.client_secret,
+            )
+        case StoredSessionAuth(oidc_client):
+            return _stored_session_provider(oidc_client)
 
 
 def detect_pipefy_tiers(
@@ -177,7 +231,12 @@ __all__ = [
     "SERVICE_ACCOUNT_TIER",
     "STATIC_TOKEN_TIER",
     "STORED_SESSION_TIER",
+    "ResolvedAuth",
     "ServiceAccount",
+    "ServiceAccountAuth",
+    "StaticTokenAuth",
+    "StoredSessionAuth",
+    "build_httpx_auth",
     "detect_pipefy_tiers",
     "missing_auth_message",
     "resolve_pipefy_auth",

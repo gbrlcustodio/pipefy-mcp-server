@@ -9,12 +9,12 @@ This document explains **why** the main third-party packages exist across the **
 | `gql[httpx]` | Async GraphQL client; `HTTPXAsyncTransport` for Pipefy’s GraphQL endpoints. |
 | `httpx` | Shared async HTTP for transports and direct calls (timeouts, HTTP/2-capable stack via httpx). |
 | `httpx-auth` | OAuth2 client-credentials (`OAuth2ClientCredentials`) aligned with Pipefy service accounts. |
-| `pydantic` / `pydantic-settings` | Request/response models and typed configuration (`DeploymentConfig` / `SdkConfig`; `pydantic-settings` only at the application edge). |
+| `pydantic` / `pydantic-settings` | Request/response models and refined value objects (`DeploymentConfig` / `PipefyEndpoints`); `pydantic-settings` reads env only in per-package `env.py` modules, behind the optional `[env]` extra. |
 | `email-validator` | Used where models validate email-shaped inputs (e.g. member invites). |
 | `rapidfuzz` | Fuzzy matching helpers used in domain logic where the SDK mirrors MCP/CLI behavior. |
 | `openpyxl` | Reads `.xlsx` exports and converts sheet data to text (CSV-like) when the API returns Excel. |
 
-**Security:** GraphQL and export URLs are validated against SSRF rules in `pipefy-infra` (invoked from `DeploymentConfig` / `AuthConfig` and SDK services); do not bypass host checks when adding download paths.
+**Security:** GraphQL and export URLs are validated against SSRF rules in `pipefy-infra` (invoked from `DeploymentConfig` at the deployment edge and SDK services); do not bypass host checks when adding download paths.
 
 ## pipefy-mcp-server (`packages/mcp`)
 

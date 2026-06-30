@@ -40,27 +40,32 @@ bearer on every request. It does not yet carry per-request on-behalf-of identity
 identity resolved at startup; treat `--remote` as local/validation until #302
 lands.
 
-**Resource-server profile.** Config is split by domain. *Token validation* is an
-auth concern and lives in `pipefy_auth.JwtValidationSettings` (`settings.jwt`,
-env `PIPEFY_JWT_*`): `ISSUER_URL` (an override; absent it, the inbound issuer
-defaults to the one this process logs into, the `OidcClient` issuer, since in a
-single-realm deployment they are the same IdP), optional `AUDIENCE` /
-`VERIFY_AUDIENCE` (off by default, the same-audience interim), and `JWKS_URI`.
-*Resource identity* is MCP-specific and stays in `pipefy_mcp.ResourceServerSettings`
-(`settings.rs`, env `PIPEFY_MCP_RS_*`): `RESOURCE_SERVER_URL` (this server's public
-canonical URL, e.g. `https://host/mcp`) and `REQUIRED_SCOPES`. The shared
-`PIPEFY_ALLOW_INSECURE_URLS` covers both. The profile activates when
+**Resource-server profile.** Config is split by domain, and both halves are
+parsed into value objects at the runtime edge (`resolve_mcp_runtime`). *Token
+validation* is an auth concern: `PIPEFY_JWT_*` is read by `pipefy_auth.env`
+(`load_jwt_validation`) into a `pipefy_auth.JwtValidationInputs` (`runtime.jwt`,
+or `None` when no issuer resolves): `ISSUER_URL` (an override; absent it, the
+inbound issuer defaults to the one this process logs into, the `OidcClient`
+issuer, since in a single-realm deployment they are the same IdP), optional
+`AUDIENCE` / `VERIFY_AUDIENCE` (off by default, the same-audience interim), and
+`JWKS_URI`. The override-or-login fallback is resolved at the edge, so
+`JwtValidationInputs.issuer_url` is already concrete. *Resource identity* is
+MCP-specific and parses into `pipefy_mcp.runtime.ResourceServerIdentity`
+(`runtime.resource_server`, env `PIPEFY_MCP_RS_*`): `RESOURCE_SERVER_URL` (this
+server's public canonical URL, e.g. `https://host/mcp`) and `REQUIRED_SCOPES`.
+The shared `PIPEFY_ALLOW_INSECURE_URLS` covers both. The profile activates when
 `RESOURCE_SERVER_URL` is set (the one value that cannot default); there is no
 separate enable flag, just `--remote` plus this URL. Set `RESOURCE_SERVER_URL`
 with the stored-session login disabled and no `ISSUER_URL` override and startup
-fails (no issuer to validate against).
+fails (no issuer to validate against): `runtime.jwt` is `None` and
+`build_resource_server_auth` raises.
 
 The JWKS/RS256 validation lives in `pipefy_auth` (`JwtValidator`); the MCP adapter
 `auth/resource_server.py` (`JwtTokenVerifier`) maps validated claims onto the
 SDK's `AccessToken`. FastMCP serves the RFC 9728 protected-resource metadata and
 the `401` + `WWW-Authenticate` challenge; `build_resource_server_auth` (same
-module, the composition root) resolves the inbound issuer and pairs the verifier
-with `AuthSettings`, which `server.py` wires into the app.
+module) takes the already-parsed `ResourceServerIdentity` + `JwtValidationInputs`
+and pairs the verifier with `AuthSettings`, which `server.py` wires into the app.
 
 **Loopback bind.** `_assert_safe_http_bind` restricts the HTTP transport to a
 loopback bind, unconditionally for now. Even with the resource-server profile
@@ -143,6 +148,6 @@ remote profile. The retired `GATED:` convention could also express *input*
 restriction within an exposed tool. Where a remotely-exposed tool needs restricted
 inputs (for example the attachment tools tracked in #305, which would accept a
 `file_url` rather than a local `file_path`), enforce that in the tool body gated on
-`settings.mcp.remote_mode` at call time, not via the marker. A tool whose exclusion deserves
+`get_runtime().mcp.remote_mode` at call time, not via the marker. A tool whose exclusion deserves
 a reason gets a plain code comment pointing at its follow-up issue (the attachment
 tools point at #305); the exclusion itself needs no annotation.

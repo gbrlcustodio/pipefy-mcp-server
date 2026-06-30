@@ -107,40 +107,45 @@ The login subsystem is namespaced under `PIPEFY_AUTH_*`; the API credentials sta
 
 ## Settings architecture (library / script users only)
 
-End users of `pipefy-cli` and `pipefy-mcp-server` are unaffected by the internals; the env contract is the table above. The split below matters only if you construct settings types directly in Python.
+End users of `pipefy-cli` and `pipefy-mcp-server` are unaffected by the internals; the env contract is the table above. The split below matters only if you construct these types directly in Python.
 
-The libraries are now pure, env-free `pydantic.BaseModel` value objects (they do not import `pydantic-settings`); the applications own all env reading. Host topology and the insecure-URL posture live on one `pipefy_infra.deployment.DeploymentConfig`, injected by reference into the SDK and auth configs so they cannot diverge.
+Each library public API now takes refined value objects (a frozen `pydantic.BaseModel` whose construction witnesses validity) and primitives, never a config instance. The `*Config` readers and the env-reading code are confined to per-package `env.py` submodules behind an optional `[env]` extra, so `import pipefy_sdk` / `import pipefy_auth` pulls no `pydantic-settings`. Host topology and the insecure-URL posture live on one `pipefy_infra.deployment.DeploymentConfig` parsed at the edge; its derived URLs become the value objects the libraries consume.
 
 | Was | Now |
 |---|---|
-| `pipefy_sdk.PipefySettings` | `pipefy_sdk.SdkConfig` (required injected `deployment`) |
-| `PipefySettings.base_url` / `allow_insecure_urls` | `DeploymentConfig.base_url` / `allow_insecure_urls` (forwarded on `SdkConfig`) |
-| `pipefy_auth.AuthSettings` | `pipefy_auth.AuthConfig` (required injected `deployment`) |
-| `AuthSettings.auth_url` / `auth_client_id` | `AuthConfig.issuer_url` / `public_client_id` |
-| `AuthSettings.service_account_url` | `deployment.oauth_token_url` |
-| `service_account_client_id` / `_secret` (flat) | nested `AuthConfig.service_account` (a `ServiceAccountCredentials`, or `None`) |
-| `pipefy_auth.JwtValidationSettings` | `pipefy_auth.JwtValidationConfig` (required injected `deployment`) |
-| `PipefySettings.org_id` | CLI edge only (`PIPEFY_ORG_ID`) |
-| `PipefySettings.permission_denied_enrichment_timeout_seconds` | MCP edge only (`pipefy_mcp.McpSettings`) |
+| `pipefy_sdk.SdkConfig` (passed to `PipefyClient`) | `pipefy_sdk.PipefyEndpoints` (`graphql_url` / `interfaces_graphql_url` / `internal_api_url`); `allow_insecure_urls` is a separate primitive arg |
+| `SdkConfig.deployment` / `.graphql_url` | build `PipefyEndpoints` from `DeploymentConfig` properties, or call `pipefy_sdk.env.load_sdk(deployment)` |
+| `pipefy_auth.AuthConfig` | `pipefy_auth.CredentialSources` (`static_token`, `service_account`, `oidc_client`), passed to `resolve_pipefy_auth` |
+| `AuthConfig.to_service_account()` / `ServiceAccountCredentials` | `pipefy_auth.ServiceAccount` (`token_url`, `client_id`, `client_secret`) |
+| `AuthConfig.issuer_url` / `public_client_id` | `pipefy_auth.OidcClient` (`issuer_url`, `client_id`) |
+| `pipefy_auth.JwtValidationConfig` (injected `deployment`) | `pipefy_auth.JwtValidationInputs` (`issuer_url` required, resolved at the edge) |
+| `PipefySettings.org_id` | CLI edge only (`PIPEFY_ORG_ID`, on `CliRuntime`) |
+| `PipefySettings.permission_denied_enrichment_timeout_seconds` | MCP edge only (`pipefy_mcp.runtime.McpSettings`) |
 
-Compose by building one `DeploymentConfig` and injecting it:
+Build the value objects directly, or let a loader project them from one `DeploymentConfig`:
 
 ```python
-from pipefy_auth import AuthConfig, ServiceAccountCredentials
-from pipefy_infra.deployment import DeploymentConfig
-from pipefy_sdk import SdkConfig
+from pipefy_auth import CredentialSources, ServiceAccount, resolve_pipefy_auth
+from pipefy_sdk import PipefyClient, PipefyEndpoints
 
-deployment = DeploymentConfig(base_url="https://app.pipefy.com")
-sdk = SdkConfig(deployment=deployment)
-auth = AuthConfig(
-    deployment=deployment,
-    service_account=ServiceAccountCredentials(client_id="...", client_secret="..."),
+endpoints = PipefyEndpoints(
+    graphql_url="https://app.pipefy.com/graphql",
+    interfaces_graphql_url="https://app.pipefy.com/graphql/interfaces",
+    internal_api_url="https://app.pipefy.com/internal_api",
 )
-sdk.graphql_url               # "https://app.pipefy.com/graphql"
-auth.to_service_account().token_url  # "https://app.pipefy.com/oauth/token"
+auth = resolve_pipefy_auth(
+    CredentialSources(
+        service_account=ServiceAccount(
+            token_url="https://app.pipefy.com/oauth/token",
+            client_id="...",
+            client_secret="...",
+        )
+    )
+)
+client = PipefyClient(endpoints, auth=auth)
 ```
 
-The application composition roots do this for you from the environment: `pipefy_cli.settings.resolve_cli_settings(...)` and `pipefy_mcp.settings.resolve_mcp_settings()` (the MCP server resolves lazily via `get_settings()`).
+The `[env]` loaders do this from the environment: `pipefy_infra.env.load_deployment()` parses the deployment, then `pipefy_sdk.env.load_sdk(deployment)` and `pipefy_auth.env.load_auth(deployment)` project the value objects. The application composition roots compose them: `pipefy_cli.runtime.resolve_cli_runtime(...)` and `pipefy_mcp.runtime.resolve_mcp_runtime()` (the MCP server resolves lazily via `get_runtime()`).
 
 ---
 

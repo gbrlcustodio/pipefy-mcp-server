@@ -60,29 +60,42 @@ When a type-related failure looks plausible, the fix is a type checker in CI, no
 
 ## Settings and configuration architecture
 
-How `PIPEFY_*` env vars, `.env`, and `config.toml` become typed config. The operator-facing contract (every var, the precedence chain, the TOML schema) lives in `docs/config.md`; this section is the internal design contract.
+How `PIPEFY_*` env vars, `.env`, and `config.toml` become typed inputs. The operator-facing contract (every var, the precedence chain, the TOML schema) lives in `docs/config.md`; this section is the internal design contract. The model is "parse, don't validate": raw text is parsed once, at the edge, into refined value objects that the rest of the system trusts by construction.
 
-### Library / application split
+### The parse pipeline
 
-The library packages (`infra`, `sdk`, `auth`) are pure `pydantic.BaseModel` value objects: they validate themselves but read no env or file. Reading the environment is an application concern owned by exactly one composition root per app: `pipefy_cli.settings.resolve_cli_settings` and `pipefy_mcp.settings.resolve_mcp_settings`. Libraries MUST NOT import `pydantic_settings` (a per-package ruff rule enforces it). New config knobs are declared as fields on the relevant library value object, and the edge reads them; do not add a second env-reading path.
+Configuration flows through one directional pipeline, each stage discarding the looser representation behind it:
 
-The two layers are named and filed consistently. A pure value object is a `*Config` (`DeploymentConfig`, `SdkConfig`, `AuthConfig`, `JwtValidationConfig`) and lives in its library's `config.py`. The env-reading subclass is a `*Settings` (`SdkSettings`, `AuthSettings`, `ServiceAccountSettings`, ...) and lives in the app's `settings.py` next to its `resolve_*_settings` root; the resolved composite an app hands to its consumers is also a `*Settings` (`CliSettings`, MCP's `Settings`). Reader classes carry no `Env` infix: the `*Settings` suffix already marks the env-reading layer.
+```
+raw env / .env / toml
+  -> [string parse: strip / fold / coerce / precedence]   readers in pipefy_*/env.py
+  -> [projection parse: wide reader -> value object]       loaders in pipefy_*/env.py
+  -> refined value objects (the API surface)               PipefyEndpoints, ServiceAccount, ...
+  -> behavior                                              PipefyClient, resolve_pipefy_auth, JwtValidator
+```
 
-### One DeploymentConfig, injected by reference
+A reader is a `pydantic_settings.BaseSettings` shell that knows the env mapping; a loader is a function that reads one reader, projects it onto a refined value object, and returns that object plus primitives. Both are transient scaffolding: the application holds the loader's output, never the reader.
 
-`pipefy_infra.deployment.DeploymentConfig` is the single source of host topology (`base_url` plus the derived `graphql_url` / `internal_api_url` / `interfaces_graphql_url` / `oauth_token_url` properties) and the single SSRF posture (`allow_insecure_urls`). The composition root builds ONE instance and injects it by reference into the SDK / auth / jwt / resource-server configs, so they cannot structurally diverge on host or posture. `deployment` is injected with no default, so the type system forces every edge to supply it. The service-account tier is injected the same way but optional: `AuthConfig.service_account_credentials` is a `ServiceAccountCredentials | None` that defaults to `None` (tier unconfigured), and the edge passes the whole credential block or nothing. Models that hold a `deployment` forward `allow_insecure_urls` (and the SDK its URL properties) off it rather than storing their own copy.
+### Public APIs take refined value objects, never a config instance
+
+A library's public entry point accepts only refined value objects (a frozen `pydantic.BaseModel` whose construction witnesses validity) and primitives. `PipefyClient(endpoints: PipefyEndpoints, *, auth, allow_insecure_urls, ...)`, `resolve_pipefy_auth(sources: CredentialSources)`, and `JwtValidator(inputs: JwtValidationInputs)` are the shape: a caller cannot hand them a half-validated reader. No library public `__init__` exports a `*Config` / `*Settings` symbol, and no `*Config` appears in one of these signatures (a greppable guard in the chore commit enforces both). Construction of the value object is the single validation gate, so every path that builds one (the loader, a test, a future caller) gets the same checks.
+
+### Shape rides the value object; posture policy parses at the deployment edge
+
+Two distinct parses, kept separate because they need different context:
+
+- **Shape** is context-free and rides every construction path: URL shape (`security.URL_SHAPE_PATTERN`), no query/fragment, `OPAQUE_CREDENTIAL_PATTERN` on credentials, and cross-field rules (`verify_audience => audience`). It lives on the value object (a field `pattern=` plus a `model_validator(mode="after")`), so a hand-built object cannot be malformed.
+- **Posture policy** is context-dependent (`validate_https_url(allow_insecure=...)`, blocked IP ranges) and parses once at the deployment edge. `pipefy_infra.deployment.DeploymentConfig` gates `base_url` as a host root, which covers every derived suffix (`graphql_url`, `oauth_token_url`, ...); its derived URLs are then witnesses that the policy parse passed. There is one source of `allow_insecure_urls` (the one `DeploymentConfig`), so endpoints, the service-account `token_url`, and the inbound issuer cannot diverge on host or posture.
+
+### Parsers live in per-package env.py submodules
+
+Each library that reads env owns one `env.py`: `pipefy_infra.env` (`load_deployment`), `pipefy_sdk.env` (`load_sdk`), `pipefy_auth.env` (`load_auth`, `load_jwt_validation`). These are the only modules allowed to import `pydantic_settings`; a per-package ruff `banned-api` rule bans it everywhere else, with a per-file exception for `env.py` and for `infra/settings_base.py`. The env-reading dependency is an optional extra (`pipefy-sdk[env]`, `pipefy-auth[env]`), so `import pipefy_sdk` / `import pipefy_auth` pulls no `pydantic_settings`. The two application composition roots (`pipefy_cli.runtime.resolve_cli_runtime`, `pipefy_mcp.runtime.resolve_mcp_runtime`) compose the loaders around one `DeploymentConfig`; they never redefine the env mapping. The resolved composite each app holds is a `*Runtime` (`CliRuntime`, `McpRuntime`) of parsed value objects and primitives, not a bag of readers.
 
 ### PipefyBaseSettings owns the source chain
 
-Each edge reader subclasses its library model plus `pipefy_infra.settings_base.PipefyBaseSettings`, which owns the one precedence chain (init > env > dotenv > `config.toml` > file secret) and the shared `SettingsConfigDict`. A reader shell therefore adds only its `env_prefix`, any cross-prefix `validation_alias` (for example `PIPEFY_TOKEN`, kept at the product root), and `_toml_section`. `PipefyBaseSettings` is generic machinery (imports only `pydantic_settings` and the TOML source), so `infra` stays a leaf.
+Each reader subclasses `pipefy_infra.settings_base.PipefyBaseSettings`, which owns the one precedence chain (init > env > dotenv > `config.toml` > file secret) and the shared `SettingsConfigDict`. A reader therefore adds only its `env_prefix`, any cross-prefix `validation_alias` (for example `PIPEFY_TOKEN`, kept at the product root), and `_toml_section`. `PipefyBaseSettings` is generic machinery (imports only `pydantic_settings` and the TOML source), so `infra` stays a leaf.
 
-### Normalize at the boundary, validate in the value object
-
-Normalizing human-typed input is a boundary concern; the library value objects accept only already-parsed values. Whitespace trimming is uniform across every field, so it is a single wildcard `field_validator("*", mode="before")(strip_if_str)` on `PipefyBaseSettings` that trims every value as it is read (env, `.env`, TOML). Field-specific leniency (case-folding an enum value such as `keychain_backend`, where `KEYCHAIN_BACKEND=FILE` should fold to `file`) cannot ride the blanket wildcard, since most fields are case-sensitive; each edge reader wires it onto the specific field with `field_validator("keychain_backend", mode="before")(lower_if_str)`. The library value objects do NOT normalize: they validate and reject a non-canonical value as a programmer error (credential and URL fields carry a `pattern=` that excludes leading/trailing whitespace; `keychain_backend` is a bare lowercase `Literal`). Do not add `strip_if_str` / `lower_if_str` validators to library models, and do not re-normalize inside a `model_validator`. Tests assert the layering: edge readers strip and fold env input; direct construction of a library model with a padded or mixed-case value raises.
-
-### SSRF gating at construction
-
-URL *shape* is a field-level constraint (`security.URL_SHAPE_PATTERN`); URL *policy* (HTTPS-or-insecure, blocked IP ranges, host-root vs no-query/fragment) runs in a `model_validator(mode="after")` using the injected `allow_insecure_urls`. `DeploymentConfig` gates `base_url` as a host root, which covers every derived suffix; `AuthConfig` gates `issuer_url`, `JwtValidationConfig` gates `issuer_url` + `jwks_uri`, and `ResourceServerSettings` gates `resource_server_url`. There is one source of `allow_insecure_urls` (the injected `DeploymentConfig`); no reader re-reads `PIPEFY_ALLOW_INSECURE_URLS`.
+Normalizing human-typed input is the reader's job, not the value object's. Whitespace trimming is uniform, so it is a single wildcard `field_validator("*", mode="before")(strip_if_str)` on `PipefyBaseSettings` that trims every value as it is read. Field-specific leniency (case-folding `keychain_backend`, where `KEYCHAIN_BACKEND=FILE` folds to `file`) cannot ride the blanket wildcard, since most fields are case-sensitive; the reader wires it onto the field with `field_validator("keychain_backend", mode="before")(lower_if_str)`. The value objects do NOT normalize: a credential or URL `pattern=` excludes surrounding whitespace, and a padded or mixed-case value passed to a value object directly is a programmer error that raises. Tests assert the layering: readers strip and fold env input; direct construction with a non-canonical value raises.
 
 ### Sectioned TOML
 
@@ -90,7 +103,7 @@ When the same bare field name appears across concepts (`issuer_url` lives in bot
 
 ### Lazy resolution (MCP)
 
-Importing the settings module does no env or file IO. `pipefy_mcp.settings.get_settings()` resolves and caches on first call; `reset_settings()` clears the cache and an autouse test fixture calls it so the process-wide cache does not leak across tests.
+Importing `pipefy_mcp.runtime` does no env or file IO. `get_runtime()` resolves and caches on first call; `reset_runtime()` clears the cache and an autouse test fixture calls it so the process-wide cache does not leak across tests.
 
 ## Testing
 - `pytest-asyncio`, `pytest-cov`, `pytest-mock`.

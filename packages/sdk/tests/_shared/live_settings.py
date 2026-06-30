@@ -6,6 +6,7 @@ import pytest
 from httpx import Auth
 from pipefy_auth import (
     AuthConfig,
+    CredentialSources,
     ServiceAccountCredentials,
     missing_auth_message,
     resolve_pipefy_auth,
@@ -92,9 +93,11 @@ def _try_resolve_live_auth() -> Auth | None:
     # ``oidc_client=None``: a stray ``pipefy auth login`` on a dev machine would
     # otherwise satisfy live-creds detection via the developer's personal session.
     return resolve_pipefy_auth(
-        static_token=a.static_token,
-        service_account=a.to_service_account(),
-        oidc_client=None,
+        CredentialSources(
+            static_token=a.static_token,
+            service_account=a.to_service_account(),
+            oidc_client=None,
+        )
     )
 
 

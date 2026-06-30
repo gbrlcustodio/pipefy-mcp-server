@@ -37,6 +37,7 @@ from pipefy_auth.resolver import (
     SERVICE_ACCOUNT_TIER,
     STATIC_TOKEN_TIER,
     STORED_SESSION_TIER,
+    CredentialSources,
     ServiceAccount,
     detect_pipefy_tiers,
     missing_auth_message,
@@ -59,15 +60,21 @@ from pipefy_auth.storage import (
     load_session,
     store_session,
 )
-from pipefy_auth.verification import JwtValidator, TokenValidationError
+from pipefy_auth.verification import (
+    JwtValidationInputs,
+    JwtValidator,
+    TokenValidationError,
+)
 
 __all__ = [
     "AuthConfig",
     "JwtValidationConfig",
     "ServiceAccountCredentials",
     "CallableBearerAuth",
+    "CredentialSources",
     "DEFAULT_AUTH_CLIENT_ID",
     "DiscoveryPolicy",
+    "JwtValidationInputs",
     "JwtValidator",
     "LoginError",
     "LoginResult",

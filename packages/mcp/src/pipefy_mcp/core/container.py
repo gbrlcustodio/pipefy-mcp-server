@@ -5,6 +5,7 @@ import logging
 
 from pipefy_auth import (
     STORED_SESSION_TIER,
+    CredentialSources,
     RefreshError,
     configure_keychain_backend,
     ensure_fresh_session,
@@ -46,9 +47,11 @@ class ServicesContainer:
         configure_keychain_backend(settings.auth.keychain_backend)
         oidc_client = settings.auth.to_oidc_client()
         resolved = resolve_pipefy_auth(
-            static_token=settings.auth.static_token,
-            service_account=settings.auth.to_service_account(),
-            oidc_client=oidc_client,
+            CredentialSources(
+                static_token=settings.auth.static_token,
+                service_account=settings.auth.to_service_account(),
+                oidc_client=oidc_client,
+            )
         )
         if resolved is None:
             raise RuntimeError(

@@ -10,7 +10,11 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from pipefy_auth.verification import JwtValidator, TokenValidationError
+from pipefy_auth.verification import (
+    JwtValidationInputs,
+    JwtValidator,
+    TokenValidationError,
+)
 
 _ISSUER = "https://idp.example.com/realms/pipefy"
 _AUDIENCE = "https://mcp.example.com/mcp"
@@ -50,7 +54,7 @@ def _validator(monkeypatch: pytest.MonkeyPatch, **kwargs: Any) -> JwtValidator:
         "jwks_uri": _JWKS_URI,
     }
     defaults.update(kwargs)
-    validator = JwtValidator(**defaults)
+    validator = JwtValidator(JwtValidationInputs(**defaults))
     monkeypatch.setattr(
         validator._jwks,
         "get_signing_key_from_jwt",
@@ -132,7 +136,9 @@ def test_jwks_uri_resolved_from_discovery(monkeypatch: pytest.MonkeyPatch) -> No
         lambda issuer_url, policy: metadata,
     )
     validator = JwtValidator(
-        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+        JwtValidationInputs(
+            issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+        )
     )
     assert validator._jwks is None  # deferred, not resolved at construction
     assert validator._jwks_client().uri == _JWKS_URI
@@ -150,7 +156,9 @@ def test_discovery_path_does_no_network_at_construction(
 
     monkeypatch.setattr("pipefy_auth.verification.fetch_provider_metadata", _fail)
     validator = JwtValidator(
-        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+        JwtValidationInputs(
+            issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+        )
     )
     assert validator._jwks is None
 
@@ -164,7 +172,9 @@ def test_discovery_without_jwks_uri_raises(monkeypatch: pytest.MonkeyPatch) -> N
         lambda issuer_url, policy: SimpleNamespace(jwks_uri=None),
     )
     validator = JwtValidator(
-        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+        JwtValidationInputs(
+            issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+        )
     )
     with pytest.raises(TokenValidationError, match="jwks_uri"):
         validator.validate(_sign(_claims()))
@@ -184,7 +194,9 @@ def test_discovery_failure_is_not_cached(monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr("pipefy_auth.verification.fetch_provider_metadata", _flaky)
     validator = JwtValidator(
-        issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+        JwtValidationInputs(
+            issuer_url=_ISSUER, audience=_AUDIENCE, verify_audience=False
+        )
     )
 
     with pytest.raises(TokenValidationError, match="transient discovery outage"):
@@ -208,10 +220,12 @@ def test_explicit_http_jwks_uri_is_rejected() -> None:
     # https/SSRF gate rather than handing an unchecked URL to PyJWKClient.
     with pytest.raises(ValueError, match="jwks_uri"):
         JwtValidator(
-            issuer_url=_ISSUER,
-            audience=_AUDIENCE,
-            verify_audience=False,
-            jwks_uri="http://idp.example.com/protocol/openid-connect/certs",
+            JwtValidationInputs(
+                issuer_url=_ISSUER,
+                audience=_AUDIENCE,
+                verify_audience=False,
+                jwks_uri="http://idp.example.com/protocol/openid-connect/certs",
+            )
         )
 
 
@@ -219,10 +233,12 @@ def test_explicit_http_jwks_uri_is_rejected() -> None:
 def test_explicit_internal_host_jwks_uri_is_rejected() -> None:
     with pytest.raises(ValueError, match="jwks_uri"):
         JwtValidator(
-            issuer_url=_ISSUER,
-            audience=_AUDIENCE,
-            verify_audience=False,
-            jwks_uri="https://127.0.0.1/certs",
+            JwtValidationInputs(
+                issuer_url=_ISSUER,
+                audience=_AUDIENCE,
+                verify_audience=False,
+                jwks_uri="https://127.0.0.1/certs",
+            )
         )
 
 
@@ -230,10 +246,12 @@ def test_explicit_internal_host_jwks_uri_is_rejected() -> None:
 def test_explicit_jwks_uri_with_query_is_rejected() -> None:
     with pytest.raises(ValueError, match="jwks_uri"):
         JwtValidator(
-            issuer_url=_ISSUER,
-            audience=_AUDIENCE,
-            verify_audience=False,
-            jwks_uri=f"{_JWKS_URI}?rotate=1",
+            JwtValidationInputs(
+                issuer_url=_ISSUER,
+                audience=_AUDIENCE,
+                verify_audience=False,
+                jwks_uri=f"{_JWKS_URI}?rotate=1",
+            )
         )
 
 
@@ -242,10 +260,12 @@ def test_explicit_insecure_jwks_uri_allowed_when_opted_in() -> None:
     # allow_insecure_urls relaxes both the scheme and the internal-host gate,
     # mirroring the discovery path's policy.
     validator = JwtValidator(
-        issuer_url=_ISSUER,
-        audience=_AUDIENCE,
-        verify_audience=False,
-        allow_insecure_urls=True,
-        jwks_uri="http://127.0.0.1/certs",
+        JwtValidationInputs(
+            issuer_url=_ISSUER,
+            audience=_AUDIENCE,
+            verify_audience=False,
+            allow_insecure_urls=True,
+            jwks_uri="http://127.0.0.1/certs",
+        )
     )
     assert validator._jwks.uri == "http://127.0.0.1/certs"

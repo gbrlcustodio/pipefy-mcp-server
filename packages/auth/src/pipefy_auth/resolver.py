@@ -13,10 +13,13 @@ display concern handled in CLI code, not a tier here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from typing import Self
 
 from httpx import Auth
 from httpx_auth import OAuth2ClientCredentials
+from pipefy_infra import security
+from pipefy_infra.coerce import OPAQUE_CREDENTIAL_PATTERN
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pipefy_auth.bearer import (
     CallableBearerAuth,
@@ -32,13 +35,44 @@ SERVICE_ACCOUNT_TIER = "service-account"
 STORED_SESSION_TIER = "stored-session"
 
 
-@dataclass(frozen=True)
-class ServiceAccount:
-    """OAuth2 client-credentials inputs for the service-account tier."""
+class ServiceAccount(BaseModel):
+    """OAuth2 client-credentials inputs for the service-account tier.
 
-    token_url: str
-    client_id: str
-    client_secret: str
+    A frozen, refined value object: construction witnesses a well-shaped token
+    endpoint and opaque credentials. The token endpoint is derived from the one
+    deployment host root (already HTTPS/SSRF-gated there), so only shape is
+    checked here.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    token_url: str = Field(pattern=security.URL_SHAPE_PATTERN)
+    client_id: str = Field(pattern=OPAQUE_CREDENTIAL_PATTERN)
+    client_secret: str = Field(pattern=OPAQUE_CREDENTIAL_PATTERN)
+
+    @model_validator(mode="after")
+    def _validate_url_shape(self) -> Self:
+        security.assert_url_has_no_query_or_fragment(
+            self.token_url, field_label="token_url"
+        )
+        return self
+
+
+class CredentialSources(BaseModel):
+    """The parsed credentials for every tier, bundled as one input.
+
+    A frozen value object the application edge resolves once (via
+    ``pipefy_auth.env.load_auth``) and hands to :func:`resolve_pipefy_auth` /
+    :func:`detect_pipefy_tiers`. Each field is the witness for one tier, or
+    ``None`` when that tier is unconfigured. ``keychain_backend`` is NOT here: it
+    is a pre-resolve side effect (backend selection), not a credential source.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    static_token: str | None = Field(default=None, pattern=OPAQUE_CREDENTIAL_PATTERN)
+    service_account: ServiceAccount | None = None
+    oidc_client: OidcClient | None = None
 
 
 # Maps each ``httpx.Auth`` implementation back to the resolver-tier name that
@@ -103,12 +137,7 @@ def _has_stored_session(oidc_client: OidcClient) -> bool:
     )
 
 
-def resolve_pipefy_auth(
-    *,
-    static_token: str | None = None,
-    service_account: ServiceAccount | None = None,
-    oidc_client: OidcClient | None = None,
-) -> Auth | None:
+def resolve_pipefy_auth(sources: CredentialSources) -> Auth | None:
     """Resolve the highest-precedence tier with credentials available.
 
     Short-circuits at the first tier that resolves — lower tiers are never
@@ -120,35 +149,29 @@ def resolve_pipefy_auth(
     :func:`detect_pipefy_tiers` instead.
 
     Args:
-        static_token: Pre-resolved bearer for the static-token tier. Consumers
-            collapse their own per-source precedence (e.g. CLI ``--token`` flag
-            vs ``PIPEFY_TOKEN`` env var) into one value before calling.
-        service_account: Service-account client-credentials inputs.
-        oidc_client: OIDC client identity for the stored-session tier; the
+        sources: The parsed credentials for every tier. ``static_token`` is the
+            pre-resolved bearer (consumers collapse their own per-source
+            precedence, e.g. CLI ``--token`` vs ``PIPEFY_TOKEN``, before
+            building it). ``oidc_client`` gates the stored-session tier: the
             session is loaded from the keychain at detection time, and a fresh
             access token is fetched per request via
-            :class:`pipefy_auth.bearer.RefreshableBearerAuth`, which also
-            forces a refresh + retry on a 401 response.
+            :class:`pipefy_auth.bearer.RefreshableBearerAuth`, which also forces
+            a refresh + retry on a 401 response.
     """
-    if static_token and static_token.strip():
-        return StaticBearerAuth(static_token.strip())
-    if service_account is not None:
+    if sources.static_token and sources.static_token.strip():
+        return StaticBearerAuth(sources.static_token.strip())
+    if sources.service_account is not None:
         return OAuth2ClientCredentials(
-            token_url=service_account.token_url,
-            client_id=service_account.client_id,
-            client_secret=service_account.client_secret,
+            token_url=sources.service_account.token_url,
+            client_id=sources.service_account.client_id,
+            client_secret=sources.service_account.client_secret,
         )
-    if oidc_client is not None and _has_stored_session(oidc_client):
-        return _stored_session_provider(oidc_client)
+    if sources.oidc_client is not None and _has_stored_session(sources.oidc_client):
+        return _stored_session_provider(sources.oidc_client)
     return None
 
 
-def detect_pipefy_tiers(
-    *,
-    static_token: str | None = None,
-    service_account: ServiceAccount | None = None,
-    oidc_client: OidcClient | None = None,
-) -> list[str]:
+def detect_pipefy_tiers(sources: CredentialSources) -> list[str]:
     """Return every tier with credentials available, highest-precedence first.
 
     Used by ``pipefy auth status`` to surface masked sources alongside the
@@ -156,11 +179,11 @@ def detect_pipefy_tiers(
     the keychain read for the stored-session tier).
     """
     detected: list[str] = []
-    if static_token and static_token.strip():
+    if sources.static_token and sources.static_token.strip():
         detected.append(STATIC_TOKEN_TIER)
-    if service_account is not None:
+    if sources.service_account is not None:
         detected.append(SERVICE_ACCOUNT_TIER)
-    if oidc_client is not None and _has_stored_session(oidc_client):
+    if sources.oidc_client is not None and _has_stored_session(sources.oidc_client):
         detected.append(STORED_SESSION_TIER)
     return detected
 
@@ -177,6 +200,7 @@ __all__ = [
     "SERVICE_ACCOUNT_TIER",
     "STATIC_TOKEN_TIER",
     "STORED_SESSION_TIER",
+    "CredentialSources",
     "ServiceAccount",
     "detect_pipefy_tiers",
     "missing_auth_message",

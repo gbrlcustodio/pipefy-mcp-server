@@ -19,6 +19,7 @@ from httpx import Auth
 from pipefy_auth import (
     STATIC_TOKEN_TIER,
     STORED_SESSION_TIER,
+    CredentialSources,
     OidcClient,
     RefreshError,
     ServiceAccount,
@@ -83,12 +84,16 @@ def clear_authenticated_client_cache() -> None:
     _cached_client = None
 
 
-def _resolve(auth: AuthContext) -> Auth | None:
-    return resolve_pipefy_auth(
+def _credential_sources(auth: AuthContext) -> CredentialSources:
+    return CredentialSources(
         static_token=auth.bearer_token.value if auth.bearer_token else None,
         service_account=auth.service_account,
         oidc_client=auth.oidc_client,
     )
+
+
+def _resolve(auth: AuthContext) -> Auth | None:
+    return resolve_pipefy_auth(_credential_sources(auth))
 
 
 def _to_display_source(tier: str, bearer: BearerToken | None) -> str:
@@ -104,11 +109,7 @@ def _to_display_source(tier: str, bearer: BearerToken | None) -> str:
 
 def detect_cli_sources(auth: AuthContext) -> list[str]:
     """Return detected sources mapped to CLI display labels."""
-    detected = detect_pipefy_tiers(
-        static_token=auth.bearer_token.value if auth.bearer_token else None,
-        service_account=auth.service_account,
-        oidc_client=auth.oidc_client,
-    )
+    detected = detect_pipefy_tiers(_credential_sources(auth))
     return [_to_display_source(tier, auth.bearer_token) for tier in detected]
 
 

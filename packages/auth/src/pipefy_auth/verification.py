@@ -16,11 +16,12 @@ offload :meth:`JwtValidator.validate` to a thread.
 from __future__ import annotations
 
 import threading
-from typing import Any
+from typing import Any, Self
 
 import jwt
 from jwt import PyJWKClient
 from pipefy_infra import security
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pipefy_auth.discovery import DiscoveryPolicy, fetch_provider_metadata
 
@@ -34,6 +35,39 @@ class TokenValidationError(ValueError):
     failure can catch the broad type without importing PyJWT's exception
     hierarchy. The underlying cause is chained for diagnostics.
     """
+
+
+class JwtValidationInputs(BaseModel):
+    """The post-resolution witness for inbound bearer validation.
+
+    A frozen, refined value object that feeds :class:`JwtValidator`. Unlike the
+    env-level config it replaces, ``issuer_url`` is REQUIRED here: the loader has
+    already resolved the override-or-login-issuer fallback into a concrete issuer
+    before constructing this. Shape validation (scheme + host, no query/fragment)
+    rides every construction path; the HTTPS-vs-insecure posture is applied by
+    the loader (carried here as ``allow_insecure_urls`` for the JWKS-fetch gate).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    issuer_url: str = Field(pattern=security.URL_SHAPE_PATTERN)
+    jwks_uri: str | None = Field(default=None, pattern=security.URL_SHAPE_PATTERN)
+    audience: str | None = None
+    verify_audience: bool = False
+    allow_insecure_urls: bool = False
+
+    @model_validator(mode="after")
+    def _validate_configuration(self) -> Self:
+        if self.verify_audience and not self.audience:
+            raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
+        security.assert_url_has_no_query_or_fragment(
+            self.issuer_url, field_label="issuer_url"
+        )
+        if self.jwks_uri is not None:
+            security.assert_url_has_no_query_or_fragment(
+                self.jwks_uri, field_label="jwks_uri"
+            )
+        return self
 
 
 class JwtValidator:
@@ -52,28 +86,20 @@ class JwtValidator:
     place; ``audience`` is then required by the caller.
     """
 
-    def __init__(
-        self,
-        *,
-        issuer_url: str,
-        audience: str | None,
-        verify_audience: bool,
-        allow_insecure_urls: bool = False,
-        jwks_uri: str | None = None,
-    ) -> None:
-        self._issuer = issuer_url
-        self._audience = audience
-        self._verify_audience = verify_audience
-        self._allow_insecure_urls = allow_insecure_urls
+    def __init__(self, inputs: JwtValidationInputs) -> None:
+        self._issuer = inputs.issuer_url
+        self._audience = inputs.audience
+        self._verify_audience = inputs.verify_audience
+        self._allow_insecure_urls = inputs.allow_insecure_urls
         # Guards the one-time lazy discovery in _jwks_client: validate() can run
         # concurrently, and a cold burst should resolve jwks_uri once rather than
         # each request firing its own discovery fetch at the IdP.
         self._lock = threading.Lock()
-        if jwks_uri is not None:
+        if inputs.jwks_uri is not None:
             # Explicit override: validated and built eagerly (no network) so a
             # misconfigured override fails at startup, not on the first request.
             resolved_jwks_uri = self._validate_jwks_uri(
-                jwks_uri, allow_insecure_urls=allow_insecure_urls
+                inputs.jwks_uri, allow_insecure_urls=inputs.allow_insecure_urls
             )
             # cache_keys memoizes get_signing_key(kid), so the steady-state path is
             # a dict lookup; without it every validate() rebuilds the JWK set and

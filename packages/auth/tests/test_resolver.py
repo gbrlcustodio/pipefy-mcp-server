@@ -18,6 +18,7 @@ from pipefy_auth.resolver import (
     SERVICE_ACCOUNT_TIER,
     STATIC_TOKEN_TIER,
     STORED_SESSION_TIER,
+    CredentialSources,
     ServiceAccount,
     detect_pipefy_tiers,
     missing_auth_message,
@@ -53,9 +54,17 @@ def _oidc() -> OidcClient:
     return OidcClient(issuer_url="https://issuer.test/", client_id="pipefy-cli")
 
 
+def _resolve(**kw):
+    return resolve_pipefy_auth(CredentialSources(**kw))
+
+
+def _detect(**kw):
+    return detect_pipefy_tiers(CredentialSources(**kw))
+
+
 @pytest.mark.unit
 def test_resolve_with_no_inputs_returns_none():
-    assert resolve_pipefy_auth() is None
+    assert _resolve() is None
 
 
 @pytest.mark.unit
@@ -63,7 +72,7 @@ def test_static_token_wins_and_short_circuits_lower_tiers(monkeypatch):
     """Once the static-token tier resolves, lower tiers' inputs are never inspected."""
     mock_load = MockCounter()
     monkeypatch.setattr("pipefy_auth.resolver.load_session", mock_load)
-    resolved = resolve_pipefy_auth(
+    resolved = _resolve(
         static_token="TOKEN",
         service_account=_service_account(),
         oidc_client=_oidc(),
@@ -74,9 +83,23 @@ def test_static_token_wins_and_short_circuits_lower_tiers(monkeypatch):
 
 
 @pytest.mark.unit
-def test_static_token_trimmed_and_blank_treated_as_absent():
-    assert resolve_pipefy_auth(static_token="   ") is None
-    resolved = resolve_pipefy_auth(static_token="  ABC  ")
+def test_credential_sources_rejects_padded_or_blank_static_token():
+    """The witness enforces a clean token, so the resolver never sees padding.
+
+    A blank or surrounding-whitespace ``PIPEFY_TOKEN`` is rejected at the
+    boundary (the reader strips, then the value object's pattern rejects an
+    empty/padded result), not silently trimmed deep in the resolver.
+    """
+    from pydantic import ValidationError
+
+    for bad in ("   ", "  ABC  "):
+        with pytest.raises(ValidationError):
+            CredentialSources(static_token=bad)
+
+
+@pytest.mark.unit
+def test_clean_static_token_resolves_to_static_bearer():
+    resolved = _resolve(static_token="ABC")
     assert isinstance(resolved, StaticBearerAuth)
 
 
@@ -86,9 +109,7 @@ def test_service_account_wins_when_no_static_token_and_short_circuits_stored(
 ):
     mock_load = MockCounter()
     monkeypatch.setattr("pipefy_auth.resolver.load_session", mock_load)
-    resolved = resolve_pipefy_auth(
-        service_account=_service_account(), oidc_client=_oidc()
-    )
+    resolved = _resolve(service_account=_service_account(), oidc_client=_oidc())
     assert isinstance(resolved, OAuth2ClientCredentials)
     assert tier_for(resolved) == SERVICE_ACCOUNT_TIER
     assert mock_load.calls == 0
@@ -99,7 +120,7 @@ def test_stored_session_wins_when_nothing_else_configured(monkeypatch):
     monkeypatch.setattr(
         "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
     )
-    resolved = resolve_pipefy_auth(oidc_client=_oidc())
+    resolved = _resolve(oidc_client=_oidc())
     assert isinstance(resolved, RefreshableBearerAuth)
     assert tier_for(resolved) == STORED_SESSION_TIER
 
@@ -107,7 +128,7 @@ def test_stored_session_wins_when_nothing_else_configured(monkeypatch):
 @pytest.mark.unit
 def test_stored_session_tier_requires_keychain_entry(monkeypatch):
     monkeypatch.setattr("pipefy_auth.resolver.load_session", lambda **_: None)
-    assert resolve_pipefy_auth(oidc_client=_oidc()) is None
+    assert _resolve(oidc_client=_oidc()) is None
 
 
 @pytest.mark.unit
@@ -118,7 +139,7 @@ def test_resolver_skips_stored_session_when_oidc_client_is_none(monkeypatch):
         raise AssertionError("load_session must not be called when oidc_client is None")
 
     monkeypatch.setattr("pipefy_auth.resolver.load_session", _poison)
-    assert resolve_pipefy_auth(oidc_client=None) is None
+    assert _resolve(oidc_client=None) is None
 
 
 @pytest.mark.unit
@@ -129,7 +150,7 @@ def test_detect_omits_stored_session_when_oidc_client_is_none(monkeypatch):
         raise AssertionError("load_session must not be called when oidc_client is None")
 
     monkeypatch.setattr("pipefy_auth.resolver.load_session", _poison)
-    tiers = detect_pipefy_tiers(
+    tiers = _detect(
         static_token="T",
         service_account=_service_account(),
         oidc_client=None,
@@ -167,7 +188,7 @@ def test_detect_lists_every_configured_tier_in_precedence_order(monkeypatch):
     monkeypatch.setattr(
         "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
     )
-    tiers = detect_pipefy_tiers(
+    tiers = _detect(
         static_token="T",
         service_account=_service_account(),
         oidc_client=_oidc(),
@@ -182,7 +203,7 @@ def test_detect_lists_every_configured_tier_in_precedence_order(monkeypatch):
 @pytest.mark.unit
 def test_detect_skips_tiers_without_credentials(monkeypatch):
     monkeypatch.setattr("pipefy_auth.resolver.load_session", lambda **_: None)
-    tiers = detect_pipefy_tiers(static_token="T", service_account=_service_account())
+    tiers = _detect(static_token="T", service_account=_service_account())
     assert tiers == [STATIC_TOKEN_TIER, SERVICE_ACCOUNT_TIER]
 
 
@@ -225,7 +246,7 @@ def test_stored_session_provider_raises_when_session_vanishes(monkeypatch):
         "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
     )
     monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", lambda **_: None)
-    resolved = resolve_pipefy_auth(oidc_client=_oidc())
+    resolved = _resolve(oidc_client=_oidc())
     assert isinstance(resolved, RefreshableBearerAuth)
     provider = resolved._token_provider  # type: ignore[attr-defined]
     with pytest.raises(RuntimeError, match="session was removed"):
@@ -258,7 +279,7 @@ def test_stored_session_force_refresh_calls_ensure_fresh_session_with_force(
         )
 
     monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", fake_ensure)
-    resolved = resolve_pipefy_auth(oidc_client=_oidc())
+    resolved = _resolve(oidc_client=_oidc())
     assert isinstance(resolved, RefreshableBearerAuth)
     new_token = resolved._force_refresh()  # type: ignore[attr-defined]
     assert new_token == "ROTATED"
@@ -275,7 +296,7 @@ def test_stored_session_force_refresh_returns_none_on_refresh_error(monkeypatch)
         raise RefreshError("invalid_grant", error_code="invalid_grant")
 
     monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", fake_ensure)
-    resolved = resolve_pipefy_auth(oidc_client=_oidc())
+    resolved = _resolve(oidc_client=_oidc())
     assert isinstance(resolved, RefreshableBearerAuth)
     assert resolved._force_refresh() is None  # type: ignore[attr-defined]
 
@@ -286,7 +307,7 @@ def test_stored_session_force_refresh_returns_none_when_session_vanished(monkeyp
         "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
     )
     monkeypatch.setattr("pipefy_auth.resolver.ensure_fresh_session", lambda **_: None)
-    resolved = resolve_pipefy_auth(oidc_client=_oidc())
+    resolved = _resolve(oidc_client=_oidc())
     assert isinstance(resolved, RefreshableBearerAuth)
     assert resolved._force_refresh() is None  # type: ignore[attr-defined]
 

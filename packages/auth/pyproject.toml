@@ -13,8 +13,12 @@ dependencies = [
     # RS256 validation of inbound bearers (resource-server role); [crypto] pulls cryptography.
     "pyjwt[crypto]>=2.8",
     "pydantic>=2.13.4,<3",
-    "pydantic-settings>=2.8.1",
 ]
+
+[project.optional-dependencies]
+# Env-reading edge (pipefy_auth.env). The core auth package is env-free; only
+# callers that parse the environment into the auth value objects need this.
+env = ["pydantic-settings>=2.8.1"]
 
 [dependency-groups]
 dev = [

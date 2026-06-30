@@ -835,8 +835,12 @@ dependencies = [
     { name = "keyrings-alt" },
     { name = "pipefy-infra" },
     { name = "pydantic" },
-    { name = "pydantic-settings" },
     { name = "pyjwt", extra = ["crypto"] },
+]
+
+[package.optional-dependencies]
+env = [
+    { name = "pydantic-settings" },
 ]
 
 [package.dev-dependencies]
@@ -854,9 +858,10 @@ requires-dist = [
     { name = "keyrings-alt", specifier = ">=5" },
     { name = "pipefy-infra", editable = "packages/infra" },
     { name = "pydantic", specifier = ">=2.13.4,<3" },
-    { name = "pydantic-settings", specifier = ">=2.8.1" },
+    { name = "pydantic-settings", marker = "extra == 'env'", specifier = ">=2.8.1" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.8" },
 ]
+provides-extras = ["env"]
 
 [package.metadata.requires-dev]
 dev = [

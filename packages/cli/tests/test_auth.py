@@ -12,6 +12,7 @@ from pipefy_auth import (
     RefreshableBearerAuth,
     ServiceAccount,
     StaticBearerAuth,
+    StaticTokenAuth,
     StoredSession,
     StoredSessionAuth,
     TokenResponse,
@@ -21,8 +22,8 @@ from pipefy_sdk import PipefySettings
 from pipefy_cli.auth import (
     AuthContext,
     BearerToken,
-    detect_cli_sources,
     get_authenticated_client,
+    to_display_source,
 )
 from pipefy_cli.main import app
 
@@ -146,16 +147,20 @@ def test_cli_uses_pipefy_token_env_when_no_flag(
 # --------------------------------------------------------------------------- #
 
 
-def test_detect_cli_sources_maps_static_token_to_flag_label(clean_pipefy_env):
+def test_to_display_source_maps_flag_token_to_flag_label():
     """``--token`` source surfaces as the locked ``flag-token`` wire value."""
-    sources = detect_cli_sources(_auth(bearer_token="t", bearer_source="flag"))
-    assert sources[0] == "flag-token"
+    source = to_display_source(
+        StaticTokenAuth("t"), BearerToken(value="t", source="flag")
+    )
+    assert source == "flag-token"
 
 
-def test_detect_cli_sources_maps_env_token_to_env_label(clean_pipefy_env):
+def test_to_display_source_maps_env_token_to_env_label():
     """``PIPEFY_TOKEN`` source surfaces as the locked ``env-token`` wire value."""
-    sources = detect_cli_sources(_auth(bearer_token="t", bearer_source="env"))
-    assert sources[0] == "env-token"
+    source = to_display_source(
+        StaticTokenAuth("t"), BearerToken(value="t", source="env")
+    )
+    assert source == "env-token"
 
 
 # --------------------------------------------------------------------------- #

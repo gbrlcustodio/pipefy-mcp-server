@@ -29,9 +29,6 @@ from pipefy_auth.refresh import (
     refresh_access_token,
 )
 from pipefy_auth.resolver import (
-    SERVICE_ACCOUNT_TIER,
-    STATIC_TOKEN_TIER,
-    STORED_SESSION_TIER,
     ResolvedAuth,
     ServiceAccount,
     ServiceAccountAuth,
@@ -78,9 +75,6 @@ __all__ = [
     "RevocationError",
     "RevocationUnsupportedError",
     "ResolvedAuth",
-    "SERVICE_ACCOUNT_TIER",
-    "STATIC_TOKEN_TIER",
-    "STORED_SESSION_TIER",
     "ServiceAccount",
     "ServiceAccountAuth",
     "SessionDeleteError",

@@ -41,7 +41,7 @@ from pipefy_cli.auth import (
     DisplaySource,
     detect_cli_sources,
     get_authenticated_client,
-    resolve_cli_auth,
+    to_display_source,
 )
 from pipefy_cli.commands._common import settings_and_auth_from_ctx
 from pipefy_cli.output import render_json
@@ -420,22 +420,26 @@ def auth_status(
 ) -> None:
     """Print which auth source is active, the authenticated identity, and session expiry."""
     settings, auth = settings_and_auth_from_ctx(ctx)
-    detected = detect_cli_sources(auth)
+    tiers = detect_cli_sources(auth)
+    detected: list[DisplaySource] = [
+        to_display_source(tier, auth.bearer_token) for tier in tiers
+    ]
+    # Precedence-first, so the head is the active source and the same winner the
+    # resolver would pick, without a second resolve pass.
+    active = tiers[0] if tiers else None
     source: DisplaySource = detected[0] if detected else "none"
     report = AuthStatusReport(auth_source=source, detected_sources=detected)
-    # Surface masking env vars whenever a stored session exists — that's the
+    # Surface masking env vars whenever a stored session exists: that's the
     # CI-overrides-keychain failure mode the field is for, and the higher-
     # precedence winner is the case where it matters.
-    if "stored-session" in detected:
+    if any(isinstance(tier, StoredSessionAuth) for tier in tiers):
         report.masking_env_vars = _session_masking_env_vars()
 
     try:
-        if source == "none":
+        if active is None:
             raise _StatusExit(report=report, exit_code=2)
-        # The active source is the resolver's winner; a StoredSessionAuth carries
-        # its OIDC client by construction, so populating session details needs no
-        # presence check.
-        active = resolve_cli_auth(auth)
+        # A StoredSessionAuth carries its OIDC client by construction, so
+        # populating session details needs no presence check.
         if isinstance(active, StoredSessionAuth):
             _populate_stored_session(report, active.oidc_client)
         _fetch_identity(report, settings, auth)

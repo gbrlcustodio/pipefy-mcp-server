@@ -96,8 +96,7 @@ def clear_authenticated_client_cache() -> None:
     _cached_client = None
 
 
-def resolve_cli_auth(auth: AuthContext) -> ResolvedAuth | None:
-    """Resolve the highest-precedence tier for a CLI invocation, or ``None``."""
+def _resolve(auth: AuthContext) -> ResolvedAuth | None:
     return resolve_pipefy_auth(
         static_token=auth.bearer_token.value if auth.bearer_token else None,
         service_account=auth.service_account,
@@ -105,7 +104,7 @@ def resolve_cli_auth(auth: AuthContext) -> ResolvedAuth | None:
     )
 
 
-def _to_display_source(
+def to_display_source(
     resolved: ResolvedAuth, bearer: BearerToken | None
 ) -> DisplaySource:
     """Map a resolved tier to its locked ``auth status`` wire value.
@@ -128,16 +127,18 @@ def _to_display_source(
             assert_never(resolved)
 
 
-def detect_cli_sources(auth: AuthContext) -> list[DisplaySource]:
-    """Return detected sources mapped to CLI display labels, precedence-first."""
-    return [
-        _to_display_source(resolved, auth.bearer_token)
-        for resolved in detect_pipefy_tiers(
-            static_token=auth.bearer_token.value if auth.bearer_token else None,
-            service_account=auth.service_account,
-            oidc_client=auth.oidc_client,
-        )
-    ]
+def detect_cli_sources(auth: AuthContext) -> list[ResolvedAuth]:
+    """Return the detected resolver tiers for a CLI invocation, precedence-first.
+
+    The non-short-circuiting view of the chain: every configured tier, not just
+    the winner. ``pipefy auth status`` renders each via :func:`to_display_source`
+    and treats the first as the active source.
+    """
+    return detect_pipefy_tiers(
+        static_token=auth.bearer_token.value if auth.bearer_token else None,
+        service_account=auth.service_account,
+        oidc_client=auth.oidc_client,
+    )
 
 
 def _cache_key(
@@ -176,7 +177,7 @@ def get_authenticated_client(
     """
     global _cached_signature, _cached_client
 
-    resolved = resolve_cli_auth(auth)
+    resolved = _resolve(auth)
     if resolved is None:
         typer.echo(f"{missing_auth_message()} See {DOCS_CLI_AUTH_REF}.", err=True)
         raise typer.Exit(2)
@@ -219,5 +220,5 @@ __all__ = [
     "clear_authenticated_client_cache",
     "detect_cli_sources",
     "get_authenticated_client",
-    "resolve_cli_auth",
+    "to_display_source",
 ]

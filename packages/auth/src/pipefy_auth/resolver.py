@@ -27,10 +27,6 @@ from pipefy_auth.identity import OidcClient
 from pipefy_auth.refresh import RefreshError, ensure_fresh_session
 from pipefy_auth.storage import load_session
 
-STATIC_TOKEN_TIER = "static-token"
-SERVICE_ACCOUNT_TIER = "service-account"
-STORED_SESSION_TIER = "stored-session"
-
 
 @dataclass(frozen=True)
 class ServiceAccount:
@@ -194,9 +190,6 @@ def missing_auth_message(*, login_command: str = "pipefy auth login") -> str:
 
 
 __all__ = [
-    "SERVICE_ACCOUNT_TIER",
-    "STATIC_TOKEN_TIER",
-    "STORED_SESSION_TIER",
     "ResolvedAuth",
     "ServiceAccount",
     "ServiceAccountAuth",

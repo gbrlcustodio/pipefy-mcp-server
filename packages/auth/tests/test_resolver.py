@@ -69,7 +69,6 @@ def test_static_token_wins_and_short_circuits_lower_tiers(monkeypatch):
         oidc_client=_oidc(),
     )
     assert isinstance(resolved, StaticTokenAuth)
-    assert resolved.tier == STATIC_TOKEN_TIER
     assert mock_load.calls == 0
 
 
@@ -91,7 +90,6 @@ def test_service_account_wins_when_no_static_token_and_short_circuits_stored(
         service_account=_service_account(), oidc_client=_oidc()
     )
     assert isinstance(resolved, ServiceAccountAuth)
-    assert resolved.tier == SERVICE_ACCOUNT_TIER
     assert resolved.credentials == _service_account()
     assert mock_load.calls == 0
 
@@ -103,7 +101,6 @@ def test_stored_session_wins_when_nothing_else_configured(monkeypatch):
     )
     resolved = resolve_pipefy_auth(oidc_client=_oidc())
     assert isinstance(resolved, StoredSessionAuth)
-    assert resolved.tier == STORED_SESSION_TIER
 
 
 @pytest.mark.unit

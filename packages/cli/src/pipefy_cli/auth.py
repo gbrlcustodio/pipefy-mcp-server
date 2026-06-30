@@ -114,7 +114,6 @@ def detect_cli_sources(auth: AuthContext) -> list[str]:
 def _cache_key(
     pipefy_settings: PipefySettings,
     auth: AuthContext,
-    tier: str,
 ) -> str:
     """SHA-256 digest of every input that could change the cached client.
 
@@ -122,13 +121,13 @@ def _cache_key(
     token, the service-account ``client_secret`` — don't linger in module
     state for the process lifetime. Adding a new field to
     :class:`PipefySettings` or :class:`AuthContext` automatically participates
-    in the key without touching this function.
+    in the key without touching this function. The resolved tier is omitted: it
+    is a pure function of the auth fields above, so it adds no distinction.
     """
     payload = json.dumps(
         {
             "settings": pipefy_settings.model_dump(mode="json"),
             "auth": asdict(auth),
-            "tier": tier,
         },
         sort_keys=True,
         default=str,
@@ -152,7 +151,6 @@ def get_authenticated_client(
     if resolved is None:
         typer.echo(f"{missing_auth_message()} See {DOCS_CLI_AUTH_REF}.", err=True)
         raise typer.Exit(2)
-    tier = resolved.tier
 
     # Stored-session: warm up eagerly so refresh failures surface as a clean
     # exit(2) with a "run `pipefy auth login` again" hint instead of leaking
@@ -171,7 +169,7 @@ def get_authenticated_client(
             )
             raise typer.Exit(2) from exc
 
-    key = _cache_key(pipefy_settings, auth, tier)
+    key = _cache_key(pipefy_settings, auth)
     if _cached_client is not None and _cached_signature == key:
         return _cached_client
 

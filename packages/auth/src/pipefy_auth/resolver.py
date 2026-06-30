@@ -14,7 +14,6 @@ display concern handled in CLI code, not a tier here.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar
 
 from httpx import Auth
 from httpx_auth import OAuth2ClientCredentials
@@ -46,7 +45,6 @@ class StaticTokenAuth:
     """Resolved static-token tier: a pre-issued bearer, stripped and non-blank."""
 
     token: str
-    tier: ClassVar[str] = STATIC_TOKEN_TIER
 
 
 @dataclass(frozen=True)
@@ -54,7 +52,6 @@ class ServiceAccountAuth:
     """Resolved service-account tier: the OAuth2 client-credentials inputs."""
 
     credentials: ServiceAccount
-    tier: ClassVar[str] = SERVICE_ACCOUNT_TIER
 
 
 @dataclass(frozen=True)
@@ -67,13 +64,12 @@ class StoredSessionAuth:
     """
 
     oidc_client: OidcClient
-    tier: ClassVar[str] = STORED_SESSION_TIER
 
 
 # The credential precedence chain, parsed into the tier that won.
-# :func:`resolve_pipefy_auth` is the parser; the ``tier`` attribute on each
-# variant carries the wire-schema name (e.g. ``"stored-session"``) so consumers
-# read it directly rather than recovering it from a built ``httpx.Auth``.
+# :func:`resolve_pipefy_auth` is the parser; consumers branch on the variant
+# (``isinstance`` / ``match``) rather than recovering the tier from a built
+# ``httpx.Auth``.
 ResolvedAuth = StaticTokenAuth | ServiceAccountAuth | StoredSessionAuth
 
 
@@ -119,10 +115,9 @@ def resolve_pipefy_auth(
 
     Short-circuits at the first tier that resolves; lower tiers are never
     inspected. The returned :data:`ResolvedAuth` variant carries the tier
-    identity in its type (and its ``tier`` attribute), so callers read the
-    decision directly rather than recovering it from a built ``httpx.Auth``.
-    Pass the result to :func:`build_httpx_auth` to obtain the transport's
-    ``httpx.Auth``.
+    identity in its type, so callers branch on it directly rather than
+    recovering the decision from a built ``httpx.Auth``. Pass the result to
+    :func:`build_httpx_auth` to obtain the transport's ``httpx.Auth``.
 
     For an enumeration of every detected tier (e.g. for diagnostics), call
     :func:`detect_pipefy_tiers` instead.

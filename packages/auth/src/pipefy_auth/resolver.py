@@ -166,20 +166,22 @@ def detect_pipefy_tiers(
     static_token: str | None = None,
     service_account: ServiceAccount | None = None,
     oidc_client: OidcClient | None = None,
-) -> list[str]:
+) -> list[ResolvedAuth]:
     """Return every tier with credentials available, highest-precedence first.
 
-    Used by ``pipefy auth status`` to surface masked sources alongside the
-    winner. Does not short-circuit — every tier's detection runs (including
-    the keychain read for the stored-session tier).
+    The non-short-circuiting sibling of :func:`resolve_pipefy_auth`: it parses
+    each configured tier into the same :data:`ResolvedAuth` variant rather than
+    stopping at the winner, so ``pipefy auth status`` can surface masked sources
+    alongside the active one. Runs every tier's detection, including the
+    keychain read for the stored-session tier.
     """
-    detected: list[str] = []
+    detected: list[ResolvedAuth] = []
     if static_token and static_token.strip():
-        detected.append(STATIC_TOKEN_TIER)
+        detected.append(StaticTokenAuth(static_token.strip()))
     if service_account is not None:
-        detected.append(SERVICE_ACCOUNT_TIER)
+        detected.append(ServiceAccountAuth(service_account))
     if oidc_client is not None and _has_stored_session(oidc_client):
-        detected.append(STORED_SESSION_TIER)
+        detected.append(StoredSessionAuth(oidc_client))
     return detected
 
 

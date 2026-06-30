@@ -14,9 +14,6 @@ from pipefy_auth.bearer import (
 from pipefy_auth.identity import OidcClient
 from pipefy_auth.refresh import RefreshError
 from pipefy_auth.resolver import (
-    SERVICE_ACCOUNT_TIER,
-    STATIC_TOKEN_TIER,
-    STORED_SESSION_TIER,
     ServiceAccount,
     ServiceAccountAuth,
     StaticTokenAuth,
@@ -151,7 +148,7 @@ def test_detect_omits_stored_session_when_oidc_client_is_none(monkeypatch):
         service_account=_service_account(),
         oidc_client=None,
     )
-    assert tiers == [STATIC_TOKEN_TIER, SERVICE_ACCOUNT_TIER]
+    assert [type(tier) for tier in tiers] == [StaticTokenAuth, ServiceAccountAuth]
 
 
 @pytest.mark.unit
@@ -187,10 +184,10 @@ def test_detect_lists_every_configured_tier_in_precedence_order(monkeypatch):
         service_account=_service_account(),
         oidc_client=_oidc(),
     )
-    assert tiers == [
-        STATIC_TOKEN_TIER,
-        SERVICE_ACCOUNT_TIER,
-        STORED_SESSION_TIER,
+    assert [type(tier) for tier in tiers] == [
+        StaticTokenAuth,
+        ServiceAccountAuth,
+        StoredSessionAuth,
     ]
 
 
@@ -198,7 +195,7 @@ def test_detect_lists_every_configured_tier_in_precedence_order(monkeypatch):
 def test_detect_skips_tiers_without_credentials(monkeypatch):
     monkeypatch.setattr("pipefy_auth.resolver.load_session", lambda **_: None)
     tiers = detect_pipefy_tiers(static_token="T", service_account=_service_account())
-    assert tiers == [STATIC_TOKEN_TIER, SERVICE_ACCOUNT_TIER]
+    assert [type(tier) for tier in tiers] == [StaticTokenAuth, ServiceAccountAuth]
 
 
 @pytest.mark.unit

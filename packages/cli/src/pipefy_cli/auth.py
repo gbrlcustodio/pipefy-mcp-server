@@ -12,15 +12,16 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
-from typing import Literal
+from typing import Final, Literal, assert_never
 
 import typer
 from pipefy_auth import (
-    STATIC_TOKEN_TIER,
     OidcClient,
     RefreshError,
     ResolvedAuth,
     ServiceAccount,
+    ServiceAccountAuth,
+    StaticTokenAuth,
     StoredSessionAuth,
     build_httpx_auth,
     detect_pipefy_tiers,
@@ -37,8 +38,21 @@ from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 
 # Display labels for ``pipefy auth status``. The resolver knows the
 # static-token tier; the CLI restores the flag-vs-env distinction here.
-FLAG_TOKEN_SOURCE = "flag-token"
-ENV_TOKEN_SOURCE = "env-token"
+FLAG_TOKEN_SOURCE: Final = "flag-token"
+ENV_TOKEN_SOURCE: Final = "env-token"
+
+# Locked JSON wire schema for ``pipefy auth status``: the resolver tier names,
+# with the static-token tier split into the CLI's flag-vs-env surfaces, plus an
+# explicit ``"none"`` sentinel for when no tier resolved. Produced by
+# :func:`detect_cli_sources` / :func:`_to_display_source`; ``commands.auth``
+# renders it.
+DisplaySource = Literal[
+    "flag-token",
+    "env-token",
+    "service-account",
+    "stored-session",
+    "none",
+]
 
 
 @dataclass(frozen=True)
@@ -82,7 +96,8 @@ def clear_authenticated_client_cache() -> None:
     _cached_client = None
 
 
-def _resolve(auth: AuthContext) -> ResolvedAuth | None:
+def resolve_cli_auth(auth: AuthContext) -> ResolvedAuth | None:
+    """Resolve the highest-precedence tier for a CLI invocation, or ``None``."""
     return resolve_pipefy_auth(
         static_token=auth.bearer_token.value if auth.bearer_token else None,
         service_account=auth.service_account,
@@ -90,25 +105,39 @@ def _resolve(auth: AuthContext) -> ResolvedAuth | None:
     )
 
 
-def _to_display_source(tier: str, bearer: BearerToken | None) -> str:
-    """Map a resolver tier name to the locked JSON wire schema for ``auth status``."""
-    if tier == STATIC_TOKEN_TIER:
-        return (
-            FLAG_TOKEN_SOURCE
-            if bearer and bearer.source == "flag"
-            else ENV_TOKEN_SOURCE
+def _to_display_source(
+    resolved: ResolvedAuth, bearer: BearerToken | None
+) -> DisplaySource:
+    """Map a resolved tier to its locked ``auth status`` wire value.
+
+    The static-token tier splits into the flag-vs-env distinction the CLI
+    surfaces; the other tiers map to their resolver wire name unchanged.
+    """
+    match resolved:
+        case StaticTokenAuth():
+            return (
+                FLAG_TOKEN_SOURCE
+                if bearer and bearer.source == "flag"
+                else ENV_TOKEN_SOURCE
+            )
+        case ServiceAccountAuth():
+            return "service-account"
+        case StoredSessionAuth():
+            return "stored-session"
+        case _:
+            assert_never(resolved)
+
+
+def detect_cli_sources(auth: AuthContext) -> list[DisplaySource]:
+    """Return detected sources mapped to CLI display labels, precedence-first."""
+    return [
+        _to_display_source(resolved, auth.bearer_token)
+        for resolved in detect_pipefy_tiers(
+            static_token=auth.bearer_token.value if auth.bearer_token else None,
+            service_account=auth.service_account,
+            oidc_client=auth.oidc_client,
         )
-    return tier
-
-
-def detect_cli_sources(auth: AuthContext) -> list[str]:
-    """Return detected sources mapped to CLI display labels."""
-    detected = detect_pipefy_tiers(
-        static_token=auth.bearer_token.value if auth.bearer_token else None,
-        service_account=auth.service_account,
-        oidc_client=auth.oidc_client,
-    )
-    return [_to_display_source(tier, auth.bearer_token) for tier in detected]
+    ]
 
 
 def _cache_key(
@@ -147,7 +176,7 @@ def get_authenticated_client(
     """
     global _cached_signature, _cached_client
 
-    resolved = _resolve(auth)
+    resolved = resolve_cli_auth(auth)
     if resolved is None:
         typer.echo(f"{missing_auth_message()} See {DOCS_CLI_AUTH_REF}.", err=True)
         raise typer.Exit(2)
@@ -184,9 +213,11 @@ def get_authenticated_client(
 __all__ = [
     "AuthContext",
     "BearerToken",
+    "DisplaySource",
     "ENV_TOKEN_SOURCE",
     "FLAG_TOKEN_SOURCE",
     "clear_authenticated_client_cache",
     "detect_cli_sources",
     "get_authenticated_client",
+    "resolve_cli_auth",
 ]

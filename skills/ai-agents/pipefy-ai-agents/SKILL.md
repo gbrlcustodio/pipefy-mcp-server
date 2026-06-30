@@ -128,7 +128,6 @@ Use real values from `get_pipe` / `get_start_form_fields` for your org. Placehol
 - Pipe relations exist for `create_connected_card`
 - Action types are valid
 - Behavior structure passes Pydantic validation
-- Service-account membership on cross-pipe targets when `PIPEFY_SERVICE_ACCOUNT_IDS` is set
 - Field IDs are checked against start-form and phase fields, accepting both slug `id` and numeric `internal_id`. Placeholders like `%{field:<slug>}` or `%{field:<internal_id>}` are validated but **not rewritten** at this step.
 
 ### 7 — Create the agent
@@ -215,7 +214,7 @@ Per behavior you can pass `template_params` (or `placeholders`) with `str → st
 - **`update_ai_agent` is full-replace, not patch.** Fetch existing behaviors with `get_ai_agent` first, merge, then update — otherwise existing behaviors are silently dropped.
 - **Behavior save is all-or-nothing (`RECORD_NOT_SAVED`).** One invalid behavior rejects the entire list. The MCP tool auto-validates the payload on failure; if structurally correct, the error indicates a pipe-level restriction (not your payload). Inform the user this pipe does not support AI agent behaviors and suggest alternatives.
 - **Partial-failure recovery.** If `create_ai_agent` returns a UUID but reports failure, call `update_ai_agent` with that UUID. Do NOT create a second agent.
-- **Cross-pipe `PERMISSION_DENIED`.** Behaviors with `create_connected_card` or cross-pipe `create_card` require the service account to be a member of **both** source and destination pipes. `validate_ai_agent_behaviors` catches this when `PIPEFY_SERVICE_ACCOUNT_IDS` is set; otherwise the API returns bare `PERMISSION_DENIED`. Recovery: `get_pipe_members` + `invite_members` on the destination pipe.
+- **Cross-pipe `PERMISSION_DENIED`.** Behaviors with `create_connected_card` or cross-pipe `create_card` require the service account to be a member of **both** source and destination pipes. When it is not, the API returns a bare `PERMISSION_DENIED`. Recovery: `get_pipe_members` + `invite_members` on the destination pipe.
 - **Phase transition rule on `move_card`.** Destination must be reachable from the source phase (`cards_can_be_moved_to_phases`). Both `validate_ai_agent_behaviors` and `create_ai_agent` / `update_ai_agent` enrich this error with `valid_destinations` and a hint that transition rules are editable in the Pipefy UI only.
 - **Maximum 5 behaviors per agent.** Adding a 6th rejects the whole save.
 - **Ghost agents.** An agent listed by `get_ai_agents` may return "Agent not found" on `get_ai_agent` — a Pipefy backend artifact, persists across sessions, do not retry.

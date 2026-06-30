@@ -33,7 +33,6 @@ service_account_client_secret = "..."
 
 # SDK (pipefy_sdk.PipefySettings)
 org_id = "300123"
-service_account_ids = ["42", "43"]
 default_webhook_name = "Pipefy Webhook"
 permission_denied_enrichment_timeout_seconds = 5.0
 gql_reuse_fetched_graphql_schema = false
@@ -73,7 +72,6 @@ Credential variables reject leading and trailing whitespace; `PIPEFY_ORG_ID` (be
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `PIPEFY_ORG_ID` | unset | Convenience: pins a default org for CLI and MCP tools that take an optional `org_id` argument. |
-| `PIPEFY_SERVICE_ACCOUNT_IDS` | `[]` | Comma-separated list (env-var form) or native TOML array (`service_account_ids = ["42", "43"]`). Guards against accidentally treating service-account users as humans in member-management tools. |
 | `PIPEFY_PORTAL_ORG_UUID` | unset | SDK portal integration tests only (`pytest -m integration -k portal`). Set in local `.env` to an organization **UUID** (or numeric org id string) where the active token has **`manage_portals`** (and usually `create_portal`). Never committed; runtime MCP/CLI do not read this. Many default orgs return `PERMISSION_DENIED` on portal writes — pick an org with portal admin scope. See [`mcp/tools/portal.md`](mcp/tools/portal.md#testing). |
 | `PIPEFY_DISABLE_STORED_SESSION` | `0` | Set to `1` (or `disable_stored_session = true` in TOML) to skip the keychain-backed stored-session tier entirely. `pipefy auth login` / `auth logout` refuse with exit code 2 when set. |
 | `PIPEFY_KEYCHAIN_BACKEND` | `auto` | Set to `file` (or `keychain_backend = "file"` in TOML) to use a file-backed plaintext keyring under `~/.config/pipefy/keyring.cfg` (`%APPDATA%\pipefy\keyring.cfg` on Windows). Unblocks headless Linux and CI runners. Plaintext on disk; opt-in only. |

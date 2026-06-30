@@ -551,8 +551,6 @@ async def enrich_permission_denied_error(
     except (TimeoutError, asyncio.TimeoutError):
         return None
 
-    sa_ids = set(_settings_mod.settings.pipefy.service_account_ids)
-
     missing_pipes: list[str] = []
     for pid, result in zip(unique_ids, results):
         if isinstance(result, BaseException):
@@ -568,17 +566,6 @@ async def enrich_permission_denied_error(
                 f"Service account may not be a member of {pipe_name} (ID: {pid}). "
                 f"Use invite_members to add it."
             )
-        elif sa_ids:
-            member_ids = {
-                str(m.get("user", {}).get("id", ""))
-                for m in members
-                if isinstance(m, dict)
-            }
-            if not sa_ids & member_ids:
-                missing_pipes.append(
-                    f"Service account is not a member of {pipe_name} (ID: {pid}). "
-                    f"Use invite_members to add it."
-                )
 
     if not missing_pipes:
         return None

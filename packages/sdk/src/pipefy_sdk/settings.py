@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import Annotated, Self
+from typing import Self
 
 from pipefy_infra import security
 from pipefy_infra.config import PipefyTomlConfigSource
 from pydantic import Field, computed_field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
-    NoDecode,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
@@ -98,14 +97,6 @@ class PipefySettings(BaseSettings):
         ),
     )
 
-    service_account_ids: Annotated[list[str], NoDecode] = Field(
-        default_factory=list,
-        description=(
-            "Pipefy user IDs for service accounts: protected from removal in member tools; "
-            "used for proactive cross-pipe membership checks in validate_ai_agent_behaviors."
-        ),
-    )
-
     permission_denied_enrichment_timeout_seconds: float = Field(
         default=5.0,
         ge=0.1,
@@ -145,18 +136,6 @@ class PipefySettings(BaseSettings):
         if isinstance(value, str):
             return value.strip()
         return value
-
-    @field_validator("service_account_ids", mode="before")
-    @classmethod
-    def _coerce_service_account_ids(cls, value: object) -> list[str]:
-        if value is None or value == "":
-            return []
-        if isinstance(value, list):
-            return [str(item).strip() for item in value if str(item).strip()]
-        if isinstance(value, str):
-            return [part.strip() for part in value.split(",") if part.strip()]
-        msg = "service_account_ids must be a list or a comma-separated string"
-        raise ValueError(msg)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

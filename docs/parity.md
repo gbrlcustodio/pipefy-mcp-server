@@ -138,7 +138,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `list_portals` | `pipefy portal list` | shipped | `--organization-uuid`; at most one main portal per org. |
 | `move_card_to_phase` | `pipefy card move` | shipped | (`--phase`). |
 | `publish_sub_portal` | `pipefy portal sub-portal publish` | shipped | internal_api `updateSubPortalElement` on a templated `forms` element; check `subPortals[].published` via `get_portal`. |
-| `remove_member_from_pipe` | `pipefy member remove` | shipped | ``PIPEFY_SERVICE_ACCOUNT_IDS`` guard like MCP. |
+| `remove_member_from_pipe` | `pipefy member remove` | shipped | — |
 | `search_pipes` | `pipefy pipe list` | shipped | (`--name`, `--max-per-org`). |
 | `search_schema` | `pipefy introspect schema search` | shipped | (optional `--kind`). |
 | `search_tables` | `pipefy table list` | shipped | (without ``--ids``). |

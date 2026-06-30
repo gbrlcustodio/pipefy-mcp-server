@@ -1566,8 +1566,7 @@ Usage: pipefy member [OPTIONS] COMMAND [ARGS]...
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
 │ list       List members of a pipe.                                           │
 │ invite     Invite users to a pipe.                                           │
-│ remove     Remove users from a pipe (same service-account guard as MCP when  │
-│            env is set).                                                      │
+│ remove     Remove users from a pipe.                                         │
 │ set-role   Set a member's role on a pipe.                                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
@@ -1599,7 +1598,7 @@ Usage: pipefy member list [OPTIONS]
 ### HELP member/remove
 Usage: pipefy member remove [OPTIONS]
 
- Remove users from a pipe (same service-account guard as MCP when env is set).
+ Remove users from a pipe.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --pipe              TEXT  Pipe id. [required]                             │
@@ -1615,10 +1614,6 @@ Usage: pipefy member remove [OPTIONS]
 Usage: pipefy member set-role [OPTIONS]
 
  Set a member's role on a pipe.
-
- When ``PIPEFY_SERVICE_ACCOUNT_IDS`` includes ``--member``, the response gains
- a ``warning`` field reminding callers to preserve write permissions on that
- account (parity with the MCP ``set_role`` tool).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --pipe            TEXT  Pipe id. [required]                               │

@@ -22,34 +22,6 @@ def test_relation_pipe_list_json(runner, clean_pipefy_env, saved_cwd, oauth_env)
     mock_client.get_pipe_relations.assert_awaited_once_with("10")
 
 
-def test_member_remove_blocks_service_account(
-    runner, clean_pipefy_env, saved_cwd, oauth_env, monkeypatch
-):
-    oauth_env("mem-guard")
-    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_IDS", "svc-1")
-    mock_client = MagicMock()
-    with patch(
-        "pipefy_cli.commands._common.get_authenticated_client",
-        return_value=mock_client,
-    ):
-        result = runner.invoke(
-            app,
-            [
-                "member",
-                "remove",
-                "--pipe",
-                "44",
-                "--user-ids",
-                "svc-1",
-                "--yes",
-                "--json",
-            ],
-        )
-    assert result.exit_code == 2
-    assert "Cannot remove service account" in (result.stderr or "")
-    mock_client.remove_members_from_pipe.assert_not_called()
-
-
 def test_member_invite_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("mem-inv")
     mock_client = MagicMock()

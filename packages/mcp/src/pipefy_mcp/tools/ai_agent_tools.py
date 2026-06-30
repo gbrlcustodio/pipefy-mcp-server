@@ -17,7 +17,6 @@ from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
 from pipefy_sdk.ai_preflight import validate_ai_agent_behaviors_sdk
 from pydantic import ValidationError
 
-from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
     build_create_agent_partial_failure,
@@ -634,7 +633,6 @@ class AiAgentTools:
                 client,
                 pid,
                 behaviors,
-                service_account_ids=settings.pipefy.service_account_ids,
                 strict_unknown_action_types=strict_unknown_action_types,
             )
             if not result.get("success"):

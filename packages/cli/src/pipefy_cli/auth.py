@@ -156,8 +156,7 @@ def get_authenticated_client(
 
     # Stored-session: warm up eagerly so refresh failures surface as a clean
     # exit(2) with a "run `pipefy auth login` again" hint instead of leaking
-    # out as a transport error on the first GraphQL call. The variant carries a
-    # non-None oidc_client by construction, so no presence check is needed.
+    # out as a transport error on the first GraphQL call.
     if isinstance(resolved, StoredSessionAuth):
         try:
             ensure_fresh_session(

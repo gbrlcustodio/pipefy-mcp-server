@@ -59,7 +59,12 @@ class ServiceAccountAuth:
 
 @dataclass(frozen=True)
 class StoredSessionAuth:
-    """Resolved stored-session tier: the OIDC client whose keychain session was found."""
+    """Resolved stored-session tier: the OIDC client whose keychain session was found.
+
+    ``oidc_client`` is non-None by construction: :func:`resolve_pipefy_auth` only
+    builds this variant once a keychain session is present, so consumers reach it
+    without a further presence check.
+    """
 
     oidc_client: OidcClient
     tier: ClassVar[str] = STORED_SESSION_TIER

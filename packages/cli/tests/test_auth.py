@@ -298,8 +298,7 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
             side_effect=RefreshError("invalid_grant"),
         ),
     ):
-        # Return the stored-session variant so ``resolved.tier`` is the
-        # stored-session tier and triggers the eager warmup.
+        # Return the stored-session variant so the eager warmup path runs.
         mock_resolve.return_value = StoredSessionAuth(
             OidcClient(issuer_url=_ISSUER, client_id="pipefy-cli")
         )

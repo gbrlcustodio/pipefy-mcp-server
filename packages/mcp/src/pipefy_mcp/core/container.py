@@ -54,8 +54,6 @@ class ServicesContainer:
                 f"{missing_auth_message()} "
                 f"See {DOCS_SETUP_REF} for host-specific install steps."
             )
-        # The variant carries a non-None oidc_client by construction, so the
-        # stored-session tier needs no separate presence check here.
         if isinstance(resolved, StoredSessionAuth):
             try:
                 await asyncio.to_thread(

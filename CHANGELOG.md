@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Removed
 
-- **Auth (breaking)**: removed `pipefy_auth.tier_for` and the internal `_TIER_BY_AUTH_TYPE` reverse-lookup table. They recovered a tier name from a built `httpx.Auth` by `isinstance`; the `ResolvedAuth` variants returned by `resolve_pipefy_auth` now carry their tier directly, so read `resolved.tier` instead.
+- **Auth (breaking)**: removed `pipefy_auth.tier_for` and the internal `_TIER_BY_AUTH_TYPE` reverse-lookup table. They recovered a tier name from a built `httpx.Auth` by `isinstance`; the `ResolvedAuth` variants returned by `resolve_pipefy_auth` now carry the tier in their type, so branch on the variant (`isinstance` / `match`) instead.
 - **SDK / MCP / CLI (breaking)**: retired the `PIPEFY_SERVICE_ACCOUNT_IDS` env var and the `service_account_ids` setting (and its TOML key). This drops the advisory features it fed: the guard that blocked `remove_member_from_pipe` from removing a configured service account, the `set_role` write-permission warning, and the proactive cross-pipe membership check in `validate_ai_agent_behaviors`. The Pipefy API still authorizes every mutation, so removing a service account is recoverable via the Pipefy UI, and the cross-pipe membership requirement now surfaces as a bare `PERMISSION_DENIED` at call time (recover with `get_pipe_members` + `invite_members`). The field was an advisory, single-tenant shadow of a missing platform attribute and had no place in the remote multi-user profile.
 
 ## [0.2.0-beta.4] - 2026-06-19

@@ -66,10 +66,8 @@ class StoredSessionAuth:
     oidc_client: OidcClient
 
 
-# The credential precedence chain, parsed into the tier that won.
-# :func:`resolve_pipefy_auth` is the parser; consumers branch on the variant
-# (``isinstance`` / ``match``) rather than recovering the tier from a built
-# ``httpx.Auth``.
+# The credential precedence chain, parsed into the tier that won:
+# :func:`resolve_pipefy_auth` produces it, :func:`build_httpx_auth` consumes it.
 ResolvedAuth = StaticTokenAuth | ServiceAccountAuth | StoredSessionAuth
 
 
@@ -115,9 +113,8 @@ def resolve_pipefy_auth(
 
     Short-circuits at the first tier that resolves; lower tiers are never
     inspected. The returned :data:`ResolvedAuth` variant carries the tier
-    identity in its type, so callers branch on it directly rather than
-    recovering the decision from a built ``httpx.Auth``. Pass the result to
-    :func:`build_httpx_auth` to obtain the transport's ``httpx.Auth``.
+    identity in its type; pass it to :func:`build_httpx_auth` to obtain the
+    transport's ``httpx.Auth``.
 
     For an enumeration of every detected tier (e.g. for diagnostics), call
     :func:`detect_pipefy_tiers` instead.

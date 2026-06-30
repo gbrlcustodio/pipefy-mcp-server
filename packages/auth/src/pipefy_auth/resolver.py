@@ -14,6 +14,7 @@ display concern handled in CLI code, not a tier here.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import assert_never
 
 from httpx import Auth
 from httpx_auth import OAuth2ClientCredentials
@@ -156,6 +157,8 @@ def build_httpx_auth(resolved: ResolvedAuth) -> Auth:
             )
         case StoredSessionAuth(oidc_client):
             return _stored_session_provider(oidc_client)
+        case _:
+            assert_never(resolved)
 
 
 def detect_pipefy_tiers(

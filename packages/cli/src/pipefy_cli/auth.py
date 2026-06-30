@@ -11,64 +11,28 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
-from typing import Literal
 
 import typer
-from httpx import Auth
 from pipefy_auth import (
     STATIC_TOKEN_TIER,
     STORED_SESSION_TIER,
     CredentialSources,
-    OidcClient,
     RefreshError,
-    ServiceAccount,
     detect_pipefy_tiers,
     ensure_fresh_session,
     missing_auth_message,
     resolve_pipefy_auth,
     tier_for,
 )
-from pipefy_sdk import (
-    PipefyClient,
-    PipefyEndpoints,
-    SdkConfig,
-)
+from pipefy_sdk import PipefyClient
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
+from pipefy_cli.runtime import CliRuntime, TokenSource
 
 # Display labels for ``pipefy auth status``. The resolver knows the
 # static-token tier; the CLI restores the flag-vs-env distinction here.
 FLAG_TOKEN_SOURCE = "flag-token"
 ENV_TOKEN_SOURCE = "env-token"
-
-
-@dataclass(frozen=True)
-class BearerToken:
-    """Static bearer token plus the surface that produced it (``--token`` or env)."""
-
-    value: str
-    source: Literal["flag", "env"]
-
-
-@dataclass(frozen=True)
-class AuthContext:
-    """Auth inputs for a single CLI invocation.
-
-    Each field maps to one resolver tier (bearer-token, service-account,
-    stored-session). Built once at startup from the loaded
-    :class:`pipefy_auth.AuthConfig` plus the per-invocation ``--token`` /
-    ``PIPEFY_TOKEN`` resolution.
-
-    ``oidc_client`` is ``None`` only when ``AuthConfig.disable_stored_session``
-    is set (env: PIPEFY_AUTH_DISABLE_STORED_SESSION); the stored-session tier is
-    then skipped end-to-end. Otherwise ``issuer_url`` defaults to the prod IdP
-    and the client is always present.
-    """
-
-    bearer_token: BearerToken | None
-    service_account: ServiceAccount | None
-    oidc_client: OidcClient | None
 
 
 _cached_signature: str | None = None
@@ -84,52 +48,35 @@ def clear_authenticated_client_cache() -> None:
     _cached_client = None
 
 
-def _credential_sources(auth: AuthContext) -> CredentialSources:
-    return CredentialSources(
-        static_token=auth.bearer_token.value if auth.bearer_token else None,
-        service_account=auth.service_account,
-        oidc_client=auth.oidc_client,
-    )
-
-
-def _resolve(auth: AuthContext) -> Auth | None:
-    return resolve_pipefy_auth(_credential_sources(auth))
-
-
-def _to_display_source(tier: str, bearer: BearerToken | None) -> str:
+def _to_display_source(tier: str, token_source: TokenSource | None) -> str:
     """Map a resolver tier name to the locked JSON wire schema for ``auth status``."""
     if tier == STATIC_TOKEN_TIER:
-        return (
-            FLAG_TOKEN_SOURCE
-            if bearer and bearer.source == "flag"
-            else ENV_TOKEN_SOURCE
-        )
+        return FLAG_TOKEN_SOURCE if token_source == "flag" else ENV_TOKEN_SOURCE
     return tier
 
 
-def detect_cli_sources(auth: AuthContext) -> list[str]:
+def detect_cli_sources(runtime: CliRuntime) -> list[str]:
     """Return detected sources mapped to CLI display labels."""
-    detected = detect_pipefy_tiers(_credential_sources(auth))
-    return [_to_display_source(tier, auth.bearer_token) for tier in detected]
+    detected = detect_pipefy_tiers(runtime.credentials)
+    return [_to_display_source(tier, runtime.token_source) for tier in detected]
 
 
 def _cache_key(
-    sdk_config: SdkConfig,
-    auth: AuthContext,
+    endpoints_dump: str,
+    credentials: CredentialSources,
     tier: str,
 ) -> str:
     """SHA-256 digest of every input that could change the cached client.
 
-    Hashed (not stored as plaintext) so the dump's secrets — the bearer
-    token, the service-account ``client_secret`` — don't linger in module
-    state for the process lifetime. Adding a new field to
-    :class:`SdkConfig` or :class:`AuthContext` automatically participates
-    in the key without touching this function.
+    Hashed (not stored as plaintext) so the credentials — the bearer token, the
+    service-account ``client_secret`` — don't linger in module state for the
+    process lifetime. The endpoints and credential bundle, plus the resolved
+    tier, are the only inputs that vary the wired client.
     """
     payload = json.dumps(
         {
-            "settings": sdk_config.model_dump(mode="json"),
-            "auth": asdict(auth),
+            "endpoints": endpoints_dump,
+            "credentials": credentials.model_dump(mode="json"),
             "tier": tier,
         },
         sort_keys=True,
@@ -138,10 +85,7 @@ def _cache_key(
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def get_authenticated_client(
-    sdk_config: SdkConfig,
-    auth: AuthContext,
-) -> PipefyClient:
+def get_authenticated_client(runtime: CliRuntime) -> PipefyClient:
     """Return a facade client using the highest-precedence available auth source.
 
     Raises:
@@ -150,7 +94,7 @@ def get_authenticated_client(
     """
     global _cached_signature, _cached_client
 
-    resolved = _resolve(auth)
+    resolved = resolve_pipefy_auth(runtime.credentials)
     if resolved is None:
         typer.echo(f"{missing_auth_message()} See {DOCS_CLI_AUTH_REF}.", err=True)
         raise typer.Exit(2)
@@ -160,7 +104,7 @@ def get_authenticated_client(
     # exit(2) with a "run `pipefy auth login` again" hint instead of leaking
     # out as a transport error on the first GraphQL call.
     if tier == STORED_SESSION_TIER:
-        oidc = auth.oidc_client
+        oidc = runtime.credentials.oidc_client
         if oidc is None:
             # Resolver only picks STORED_SESSION_TIER when oidc_client is non-None;
             # reaching here means that invariant is broken.
@@ -181,20 +125,16 @@ def get_authenticated_client(
             )
             raise typer.Exit(2) from exc
 
-    key = _cache_key(sdk_config, auth, tier)
+    key = _cache_key(runtime.endpoints.model_dump_json(), runtime.credentials, tier)
     if _cached_client is not None and _cached_signature == key:
         return _cached_client
 
     client = PipefyClient(
-        PipefyEndpoints(
-            graphql_url=sdk_config.graphql_url,
-            interfaces_graphql_url=sdk_config.interfaces_graphql_url,
-            internal_api_url=sdk_config.internal_api_url,
-        ),
+        runtime.endpoints,
         auth=resolved,
-        allow_insecure_urls=sdk_config.allow_insecure_urls,
-        reuse_schema=sdk_config.gql_reuse_fetched_graphql_schema,
-        default_webhook_name=sdk_config.default_webhook_name,
+        allow_insecure_urls=runtime.allow_insecure_urls,
+        reuse_schema=runtime.reuse_schema,
+        default_webhook_name=runtime.default_webhook_name,
     )
     _cached_signature = key
     _cached_client = client
@@ -202,8 +142,6 @@ def get_authenticated_client(
 
 
 __all__ = [
-    "AuthContext",
-    "BearerToken",
     "ENV_TOKEN_SOURCE",
     "FLAG_TOKEN_SOURCE",
     "clear_authenticated_client_cache",

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import typer
 from pipefy_auth import (
+    CredentialSources,
     OidcClient,
     RefreshableBearerAuth,
     ServiceAccount,
@@ -15,31 +16,32 @@ from pipefy_auth import (
     StoredSession,
     TokenResponse,
 )
-from pipefy_infra.deployment import DeploymentConfig
-from pipefy_sdk import PipefyEndpoints, SdkConfig
+from pipefy_sdk import PipefyEndpoints
 
-from pipefy_cli.auth import (
-    AuthContext,
-    BearerToken,
-    detect_cli_sources,
-    get_authenticated_client,
-)
+from pipefy_cli.auth import detect_cli_sources, get_authenticated_client
 from pipefy_cli.main import app
+from pipefy_cli.runtime import CliRuntime
+
+_BASE = "https://unit.example.com"
 
 
-def _minimal_config() -> SdkConfig:
-    return SdkConfig(deployment=DeploymentConfig(base_url="https://unit.example.com"))
+def _endpoints(base: str = _BASE) -> PipefyEndpoints:
+    return PipefyEndpoints(
+        graphql_url=f"{base}/graphql",
+        interfaces_graphql_url=f"{base}/graphql/interfaces",
+        internal_api_url=f"{base}/internal_api",
+    )
 
 
 def _service_account() -> ServiceAccount:
     return ServiceAccount(
-        token_url="https://unit.example.com/oauth/token",
+        token_url=f"{_BASE}/oauth/token",
         client_id="cid",
         client_secret="csecret",
     )
 
 
-def _auth(
+def _runtime(
     *,
     bearer_token: str | None = None,
     bearer_source: str = "flag",
@@ -47,16 +49,11 @@ def _auth(
     client_id: str | None = None,
     service_account: ServiceAccount | None = None,
     include_service_account: bool = True,
-) -> AuthContext:
-    """Build an :class:`AuthContext` for tests."""
+) -> CliRuntime:
+    """Build a :class:`CliRuntime` for tests."""
     oidc_client = (
         OidcClient(issuer_url=issuer_url, client_id=client_id)
         if issuer_url and client_id
-        else None
-    )
-    bearer = (
-        BearerToken(value=bearer_token, source=bearer_source)  # type: ignore[arg-type]
-        if bearer_token is not None
         else None
     )
     sa = (
@@ -64,18 +61,46 @@ def _auth(
         if service_account is not None
         else (_service_account() if include_service_account else None)
     )
-    return AuthContext(bearer_token=bearer, service_account=sa, oidc_client=oidc_client)
+    credentials = CredentialSources(
+        static_token=bearer_token, service_account=sa, oidc_client=oidc_client
+    )
+    return CliRuntime(
+        endpoints=_endpoints(),
+        allow_insecure_urls=False,
+        reuse_schema=False,
+        default_webhook_name="Pipefy Webhook",
+        credentials=credentials,
+        token_source=(bearer_source if bearer_token else None),  # type: ignore[arg-type]
+        keychain_backend="auto",
+        org_id=None,
+    )
+
+
+def _public_only_runtime(
+    *,
+    bearer_token: str | None = None,
+    bearer_source: str = "flag",
+    issuer_url: str | None = None,
+    client_id: str | None = None,
+) -> CliRuntime:
+    """``CliRuntime`` without a service-account tier (stored-session scenario)."""
+    return _runtime(
+        bearer_token=bearer_token,
+        bearer_source=bearer_source,
+        issuer_url=issuer_url,
+        client_id=client_id,
+        include_service_account=False,
+    )
 
 
 def test_get_authenticated_client_passes_auth_to_pipefy_client(clean_pipefy_env):
-    sdk_config = _minimal_config()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
-        client = get_authenticated_client(sdk_config, _auth(bearer_token="tok"))
+        client = get_authenticated_client(_runtime(bearer_token="tok"))
         kwargs = mock_pc.call_args.kwargs
         endpoints = mock_pc.call_args.args[0]
         assert isinstance(endpoints, PipefyEndpoints)
-        assert endpoints.graphql_url == sdk_config.graphql_url
+        assert endpoints.graphql_url == f"{_BASE}/graphql"
         assert isinstance(kwargs["auth"], StaticBearerAuth)
         assert client is mock_pc.return_value
 
@@ -83,17 +108,16 @@ def test_get_authenticated_client_passes_auth_to_pipefy_client(clean_pipefy_env)
 def test_cache_returns_same_instance_for_identical_service_account_settings(
     clean_pipefy_env,
 ):
-    sdk_config = _minimal_config()
     with patch("pipefy_cli.auth.PipefyClient") as mock_pc:
         mock_pc.return_value = MagicMock()
-        first = get_authenticated_client(sdk_config, _auth())
-        second = get_authenticated_client(sdk_config, _auth())
+        first = get_authenticated_client(_runtime())
+        second = get_authenticated_client(_runtime())
         assert first is second
         assert mock_pc.call_count == 1
 
 
 def test_empty_base_url_exits_2_cli(clean_pipefy_env, saved_cwd, monkeypatch, runner):
-    """``PIPEFY_BASE_URL=""`` is rejected at settings load and surfaces as exit 2."""
+    """``PIPEFY_BASE_URL=""`` is rejected at runtime load and surfaces as exit 2."""
     monkeypatch.setenv("PIPEFY_BASE_URL", "")
     result = runner.invoke(app, ["card", "get", "123"])
     assert result.exit_code == 2
@@ -138,8 +162,9 @@ def test_cli_uses_pipefy_token_env_when_no_flag(
         result = runner.invoke(app, ["card", "get", "77"])
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
     mock_gc.assert_called_once()
-    auth_arg = mock_gc.call_args.args[1]
-    assert auth_arg.bearer_token == BearerToken(value="secret-from-env", source="env")
+    runtime_arg = mock_gc.call_args.args[0]
+    assert runtime_arg.credentials.static_token == "secret-from-env"
+    assert runtime_arg.token_source == "env"
 
 
 # --------------------------------------------------------------------------- #
@@ -149,13 +174,13 @@ def test_cli_uses_pipefy_token_env_when_no_flag(
 
 def test_detect_cli_sources_maps_static_token_to_flag_label(clean_pipefy_env):
     """``--token`` source surfaces as the locked ``flag-token`` wire value."""
-    sources = detect_cli_sources(_auth(bearer_token="t", bearer_source="flag"))
+    sources = detect_cli_sources(_runtime(bearer_token="t", bearer_source="flag"))
     assert sources[0] == "flag-token"
 
 
 def test_detect_cli_sources_maps_env_token_to_env_label(clean_pipefy_env):
     """``PIPEFY_TOKEN`` source surfaces as the locked ``env-token`` wire value."""
-    sources = detect_cli_sources(_auth(bearer_token="t", bearer_source="env"))
+    sources = detect_cli_sources(_runtime(bearer_token="t", bearer_source="env"))
     assert sources[0] == "env-token"
 
 
@@ -182,31 +207,8 @@ def _fresh_stored_session(*, access_token: str = "SESSION_ACCESS") -> StoredSess
     )
 
 
-def _public_only_config() -> SdkConfig:
-    """``PIPEFY_SERVICE_ACCOUNT_*`` pair absent -> service-account tier unavailable, stored session wins."""
-    return SdkConfig(deployment=DeploymentConfig(base_url="https://unit.example.com"))
-
-
-def _public_only_auth(
-    *,
-    bearer_token: str | None = None,
-    bearer_source: str = "flag",
-    issuer_url: str | None = None,
-    client_id: str | None = None,
-) -> AuthContext:
-    """``AuthContext`` without a service-account tier (stored-session scenario)."""
-    return _auth(
-        bearer_token=bearer_token,
-        bearer_source=bearer_source,
-        issuer_url=issuer_url,
-        client_id=client_id,
-        include_service_account=False,
-    )
-
-
 def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
     """The static-token tier MUST short-circuit before the keychain is even consulted."""
-    sdk_config = _minimal_config()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_auth.resolver.load_session") as mock_load,
@@ -214,8 +216,7 @@ def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(
-            sdk_config,
-            _auth(
+            _runtime(
                 bearer_token="explicit-bearer",
                 issuer_url=_ISSUER,
                 client_id="pipefy-cli",
@@ -228,7 +229,6 @@ def test_bearer_token_wins_over_stored_session(clean_pipefy_env):
 
 def test_service_account_creds_win_over_stored_session(clean_pipefy_env):
     """The service-account tier MUST short-circuit before the keychain is consulted."""
-    sdk_config = _minimal_config()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
         patch("pipefy_auth.resolver.load_session") as mock_load,
@@ -236,8 +236,7 @@ def test_service_account_creds_win_over_stored_session(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(
-            sdk_config,
-            _auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
+            _runtime(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         mock_pc.assert_called_once()
         mock_ensure.assert_not_called()
@@ -246,7 +245,6 @@ def test_service_account_creds_win_over_stored_session(clean_pipefy_env):
 
 def test_stored_session_used_when_no_other_source(clean_pipefy_env):
     """Stored-session tier activates when bearer absent and service-account triple incomplete."""
-    sdk_config = _public_only_config()
     session = _fresh_stored_session()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
@@ -255,8 +253,7 @@ def test_stored_session_used_when_no_other_source(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         get_authenticated_client(
-            sdk_config,
-            _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
+            _public_only_runtime(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         mock_pc.assert_called_once()
         assert isinstance(mock_pc.call_args.kwargs["auth"], RefreshableBearerAuth)
@@ -264,7 +261,6 @@ def test_stored_session_used_when_no_other_source(clean_pipefy_env):
 
 def test_cache_reuses_resolved_auth_for_stored_session(clean_pipefy_env):
     """Two stored-session calls with identical OIDC inputs reuse the cached client."""
-    sdk_config = _public_only_config()
     stored = _fresh_stored_session()
     with (
         patch("pipefy_cli.auth.PipefyClient") as mock_pc,
@@ -273,12 +269,10 @@ def test_cache_reuses_resolved_auth_for_stored_session(clean_pipefy_env):
     ):
         mock_pc.return_value = MagicMock()
         first = get_authenticated_client(
-            sdk_config,
-            _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
+            _public_only_runtime(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         second = get_authenticated_client(
-            sdk_config,
-            _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
+            _public_only_runtime(issuer_url=_ISSUER, client_id="pipefy-cli"),
         )
         assert first is second
         assert mock_pc.call_count == 1
@@ -288,7 +282,6 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
     """RefreshError from the eager warmup surfaces as exit(2) + relogin message."""
     from pipefy_auth import RefreshError
 
-    sdk_config = _public_only_config()
     with (
         patch(
             "pipefy_auth.resolver.load_session", return_value=_fresh_stored_session()
@@ -307,8 +300,7 @@ def test_refresh_error_exits_2_with_relogin_hint(clean_pipefy_env, capsys):
         )
         with pytest.raises(typer.Exit) as excinfo:
             get_authenticated_client(
-                sdk_config,
-                _public_only_auth(issuer_url=_ISSUER, client_id="pipefy-cli"),
+                _public_only_runtime(issuer_url=_ISSUER, client_id="pipefy-cli"),
             )
         assert excinfo.value.exit_code == 2
     err = capsys.readouterr().err

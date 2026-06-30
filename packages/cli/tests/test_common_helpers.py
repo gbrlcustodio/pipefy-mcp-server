@@ -159,34 +159,25 @@ def test_run_pipefy_client_coroutine_runs_factory_and_returns(monkeypatch):
 
     captured: dict[str, Any] = {}
 
-    def fake_get_client(settings: object, auth: object) -> object:
-        captured["settings"] = settings
-        bearer = auth.bearer_token  # type: ignore[attr-defined]
-        captured["bearer_token"] = bearer.value if bearer is not None else None
+    def fake_get_client(runtime: object) -> object:
+        captured["runtime"] = runtime
+        captured["bearer_token"] = runtime.credentials.static_token  # type: ignore[attr-defined]
         return "client-instance"
 
     async def factory(client: object) -> str:
         captured["received_client"] = client
         return "done"
 
-    sentinel_settings = object()
-    sentinel_auth = _common.AuthContext(
-        bearer_token=_common.BearerToken(value="abc", source="flag"),
-        service_account=None,
-        oidc_client=None,
-    )
+    sentinel_runtime = MagicMock()
+    sentinel_runtime.credentials.static_token = "abc"
     monkeypatch.setattr(_common, "get_authenticated_client", fake_get_client)
-    monkeypatch.setattr(
-        _common,
-        "settings_and_auth_from_ctx",
-        lambda ctx: (sentinel_settings, sentinel_auth),
-    )
+    monkeypatch.setattr(_common, "runtime_from_ctx", lambda ctx: sentinel_runtime)
 
     result = run_pipefy_client_coroutine(MagicMock(), factory)
 
     assert result == "done"
     assert captured == {
-        "settings": sentinel_settings,
+        "runtime": sentinel_runtime,
         "bearer_token": "abc",
         "received_client": "client-instance",
     }
@@ -202,19 +193,8 @@ def test_run_pipefy_client_coroutine_maps_pipefy_error_to_exit_1(monkeypatch):
     from pipefy_cli.commands import _common
     from pipefy_cli.commands._common import run_pipefy_client_coroutine
 
-    monkeypatch.setattr(
-        _common, "get_authenticated_client", lambda settings, auth: object()
-    )
-    monkeypatch.setattr(
-        _common,
-        "settings_and_auth_from_ctx",
-        lambda ctx: (
-            object(),
-            _common.AuthContext(
-                bearer_token=None, service_account=None, oidc_client=None
-            ),
-        ),
-    )
+    monkeypatch.setattr(_common, "get_authenticated_client", lambda runtime: object())
+    monkeypatch.setattr(_common, "runtime_from_ctx", lambda ctx: object())
 
     async def factory(client: object) -> str:
         raise PipefyError("graphql denied")
@@ -230,19 +210,8 @@ def test_run_pipefy_client_coroutine_maps_value_error_when_configured(monkeypatc
     from pipefy_cli.commands import _common
     from pipefy_cli.commands._common import run_pipefy_client_coroutine
 
-    monkeypatch.setattr(
-        _common, "get_authenticated_client", lambda settings, auth: object()
-    )
-    monkeypatch.setattr(
-        _common,
-        "settings_and_auth_from_ctx",
-        lambda ctx: (
-            object(),
-            _common.AuthContext(
-                bearer_token=None, service_account=None, oidc_client=None
-            ),
-        ),
-    )
+    monkeypatch.setattr(_common, "get_authenticated_client", lambda runtime: object())
+    monkeypatch.setattr(_common, "runtime_from_ctx", lambda ctx: object())
 
     async def factory(client: object) -> None:
         raise ValueError("Export failed (state='failed').")
@@ -258,19 +227,8 @@ def test_run_pipefy_client_coroutine_broken_pipe_exits_0(monkeypatch):
     from pipefy_cli.commands import _common
     from pipefy_cli.commands._common import run_pipefy_client_coroutine
 
-    monkeypatch.setattr(
-        _common, "get_authenticated_client", lambda settings, auth: object()
-    )
-    monkeypatch.setattr(
-        _common,
-        "settings_and_auth_from_ctx",
-        lambda ctx: (
-            object(),
-            _common.AuthContext(
-                bearer_token=None, service_account=None, oidc_client=None
-            ),
-        ),
-    )
+    monkeypatch.setattr(_common, "get_authenticated_client", lambda runtime: object())
+    monkeypatch.setattr(_common, "runtime_from_ctx", lambda ctx: object())
 
     async def factory(client: object) -> None:
         raise BrokenPipeError()

@@ -31,16 +31,16 @@ from pipefy_auth import (
     run_login,
     store_session,
 )
-from pipefy_sdk import MePayload, SdkConfig
+from pipefy_sdk import MePayload
 
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
-    AuthContext,
     detect_cli_sources,
     get_authenticated_client,
 )
-from pipefy_cli.commands._common import settings_and_auth_from_ctx
+from pipefy_cli.commands._common import runtime_from_ctx
 from pipefy_cli.output import render_json
+from pipefy_cli.runtime import CliRuntime
 
 # Locked JSON wire schema. Matches the policy ``name`` field produced by
 # :func:`pipefy_cli.auth.build_policies` (so the resolver's identifiers reach
@@ -137,8 +137,9 @@ def auth_login(
     # Lazy to keep keyring's ~30-80ms backend-discovery cost off every CLI startup.
     from keyring.errors import KeyringError
 
-    settings, auth = settings_and_auth_from_ctx(ctx)
-    if auth.oidc_client is None:
+    runtime = runtime_from_ctx(ctx)
+    oidc_client = runtime.credentials.oidc_client
+    if oidc_client is None:
         typer.echo(
             "Stored sessions are disabled (PIPEFY_AUTH_DISABLE_STORED_SESSION=1 or "
             "disable_stored_session=true under [auth] in config.toml). Unset to log in, or "
@@ -146,8 +147,8 @@ def auth_login(
             err=True,
         )
         raise typer.Exit(2)
-    issuer_url = auth.oidc_client.issuer_url
-    client_id = auth.oidc_client.client_id
+    issuer_url = oidc_client.issuer_url
+    client_id = oidc_client.client_id
     typer.echo(f"Signing in to Pipefy at {issuer_url} ...")
 
     def _print_url(url: str) -> None:
@@ -173,7 +174,7 @@ def auth_login(
             open_browser=_open,
             on_url=_print_url,
             discovery_policy=DiscoveryPolicy(
-                allow_insecure_urls=settings.allow_insecure_urls
+                allow_insecure_urls=runtime.allow_insecure_urls
             ),
         )
     except LoginError as exc:
@@ -391,11 +392,9 @@ def _populate_stored_session(report: AuthStatusReport, oidc: OidcClient) -> None
     )
 
 
-def _fetch_identity(
-    report: AuthStatusReport, settings: SdkConfig, auth: AuthContext
-) -> None:
+def _fetch_identity(report: AuthStatusReport, runtime: CliRuntime) -> None:
     """Populate ``report.identity``; raise ``_StatusExit`` on transport / 401."""
-    client = get_authenticated_client(settings, auth)
+    client = get_authenticated_client(runtime)
     try:
         report.identity = asyncio.run(client.get_me())
     except TransportServerError as exc:
@@ -424,8 +423,8 @@ def auth_status(
     ),
 ) -> None:
     """Print which auth source is active, the authenticated identity, and session expiry."""
-    settings, auth = settings_and_auth_from_ctx(ctx)
-    detected_names = detect_cli_sources(auth)
+    runtime = runtime_from_ctx(ctx)
+    detected_names = detect_cli_sources(runtime)
     # The locked JSON wire schema matches the policy names exactly; cast for
     # typing only — values are already constrained by ``build_policies``.
     detected: list[DisplaySource] = [
@@ -444,7 +443,7 @@ def auth_status(
         if source == "none":
             raise _StatusExit(report=report, exit_code=2)
         if source == "stored-session":
-            if auth.oidc_client is None:
+            if runtime.credentials.oidc_client is None:
                 # ``stored-session`` only enters ``detected`` when ``oidc_client``
                 # is non-None (resolver gates the tier on it); reaching here
                 # means that invariant is broken.
@@ -452,8 +451,8 @@ def auth_status(
                     "stored-session detected without an OIDC client "
                     "(resolver invariant broken)."
                 )
-            _populate_stored_session(report, auth.oidc_client)
-        _fetch_identity(report, settings, auth)
+            _populate_stored_session(report, runtime.credentials.oidc_client)
+        _fetch_identity(report, runtime)
     except _StatusExit as exit_:
         _render(exit_.report, json_out=json_out)
         if exit_.stderr and not json_out:
@@ -466,16 +465,17 @@ def auth_status(
 @auth_app.command("logout")
 def auth_logout(ctx: typer.Context) -> None:
     """Revoke the stored refresh token at the IdP and clear the local session."""
-    settings, auth = settings_and_auth_from_ctx(ctx)
-    if auth.oidc_client is None:
+    runtime = runtime_from_ctx(ctx)
+    oidc_client = runtime.credentials.oidc_client
+    if oidc_client is None:
         typer.echo(
             "Stored sessions are disabled (PIPEFY_AUTH_DISABLE_STORED_SESSION=1 or "
             "disable_stored_session=true under [auth] in config.toml). Nothing to do.",
             err=True,
         )
         raise typer.Exit(2)
-    issuer = auth.oidc_client.issuer_url
-    client_id = auth.oidc_client.client_id
+    issuer = oidc_client.issuer_url
+    client_id = oidc_client.client_id
 
     session = load_session(issuer=issuer, client_id=client_id)
     if session is None:
@@ -492,7 +492,7 @@ def auth_logout(ctx: typer.Context) -> None:
             issuer=issuer,
             client_id=client_id,
             refresh_token=session.token.refresh_token,
-            policy=DiscoveryPolicy(allow_insecure_urls=settings.allow_insecure_urls),
+            policy=DiscoveryPolicy(allow_insecure_urls=runtime.allow_insecure_urls),
         )
     except RevocationUnsupportedError:
         revoke_warning = (

@@ -6,7 +6,6 @@ import typer
 from pipefy_auth import configure_keychain_backend
 
 from pipefy_cli import __version__ as _cli_version
-from pipefy_cli.auth import BearerToken
 from pipefy_cli.commands.agent import agent_app
 from pipefy_cli.commands.ai_automation import ai_automation_app
 from pipefy_cli.commands.attachment import attachment_app
@@ -33,7 +32,7 @@ from pipefy_cli.commands.report_pipe import report_pipe_app
 from pipefy_cli.commands.table import table_app
 from pipefy_cli.commands.usage import usage_app
 from pipefy_cli.commands.webhook import webhook_app
-from pipefy_cli.settings import resolve_cli_settings
+from pipefy_cli.runtime import resolve_cli_runtime
 
 app = typer.Typer(
     name="pipefy",
@@ -81,28 +80,18 @@ def main(
     """Global options apply to all subcommands."""
     ctx.ensure_object(dict)
     try:
-        cli_settings = resolve_cli_settings(
+        runtime = resolve_cli_runtime(
             base_url_flag=base_url,
             allow_insecure_urls_flag=allow_insecure_urls,
+            token_flag=token,
         )
     except ValueError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
-    ctx.obj["sdk_config"] = cli_settings.pipefy
-    ctx.obj["auth_config"] = cli_settings.auth
-    ctx.obj["org_id"] = cli_settings.org_id
+    ctx.obj["runtime"] = runtime
     # Swap the keyring backend before any keychain probe (resolver tier
     # detection, ``auth login``, ``auth status``). No-op when ``auto``.
-    configure_keychain_backend(cli_settings.auth.keychain_backend)
-    cli_token = token.strip() if token else None
-    bearer: BearerToken | None
-    if cli_token:
-        bearer = BearerToken(value=cli_token, source="flag")
-    elif cli_settings.auth.static_token:
-        bearer = BearerToken(value=cli_settings.auth.static_token, source="env")
-    else:
-        bearer = None
-    ctx.obj["token"] = bearer
+    configure_keychain_backend(runtime.keychain_backend)
 
 
 app.add_typer(agent_app, name="agent")

@@ -1,4 +1,4 @@
-"""Tests for the CLI composition root (one injected DeploymentConfig)."""
+"""Tests for the CLI composition root (resolve_cli_runtime -> CliRuntime)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,14 @@ import textwrap
 
 import pytest
 
-from pipefy_cli.settings import resolve_cli_settings
+from pipefy_cli.runtime import resolve_cli_runtime
+
+
+def _resolve(**kw):
+    kw.setdefault("base_url_flag", None)
+    kw.setdefault("allow_insecure_urls_flag", None)
+    kw.setdefault("token_flag", None)
+    return resolve_cli_runtime(**kw)
 
 
 def test_env_only_resolution(
@@ -18,32 +25,39 @@ def test_env_only_resolution(
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "env-client")
     monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "env-secret")
 
-    resolved = resolve_cli_settings(
-        base_url_flag=None,
-        allow_insecure_urls_flag=None,
-    )
+    runtime = _resolve()
 
-    assert resolved.pipefy.deployment.base_url == "https://env-only.example.com"
-    assert resolved.pipefy.graphql_url == "https://env-only.example.com/graphql"
+    assert runtime.endpoints.graphql_url == "https://env-only.example.com/graphql"
     assert (
-        resolved.pipefy.internal_api_url == "https://env-only.example.com/internal_api"
+        runtime.endpoints.internal_api_url
+        == "https://env-only.example.com/internal_api"
     )
-    sa = resolved.auth.to_service_account()
+    sa = runtime.credentials.service_account
     assert sa is not None
     assert sa.token_url == "https://env-only.example.com/oauth/token"
-    assert resolved.auth.service_account_credentials.client_id == "env-client"
-    assert resolved.auth.service_account_credentials.client_secret == "env-secret"
+    assert sa.client_id == "env-client"
+    assert sa.client_secret == "env-secret"
 
 
-def test_pipefy_and_auth_share_one_deployment(
+def test_endpoints_and_token_url_share_one_host(
     clean_pipefy_env,
     saved_cwd,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """The SDK and auth configs are injected the SAME DeploymentConfig instance."""
+    """The SDK endpoints and the service-account token URL derive from one host.
+
+    Structurally guaranteed: resolve_cli_runtime builds ONE DeploymentConfig and
+    feeds it to both loaders, so the endpoints and the OAuth token URL cannot
+    drift onto different hosts.
+    """
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://shared.example.com")
-    resolved = resolve_cli_settings(base_url_flag=None, allow_insecure_urls_flag=None)
-    assert resolved.pipefy.deployment is resolved.auth.deployment
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
+    runtime = _resolve()
+    assert runtime.endpoints.graphql_url == "https://shared.example.com/graphql"
+    assert runtime.credentials.service_account.token_url == (
+        "https://shared.example.com/oauth/token"
+    )
 
 
 def test_dotenv_only_resolution(
@@ -63,13 +77,10 @@ def test_dotenv_only_resolution(
         encoding="utf-8",
     )
 
-    resolved = resolve_cli_settings(
-        base_url_flag=None,
-        allow_insecure_urls_flag=None,
-    )
+    runtime = _resolve()
 
-    assert resolved.pipefy.deployment.base_url == "https://dotenv.example.com"
-    assert resolved.auth.service_account_credentials.client_id == "dotenv-client"
+    assert runtime.endpoints.graphql_url == "https://dotenv.example.com/graphql"
+    assert runtime.credentials.service_account.client_id == "dotenv-client"
 
 
 def test_process_env_overrides_dotenv(
@@ -84,12 +95,9 @@ def test_process_env_overrides_dotenv(
     )
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://from-process.example.com")
 
-    resolved = resolve_cli_settings(
-        base_url_flag=None,
-        allow_insecure_urls_flag=None,
-    )
+    runtime = _resolve()
 
-    assert resolved.pipefy.deployment.base_url == "https://from-process.example.com"
+    assert runtime.endpoints.graphql_url == "https://from-process.example.com/graphql"
 
 
 def test_base_url_flag_overrides_env(
@@ -99,21 +107,18 @@ def test_base_url_flag_overrides_env(
 ):
     """``--base-url`` outranks ``PIPEFY_BASE_URL`` for the one shared deployment."""
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://from-env.example.com")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_ID", "cid")
+    monkeypatch.setenv("PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET", "sec")
 
-    resolved = resolve_cli_settings(
-        base_url_flag="https://from-flag.example.com",
-        allow_insecure_urls_flag=None,
-    )
+    runtime = _resolve(base_url_flag="https://from-flag.example.com")
 
-    assert resolved.pipefy.deployment.base_url == "https://from-flag.example.com"
-    # One injected instance: auth cannot drift from the SDK side.
-    assert resolved.pipefy.deployment is resolved.auth.deployment
-    assert resolved.auth.deployment.oauth_token_url == (
+    assert runtime.endpoints.graphql_url == "https://from-flag.example.com/graphql"
+    assert runtime.credentials.service_account.token_url == (
         "https://from-flag.example.com/oauth/token"
     )
 
 
-def test_empty_base_url_env_rejected_at_settings_load(
+def test_empty_base_url_env_rejected_at_runtime_load(
     clean_pipefy_env,
     saved_cwd,
     monkeypatch: pytest.MonkeyPatch,
@@ -121,27 +126,17 @@ def test_empty_base_url_env_rejected_at_settings_load(
     """``PIPEFY_BASE_URL=""`` is rejected by pydantic ``pattern`` validation."""
     monkeypatch.setenv("PIPEFY_BASE_URL", "")
     with pytest.raises(ValueError, match="should match pattern"):
-        resolve_cli_settings(
-            base_url_flag=None,
-            allow_insecure_urls_flag=None,
-        )
+        _resolve()
 
 
-def test_base_url_defaults_to_pipefy_prod(
-    clean_pipefy_env,
-    saved_cwd,
-):
-    """No env / no flag -> base_url defaults to the Pipefy production host."""
-    resolved = resolve_cli_settings(
-        base_url_flag=None,
-        allow_insecure_urls_flag=None,
-    ).pipefy
-
-    assert resolved.deployment.base_url == "https://app.pipefy.com"
-    assert resolved.graphql_url == "https://app.pipefy.com/graphql"
-    assert resolved.internal_api_url == "https://app.pipefy.com/internal_api"
+def test_base_url_defaults_to_pipefy_prod(clean_pipefy_env, saved_cwd):
+    """No env / no flag -> endpoints derive from the Pipefy production host."""
+    runtime = _resolve()
+    assert runtime.endpoints.graphql_url == "https://app.pipefy.com/graphql"
+    assert runtime.endpoints.internal_api_url == "https://app.pipefy.com/internal_api"
     assert (
-        resolved.interfaces_graphql_url == "https://app.pipefy.com/graphql/interfaces"
+        runtime.endpoints.interfaces_graphql_url
+        == "https://app.pipefy.com/graphql/interfaces"
     )
 
 
@@ -154,7 +149,7 @@ def test_localhost_base_url_rejected_without_insecure_flag(
     monkeypatch.setenv("PIPEFY_BASE_URL", "https://localhost")
 
     with pytest.raises(ValueError, match="localhost"):
-        resolve_cli_settings(base_url_flag=None, allow_insecure_urls_flag=None)
+        _resolve()
 
 
 def test_allow_insecure_urls_flag_overrides_env(
@@ -165,14 +160,10 @@ def test_allow_insecure_urls_flag_overrides_env(
     monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "false")
     monkeypatch.setenv("PIPEFY_BASE_URL", "http://127.0.0.1:9999")
 
-    resolved = resolve_cli_settings(
-        base_url_flag=None,
-        allow_insecure_urls_flag=True,
-    )
+    runtime = _resolve(allow_insecure_urls_flag=True)
 
-    assert resolved.pipefy.allow_insecure_urls is True
-    assert resolved.auth.allow_insecure_urls is True
-    assert resolved.pipefy.deployment.base_url == "http://127.0.0.1:9999"
+    assert runtime.allow_insecure_urls is True
+    assert runtime.endpoints.graphql_url == "http://127.0.0.1:9999/graphql"
 
 
 def test_allow_insecure_urls_flag_false_overrides_env_true(
@@ -183,37 +174,45 @@ def test_allow_insecure_urls_flag_false_overrides_env_true(
     """Flag ``False`` must override ``PIPEFY_ALLOW_INSECURE_URLS=true`` deployment-wide."""
     monkeypatch.setenv("PIPEFY_ALLOW_INSECURE_URLS", "true")
 
-    resolved = resolve_cli_settings(
-        base_url_flag=None,
-        allow_insecure_urls_flag=False,
-    )
+    runtime = _resolve(allow_insecure_urls_flag=False)
 
-    assert resolved.pipefy.allow_insecure_urls is False
-    assert resolved.auth.allow_insecure_urls is False
+    assert runtime.allow_insecure_urls is False
 
 
-def test_base_url_flag_localhost_rejected_without_insecure(
-    clean_pipefy_env,
-    saved_cwd,
-):
+def test_base_url_flag_localhost_rejected_without_insecure(clean_pipefy_env, saved_cwd):
     with pytest.raises(ValueError, match="HTTPS|http"):
-        resolve_cli_settings(
-            base_url_flag="http://localhost",
-            allow_insecure_urls_flag=None,
-        )
+        _resolve(base_url_flag="http://localhost")
 
 
 def test_base_url_flag_localhost_allowed_with_insecure_flag(
+    clean_pipefy_env, saved_cwd
+):
+    runtime = _resolve(
+        base_url_flag="http://localhost:3000", allow_insecure_urls_flag=True
+    )
+    assert runtime.endpoints.graphql_url == "http://localhost:3000/graphql"
+
+
+def test_token_flag_overrides_env_and_records_source(
     clean_pipefy_env,
     saved_cwd,
+    monkeypatch: pytest.MonkeyPatch,
 ):
-    resolved = resolve_cli_settings(
-        base_url_flag="http://localhost:3000",
-        allow_insecure_urls_flag=True,
-    ).pipefy
+    monkeypatch.setenv("PIPEFY_TOKEN", "env-token")
+    runtime = _resolve(token_flag="flag-token")
+    assert runtime.credentials.static_token == "flag-token"
+    assert runtime.token_source == "flag"
 
-    assert resolved.deployment.base_url == "http://localhost:3000"
-    assert resolved.graphql_url == "http://localhost:3000/graphql"
+
+def test_env_token_records_env_source(
+    clean_pipefy_env,
+    saved_cwd,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("PIPEFY_TOKEN", "env-token")
+    runtime = _resolve()
+    assert runtime.credentials.static_token == "env-token"
+    assert runtime.token_source == "env"
 
 
 def test_org_id_resolves_at_the_cli_edge(
@@ -221,12 +220,9 @@ def test_org_id_resolves_at_the_cli_edge(
     saved_cwd,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """``PIPEFY_ORG_ID`` is a CLI-only edge value, exposed on CliSettings."""
+    """``PIPEFY_ORG_ID`` is a CLI-only edge value, exposed on CliRuntime."""
     monkeypatch.setenv("PIPEFY_ORG_ID", "300123")
-    assert (
-        resolve_cli_settings(base_url_flag=None, allow_insecure_urls_flag=None).org_id
-        == "300123"
-    )
+    assert _resolve().org_id == "300123"
 
 
 @pytest.mark.parametrize(
@@ -267,15 +263,10 @@ def test_issuer_url_validation(
     expect_error: str | None,
 ):
     monkeypatch.setenv("PIPEFY_AUTH_ISSUER_URL", url)
+    flag = True if allow_insecure else None
     if expect_error is None:
-        resolved = resolve_cli_settings(
-            base_url_flag=None,
-            allow_insecure_urls_flag=True if allow_insecure else None,
-        ).auth
-        assert resolved.issuer_url == url
+        runtime = _resolve(allow_insecure_urls_flag=flag)
+        assert runtime.credentials.oidc_client.issuer_url == url
     else:
         with pytest.raises(ValueError, match=expect_error):
-            resolve_cli_settings(
-                base_url_flag=None,
-                allow_insecure_urls_flag=True if allow_insecure else None,
-            )
+            _resolve(allow_insecure_urls_flag=flag)

@@ -427,7 +427,9 @@ def auth_status(
     # Precedence-first, so the head is the active method and the same winner the
     # resolver would pick, without a second resolve pass.
     active = auth_methods[0] if auth_methods else None
-    source: DisplaySource = detected_sources[0] if detected_sources else "none"
+    source: DisplaySource = (
+        to_display_source(active, auth.bearer_token) if active else "none"
+    )
     report = AuthStatusReport(auth_source=source, detected_sources=detected_sources)
     # Surface masking env vars whenever a stored session exists: that's the
     # CI-overrides-keychain failure mode the field is for, and the higher-

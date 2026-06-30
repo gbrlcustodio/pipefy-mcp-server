@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
-from typing import Final, Literal, assert_never
+from typing import Any, Final, Literal, assert_never
 
 import typer
 from pipefy_auth import (
@@ -44,7 +44,7 @@ ENV_TOKEN_SOURCE: Final = "env-token"
 # Locked JSON wire schema for ``pipefy auth status``: the auth-method names,
 # with the static-token method split into the CLI's flag-vs-env surfaces, plus
 # an explicit ``"none"`` sentinel for when no method resolved. Produced by
-# :func:`detect_cli_auth_methods` / :func:`_to_display_source`; ``commands.auth``
+# :func:`detect_cli_auth_methods` / :func:`to_display_source`; ``commands.auth``
 # renders it.
 DisplaySource = Literal[
     "flag-token",
@@ -96,12 +96,17 @@ def clear_authenticated_client_cache() -> None:
     _cached_client = None
 
 
+def _resolver_kwargs(auth: AuthContext) -> dict[str, Any]:
+    """Map an :class:`AuthContext` onto the keyword inputs the resolver takes."""
+    return {
+        "static_token": auth.bearer_token.value if auth.bearer_token else None,
+        "service_account": auth.service_account,
+        "oidc_client": auth.oidc_client,
+    }
+
+
 def _resolve(auth: AuthContext) -> ResolvedAuth | None:
-    return resolve_pipefy_auth(
-        static_token=auth.bearer_token.value if auth.bearer_token else None,
-        service_account=auth.service_account,
-        oidc_client=auth.oidc_client,
-    )
+    return resolve_pipefy_auth(**_resolver_kwargs(auth))
 
 
 def to_display_source(
@@ -134,11 +139,7 @@ def detect_cli_auth_methods(auth: AuthContext) -> list[ResolvedAuth]:
     just the winner. ``pipefy auth status`` renders each via
     :func:`to_display_source` and treats the first as the active source.
     """
-    return detect_pipefy_auth_methods(
-        static_token=auth.bearer_token.value if auth.bearer_token else None,
-        service_account=auth.service_account,
-        oidc_client=auth.oidc_client,
-    )
+    return detect_pipefy_auth_methods(**_resolver_kwargs(auth))
 
 
 def _cache_key(

@@ -158,8 +158,8 @@ def resolve_pipefy_auth(sources: CredentialSources) -> Auth | None:
             :class:`pipefy_auth.bearer.RefreshableBearerAuth`, which also forces
             a refresh + retry on a 401 response.
     """
-    if sources.static_token and sources.static_token.strip():
-        return StaticBearerAuth(sources.static_token.strip())
+    if sources.static_token:
+        return StaticBearerAuth(sources.static_token)
     if sources.service_account is not None:
         return OAuth2ClientCredentials(
             token_url=sources.service_account.token_url,
@@ -179,7 +179,7 @@ def detect_pipefy_tiers(sources: CredentialSources) -> list[str]:
     the keychain read for the stored-session tier).
     """
     detected: list[str] = []
-    if sources.static_token and sources.static_token.strip():
+    if sources.static_token:
         detected.append(STATIC_TOKEN_TIER)
     if sources.service_account is not None:
         detected.append(SERVICE_ACCOUNT_TIER)

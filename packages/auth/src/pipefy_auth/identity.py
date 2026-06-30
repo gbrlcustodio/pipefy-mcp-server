@@ -13,7 +13,7 @@ DEFAULT_AUTH_CLIENT_ID = "pipefy-cli"
 class OidcClient:
     """OIDC client identity: issuer URL + the public client id registered there.
 
-    Presence of an :class:`OidcClient` is what gates the stored-session tier
+    Presence of an :class:`OidcClient` is what gates the stored-session method
     of the credential precedence chain.
     """
 

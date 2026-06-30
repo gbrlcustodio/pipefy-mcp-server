@@ -35,7 +35,7 @@ from pipefy_auth.resolver import (
     StaticTokenAuth,
     StoredSessionAuth,
     build_httpx_auth,
-    detect_pipefy_tiers,
+    detect_pipefy_auth_methods,
     missing_auth_message,
     resolve_pipefy_auth,
 )
@@ -88,7 +88,7 @@ __all__ = [
     "build_httpx_auth",
     "configure_keychain_backend",
     "delete_session",
-    "detect_pipefy_tiers",
+    "detect_pipefy_auth_methods",
     "ensure_fresh_session",
     "fetch_provider_metadata",
     "keychain_backend_name",

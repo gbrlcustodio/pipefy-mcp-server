@@ -39,7 +39,7 @@ from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 from pipefy_cli.auth import (
     AuthContext,
     DisplaySource,
-    detect_cli_sources,
+    detect_cli_auth_methods,
     get_authenticated_client,
     to_display_source,
 )
@@ -420,19 +420,19 @@ def auth_status(
 ) -> None:
     """Print which auth source is active, the authenticated identity, and session expiry."""
     settings, auth = settings_and_auth_from_ctx(ctx)
-    tiers = detect_cli_sources(auth)
-    detected: list[DisplaySource] = [
-        to_display_source(tier, auth.bearer_token) for tier in tiers
+    auth_methods = detect_cli_auth_methods(auth)
+    detected_sources: list[DisplaySource] = [
+        to_display_source(method, auth.bearer_token) for method in auth_methods
     ]
-    # Precedence-first, so the head is the active source and the same winner the
+    # Precedence-first, so the head is the active method and the same winner the
     # resolver would pick, without a second resolve pass.
-    active = tiers[0] if tiers else None
-    source: DisplaySource = detected[0] if detected else "none"
-    report = AuthStatusReport(auth_source=source, detected_sources=detected)
+    active = auth_methods[0] if auth_methods else None
+    source: DisplaySource = detected_sources[0] if detected_sources else "none"
+    report = AuthStatusReport(auth_source=source, detected_sources=detected_sources)
     # Surface masking env vars whenever a stored session exists: that's the
     # CI-overrides-keychain failure mode the field is for, and the higher-
     # precedence winner is the case where it matters.
-    if any(isinstance(tier, StoredSessionAuth) for tier in tiers):
+    if any(isinstance(method, StoredSessionAuth) for method in auth_methods):
         report.masking_env_vars = _session_masking_env_vars()
 
     try:

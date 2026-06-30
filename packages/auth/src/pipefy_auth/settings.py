@@ -5,7 +5,7 @@ Owns every value that describes *how* to authenticate against Pipefy:
 * ``PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`` / ``PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET``
   — OAuth2 client-credentials grant inputs (legacy ``PIPEFY_OAUTH_CLIENT`` /
   ``_SECRET`` names still honoured via :class:`AliasChoices`).
-* ``PIPEFY_AUTH_URL`` — full OIDC issuer URL for the stored-session tier
+* ``PIPEFY_AUTH_URL`` — full OIDC issuer URL for the stored-session method
   (default ``https://signin.pipefy.com/realms/pipefy``).
 * ``PIPEFY_AUTH_CLIENT_ID`` — OIDC public client id (defaults to
   :data:`pipefy_auth.identity.DEFAULT_AUTH_CLIENT_ID`).
@@ -212,7 +212,7 @@ class AuthSettings(BaseSettings):
         pattern=_OPAQUE_CREDENTIAL_PATTERN,
         validation_alias=AliasChoices("PIPEFY_TOKEN"),
         description=(
-            "Pre-issued bearer for the static-token tier (env: PIPEFY_TOKEN). "
+            "Pre-issued bearer for the static-token method (env: PIPEFY_TOKEN). "
             "When set, outranks both the service-account triple and any stored session."
         ),
     )
@@ -247,7 +247,7 @@ class AuthSettings(BaseSettings):
         default=DEFAULT_AUTH_URL,
         pattern=security.URL_SHAPE_PATTERN,
         description=(
-            "OIDC issuer URL for the stored-session tier "
+            "OIDC issuer URL for the stored-session method "
             "(env: PIPEFY_AUTH_URL). Defaults to "
             f"'{DEFAULT_AUTH_URL}' (canonical Pipefy production IdP). Set to "
             "the full issuer URL for a non-prod IdP."
@@ -294,7 +294,7 @@ class AuthSettings(BaseSettings):
         default=False,
         description=(
             "When true (env: PIPEFY_DISABLE_STORED_SESSION), the stored-session "
-            "tier is never probed: ``to_oidc_client()`` returns None, tier "
+            "method is never probed: ``to_oidc_client()`` returns None, method "
             "resolution skips the keychain, and ``pipefy auth login`` refuses. "
             "Use to avoid the keychain backend-discovery cost on cold start "
             "(headless Linux, CI) or to opt out of OS-keychain storage entirely."
@@ -316,7 +316,7 @@ class AuthSettings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def service_account_url(self) -> str:
-        """OAuth 2.0 token endpoint for the service-account tier."""
+        """OAuth 2.0 token endpoint for the service-account method."""
         return f"{self.base_url.rstrip('/')}/oauth/token"
 
     def to_service_account(self) -> ServiceAccount | None:
@@ -337,7 +337,7 @@ class AuthSettings(BaseSettings):
         """Project the OIDC fields into an :class:`OidcClient`.
 
         Returns ``None`` when :attr:`disable_stored_session` is set: callers
-        treat that as "the stored-session tier is off" without inspecting any
+        treat that as "the stored-session method is off" without inspecting any
         OIDC field. Otherwise returns a real client because ``auth_url`` has
         a non-empty default.
         """

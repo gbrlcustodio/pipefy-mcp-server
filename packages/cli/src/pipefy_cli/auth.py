@@ -24,7 +24,7 @@ from pipefy_auth import (
     StaticTokenAuth,
     StoredSessionAuth,
     build_httpx_auth,
-    detect_pipefy_tiers,
+    detect_pipefy_auth_methods,
     ensure_fresh_session,
     missing_auth_message,
     resolve_pipefy_auth,
@@ -37,14 +37,14 @@ from pipefy_sdk import (
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 
 # Display labels for ``pipefy auth status``. The resolver knows the
-# static-token tier; the CLI restores the flag-vs-env distinction here.
+# static-token method; the CLI restores the flag-vs-env distinction here.
 FLAG_TOKEN_SOURCE: Final = "flag-token"
 ENV_TOKEN_SOURCE: Final = "env-token"
 
-# Locked JSON wire schema for ``pipefy auth status``: the resolver tier names,
-# with the static-token tier split into the CLI's flag-vs-env surfaces, plus an
-# explicit ``"none"`` sentinel for when no tier resolved. Produced by
-# :func:`detect_cli_sources` / :func:`_to_display_source`; ``commands.auth``
+# Locked JSON wire schema for ``pipefy auth status``: the auth-method names,
+# with the static-token method split into the CLI's flag-vs-env surfaces, plus
+# an explicit ``"none"`` sentinel for when no method resolved. Produced by
+# :func:`detect_cli_auth_methods` / :func:`_to_display_source`; ``commands.auth``
 # renders it.
 DisplaySource = Literal[
     "flag-token",
@@ -67,13 +67,13 @@ class BearerToken:
 class AuthContext:
     """Auth inputs for a single CLI invocation.
 
-    Each field maps to one resolver tier (bearer-token, service-account,
+    Each field maps to one auth method (bearer-token, service-account,
     stored-session). Built once at startup from the loaded
     :class:`pipefy_auth.AuthSettings` plus the per-invocation ``--token`` /
     ``PIPEFY_TOKEN`` resolution.
 
     ``oidc_client`` is ``None`` only when ``AuthSettings.disable_stored_session``
-    is set (env: PIPEFY_DISABLE_STORED_SESSION); the stored-session tier is
+    is set (env: PIPEFY_DISABLE_STORED_SESSION); the stored-session method is
     then skipped end-to-end. Otherwise ``auth_url`` defaults to the prod IdP
     and the client is always present.
     """
@@ -107,10 +107,10 @@ def _resolve(auth: AuthContext) -> ResolvedAuth | None:
 def to_display_source(
     resolved: ResolvedAuth, bearer: BearerToken | None
 ) -> DisplaySource:
-    """Map a resolved tier to its locked ``auth status`` wire value.
+    """Map a resolved auth method to its locked ``auth status`` wire value.
 
-    The static-token tier splits into the flag-vs-env distinction the CLI
-    surfaces; the other tiers map to their resolver wire name unchanged.
+    The static-token method splits into the flag-vs-env distinction the CLI
+    surfaces; the other methods map to their resolver wire name unchanged.
     """
     match resolved:
         case StaticTokenAuth():
@@ -127,14 +127,14 @@ def to_display_source(
             assert_never(resolved)
 
 
-def detect_cli_sources(auth: AuthContext) -> list[ResolvedAuth]:
-    """Return the detected resolver tiers for a CLI invocation, precedence-first.
+def detect_cli_auth_methods(auth: AuthContext) -> list[ResolvedAuth]:
+    """Return the detected auth methods for a CLI invocation, precedence-first.
 
-    The non-short-circuiting view of the chain: every configured tier, not just
-    the winner. ``pipefy auth status`` renders each via :func:`to_display_source`
-    and treats the first as the active source.
+    The non-short-circuiting view of the chain: every configured method, not
+    just the winner. ``pipefy auth status`` renders each via
+    :func:`to_display_source` and treats the first as the active source.
     """
-    return detect_pipefy_tiers(
+    return detect_pipefy_auth_methods(
         static_token=auth.bearer_token.value if auth.bearer_token else None,
         service_account=auth.service_account,
         oidc_client=auth.oidc_client,
@@ -151,8 +151,8 @@ def _cache_key(
     token, the service-account ``client_secret`` — don't linger in module
     state for the process lifetime. Adding a new field to
     :class:`PipefySettings` or :class:`AuthContext` automatically participates
-    in the key without touching this function. The resolved tier is omitted: it
-    is a pure function of the auth fields above, so it adds no distinction.
+    in the key without touching this function. The resolved method is omitted:
+    it is a pure function of the auth fields above, so it adds no distinction.
     """
     payload = json.dumps(
         {
@@ -218,7 +218,7 @@ __all__ = [
     "ENV_TOKEN_SOURCE",
     "FLAG_TOKEN_SOURCE",
     "clear_authenticated_client_cache",
-    "detect_cli_sources",
+    "detect_cli_auth_methods",
     "get_authenticated_client",
     "to_display_source",
 ]

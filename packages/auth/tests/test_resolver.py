@@ -19,7 +19,7 @@ from pipefy_auth.resolver import (
     StaticTokenAuth,
     StoredSessionAuth,
     build_httpx_auth,
-    detect_pipefy_tiers,
+    detect_pipefy_auth_methods,
     missing_auth_message,
     resolve_pipefy_auth,
 )
@@ -137,18 +137,18 @@ def test_resolver_skips_stored_session_when_oidc_client_is_none(monkeypatch):
 
 @pytest.mark.unit
 def test_detect_omits_stored_session_when_oidc_client_is_none(monkeypatch):
-    """``detect_pipefy_tiers`` skips the stored-session probe with no client."""
+    """``detect_pipefy_auth_methods`` skips the stored-session probe with no client."""
 
     def _poison(**_kwargs):
         raise AssertionError("load_session must not be called when oidc_client is None")
 
     monkeypatch.setattr("pipefy_auth.resolver.load_session", _poison)
-    tiers = detect_pipefy_tiers(
+    methods = detect_pipefy_auth_methods(
         static_token="T",
         service_account=_service_account(),
         oidc_client=None,
     )
-    assert [type(tier) for tier in tiers] == [StaticTokenAuth, ServiceAccountAuth]
+    assert [type(method) for method in methods] == [StaticTokenAuth, ServiceAccountAuth]
 
 
 @pytest.mark.unit
@@ -179,12 +179,12 @@ def test_detect_lists_every_configured_tier_in_precedence_order(monkeypatch):
     monkeypatch.setattr(
         "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
     )
-    tiers = detect_pipefy_tiers(
+    methods = detect_pipefy_auth_methods(
         static_token="T",
         service_account=_service_account(),
         oidc_client=_oidc(),
     )
-    assert [type(tier) for tier in tiers] == [
+    assert [type(method) for method in methods] == [
         StaticTokenAuth,
         ServiceAccountAuth,
         StoredSessionAuth,
@@ -194,8 +194,10 @@ def test_detect_lists_every_configured_tier_in_precedence_order(monkeypatch):
 @pytest.mark.unit
 def test_detect_skips_tiers_without_credentials(monkeypatch):
     monkeypatch.setattr("pipefy_auth.resolver.load_session", lambda **_: None)
-    tiers = detect_pipefy_tiers(static_token="T", service_account=_service_account())
-    assert [type(tier) for tier in tiers] == [StaticTokenAuth, ServiceAccountAuth]
+    methods = detect_pipefy_auth_methods(
+        static_token="T", service_account=_service_account()
+    )
+    assert [type(method) for method in methods] == [StaticTokenAuth, ServiceAccountAuth]
 
 
 @pytest.mark.unit

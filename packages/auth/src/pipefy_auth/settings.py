@@ -5,7 +5,7 @@ Owns every value that describes *how* to authenticate against Pipefy:
 * ``PIPEFY_SERVICE_ACCOUNT_CLIENT_ID`` / ``PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET``
   — OAuth2 client-credentials grant inputs (legacy ``PIPEFY_OAUTH_CLIENT`` /
   ``_SECRET`` names still honoured via :class:`AliasChoices`).
-* ``PIPEFY_AUTH_URL`` — full OIDC issuer URL for the stored-session method
+* ``PIPEFY_AUTH_URL``: full OIDC issuer URL for the stored-session method
   (default ``https://signin.pipefy.com/realms/pipefy``).
 * ``PIPEFY_AUTH_CLIENT_ID`` — OIDC public client id (defaults to
   :data:`pipefy_auth.identity.DEFAULT_AUTH_CLIENT_ID`).

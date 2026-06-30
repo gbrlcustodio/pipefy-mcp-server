@@ -7,7 +7,6 @@ import time
 import pytest
 
 from pipefy_auth.bearer import (
-    CallableBearerAuth,
     RefreshableBearerAuth,
 )
 from pipefy_auth.identity import OidcClient
@@ -24,7 +23,6 @@ from pipefy_auth.resolver import (
     detect_pipefy_tiers,
     missing_auth_message,
     resolve_pipefy_auth,
-    tier_for,
 )
 from pipefy_auth.responses import TokenResponse
 from pipefy_auth.storage import StoredSession
@@ -201,23 +199,6 @@ def test_missing_auth_message_custom_login_command():
     msg = missing_auth_message(login_command="my-cli login")
     assert "my-cli login" in msg
     assert "pipefy auth login" not in msg
-
-
-@pytest.mark.unit
-def test_tier_for_raises_on_foreign_auth_class():
-    """``tier_for`` only recognises auth produced by ``resolve_pipefy_auth``."""
-
-    class CustomAuth:
-        pass
-
-    with pytest.raises(ValueError, match="No resolver-tier name"):
-        tier_for(CustomAuth())  # type: ignore[arg-type]
-
-
-@pytest.mark.unit
-def test_tier_for_recognises_callable_bearer_auth_as_stored_session():
-    auth = CallableBearerAuth(lambda: "TOKEN")
-    assert tier_for(auth) == STORED_SESSION_TIER
 
 
 @pytest.mark.unit

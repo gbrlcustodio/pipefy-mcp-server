@@ -41,7 +41,6 @@ from pipefy_auth.resolver import (
     detect_pipefy_tiers,
     missing_auth_message,
     resolve_pipefy_auth,
-    tier_for,
 )
 from pipefy_auth.responses import OAuthErrorResponse, TokenResponse
 from pipefy_auth.revoke import (
@@ -107,5 +106,4 @@ __all__ = [
     "revoke_session",
     "run_login",
     "store_session",
-    "tier_for",
 ]

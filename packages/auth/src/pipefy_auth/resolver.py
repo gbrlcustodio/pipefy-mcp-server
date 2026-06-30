@@ -20,7 +20,6 @@ from httpx import Auth
 from httpx_auth import OAuth2ClientCredentials
 
 from pipefy_auth.bearer import (
-    CallableBearerAuth,
     RefreshableBearerAuth,
     StaticBearerAuth,
 )
@@ -66,46 +65,11 @@ class StoredSessionAuth:
     tier: ClassVar[str] = STORED_SESSION_TIER
 
 
-# The credential precedence chain, parsed into the tier that won. ``resolve_auth_tier``
-# is the parser; the ``tier`` attribute on each variant carries the wire-schema name
-# (e.g. ``"stored-session"``) so consumers read it directly instead of recovering it
-# from a built ``httpx.Auth`` via ``tier_for``.
+# The credential precedence chain, parsed into the tier that won.
+# :func:`resolve_pipefy_auth` is the parser; the ``tier`` attribute on each
+# variant carries the wire-schema name (e.g. ``"stored-session"``) so consumers
+# read it directly rather than recovering it from a built ``httpx.Auth``.
 ResolvedAuth = StaticTokenAuth | ServiceAccountAuth | StoredSessionAuth
-
-
-# Maps each ``httpx.Auth`` implementation back to the resolver-tier name that
-# produced it. ``tier_for`` is the public lookup; the mapping itself is the
-# single source of truth so the wire-schema strings (e.g. ``"stored-session"``)
-# stay in one place. ``CallableBearerAuth`` is listed alongside
-# ``RefreshableBearerAuth`` so consumers who build one directly still resolve
-# to the stored-session tier.
-_TIER_BY_AUTH_TYPE: dict[type[Auth], str] = {
-    StaticBearerAuth: STATIC_TOKEN_TIER,
-    OAuth2ClientCredentials: SERVICE_ACCOUNT_TIER,
-    RefreshableBearerAuth: STORED_SESSION_TIER,
-    CallableBearerAuth: STORED_SESSION_TIER,
-}
-
-
-def tier_for(auth: Auth) -> str:
-    """Return the resolver-tier name that produced ``auth``.
-
-    Recovers the tier from a built ``httpx.Auth``. New callers that already
-    hold the :data:`ResolvedAuth` from :func:`resolve_pipefy_auth` should read
-    its ``tier`` attribute directly instead; this reverse lookup remains only
-    for callers that have an ``httpx.Auth`` and no longer carry the variant.
-
-    Raises:
-        ValueError: When ``auth`` is not an instance produced by
-            :func:`build_httpx_auth` (e.g. a consumer-provided ``httpx.Auth``
-            for tests or a custom integration).
-    """
-    for cls, source in _TIER_BY_AUTH_TYPE.items():
-        if isinstance(auth, cls):
-            return source
-    raise ValueError(
-        f"No resolver-tier name for httpx.Auth of type {type(auth).__name__}"
-    )
 
 
 def _stored_session_provider(oidc_client: OidcClient) -> RefreshableBearerAuth:
@@ -240,5 +204,4 @@ __all__ = [
     "detect_pipefy_tiers",
     "missing_auth_message",
     "resolve_pipefy_auth",
-    "tier_for",
 ]

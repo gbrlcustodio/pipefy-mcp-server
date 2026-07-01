@@ -14,15 +14,12 @@ from pipefy_auth.bearer import (
 from pipefy_auth.identity import OidcClient
 from pipefy_auth.refresh import RefreshError
 from pipefy_auth.resolver import (
-    SERVICE_ACCOUNT_TIER,
-    STATIC_TOKEN_TIER,
-    STORED_SESSION_TIER,
     ServiceAccount,
     ServiceAccountAuth,
     StaticTokenAuth,
     StoredSessionAuth,
     build_httpx_auth,
-    detect_pipefy_tiers,
+    detect_pipefy_auth_methods,
     missing_auth_message,
     resolve_pipefy_auth,
 )
@@ -140,18 +137,18 @@ def test_resolver_skips_stored_session_when_oidc_client_is_none(monkeypatch):
 
 @pytest.mark.unit
 def test_detect_omits_stored_session_when_oidc_client_is_none(monkeypatch):
-    """``detect_pipefy_tiers`` skips the stored-session probe with no client."""
+    """``detect_pipefy_auth_methods`` skips the stored-session probe with no client."""
 
     def _poison(**_kwargs):
         raise AssertionError("load_session must not be called when oidc_client is None")
 
     monkeypatch.setattr("pipefy_auth.resolver.load_session", _poison)
-    tiers = detect_pipefy_tiers(
+    methods = detect_pipefy_auth_methods(
         static_token="T",
         service_account=_service_account(),
         oidc_client=None,
     )
-    assert tiers == [STATIC_TOKEN_TIER, SERVICE_ACCOUNT_TIER]
+    assert [type(method) for method in methods] == [StaticTokenAuth, ServiceAccountAuth]
 
 
 @pytest.mark.unit
@@ -182,23 +179,50 @@ def test_detect_lists_every_configured_tier_in_precedence_order(monkeypatch):
     monkeypatch.setattr(
         "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
     )
-    tiers = detect_pipefy_tiers(
+    methods = detect_pipefy_auth_methods(
         static_token="T",
         service_account=_service_account(),
         oidc_client=_oidc(),
     )
-    assert tiers == [
-        STATIC_TOKEN_TIER,
-        SERVICE_ACCOUNT_TIER,
-        STORED_SESSION_TIER,
+    assert [type(method) for method in methods] == [
+        StaticTokenAuth,
+        ServiceAccountAuth,
+        StoredSessionAuth,
     ]
 
 
 @pytest.mark.unit
 def test_detect_skips_tiers_without_credentials(monkeypatch):
     monkeypatch.setattr("pipefy_auth.resolver.load_session", lambda **_: None)
-    tiers = detect_pipefy_tiers(static_token="T", service_account=_service_account())
-    assert tiers == [STATIC_TOKEN_TIER, SERVICE_ACCOUNT_TIER]
+    methods = detect_pipefy_auth_methods(
+        static_token="T", service_account=_service_account()
+    )
+    assert [type(method) for method in methods] == [StaticTokenAuth, ServiceAccountAuth]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {
+            "static_token": "T",
+            "service_account": _service_account(),
+            "oidc_client": _oidc(),
+        },
+        {"service_account": _service_account(), "oidc_client": _oidc()},
+        {"oidc_client": _oidc()},
+        {},
+    ],
+)
+def test_detect_head_is_the_resolved_method(monkeypatch, kwargs):
+    """``auth status`` treats ``detect(...)[0]`` as active; both draw from the
+    same generator, so its head equals ``resolve(...)`` (and empty ⟺ ``None``)."""
+    monkeypatch.setattr(
+        "pipefy_auth.resolver.load_session", lambda **_: _stored_session()
+    )
+    methods = detect_pipefy_auth_methods(**kwargs)
+    resolved = resolve_pipefy_auth(**kwargs)
+    assert (methods[0] if methods else None) == resolved
 
 
 @pytest.mark.unit

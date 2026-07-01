@@ -22,6 +22,14 @@ from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 _VALID_PERIODS = {"current_month", "last_month", "last_3_months"}
 
+# AutomationExecutionMetricsPeriod enum: rolling windows for execution metrics.
+_VALID_EXECUTION_METRICS_PERIODS = {
+    "FIFTEEN_MINUTES",
+    "SIXTY_MINUTES",
+    "TWELVE_HOURS",
+    "TWENTY_FOUR_HOURS",
+}
+
 # Pagination
 _MIN_PAGE_SIZE = 1
 _MAX_PAGE_SIZE = 100
@@ -397,6 +405,75 @@ class ObservabilityTools:
                 )
             return build_observability_read_success_payload(
                 raw, message="AI credit usage retrieved."
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True),
+        )
+        async def get_automation_execution_metrics(
+            organization_id: PipefyId,
+            ctx: Context,
+            automation_ids: list[PipefyId] | None = None,
+            repo_id: PipefyId | None = None,
+            period: str = "SIXTY_MINUTES",
+            debug: bool = False,
+        ) -> dict[str, Any]:
+            """Get execution metrics (totalRuns, successRate, failureRate, averageDuration, lastRun) for one or more automations over a rolling window. Returns metrics for the automations you can access plus a `partial_errors` list naming any that were denied (PERMISSION_DENIED) — a partial result, not a hard failure. `period`: FIFTEEN_MINUTES, SIXTY_MINUTES (default), TWELVE_HOURS, or TWENTY_FOUR_HOURS.
+
+            Args:
+                organization_id: Organization ID (numeric org id, same as in the Pipefy URL).
+                automation_ids: Optional automation IDs to fetch metrics for. Omit to fetch metrics for every automation in the organization (optionally scoped by repo_id). When provided, it must contain at least one ID.
+                repo_id: Optional pipe/repo ID to scope the query.
+                period: AutomationExecutionMetricsPeriod (FIFTEEN_MINUTES, SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to SIXTY_MINUTES, matching the API.
+                debug: When True, append GraphQL codes and correlation_id to errors.
+            """
+            client = get_pipefy_client(ctx)
+            organization_id, err = validate_tool_id(organization_id, "organization_id")
+            if err is not None:
+                return err
+            normalized_ids: list[str] | None = None
+            if automation_ids is not None:
+                if not automation_ids:
+                    return build_observability_error_payload(
+                        message="Invalid 'automation_ids': when provided, it must contain at least one automation ID.",
+                    )
+                normalized_ids = []
+                for raw_id in automation_ids:
+                    norm_id, id_err = validate_tool_id(raw_id, "automation_ids")
+                    if id_err is not None:
+                        return id_err
+                    normalized_ids.append(norm_id)
+            normalized_repo_id: str | None = None
+            if repo_id is not None:
+                normalized_repo_id, err = validate_tool_id(repo_id, "repo_id")
+                if err is not None:
+                    return err
+            if period not in _VALID_EXECUTION_METRICS_PERIODS:
+                return build_observability_error_payload(
+                    message=(
+                        "Invalid 'period': must be one of "
+                        f"{sorted(_VALID_EXECUTION_METRICS_PERIODS)}."
+                    ),
+                )
+            try:
+                raw = await client.get_automation_execution_metrics(
+                    organization_id,
+                    normalized_ids,
+                    repo_id=normalized_repo_id,
+                    period=period,
+                )
+            except ValueError as exc:
+                return build_observability_error_payload(message=str(exc))
+            except Exception as exc:  # noqa: BLE001
+                return handle_observability_tool_graphql_error(
+                    exc,
+                    "Get automation execution metrics failed.",
+                    debug=debug,
+                    resource_kind="organization",
+                    resource_id=str(organization_id),
+                )
+            return build_observability_read_success_payload(
+                raw, message="Automation execution metrics retrieved."
             )
 
         @mcp.tool(

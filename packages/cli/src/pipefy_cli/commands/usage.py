@@ -81,6 +81,45 @@ def usage_automations(
     run_cli_command(ctx, json_out, factory)
 
 
+@usage_app.command("execution-metrics")
+def usage_execution_metrics(
+    ctx: typer.Context,
+    organization: str = typer.Option(
+        ...,
+        "--organization",
+        "--org",
+        help="Organization ID (numeric org id, same as in the Pipefy URL).",
+    ),
+    automation_ids: list[str] = typer.Option(
+        [],
+        "--automation",
+        "-a",
+        help="Automation ID to fetch metrics for (repeat for multiple; omit to fetch all automations in the organization).",
+    ),
+    repo: str | None = typer.Option(
+        None, "--repo", help="Optional pipe/repo ID to scope the query."
+    ),
+    period: str = typer.Option(
+        "SIXTY_MINUTES",
+        "--period",
+        help="FIFTEEN_MINUTES | SIXTY_MINUTES | TWELVE_HOURS | TWENTY_FOUR_HOURS",
+    ),
+    json_out: bool = typer.Option(False, "--json", "-j"),
+) -> None:
+    """Automation execution metrics (``get_automation_execution_metrics``).
+
+    Returns metrics for the automations the token may read plus a ``partial_errors``
+    list naming any that were denied.
+    """
+
+    async def factory(client: PipefyClient):
+        return await client.get_automation_execution_metrics(
+            organization, automation_ids or None, repo_id=repo, period=period
+        )
+
+    run_cli_command(ctx, json_out, factory)
+
+
 @usage_app.command("credits")
 def usage_credits(
     ctx: typer.Context,

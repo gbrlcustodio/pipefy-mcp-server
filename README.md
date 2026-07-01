@@ -36,7 +36,7 @@ Open-source toolkit for **Pipefy** developers: a Model Context Protocol (MCP) se
 
 | Component | Package / path | Purpose |
 |-----------|----------------|---------|
-| **MCP server** | `pipefy-mcp-server` | Exposes **152** tools to MCP clients (Cursor, Claude Desktop, Claude Code, and others). |
+| **MCP server** | `pipefy-mcp-server` | Exposes **153** tools to MCP clients (Cursor, Claude Desktop, Claude Code, and others). |
 | **CLI** | `pipefy-cli` | Terminal commands aligned with MCP capabilities; see [`docs/parity.md`](docs/parity.md). |
 | **SDK** | `pipefy-sdk` | Vendor GraphQL client, services, and models shared by MCP and CLI. |
 | **Skills** | [`skills/`](skills/) | Markdown playbooks (Anthropic Skills format) for common Pipefy workflows. |
@@ -148,7 +148,7 @@ Deprecation and semver (post-1.0): [`docs/DEPRECATION.md`](docs/DEPRECATION.md).
 
 ## MCP server
 
-The server registers **152 tools** across ten domains. Canonical names: `PIPEFY_TOOL_NAMES` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py).
+The server registers **153 tools** across ten domains. Canonical names: `PIPEFY_TOOL_NAMES` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py).
 
 Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clients show to models). Per-area reference docs cover parameters, edge cases, and cross-cutting behavior.
 

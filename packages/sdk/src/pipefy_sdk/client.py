@@ -1805,6 +1805,33 @@ class PipefyClient:
             organization_uuid, filter_date, filters=filters, search=search, sort=sort
         )
 
+    async def get_automation_execution_metrics(
+        self,
+        organization_id: str,
+        automation_ids: list[str] | None = None,
+        *,
+        repo_id: str | None = None,
+        period: str = "SIXTY_MINUTES",
+    ) -> dict[str, Any]:
+        """Get execution metrics for one or more automations within a rolling period.
+
+        Returns metrics for the automations this token may read plus a
+        ``partial_errors`` list for any that failed (e.g. ``PERMISSION_DENIED``).
+
+        Args:
+            organization_id: Organization ID (numeric org id, not a UUID).
+            automation_ids: Automation IDs to fetch metrics for. Omit to fetch
+                metrics for every automation in the organization (optionally
+                scoped by ``repo_id``).
+            repo_id: Optional pipe/repo ID to scope the query.
+            period: AutomationExecutionMetricsPeriod enum value (FIFTEEN_MINUTES,
+                SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to
+                SIXTY_MINUTES, matching the API default.
+        """
+        return await self._observability_service.get_automation_execution_metrics(
+            organization_id, automation_ids, repo_id=repo_id, period=period
+        )
+
     async def get_ai_credit_usage(
         self,
         organization_uuid: str,

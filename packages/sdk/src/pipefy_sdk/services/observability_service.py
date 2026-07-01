@@ -6,6 +6,7 @@ from typing import Any, TypedDict
 from zipfile import BadZipFile
 
 import httpx
+from graphql import ExecutionResult
 from openpyxl.utils.exceptions import InvalidFileException
 
 from pipefy_sdk.graphql_executor import GraphQLExecutor
@@ -15,6 +16,7 @@ from pipefy_sdk.queries.observability_queries import (
     GET_AI_AGENT_LOG_DETAILS_QUERY,
     GET_AI_AGENT_LOGS_QUERY,
     GET_AI_CREDIT_USAGE_QUERY,
+    GET_AUTOMATION_EXECUTION_METRICS_QUERY,
     GET_AUTOMATION_JOBS_EXPORT_QUERY,
     GET_AUTOMATION_LOGS_BY_REPO_QUERY,
     GET_AUTOMATION_LOGS_QUERY,
@@ -25,6 +27,7 @@ from pipefy_sdk.services.observability_export_csv import (
     xlsx_first_sheet_to_csv_limited,
 )
 from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
+from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 _DEFAULT_PAGE_SIZE = 30
 
@@ -91,11 +94,78 @@ def _build_usage_variables(
     return variables
 
 
+def _normalize_execution_metrics_result(result: ExecutionResult) -> dict[str, Any]:
+    """Split a partial ``automations.executionMetrics`` response into nodes and errors.
+
+    ``result.data`` carries the automations the token may read (each with its
+    ``executionMetrics``); ``result.errors`` carries per-automation failures
+    (e.g. ``PERMISSION_DENIED``) with ``automation_id`` in ``extensions``. Both are
+    returned so the caller can report a partial success.
+
+    Args:
+        result: ExecutionResult from ``execute_query_allow_partial``.
+    """
+    data = result.data or {}
+    automations = unwrap_relay_connection_nodes(data.get("automations"))
+    partial_errors: list[dict[str, Any]] = []
+    for err in result.errors or []:
+        extensions = getattr(err, "extensions", None) or {}
+        partial_errors.append(
+            {
+                "automation_id": extensions.get("automation_id"),
+                "code": extensions.get("code"),
+                "message": getattr(err, "message", str(err)),
+                "correlation_id": extensions.get("correlation_id"),
+            }
+        )
+    return {"automations": automations, "partial_errors": partial_errors}
+
+
 class ObservabilityService:
     """Reads for AI agent logs, automation logs, usage stats, and credit dashboard."""
 
     def __init__(self, *, executor: GraphQLExecutor) -> None:
         self._executor = executor
+
+    async def get_automation_execution_metrics(
+        self,
+        organization_id: str,
+        automation_ids: list[str] | None = None,
+        *,
+        repo_id: str | None = None,
+        period: str = "SIXTY_MINUTES",
+    ) -> dict[str, Any]:
+        """Get execution metrics for one or more automations within a rolling period.
+
+        Partial success: returns metrics for the automations this token may read,
+        plus a ``partial_errors`` list naming any automations that failed
+        (e.g. ``PERMISSION_DENIED``). The ``automations`` query reports per-node
+        errors alongside data, so this uses the partial-tolerant execute path.
+
+        Args:
+            organization_id: Organization ID (required by the ``automations`` query;
+                a numeric org id, not a UUID).
+            automation_ids: Automation IDs to fetch metrics for. When ``None``,
+                the ``automationIds`` filter is omitted and the query returns
+                metrics for every automation in the organization (optionally
+                scoped by ``repo_id``).
+            repo_id: Optional pipe/repo ID to scope the query.
+            period: AutomationExecutionMetricsPeriod enum value (FIFTEEN_MINUTES,
+                SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to
+                SIXTY_MINUTES, matching the API default.
+        """
+        variables: dict[str, Any] = {
+            "organizationId": organization_id,
+            "period": period,
+        }
+        if automation_ids is not None:
+            variables["automationIds"] = automation_ids
+        if repo_id is not None:
+            variables["repoId"] = repo_id
+        result = await self._executor.execute_query_allow_partial(
+            GET_AUTOMATION_EXECUTION_METRICS_QUERY, variables
+        )
+        return _normalize_execution_metrics_result(result)
 
     async def get_ai_agent_logs(
         self,

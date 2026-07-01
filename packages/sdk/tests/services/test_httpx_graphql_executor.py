@@ -5,6 +5,7 @@ import pytest
 from gql import gql
 from gql.graphql_request import GraphQLRequest
 from gql.transport.httpx import HTTPXAsyncTransport
+from graphql import ExecutionResult, GraphQLError
 from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk import __version__
@@ -150,6 +151,51 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged():
             await base.execute_query(query, variables)
 
     assert exc.value is expected_error
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_forwards_get_execution_result_false():
+    """Default path asks gql for the data dict (raise-on-errors semantics)."""
+    query = _sample_query()
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"ok": True})
+
+    with patch("pipefy_sdk.graphql_executor.Client") as mock_client_cls:
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
+        await base.execute_query(query, {})
+
+    assert mock_session.execute.call_args.kwargs["get_execution_result"] is False
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_allow_partial_returns_execution_result_without_raising():
+    """Partial path forwards get_execution_result=True and returns the result as-is.
+
+    gql does not raise on GraphQL ``errors`` in this mode, so per-node failures
+    arrive on ``result.errors`` next to the partial ``result.data``.
+    """
+    query = _sample_query()
+    sentinel = ExecutionResult(
+        data={"automations": {"edges": []}},
+        errors=[GraphQLError("Permission denied", extensions={"code": "X"})],
+    )
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=sentinel)
+
+    with patch("pipefy_sdk.graphql_executor.Client") as mock_client_cls:
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
+        result = await base.execute_query_allow_partial(query, {"x": 1})
+
+    assert result is sentinel
+    assert mock_session.execute.call_args.kwargs["get_execution_result"] is True
 
 
 @pytest.mark.unit

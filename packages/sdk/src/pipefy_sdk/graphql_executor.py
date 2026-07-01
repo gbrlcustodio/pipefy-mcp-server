@@ -8,16 +8,18 @@ from gql import Client
 from gql.graphql_request import GraphQLRequest
 from gql.transport.exceptions import TransportQueryError
 from gql.transport.httpx import HTTPXAsyncTransport
-from graphql import DocumentNode, GraphQLSchema
+from graphql import DocumentNode, ExecutionResult, GraphQLSchema
 from httpx import Auth, Timeout
 
 
 class GraphQLExecutor(Protocol):
     """The GraphQL execution seam services depend on.
 
-    Narrow by design: it exposes only the operation services need and leaks
+    Narrow by design: it exposes only the operations services need and leaks
     nothing about the httpx/gql transport. Services receive an implementation
-    through their constructor and call ``execute_query``; tests inject a fake.
+    through their constructor and call ``execute_query``, or
+    ``execute_query_allow_partial`` when a response can mix ``data`` with
+    per-node ``errors``; tests inject a fake.
     ``query`` is a parsed ``DocumentNode``: callers build one with ``gql()`` (the
     raw ``execute_graphql`` passthrough parses its string before reaching here).
     """
@@ -25,6 +27,10 @@ class GraphQLExecutor(Protocol):
     async def execute_query(
         self, query: DocumentNode, variables: dict[str, Any]
     ) -> dict: ...
+
+    async def execute_query_allow_partial(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> ExecutionResult: ...
 
 
 def _graphql_request_with_variables(
@@ -72,16 +78,26 @@ class HttpxGraphQLExecutor:
         self._fetched_gql_schema: GraphQLSchema | None = None
         self._fetched_gql_schema_lock = asyncio.Lock()
 
-    async def execute_query(
-        self, query: DocumentNode, variables: dict[str, Any]
-    ) -> dict:
-        """Execute a GraphQL query/mutation with variables.
+    async def _execute_request(
+        self,
+        query: DocumentNode,
+        variables: dict[str, Any],
+        *,
+        get_execution_result: bool,
+    ) -> Any:
+        """Run a GraphQL request on a fresh transport, honoring schema caching.
 
         A fresh HTTPXAsyncTransport is created per call so concurrent invocations
         each get their own isolated connection state.
         By default the gql client does not fetch the remote schema (no introspection
         per request). When ``cache_schema`` is True the schema is fetched once per
         executor instance, cached, and reused for local validation.
+
+        ``get_execution_result`` is forwarded to gql's ``session.execute``: when
+        ``False`` gql returns the ``data`` dict and raises ``TransportQueryError`` if
+        the response carries GraphQL ``errors``; when ``True`` gql returns an
+        ``ExecutionResult`` carrying ``data`` and ``errors`` together without raising,
+        so partial-success responses are preserved.
         """
         transport = HTTPXAsyncTransport(
             url=self._graphql_url,
@@ -90,39 +106,68 @@ class HttpxGraphQLExecutor:
             verify=True,
             headers=self._headers,
         )
-        try:
-            if self._cache_schema:
-                if self._fetched_gql_schema is None:
-                    async with self._fetched_gql_schema_lock:
-                        if self._fetched_gql_schema is None:
-                            client = Client(
-                                transport=transport,
-                                fetch_schema_from_transport=True,
+        request = _graphql_request_with_variables(query, variables)
+        if self._cache_schema:
+            if self._fetched_gql_schema is None:
+                async with self._fetched_gql_schema_lock:
+                    if self._fetched_gql_schema is None:
+                        client = Client(
+                            transport=transport,
+                            fetch_schema_from_transport=True,
+                        )
+                        async with client as session:
+                            result = await session.execute(
+                                request, get_execution_result=get_execution_result
                             )
-                            async with client as session:
-                                result = await session.execute(
-                                    _graphql_request_with_variables(query, variables)
-                                )
-                            if client.schema is not None:
-                                self._fetched_gql_schema = client.schema
-                            return result
-                reuse_client = Client(
-                    transport=transport,
-                    schema=self._fetched_gql_schema,
-                    fetch_schema_from_transport=False,
-                )
-                async with reuse_client as session:
-                    return await session.execute(
-                        _graphql_request_with_variables(query, variables)
-                    )
-
-            async with Client(
-                transport=transport, fetch_schema_from_transport=False
-            ) as session:
+                        if client.schema is not None:
+                            self._fetched_gql_schema = client.schema
+                        return result
+            reuse_client = Client(
+                transport=transport,
+                schema=self._fetched_gql_schema,
+                fetch_schema_from_transport=False,
+            )
+            async with reuse_client as session:
                 return await session.execute(
-                    _graphql_request_with_variables(query, variables)
+                    request, get_execution_result=get_execution_result
                 )
+
+        async with Client(
+            transport=transport, fetch_schema_from_transport=False
+        ) as session:
+            return await session.execute(
+                request, get_execution_result=get_execution_result
+            )
+
+    async def execute_query(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> dict:
+        """Execute a GraphQL query/mutation with variables.
+
+        All-or-nothing semantics: gql raises ``TransportQueryError`` if the response
+        carries any GraphQL ``errors`` (the partial ``data`` is discarded). For
+        responses that intentionally mix data and per-node errors, use
+        :meth:`execute_query_allow_partial` instead.
+        """
+        try:
+            return await self._execute_request(
+                query, variables, get_execution_result=False
+            )
         except TransportQueryError as exc:
             if self._on_graphql_error is None:
                 raise
             raise ValueError(self._on_graphql_error(exc.errors or [])) from exc
+
+    async def execute_query_allow_partial(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> ExecutionResult:
+        """Execute a query preserving partial ``data`` alongside GraphQL ``errors``.
+
+        Pipefy can return ``data`` for the nodes a token may access AND per-node
+        ``errors`` (e.g. ``PERMISSION_DENIED`` carrying ``automation_id`` in
+        ``extensions``) in a single response. :meth:`execute_query` would raise and
+        drop the partial ``data``; this path uses gql's ``get_execution_result=True``
+        so callers receive both ``result.data`` and ``result.errors`` and can report a
+        partial success. Transport-level failures still raise as ``TransportError``.
+        """
+        return await self._execute_request(query, variables, get_execution_result=True)

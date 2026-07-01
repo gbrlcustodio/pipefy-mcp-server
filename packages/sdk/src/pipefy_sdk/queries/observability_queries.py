@@ -239,6 +239,43 @@ GET_AUTOMATIONS_USAGE_QUERY = gql(
     """
 )
 
+GET_AUTOMATION_EXECUTION_METRICS_QUERY = gql(
+    """
+    query AutomationExecutionMetrics(
+        $organizationId: ID!
+        $repoId: ID
+        $automationIds: [ID!]
+        $period: AutomationExecutionMetricsPeriod
+    ) {
+        automations(
+            organizationId: $organizationId
+            repoId: $repoId
+            automationIds: $automationIds
+        ) {
+            edges {
+                node {
+                    id
+                    name
+                    event_id
+                    action_id
+                    event_repo {
+                        id
+                        name
+                    }
+                    executionMetrics(period: $period) {
+                        lastRun
+                        failureRate
+                        successRate
+                        averageDuration
+                        totalRuns
+                    }
+                }
+            }
+        }
+    }
+    """
+)
+
 RESOLVE_ORGANIZATION_UUID_QUERY = gql(
     """
     query ResolveOrganizationUuid($id: ID!) {
@@ -307,6 +344,7 @@ GET_AUTOMATION_JOBS_EXPORT_QUERY = gql(
 
 __all__ = [
     "CREATE_AUTOMATION_JOBS_EXPORT_MUTATION",
+    "GET_AUTOMATION_EXECUTION_METRICS_QUERY",
     "GET_AUTOMATION_JOBS_EXPORT_QUERY",
     "GET_AGENTS_USAGE_QUERY",
     "GET_AI_AGENT_LOG_DETAILS_QUERY",

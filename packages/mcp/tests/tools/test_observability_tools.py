@@ -28,6 +28,7 @@ def mock_observability_client():
     client.get_automation_logs_by_repo = AsyncMock()
     client.get_agents_usage = AsyncMock()
     client.get_automations_usage = AsyncMock()
+    client.get_automation_execution_metrics = AsyncMock()
     client.get_ai_credit_usage = AsyncMock()
     client.export_automation_jobs = AsyncMock()
     client.get_automation_jobs_export = AsyncMock()
@@ -307,6 +308,116 @@ async def test_get_automations_usage_success(
     payload = extract_payload(result)
     assert payload["success"] is True
     assert payload["data"]["automationsUsageDetails"]["usage"] == 500
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_execution_metrics_partial_success(
+    observability_session, mock_observability_client, extract_payload
+):
+    """Permitted automations + denied ids both surface; defaults applied."""
+    mock_observability_client.get_automation_execution_metrics.return_value = {
+        "automations": [
+            {
+                "id": "25",
+                "name": "Loop 51",
+                "executionMetrics": {
+                    "lastRun": None,
+                    "failureRate": 0.0,
+                    "successRate": 0.0,
+                    "averageDuration": None,
+                    "totalRuns": 0,
+                },
+            }
+        ],
+        "partial_errors": [
+            {
+                "automation_id": "124",
+                "code": "PERMISSION_DENIED",
+                "message": "Permission denied",
+                "correlation_id": "c86ccfa6",
+            }
+        ],
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_execution_metrics",
+            {"organization_id": "3", "automation_ids": ["25", "124"], "repo_id": "16"},
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
+        "3", ["25", "124"], repo_id="16", period="SIXTY_MINUTES"
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert [a["id"] for a in payload["data"]["automations"]] == ["25"]
+    assert payload["data"]["partial_errors"][0]["automation_id"] == "124"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_execution_metrics_without_ids_fetches_all(
+    observability_session, mock_observability_client, extract_payload
+):
+    """Omitting automation_ids fetches every automation in the org (ids passed as None)."""
+    mock_observability_client.get_automation_execution_metrics.return_value = {
+        "automations": [],
+        "partial_errors": [],
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_execution_metrics",
+            {"organization_id": "3"},
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
+        "3", None, repo_id=None, period="SIXTY_MINUTES"
+    )
+    assert extract_payload(result)["success"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_execution_metrics_rejects_invalid_period(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_execution_metrics",
+            {
+                "organization_id": "3",
+                "automation_ids": ["25"],
+                "period": "current_month",
+            },
+        )
+
+    assert result.isError is False
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "period" in tool_error_message(p)
+    mock_observability_client.get_automation_execution_metrics.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_execution_metrics_rejects_empty_ids(
+    observability_session, mock_observability_client, extract_payload
+):
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_execution_metrics",
+            {"organization_id": "3", "automation_ids": []},
+        )
+
+    assert result.isError is False
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "automation_ids" in tool_error_message(p)
+    mock_observability_client.get_automation_execution_metrics.assert_not_awaited()
 
 
 @pytest.mark.anyio

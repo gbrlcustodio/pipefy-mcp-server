@@ -13,6 +13,7 @@ display concern handled in CLI code, not an auth method here.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import assert_never
 
@@ -100,6 +101,29 @@ def _has_stored_session(oidc_client: OidcClient) -> bool:
     )
 
 
+def _detected_methods(
+    *,
+    static_token: str | None,
+    service_account: ServiceAccount | None,
+    oidc_client: OidcClient | None,
+) -> Iterator[ResolvedAuth]:
+    """Yield each configured auth method, highest precedence first.
+
+    The single source of both precedence order and per-method gate logic:
+    :func:`resolve_pipefy_auth` takes the first item, :func:`detect_pipefy_auth_methods`
+    takes them all. Lazy by design, so ``resolve``'s short-circuit falls out of
+    generator suspension: pulling only the first item stops the body at that
+    ``yield``, leaving lower gates (including the stored-session keychain read)
+    unevaluated.
+    """
+    if static_token and static_token.strip():
+        yield StaticTokenAuth(static_token.strip())
+    if service_account is not None:
+        yield ServiceAccountAuth(service_account)
+    if oidc_client is not None and _has_stored_session(oidc_client):
+        yield StoredSessionAuth(oidc_client)
+
+
 def resolve_pipefy_auth(
     *,
     static_token: str | None = None,
@@ -114,7 +138,8 @@ def resolve_pipefy_auth(
     the transport's ``httpx.Auth``.
 
     For an enumeration of every detected auth method (e.g. for diagnostics),
-    call :func:`detect_pipefy_auth_methods` instead.
+    call :func:`detect_pipefy_auth_methods` instead. The two share
+    :func:`_detected_methods`, so this always equals that function's first entry.
 
     Args:
         static_token: Pre-resolved bearer for the static-token method. Consumers
@@ -124,13 +149,14 @@ def resolve_pipefy_auth(
         oidc_client: OIDC client identity for the stored-session method; the
             session is loaded from the keychain at detection time.
     """
-    if static_token and static_token.strip():
-        return StaticTokenAuth(static_token.strip())
-    if service_account is not None:
-        return ServiceAccountAuth(service_account)
-    if oidc_client is not None and _has_stored_session(oidc_client):
-        return StoredSessionAuth(oidc_client)
-    return None
+    return next(
+        _detected_methods(
+            static_token=static_token,
+            service_account=service_account,
+            oidc_client=oidc_client,
+        ),
+        None,
+    )
 
 
 def build_httpx_auth(resolved: ResolvedAuth) -> Auth:
@@ -169,16 +195,17 @@ def detect_pipefy_auth_methods(
     each configured method into the same :data:`ResolvedAuth` variant rather
     than stopping at the winner, so ``pipefy auth status`` can surface masked
     methods alongside the active one. Runs every method's detection, including
-    the keychain read for the stored-session method.
+    the keychain read for the stored-session method. The first entry is always
+    the method :func:`resolve_pipefy_auth` returns; both draw from
+    :func:`_detected_methods`.
     """
-    methods: list[ResolvedAuth] = []
-    if static_token and static_token.strip():
-        methods.append(StaticTokenAuth(static_token.strip()))
-    if service_account is not None:
-        methods.append(ServiceAccountAuth(service_account))
-    if oidc_client is not None and _has_stored_session(oidc_client):
-        methods.append(StoredSessionAuth(oidc_client))
-    return methods
+    return list(
+        _detected_methods(
+            static_token=static_token,
+            service_account=service_account,
+            oidc_client=oidc_client,
+        )
+    )
 
 
 def missing_auth_message(*, login_command: str = "pipefy auth login") -> str:

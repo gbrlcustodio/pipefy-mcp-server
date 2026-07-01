@@ -66,6 +66,19 @@ In practice:
 
 A function that accepts the parsed type may assume the guarantee and must not re-check it. This pairs with the boundary rule above: that one says where to validate, this one says what the check should hand back.
 
+### Parsed types are self-guaranteeing
+
+A parsed type rejects invalid construction itself; it does not rely on the pipeline that usually builds it. Its constructor enforces every invariant it claims, so holding an instance is proof it is valid and a hand-written instance cannot be invalid. The domain name is the guarantee, not the resolver that happens to produce it.
+
+- A recurring (value + invariant) pair earns a dedicated leaf type rather than a bare `str`, so every field holding one inherits the guarantee instead of re-checking it. A one-off invariant stays with its owner.
+- When validity depends on a policy, carry the policy as part of the value so the constructor has the context to judge it.
+- A runtime-erased alias does not qualify: it disappears at runtime, so an invalid value still constructs. Reach for a type whose constructor actually runs.
+- Settings models stay pure data readers. A cross-field rule fails fast at construction, not through a projection method a consumer must remember to call, which makes the parse optional and invites a silent `None`.
+
+### Composition: the per-app runtime
+
+Parsed types are decisions and cost no I/O to build. Effects (keychain reads, network, building clients or verifiers) live in a per-application runtime built once at startup: the single place raw settings become domain types and wired resources. Downstream depends on the runtime or the types it holds, never on raw settings or an ad-hoc resolve. The runtime lives in the app package; shared packages export parsed types and resolvers, not app wiring or effects. Whether an app wires eagerly (fail fast at boot) or keeps effectful members lazy is a per-app choice.
+
 ## Testing
 - `pytest-asyncio`, `pytest-cov`, `pytest-mock`.
 - Unit tests: default (no marker needed). Integration tests: `@pytest.mark.integration` (needs `PIPEFY_*` credentials).

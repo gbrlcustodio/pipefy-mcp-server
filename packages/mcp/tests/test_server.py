@@ -13,9 +13,9 @@ from pipefy_sdk import PipefySettings
 from pipefy_mcp.auth import build_resource_server_auth
 from pipefy_mcp.server import (
     _assert_safe_http_bind,
+    _make_lifespan,
     _register_pipefy_tools,
     build_pipefy_mcp_server,
-    lifespan,
     run_server,
 )
 from pipefy_mcp.settings import ResourceServerSettings, Settings
@@ -47,26 +47,26 @@ _MINIMAL_PIPEFY_SETTINGS = Settings(
 
 
 @pytest.fixture
-def mocked_container():
-    """Patch the ``ServicesContainer`` the lifespan builds with a no-network mock.
+def mocked_runtime():
+    """Patch the ``McpRuntime`` the builder constructs with a no-network mock.
 
-    The lifespan constructs ``ServicesContainer()`` per entry; this intercepts
-    that construction so ``initialize_services`` is a no-op and ``pipefy_client``
-    is a stand-in a tool can resolve.
+    ``build_pipefy_mcp_server`` constructs ``McpRuntime`` once; this intercepts
+    that construction so ``initialize`` is a no-op and ``pipefy_client`` is a
+    stand-in a tool can resolve.
     """
-    container = MagicMock()
-    container.initialize_services = AsyncMock()
-    container.pipefy_client = MagicMock()
-    with patch("pipefy_mcp.server.ServicesContainer", return_value=container):
-        yield container
+    runtime = MagicMock()
+    runtime.initialize = AsyncMock()
+    runtime.pipefy_client = MagicMock()
+    with patch("pipefy_mcp.server.McpRuntime", return_value=runtime):
+        yield runtime
 
 
 @pytest.mark.anyio
-async def test_register_tools(mocked_container):
+async def test_register_tools(mocked_runtime):
     """The full Pipefy tool surface is reachable through an MCP session.
 
     Builds its own app with an explicit ``remote_mode=False`` (so the ambient
-    ``PIPEFY_MCP_REMOTE_MODE`` cannot change the surface) under ``mocked_container``
+    ``PIPEFY_MCP_REMOTE_MODE`` cannot change the surface) under ``mocked_runtime``
     (so entering the lifespan does not resolve real auth).
     """
     app = build_pipefy_mcp_server(remote_mode=False)
@@ -99,7 +99,7 @@ def test_run_server_builds_the_stdio_server_and_runs_it(monkeypatch):
 
 
 @pytest.mark.unit
-def test_build_server_registers_the_full_surface(mocked_container):
+def test_build_server_registers_the_full_surface(mocked_runtime):
     """The default (local) profile registers every Pipefy tool up front."""
     app = build_pipefy_mcp_server(remote_mode=False)
     registered = {t.name for t in app._tool_manager.list_tools()}
@@ -107,7 +107,7 @@ def test_build_server_registers_the_full_surface(mocked_container):
 
 
 @pytest.mark.unit
-def test_build_server_remote_mode_exposes_only_the_remote_safe_seed(mocked_container):
+def test_build_server_remote_mode_exposes_only_the_remote_safe_seed(mocked_runtime):
     """The remote profile withholds every tool not marked remote-safe."""
     app = build_pipefy_mcp_server(remote_mode=True)
     exposed = {t.name for t in app._tool_manager.list_tools()} & PIPEFY_TOOL_NAMES
@@ -118,7 +118,7 @@ def test_build_server_remote_mode_exposes_only_the_remote_safe_seed(mocked_conta
 
 
 @pytest.mark.unit
-def test_second_registration_pass_is_rejected_by_collision_preflight(mocked_container):
+def test_second_registration_pass_is_rejected_by_collision_preflight(mocked_runtime):
     """A second registration pass on the same app is rejected by the preflight.
 
     The guard is ``check_for_name_collisions()``: the first pass already
@@ -137,10 +137,10 @@ def test_second_registration_pass_is_rejected_by_collision_preflight(mocked_cont
 
 
 @pytest.mark.anyio
-async def test_lifespan_initializes_services_and_yields_container_without_registering(
-    mocked_container,
+async def test_lifespan_initializes_runtime_and_yields_it_without_registering(
+    mocked_runtime,
 ):
-    """The lifespan builds a container, initializes it, and yields it; no tools added."""
+    """The lifespan initializes the runtime and yields it; no tools added."""
     app = FastMCP("lifespan-resources-test")
 
     @app.tool()
@@ -148,24 +148,26 @@ async def test_lifespan_initializes_services_and_yields_container_without_regist
         """Pre-existing tool; the lifespan must not touch the tool table."""
         return "ok"
 
-    with patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS):
-        async with lifespan(app) as yielded:
-            names = {t.name for t in app._tool_manager.list_tools()}
+    lifespan = _make_lifespan(mocked_runtime)
+    async with lifespan(app) as yielded:
+        names = {t.name for t in app._tool_manager.list_tools()}
 
-    assert yielded is mocked_container
-    mocked_container.initialize_services.assert_awaited_once()
+    assert yielded is mocked_runtime
+    mocked_runtime.initialize.assert_awaited_once()
     # No Pipefy tools were registered by the lifespan; only the foreign tool.
     assert names == {"foreign_mcp_tool"}
 
 
 @pytest.mark.anyio
-async def test_repeat_lifespan_reinitializes_each_visit_and_leaves_tools_untouched(
-    mocked_container,
+async def test_repeat_lifespan_yields_the_same_runtime_and_leaves_tools_untouched(
+    mocked_runtime,
 ):
-    """Re-entering the lifespan builds and initializes a fresh container, never registers.
+    """Re-entering the lifespan yields the one app-scoped runtime, never registers.
 
-    Streamable HTTP re-enters the lifespan per session; each session gets its own
-    initialized container, and the tool table is never mutated.
+    Streamable HTTP re-enters the lifespan per session; every session shares the
+    single runtime (the build-once guarantee lives in its idempotent
+    ``initialize``, exercised in test_runtime.py), and the tool table is never
+    mutated.
     """
     app = FastMCP("lifespan-repeat-test")
 
@@ -174,31 +176,27 @@ async def test_repeat_lifespan_reinitializes_each_visit_and_leaves_tools_untouch
         """Must survive both visits untouched."""
         return "ok"
 
-    with patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS):
-        async with lifespan(app):
-            first = {t.name for t in app._tool_manager.list_tools()}
-        async with lifespan(app):
-            second = {t.name for t in app._tool_manager.list_tools()}
+    lifespan = _make_lifespan(mocked_runtime)
+    async with lifespan(app) as first_runtime:
+        first = {t.name for t in app._tool_manager.list_tools()}
+    async with lifespan(app) as second_runtime:
+        second = {t.name for t in app._tool_manager.list_tools()}
 
     assert first == second == {"foreign_mcp_tool"}
-    # Resources are initialized per visit; the tool table is never mutated.
-    assert mocked_container.initialize_services.await_count == 2
+    assert first_runtime is second_runtime is mocked_runtime
+    # The lifespan drives the idempotent initialize on each entry.
+    assert mocked_runtime.initialize.await_count == 2
 
 
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_lifespan_logs_error_when_initialization_raises():
-    """When service init raises, logger.exception runs and the error propagates."""
+    """When runtime init raises, logger.exception runs and the error propagates."""
     app = FastMCP("lifespan-init-fail")
-    mock_container = MagicMock()
-    mock_container.initialize_services = AsyncMock(
-        side_effect=ValueError("init failed")
-    )
-    with (
-        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
-        patch("pipefy_mcp.server.ServicesContainer", return_value=mock_container),
-        patch("pipefy_mcp.server.logger") as mock_logger,
-    ):
+    runtime = MagicMock()
+    runtime.initialize = AsyncMock(side_effect=ValueError("init failed"))
+    lifespan = _make_lifespan(runtime)
+    with patch("pipefy_mcp.server.logger") as mock_logger:
         with pytest.raises(ValueError, match="init failed"):
             async with lifespan(app):
                 pass
@@ -356,14 +354,14 @@ def test_run_server_http_refuses_non_loopback_before_building():
 
 
 @pytest.mark.unit
-def test_stdio_build_has_no_inbound_auth(mocked_container):
+def test_stdio_build_has_no_inbound_auth(mocked_runtime):
     """The stdio profile builds with no inbound auth wired into FastMCP."""
     app = build_pipefy_mcp_server(remote_mode=False)
     assert app.settings.auth is None
 
 
 @pytest.mark.unit
-def test_build_with_resource_server_wires_inbound_auth(mocked_container):
+def test_build_with_resource_server_wires_inbound_auth(mocked_runtime):
     """An enabled resource-server pair wires FastMCP's auth + token verifier."""
     app = build_pipefy_mcp_server(
         remote_mode=True, resource_server=_resource_server_pair()
@@ -378,7 +376,7 @@ def _asgi_client(app):
 
 
 @pytest.mark.unit
-async def test_http_unauthenticated_request_gets_401_challenge(mocked_container):
+async def test_http_unauthenticated_request_gets_401_challenge(mocked_runtime):
     """A request with no bearer is rejected with a 401 + WWW-Authenticate challenge.
 
     The auth middleware runs before the MCP handler, so no session (and no
@@ -396,7 +394,7 @@ async def test_http_unauthenticated_request_gets_401_challenge(mocked_container)
 
 
 @pytest.mark.unit
-async def test_http_serves_protected_resource_metadata(mocked_container):
+async def test_http_serves_protected_resource_metadata(mocked_runtime):
     """The RFC 9728 metadata route is served at the resource's well-known path."""
     app = build_pipefy_mcp_server(
         remote_mode=True, resource_server=_resource_server_pair()

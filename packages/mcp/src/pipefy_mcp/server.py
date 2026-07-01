@@ -2,13 +2,22 @@ from __future__ import annotations
 
 import logging
 import textwrap
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from mcp.server.fastmcp import FastMCP
 
-from pipefy_mcp.auth import ResourceServerAuth, build_resource_server_auth
-from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.auth import (
+    RequestContextBearerAuth,
+    ResourceServerAuth,
+    build_resource_server_auth,
+)
+from pipefy_mcp.core.runtime import (
+    AuthStrategy,
+    McpRuntime,
+    RequestScopedIdentity,
+    StartupIdentity,
+)
 from pipefy_mcp.settings import resolve_mcp_settings, settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
@@ -21,44 +30,62 @@ PIPEFY_INSTRUCTIONS = textwrap.dedent("""
 
 # Hosts that keep the server reachable only from the local machine. The HTTP
 # transport refuses to bind anywhere else (a routable interface or 0.0.0.0)
-# while it is unauthenticated.
+# until the DNS-rebinding host/Origin allowlist lands (#303); see
+# _assert_safe_http_bind.
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
-@asynccontextmanager
-async def lifespan(app: FastMCP) -> AsyncIterator[ServicesContainer]:
-    """Manage the server's resource lifecycle (not tool registration).
+def _make_lifespan(
+    runtime: McpRuntime,
+) -> Callable[[FastMCP], AbstractAsyncContextManager[McpRuntime]]:
+    """Build the FastMCP lifespan bound to the one app-scoped ``runtime``.
 
-    Following the FastMCP lifespan contract, this owns resources only: it builds a
-    container, initializes its services, and yields it as the request
-    ``lifespan_context``. Tools resolve the live client per request from this
-    ``lifespan_context`` (see
+    Following the FastMCP lifespan contract, the lifespan owns resources only: it
+    initializes the runtime and yields it as the request ``lifespan_context``.
+    Tools resolve the live client per request from that context (see
     :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so both transports
     must run a lifespan for tools to find a client.
 
-    The container is built per entry. Streamable HTTP re-enters this context
-    manager per session, so each session gets its own initialized container. That
-    re-resolution is cheap (the stored-session warm-up only hits the network when
-    the token is stale, serialized by the auth layer) and the HTTP profile is
-    loopback validation-only; #302's per-request identity will build the client
-    from the request here instead. See AGENTS.md for the fuller rationale.
+    The one runtime is built once at server construction and captured here.
+    Streamable HTTP re-enters this context manager per session; each entry calls
+    the idempotent :meth:`McpRuntime.initialize` (a no-op after the first) and
+    yields the same runtime, so every session shares one client. See AGENTS.md
+    for the fuller rationale.
 
     Tools are registered once, up front, by :func:`_register_pipefy_tools`, never
     here, so re-entry cannot race the tool table.
     """
-    try:
-        logger.info("Initializing services")
-        logger.info(
-            "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
-            "enabled" if settings.mcp.unified_envelope else "disabled",
-        )
-        container = ServicesContainer()
-        await container.initialize_services(settings)
-    except Exception:
-        logger.exception("Fatal error during server lifespan initialization")
-        raise
 
-    yield container
+    @asynccontextmanager
+    async def lifespan(_app: FastMCP) -> AsyncIterator[McpRuntime]:
+        try:
+            logger.info("Initializing services")
+            logger.info(
+                "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
+                "enabled" if settings.mcp.unified_envelope else "disabled",
+            )
+            await runtime.initialize()
+        except Exception:
+            logger.exception("Fatal error during server lifespan initialization")
+            raise
+
+        yield runtime
+
+    return lifespan
+
+
+def _select_auth_strategy(resource_server: ResourceServerAuth | None) -> AuthStrategy:
+    """Parse the transport profile into the shared client's identity model.
+
+    The resource-server profile validates a per-request bearer, so the shared
+    client acts on behalf of each caller (:class:`RequestScopedIdentity`, reading
+    the request context per call). Without it (stdio, or the disabled HTTP
+    profile) there is no inbound identity, so the client resolves one credential
+    at startup (:class:`StartupIdentity`).
+    """
+    if resource_server is not None:
+        return RequestScopedIdentity(RequestContextBearerAuth())
+    return StartupIdentity()
 
 
 def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
@@ -100,12 +127,13 @@ def build_pipefy_mcp_server(
 ) -> FastMCP:
     """Build the FastMCP app with its tools registered once, before serving.
 
-    Used by both transports: the resource-only :func:`lifespan` is the same, only
-    the transport ``run`` differs. ``remote_mode`` (the default-deny remote-safe
-    tool surface) defaults to whether the configured profile is ``remote``; pass an
-    explicit value to override (used by tests). ``host``/``port`` default to
-    ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT`` and matter only for the HTTP
-    transport; stdio ignores them.
+    Used by both transports. It builds the one app-scoped :class:`McpRuntime`
+    (its identity model chosen by :func:`_select_auth_strategy` from the profile)
+    and binds the lifespan to it; only the transport ``run`` differs.
+    ``remote_mode`` (the default-deny remote-safe tool surface) defaults to whether
+    the configured profile is ``remote``; pass an explicit value to override (used
+    by tests). ``host``/``port`` default to ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``
+    and matter only for the HTTP transport; stdio ignores them.
 
     ``resource_server`` is the ``(verifier, auth)`` pair from
     :func:`pipefy_mcp.auth.build_resource_server_auth`. When present, FastMCP
@@ -118,10 +146,11 @@ def build_pipefy_mcp_server(
     )
     resolved_host, resolved_port = _resolve_bind(host, port)
     verifier, auth = resource_server or (None, None)
+    runtime = McpRuntime(settings, _select_auth_strategy(resource_server))
     app = FastMCP(
         "pipefy",
         instructions=PIPEFY_INSTRUCTIONS,
-        lifespan=lifespan,
+        lifespan=_make_lifespan(runtime),
         host=resolved_host,
         port=resolved_port,
         token_verifier=verifier,
@@ -134,16 +163,15 @@ def build_pipefy_mcp_server(
 def _assert_safe_http_bind(*, host: str) -> None:
     """Refuse to bind the HTTP transport to a non-loopback host.
 
-    The HTTP transport is restricted to loopback for now. Even with the
-    resource-server profile validating an inbound bearer, there is no
-    per-request on-behalf-of identity yet, so every call still runs as the
-    single identity resolved at startup. A network-reachable bind would hand
-    that identity to anyone who can reach the port. (The filesystem tools, e.g.
-    the attachment uploads, also only make sense on loopback, where the server
-    shares the client's disk.)
+    The HTTP transport is restricted to loopback for now. The resource-server
+    profile now carries per-request on-behalf-of identity (each call runs as the
+    validated caller, not a single startup identity), so that is no longer the
+    blocker; the remaining one is DNS-rebinding protection, the configurable
+    host / Origin allowlist tracked in #303. (The filesystem tools, e.g. the
+    attachment uploads, also only make sense on loopback, where the server shares
+    the client's disk; remote-safe file inputs are #305.)
 
-    Off-loopback binding stays off until the hosted on-behalf-of profile lands
-    (per-request identity and the DNS-rebinding host/Origin allowlist); see
+    Off-loopback binding stays off until that allowlist lands; see
     experiments/hosted-obo/RFC-OUTLINE.md.
     """
     if host in _LOOPBACK_HOSTS:
@@ -182,8 +210,8 @@ def run_server(
     an import failure.
 
     Both transports build the same app through :func:`build_pipefy_mcp_server`
-    (same :func:`lifespan`, same :func:`_register_pipefy_tools`) and differ only
-    in the transport ``run`` and HTTP's bind concerns.
+    (same runtime-bound lifespan, same :func:`_register_pipefy_tools`) and differ
+    only in the transport ``run`` and HTTP's bind concerns.
     """
     mcp = resolve_mcp_settings(
         profile=profile, transport=transport, host=host, port=port

@@ -40,11 +40,12 @@ marker is described below.
 Bind host/port come from `PIPEFY_MCP_HOST` / `PIPEFY_MCP_PORT` (defaults
 `127.0.0.1:8000`), overridable with `--host` / `--port`, and matter only over HTTP.
 
-The identity the server acts as is still the single credential resolved at startup,
-for both profiles: `remote` validates the inbound bearer but does not yet act on
-behalf of the caller. Per-request on-behalf-of identity is separate, in-progress
-work; until it lands, treat `remote` as a validation-only HTTP profile and keep the
-bind on loopback.
+Under `remote` the server acts on behalf of each caller: it validates the inbound
+bearer per request and the one shared client reads that validated bearer per call,
+so concurrent callers each act as themselves rather than as a single identity
+resolved at startup. `local` runs as the one credential resolved at startup. The
+transport still binds loopback-only until the DNS-rebinding host/Origin allowlist
+lands.
 
 **Resource-server profile.** Config is split by domain. *Token validation* is an
 auth concern and lives in `pipefy_auth.JwtValidationSettings` (`settings.jwt`,
@@ -69,50 +70,54 @@ module, the composition root) resolves the inbound issuer and pairs the verifier
 with `AuthSettings`, which `server.py` wires into the app.
 
 **Loopback bind.** `_assert_safe_http_bind` restricts the HTTP transport to a
-loopback bind, unconditionally for now. Even with the resource-server profile
-validating an inbound bearer, there is no per-request on-behalf-of identity yet,
-so every call runs as the single startup identity; a network-reachable port would
-hand that identity to anyone who can reach it. Off-loopback binding stays off until
-the hosted on-behalf-of profile lands (see `experiments/hosted-obo/RFC-OUTLINE.md`),
-which brings per-request identity and the configurable host / Origin allowlist for a
-proxied deployment (DNS-rebinding protection). The attachment tools' local
-`file_path` inputs also still assume a loopback peer that shares the client's disk
-(remote-safe file inputs are separate follow-up work).
+loopback bind, unconditionally for now. Per-request on-behalf-of identity now
+exists (each call runs as the validated caller, not a single startup identity), so
+that is no longer the blocker; the remaining one is DNS-rebinding protection, the
+configurable host / Origin allowlist for a proxied deployment. Off-loopback binding
+stays off until that lands (see `experiments/hosted-obo/RFC-OUTLINE.md`). The
+attachment tools' local `file_path` inputs also still assume a loopback peer that
+shares the client's disk (remote-safe file inputs are separate follow-up work).
 
 ## Tool registration
 
 Tools are registered **once, at construction** (via `_register_pipefy_tools` in
 `server.py`, reached through `build_pipefy_mcp_server`, which both transports use),
 not inside the FastMCP `lifespan`. The lifespan owns resources only: it
-initializes services and yields the container as the request `lifespan_context`.
-This follows the FastMCP contract, where the lifespan can run per session (per
-request under Streamable HTTP) and so must not mutate the tool table.
+initializes the app-scoped runtime and yields it as the request
+`lifespan_context`. This follows the FastMCP contract, where the lifespan can run
+per session (per request under Streamable HTTP) and so must not mutate the tool
+table.
 
 Tools take no client at registration. Each tool function declares a
 `ctx: Context` parameter (FastMCP injects it and keeps it out of the tool's
 input schema) and resolves the live client per request with
 `get_pipefy_client(ctx)` (`tools/tool_context.py`), which reads
 `ctx.request_context.lifespan_context.pipefy_client`. Because the client is
-looked up per call rather than captured at registration, what the lifespan yields
-can change (a future per-request identity can vary the client) without touching
-any tool or re-registering. That is why there is no repeat-visit bookkeeping:
-registration never repeats.
+looked up per call rather than captured at registration, tools observe whatever
+the runtime holds without re-registering; under the hosted profile the one shared
+client applies each request's identity itself (via its request-context bearer), so
+identity is per-request even though the client is stable. That is why there is no
+repeat-visit bookkeeping: registration never repeats.
 
 When adding a tool, give it a `ctx: Context` parameter and start its body with
 `client = get_pipefy_client(ctx)`; do not pass a client through `register`.
 
 Both transports launch through the single `run_server` entry point, which resolves
-the profile/transport once and builds the same app through
-`build_pipefy_mcp_server` (same `lifespan`, same `_register_pipefy_tools`), differing
-only in the transport `run` and HTTP's bind concerns. Initialization runs in the
-lifespan, in the serving event loop, for both: the per-request HTTP clients bind to
-the loop that is running when they are first used, so creating them off in a
-separate startup loop would leave them bound to a closed loop. The lifespan builds a
-fresh `ServicesContainer` per entry (no singleton); Streamable HTTP re-enters it per
-session, so each session gets its own initialized container. The per-session
-re-resolution is cheap (the stored-session warm-up only hits the network when the
-token is stale, serialized by the auth layer) and a future per-request identity will
-build the client from the request here anyway.
+the profile/transport once (via `resolve_mcp_settings`) and builds the same app
+through `build_pipefy_mcp_server` (same runtime-bound lifespan, same
+`_register_pipefy_tools`), differing only in the transport `run` and HTTP's bind
+concerns. `build_pipefy_mcp_server` constructs one app-scoped `McpRuntime`
+(`core/runtime.py`) and binds the lifespan to it. Initialization runs in the
+lifespan, in the serving event loop, for both: the per-request HTTP clients bind
+to the loop that is running when they are first used, so creating them off in a
+separate startup loop would leave them bound to a closed loop. The runtime's
+`initialize` is idempotent, so Streamable HTTP re-entering the lifespan per
+session shares the single client built on the first entry rather than rebuilding
+it. The runtime holds no per-request state: `StartupIdentity` resolves one
+credential at startup (stdio/local), while `RequestScopedIdentity` wires the
+shared client with a `RequestContextBearerAuth` that reads each caller's
+validated bearer from the request context, so one client serves every concurrent
+caller as themselves.
 
 ## Remote-profile tool marker
 

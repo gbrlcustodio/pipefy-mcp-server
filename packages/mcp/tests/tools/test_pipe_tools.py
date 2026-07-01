@@ -17,7 +17,8 @@ from mcp.types import (
 )
 from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.core.container import ServicesContainer
+from pipefy_mcp.core.runtime import McpRuntime, StartupIdentity
+from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     DeleteCardErrorPayload,
@@ -67,16 +68,16 @@ def mock_pipefy_client():
 
 
 @pytest.fixture(autouse=True)
-def mock_services_container(mocker, mock_pipefy_client):
-    container = Mock(ServicesContainer)
-    container.pipefy_client = mock_pipefy_client
-    container.initialize_services = AsyncMock()
+def mock_mcp_runtime(mocker, mock_pipefy_client):
+    runtime = Mock(McpRuntime)
+    runtime.pipefy_client = mock_pipefy_client
+    runtime.initialize = AsyncMock()
 
-    # The lifespan builds ServicesContainer() per entry; patch it where the
-    # server module looks it up so the built container is this mock.
+    # build_pipefy_mcp_server constructs McpRuntime once; patch it where the
+    # server module looks it up so the built runtime is this mock.
     return mocker.patch(
-        "pipefy_mcp.server.ServicesContainer",
-        return_value=container,
+        "pipefy_mcp.server.McpRuntime",
+        return_value=runtime,
     )
 
 
@@ -265,13 +266,13 @@ class TestCreateCardTool:
             "Pipefy MCP Test Server", PipeTools.register, mock_pipefy_client
         )
 
-        container = ServicesContainer()
-        container.pipefy_client = mock_pipefy_client
+        runtime = McpRuntime(settings, StartupIdentity())
+        runtime.pipefy_client = mock_pipefy_client
 
         ctx = MagicMock()
         ctx.debug = AsyncMock()
         ctx.session = SimpleNamespace(client_params=SimpleNamespace())
-        ctx.request_context = SimpleNamespace(lifespan_context=container)
+        ctx.request_context = SimpleNamespace(lifespan_context=runtime)
 
         result = await mcp._tool_manager.call_tool(
             "create_card",

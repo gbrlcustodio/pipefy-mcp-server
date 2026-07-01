@@ -423,6 +423,16 @@ class JwtValidationSettings(BaseSettings):
             file_secret_settings,
         )
 
+    @field_validator("issuer_url", "audience", "jwks_uri", mode="before")
+    @classmethod
+    def _strip_str(cls, value: object) -> object:
+        # Mirror AuthSettings._strip_str: normalize once here so _validate_urls
+        # and resolve_jwt_validation read already-stripped values (env-var
+        # whitespace must not survive into jwt.decode's exact iss/aud compare).
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
     issuer_url: str | None = Field(
         default=None,
         description=(
@@ -475,20 +485,16 @@ class JwtValidationSettings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_urls(self) -> Self:
-        # Strip and shape-check both URL fields. Env-var whitespace would otherwise
-        # survive into the consumer: issuer_url into jwt.decode(issuer=...), which
-        # compares iss exactly, and jwks_uri into the JWKS fetch. A realm path is
-        # allowed, so only a query or fragment (which would corrupt URL building)
-        # is rejected.
+        # Shape-check both URL fields (already stripped by _strip_str). A realm
+        # path is allowed, so only a query or fragment (which would corrupt URL
+        # building) is rejected.
         for label in ("issuer_url", "jwks_uri"):
             value = getattr(self, label)
             if value is None:
                 continue
-            stripped = value.strip()
-            setattr(self, label, stripped)
-            security.assert_url_has_no_query_or_fragment(stripped, field_label=label)
+            security.assert_url_has_no_query_or_fragment(value, field_label=label)
             security.validate_https_url(
-                stripped, label, allow_insecure=self.allow_insecure_urls
+                value, label, allow_insecure=self.allow_insecure_urls
             )
         return self
 

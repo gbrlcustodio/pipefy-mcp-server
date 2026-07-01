@@ -90,6 +90,15 @@ def test_issuer_url_is_stripped():
 
 
 @pytest.mark.unit
+def test_audience_is_stripped_at_construction():
+    """audience is normalized by the reader, so the parsed policy carries no whitespace."""
+    settings = JwtValidationSettings(audience="  api://x  ", verify_audience=True)
+    assert settings.audience == "api://x"
+    resolved = resolve_jwt_validation(settings, issuer_url=_ISSUER)
+    assert resolved.audience == RequireAudience("api://x")
+
+
+@pytest.mark.unit
 def test_issuer_url_rejects_query_or_fragment():
     """A query/fragment would corrupt the .well-known concatenation."""
     with pytest.raises(ValueError):

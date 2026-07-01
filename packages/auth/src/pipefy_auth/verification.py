@@ -220,9 +220,11 @@ def resolve_jwt_validation(
     resource server, an inactive-vs-misconfigured distinction it must raise on).
     """
     if settings.verify_audience:
-        if not (settings.audience and settings.audience.strip()):
+        # audience is already stripped by JwtValidationSettings._strip_str, so a
+        # whitespace-only value collapses to "" and is caught here.
+        if not settings.audience:
             raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
-        audience: AudiencePolicy = RequireAudience(settings.audience.strip())
+        audience: AudiencePolicy = RequireAudience(settings.audience)
     else:
         audience = SkipAudience()
     return ResolvedJwtValidation(

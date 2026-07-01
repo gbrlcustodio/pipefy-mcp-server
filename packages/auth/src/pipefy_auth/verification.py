@@ -17,16 +17,13 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, assert_never
+from typing import Any, assert_never
 
 import jwt
 from jwt import PyJWKClient
 from pipefy_infra import security
 
 from pipefy_auth.discovery import DiscoveryPolicy, fetch_provider_metadata
-
-if TYPE_CHECKING:
-    from pipefy_auth.settings import JwtValidationSettings
 
 _ALGORITHMS = ["RS256"]
 
@@ -51,23 +48,6 @@ class RequireAudience:
 # RequireAudience cannot exist without its value, so JwtValidator is total over this
 # with no None branch and no separate verify flag.
 AudiencePolicy = SkipAudience | RequireAudience
-
-
-@dataclass(frozen=True)
-class ResolvedJwtValidation:
-    """Inbound-validation config after parsing, ready to build a :class:`JwtValidator`.
-
-    The frozen counterpart to the loose :class:`~pipefy_auth.JwtValidationSettings`
-    env reader: the audience posture is the :data:`AudiencePolicy` sum type (the
-    loose ``audience``/``verify_audience`` pair does not survive into this type),
-    and ``issuer_url`` is the resolved inbound issuer, not an override. Code holding
-    this may assume the cross-field rules already hold.
-    """
-
-    audience: AudiencePolicy
-    issuer_url: str
-    jwks_uri: str | None
-    allow_insecure_urls: bool
 
 
 class TokenValidationError(ValueError):
@@ -205,31 +185,3 @@ class JwtValidator:
             )
         except Exception as exc:
             raise TokenValidationError(str(exc)) from exc
-
-
-def resolve_jwt_validation(
-    settings: JwtValidationSettings, *, issuer_url: str
-) -> ResolvedJwtValidation:
-    """Parse the loose env reader into the frozen inbound-validation config.
-
-    The audience parse step: the ``verify_audience`` / ``audience`` pair collapses
-    into an :data:`AudiencePolicy`, and the cross-field rule is enforced here once
-    (verifying against no audience is rejected) rather than re-checked downstream.
-    ``issuer_url`` is supplied already resolved: the override-vs-login-issuer
-    fallback and the "no issuer" error are the caller's concern (for the MCP
-    resource server, an inactive-vs-misconfigured distinction it must raise on).
-    """
-    if settings.verify_audience:
-        # audience is already stripped by JwtValidationSettings._strip_str, so a
-        # whitespace-only value collapses to "" and is caught here.
-        if not settings.audience:
-            raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
-        audience: AudiencePolicy = RequireAudience(settings.audience)
-    else:
-        audience = SkipAudience()
-    return ResolvedJwtValidation(
-        audience=audience,
-        issuer_url=issuer_url,
-        jwks_uri=settings.jwks_uri,
-        allow_insecure_urls=settings.allow_insecure_urls,
-    )

@@ -427,8 +427,8 @@ class JwtValidationSettings(BaseSettings):
     @classmethod
     def _strip_str(cls, value: object) -> object:
         # Mirror AuthSettings._strip_str: normalize once here so _validate_urls
-        # and resolve_jwt_validation read already-stripped values (env-var
-        # whitespace must not survive into jwt.decode's exact iss/aud compare).
+        # and _validate_audience read already-stripped values (env-var whitespace
+        # must not survive into jwt.decode's exact iss/aud compare).
         if isinstance(value, str):
             return value.strip()
         return value
@@ -496,6 +496,17 @@ class JwtValidationSettings(BaseSettings):
             security.validate_https_url(
                 value, label, allow_insecure=self.allow_insecure_urls
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_audience(self) -> Self:
+        # verify_audience with no audience has nothing to check against: the two
+        # env vars only make sense together. Fail fast at construction (like
+        # _validate_urls) so the illegal pair never reaches the AudiencePolicy
+        # fold at the resource-server composition root. audience is already
+        # stripped by _strip_str, so a whitespace-only value collapses to "".
+        if self.verify_audience and not self.audience:
+            raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
         return self
 
 

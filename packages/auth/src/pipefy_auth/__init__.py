@@ -60,10 +60,8 @@ from pipefy_auth.verification import (
     AudiencePolicy,
     JwtValidator,
     RequireAudience,
-    ResolvedJwtValidation,
     SkipAudience,
     TokenValidationError,
-    resolve_jwt_validation,
 )
 
 __all__ = [
@@ -71,9 +69,7 @@ __all__ = [
     "AuthSettings",
     "JwtValidationSettings",
     "RequireAudience",
-    "ResolvedJwtValidation",
     "SkipAudience",
-    "resolve_jwt_validation",
     "CallableBearerAuth",
     "DEFAULT_AUTH_CLIENT_ID",
     "DiscoveryPolicy",

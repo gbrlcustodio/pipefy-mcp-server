@@ -4,12 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from pipefy_auth import (
-    JwtValidationSettings,
-    RequireAudience,
-    SkipAudience,
-    resolve_jwt_validation,
-)
+from pipefy_auth import JwtValidationSettings
 
 _ISSUER = "https://idp.example.com/realms/x"
 
@@ -59,27 +54,18 @@ def test_resolve_issuer_url_is_none_when_neither_set():
 
 
 @pytest.mark.unit
-def test_resolve_defaults_to_skip_audience():
-    """No audience config parses to the skip posture, carrying the resolved issuer."""
-    resolved = resolve_jwt_validation(JwtValidationSettings(), issuer_url=_ISSUER)
-    assert resolved.audience == SkipAudience()
-    assert resolved.issuer_url == _ISSUER
-
-
-@pytest.mark.unit
-def test_resolve_verify_audience_requires_audience():
-    """Verifying without an audience is a misconfiguration, caught at the parse step."""
-    settings = JwtValidationSettings(verify_audience=True)
+def test_verify_audience_requires_audience():
+    """Verifying without an audience is a misconfiguration, caught at construction."""
     with pytest.raises(ValueError, match="verify_audience requires audience"):
-        resolve_jwt_validation(settings, issuer_url=_ISSUER)
+        JwtValidationSettings(verify_audience=True)
 
 
 @pytest.mark.unit
-def test_resolve_carries_the_required_audience():
-    """The valid pair parses into the sum type, so consumers never re-derive it."""
+def test_verify_audience_with_audience_constructs():
+    """The valid pair (verify on, audience present) is accepted at construction."""
     settings = JwtValidationSettings(audience="api://x", verify_audience=True)
-    resolved = resolve_jwt_validation(settings, issuer_url=_ISSUER)
-    assert resolved.audience == RequireAudience("api://x")
+    assert settings.verify_audience is True
+    assert settings.audience == "api://x"
 
 
 @pytest.mark.unit
@@ -91,11 +77,9 @@ def test_issuer_url_is_stripped():
 
 @pytest.mark.unit
 def test_audience_is_stripped_at_construction():
-    """audience is normalized by the reader, so the parsed policy carries no whitespace."""
+    """audience is normalized by the reader, so no consumer re-strips it."""
     settings = JwtValidationSettings(audience="  api://x  ", verify_audience=True)
     assert settings.audience == "api://x"
-    resolved = resolve_jwt_validation(settings, issuer_url=_ISSUER)
-    assert resolved.audience == RequireAudience("api://x")
 
 
 @pytest.mark.unit

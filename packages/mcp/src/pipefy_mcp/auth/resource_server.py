@@ -26,7 +26,13 @@ from typing import Any
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
-from pipefy_auth import JwtValidationSettings, JwtValidator, resolve_jwt_validation
+from pipefy_auth import (
+    AudiencePolicy,
+    JwtValidationSettings,
+    JwtValidator,
+    RequireAudience,
+    SkipAudience,
+)
 
 from pipefy_mcp.settings import ResourceServerSettings
 
@@ -144,13 +150,20 @@ def build_resource_server_auth(
             "resolvable: set PIPEFY_JWT_ISSUER_URL, or leave the stored-session "
             "login enabled so its issuer can be reused."
         )
-    validation = resolve_jwt_validation(jwt_validation, issuer_url=issuer_url)
+    # Fold the loose audience pair into the AudiencePolicy sum type. A
+    # verify-without-audience is already rejected at JwtValidationSettings
+    # construction, so `is not None` only narrows the Optional for the type
+    # checker here; it is never the deciding branch.
+    if jwt_validation.verify_audience and jwt_validation.audience is not None:
+        audience_policy: AudiencePolicy = RequireAudience(jwt_validation.audience)
+    else:
+        audience_policy = SkipAudience()
     verifier = JwtTokenVerifier(
         JwtValidator(
-            issuer_url=validation.issuer_url,
-            audience_policy=validation.audience,
-            allow_insecure_urls=validation.allow_insecure_urls,
-            jwks_uri=validation.jwks_uri,
+            issuer_url=issuer_url,
+            audience_policy=audience_policy,
+            allow_insecure_urls=jwt_validation.allow_insecure_urls,
+            jwks_uri=jwt_validation.jwks_uri,
         ),
         resource=rs.resource_server_url,
     )

@@ -52,7 +52,6 @@ async def lifespan(app: FastMCP) -> AsyncIterator[ServicesContainer]:
             "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
             "enabled" if settings.mcp.unified_envelope else "disabled",
         )
-        logger.info("PIPEFY_MCP_PROFILE=%s", settings.mcp.profile)
         container = ServicesContainer()
         await container.initialize_services(settings)
     except Exception:
@@ -192,7 +191,7 @@ def run_server(
     remote_profile = mcp.profile == "remote"
 
     if mcp.transport == "stdio":
-        logger.info("Starting Pipefy MCP server")
+        logger.info("Starting Pipefy MCP server over stdio (profile=%s)", mcp.profile)
         build_pipefy_mcp_server(remote_mode=remote_profile).run()
         return
 

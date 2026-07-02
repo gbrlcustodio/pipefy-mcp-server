@@ -226,6 +226,67 @@ def test_loopback_http_bind_refuses_non_loopback_hosts(host):
 
 
 @pytest.mark.unit
+def test_run_server_stdio_logs_the_argv_resolved_profile(monkeypatch):
+    """The startup log reflects the argv-resolved profile, not the ambient env.
+
+    Regression guard: launching ``--profile local`` while ``PIPEFY_MCP_PROFILE``
+    says ``remote`` in the environment must log ``local`` (argv wins), so the one
+    operator-facing signal of the active profile is accurate.
+    """
+    monkeypatch.setenv("PIPEFY_MCP_PROFILE", "remote")
+    monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
+    with (
+        patch("pipefy_mcp.server.build_pipefy_mcp_server"),
+        patch("pipefy_mcp.server.logger") as mock_logger,
+    ):
+        run_server(profile="local")
+
+    logged = " ".join(str(call.args) for call in mock_logger.info.call_args_list)
+    assert "local" in logged
+    assert "remote" not in logged
+
+
+@pytest.mark.unit
+def test_run_server_local_profile_over_http_serves_without_inbound_auth():
+    """``--profile local --transport http`` serves HTTP with the full surface, no bearer.
+
+    The local profile over loopback HTTP trusts its peer, so no resource-server
+    (inbound bearer validation) is built even when serving over HTTP.
+    """
+    fake_app = MagicMock()
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
+    ):
+        run_server(profile="local", transport="http", host="127.0.0.1", port=9200)
+
+    mock_build.assert_called_once_with(
+        remote_mode=False, host="127.0.0.1", port=9200, resource_server=None
+    )
+    fake_app.run.assert_called_once_with("streamable-http")
+
+
+@pytest.mark.unit
+def test_run_server_remote_profile_defaults_to_http_transport(monkeypatch):
+    """``--profile remote`` with no ``--transport`` serves HTTP (profile-derived default)."""
+    monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
+    fake_app = MagicMock()
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
+    ):
+        run_server(profile="remote", host="127.0.0.1", port=9300)
+
+    fake_app.run.assert_called_once_with("streamable-http")
+    _, kwargs = mock_build.call_args
+    assert kwargs["remote_mode"] is True
+
+
+@pytest.mark.unit
 def test_run_server_http_builds_the_app_and_serves_over_streamable_http():
     """The HTTP path builds through the shared builder and serves streamable-http."""
     fake_app = MagicMock()

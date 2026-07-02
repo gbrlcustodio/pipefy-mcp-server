@@ -842,3 +842,46 @@ async def test_pipefy_client_invite_members_propagates_value_error(mock_settings
             "1",
             [{"email": "x", "role_name": "m"}],
         )
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_automation_extra_input_camel_aliases_reach_service_as_api_names():
+    """`extra_input` camelCase aliases are rewritten to the API field names (issue #275)."""
+    automation_service = AsyncMock()
+    automation_service.create_automation = AsyncMock(
+        return_value={"ok": "create_automation"}
+    )
+    automation_service.update_automation = AsyncMock(
+        return_value={"ok": "update_automation"}
+    )
+    client = PipefyClient.__new__(PipefyClient)
+    client._automation_service = automation_service
+
+    await client.create_automation(
+        "p1",
+        "Rule",
+        "card_created",
+        "move_single_card",
+        extra_input={
+            "actionParams": {"to_phase_id": "42"},
+            "eventParams": {"to_phase_id": "7"},
+        },
+    )
+    automation_service.create_automation.assert_awaited_once_with(
+        "p1",
+        "Rule",
+        "card_created",
+        "move_single_card",
+        action_repo_id=None,
+        active=True,
+        action_params={"to_phase_id": "42"},
+        event_params={"to_phase_id": "7"},
+    )
+
+    await client.update_automation(
+        "a1", extra_input={"actionParams": {"card_id": "%{id}"}}
+    )
+    automation_service.update_automation.assert_awaited_once_with(
+        "a1", action_params={"card_id": "%{id}"}
+    )

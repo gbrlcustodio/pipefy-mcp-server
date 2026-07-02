@@ -597,7 +597,13 @@ Usage: pipefy automation create [OPTIONS]
 │    --extra                                     TEXT  Optional JSON object:   │
 │                                                      extra                   │
 │                                                      CreateAutomationInput   │
-│                                                      fields (camelCase).     │
+│                                                      fields, using the API   │
+│                                                      field names (e.g.       │
+│                                                      action_params,          │
+│                                                      event_params).          │
+│                                                      camelCase aliases such  │
+│                                                      as actionParams are     │
+│                                                      accepted and rewritten. │
 │    --json                   -j                       Print machine-readable  │
 │                                                      JSON to stdout.         │
 │    --help                                            Show this message and   │
@@ -816,8 +822,10 @@ Usage: pipefy automation update [OPTIONS] AUTOMATION_ID
 │ *    automation_id      TEXT  Automation rule id. [required]                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --extra          TEXT  JSON object: fields to patch                       │
-│                           (UpdateAutomationInput, camelCase).                │
+│ *  --extra          TEXT  JSON object: fields to patch, using the            │
+│                           UpdateAutomationInput API field names (e.g.        │
+│                           action_params, event_params). camelCase aliases    │
+│                           such as actionParams are accepted and rewritten.   │
 │                           [required]                                         │
 │    --json   -j            Print machine-readable JSON to stdout.             │
 │    --help                 Show this message and exit.                        │

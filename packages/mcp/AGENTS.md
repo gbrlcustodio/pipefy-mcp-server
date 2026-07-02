@@ -106,19 +106,23 @@ the profile/transport once (via `resolve_mcp_settings`) and builds the same app
 through `build_pipefy_mcp_server` (same runtime-bound lifespan, same
 `_register_pipefy_tools`), differing only in the transport `run` and HTTP's bind
 concerns. `build_pipefy_mcp_server` constructs one app-scoped `McpRuntime`
-(`core/runtime.py`) and binds the lifespan to it. The runtime is the composition
-root: it wires its shared client in its constructor and fails fast there, so a
-missing credential surfaces when the server is built at startup, not on the first
-tool call. (This also means `build_pipefy_mcp_server` resolves the credential, so
-the live integration tests that build the app at import skip themselves when no
-creds are configured.) Wiring the client at construction is safe off the event
+(`core/runtime.py`) and binds the lifespan to it. The composition root selects
+the identity source (`_select_auth_source`): on the stdio profile it resolves the
+one startup credential and fails fast when none is configured
+(`StartupIdentity.from_configured_credential`), so a missing credential surfaces
+when the server is built at startup, not on the first tool call. The runtime then
+wires its shared client to whichever identity's `httpx.Auth` it was handed. (This
+also means `build_pipefy_mcp_server` resolves the credential, so the live
+integration tests that build the app at import skip themselves when no creds are
+configured.) Wiring the client at construction is safe off the event
 loop: `PipefyClient` construction does no network I/O and binds nothing to a
 running loop, because its executors open a fresh per-request transport at call
 time; the client built at startup works on whatever loop later serves requests.
 Streamable HTTP re-entering the lifespan per session just yields the same
 already-wired runtime, so there is nothing to rebuild. The runtime holds no
-per-request state: `StartupIdentity` resolves one credential at startup
-(stdio/local), while `RequestScopedIdentity` wires the shared client with a
+per-request state: both identity variants carry an `httpx.Auth` the shared client
+applies to every outbound call. `StartupIdentity` carries the one credential
+resolved at startup (stdio/local), while `RequestScopedIdentity` carries a
 `RequestContextBearerAuth` that reads each caller's validated bearer from the
 request context, so one client serves every concurrent caller as themselves.
 

@@ -13,12 +13,12 @@ from pipefy_mcp.auth import (
     build_resource_server_auth,
 )
 from pipefy_mcp.core.runtime import (
-    AuthStrategy,
+    AuthSource,
     McpRuntime,
     RequestScopedIdentity,
     StartupIdentity,
 )
-from pipefy_mcp.settings import resolve_mcp_settings, settings
+from pipefy_mcp.settings import Settings, resolve_mcp_settings, settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
 
@@ -66,18 +66,21 @@ def _make_lifespan(
     return lifespan
 
 
-def _select_auth_strategy(resource_server: ResourceServerAuth | None) -> AuthStrategy:
-    """Parse the transport profile into the shared client's identity model.
+def _select_auth_source(
+    settings: Settings, resource_server: ResourceServerAuth | None
+) -> AuthSource:
+    """Parse the transport profile into the shared client's identity source.
 
     The resource-server profile validates a per-request bearer, so the shared
     client acts on behalf of each caller (:class:`RequestScopedIdentity`, reading
     the request context per call). Without it (stdio, or the disabled HTTP
-    profile) there is no inbound identity, so the client resolves one credential
-    at startup (:class:`StartupIdentity`).
+    profile) there is no inbound identity, so the one startup credential is
+    resolved from settings (and fails fast when none is configured); see
+    :meth:`StartupIdentity.from_configured_credential`.
     """
     if resource_server is not None:
         return RequestScopedIdentity(RequestContextBearerAuth())
-    return StartupIdentity()
+    return StartupIdentity.from_configured_credential(settings)
 
 
 def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
@@ -119,7 +122,7 @@ def build_pipefy_mcp_server(
     """Build the FastMCP app with its tools registered once, before serving.
 
     Used by both transports. It builds the one app-scoped :class:`McpRuntime`
-    (its identity model chosen by :func:`_select_auth_strategy` from the profile)
+    (its identity source chosen by :func:`_select_auth_source` from the profile)
     and binds the lifespan to it; only the transport ``run`` differs.
     ``remote_mode`` (the default-deny remote-safe tool surface) defaults to whether
     the configured profile is ``remote``; pass an explicit value to override (used
@@ -137,7 +140,7 @@ def build_pipefy_mcp_server(
     )
     resolved_host, resolved_port = _resolve_bind(host, port)
     verifier, auth = resource_server or (None, None)
-    runtime = McpRuntime(settings, _select_auth_strategy(resource_server))
+    runtime = McpRuntime(settings, _select_auth_source(settings, resource_server))
     app = FastMCP(
         "pipefy",
         instructions=PIPEFY_INSTRUCTIONS,

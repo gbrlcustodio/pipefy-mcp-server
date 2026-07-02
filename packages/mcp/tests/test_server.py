@@ -1,3 +1,4 @@
+import time
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
@@ -7,14 +8,24 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_auth import AuthSettings, JwtValidationSettings
+from pipefy_auth import (
+    AuthSettings,
+    JwtValidationSettings,
+    RefreshableBearerAuth,
+    StaticBearerAuth,
+    TokenResponse,
+)
+from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefySettings
 
-from pipefy_mcp.auth import build_resource_server_auth
+from pipefy_mcp._docs import DOCS_SETUP_REF
+from pipefy_mcp.auth import RequestContextBearerAuth, build_resource_server_auth
+from pipefy_mcp.core.runtime import RequestScopedIdentity, StartupIdentity
 from pipefy_mcp.server import (
     _assert_safe_http_bind,
     _make_lifespan,
     _register_pipefy_tools,
+    _select_auth_source,
     build_pipefy_mcp_server,
     run_server,
 )
@@ -23,6 +34,31 @@ from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 
 _RS_ISSUER = "https://idp.example.com/realms/x"
 _RS_RESOURCE = "https://mcp.example.com/mcp"
+
+_AUTH_ENV_KEYS = (
+    "PIPEFY_TOKEN",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
+    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
+    "PIPEFY_OAUTH_CLIENT",
+    "PIPEFY_OAUTH_SECRET",
+    "PIPEFY_AUTH_URL",
+    "PIPEFY_BASE_URL",
+    "PIPEFY_DISABLE_STORED_SESSION",
+    "PIPEFY_KEYCHAIN_BACKEND",
+)
+
+
+def _fresh_stored_session() -> StoredSession:
+    return StoredSession(
+        issuer="https://signin.pipefy.com/realms/pipefy",
+        client_id="pipefy-cli",
+        obtained_at=int(time.time()),
+        token=TokenResponse(
+            access_token="ACCESS",
+            refresh_token="REFRESH",
+            expires_in=3600,
+        ),
+    )
 
 
 def _resource_server_pair():
@@ -48,16 +84,95 @@ _MINIMAL_PIPEFY_SETTINGS = Settings(
 
 @pytest.fixture
 def mocked_runtime():
-    """Patch the ``McpRuntime`` the builder constructs with a no-network mock.
+    """Patch the builder's identity selection and runtime with no-network stand-ins.
 
-    ``build_pipefy_mcp_server`` constructs ``McpRuntime`` once (which wires its
-    client); this intercepts that construction so no real auth is resolved and
-    ``pipefy_client`` is a stand-in a tool can resolve.
+    ``build_pipefy_mcp_server`` first selects an identity source (which, on the
+    stdio profile, resolves a credential and fails fast) and then constructs
+    ``McpRuntime`` once (which wires its client). This intercepts both so building
+    resolves no real credential and ``pipefy_client`` is a stand-in a tool can
+    resolve.
     """
     runtime = MagicMock()
     runtime.pipefy_client = MagicMock()
-    with patch("pipefy_mcp.server.McpRuntime", return_value=runtime):
+    with (
+        patch(
+            "pipefy_mcp.server._select_auth_source",
+            return_value=RequestScopedIdentity(RequestContextBearerAuth()),
+        ),
+        patch("pipefy_mcp.server.McpRuntime", return_value=runtime),
+    ):
         yield runtime
+
+
+class TestSelectAuthSource:
+    """The composition root parses the transport profile into an identity source.
+
+    The stdio profile resolves one credential from settings and fails fast when
+    none is configured; the hosted profile needs none.
+    """
+
+    @pytest.fixture(autouse=True)
+    def clear_auth_env(self, monkeypatch):
+        """Strip ambient ``PIPEFY_*`` auth env so ``AuthSettings()`` is hermetic."""
+        for key in _AUTH_ENV_KEYS:
+            monkeypatch.delenv(key, raising=False)
+
+    @pytest.mark.unit
+    def test_hosted_profile_needs_no_credential(self):
+        """With a resource server, identity is per request; no startup credential."""
+
+        def _poison(**_kwargs):
+            raise AssertionError("hosted profile must not resolve a startup credential")
+
+        with patch("pipefy_mcp.core.runtime.resolve_pipefy_auth", _poison):
+            source = _select_auth_source(
+                _MINIMAL_PIPEFY_SETTINGS, _resource_server_pair()
+            )
+        assert isinstance(source, RequestScopedIdentity)
+        assert isinstance(source.auth, RequestContextBearerAuth)
+
+    @pytest.mark.unit
+    def test_static_token_becomes_a_startup_identity(self):
+        """``PIPEFY_TOKEN`` resolves to a static-bearer startup identity."""
+        settings = Settings(
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            auth=AuthSettings(static_token="env-bearer"),
+        )
+        source = _select_auth_source(settings, None)
+        assert isinstance(source, StartupIdentity)
+        assert isinstance(source.auth, StaticBearerAuth)
+
+    # Patch ``load_session``: ``auth_url``'s prod default makes the stored-session
+    # tier reachable, so a host with a real keychain entry would otherwise satisfy
+    # resolution and break the assertion.
+    @pytest.mark.unit
+    @patch("pipefy_auth.resolver.load_session", lambda **_: None)
+    def test_stdio_profile_without_credential_fails_fast(self):
+        """No PIPEFY_TOKEN and no service-account triple → raises at selection."""
+        settings = Settings(
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            auth=AuthSettings(),
+        )
+        with pytest.raises(
+            RuntimeError, match="Missing Pipefy authentication"
+        ) as exc_info:
+            _select_auth_source(settings, None)
+        assert DOCS_SETUP_REF in str(exc_info.value)
+
+    @pytest.mark.unit
+    def test_stored_session_builds_a_refreshable_startup_identity(self):
+        """The stored-session arm wires a lazily-refreshing auth; no eager network I/O."""
+        settings = Settings(
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            auth=AuthSettings(auth_url="https://signin.pipefy.com/realms/pipefy"),
+        )
+        with patch(
+            "pipefy_auth.resolver.load_session",
+            return_value=_fresh_stored_session(),
+        ):
+            source = _select_auth_source(settings, None)
+        assert isinstance(source, StartupIdentity)
+        assert isinstance(source.auth, RefreshableBearerAuth)
 
 
 @pytest.mark.anyio

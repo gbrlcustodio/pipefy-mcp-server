@@ -55,9 +55,17 @@ def test_resolve_issuer_url_is_none_when_neither_set():
 
 @pytest.mark.unit
 def test_verify_audience_requires_audience():
-    """Turning on audience checks without an audience is a misconfiguration."""
+    """Verifying without an audience is a misconfiguration, caught at construction."""
     with pytest.raises(ValueError, match="verify_audience requires audience"):
         JwtValidationSettings(verify_audience=True)
+
+
+@pytest.mark.unit
+def test_verify_audience_with_audience_constructs():
+    """The valid pair (verify on, audience present) is accepted at construction."""
+    settings = JwtValidationSettings(audience="api://x", verify_audience=True)
+    assert settings.verify_audience is True
+    assert settings.audience == "api://x"
 
 
 @pytest.mark.unit
@@ -65,6 +73,13 @@ def test_issuer_url_is_stripped():
     """Surrounding whitespace is stripped so it cannot survive into jwt.decode."""
     settings = JwtValidationSettings(issuer_url=f"  {_ISSUER}  ")
     assert settings.issuer_url == _ISSUER
+
+
+@pytest.mark.unit
+def test_audience_is_stripped_at_construction():
+    """audience is normalized by the reader, so no consumer re-strips it."""
+    settings = JwtValidationSettings(audience="  api://x  ", verify_audience=True)
+    assert settings.audience == "api://x"
 
 
 @pytest.mark.unit

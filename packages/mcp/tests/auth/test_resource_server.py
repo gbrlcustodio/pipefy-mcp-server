@@ -168,6 +168,34 @@ def test_build_stamps_resource_server_url_not_audience() -> None:
 
 
 @pytest.mark.unit
+def test_build_skips_audience_by_default() -> None:
+    """No audience config folds to SkipAudience: the validator does not check aud."""
+    verifier, _ = build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RESOURCE),
+        JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
+        default_issuer_url=_ISSUER,
+    )
+    assert verifier._validator._verify_aud is False
+    assert verifier._validator._audience is None
+
+
+@pytest.mark.unit
+def test_build_requires_audience_when_verifying() -> None:
+    """verify_audience with an audience folds to RequireAudience(audience)."""
+    verifier, _ = build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RESOURCE),
+        JwtValidationSettings(
+            audience="api://x",
+            verify_audience=True,
+            jwks_uri="https://idp.example.com/jwks",
+        ),
+        default_issuer_url=_ISSUER,
+    )
+    assert verifier._validator._verify_aud is True
+    assert verifier._validator._audience == "api://x"
+
+
+@pytest.mark.unit
 def test_build_inactive_when_unconfigured() -> None:
     """No resource_server_url means no auth: the profile is off, not an error."""
     assert (

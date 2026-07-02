@@ -423,6 +423,16 @@ class JwtValidationSettings(BaseSettings):
             file_secret_settings,
         )
 
+    @field_validator("issuer_url", "audience", "jwks_uri", mode="before")
+    @classmethod
+    def _strip_str(cls, value: object) -> object:
+        # Mirror AuthSettings._strip_str: normalize once here so _validate_urls
+        # and _validate_audience read already-stripped values (env-var whitespace
+        # must not survive into jwt.decode's exact iss/aud compare).
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
     issuer_url: str | None = Field(
         default=None,
         description=(
@@ -474,24 +484,29 @@ class JwtValidationSettings(BaseSettings):
         return self.issuer_url or default
 
     @model_validator(mode="after")
-    def _validate_configuration(self) -> Self:
-        if self.verify_audience and not self.audience:
-            raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
-        # Strip and shape-check both URL fields. Env-var whitespace would otherwise
-        # survive into the consumer: issuer_url into jwt.decode(issuer=...), which
-        # compares iss exactly, and jwks_uri into the JWKS fetch. A realm path is
-        # allowed, so only a query or fragment (which would corrupt URL building)
-        # is rejected.
+    def _validate_urls(self) -> Self:
+        # Shape-check both URL fields (already stripped by _strip_str). A realm
+        # path is allowed, so only a query or fragment (which would corrupt URL
+        # building) is rejected.
         for label in ("issuer_url", "jwks_uri"):
             value = getattr(self, label)
             if value is None:
                 continue
-            stripped = value.strip()
-            setattr(self, label, stripped)
-            security.assert_url_has_no_query_or_fragment(stripped, field_label=label)
+            security.assert_url_has_no_query_or_fragment(value, field_label=label)
             security.validate_https_url(
-                stripped, label, allow_insecure=self.allow_insecure_urls
+                value, label, allow_insecure=self.allow_insecure_urls
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_audience(self) -> Self:
+        # verify_audience with no audience has nothing to check against: the two
+        # env vars only make sense together. Fail fast at construction (like
+        # _validate_urls) so the illegal pair never reaches the AudiencePolicy
+        # fold at the resource-server composition root. audience is already
+        # stripped by _strip_str, so a whitespace-only value collapses to "".
+        if self.verify_audience and not self.audience:
+            raise ValueError("verify_audience requires audience (PIPEFY_JWT_AUDIENCE).")
         return self
 
 

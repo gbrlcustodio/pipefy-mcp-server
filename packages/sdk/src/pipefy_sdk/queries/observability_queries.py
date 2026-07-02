@@ -256,12 +256,20 @@ GET_AUTOMATION_EXECUTION_METRICS_QUERY = gql(
         $repoId: ID
         $automationIds: [ID!]
         $period: AutomationExecutionMetricsPeriod
+        $first: Int
+        $after: String
     ) {
         automations(
             organizationId: $organizationId
             repoId: $repoId
             automationIds: $automationIds
+            first: $first
+            after: $after
         ) {
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
             edges {
                 node {
                     id

@@ -1812,24 +1812,34 @@ class PipefyClient:
         *,
         repo_id: str | None = None,
         period: str = "SIXTY_MINUTES",
+        first: int = 30,
+        after: str | None = None,
     ) -> dict[str, Any]:
         """Get execution metrics for one or more automations within a rolling period.
 
         Returns metrics for the automations this token may read plus a
-        ``partial_errors`` list for any that failed (e.g. ``PERMISSION_DENIED``).
+        ``partial_errors`` list for any that failed (e.g. ``PERMISSION_DENIED``),
+        and a ``page_info`` with ``hasNextPage`` and ``endCursor``.
 
         Args:
             organization_id: Organization ID (numeric org id, not a UUID).
             automation_ids: Automation IDs to fetch metrics for. Omit to fetch
                 metrics for every automation in the organization (optionally
-                scoped by ``repo_id``).
+                scoped by ``repo_id``), one page at a time.
             repo_id: Optional pipe/repo ID to scope the query.
             period: AutomationExecutionMetricsPeriod enum value (FIFTEEN_MINUTES,
                 SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to
                 SIXTY_MINUTES, matching the API default.
+            first: Page size (default 30; the server caps a page at 50).
+            after: Cursor from a previous page's ``page_info.endCursor``.
         """
         return await self._observability_service.get_automation_execution_metrics(
-            organization_id, automation_ids, repo_id=repo_id, period=period
+            organization_id,
+            automation_ids,
+            repo_id=repo_id,
+            period=period,
+            first=first,
+            after=after,
         )
 
     async def get_ai_credit_usage(

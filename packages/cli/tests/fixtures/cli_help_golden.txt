@@ -2952,22 +2952,29 @@ Usage: pipefy usage execution-metrics [OPTIONS]
  Automation execution metrics (``get_automation_execution_metrics``).
 
  Returns metrics for the automations the token may read plus a
- ``partial_errors`` list naming any that were denied.
+ ``partial_errors`` list naming any that were denied, and a ``page_info`` for
+ paging with ``--after``.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --organization,--org          TEXT  Organization ID (numeric org id, same │
-│                                        as in the Pipefy URL).                │
-│                                        [required]                            │
-│    --automation          -a      TEXT  Automation ID to fetch metrics for    │
-│                                        (repeat for multiple; omit to fetch   │
-│                                        all automations in the organization). │
-│    --repo                        TEXT  Optional pipe/repo ID to scope the    │
-│                                        query.                                │
-│    --period                      TEXT  FIFTEEN_MINUTES | SIXTY_MINUTES |     │
-│                                        TWELVE_HOURS | TWENTY_FOUR_HOURS      │
-│                                        [default: SIXTY_MINUTES]              │
+│ *  --organization,--org          TEXT     Organization ID (numeric org id,   │
+│                                           same as in the Pipefy URL).        │
+│                                           [required]                         │
+│    --automation          -a      TEXT     Automation ID to fetch metrics for │
+│                                           (repeat for multiple; omit to      │
+│                                           fetch all automations in the       │
+│                                           organization).                     │
+│    --repo                        TEXT     Optional pipe/repo ID to scope the │
+│                                           query.                             │
+│    --period                      TEXT     FIFTEEN_MINUTES | SIXTY_MINUTES |  │
+│                                           TWELVE_HOURS | TWENTY_FOUR_HOURS   │
+│                                           [default: SIXTY_MINUTES]           │
+│    --first                       INTEGER  Page size (1-50; the server caps a │
+│                                           page at 50).                       │
+│                                           [default: 30]                      │
+│    --after                       TEXT     Cursor from a previous page's      │
+│                                           page_info.endCursor.               │
 │    --json                -j                                                  │
-│    --help                              Show this message and exit.           │
+│    --help                                 Show this message and exit.        │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP webhook

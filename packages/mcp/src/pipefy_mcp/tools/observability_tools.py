@@ -32,6 +32,9 @@ _VALID_EXECUTION_METRICS_PERIODS = frozenset(AUTOMATION_EXECUTION_METRICS_PERIOD
 # Pagination
 _MIN_PAGE_SIZE = 1
 _MAX_PAGE_SIZE = 100
+# The automations connection caps a page at 50; asking for more is rejected up front
+# rather than silently returning 50.
+_MAX_EXECUTION_METRICS_PAGE_SIZE = 50
 
 # CSV / export download limits
 _MIN_CSV_CHARS = 256
@@ -415,15 +418,19 @@ class ObservabilityTools:
             automation_ids: list[PipefyId] | None = None,
             repo_id: PipefyId | None = None,
             period: str = "SIXTY_MINUTES",
+            first: int = 30,
+            after: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Get execution metrics (totalRuns, successRate, failureRate, averageDuration, lastRun) for one or more automations over a rolling window. Returns metrics for the automations you can access plus a `partial_errors` list naming any that were denied (PERMISSION_DENIED); this is a partial result, not a hard failure. `period`: FIFTEEN_MINUTES, SIXTY_MINUTES (default), TWELVE_HOURS, or TWENTY_FOUR_HOURS.
+            """Get execution metrics (totalRuns, successRate, failureRate, averageDuration, lastRun) for one or more automations over a rolling window. Returns metrics for the automations you can access plus a `partial_errors` list naming any that were denied (PERMISSION_DENIED); this is a partial result, not a hard failure. Results are paginated: `page_info` carries `hasNextPage` and `endCursor`, and the server caps a page at 50 automations, so pass `endCursor` back as `after` to fetch the rest. `period`: FIFTEEN_MINUTES, SIXTY_MINUTES (default), TWELVE_HOURS, or TWENTY_FOUR_HOURS.
 
             Args:
                 organization_id: Organization ID (numeric org id, same as in the Pipefy URL).
                 automation_ids: Optional automation IDs to fetch metrics for. Omit to fetch metrics for every automation in the organization (optionally scoped by repo_id). When provided, it must contain at least one ID.
                 repo_id: Optional pipe/repo ID to scope the query.
                 period: AutomationExecutionMetricsPeriod (FIFTEEN_MINUTES, SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to SIXTY_MINUTES, matching the API.
+                first: Page size, 1 to 50 (default 30).
+                after: Cursor from a previous page's page_info.endCursor.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -445,12 +452,21 @@ class ObservabilityTools:
                         f"{sorted(_VALID_EXECUTION_METRICS_PERIODS)}."
                     ),
                 )
+            if not _MIN_PAGE_SIZE <= first <= _MAX_EXECUTION_METRICS_PAGE_SIZE:
+                return build_observability_error_payload(
+                    message=(
+                        f"Invalid 'first': must be between {_MIN_PAGE_SIZE} and "
+                        f"{_MAX_EXECUTION_METRICS_PAGE_SIZE}."
+                    ),
+                )
             try:
                 raw = await client.get_automation_execution_metrics(
                     organization_id,
                     normalized_ids,
                     repo_id=normalized_repo_id,
                     period=period,
+                    first=first,
+                    after=after,
                 )
             except ValueError as exc:
                 return build_observability_error_payload(message=str(exc))

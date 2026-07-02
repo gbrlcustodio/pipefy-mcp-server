@@ -348,7 +348,7 @@ async def test_get_automation_execution_metrics_partial_success(
 
     assert result.isError is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
-        "3", ["25", "124"], repo_id="16", period="SIXTY_MINUTES"
+        "3", ["25", "124"], repo_id="16", period="SIXTY_MINUTES", first=30, after=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -375,7 +375,7 @@ async def test_get_automation_execution_metrics_without_ids_fetches_all(
 
     assert result.isError is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
-        "3", None, repo_id=None, period="SIXTY_MINUTES"
+        "3", None, repo_id=None, period="SIXTY_MINUTES", first=30, after=None
     )
     assert extract_payload(result)["success"] is True
 
@@ -418,6 +418,51 @@ async def test_get_automation_execution_metrics_rejects_empty_ids(
     assert p["success"] is False
     assert "automation_ids" in tool_error_message(p)
     mock_observability_client.get_automation_execution_metrics.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_execution_metrics_rejects_first_over_cap(
+    observability_session, mock_observability_client, extract_payload
+):
+    """first above the server's 50-per-page cap is rejected before any API call."""
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_execution_metrics",
+            {"organization_id": "3", "first": 51},
+        )
+
+    assert result.isError is False
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "first" in tool_error_message(p)
+    mock_observability_client.get_automation_execution_metrics.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_execution_metrics_forwards_pagination(
+    observability_session, mock_observability_client, extract_payload
+):
+    """first and after reach the client; page_info rides back in the payload."""
+    mock_observability_client.get_automation_execution_metrics.return_value = {
+        "automations": [],
+        "partial_errors": [],
+        "page_info": {"hasNextPage": True, "endCursor": "cur-1"},
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_execution_metrics",
+            {"organization_id": "3", "first": 50, "after": "cur-0"},
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
+        "3", None, repo_id=None, period="SIXTY_MINUTES", first=50, after="cur-0"
+    )
+    payload = extract_payload(result)
+    assert payload["data"]["page_info"] == {"hasNextPage": True, "endCursor": "cur-1"}
 
 
 @pytest.mark.anyio

@@ -562,10 +562,11 @@ async def test_get_automation_execution_metrics_all_permitted():
     partial_result = PartialQueryResult(
         data={
             "automations": {
+                "pageInfo": {"hasNextPage": False, "endCursor": "cur-2"},
                 "edges": [
                     {"node": _metrics_node("25", total_runs=3)},
                     {"node": _metrics_node("107", total_runs=0)},
-                ]
+                ],
             }
         },
         errors=[],
@@ -584,10 +585,12 @@ async def test_get_automation_execution_metrics_all_permitted():
         "automationIds": ["25", "107"],
         "period": "TWENTY_FOUR_HOURS",
         "repoId": "16",
+        "first": 30,
     }
     assert [a["id"] for a in result["automations"]] == ["25", "107"]
     assert result["automations"][0]["executionMetrics"]["totalRuns"] == 3
     assert result["partial_errors"] == []
+    assert result["page_info"] == {"hasNextPage": False, "endCursor": "cur-2"}
 
 
 @pytest.mark.unit
@@ -678,5 +681,30 @@ async def test_get_automation_execution_metrics_without_ids_omits_filter():
 
     _, variables = executor.execute_query_allow_partial.call_args[0]
     assert "automationIds" not in variables
-    assert variables == {"organizationId": "3", "period": "SIXTY_MINUTES"}
+    assert variables == {"organizationId": "3", "period": "SIXTY_MINUTES", "first": 30}
     assert [a["id"] for a in result["automations"]] == ["25", "107"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_paginates_with_first_and_after():
+    """first and after are forwarded; after is omitted when not supplied."""
+    partial_result = PartialQueryResult(
+        data={
+            "automations": {
+                "pageInfo": {"hasNextPage": True, "endCursor": "cur-1"},
+                "edges": [{"node": _metrics_node("25", total_runs=3)}],
+            }
+        },
+        errors=[],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    result = await service.get_automation_execution_metrics(
+        "3", first=50, after="cur-0"
+    )
+
+    _, variables = executor.execute_query_allow_partial.call_args[0]
+    assert variables["first"] == 50
+    assert variables["after"] == "cur-0"
+    assert result["page_info"] == {"hasNextPage": True, "endCursor": "cur-1"}

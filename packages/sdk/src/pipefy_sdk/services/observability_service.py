@@ -118,6 +118,10 @@ def _normalize_execution_metrics_result(result: PartialQueryResult) -> dict[str,
     An empty ``edges`` list (every requested automation denied) stays a partial
     success with a populated ``partial_errors``.
 
+    ``page_info`` carries the connection's ``pageInfo`` (``hasNextPage``,
+    ``endCursor``); the server caps each page at 50 automations, so callers page
+    with ``after`` until ``hasNextPage`` is false.
+
     Args:
         result: PartialQueryResult from ``execute_query_allow_partial``.
     """
@@ -126,7 +130,12 @@ def _normalize_execution_metrics_result(result: PartialQueryResult) -> dict[str,
         raise ValueError(result.errors[0].get("message") or "Query failed.")
     automations = unwrap_relay_connection_nodes(connection)
     partial_errors = [_partial_error(err) for err in result.errors]
-    return {"automations": automations, "partial_errors": partial_errors}
+    page_info = connection.get("pageInfo") if isinstance(connection, dict) else None
+    return {
+        "automations": automations,
+        "partial_errors": partial_errors,
+        "page_info": page_info,
+    }
 
 
 class ObservabilityService:
@@ -142,6 +151,8 @@ class ObservabilityService:
         *,
         repo_id: str | None = None,
         period: str = "SIXTY_MINUTES",
+        first: int = _DEFAULT_PAGE_SIZE,
+        after: str | None = None,
     ) -> dict[str, Any]:
         """Get execution metrics for one or more automations within a rolling period.
 
@@ -150,26 +161,35 @@ class ObservabilityService:
         (e.g. ``PERMISSION_DENIED``). The ``automations`` query reports per-node
         errors alongside data, so this uses the partial-tolerant execute path.
 
+        The connection is paginated (the server caps each page at 50 automations).
+        The returned ``page_info`` carries ``hasNextPage`` and ``endCursor``; pass
+        ``endCursor`` back as ``after`` to fetch the next page.
+
         Args:
             organization_id: Organization ID (required by the ``automations`` query;
                 a numeric org id, not a UUID).
             automation_ids: Automation IDs to fetch metrics for. When ``None``,
                 the ``automationIds`` filter is omitted and the query returns
                 metrics for every automation in the organization (optionally
-                scoped by ``repo_id``).
+                scoped by ``repo_id``), one page at a time.
             repo_id: Optional pipe/repo ID to scope the query.
             period: AutomationExecutionMetricsPeriod enum value (FIFTEEN_MINUTES,
                 SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to
                 SIXTY_MINUTES, matching the API default.
+            first: Page size (default 30; the server caps a page at 50).
+            after: Cursor from a previous page's ``page_info.endCursor``.
         """
         variables: dict[str, Any] = {
             "organizationId": organization_id,
             "period": period,
+            "first": first,
         }
         if automation_ids is not None:
             variables["automationIds"] = automation_ids
         if repo_id is not None:
             variables["repoId"] = repo_id
+        if after is not None:
+            variables["after"] = after
         result = await self._executor.execute_query_allow_partial(
             GET_AUTOMATION_EXECUTION_METRICS_QUERY, variables
         )

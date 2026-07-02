@@ -106,17 +106,28 @@ def usage_execution_metrics(
         "--period",
         help=_EXECUTION_METRICS_PERIOD_HELP,
     ),
+    first: int = typer.Option(
+        30, "--first", help="Page size (1-50; the server caps a page at 50)."
+    ),
+    after: str | None = typer.Option(
+        None, "--after", help="Cursor from a previous page's page_info.endCursor."
+    ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Automation execution metrics (``get_automation_execution_metrics``).
 
     Returns metrics for the automations the token may read plus a ``partial_errors``
-    list naming any that were denied.
+    list naming any that were denied, and a ``page_info`` for paging with ``--after``.
     """
 
     async def factory(client: PipefyClient):
         return await client.get_automation_execution_metrics(
-            organization, automation_ids or None, repo_id=repo, period=period
+            organization,
+            automation_ids or None,
+            repo_id=repo,
+            period=period,
+            first=first,
+            after=after,
         )
 
     run_cli_command(ctx, json_out, factory)

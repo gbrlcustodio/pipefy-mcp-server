@@ -574,6 +574,34 @@ async def test_create_automation_error(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("automation_session", [None], indirect=True)
+async def test_create_automation_error_only_diagnostic_markers_uses_fallback(
+    automation_session, mock_automation_client, extract_payload
+):
+    mock_automation_client.create_automation.side_effect = TransportQueryError(
+        " [code=X] [correlation_id=Y]",
+        errors=[{"message": " [code=X] [correlation_id=Y]"}],
+    )
+
+    async with automation_session as session:
+        result = await session.call_tool(
+            "create_automation",
+            {
+                "pipe_id": "p1",
+                "name": "N",
+                "trigger_id": "e",
+                "action_id": "a",
+            },
+        )
+
+    payload = extract_payload(result)
+    msg = tool_error_message(payload)
+    assert payload["success"] is False
+    assert msg == "Automation request failed."
+    assert "[code=" not in msg and "[correlation_id=" not in msg
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("automation_session", [None], indirect=True)
 async def test_update_automation_success(
     automation_session, mock_automation_client, extract_payload
 ):

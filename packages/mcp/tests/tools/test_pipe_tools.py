@@ -17,7 +17,8 @@ from mcp.types import (
 )
 from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.core.runtime import McpRuntime, StartupIdentity
+from pipefy_mcp.auth import RequestContextBearerAuth
+from pipefy_mcp.core.runtime import McpRuntime, RequestScopedIdentity
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
@@ -71,7 +72,6 @@ def mock_pipefy_client():
 def mock_mcp_runtime(mocker, mock_pipefy_client):
     runtime = Mock(McpRuntime)
     runtime.pipefy_client = mock_pipefy_client
-    runtime.initialize = AsyncMock()
 
     # build_pipefy_mcp_server constructs McpRuntime once; patch it where the
     # server module looks it up so the built runtime is this mock.
@@ -266,7 +266,9 @@ class TestCreateCardTool:
             "Pipefy MCP Test Server", PipeTools.register, mock_pipefy_client
         )
 
-        runtime = McpRuntime(settings, StartupIdentity())
+        runtime = McpRuntime(
+            settings, RequestScopedIdentity(RequestContextBearerAuth())
+        )
         runtime.pipefy_client = mock_pipefy_client
 
         ctx = MagicMock()

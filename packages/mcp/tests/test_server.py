@@ -1,5 +1,5 @@
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -50,12 +50,11 @@ _MINIMAL_PIPEFY_SETTINGS = Settings(
 def mocked_runtime():
     """Patch the ``McpRuntime`` the builder constructs with a no-network mock.
 
-    ``build_pipefy_mcp_server`` constructs ``McpRuntime`` once; this intercepts
-    that construction so ``initialize`` is a no-op and ``pipefy_client`` is a
-    stand-in a tool can resolve.
+    ``build_pipefy_mcp_server`` constructs ``McpRuntime`` once (which wires its
+    client); this intercepts that construction so no real auth is resolved and
+    ``pipefy_client`` is a stand-in a tool can resolve.
     """
     runtime = MagicMock()
-    runtime.initialize = AsyncMock()
     runtime.pipefy_client = MagicMock()
     with patch("pipefy_mcp.server.McpRuntime", return_value=runtime):
         yield runtime
@@ -137,10 +136,10 @@ def test_second_registration_pass_is_rejected_by_collision_preflight(mocked_runt
 
 
 @pytest.mark.anyio
-async def test_lifespan_initializes_runtime_and_yields_it_without_registering(
+async def test_lifespan_yields_the_runtime_without_registering(
     mocked_runtime,
 ):
-    """The lifespan initializes the runtime and yields it; no tools added."""
+    """The lifespan yields the app-scoped runtime and adds no tools."""
     app = FastMCP("lifespan-resources-test")
 
     @app.tool()
@@ -153,7 +152,6 @@ async def test_lifespan_initializes_runtime_and_yields_it_without_registering(
         names = {t.name for t in app._tool_manager.list_tools()}
 
     assert yielded is mocked_runtime
-    mocked_runtime.initialize.assert_awaited_once()
     # No Pipefy tools were registered by the lifespan; only the foreign tool.
     assert names == {"foreign_mcp_tool"}
 
@@ -164,10 +162,9 @@ async def test_repeat_lifespan_yields_the_same_runtime_and_leaves_tools_untouche
 ):
     """Re-entering the lifespan yields the one app-scoped runtime, never registers.
 
-    Streamable HTTP re-enters the lifespan per session; every session shares the
-    single runtime (the build-once guarantee lives in its idempotent
-    ``initialize``, exercised in test_runtime.py), and the tool table is never
-    mutated.
+    Streamable HTTP re-enters the lifespan per session; the runtime (with its
+    client wired at construction) is shared across entries, and the tool table is
+    never mutated.
     """
     app = FastMCP("lifespan-repeat-test")
 
@@ -184,26 +181,6 @@ async def test_repeat_lifespan_yields_the_same_runtime_and_leaves_tools_untouche
 
     assert first == second == {"foreign_mcp_tool"}
     assert first_runtime is second_runtime is mocked_runtime
-    # The lifespan drives the idempotent initialize on each entry.
-    assert mocked_runtime.initialize.await_count == 2
-
-
-@pytest.mark.unit
-@pytest.mark.anyio
-async def test_lifespan_logs_error_when_initialization_raises():
-    """When runtime init raises, logger.exception runs and the error propagates."""
-    app = FastMCP("lifespan-init-fail")
-    runtime = MagicMock()
-    runtime.initialize = AsyncMock(side_effect=ValueError("init failed"))
-    lifespan = _make_lifespan(runtime)
-    with patch("pipefy_mcp.server.logger") as mock_logger:
-        with pytest.raises(ValueError, match="init failed"):
-            async with lifespan(app):
-                pass
-
-        mock_logger.exception.assert_called_once()
-        call_msg = mock_logger.exception.call_args[0][0]
-        assert "Fatal error during server lifespan" in call_msg
 
 
 # --- HTTP (Streamable) transport profile ------------------------------------

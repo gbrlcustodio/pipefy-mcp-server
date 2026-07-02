@@ -41,16 +41,15 @@ def _make_lifespan(
     """Build the FastMCP lifespan bound to the one app-scoped ``runtime``.
 
     Following the FastMCP lifespan contract, the lifespan owns resources only: it
-    initializes the runtime and yields it as the request ``lifespan_context``.
-    Tools resolve the live client per request from that context (see
+    yields the runtime as the request ``lifespan_context``. Tools resolve the live
+    client per request from that context (see
     :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so both transports
     must run a lifespan for tools to find a client.
 
-    The one runtime is built once at server construction and captured here.
-    Streamable HTTP re-enters this context manager per session; each entry calls
-    the idempotent :meth:`McpRuntime.initialize` (a no-op after the first) and
-    yields the same runtime, so every session shares one client. See AGENTS.md
-    for the fuller rationale.
+    The one runtime is built once at server construction (which wires its client)
+    and captured here. Streamable HTTP re-enters this context manager per session;
+    each entry yields the same already-wired runtime, so every session shares one
+    client and there is nothing to rebuild. See AGENTS.md for the fuller rationale.
 
     Tools are registered once, up front, by :func:`_register_pipefy_tools`, never
     here, so re-entry cannot race the tool table.
@@ -58,17 +57,10 @@ def _make_lifespan(
 
     @asynccontextmanager
     async def lifespan(_app: FastMCP) -> AsyncIterator[McpRuntime]:
-        try:
-            logger.info("Initializing services")
-            logger.info(
-                "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
-                "enabled" if settings.mcp.unified_envelope else "disabled",
-            )
-            await runtime.initialize()
-        except Exception:
-            logger.exception("Fatal error during server lifespan initialization")
-            raise
-
+        logger.info(
+            "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
+            "enabled" if settings.mcp.unified_envelope else "disabled",
+        )
         yield runtime
 
     return lifespan
@@ -93,10 +85,9 @@ def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
 
     Shared by both transports. Tools take no client at registration: each
     resolves the live client per request from the lifespan context (see
-    :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so they can be
-    registered before services are initialized and keep working across a service
-    re-initialization. Registration never repeats, so there is no repeat-visit
-    bookkeeping to maintain.
+    :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so registration is
+    decoupled from how or when the runtime wires its client. Registration never
+    repeats, so there is no repeat-visit bookkeeping to maintain.
     """
     install_pipefy_validation_envelope()
     registry = ToolRegistry(mcp=app)

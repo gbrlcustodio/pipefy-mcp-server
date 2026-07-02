@@ -5,14 +5,19 @@ from unittest.mock import Mock
 
 import pytest
 
-from pipefy_mcp.core.runtime import McpRuntime, StartupIdentity
+from pipefy_mcp.auth import RequestContextBearerAuth
+from pipefy_mcp.core.runtime import McpRuntime, RequestScopedIdentity
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 
 def _runtime() -> McpRuntime:
-    """A pure runtime (no client built) to hold a preset ``pipefy_client``."""
-    return McpRuntime(settings, StartupIdentity())
+    """A runtime built with no credential resolution, to hold a preset client.
+
+    The request-scoped strategy wires a client without keychain or network I/O,
+    so the runtime constructs cleanly; tests overwrite ``pipefy_client``.
+    """
+    return McpRuntime(settings, RequestScopedIdentity(RequestContextBearerAuth()))
 
 
 def _ctx_with_runtime(runtime: McpRuntime) -> Mock:
@@ -43,12 +48,3 @@ def test_reads_the_live_client_off_the_runtime():
 
     runtime.pipefy_client = second
     assert get_pipefy_client(ctx) is second
-
-
-@pytest.mark.unit
-def test_raises_when_no_client_initialized_yet():
-    runtime = _runtime()
-    runtime.pipefy_client = None
-
-    with pytest.raises(RuntimeError, match="client is not initialized"):
-        get_pipefy_client(_ctx_with_runtime(runtime))

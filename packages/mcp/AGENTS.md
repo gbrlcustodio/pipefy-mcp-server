@@ -82,11 +82,10 @@ shares the client's disk (remote-safe file inputs are separate follow-up work).
 
 Tools are registered **once, at construction** (via `_register_pipefy_tools` in
 `server.py`, reached through `build_pipefy_mcp_server`, which both transports use),
-not inside the FastMCP `lifespan`. The lifespan owns resources only: it
-initializes the app-scoped runtime and yields it as the request
-`lifespan_context`. This follows the FastMCP contract, where the lifespan can run
-per session (per request under Streamable HTTP) and so must not mutate the tool
-table.
+not inside the FastMCP `lifespan`. The lifespan owns resources only: it yields
+the already-wired app-scoped runtime as the request `lifespan_context`. This
+follows the FastMCP contract, where the lifespan can run per session (per request
+under Streamable HTTP) and so must not mutate the tool table.
 
 Tools take no client at registration. Each tool function declares a
 `ctx: Context` parameter (FastMCP injects it and keeps it out of the tool's
@@ -107,17 +106,21 @@ the profile/transport once (via `resolve_mcp_settings`) and builds the same app
 through `build_pipefy_mcp_server` (same runtime-bound lifespan, same
 `_register_pipefy_tools`), differing only in the transport `run` and HTTP's bind
 concerns. `build_pipefy_mcp_server` constructs one app-scoped `McpRuntime`
-(`core/runtime.py`) and binds the lifespan to it. Initialization runs in the
-lifespan, in the serving event loop, for both: the per-request HTTP clients bind
-to the loop that is running when they are first used, so creating them off in a
-separate startup loop would leave them bound to a closed loop. The runtime's
-`initialize` is idempotent, so Streamable HTTP re-entering the lifespan per
-session shares the single client built on the first entry rather than rebuilding
-it. The runtime holds no per-request state: `StartupIdentity` resolves one
-credential at startup (stdio/local), while `RequestScopedIdentity` wires the
-shared client with a `RequestContextBearerAuth` that reads each caller's
-validated bearer from the request context, so one client serves every concurrent
-caller as themselves.
+(`core/runtime.py`) and binds the lifespan to it. The runtime is the composition
+root: it wires its shared client in its constructor and fails fast there, so a
+missing credential surfaces when the server is built at startup, not on the first
+tool call. (This also means `build_pipefy_mcp_server` resolves the credential, so
+the live integration tests that build the app at import skip themselves when no
+creds are configured.) Wiring the client at construction is safe off the event
+loop: `PipefyClient` construction does no network I/O and binds nothing to a
+running loop, because its executors open a fresh per-request transport at call
+time; the client built at startup works on whatever loop later serves requests.
+Streamable HTTP re-entering the lifespan per session just yields the same
+already-wired runtime, so there is nothing to rebuild. The runtime holds no
+per-request state: `StartupIdentity` resolves one credential at startup
+(stdio/local), while `RequestScopedIdentity` wires the shared client with a
+`RequestContextBearerAuth` that reads each caller's validated bearer from the
+request context, so one client serves every concurrent caller as themselves.
 
 ## Remote-profile tool marker
 

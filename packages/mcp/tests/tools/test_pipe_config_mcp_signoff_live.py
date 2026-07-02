@@ -25,13 +25,19 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
-from _shared.live_settings import require_live_creds
+from _shared.live_settings import pipefy_live_configured, require_live_creds
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
 
 from pipefy_mcp.server import build_pipefy_mcp_server
 from pipefy_mcp.settings import settings
+
+# Building the app now resolves the Pipefy credential (the runtime wires its
+# client at construction), so this credential-dependent module skips itself
+# when no live creds are configured rather than failing at collection.
+if not pipefy_live_configured():
+    pytest.skip("live MCP tests require Pipefy credentials", allow_module_level=True)
 
 mcp_server = build_pipefy_mcp_server()
 

@@ -55,6 +55,9 @@ class AutomationToolErrorPayload(TypedDict):
     error: ToolErrorDetail
 
 
+_AUTOMATION_REQUEST_FAILED = "Automation request failed."
+
+
 def build_automation_mutation_success_payload(
     automation: dict[str, Any],
     action: str,
@@ -169,8 +172,10 @@ async def handle_automation_tool_graphql_error(
         return build_automation_error_payload(message=message, code=code)
 
     msgs = extract_error_strings(exc)
-    base = "; ".join(msgs) if msgs else "Automation request failed."
+    base = "; ".join(msgs) if msgs else _AUTOMATION_REQUEST_FAILED
     base = strip_internal_api_diagnostic_markers(base)
+    if not base.strip():
+        base = _AUTOMATION_REQUEST_FAILED
     base = with_debug_suffix(base, debug=debug, codes=codes, correlation_id=cid)
     return build_automation_error_payload(message=base, code=first_code)
 

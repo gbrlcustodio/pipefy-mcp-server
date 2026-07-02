@@ -15,13 +15,10 @@ from httpx import Auth, Timeout
 
 @dataclass(frozen=True)
 class PartialQueryResult:
-    """A GraphQL response that carries ``data`` and per-node ``errors`` together.
+    """GraphQL ``data`` plus the raw per-node error dicts from one response.
 
-    The executor's own value type for the partial-tolerant path, so services
-    and their tests never touch gql or graphql-core objects. ``errors`` holds
-    the raw GraphQL error dicts from the response body (``message`` plus an
-    ``extensions`` mapping); ``data`` holds the partial payload. A response with
-    no data at all is a failure and raises, so ``data`` is always a dict here.
+    Owned by the executor so services and their tests never touch gql objects.
+    ``data`` is always a dict: a response with no data raises instead.
     """
 
     data: dict[str, Any]
@@ -46,10 +43,8 @@ class GraphQLExecutor(Protocol):
 class PartialGraphQLExecutor(GraphQLExecutor, Protocol):
     """:class:`GraphQLExecutor` plus a partial-tolerant execute path.
 
-    Required only by services whose queries can mix ``data`` with per-node
-    ``errors`` in one response (e.g. ``automations.executionMetrics``);
-    everything else depends on the narrower :class:`GraphQLExecutor` so the
-    shared seam stays one method.
+    For services whose queries mix ``data`` with per-node ``errors`` in one
+    response; everything else depends on the narrower protocol.
     """
 
     async def execute_query_allow_partial(
@@ -113,9 +108,8 @@ class HttpxGraphQLExecutor:
         per request). When ``cache_schema`` is True the schema is fetched once per
         executor instance, cached, and reused for local validation.
 
-        Returns the ``data`` dict and raises ``TransportQueryError`` if the response
-        carries GraphQL ``errors`` (gql raises even when partial ``data`` is present).
-        The partial ``data`` and the ``errors`` are both available on the exception.
+        Any GraphQL ``errors`` raise ``TransportQueryError`` (even alongside partial
+        ``data``); the exception carries both ``data`` and ``errors``.
         """
         transport = HTTPXAsyncTransport(
             url=self._graphql_url,
@@ -152,12 +146,6 @@ class HttpxGraphQLExecutor:
             return await session.execute(request)
 
     def _reraise_graphql_error(self, exc: TransportQueryError) -> NoReturn:
-        """Reraise a gql error as the executor's error type.
-
-        With ``on_graphql_error`` set (the Internal API executor) the gql exception
-        is converted to ``ValueError`` carrying the formatter's ``[code=…]`` envelope;
-        otherwise the original ``TransportQueryError`` propagates unchanged.
-        """
         if self._on_graphql_error is None:
             raise exc
         raise ValueError(self._on_graphql_error(exc.errors or [])) from exc
@@ -167,10 +155,9 @@ class HttpxGraphQLExecutor:
     ) -> dict:
         """Execute a GraphQL query/mutation with variables.
 
-        All-or-nothing semantics: gql raises ``TransportQueryError`` if the response
-        carries any GraphQL ``errors`` (the partial ``data`` is discarded). For
-        responses that intentionally mix data and per-node errors, use
-        :meth:`execute_query_allow_partial` instead.
+        All-or-nothing: any GraphQL ``errors`` raise and partial ``data`` is
+        discarded; for responses that mix both, use
+        :meth:`execute_query_allow_partial`.
         """
         try:
             return await self._execute_request(query, variables)
@@ -182,14 +169,10 @@ class HttpxGraphQLExecutor:
     ) -> PartialQueryResult:
         """Execute a query preserving partial ``data`` alongside GraphQL ``errors``.
 
-        Pipefy can return ``data`` for the nodes a token may access AND per-node
-        ``errors`` (e.g. ``PERMISSION_DENIED`` carrying ``automation_id`` in
-        ``extensions``) in a single response. gql raises ``TransportQueryError`` on
-        any ``errors`` even in this mode, but attaches the partial ``data`` and the
-        ``errors`` to the exception, so this rebuilds them into a
-        :class:`PartialQueryResult`. A response with no ``data`` at all is a real
-        failure and reraises like :meth:`execute_query`; transport-level failures
-        always raise.
+        gql raises on any ``errors`` but attaches the partial ``data`` and the raw
+        error dicts to the exception; this rebuilds them into a
+        :class:`PartialQueryResult`. A response with no ``data`` at all reraises
+        like :meth:`execute_query`.
         """
         try:
             data = await self._execute_request(query, variables)

@@ -2968,7 +2968,7 @@ Usage: pipefy usage execution-metrics [OPTIONS]
 │    --period                      TEXT     FIFTEEN_MINUTES | SIXTY_MINUTES |  │
 │                                           TWELVE_HOURS | TWENTY_FOUR_HOURS   │
 │                                           [default: SIXTY_MINUTES]           │
-│    --first                       INTEGER  Page size (1-50). [default: 30]    │
+│    --first                       INTEGER  Page size (1-50). [default: 50]    │
 │    --after                       TEXT     Cursor from a previous page's      │
 │                                           page_info.endCursor.               │
 │    --json                -j                                                  │

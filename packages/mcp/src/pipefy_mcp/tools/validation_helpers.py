@@ -101,14 +101,9 @@ def validate_optional_tool_id_list(
 ) -> tuple[list[str] | None, dict[str, object] | None]:
     """Validate an optional list of Pipefy IDs at the tool boundary.
 
-    ``None`` passes through as ``(None, None)`` (the filter is omitted). A present
-    list must be non-empty and each element must pass :func:`validate_tool_id`;
-    elements are returned cleaned (stripped, int→str). Returns
-    ``(cleaned_ids_or_none, error_payload_or_none)``.
-
-    Args:
-        values: Optional list of raw ID values from the tool parameter.
-        label: Parameter name for the error message.
+    ``None`` passes through as ``(None, None)``; a present list must be non-empty
+    and every element pass :func:`validate_tool_id`. Returns
+    ``(cleaned_ids, error_payload)``.
     """
     if values is None:
         return None, None
@@ -119,9 +114,9 @@ def validate_optional_tool_id_list(
     cleaned: list[str] = []
     for value in values:
         cleaned_id, err = validate_tool_id(value, label)
-        if err is not None:
+        if cleaned_id is None:
             return None, err
-        cleaned.append(cleaned_id)  # type: ignore[arg-type]
+        cleaned.append(cleaned_id)
     return cleaned, None
 
 

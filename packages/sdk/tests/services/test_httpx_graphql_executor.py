@@ -175,12 +175,7 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged():
 @pytest.mark.unit
 @pytest.mark.asyncio
 async def test_execute_query_allow_partial_returns_data_and_errors_together():
-    """A response mixing data and per-node errors becomes a PartialQueryResult.
-
-    gql 4 raises ``TransportQueryError`` whenever the response carries any errors,
-    even for a partial success; the executor rebuilds the partial ``data`` and the
-    raw error dicts from the exception rather than dropping them.
-    """
+    """A response mixing data and per-node errors becomes a PartialQueryResult."""
     partial_body = {
         "data": {"automations": {"edges": [{"node": {"id": "25"}}]}},
         "errors": [

@@ -416,18 +416,18 @@ class ObservabilityTools:
             automation_ids: list[PipefyId] | None = None,
             repo_id: PipefyId | None = None,
             period: str = "SIXTY_MINUTES",
-            first: int = 30,
+            first: int = AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
             after: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Get execution metrics (totalRuns, successRate, failureRate, averageDuration, lastRun) for one or more automations over a rolling window. Returns metrics for the automations you can access plus a `partial_errors` list naming any that were denied (PERMISSION_DENIED); this is a partial result, not a hard failure. Results are paginated: `page_info` carries `hasNextPage` and `endCursor`, and a page contains at most 50 automations, so pass `endCursor` back as `after` to fetch the rest. `period`: FIFTEEN_MINUTES, SIXTY_MINUTES (default), TWELVE_HOURS, or TWENTY_FOUR_HOURS.
+            """Get execution metrics (totalRuns, successRate, failureRate, averageDuration, lastRun) for one or more automations over a rolling window. Returns metrics for the automations you can access plus a `partial_errors` list naming any that were denied; a partial result, not a hard failure. Paginated: a page holds at most 50 automations; pass `page_info.endCursor` back as `after` to fetch the rest.
 
             Args:
                 organization_id: Organization ID (numeric org id, same as in the Pipefy URL).
-                automation_ids: Optional automation IDs to fetch metrics for. Omit to fetch metrics for every automation in the organization (optionally scoped by repo_id). When provided, it must contain at least one ID.
+                automation_ids: Automation IDs to fetch. Omit to fetch every automation in the organization (optionally scoped by repo_id); when provided, must be non-empty.
                 repo_id: Optional pipe/repo ID to scope the query.
-                period: AutomationExecutionMetricsPeriod (FIFTEEN_MINUTES, SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to SIXTY_MINUTES, matching the API.
-                first: Page size, 1 to 50 (default 30).
+                period: One of FIFTEEN_MINUTES, SIXTY_MINUTES (default), TWELVE_HOURS, TWENTY_FOUR_HOURS.
+                first: Page size, 1 to 50 (default 50).
                 after: Cursor from a previous page's page_info.endCursor.
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """

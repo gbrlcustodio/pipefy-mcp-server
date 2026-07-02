@@ -111,7 +111,7 @@ def usage_execution_metrics(
         help=_EXECUTION_METRICS_PERIOD_HELP,
     ),
     first: int = typer.Option(
-        30,
+        AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
         "--first",
         help=f"Page size (1-{AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE}).",
     ),

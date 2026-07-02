@@ -348,7 +348,7 @@ async def test_get_automation_execution_metrics_partial_success(
 
     assert result.isError is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
-        "3", ["25", "124"], repo_id="16", period="SIXTY_MINUTES", first=30, after=None
+        "3", ["25", "124"], repo_id="16", period="SIXTY_MINUTES", first=50, after=None
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -375,7 +375,7 @@ async def test_get_automation_execution_metrics_without_ids_fetches_all(
 
     assert result.isError is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
-        "3", None, repo_id=None, period="SIXTY_MINUTES", first=30, after=None
+        "3", None, repo_id=None, period="SIXTY_MINUTES", first=50, after=None
     )
     assert extract_payload(result)["success"] is True
 

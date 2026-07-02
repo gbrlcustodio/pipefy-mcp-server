@@ -585,7 +585,7 @@ async def test_get_automation_execution_metrics_all_permitted():
         "automationIds": ["25", "107"],
         "period": "TWENTY_FOUR_HOURS",
         "repoId": "16",
-        "first": 30,
+        "first": 50,
     }
     assert [a["id"] for a in result["automations"]] == ["25", "107"]
     assert result["automations"][0]["executionMetrics"]["totalRuns"] == 3
@@ -620,7 +620,6 @@ async def test_get_automation_execution_metrics_partial_permission_denied():
             "correlation_id": "c86ccfa6",
         },
     ]
-    # repo_id omitted → not sent as a variable
     _, variables = executor.execute_query_allow_partial.call_args[0]
     assert "repoId" not in variables
 
@@ -692,7 +691,7 @@ async def test_get_automation_execution_metrics_without_ids_omits_filter():
 
     _, variables = executor.execute_query_allow_partial.call_args[0]
     assert "automationIds" not in variables
-    assert variables == {"organizationId": "3", "period": "SIXTY_MINUTES", "first": 30}
+    assert variables == {"organizationId": "3", "period": "SIXTY_MINUTES", "first": 50}
     assert [a["id"] for a in result["automations"]] == ["25", "107"]
 
 

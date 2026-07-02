@@ -20,19 +20,12 @@ def mock_executor(
 ) -> MagicMock:
     """A MagicMock standing in for a :class:`PartialGraphQLExecutor`.
 
-    Spec'd on the wide protocol so the one fake serves every service, including
-    the partial-tolerant consumers; services that only need the narrow
-    :class:`GraphQLExecutor` see a structural superset.
-
-    Pass ``return_value`` to set what ``execute_query`` resolves to, or
-    ``side_effect`` for the error-path tests. Assert on the returned mock's
-    ``execute_query`` to verify the query and variables a service sent.
-
-    The partial-tolerant seam is stubbed too: ``partial_result`` sets what
-    ``execute_query_allow_partial`` resolves to, and ``partial_side_effect``
-    drives its error paths. Without them the spec'd mock would auto-create the
-    method as an AsyncMock resolving to a bare MagicMock, so a service reading
-    ``result.data``/``result.errors`` gets silent garbage instead of a failure.
+    Spec'd on the wide protocol so one fake serves every service.
+    ``return_value``/``side_effect`` drive ``execute_query``;
+    ``partial_result``/``partial_side_effect`` drive
+    ``execute_query_allow_partial``. Both are stubbed explicitly: an
+    auto-created method would resolve to a bare MagicMock and feed services
+    silent garbage instead of a failure.
     """
     mock = MagicMock(spec=PartialGraphQLExecutor)
     mock.execute_query = AsyncMock(return_value=return_value, side_effect=side_effect)

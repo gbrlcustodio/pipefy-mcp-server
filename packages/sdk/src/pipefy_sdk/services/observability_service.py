@@ -104,18 +104,7 @@ def _build_execution_metrics_variables(
     first: int,
     after: str | None,
 ) -> dict[str, Any]:
-    """Build the GraphQL variables dict for the execution-metrics query.
-
-    Optional filters are omitted when ``None`` rather than sent as nulls.
-
-    Args:
-        organization_id: Organization ID.
-        automation_ids: Optional automation IDs filter.
-        repo_id: Optional pipe/repo ID to scope the query.
-        period: AutomationExecutionMetricsPeriod enum value.
-        first: Page size.
-        after: Cursor for the next page.
-    """
+    """Build the execution-metrics variables, omitting optional filters that are ``None``."""
     variables: dict[str, Any] = {
         "organizationId": organization_id,
         "period": period,
@@ -144,24 +133,10 @@ def _partial_error(err: dict[str, Any]) -> dict[str, Any]:
 def _normalize_execution_metrics_result(result: PartialQueryResult) -> dict[str, Any]:
     """Split a partial ``automations.executionMetrics`` response into nodes and errors.
 
-    ``result.data`` carries the automations the token may read (each with its
-    ``executionMetrics``); ``result.errors`` carries per-automation failures
-    (e.g. ``PERMISSION_DENIED``) with ``automation_id`` in ``extensions``. Both are
-    returned so the caller can report a partial success.
-
     A null ``automations`` connection means the lookup itself failed (bad org, no
-    org access) rather than individual nodes being denied; that is a total failure,
-    so this raises ``ValueError`` (with the response's first error message when
-    present) instead of reporting an empty partial success. An empty ``edges``
-    list (every requested automation denied) stays a partial success with a
-    populated ``partial_errors``.
-
-    ``page_info`` carries the connection's ``pageInfo`` (``hasNextPage``,
-    ``endCursor``); a page contains at most 50 automations (the connection's max
-    page size), so callers page with ``after`` until ``hasNextPage`` is false.
-
-    Args:
-        result: PartialQueryResult from ``execute_query_allow_partial``.
+    org access), so it raises ``ValueError``; an empty ``edges`` list (every
+    requested automation denied) stays a partial success. ``page_info`` carries
+    the connection's ``pageInfo`` for cursor paging.
     """
     connection = result.data.get("automations")
     if connection is None:
@@ -190,33 +165,24 @@ class ObservabilityService:
         *,
         repo_id: str | None = None,
         period: str = "SIXTY_MINUTES",
-        first: int = _DEFAULT_PAGE_SIZE,
+        first: int = AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
         after: str | None = None,
     ) -> dict[str, Any]:
-        """Get execution metrics for one or more automations within a rolling period.
+        """Get execution metrics for automations within a rolling period.
 
-        Partial success: returns metrics for the automations this token may read,
-        plus a ``partial_errors`` list naming any automations that failed
-        (e.g. ``PERMISSION_DENIED``). The ``automations`` query reports per-node
-        errors alongside data, so this uses the partial-tolerant execute path.
-
-        The connection is paginated with a max page size of 50.
-        The returned ``page_info`` carries ``hasNextPage`` and ``endCursor``; pass
-        ``endCursor`` back as ``after`` to fetch the next page.
+        Partial success: returns metrics for the automations this token may read
+        plus a ``partial_errors`` list naming any that failed. ``page_info``
+        carries the cursor for paging past the 50-automation max page.
 
         Args:
-            organization_id: Organization ID (required by the ``automations`` query;
-                a numeric org id, not a UUID).
-            automation_ids: Automation IDs to fetch metrics for. When ``None``,
-                the ``automationIds`` filter is omitted and the query returns
-                metrics for every automation in the organization (optionally
-                scoped by ``repo_id``), one page at a time.
+            organization_id: Numeric org id, not a UUID.
+            automation_ids: IDs to fetch metrics for. ``None`` fetches every
+                automation in the organization (optionally scoped by ``repo_id``).
             repo_id: Optional pipe/repo ID to scope the query.
-            period: AutomationExecutionMetricsPeriod enum value (FIFTEEN_MINUTES,
-                SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to
-                SIXTY_MINUTES, matching the API default.
-            first: Page size (default 30, max 50).
-            after: Cursor from a previous page's ``page_info.endCursor``.
+            period: One of ``AUTOMATION_EXECUTION_METRICS_PERIODS`` (default
+                SIXTY_MINUTES, the API default).
+            first: Page size (default and max 50).
+            after: Cursor from the previous page's ``page_info.endCursor``.
         """
         variables = _build_execution_metrics_variables(
             organization_id,

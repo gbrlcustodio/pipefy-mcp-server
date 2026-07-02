@@ -46,7 +46,7 @@ from pipefy_sdk.services.automation_service import AutomationService
 from pipefy_sdk.services.card_service import CardService
 from pipefy_sdk.services.member_service import MemberService
 from pipefy_sdk.services.observability_service import (
-    _DEFAULT_PAGE_SIZE,
+    AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
     ObservabilityService,
 )
 from pipefy_sdk.services.organization_service import OrganizationService
@@ -1815,26 +1815,24 @@ class PipefyClient:
         *,
         repo_id: str | None = None,
         period: str = "SIXTY_MINUTES",
-        first: int = _DEFAULT_PAGE_SIZE,
+        first: int = AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
         after: str | None = None,
     ) -> dict[str, Any]:
-        """Get execution metrics for one or more automations within a rolling period.
+        """Get execution metrics for automations within a rolling period.
 
-        Returns metrics for the automations this token may read plus a
-        ``partial_errors`` list for any that failed (e.g. ``PERMISSION_DENIED``),
-        and a ``page_info`` with ``hasNextPage`` and ``endCursor``.
+        Partial success: returns metrics for the automations this token may read
+        plus a ``partial_errors`` list naming any that failed. ``page_info``
+        carries the cursor for paging past the 50-automation max page.
 
         Args:
-            organization_id: Organization ID (numeric org id, not a UUID).
-            automation_ids: Automation IDs to fetch metrics for. Omit to fetch
-                metrics for every automation in the organization (optionally
-                scoped by ``repo_id``), one page at a time.
+            organization_id: Numeric org id, not a UUID.
+            automation_ids: IDs to fetch metrics for. Omit to fetch every
+                automation in the organization (optionally scoped by ``repo_id``).
             repo_id: Optional pipe/repo ID to scope the query.
-            period: AutomationExecutionMetricsPeriod enum value (FIFTEEN_MINUTES,
-                SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to
-                SIXTY_MINUTES, matching the API default.
-            first: Page size (default 30, max 50).
-            after: Cursor from a previous page's ``page_info.endCursor``.
+            period: One of ``AUTOMATION_EXECUTION_METRICS_PERIODS`` (default
+                SIXTY_MINUTES, the API default).
+            first: Page size (default and max 50).
+            after: Cursor from the previous page's ``page_info.endCursor``.
         """
         return await self._observability_service.get_automation_execution_metrics(
             organization_id,

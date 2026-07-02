@@ -31,11 +31,9 @@ class PartialQueryResult:
 class GraphQLExecutor(Protocol):
     """The GraphQL execution seam services depend on.
 
-    Narrow by design: it exposes only the operations services need and leaks
+    Narrow by design: it exposes only the operation services need and leaks
     nothing about the httpx/gql transport. Services receive an implementation
-    through their constructor and call ``execute_query``, or
-    ``execute_query_allow_partial`` when a response can mix ``data`` with
-    per-node ``errors``; tests inject a fake.
+    through their constructor and call ``execute_query``; tests inject a fake.
     ``query`` is a parsed ``DocumentNode``: callers build one with ``gql()`` (the
     raw ``execute_graphql`` passthrough parses its string before reaching here).
     """
@@ -43,6 +41,16 @@ class GraphQLExecutor(Protocol):
     async def execute_query(
         self, query: DocumentNode, variables: dict[str, Any]
     ) -> dict: ...
+
+
+class PartialGraphQLExecutor(GraphQLExecutor, Protocol):
+    """:class:`GraphQLExecutor` plus a partial-tolerant execute path.
+
+    Required only by services whose queries can mix ``data`` with per-node
+    ``errors`` in one response (e.g. ``automations.executionMetrics``);
+    everything else depends on the narrower :class:`GraphQLExecutor` so the
+    shared seam stays one method.
+    """
 
     async def execute_query_allow_partial(
         self, query: DocumentNode, variables: dict[str, Any]

@@ -6,7 +6,11 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
-from pipefy_sdk import AUTOMATION_EXECUTION_METRICS_PERIODS, PipefyId
+from pipefy_sdk import (
+    AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+    AUTOMATION_EXECUTION_METRICS_PERIODS,
+    PipefyId,
+)
 
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 from pipefy_mcp.tools.observability_tool_helpers import (
@@ -26,15 +30,9 @@ from pipefy_mcp.tools.validation_helpers import (
 
 _VALID_PERIODS = {"current_month", "last_month", "last_3_months"}
 
-# Rolling windows for execution metrics; single-sourced from the SDK's schema enum.
-_VALID_EXECUTION_METRICS_PERIODS = frozenset(AUTOMATION_EXECUTION_METRICS_PERIODS)
-
 # Pagination
 _MIN_PAGE_SIZE = 1
 _MAX_PAGE_SIZE = 100
-# The automations connection caps a page at 50; asking for more is rejected up front
-# rather than silently returning 50.
-_MAX_EXECUTION_METRICS_PAGE_SIZE = 50
 
 # CSV / export download limits
 _MIN_CSV_CHARS = 256
@@ -422,7 +420,7 @@ class ObservabilityTools:
             after: str | None = None,
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Get execution metrics (totalRuns, successRate, failureRate, averageDuration, lastRun) for one or more automations over a rolling window. Returns metrics for the automations you can access plus a `partial_errors` list naming any that were denied (PERMISSION_DENIED); this is a partial result, not a hard failure. Results are paginated: `page_info` carries `hasNextPage` and `endCursor`, and the server caps a page at 50 automations, so pass `endCursor` back as `after` to fetch the rest. `period`: FIFTEEN_MINUTES, SIXTY_MINUTES (default), TWELVE_HOURS, or TWENTY_FOUR_HOURS.
+            """Get execution metrics (totalRuns, successRate, failureRate, averageDuration, lastRun) for one or more automations over a rolling window. Returns metrics for the automations you can access plus a `partial_errors` list naming any that were denied (PERMISSION_DENIED); this is a partial result, not a hard failure. Results are paginated: `page_info` carries `hasNextPage` and `endCursor`, and a page contains at most 50 automations, so pass `endCursor` back as `after` to fetch the rest. `period`: FIFTEEN_MINUTES, SIXTY_MINUTES (default), TWELVE_HOURS, or TWENTY_FOUR_HOURS.
 
             Args:
                 organization_id: Organization ID (numeric org id, same as in the Pipefy URL).
@@ -445,18 +443,22 @@ class ObservabilityTools:
             _, normalized_repo_id, err = validate_optional_tool_id(repo_id, "repo_id")
             if err is not None:
                 return err
-            if period not in _VALID_EXECUTION_METRICS_PERIODS:
+            if period not in AUTOMATION_EXECUTION_METRICS_PERIODS:
                 return build_observability_error_payload(
                     message=(
                         "Invalid 'period': must be one of "
-                        f"{sorted(_VALID_EXECUTION_METRICS_PERIODS)}."
+                        f"{list(AUTOMATION_EXECUTION_METRICS_PERIODS)}."
                     ),
                 )
-            if not _MIN_PAGE_SIZE <= first <= _MAX_EXECUTION_METRICS_PAGE_SIZE:
+            if (
+                not _MIN_PAGE_SIZE
+                <= first
+                <= AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE
+            ):
                 return build_observability_error_payload(
                     message=(
                         f"Invalid 'first': must be between {_MIN_PAGE_SIZE} and "
-                        f"{_MAX_EXECUTION_METRICS_PAGE_SIZE}."
+                        f"{AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE}."
                     ),
                 )
             try:

@@ -45,6 +45,9 @@ from pipefy_sdk.services.automation_graphql_types import (
     AutomationRuleSummary,
 )
 from pipefy_sdk.services.observability_export_csv import download_bytes, stream_bytes
+from pipefy_sdk.services.observability_service import (
+    AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+)
 from pipefy_sdk.services.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
@@ -60,6 +63,7 @@ from pipefy_sdk.settings import PipefySettings
 __all__ = [
     "__version__",
     "AiAgentGraphPayload",
+    "AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE",
     "AUTOMATION_EXECUTION_METRICS_PERIODS",
     "Attachment",
     "AttachmentTarget",

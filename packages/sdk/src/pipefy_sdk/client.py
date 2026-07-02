@@ -45,7 +45,10 @@ from pipefy_sdk.services.automation_graphql_types import (
 from pipefy_sdk.services.automation_service import AutomationService
 from pipefy_sdk.services.card_service import CardService
 from pipefy_sdk.services.member_service import MemberService
-from pipefy_sdk.services.observability_service import ObservabilityService
+from pipefy_sdk.services.observability_service import (
+    _DEFAULT_PAGE_SIZE,
+    ObservabilityService,
+)
 from pipefy_sdk.services.organization_service import OrganizationService
 from pipefy_sdk.services.pipe_config_service import PipeConfigService
 from pipefy_sdk.services.pipe_service import (
@@ -1812,7 +1815,7 @@ class PipefyClient:
         *,
         repo_id: str | None = None,
         period: str = "SIXTY_MINUTES",
-        first: int = 30,
+        first: int = _DEFAULT_PAGE_SIZE,
         after: str | None = None,
     ) -> dict[str, Any]:
         """Get execution metrics for one or more automations within a rolling period.
@@ -1830,7 +1833,7 @@ class PipefyClient:
             period: AutomationExecutionMetricsPeriod enum value (FIFTEEN_MINUTES,
                 SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to
                 SIXTY_MINUTES, matching the API default.
-            first: Page size (default 30; the server caps a page at 50).
+            first: Page size (default 30, max 50).
             after: Cursor from a previous page's ``page_info.endCursor``.
         """
         return await self._observability_service.get_automation_execution_metrics(

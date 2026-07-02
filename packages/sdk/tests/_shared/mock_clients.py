@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from pipefy_sdk.graphql_executor import GraphQLExecutor, PartialQueryResult
+from pipefy_sdk.graphql_executor import PartialGraphQLExecutor, PartialQueryResult
 
 
 def mock_executor(
@@ -18,7 +18,11 @@ def mock_executor(
     partial_result: PartialQueryResult | None = None,
     partial_side_effect=None,
 ) -> MagicMock:
-    """A MagicMock standing in for a :class:`GraphQLExecutor`.
+    """A MagicMock standing in for a :class:`PartialGraphQLExecutor`.
+
+    Spec'd on the wide protocol so the one fake serves every service, including
+    the partial-tolerant consumers; services that only need the narrow
+    :class:`GraphQLExecutor` see a structural superset.
 
     Pass ``return_value`` to set what ``execute_query`` resolves to, or
     ``side_effect`` for the error-path tests. Assert on the returned mock's
@@ -30,7 +34,7 @@ def mock_executor(
     method as an AsyncMock resolving to a bare MagicMock, so a service reading
     ``result.data``/``result.errors`` gets silent garbage instead of a failure.
     """
-    mock = MagicMock(spec=GraphQLExecutor)
+    mock = MagicMock(spec=PartialGraphQLExecutor)
     mock.execute_query = AsyncMock(return_value=return_value, side_effect=side_effect)
     mock.execute_query_allow_partial = AsyncMock(
         return_value=partial_result, side_effect=partial_side_effect

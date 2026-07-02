@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import typer
-from pipefy_sdk import AUTOMATION_EXECUTION_METRICS_PERIODS, PipefyClient
+from pipefy_sdk import (
+    AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+    AUTOMATION_EXECUTION_METRICS_PERIODS,
+    PipefyClient,
+)
 
 from pipefy_cli.commands._common import parse_json_object, run_cli_command
 
@@ -107,7 +111,9 @@ def usage_execution_metrics(
         help=_EXECUTION_METRICS_PERIOD_HELP,
     ),
     first: int = typer.Option(
-        30, "--first", help="Page size (1-50; the server caps a page at 50)."
+        30,
+        "--first",
+        help=f"Page size (1-{AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE}).",
     ),
     after: str | None = typer.Option(
         None, "--after", help="Cursor from a previous page's page_info.endCursor."

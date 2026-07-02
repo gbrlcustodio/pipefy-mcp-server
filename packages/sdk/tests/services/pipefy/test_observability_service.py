@@ -662,6 +662,17 @@ async def test_get_automation_execution_metrics_null_connection_raises():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_automation_execution_metrics_null_connection_without_errors_raises():
+    """A null connection raises even when the response carries no error to quote."""
+    partial_result = PartialQueryResult(data={"automations": None}, errors=[])
+    service, _ = _make_partial_service(partial_result)
+
+    with pytest.raises(ValueError, match="Query failed."):
+        await service.get_automation_execution_metrics("999", ["25"])
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_get_automation_execution_metrics_without_ids_omits_filter():
     """Omitting automation_ids drops the automationIds variable so the query returns all."""
     partial_result = PartialQueryResult(

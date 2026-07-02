@@ -8,7 +8,7 @@ from zipfile import BadZipFile
 import httpx
 from openpyxl.utils.exceptions import InvalidFileException
 
-from pipefy_sdk.graphql_executor import GraphQLExecutor, PartialQueryResult
+from pipefy_sdk.graphql_executor import PartialGraphQLExecutor, PartialQueryResult
 from pipefy_sdk.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
     GET_AGENTS_USAGE_QUERY,
@@ -29,6 +29,8 @@ from pipefy_sdk.utils.organization_identifiers import resolve_organization_uuid
 from pipefy_sdk.utils.relay import unwrap_relay_connection_nodes
 
 _DEFAULT_PAGE_SIZE = 30
+
+AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE: int = 50
 
 
 DateRange = TypedDict("DateRange", {"from": str, "to": str})
@@ -93,6 +95,41 @@ def _build_usage_variables(
     return variables
 
 
+def _build_execution_metrics_variables(
+    organization_id: str,
+    automation_ids: list[str] | None,
+    *,
+    repo_id: str | None,
+    period: str,
+    first: int,
+    after: str | None,
+) -> dict[str, Any]:
+    """Build the GraphQL variables dict for the execution-metrics query.
+
+    Optional filters are omitted when ``None`` rather than sent as nulls.
+
+    Args:
+        organization_id: Organization ID.
+        automation_ids: Optional automation IDs filter.
+        repo_id: Optional pipe/repo ID to scope the query.
+        period: AutomationExecutionMetricsPeriod enum value.
+        first: Page size.
+        after: Cursor for the next page.
+    """
+    variables: dict[str, Any] = {
+        "organizationId": organization_id,
+        "period": period,
+        "first": first,
+    }
+    if automation_ids is not None:
+        variables["automationIds"] = automation_ids
+    if repo_id is not None:
+        variables["repoId"] = repo_id
+    if after is not None:
+        variables["after"] = after
+    return variables
+
+
 def _partial_error(err: dict[str, Any]) -> dict[str, Any]:
     """Project one raw GraphQL error dict onto the per-automation failure shape."""
     extensions = err.get("extensions") or {}
@@ -114,20 +151,22 @@ def _normalize_execution_metrics_result(result: PartialQueryResult) -> dict[str,
 
     A null ``automations`` connection means the lookup itself failed (bad org, no
     org access) rather than individual nodes being denied; that is a total failure,
-    so this raises ``ValueError`` instead of reporting an empty partial success.
-    An empty ``edges`` list (every requested automation denied) stays a partial
-    success with a populated ``partial_errors``.
+    so this raises ``ValueError`` (with the response's first error message when
+    present) instead of reporting an empty partial success. An empty ``edges``
+    list (every requested automation denied) stays a partial success with a
+    populated ``partial_errors``.
 
     ``page_info`` carries the connection's ``pageInfo`` (``hasNextPage``,
-    ``endCursor``); the server caps each page at 50 automations, so callers page
-    with ``after`` until ``hasNextPage`` is false.
+    ``endCursor``); a page contains at most 50 automations (the connection's max
+    page size), so callers page with ``after`` until ``hasNextPage`` is false.
 
     Args:
         result: PartialQueryResult from ``execute_query_allow_partial``.
     """
     connection = result.data.get("automations")
-    if connection is None and result.errors:
-        raise ValueError(result.errors[0].get("message") or "Query failed.")
+    if connection is None:
+        message = result.errors[0].get("message") if result.errors else None
+        raise ValueError(message or "Query failed.")
     automations = unwrap_relay_connection_nodes(connection)
     partial_errors = [_partial_error(err) for err in result.errors]
     page_info = connection.get("pageInfo") if isinstance(connection, dict) else None
@@ -141,7 +180,7 @@ def _normalize_execution_metrics_result(result: PartialQueryResult) -> dict[str,
 class ObservabilityService:
     """Reads for AI agent logs, automation logs, usage stats, and credit dashboard."""
 
-    def __init__(self, *, executor: GraphQLExecutor) -> None:
+    def __init__(self, *, executor: PartialGraphQLExecutor) -> None:
         self._executor = executor
 
     async def get_automation_execution_metrics(
@@ -161,7 +200,7 @@ class ObservabilityService:
         (e.g. ``PERMISSION_DENIED``). The ``automations`` query reports per-node
         errors alongside data, so this uses the partial-tolerant execute path.
 
-        The connection is paginated (the server caps each page at 50 automations).
+        The connection is paginated with a max page size of 50.
         The returned ``page_info`` carries ``hasNextPage`` and ``endCursor``; pass
         ``endCursor`` back as ``after`` to fetch the next page.
 
@@ -176,20 +215,17 @@ class ObservabilityService:
             period: AutomationExecutionMetricsPeriod enum value (FIFTEEN_MINUTES,
                 SIXTY_MINUTES, TWELVE_HOURS, TWENTY_FOUR_HOURS). Defaults to
                 SIXTY_MINUTES, matching the API default.
-            first: Page size (default 30; the server caps a page at 50).
+            first: Page size (default 30, max 50).
             after: Cursor from a previous page's ``page_info.endCursor``.
         """
-        variables: dict[str, Any] = {
-            "organizationId": organization_id,
-            "period": period,
-            "first": first,
-        }
-        if automation_ids is not None:
-            variables["automationIds"] = automation_ids
-        if repo_id is not None:
-            variables["repoId"] = repo_id
-        if after is not None:
-            variables["after"] = after
+        variables = _build_execution_metrics_variables(
+            organization_id,
+            automation_ids,
+            repo_id=repo_id,
+            period=period,
+            first=first,
+            after=after,
+        )
         result = await self._executor.execute_query_allow_partial(
             GET_AUTOMATION_EXECUTION_METRICS_QUERY, variables
         )

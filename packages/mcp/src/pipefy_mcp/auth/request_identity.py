@@ -47,10 +47,11 @@ class RequestContextBearerAuth(Auth):
     a multi-worker deployment, with no chance of one request's bearer
     authenticating another's call.
 
-    It deliberately does not reuse :class:`pipefy_auth.bearer.CallableBearerAuth`:
-    that adapter serializes a keychain refresh behind a lock and a thread hop it
-    does not need here, which would funnel every user's outbound call through one
-    process-wide critical section.
+    It deliberately takes no lock and no thread hop: reading the contextvar is
+    cheap and synchronous, so there is nothing to serialize. A keychain-refresh
+    adapter must funnel its blocking refresh through one critical section; doing
+    the same here would put every user's outbound call through one process-wide
+    lock for no reason.
     """
 
     def auth_flow(self, request: Request) -> Generator[Request, Response, None]:

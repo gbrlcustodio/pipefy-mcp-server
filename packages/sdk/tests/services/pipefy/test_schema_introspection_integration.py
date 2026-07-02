@@ -16,7 +16,7 @@ from _shared.live_settings import (
     require_live_creds,
 )
 
-from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
+from pipefy_sdk.graphql_executor import AuthenticatedExecutor, GraphQLEndpoint
 from pipefy_sdk.services.schema_introspection_service import (
     SchemaIntrospectionService,
 )
@@ -26,11 +26,11 @@ from pipefy_sdk.services.schema_introspection_service import (
 def live_svc():
     require_live_creds()
     settings = live_pipefy_settings()
-    executor = HttpxGraphQLExecutor(
+    endpoint = GraphQLEndpoint(
         url=settings.graphql_url,
-        auth=live_resolved_auth(),
         cache_schema=settings.gql_reuse_fetched_graphql_schema,
     )
+    executor = AuthenticatedExecutor(endpoint=endpoint, auth=live_resolved_auth())
     return SchemaIntrospectionService(executor=executor)
 
 

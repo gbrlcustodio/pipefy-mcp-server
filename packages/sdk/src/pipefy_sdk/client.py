@@ -13,7 +13,11 @@ from pipefy_sdk.automation_preflight import (
     validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
 )
-from pipefy_sdk.graphql_executor import GraphQLExecutor, HttpxGraphQLExecutor
+from pipefy_sdk.graphql_executor import (
+    AuthenticatedExecutor,
+    GraphQLEndpoint,
+    GraphQLExecutor,
+)
 from pipefy_sdk.internal_api_errors import format_internal_api_error
 from pipefy_sdk.models.ai_agent import (
     BehaviorInput,
@@ -85,41 +89,49 @@ class Executors:
     internal: GraphQLExecutor
 
 
-def build_executors(
-    settings: PipefySettings, auth: Auth, *, surface: ClientSurface = "sdk"
-) -> Executors:
-    """Build one executor per Pipefy endpoint from a shared ``settings``/``auth``.
+@dataclass(frozen=True)
+class PipefyEndpoints:
+    """The three shared, auth-less GraphQL endpoints a Pipefy engine runs on.
 
-    This is the seam that resolves each endpoint URL from settings; the executors
-    take a ready URL and stay agnostic to endpoint topology. All three share the
-    one ``auth`` instance so the OAuth token cache is not duplicated. Only the
-    internal executor carries the ``[code=…][correlation_id=…]`` error envelope;
-    the others leave gql exceptions untouched.
+    Built once per process and reused across identities; each endpoint carries its
+    own schema cache. A per-request session binds an ``auth`` to these to get its
+    :class:`Executors`.
+    """
+
+    public: GraphQLEndpoint
+    interfaces: GraphQLEndpoint
+    internal: GraphQLEndpoint
+
+
+def build_endpoints(
+    settings: PipefySettings, *, surface: ClientSurface = "sdk"
+) -> PipefyEndpoints:
+    """Build one auth-less endpoint per Pipefy API endpoint from ``settings``.
+
+    This is the seam that resolves each endpoint URL from settings; the endpoints
+    take a ready URL and stay agnostic to endpoint topology and to identity. Only
+    the internal endpoint carries the ``[code=…][correlation_id=…]`` error
+    envelope; the others leave gql exceptions untouched.
 
     The client telemetry headers are resolved once here from ``surface`` and the
-    package version, then shared by all three executors: every endpoint targets a
+    package version, then shared by all three endpoints: every endpoint targets a
     Pipefy API host, so each carries the same surface/version stamp. ``surface`` is
     the caller's identity (the MCP server passes ``mcp``, the CLI ``cli``); direct
     SDK use keeps the ``sdk`` default.
     """
     cache_schema = settings.gql_reuse_fetched_graphql_schema
     headers = telemetry_headers(surface=surface, version=__version__)
-    return Executors(
-        public=HttpxGraphQLExecutor(
-            url=settings.graphql_url,
-            auth=auth,
-            cache_schema=cache_schema,
-            headers=headers,
+    return PipefyEndpoints(
+        public=GraphQLEndpoint(
+            url=settings.graphql_url, cache_schema=cache_schema, headers=headers
         ),
-        interfaces=HttpxGraphQLExecutor(
+        interfaces=GraphQLEndpoint(
             url=settings.interfaces_graphql_url,
-            auth=auth,
             cache_schema=cache_schema,
             headers=headers,
         ),
-        internal=HttpxGraphQLExecutor(
+        internal=GraphQLEndpoint(
             url=settings.internal_api_url,
-            auth=auth,
             cache_schema=cache_schema,
             headers=headers,
             on_graphql_error=format_internal_api_error,
@@ -127,8 +139,68 @@ def build_executors(
     )
 
 
+def _bind(endpoints: PipefyEndpoints, auth: Auth) -> Executors:
+    """Bind one identity's ``auth`` to shared endpoints, one executor each.
+
+    All three executors share the one ``auth`` instance so the OAuth token cache
+    is not duplicated across a session's endpoints.
+    """
+    return Executors(
+        public=AuthenticatedExecutor(endpoint=endpoints.public, auth=auth),
+        interfaces=AuthenticatedExecutor(endpoint=endpoints.interfaces, auth=auth),
+        internal=AuthenticatedExecutor(endpoint=endpoints.internal, auth=auth),
+    )
+
+
+def build_executors(
+    settings: PipefySettings, auth: Auth, *, surface: ClientSurface = "sdk"
+) -> Executors:
+    """Build shared endpoints and bind ``auth`` to them in one step.
+
+    Back-compat convenience over :func:`build_endpoints` + :func:`_bind`: it builds
+    the endpoints from ``settings`` and binds them to a single ``auth``. Callers
+    that want the endpoints once and many identities later use the engine instead.
+    """
+    return _bind(build_endpoints(settings, surface=surface), auth)
+
+
+@dataclass(frozen=True)
+class PipefyEngine:
+    """Process-scoped, auth-agnostic core: the shared endpoints and settings.
+
+    Hold one per process. Call :meth:`session` per request with the caller's
+    ``auth`` to get a cheap, identity-bound :class:`PipefyClient`. The endpoints
+    (and their schema caches) are shared across every session, so a future auth
+    transform (OBO exchange, a distinct downstream audience) is a change to the
+    ``auth`` the caller passes to :meth:`session`, not to the engine. ``settings``
+    rides along because it is process config the services need at wiring time (the
+    webhook service reads ``allow_insecure_urls`` / ``default_webhook_name``).
+    """
+
+    endpoints: PipefyEndpoints
+    settings: PipefySettings
+
+    @classmethod
+    def build(
+        cls, settings: PipefySettings, *, surface: ClientSurface = "sdk"
+    ) -> PipefyEngine:
+        """Build the shared endpoints from ``settings`` and hold both."""
+        return cls(build_endpoints(settings, surface=surface), settings)
+
+    def session(self, auth: Auth) -> PipefyClient:
+        """Bind ``auth`` to the shared endpoints and return an operation surface."""
+        return PipefyClient.from_executors(
+            _bind(self.endpoints, auth), settings=self.settings
+        )
+
+
 class PipefyClient:
-    """Facade client for Pipefy API operations (pure delegation)."""
+    """Facade client for Pipefy API operations (pure delegation).
+
+    A session in the engine/session split: an identity-bound surface over the
+    shared endpoints. Build one per request via :meth:`PipefyEngine.session`, or
+    directly through the back-compat constructor.
+    """
 
     def __init__(
         self,
@@ -139,6 +211,9 @@ class PipefyClient:
     ) -> None:
         """Build a facade wired with a pre-constructed ``httpx.Auth``.
 
+        Back-compat entry point: it builds the shared endpoints and binds ``auth``
+        in one step, converging on the same wiring as :meth:`PipefyEngine.session`.
+
         Args:
             settings: Pipefy endpoint configuration.
             auth: ``httpx.Auth`` that supplies the credentials for every GraphQL
@@ -148,7 +223,24 @@ class PipefyClient:
                 composition root passes its own (``mcp``/``cli``); direct SDK use
                 keeps the ``sdk`` default.
         """
-        ex = build_executors(settings, auth, surface=surface)
+        self._wire(build_executors(settings, auth, surface=surface), settings)
+
+    @classmethod
+    def from_executors(
+        cls, executors: Executors, *, settings: PipefySettings
+    ) -> PipefyClient:
+        """Build a session over prebuilt, already identity-bound executors.
+
+        The engine's per-request entry point: :meth:`PipefyEngine.session` binds an
+        identity's ``auth`` to the shared endpoints and hands the executors here,
+        along with the engine's ``settings`` for the services that need it.
+        """
+        client = cls.__new__(cls)
+        client._wire(executors, settings)
+        return client
+
+    def _wire(self, ex: Executors, settings: PipefySettings) -> None:
+        """Wire the domain services onto ``ex`` (the sole construction path)."""
         self._internal_executor = ex.internal
         self._pipe_service = PipeService(executor=ex.public)
         self._card_service = CardService(executor=ex.public)

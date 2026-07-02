@@ -1,6 +1,6 @@
 """Unit tests for the request-scoped identity bridge (hosted profile).
 
-The isolation test is the #302 acceptance criterion: one shared
+The isolation test is the on-behalf-of acceptance criterion: one shared
 :class:`RequestContextBearerAuth` instance, driven concurrently by many tasks
 that each carry a different validated token, must attach each task's own token
 and never another's. This is what lets a single app-scoped client serve every

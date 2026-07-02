@@ -88,8 +88,8 @@ class McpRuntime:
     executors open a fresh per-request transport at call time), so the client
     built at startup works on whatever loop later serves requests.
 
-    This is the stepping stone toward the single per-app runtime issue #346
-    formalizes; today it owns the shared client.
+    This is a stepping stone toward a single per-app runtime; today it owns the
+    shared client.
     """
 
     def __init__(self, settings: Settings, identity: AuthSource) -> None:

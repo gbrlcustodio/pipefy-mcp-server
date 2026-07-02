@@ -30,7 +30,7 @@ PIPEFY_INSTRUCTIONS = textwrap.dedent("""
 
 # Hosts that keep the server reachable only from the local machine. The HTTP
 # transport refuses to bind anywhere else (a routable interface or 0.0.0.0)
-# until the DNS-rebinding host/Origin allowlist lands (#303); see
+# until the DNS-rebinding host/Origin allowlist lands; see
 # _assert_safe_http_bind.
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 
@@ -161,9 +161,9 @@ def _assert_safe_http_bind(*, host: str) -> None:
     profile now carries per-request on-behalf-of identity (each call runs as the
     validated caller, not a single startup identity), so that is no longer the
     blocker; the remaining one is DNS-rebinding protection, the configurable
-    host / Origin allowlist tracked in #303. (The filesystem tools, e.g. the
-    attachment uploads, also only make sense on loopback, where the server shares
-    the client's disk; remote-safe file inputs are #305.)
+    host / Origin allowlist. (The filesystem tools, e.g. the attachment uploads,
+    also only make sense on loopback, where the server shares the client's disk;
+    remote-safe file inputs are separate follow-up work.)
 
     Off-loopback binding stays off until that allowlist lands; see
     experiments/hosted-obo/RFC-OUTLINE.md.

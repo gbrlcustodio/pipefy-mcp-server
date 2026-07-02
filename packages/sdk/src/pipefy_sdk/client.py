@@ -9,6 +9,7 @@ from httpx import Auth
 
 from pipefy_sdk import __version__
 from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
+from pipefy_sdk.automation_input import normalize_automation_input_keys
 from pipefy_sdk.automation_preflight import (
     validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
@@ -703,12 +704,16 @@ class PipefyClient:
             action_repo_id: Pipe ID where the action executes. Defaults to ``pipe_id``.
                 For cross-pipe actions (``create_connected_card``, ``move_card_to_pipe``),
                 pass the **destination** pipe ID.
-            extra_input: Extra ``CreateAutomationInput`` keys; ``active`` here overrides the ``active`` argument.
+            extra_input: Extra ``CreateAutomationInput`` keys, using the API field names
+                (``action_params``, ``event_params``, ``schedulerCron``, ...). Top-level
+                camelCase/snake_case aliases are rewritten to the API names before sending;
+                ``active`` here overrides the ``active`` argument.
 
         Raises:
             AutomationPreflightError: When the move-card transition or ``field_map``
                 destination ``fieldId`` is invalid.
         """
+        extra_input = normalize_automation_input_keys(extra_input)
         await validate_traditional_automation_move_transition(
             self, trigger_id, action_id, extra_input
         )
@@ -756,8 +761,12 @@ class PipefyClient:
     ) -> UpdateAutomationMutationResult:
         """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names).
 
+        Top-level camelCase/snake_case aliases in ``extra_input`` are rewritten to the API
+        field names before sending, as in :meth:`create_automation`.
+
         Does not run ``field_map`` or move-transition preflight (those run on ``create_automation`` only).
         """
+        extra_input = normalize_automation_input_keys(extra_input)
         return await self._automation_service.update_automation(
             automation_id, **(extra_input or {})
         )

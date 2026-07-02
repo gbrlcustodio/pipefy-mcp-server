@@ -373,8 +373,10 @@ class AutomationTools:
 
             Use ``get_automation_events`` and ``get_automation_actions`` on ``pipe_id`` first to obtain
             valid ``trigger_id`` and ``action_id``. Optional ``extra_input`` merges API fields for
-            ``CreateAutomationInput`` (camelCase keys). Use ``update_automation`` with ``active: false``
-            to disable a rule after creation.
+            ``CreateAutomationInput``, using the API field names (``action_params``, ``event_params``,
+            ``condition``, ``schedulerCron``, ...); top-level camelCase aliases like ``actionParams``
+            are accepted and rewritten. Use ``update_automation`` with ``active: false`` to disable a
+            rule after creation.
 
             For ``card_moved`` rules with action ``move_single_card``, when ``extra_input`` includes
             ``event_params.to_phase_id`` (or ``toPhaseId``) and ``action_params.to_phase_id`` (or
@@ -422,7 +424,7 @@ class AutomationTools:
                 action_id: Action type ID from ``get_automation_actions``.
                 active: When True (default), the rule is created **enabled**. Set False to start disabled. If ``extra_input`` includes ``active``, that value wins.
                 action_repo_id: Pipe ID where the action executes (destination pipe). Defaults to ``pipe_id``. Required for cross-pipe actions.
-                extra_input: Optional extra fields for the mutation input (camelCase keys).
+                extra_input: Optional extra fields for the mutation input (API field names; top-level camelCase aliases accepted).
                 debug: When True, append GraphQL codes and correlation_id to errors.
             """
             client = get_pipefy_client(ctx)
@@ -585,7 +587,9 @@ class AutomationTools:
         ) -> dict[str, Any]:
             """Update an existing traditional automation (partial ``UpdateAutomationInput``).
 
-            Optional ``extra_input`` holds fields to change (camelCase keys). Call ``get_automation``
+            Optional ``extra_input`` holds fields to change, using the ``UpdateAutomationInput`` API
+            field names (``action_params``, ``event_params``, ...); top-level camelCase aliases like
+            ``actionParams`` are accepted and rewritten. Call ``get_automation``
             first when patching ``action_params`` — especially ``field_map`` for
             ``update_card_field`` rules (same shape as ``create_automation``: numeric ``fieldId``,
             ``inputMode``, ``value``, ``card_id``, ``fields_map_order``).

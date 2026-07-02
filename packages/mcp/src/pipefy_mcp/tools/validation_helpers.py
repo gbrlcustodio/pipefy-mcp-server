@@ -95,6 +95,36 @@ def validate_optional_tool_id(
     return True, cleaned, None
 
 
+def validate_optional_tool_id_list(
+    values: list[str | int] | None,
+    label: str = "ids",
+) -> tuple[list[str] | None, dict[str, object] | None]:
+    """Validate an optional list of Pipefy IDs at the tool boundary.
+
+    ``None`` passes through as ``(None, None)`` (the filter is omitted). A present
+    list must be non-empty and each element must pass :func:`validate_tool_id`;
+    elements are returned cleaned (stripped, int→str). Returns
+    ``(cleaned_ids_or_none, error_payload_or_none)``.
+
+    Args:
+        values: Optional list of raw ID values from the tool parameter.
+        label: Parameter name for the error message.
+    """
+    if values is None:
+        return None, None
+    if not values:
+        return None, tool_error(
+            f"Invalid '{label}': when provided, it must contain at least one ID."
+        )
+    cleaned: list[str] = []
+    for value in values:
+        cleaned_id, err = validate_tool_id(value, label)
+        if err is not None:
+            return None, err
+        cleaned.append(cleaned_id)  # type: ignore[arg-type]
+    return cleaned, None
+
+
 def mutation_error_if_not_optional_dict(
     value: Any,
     *,

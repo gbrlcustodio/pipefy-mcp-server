@@ -6,7 +6,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
-from pipefy_sdk import PipefyId
+from pipefy_sdk import AUTOMATION_EXECUTION_METRICS_PERIODS, PipefyId
 
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 from pipefy_mcp.tools.observability_tool_helpers import (
@@ -16,19 +16,18 @@ from pipefy_mcp.tools.observability_tool_helpers import (
     handle_observability_tool_graphql_error,
 )
 from pipefy_mcp.tools.tool_context import get_pipefy_client
-from pipefy_mcp.tools.validation_helpers import validate_tool_id
+from pipefy_mcp.tools.validation_helpers import (
+    validate_optional_tool_id,
+    validate_optional_tool_id_list,
+    validate_tool_id,
+)
 
 # --- Validation constants ---
 
 _VALID_PERIODS = {"current_month", "last_month", "last_3_months"}
 
-# AutomationExecutionMetricsPeriod enum: rolling windows for execution metrics.
-_VALID_EXECUTION_METRICS_PERIODS = {
-    "FIFTEEN_MINUTES",
-    "SIXTY_MINUTES",
-    "TWELVE_HOURS",
-    "TWENTY_FOUR_HOURS",
-}
+# Rolling windows for execution metrics; single-sourced from the SDK's schema enum.
+_VALID_EXECUTION_METRICS_PERIODS = frozenset(AUTOMATION_EXECUTION_METRICS_PERIODS)
 
 # Pagination
 _MIN_PAGE_SIZE = 1
@@ -418,7 +417,7 @@ class ObservabilityTools:
             period: str = "SIXTY_MINUTES",
             debug: bool = False,
         ) -> dict[str, Any]:
-            """Get execution metrics (totalRuns, successRate, failureRate, averageDuration, lastRun) for one or more automations over a rolling window. Returns metrics for the automations you can access plus a `partial_errors` list naming any that were denied (PERMISSION_DENIED) — a partial result, not a hard failure. `period`: FIFTEEN_MINUTES, SIXTY_MINUTES (default), TWELVE_HOURS, or TWENTY_FOUR_HOURS.
+            """Get execution metrics (totalRuns, successRate, failureRate, averageDuration, lastRun) for one or more automations over a rolling window. Returns metrics for the automations you can access plus a `partial_errors` list naming any that were denied (PERMISSION_DENIED); this is a partial result, not a hard failure. `period`: FIFTEEN_MINUTES, SIXTY_MINUTES (default), TWELVE_HOURS, or TWENTY_FOUR_HOURS.
 
             Args:
                 organization_id: Organization ID (numeric org id, same as in the Pipefy URL).
@@ -431,23 +430,14 @@ class ObservabilityTools:
             organization_id, err = validate_tool_id(organization_id, "organization_id")
             if err is not None:
                 return err
-            normalized_ids: list[str] | None = None
-            if automation_ids is not None:
-                if not automation_ids:
-                    return build_observability_error_payload(
-                        message="Invalid 'automation_ids': when provided, it must contain at least one automation ID.",
-                    )
-                normalized_ids = []
-                for raw_id in automation_ids:
-                    norm_id, id_err = validate_tool_id(raw_id, "automation_ids")
-                    if id_err is not None:
-                        return id_err
-                    normalized_ids.append(norm_id)
-            normalized_repo_id: str | None = None
-            if repo_id is not None:
-                normalized_repo_id, err = validate_tool_id(repo_id, "repo_id")
-                if err is not None:
-                    return err
+            normalized_ids, err = validate_optional_tool_id_list(
+                automation_ids, "automation_ids"
+            )
+            if err is not None:
+                return err
+            _, normalized_repo_id, err = validate_optional_tool_id(repo_id, "repo_id")
+            if err is not None:
+                return err
             if period not in _VALID_EXECUTION_METRICS_PERIODS:
                 return build_observability_error_payload(
                     message=(

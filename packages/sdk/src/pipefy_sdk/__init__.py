@@ -35,6 +35,9 @@ from pipefy_sdk.models import (
     infer_content_type,
 )
 from pipefy_sdk.models.form import create_form_model
+from pipefy_sdk.queries.observability_queries import (
+    AUTOMATION_EXECUTION_METRICS_PERIODS,
+)
 from pipefy_sdk.services.automation_graphql_types import (
     AutomationActionRow,
     AutomationEventRow,
@@ -57,6 +60,7 @@ from pipefy_sdk.settings import PipefySettings
 __all__ = [
     "__version__",
     "AiAgentGraphPayload",
+    "AUTOMATION_EXECUTION_METRICS_PERIODS",
     "Attachment",
     "AttachmentTarget",
     "AttachmentUploadError",

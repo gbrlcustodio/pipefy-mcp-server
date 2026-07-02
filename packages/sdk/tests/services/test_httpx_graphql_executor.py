@@ -1,11 +1,12 @@
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 from gql import gql
 from gql.graphql_request import GraphQLRequest
+from gql.transport.exceptions import TransportQueryError
 from gql.transport.httpx import HTTPXAsyncTransport
-from graphql import ExecutionResult, GraphQLError
 from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk import __version__
@@ -17,6 +18,24 @@ GRAPHQL_URL = "https://api.pipefy.com/graphql"
 
 def _bearer() -> StaticBearerAuth:
     return StaticBearerAuth("test-token")
+
+
+@contextmanager
+def _patched_transport(handler):
+    """Route the executor's gql transport through an ``httpx.MockTransport``.
+
+    Runs the real gql Client and httpx stack, swapping only the network so the
+    executor's actual raise-on-errors behavior is exercised, not a mock's.
+    """
+
+    def transport_factory(**kwargs):
+        kwargs.pop("verify", None)
+        return HTTPXAsyncTransport(**kwargs, transport=httpx.MockTransport(handler))
+
+    with patch(
+        "pipefy_sdk.graphql_executor.HTTPXAsyncTransport", side_effect=transport_factory
+    ):
+        yield
 
 
 def _sample_query() -> GraphQLRequest:
@@ -155,47 +174,68 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_forwards_get_execution_result_false():
-    """Default path asks gql for the data dict (raise-on-errors semantics)."""
-    query = _sample_query()
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value={"ok": True})
+async def test_execute_query_allow_partial_returns_data_and_errors_together():
+    """A response mixing data and per-node errors becomes a PartialQueryResult.
 
-    with patch("pipefy_sdk.graphql_executor.Client") as mock_client_cls:
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+    gql 4 raises ``TransportQueryError`` whenever the response carries any errors,
+    even for a partial success; the executor rebuilds the partial ``data`` and the
+    raw error dicts from the exception rather than dropping them.
+    """
+    partial_body = {
+        "data": {"automations": {"edges": [{"node": {"id": "25"}}]}},
+        "errors": [
+            {
+                "message": "Permission denied",
+                "extensions": {"code": "PERMISSION_DENIED", "automation_id": "124"},
+            }
+        ],
+    }
 
-        base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-        await base.execute_query(query, {})
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=partial_body)
 
-    assert mock_session.execute.call_args.kwargs["get_execution_result"] is False
+    with _patched_transport(handler):
+        executor = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
+        result = await executor.execute_query_allow_partial(_sample_query(), {})
+
+    assert result.data == {"automations": {"edges": [{"node": {"id": "25"}}]}}
+    assert result.errors[0]["extensions"]["automation_id"] == "124"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_allow_partial_returns_execution_result_without_raising():
-    """Partial path forwards get_execution_result=True and returns the result as-is.
+async def test_execute_query_allow_partial_success_carries_no_errors():
+    """An error-free response yields a PartialQueryResult with an empty error list."""
 
-    gql does not raise on GraphQL ``errors`` in this mode, so per-node failures
-    arrive on ``result.errors`` next to the partial ``result.data``.
-    """
-    query = _sample_query()
-    sentinel = ExecutionResult(
-        data={"automations": {"edges": []}},
-        errors=[GraphQLError("Permission denied", extensions={"code": "X"})],
-    )
-    mock_session = AsyncMock()
-    mock_session.execute = AsyncMock(return_value=sentinel)
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"automations": {"edges": []}}})
 
-    with patch("pipefy_sdk.graphql_executor.Client") as mock_client_cls:
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+    with _patched_transport(handler):
+        executor = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
+        result = await executor.execute_query_allow_partial(_sample_query(), {})
 
-        base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-        result = await base.execute_query_allow_partial(query, {"x": 1})
+    assert result.data == {"automations": {"edges": []}}
+    assert result.errors == []
 
-    assert result is sentinel
-    assert mock_session.execute.call_args.kwargs["get_execution_result"] is True
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_allow_partial_raises_when_no_data():
+    """A response with null data (the lookup failed outright) reraises, not a partial."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": None,
+                "errors": [{"message": "Couldn't find Organization with 'id'=999"}],
+            },
+        )
+
+    with _patched_transport(handler):
+        executor = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
+        with pytest.raises(TransportQueryError):
+            await executor.execute_query_allow_partial(_sample_query(), {})
 
 
 @pytest.mark.unit

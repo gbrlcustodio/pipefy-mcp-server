@@ -239,6 +239,16 @@ GET_AUTOMATIONS_USAGE_QUERY = gql(
     """
 )
 
+# AutomationExecutionMetricsPeriod enum values, ascending by window length. Single
+# source for the `$period` variable so the MCP validation set and CLI help stay in
+# step with the schema instead of drifting across hand-copied prose.
+AUTOMATION_EXECUTION_METRICS_PERIODS: tuple[str, ...] = (
+    "FIFTEEN_MINUTES",
+    "SIXTY_MINUTES",
+    "TWELVE_HOURS",
+    "TWENTY_FOUR_HOURS",
+)
+
 GET_AUTOMATION_EXECUTION_METRICS_QUERY = gql(
     """
     query AutomationExecutionMetrics(
@@ -343,6 +353,7 @@ GET_AUTOMATION_JOBS_EXPORT_QUERY = gql(
 )
 
 __all__ = [
+    "AUTOMATION_EXECUTION_METRICS_PERIODS",
     "CREATE_AUTOMATION_JOBS_EXPORT_MUTATION",
     "GET_AUTOMATION_EXECUTION_METRICS_QUERY",
     "GET_AUTOMATION_JOBS_EXPORT_QUERY",

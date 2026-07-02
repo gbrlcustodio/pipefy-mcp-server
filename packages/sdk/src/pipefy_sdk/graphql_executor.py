@@ -2,14 +2,30 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import Any, ClassVar, Protocol
+from dataclasses import dataclass
+from typing import Any, ClassVar, NoReturn, Protocol
 
 from gql import Client
 from gql.graphql_request import GraphQLRequest
 from gql.transport.exceptions import TransportQueryError
 from gql.transport.httpx import HTTPXAsyncTransport
-from graphql import DocumentNode, ExecutionResult, GraphQLSchema
+from graphql import DocumentNode, GraphQLSchema
 from httpx import Auth, Timeout
+
+
+@dataclass(frozen=True)
+class PartialQueryResult:
+    """A GraphQL response that carries ``data`` and per-node ``errors`` together.
+
+    The executor's own value type for the partial-tolerant path, so services
+    and their tests never touch gql or graphql-core objects. ``errors`` holds
+    the raw GraphQL error dicts from the response body (``message`` plus an
+    ``extensions`` mapping); ``data`` holds the partial payload. A response with
+    no data at all is a failure and raises, so ``data`` is always a dict here.
+    """
+
+    data: dict[str, Any]
+    errors: list[dict[str, Any]]
 
 
 class GraphQLExecutor(Protocol):
@@ -30,7 +46,7 @@ class GraphQLExecutor(Protocol):
 
     async def execute_query_allow_partial(
         self, query: DocumentNode, variables: dict[str, Any]
-    ) -> ExecutionResult: ...
+    ) -> PartialQueryResult: ...
 
 
 def _graphql_request_with_variables(
@@ -79,12 +95,8 @@ class HttpxGraphQLExecutor:
         self._fetched_gql_schema_lock = asyncio.Lock()
 
     async def _execute_request(
-        self,
-        query: DocumentNode,
-        variables: dict[str, Any],
-        *,
-        get_execution_result: bool,
-    ) -> Any:
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> dict:
         """Run a GraphQL request on a fresh transport, honoring schema caching.
 
         A fresh HTTPXAsyncTransport is created per call so concurrent invocations
@@ -93,11 +105,9 @@ class HttpxGraphQLExecutor:
         per request). When ``cache_schema`` is True the schema is fetched once per
         executor instance, cached, and reused for local validation.
 
-        ``get_execution_result`` is forwarded to gql's ``session.execute``: when
-        ``False`` gql returns the ``data`` dict and raises ``TransportQueryError`` if
-        the response carries GraphQL ``errors``; when ``True`` gql returns an
-        ``ExecutionResult`` carrying ``data`` and ``errors`` together without raising,
-        so partial-success responses are preserved.
+        Returns the ``data`` dict and raises ``TransportQueryError`` if the response
+        carries GraphQL ``errors`` (gql raises even when partial ``data`` is present).
+        The partial ``data`` and the ``errors`` are both available on the exception.
         """
         transport = HTTPXAsyncTransport(
             url=self._graphql_url,
@@ -116,9 +126,7 @@ class HttpxGraphQLExecutor:
                             fetch_schema_from_transport=True,
                         )
                         async with client as session:
-                            result = await session.execute(
-                                request, get_execution_result=get_execution_result
-                            )
+                            result = await session.execute(request)
                         if client.schema is not None:
                             self._fetched_gql_schema = client.schema
                         return result
@@ -128,16 +136,23 @@ class HttpxGraphQLExecutor:
                 fetch_schema_from_transport=False,
             )
             async with reuse_client as session:
-                return await session.execute(
-                    request, get_execution_result=get_execution_result
-                )
+                return await session.execute(request)
 
         async with Client(
             transport=transport, fetch_schema_from_transport=False
         ) as session:
-            return await session.execute(
-                request, get_execution_result=get_execution_result
-            )
+            return await session.execute(request)
+
+    def _reraise_graphql_error(self, exc: TransportQueryError) -> NoReturn:
+        """Reraise a gql error as the executor's error type.
+
+        With ``on_graphql_error`` set (the Internal API executor) the gql exception
+        is converted to ``ValueError`` carrying the formatter's ``[code=…]`` envelope;
+        otherwise the original ``TransportQueryError`` propagates unchanged.
+        """
+        if self._on_graphql_error is None:
+            raise exc
+        raise ValueError(self._on_graphql_error(exc.errors or [])) from exc
 
     async def execute_query(
         self, query: DocumentNode, variables: dict[str, Any]
@@ -150,24 +165,28 @@ class HttpxGraphQLExecutor:
         :meth:`execute_query_allow_partial` instead.
         """
         try:
-            return await self._execute_request(
-                query, variables, get_execution_result=False
-            )
+            return await self._execute_request(query, variables)
         except TransportQueryError as exc:
-            if self._on_graphql_error is None:
-                raise
-            raise ValueError(self._on_graphql_error(exc.errors or [])) from exc
+            self._reraise_graphql_error(exc)
 
     async def execute_query_allow_partial(
         self, query: DocumentNode, variables: dict[str, Any]
-    ) -> ExecutionResult:
+    ) -> PartialQueryResult:
         """Execute a query preserving partial ``data`` alongside GraphQL ``errors``.
 
         Pipefy can return ``data`` for the nodes a token may access AND per-node
         ``errors`` (e.g. ``PERMISSION_DENIED`` carrying ``automation_id`` in
-        ``extensions``) in a single response. :meth:`execute_query` would raise and
-        drop the partial ``data``; this path uses gql's ``get_execution_result=True``
-        so callers receive both ``result.data`` and ``result.errors`` and can report a
-        partial success. Transport-level failures still raise as ``TransportError``.
+        ``extensions``) in a single response. gql raises ``TransportQueryError`` on
+        any ``errors`` even in this mode, but attaches the partial ``data`` and the
+        ``errors`` to the exception, so this rebuilds them into a
+        :class:`PartialQueryResult`. A response with no ``data`` at all is a real
+        failure and reraises like :meth:`execute_query`; transport-level failures
+        always raise.
         """
-        return await self._execute_request(query, variables, get_execution_result=True)
+        try:
+            data = await self._execute_request(query, variables)
+        except TransportQueryError as exc:
+            if exc.data is None:
+                self._reraise_graphql_error(exc)
+            return PartialQueryResult(data=exc.data, errors=list(exc.errors or []))
+        return PartialQueryResult(data=data, errors=[])

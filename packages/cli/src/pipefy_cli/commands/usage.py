@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import typer
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import AUTOMATION_EXECUTION_METRICS_PERIODS, PipefyClient
 
 from pipefy_cli.commands._common import parse_json_object, run_cli_command
 
 usage_app = typer.Typer(help="AI and automation usage metrics.", no_args_is_help=True)
+
+_EXECUTION_METRICS_PERIOD_HELP = " | ".join(AUTOMATION_EXECUTION_METRICS_PERIODS)
 
 
 def _parse_date_range(from_iso: str, to_iso: str) -> dict[str, str]:
@@ -102,7 +104,7 @@ def usage_execution_metrics(
     period: str = typer.Option(
         "SIXTY_MINUTES",
         "--period",
-        help="FIFTEEN_MINUTES | SIXTY_MINUTES | TWELVE_HOURS | TWENTY_FOUR_HOURS",
+        help=_EXECUTION_METRICS_PERIOD_HELP,
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:

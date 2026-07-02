@@ -6,10 +6,9 @@ from typing import Any, TypedDict
 from zipfile import BadZipFile
 
 import httpx
-from graphql import ExecutionResult
 from openpyxl.utils.exceptions import InvalidFileException
 
-from pipefy_sdk.graphql_executor import GraphQLExecutor
+from pipefy_sdk.graphql_executor import GraphQLExecutor, PartialQueryResult
 from pipefy_sdk.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
     GET_AGENTS_USAGE_QUERY,
@@ -94,7 +93,18 @@ def _build_usage_variables(
     return variables
 
 
-def _normalize_execution_metrics_result(result: ExecutionResult) -> dict[str, Any]:
+def _partial_error(err: dict[str, Any]) -> dict[str, Any]:
+    """Project one raw GraphQL error dict onto the per-automation failure shape."""
+    extensions = err.get("extensions") or {}
+    return {
+        "automation_id": extensions.get("automation_id"),
+        "code": extensions.get("code"),
+        "message": err.get("message"),
+        "correlation_id": extensions.get("correlation_id"),
+    }
+
+
+def _normalize_execution_metrics_result(result: PartialQueryResult) -> dict[str, Any]:
     """Split a partial ``automations.executionMetrics`` response into nodes and errors.
 
     ``result.data`` carries the automations the token may read (each with its
@@ -102,22 +112,20 @@ def _normalize_execution_metrics_result(result: ExecutionResult) -> dict[str, An
     (e.g. ``PERMISSION_DENIED``) with ``automation_id`` in ``extensions``. Both are
     returned so the caller can report a partial success.
 
+    A null ``automations`` connection means the lookup itself failed (bad org, no
+    org access) rather than individual nodes being denied; that is a total failure,
+    so this raises ``ValueError`` instead of reporting an empty partial success.
+    An empty ``edges`` list (every requested automation denied) stays a partial
+    success with a populated ``partial_errors``.
+
     Args:
-        result: ExecutionResult from ``execute_query_allow_partial``.
+        result: PartialQueryResult from ``execute_query_allow_partial``.
     """
-    data = result.data or {}
-    automations = unwrap_relay_connection_nodes(data.get("automations"))
-    partial_errors: list[dict[str, Any]] = []
-    for err in result.errors or []:
-        extensions = getattr(err, "extensions", None) or {}
-        partial_errors.append(
-            {
-                "automation_id": extensions.get("automation_id"),
-                "code": extensions.get("code"),
-                "message": getattr(err, "message", str(err)),
-                "correlation_id": extensions.get("correlation_id"),
-            }
-        )
+    connection = result.data.get("automations")
+    if connection is None and result.errors:
+        raise ValueError(result.errors[0].get("message") or "Query failed.")
+    automations = unwrap_relay_connection_nodes(connection)
+    partial_errors = [_partial_error(err) for err in result.errors]
     return {"automations": automations, "partial_errors": partial_errors}
 
 

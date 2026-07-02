@@ -81,6 +81,18 @@ _MINIMAL_PIPEFY_SETTINGS = Settings(
     auth=AuthSettings(),
 )
 
+# A valid remote deployment: the resource-server URL (and an issuer to validate
+# against) are configured, so `run_server` builds a resource server and the remote
+# profile acts on behalf of the caller. Serving `remote` without this fails fast.
+_REMOTE_RS_SETTINGS = Settings(
+    pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+    auth=AuthSettings(),
+    rs=ResourceServerSettings(resource_server_url=_RS_RESOURCE),
+    jwt=JwtValidationSettings(
+        issuer_url=_RS_ISSUER, jwks_uri="https://idp.example.com/jwks"
+    ),
+)
+
 
 @pytest.fixture
 def mocked_runtime():
@@ -364,7 +376,7 @@ def test_run_server_remote_profile_defaults_to_http_transport(monkeypatch):
     monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
     fake_app = MagicMock()
     with (
-        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.settings", _REMOTE_RS_SETTINGS),
         patch(
             "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
         ) as mock_build,
@@ -378,20 +390,41 @@ def test_run_server_remote_profile_defaults_to_http_transport(monkeypatch):
 
 @pytest.mark.unit
 def test_run_server_http_builds_the_app_and_serves_over_streamable_http():
-    """The HTTP path builds through the shared builder and serves streamable-http."""
+    """The remote HTTP path builds through the shared builder with a resource server."""
     fake_app = MagicMock()
     with (
-        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.settings", _REMOTE_RS_SETTINGS),
         patch(
             "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
         ) as mock_build,
     ):
         run_server(profile="remote", transport="http", host="127.0.0.1", port=9123)
 
-    mock_build.assert_called_once_with(
-        remote_mode=True, host="127.0.0.1", port=9123, resource_server=None
-    )
+    _, kwargs = mock_build.call_args
+    assert kwargs["remote_mode"] is True
+    assert kwargs["host"] == "127.0.0.1"
+    assert kwargs["port"] == 9123
+    assert kwargs["resource_server"] is not None
     fake_app.run.assert_called_once_with("streamable-http")
+
+
+@pytest.mark.unit
+def test_run_server_remote_without_resource_server_fails_fast():
+    """``--profile remote`` with no RESOURCE_SERVER_URL fails fast, never builds the app.
+
+    The remote profile acts on behalf of the caller, so it needs a per-request
+    bearer to validate. Without a configured resource server there is no
+    per-request identity, and silently falling back to the single startup
+    credential would defeat the profile, so startup is refused.
+    """
+    with (
+        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build,
+    ):
+        with pytest.raises(RuntimeError, match="requires a resource server"):
+            run_server(profile="remote", transport="http", host="127.0.0.1", port=9123)
+
+    mock_build.assert_not_called()
 
 
 @pytest.mark.unit
@@ -401,7 +434,7 @@ def test_run_server_http_fills_host_and_port_from_settings_when_unset(monkeypatc
     monkeypatch.delenv("PIPEFY_MCP_PORT", raising=False)
     fake_app = MagicMock()
     with (
-        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.settings", _REMOTE_RS_SETTINGS),
         patch(
             "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
         ) as mock_build,
@@ -418,7 +451,7 @@ def test_run_server_http_respects_an_explicit_zero_port():
     """``port=0`` (let the OS pick) must not be swallowed as a falsy default."""
     fake_app = MagicMock()
     with (
-        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.settings", _REMOTE_RS_SETTINGS),
         patch(
             "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
         ) as mock_build,
@@ -433,7 +466,7 @@ def test_run_server_http_respects_an_explicit_zero_port():
 def test_run_server_http_refuses_non_loopback_before_building():
     """The loopback guard fires before the app is built or served."""
     with (
-        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
+        patch("pipefy_mcp.server.settings", _REMOTE_RS_SETTINGS),
         patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build,
     ):
         with pytest.raises(RuntimeError, match="Refusing to serve"):

@@ -219,8 +219,11 @@ def run_server(
 
     # The resource server (inbound bearer validation) is only meaningful for the
     # remote profile; a local server over loopback HTTP trusts its peer and skips
-    # it. Absent a configured resource_server_url the builder returns None (the
-    # unauthenticated foundation profile).
+    # it. The remote profile acts on behalf of the caller, so it needs a
+    # per-request bearer to validate: a configured resource server is mandatory.
+    # Without one the builder returns None and there would be no per-request
+    # identity to act as, so fail fast rather than silently fall back to a single
+    # startup credential.
     resource_server = None
     if remote_profile:
         oidc_client = settings.auth.to_oidc_client()
@@ -229,6 +232,12 @@ def run_server(
             settings.jwt,
             default_issuer_url=oidc_client.issuer_url if oidc_client else None,
         )
+        if resource_server is None:
+            raise RuntimeError(
+                "the 'remote' profile requires a resource server: set "
+                "PIPEFY_MCP_RS_RESOURCE_SERVER_URL so the server validates a "
+                "per-request bearer and acts on behalf of the caller."
+            )
     logger.info(
         "Starting Pipefy MCP server over HTTP on %s:%d (profile=%s, resource_server=%s)",
         mcp.host,

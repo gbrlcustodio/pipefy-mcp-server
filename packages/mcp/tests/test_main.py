@@ -144,3 +144,22 @@ def test_rejects_remote_over_stdio(mocker):
 
     assert excinfo.value.code == 2
     server_mock.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("bad_host", ["", "   ", "--host="])
+def test_rejects_an_empty_host(mocker, bad_host):
+    """An empty ``--host`` exits 2 instead of overriding the default with ''.
+
+    Without the guard, an empty value reaches ``resolve_mcp_settings`` as an
+    explicit init-kwarg, silently displacing the ``127.0.0.1`` default and later
+    failing the loopback check with a misleading non-loopback error.
+    """
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+    argv = [bad_host] if bad_host.startswith("--host=") else ["--host", bad_host]
+
+    with pytest.raises(SystemExit) as excinfo:
+        main([*argv, "--transport", "http"])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()

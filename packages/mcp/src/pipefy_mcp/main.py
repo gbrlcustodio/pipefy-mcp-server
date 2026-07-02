@@ -111,12 +111,17 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
         raise SystemExit(2)
 
+    host = _option_value(args, "--host")
+    if host is not None and not host.strip():
+        sys.stderr.write("error: --host must not be empty\n")
+        raise SystemExit(2)
+
     # Unset flags pass through as None; run_server resolves them against
     # PIPEFY_MCP_* (and the profile-derived transport default).
     run_server(
         profile=profile,
         transport=transport,
-        host=_option_value(args, "--host"),
+        host=host,
         port=_parse_port(_option_value(args, "--port")),
     )
 

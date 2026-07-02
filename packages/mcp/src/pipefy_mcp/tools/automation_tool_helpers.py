@@ -171,6 +171,8 @@ async def handle_automation_tool_graphql_error(
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else "Automation request failed."
     base = strip_internal_api_diagnostic_markers(base)
+    if not base.strip():
+        base = "Automation request failed."
     base = with_debug_suffix(base, debug=debug, codes=codes, correlation_id=cid)
     return build_automation_error_payload(message=base, code=first_code)
 

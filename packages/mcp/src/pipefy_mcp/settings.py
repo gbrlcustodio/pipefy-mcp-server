@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Self
+from typing import Any, Literal, Self
 
 from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_infra import security
 from pipefy_infra.config import PipefyTomlConfigSource
 from pipefy_sdk import PipefySettings
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, ValidationError, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -22,8 +22,8 @@ class McpSettings(BaseSettings):
     the ``settings.mcp`` namespace already supplies it; ``env_prefix="PIPEFY_MCP_"``
     re-attaches it so the operator-facing ``PIPEFY_MCP_*`` env vars stay
     byte-identical. The shared ``config.toml`` source keys off the bare field
-    names, so TOML keys are ``unified_envelope``, ``remote_mode``, ``host``,
-    ``port``.
+    names, so TOML keys are ``unified_envelope``, ``profile``, ``transport``,
+    ``host``, ``port``.
     """
 
     model_config = SettingsConfigDict(
@@ -62,13 +62,25 @@ class McpSettings(BaseSettings):
         ),
     )
 
-    remote_mode: bool = Field(
-        default=False,
+    profile: Literal["local", "remote"] = Field(
+        default="local",
         description=(
-            "When true (env: PIPEFY_MCP_REMOTE_MODE), the server runs the hosted/remote "
-            "profile and exposes ONLY tools explicitly marked remote-safe (default-deny). "
-            "When false (default), all tools register (local stdio profile). Read at "
-            "registration time, a startup decision, not per call."
+            "Launch profile (env: PIPEFY_MCP_PROFILE). 'local' (default) registers "
+            "every tool and acts as one startup credential. 'remote' exposes ONLY "
+            "tools explicitly marked remote-safe (default-deny) and validates an "
+            "inbound bearer per request. Read at registration time, a startup "
+            "decision, not per call."
+        ),
+    )
+
+    transport: Literal["stdio", "http"] | None = Field(
+        default=None,
+        description=(
+            "Wire the server speaks (env: PIPEFY_MCP_TRANSPORT). Left unset it "
+            "defaults from the profile: 'local' speaks stdio, 'remote' serves over "
+            "Streamable HTTP. Set it explicitly to run 'local' over loopback HTTP. "
+            "'remote' over stdio is rejected: a per-request bearer has no stdio "
+            "equivalent."
         ),
     )
 
@@ -76,8 +88,8 @@ class McpSettings(BaseSettings):
         default="127.0.0.1",
         description=(
             "Bind host for the Streamable HTTP transport (env: PIPEFY_MCP_HOST). "
-            "Only consulted when the server is launched with --remote; the stdio "
-            "profile ignores it. Must stay loopback (the default): the HTTP "
+            "Only consulted when serving over HTTP (--transport http); the stdio "
+            "transport ignores it. Must stay loopback (the default): the HTTP "
             "transport refuses a non-loopback bind while it is unauthenticated."
         ),
     )
@@ -86,17 +98,35 @@ class McpSettings(BaseSettings):
         default=8000,
         description=(
             "Bind port for the Streamable HTTP transport (env: PIPEFY_MCP_PORT). "
-            "Only consulted when the server is launched with --remote."
+            "Only consulted when serving over HTTP (--transport http)."
         ),
     )
+
+    @model_validator(mode="after")
+    def _resolve_transport(self) -> Self:
+        """Fill the profile-derived transport default and reject 'remote' over stdio.
+
+        Left unset, the transport follows the profile: 'local' speaks stdio,
+        'remote' serves over HTTP. 'remote' cannot run over stdio, because it
+        validates an inbound bearer per request and stdio carries none. After this
+        runs, ``transport`` is always concrete.
+        """
+        if self.transport is None:
+            self.transport = "http" if self.profile == "remote" else "stdio"
+        elif self.profile == "remote" and self.transport == "stdio":
+            raise ValueError(
+                "the 'remote' profile requires the 'http' transport "
+                "(a per-request bearer has no stdio equivalent)"
+            )
+        return self
 
 
 class ResourceServerSettings(BaseSettings):
     """This MCP server's identity as an OAuth protected resource (HTTP profile).
 
     The resource-server profile activates when ``resource_server_url`` is set: the
-    ``--remote`` transport then validates inbound bearers and serves RFC 9728
-    metadata, and the unauthenticated foundation profile is left untouched.
+    ``remote`` profile's HTTP transport then validates inbound bearers and serves
+    RFC 9728 metadata, and the unauthenticated foundation profile is left untouched.
 
     Token *validation* knobs (issuer, audience, JWKS) are an auth concern and live
     in :class:`pipefy_auth.JwtValidationSettings`, alongside the validator they
@@ -204,6 +234,45 @@ class Settings(BaseSettings):
     rs: ResourceServerSettings = Field(default_factory=ResourceServerSettings)
 
 
+def resolve_mcp_settings(
+    *,
+    profile: str | None,
+    transport: str | None,
+    host: str | None,
+    port: int | None,
+) -> McpSettings:
+    """Resolve :class:`McpSettings` honoring the launch flags as init-kwargs.
+
+    The composition root for the launch surface, mirroring
+    :func:`pipefy_cli.settings.resolve_cli_settings`: the flags are folded in as
+    init-kwargs, so argv outranks the environment (``init_kwargs > env > dotenv >
+    config.toml``, per ``settings_customise_sources``). Only the flags actually
+    passed override the environment; the rest fall back to ``PIPEFY_MCP_*`` (or
+    the field defaults). The returned settings have a concrete ``transport`` (the
+    profile-derived default is applied by the model validator).
+
+    Credential and resource-server config stay sourced from the process
+    environment; this resolves only the launch surface the flags control.
+
+    Raises:
+        ValueError: On an unknown value or an incompatible profile/transport pair
+            (e.g. 'remote' over stdio); the message is user-facing.
+    """
+    init: dict[str, Any] = {}
+    if profile is not None:
+        init["profile"] = profile
+    if transport is not None:
+        init["transport"] = transport
+    if host is not None:
+        init["host"] = host
+    if port is not None:
+        init["port"] = port
+    try:
+        return McpSettings(**init)
+    except ValidationError as exc:
+        raise ValueError(str(exc)) from exc
+
+
 settings = Settings()
 
 __all__ = [
@@ -213,5 +282,6 @@ __all__ = [
     "PipefySettings",
     "ResourceServerSettings",
     "Settings",
+    "resolve_mcp_settings",
     "settings",
 ]

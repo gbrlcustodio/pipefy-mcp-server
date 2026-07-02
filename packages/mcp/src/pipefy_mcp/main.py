@@ -1,9 +1,10 @@
 """Console-script entry point for ``pipefy-mcp-server``.
 
-With no flags the binary speaks MCP over stdio (the local profile). ``--remote``
-starts the hosted profile instead: Streamable HTTP plus the default-deny remote
-tool allowlist. ``--help`` / ``--version`` let packaging smoke tests (and humans)
-introspect the binary without entering a serve loop.
+With no flags the binary runs the local profile over stdio. ``--profile remote``
+serves the default-deny remote-safe tool surface over Streamable HTTP;
+``--transport`` overrides the profile's default wire. ``--help`` / ``--version``
+let packaging smoke tests (and humans) introspect the binary without entering a
+serve loop.
 """
 
 from __future__ import annotations
@@ -17,21 +18,27 @@ from pipefy_mcp.server import run_server
 _HELP = (
     f"pipefy-mcp-server {__version__}\n"
     "\n"
-    "Usage: pipefy-mcp-server [--help] [--version] [--remote] [--host HOST] [--port PORT]\n"
+    "Usage: pipefy-mcp-server [--help] [--version] [--profile {local|remote}]\n"
+    "                        [--transport {stdio|http}] [--host HOST] [--port PORT]\n"
     "\n"
-    "With no flags, the process speaks the Model Context Protocol on stdin/stdout\n"
-    "(the local profile) and is intended to be launched by an MCP client (e.g. an\n"
+    "With no flags, the process runs the local profile over stdio (all tools, one\n"
+    "startup credential) and is intended to be launched by an MCP client (e.g. an\n"
     "IDE extension or `uv run`).\n"
     "\n"
-    "With --remote, the process serves over Streamable HTTP and exposes only the\n"
-    "default-deny remote-safe tool surface (the hosted profile).\n"
+    "With --profile remote, it serves over Streamable HTTP and exposes only the\n"
+    "default-deny remote-safe tool surface, validating an inbound bearer per\n"
+    "request.\n"
     "\n"
     "Options:\n"
-    "  --help        Show this message and exit.\n"
-    "  --version     Show the installed version and exit.\n"
-    "  --remote      Serve over HTTP with the default-deny remote profile.\n"
-    "  --host HOST   HTTP bind host (default env PIPEFY_MCP_HOST, else 127.0.0.1).\n"
-    "  --port PORT   HTTP bind port (default env PIPEFY_MCP_PORT, else 8000).\n"
+    "  --help                    Show this message and exit.\n"
+    "  --version                 Show the installed version and exit.\n"
+    "  --profile {local|remote}  Launch profile (default local).\n"
+    "  --transport {stdio|http}  Transport wire (default: stdio for local, http\n"
+    "                            for remote). 'remote' over stdio is rejected.\n"
+    "  --host HOST               HTTP bind host (default env PIPEFY_MCP_HOST, else\n"
+    "                            127.0.0.1).\n"
+    "  --port PORT               HTTP bind port (default env PIPEFY_MCP_PORT, else\n"
+    "                            8000).\n"
 )
 
 
@@ -44,6 +51,22 @@ def _option_value(args: list[str], flag: str) -> str | None:
             value = args[i + 1]
         elif arg.startswith(prefix):
             value = arg[len(prefix) :]
+    return value
+
+
+def _validate_choice(
+    value: str | None, flag: str, allowed: frozenset[str]
+) -> str | None:
+    """Return ``value`` if it is ``None`` or an allowed label, else exit 2.
+
+    ``None`` (flag absent) passes through so the settings layer fills the default.
+    An unknown value exits with a usage error rather than surfacing a pydantic
+    ``ValidationError`` later.
+    """
+    if value is not None and value not in allowed:
+        options = "|".join(sorted(allowed))
+        sys.stderr.write(f"error: {flag} must be one of {{{options}}}, got {value!r}\n")
+        raise SystemExit(2)
     return value
 
 
@@ -73,19 +96,29 @@ def main(argv: Sequence[str] | None = None) -> None:
         sys.stdout.write(f"{__version__}\n")
         return
 
-    if "--remote" in args:
-        # Pass the parsed flags through as-is; run_server fills any unset value
-        # from PIPEFY_MCP_HOST / PIPEFY_MCP_PORT. --remote forces the
-        # default-deny remote profile alongside HTTP.
-        run_server(
-            http=True,
-            host=_option_value(args, "--host"),
-            port=_parse_port(_option_value(args, "--port")),
-            remote_mode=True,
+    profile = _validate_choice(
+        _option_value(args, "--profile"), "--profile", frozenset({"local", "remote"})
+    )
+    transport = _validate_choice(
+        _option_value(args, "--transport"),
+        "--transport",
+        frozenset({"stdio", "http"}),
+    )
+    if profile == "remote" and transport == "stdio":
+        sys.stderr.write(
+            "error: the 'remote' profile requires --transport http "
+            "(a per-request bearer has no stdio equivalent)\n"
         )
-        return
+        raise SystemExit(2)
 
-    run_server()
+    # Unset flags pass through as None; run_server resolves them against
+    # PIPEFY_MCP_* (and the profile-derived transport default).
+    run_server(
+        profile=profile,
+        transport=transport,
+        host=_option_value(args, "--host"),
+        port=_parse_port(_option_value(args, "--port")),
+    )
 
 
 if __name__ == "__main__":

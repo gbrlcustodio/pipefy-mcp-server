@@ -53,56 +53,94 @@ def test_unknown_flag_still_starts_server(mocker):
 
 
 @pytest.mark.unit
-def test_remote_starts_http_server_with_remote_profile(mocker):
-    """``--remote`` drives the unified server over HTTP with the remote profile."""
+def test_profile_remote_passes_through(mocker):
+    """``--profile remote`` reaches ``run_server``; transport stays unset for it to resolve."""
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
-    main(["--remote"])
+    main(["--profile", "remote"])
 
     server_mock.assert_called_once()
     _, kwargs = server_mock.call_args
-    assert kwargs["http"] is True
-    assert kwargs["remote_mode"] is True
-    # Unset flags pass through as None; run_server resolves the settings defaults.
+    assert kwargs["profile"] == "remote"
+    # Unset flags pass through as None; run_server resolves the profile-derived
+    # transport default and the PIPEFY_MCP_* host/port.
+    assert kwargs["transport"] is None
     assert kwargs["host"] is None
     assert kwargs["port"] is None
 
 
 @pytest.mark.unit
-def test_remote_host_and_port_overrides(mocker):
-    """``--host`` / ``--port`` override the settings defaults under ``--remote``."""
+def test_explicit_transport_passes_through(mocker):
+    """``--transport`` reaches ``run_server`` alongside the profile (e.g. local over http)."""
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
-    main(["--remote", "--host", "0.0.0.0", "--port", "9001"])
+    main(["--profile", "local", "--transport", "http"])
 
     _, kwargs = server_mock.call_args
-    assert kwargs["http"] is True
-    assert kwargs["host"] == "0.0.0.0"
-    assert kwargs["port"] == 9001
-    assert kwargs["remote_mode"] is True
+    assert kwargs["profile"] == "local"
+    assert kwargs["transport"] == "http"
 
 
 @pytest.mark.unit
-def test_remote_host_and_port_equals_form(mocker):
+def test_host_and_port_overrides(mocker):
+    """``--host`` / ``--port`` override the settings defaults."""
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    main(["--profile", "remote", "--host", "0.0.0.0", "--port", "9001"])
+
+    _, kwargs = server_mock.call_args
+    assert kwargs["profile"] == "remote"
+    assert kwargs["host"] == "0.0.0.0"
+    assert kwargs["port"] == 9001
+
+
+@pytest.mark.unit
+def test_host_and_port_equals_form(mocker):
     """``--host=`` / ``--port=`` forms are accepted too."""
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
-    main(["--remote", "--host=127.0.0.2", "--port=9002"])
+    main(["--profile", "remote", "--host=127.0.0.2", "--port=9002"])
 
     _, kwargs = server_mock.call_args
-    assert kwargs["http"] is True
     assert kwargs["host"] == "127.0.0.2"
     assert kwargs["port"] == 9002
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize("bad_port", ["abc", ""])
-def test_remote_rejects_a_non_integer_port(mocker, bad_port):
+def test_rejects_a_non_integer_port(mocker, bad_port):
     """A non-integer ``--port`` exits with a usage error instead of crashing."""
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
     with pytest.raises(SystemExit) as excinfo:
-        main(["--remote", "--port", bad_port])
+        main(["--profile", "remote", "--port", bad_port])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "flag,value", [("--profile", "bogus"), ("--transport", "carrier-pigeon")]
+)
+def test_rejects_unknown_choice(mocker, flag, value):
+    """An unknown ``--profile`` / ``--transport`` value exits 2, not a traceback."""
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main([flag, value])
+
+    assert excinfo.value.code == 2
+    server_mock.assert_not_called()
+
+
+@pytest.mark.unit
+def test_rejects_remote_over_stdio(mocker):
+    """``--profile remote --transport stdio`` is refused at the argv boundary."""
+    server_mock = mocker.patch("pipefy_mcp.main.run_server")
+
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--profile", "remote", "--transport", "stdio"])
 
     assert excinfo.value.code == 2
     server_mock.assert_not_called()

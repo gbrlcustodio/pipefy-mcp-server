@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 from pipefy_auth.settings import _reset_legacy_oauth_warning_state
 
-from pipefy_cli.config import resolve_cli_settings
+from pipefy_cli.settings import resolve_cli_settings
 
 
 @pytest.fixture(autouse=True)

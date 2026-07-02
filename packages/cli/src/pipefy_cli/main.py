@@ -33,7 +33,7 @@ from pipefy_cli.commands.report_pipe import report_pipe_app
 from pipefy_cli.commands.table import table_app
 from pipefy_cli.commands.usage import usage_app
 from pipefy_cli.commands.webhook import webhook_app
-from pipefy_cli.config import resolve_cli_settings
+from pipefy_cli.settings import resolve_cli_settings
 
 app = typer.Typer(
     name="pipefy",

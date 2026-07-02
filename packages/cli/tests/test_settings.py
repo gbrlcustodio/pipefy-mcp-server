@@ -6,7 +6,7 @@ import textwrap
 
 import pytest
 
-from pipefy_cli.config import (
+from pipefy_cli.settings import (
     CliSettings,
     resolve_cli_settings,
 )

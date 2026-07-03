@@ -95,11 +95,8 @@ class McpRuntime:
     def __init__(self, settings: Settings, identity: AuthSource) -> None:
         self._settings = settings
         self._identity = identity
-        # Both identity variants carry an ``httpx.Auth``: the startup credential
-        # (stdio) or the request-context bearer adapter (hosted). Under the hosted
-        # profile that adapter reads each caller's validated bearer from the
-        # request context per call, so the one shared client serves every
-        # concurrent caller as themselves.
+        # Both variants expose ``.auth`` (see :data:`AuthSource`), so the client is
+        # wired once here; the hosted adapter applies per-caller identity itself.
         self.pipefy_client: PipefyClient = PipefyClient(
             settings=settings.pipefy, auth=identity.auth, surface="mcp"
         )

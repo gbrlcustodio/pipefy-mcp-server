@@ -9,7 +9,7 @@ from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.auth import ResourceServerAuth, build_resource_server_auth
 from pipefy_mcp.core.container import ServicesContainer
-from pipefy_mcp.settings import settings
+from pipefy_mcp.settings import resolve_mcp_settings, settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
 
@@ -52,10 +52,6 @@ async def lifespan(app: FastMCP) -> AsyncIterator[ServicesContainer]:
             "PIPEFY_MCP_UNIFIED_ENVELOPE=%s",
             "enabled" if settings.mcp.unified_envelope else "disabled",
         )
-        logger.info(
-            "PIPEFY_MCP_REMOTE_MODE=%s",
-            "enabled" if settings.mcp.remote_mode else "disabled",
-        )
         container = ServicesContainer()
         await container.initialize_services(settings)
     except Exception:
@@ -85,9 +81,9 @@ def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
 def _resolve_bind(host: str | None, port: int | None) -> tuple[str, int]:
     """Fill an unset HTTP bind host/port from ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``.
 
-    The single owner of the default-source rule, shared by :func:`run_server` (which
-    needs the resolved values for its log line and the loopback guard) and
-    :func:`build_pipefy_mcp_server` (which passes them to ``FastMCP``).
+    Used by :func:`build_pipefy_mcp_server` for a direct call that passes no
+    host/port (e.g. tests). The serve path resolves them earlier, in
+    :func:`run_server` via :func:`resolve_mcp_settings`, and passes them in.
     """
     return (
         host if host is not None else settings.mcp.host,
@@ -105,18 +101,21 @@ def build_pipefy_mcp_server(
     """Build the FastMCP app with its tools registered once, before serving.
 
     Used by both transports: the resource-only :func:`lifespan` is the same, only
-    the transport ``run`` differs. ``remote_mode`` defaults to the configured
-    ``PIPEFY_MCP_REMOTE_MODE``; pass an explicit value to override (used by
-    tests). ``host``/``port`` default to ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``
-    and matter only for the HTTP transport; stdio ignores them.
+    the transport ``run`` differs. ``remote_mode`` (the default-deny remote-safe
+    tool surface) defaults to whether the configured profile is ``remote``; pass an
+    explicit value to override (used by tests). ``host``/``port`` default to
+    ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT`` and matter only for the HTTP
+    transport; stdio ignores them.
 
     ``resource_server`` is the ``(verifier, auth)`` pair from
     :func:`pipefy_mcp.auth.build_resource_server_auth`. When present, FastMCP
     validates the inbound bearer per request and serves the resource-server
-    metadata; when ``None`` (stdio, or the disabled HTTP profile) the app has no
+    metadata; when ``None`` (stdio, or an HTTP local profile) the app has no
     inbound auth.
     """
-    resolved = settings.mcp.remote_mode if remote_mode is None else remote_mode
+    resolved = (
+        (settings.mcp.profile == "remote") if remote_mode is None else remote_mode
+    )
     resolved_host, resolved_port = _resolve_bind(host, port)
     verifier, auth = resource_server or (None, None)
     app = FastMCP(
@@ -158,58 +157,69 @@ def _assert_safe_http_bind(*, host: str) -> None:
 
 def run_server(
     *,
-    http: bool = False,
+    profile: str | None = None,
+    transport: str | None = None,
     host: str | None = None,
     port: int | None = None,
-    remote_mode: bool | None = None,
 ) -> None:
     """Run the Pipefy MCP server. The single serve entry point for both transports.
 
-    With ``http=False`` (the default, local profile) the process speaks MCP over
-    stdio. With ``http=True`` it serves over Streamable HTTP on ``host``/``port``,
-    defaulting to the configured ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``. HTTP
-    is restricted to a loopback bind until the hosted on-behalf-of profile lands
-    (see :func:`_assert_safe_http_bind`).
+    The launch flags are resolved once through :func:`resolve_mcp_settings` (argv
+    beats ``PIPEFY_MCP_*``), which fills the profile-derived transport default and
+    rejects an incompatible pair. ``transport == "stdio"`` speaks MCP over stdio;
+    ``transport == "http"`` serves over Streamable HTTP on ``host``/``port``
+    (defaulting to ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``), restricted to a
+    loopback bind until the hosted on-behalf-of profile lands (see
+    :func:`_assert_safe_http_bind`).
 
-    ``remote_mode`` selects the default-deny remote tool surface and defaults to
-    the configured ``PIPEFY_MCP_REMOTE_MODE``. It is orthogonal to the transport:
-    stdio can run the remote profile too.
+    ``profile == "remote"`` selects the default-deny remote-safe tool surface and,
+    when ``resource_server_url`` is configured, validates an inbound bearer per
+    request. ``local`` registers every tool and runs as the one startup credential.
 
     The server is built here, at startup rather than at import. Building registers
-    every tool and reads ``PIPEFY_MCP_REMOTE_MODE``, so building at import would
-    make ``--version``/``--help`` pay the full cost and turn any registration
-    error into an import failure.
+    every tool and reads the profile, so building at import would make
+    ``--version``/``--help`` pay the full cost and turn any registration error into
+    an import failure.
 
     Both transports build the same app through :func:`build_pipefy_mcp_server`
     (same :func:`lifespan`, same :func:`_register_pipefy_tools`) and differ only
     in the transport ``run`` and HTTP's bind concerns.
     """
-    if not http:
-        logger.info("Starting Pipefy MCP server")
-        build_pipefy_mcp_server(remote_mode=remote_mode).run()
+    mcp = resolve_mcp_settings(
+        profile=profile, transport=transport, host=host, port=port
+    )
+    remote_profile = mcp.profile == "remote"
+
+    if mcp.transport == "stdio":
+        logger.info("Starting Pipefy MCP server over stdio (profile=%s)", mcp.profile)
+        build_pipefy_mcp_server(remote_mode=remote_profile).run()
         return
 
-    resolved_remote = settings.mcp.remote_mode if remote_mode is None else remote_mode
-    resolved_host, resolved_port = _resolve_bind(host, port)
-    oidc_client = settings.auth.to_oidc_client()
-    resource_server = build_resource_server_auth(
-        settings.rs,
-        settings.jwt,
-        default_issuer_url=oidc_client.issuer_url if oidc_client else None,
-    )
+    # The resource server (inbound bearer validation) is only meaningful for the
+    # remote profile; a local server over loopback HTTP trusts its peer and skips
+    # it. Absent a configured resource_server_url the builder returns None (the
+    # unauthenticated foundation profile).
+    resource_server = None
+    if remote_profile:
+        oidc_client = settings.auth.to_oidc_client()
+        resource_server = build_resource_server_auth(
+            settings.rs,
+            settings.jwt,
+            default_issuer_url=oidc_client.issuer_url if oidc_client else None,
+        )
     logger.info(
-        "Starting Pipefy MCP server over HTTP on %s:%d (remote_mode=%s, resource_server=%s)",
-        resolved_host,
-        resolved_port,
-        "enabled" if resolved_remote else "disabled",
+        "Starting Pipefy MCP server over HTTP on %s:%d (profile=%s, resource_server=%s)",
+        mcp.host,
+        mcp.port,
+        mcp.profile,
         "active" if resource_server is not None else "inactive",
     )
-    _assert_safe_http_bind(host=resolved_host)
+    _assert_safe_http_bind(host=mcp.host)
 
     app = build_pipefy_mcp_server(
-        remote_mode=resolved_remote,
-        host=resolved_host,
-        port=resolved_port,
+        remote_mode=remote_profile,
+        host=mcp.host,
+        port=mcp.port,
         resource_server=resource_server,
     )
     app.run("streamable-http")

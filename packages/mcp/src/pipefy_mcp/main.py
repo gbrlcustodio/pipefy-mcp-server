@@ -1,91 +1,95 @@
 """Console-script entry point for ``pipefy-mcp-server``.
 
-With no flags the binary speaks MCP over stdio (the local profile). ``--remote``
-starts the hosted profile instead: Streamable HTTP plus the default-deny remote
-tool allowlist. ``--help`` / ``--version`` let packaging smoke tests (and humans)
-introspect the binary without entering a serve loop.
+With no flags the binary runs the local profile over stdio. ``--profile remote``
+serves the default-deny remote-safe tool surface over Streamable HTTP;
+``--transport`` overrides the profile's default wire. ``--help`` / ``--version``
+let packaging smoke tests (and humans) introspect the binary without entering a
+serve loop.
 """
 
 from __future__ import annotations
 
-import sys
+import argparse
 from typing import Sequence
 
 from pipefy_mcp import __version__
 from pipefy_mcp.server import run_server
 
-_HELP = (
-    f"pipefy-mcp-server {__version__}\n"
-    "\n"
-    "Usage: pipefy-mcp-server [--help] [--version] [--remote] [--host HOST] [--port PORT]\n"
-    "\n"
-    "With no flags, the process speaks the Model Context Protocol on stdin/stdout\n"
-    "(the local profile) and is intended to be launched by an MCP client (e.g. an\n"
-    "IDE extension or `uv run`).\n"
-    "\n"
-    "With --remote, the process serves over Streamable HTTP and exposes only the\n"
-    "default-deny remote-safe tool surface (the hosted profile).\n"
-    "\n"
-    "Options:\n"
-    "  --help        Show this message and exit.\n"
-    "  --version     Show the installed version and exit.\n"
-    "  --remote      Serve over HTTP with the default-deny remote profile.\n"
-    "  --host HOST   HTTP bind host (default env PIPEFY_MCP_HOST, else 127.0.0.1).\n"
-    "  --port PORT   HTTP bind port (default env PIPEFY_MCP_PORT, else 8000).\n"
-)
 
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the argv parser.
 
-def _option_value(args: list[str], flag: str) -> str | None:
-    """Return the value for ``--flag VALUE`` or ``--flag=VALUE`` (last wins)."""
-    value: str | None = None
-    prefix = f"{flag}="
-    for i, arg in enumerate(args):
-        if arg == flag and i + 1 < len(args):
-            value = args[i + 1]
-        elif arg.startswith(prefix):
-            value = arg[len(prefix) :]
-    return value
-
-
-def _parse_port(value: str | None) -> int | None:
-    """Parse a ``--port`` value, exiting with a usage error on a non-integer.
-
-    ``None`` (flag absent) passes through so ``run_server`` falls back to
-    ``PIPEFY_MCP_PORT``. A non-numeric value (e.g. ``--port abc`` or ``--port ""``)
-    exits 2 rather than crashing with an unhandled ``ValueError``.
+    ``allow_abbrev=False`` keeps a partial flag (``--prof``) from silently
+    resolving to ``--profile``. Unset flags default to ``None`` so ``run_server``
+    falls back to ``PIPEFY_MCP_*`` and the profile-derived transport default
+    rather than to a value invented at the argv boundary.
     """
-    if value is None:
-        return None
-    try:
-        return int(value)
-    except ValueError:
-        sys.stderr.write(f"error: --port must be an integer, got {value!r}\n")
-        raise SystemExit(2) from None
+    parser = argparse.ArgumentParser(
+        prog="pipefy-mcp-server",
+        description=(
+            "Run the Pipefy MCP server. With no flags it speaks MCP over stdio as "
+            "the local profile (all tools, one startup credential), launched by an "
+            "MCP client. --profile remote serves the default-deny remote-safe "
+            "surface over Streamable HTTP, validating an inbound bearer per request."
+        ),
+        allow_abbrev=False,
+    )
+    parser.add_argument("--version", action="version", version=__version__)
+    parser.add_argument(
+        "--profile",
+        choices=("local", "remote"),
+        help="Launch profile (default: local).",
+    )
+    parser.add_argument(
+        "--transport",
+        choices=("stdio", "http"),
+        help=(
+            "Transport wire (default: stdio for local, http for remote). "
+            "'remote' over stdio is rejected."
+        ),
+    )
+    parser.add_argument(
+        "--host",
+        help="HTTP bind host (default: env PIPEFY_MCP_HOST, else 127.0.0.1).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        help="HTTP bind port (default: env PIPEFY_MCP_PORT, else 8000).",
+    )
+    return parser
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Entry point declared in ``packages/mcp/pyproject.toml``."""
-    args = sys.argv[1:] if argv is None else list(argv)
-    if any(a in {"-h", "--help"} for a in args):
-        sys.stdout.write(_HELP)
-        return
-    if any(a == "--version" for a in args):
-        sys.stdout.write(f"{__version__}\n")
-        return
+    """Entry point declared in ``packages/mcp/pyproject.toml``.
 
-    if "--remote" in args:
-        # Pass the parsed flags through as-is; run_server fills any unset value
-        # from PIPEFY_MCP_HOST / PIPEFY_MCP_PORT. --remote forces the
-        # default-deny remote profile alongside HTTP.
-        run_server(
-            http=True,
-            host=_option_value(args, "--host"),
-            port=_parse_port(_option_value(args, "--port")),
-            remote_mode=True,
+    Unknown flags are ignored rather than rejected: the MCP transport tolerates
+    extra argv that client wrappers (e.g. IDE extensions) may inject, so an
+    unrecognized flag must not stop the server from starting. ``--help`` /
+    ``--version`` are handled by argparse and exit before the serve loop.
+    """
+    parser = _build_parser()
+    args, _ = parser.parse_known_args(argv)
+
+    # A cross-field rule argparse cannot express. The settings model rejects it
+    # too, but failing here keeps it a clean usage error (exit 2) at the boundary.
+    if args.profile == "remote" and args.transport == "stdio":
+        parser.error(
+            "the 'remote' profile requires --transport http "
+            "(a per-request bearer has no stdio equivalent)"
         )
-        return
+    # An empty --host would reach resolve_mcp_settings as an explicit init-kwarg,
+    # displacing the 127.0.0.1 default and later failing the loopback check with a
+    # misleading non-loopback error. Reject it as a usage error instead.
+    if args.host is not None and not args.host.strip():
+        parser.error("--host must not be empty")
 
-    run_server()
+    run_server(
+        profile=args.profile,
+        transport=args.transport,
+        host=args.host,
+        port=args.port,
+    )
 
 
 if __name__ == "__main__":

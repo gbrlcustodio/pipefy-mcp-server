@@ -159,7 +159,8 @@ def test_mcp_settings_defaults():
     """MCP knobs default to the local stdio profile."""
     mcp = McpSettings()
     assert mcp.unified_envelope is True
-    assert mcp.remote_mode is False
+    assert mcp.profile == "local"
+    assert mcp.transport == "stdio"
     assert mcp.host == "127.0.0.1"
     assert mcp.port == 8000
 
@@ -167,13 +168,36 @@ def test_mcp_settings_defaults():
 @pytest.mark.unit
 def test_mcp_settings_loads_from_pipefy_mcp_env(monkeypatch):
     """The ``PIPEFY_MCP_*`` env vars keep working after the move out of PipefySettings."""
-    monkeypatch.setenv("PIPEFY_MCP_REMOTE_MODE", "true")
+    monkeypatch.setenv("PIPEFY_MCP_PROFILE", "remote")
+    monkeypatch.setenv("PIPEFY_MCP_TRANSPORT", "http")
     monkeypatch.setenv("PIPEFY_MCP_HOST", "0.0.0.0")
     monkeypatch.setenv("PIPEFY_MCP_PORT", "9100")
     monkeypatch.setenv("PIPEFY_MCP_UNIFIED_ENVELOPE", "false")
 
     mcp = Settings().mcp
-    assert mcp.remote_mode is True
+    assert mcp.profile == "remote"
+    assert mcp.transport == "http"
     assert mcp.host == "0.0.0.0"
     assert mcp.port == 9100
     assert mcp.unified_envelope is False
+
+
+@pytest.mark.unit
+def test_mcp_transport_defaults_from_profile(monkeypatch):
+    """An unset transport follows the profile: local->stdio, remote->http."""
+    monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
+    assert McpSettings(profile="local").transport == "stdio"
+    assert McpSettings(profile="remote").transport == "http"
+
+
+@pytest.mark.unit
+def test_mcp_local_profile_may_run_over_http():
+    """'local' is valid over either wire; an explicit http transport is honored."""
+    assert McpSettings(profile="local", transport="http").transport == "http"
+
+
+@pytest.mark.unit
+def test_mcp_remote_over_stdio_is_rejected():
+    """'remote' has no stdio equivalent (no per-request bearer), so it is refused."""
+    with pytest.raises(ValidationError, match="requires the 'http' transport"):
+        McpSettings(profile="remote", transport="stdio")

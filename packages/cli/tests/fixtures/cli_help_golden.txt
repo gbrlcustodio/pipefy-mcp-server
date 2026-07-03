@@ -1797,12 +1797,15 @@ Usage: pipefy pipe [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ get      Load a pipe by id (phases, labels, start form).                     │
-│ list     Search pipes across organizations (same as MCP ``search_pipes``).   │
-│ create   Create an empty pipe in an organization.                            │
-│ update   Update pipe settings (pass at least one attribute).                 │
-│ delete   Delete a pipe permanently.                                          │
-│ clone    Clone a pipe from a template pipe id.                               │
+│ get          Load a pipe by id (phases, labels, start form).                 │
+│ start-form   List start-form fields for card creation                        │
+│              (``get_start_form_fields``).                                    │
+│ list         Search pipes across organizations (same as MCP                  │
+│              ``search_pipes``).                                              │
+│ create       Create an empty pipe in an organization.                        │
+│ update       Update pipe settings (pass at least one attribute).             │
+│ delete       Delete a pipe permanently.                                      │
+│ clone        Clone a pipe from a template pipe id.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP pipe/clone
@@ -1875,6 +1878,20 @@ Usage: pipefy pipe list [OPTIONS]
 │ --json         -j                                                            │
 │ --help                                            Show this message and      │
 │                                                   exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP pipe/start-form
+Usage: pipefy pipe start-form [OPTIONS] PIPE_ID
+
+ List start-form fields for card creation (``get_start_form_fields``).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    pipe_id      TEXT  Pipe id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --required-only            Return only required fields.                      │
+│ --json           -j                                                          │
+│ --help                     Show this message and exit.                       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP pipe/update
@@ -2393,8 +2410,9 @@ Usage: pipefy relation [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ pipe   Pipe-to-pipe relations.                                               │
-│ card   Card-to-card relations.                                               │
+│ pipe    Pipe-to-pipe relations.                                              │
+│ table   Table relations.                                                     │
+│ card    Card-to-card relations.                                              │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP relation/card
@@ -2524,6 +2542,36 @@ Usage: pipefy relation pipe update [OPTIONS] RELATION_ID
 │    --extra          TEXT  JSON object merged into UpdatePipeRelationInput.   │
 │    --json   -j                                                               │
 │    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/table
+Usage: pipefy relation table [OPTIONS] COMMAND [ARGS]...
+
+ Table relations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list   Load table relations by ID (Pipefy root ``table_relations``).         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP relation/table/list
+Usage: pipefy relation table list [OPTIONS]
+
+ Load table relations by ID (Pipefy root ``table_relations``).
+
+ Do not pass a database table ID — only **table relation** identifiers (the
+ link object between tables). Obtain these IDs from the Pipefy UI, saved
+ metadata, or GraphQL/introspection; ``relation pipe list`` does not return
+ them (``get_pipe_relations`` is a different API).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --ids           TEXT  Comma-separated table relation ids (not database    │
+│                          table ids).                                         │
+│                          [required]                                          │
+│    --json  -j                                                                │
+│    --help                Show this message and exit.                         │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP report-org

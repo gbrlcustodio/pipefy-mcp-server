@@ -29,7 +29,7 @@ Link processes and cards across workflows. **8 MCP tools.**
 | `create_pipe_relation` | `pipefy relation pipe create` | No | Create a new pipe-to-pipe relation. |
 | `update_pipe_relation` | `pipefy relation pipe update <id>` | No | Change relation config (auto-fill, constraints). |
 | `delete_pipe_relation` | `pipefy relation pipe delete <id>` | No | **Two-step destructive.** |
-| `get_table_relations` | — | Yes | Load table relations by relation ID. |
+| `get_table_relations` | `pipefy relation table list --ids <id,...>` | Yes | Load table relations by relation ID. |
 | `get_card_relations` | `pipefy relation card list --card <id>` | Yes | List all card-to-card relations on a card. |
 | `create_card_relation` | `pipefy relation card create` | No | Link two cards through an existing pipe relation. |
 | `delete_card_relation` | `pipefy relation card delete <id>` | No | **Two-step destructive.** |

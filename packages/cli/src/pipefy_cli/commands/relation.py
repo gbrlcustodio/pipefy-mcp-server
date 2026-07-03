@@ -15,6 +15,7 @@ from pipefy_cli.commands._common import (
 
 relation_app = typer.Typer(help="Pipe and card relations.", no_args_is_help=True)
 relation_pipe_app = typer.Typer(help="Pipe-to-pipe relations.", no_args_is_help=True)
+relation_table_app = typer.Typer(help="Table relations.", no_args_is_help=True)
 relation_card_app = typer.Typer(help="Card-to-card relations.", no_args_is_help=True)
 
 
@@ -104,6 +105,36 @@ def relation_pipe_delete(
     run_cli_command(ctx, json_out, factory)
 
 
+@relation_table_app.command("list")
+def relation_table_list(
+    ctx: typer.Context,
+    ids: str = typer.Option(
+        ...,
+        "--ids",
+        help="Comma-separated table relation ids (not database table ids).",
+    ),
+    json_out: bool = typer.Option(False, "--json", "-j"),
+) -> None:
+    """Load table relations by ID (Pipefy root ``table_relations``).
+
+    Do not pass a database table ID — only **table relation** identifiers
+    (the link object between tables). Obtain these IDs from the Pipefy UI,
+    saved metadata, or GraphQL/introspection; ``relation pipe list`` does
+    not return them (``get_pipe_relations`` is a different API).
+    """
+
+    id_list = [p.strip() for p in ids.split(",") if p.strip()]
+    if not id_list:
+        raise typer.BadParameter(
+            "--ids must list at least one table relation id.",
+        )
+
+    async def factory(client: PipefyClient):
+        return await client.get_table_relations(id_list)
+
+    run_cli_command(ctx, json_out, factory)
+
+
 @relation_card_app.command("list", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
 def relation_card_list(
     ctx: typer.Context,
@@ -170,4 +201,5 @@ def relation_card_delete(
 
 
 relation_app.add_typer(relation_pipe_app, name="pipe")
+relation_app.add_typer(relation_table_app, name="table")
 relation_app.add_typer(relation_card_app, name="card")

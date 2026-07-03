@@ -8,6 +8,39 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pipefy_cli.main import app
 
 
+def test_pipe_start_form_required_only_json(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("pipe-start-form-req")
+    payload = {"start_form_fields": [{"id": "f1", "required": True}]}
+    mock_client = MagicMock()
+    mock_client.get_start_form_fields = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app, ["pipe", "start-form", "10", "--required-only", "--json"]
+        )
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == payload
+    mock_client.get_start_form_fields.assert_awaited_once_with("10", True)
+
+
+def test_pipe_start_form_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("pipe-start-form")
+    payload = {"start_form_fields": []}
+    mock_client = MagicMock()
+    mock_client.get_start_form_fields = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(app, ["pipe", "start-form", "10", "--json"])
+    assert result.exit_code == 0
+    mock_client.get_start_form_fields.assert_awaited_once_with("10", False)
+
+
 def test_pipe_get_rejects_option_like_positional_exit_2(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):

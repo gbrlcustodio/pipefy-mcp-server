@@ -35,18 +35,6 @@ from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 _RS_ISSUER = "https://idp.example.com/realms/x"
 _RS_RESOURCE = "https://mcp.example.com/mcp"
 
-_AUTH_ENV_KEYS = (
-    "PIPEFY_TOKEN",
-    "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
-    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-    "PIPEFY_OAUTH_CLIENT",
-    "PIPEFY_OAUTH_SECRET",
-    "PIPEFY_AUTH_URL",
-    "PIPEFY_BASE_URL",
-    "PIPEFY_DISABLE_STORED_SESSION",
-    "PIPEFY_KEYCHAIN_BACKEND",
-)
-
 
 def _fresh_stored_session() -> StoredSession:
     return StoredSession(
@@ -132,10 +120,8 @@ class TestSelectAuthSource:
     """
 
     @pytest.fixture(autouse=True)
-    def clear_auth_env(self, monkeypatch):
-        """Strip ambient ``PIPEFY_*`` auth env so ``AuthSettings()`` is hermetic."""
-        for key in _AUTH_ENV_KEYS:
-            monkeypatch.delenv(key, raising=False)
+    def _hermetic_auth_env(self, clear_auth_env):
+        """Apply the shared auth-env scrub to every test in this class."""
 
     @pytest.mark.unit
     def test_hosted_profile_needs_no_credential(self):

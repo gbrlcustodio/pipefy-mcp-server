@@ -11,18 +11,6 @@ from pipefy_mcp.core.runtime import (
 )
 from pipefy_mcp.settings import Settings
 
-_AUTH_ENV_KEYS = (
-    "PIPEFY_TOKEN",
-    "PIPEFY_SERVICE_ACCOUNT_CLIENT_ID",
-    "PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET",
-    "PIPEFY_OAUTH_CLIENT",
-    "PIPEFY_OAUTH_SECRET",
-    "PIPEFY_AUTH_URL",
-    "PIPEFY_BASE_URL",
-    "PIPEFY_DISABLE_STORED_SESSION",
-    "PIPEFY_KEYCHAIN_BACKEND",
-)
-
 
 def _settings() -> Settings:
     return Settings(
@@ -71,7 +59,7 @@ class TestMcpRuntime:
 
     @patch("pipefy_mcp.core.runtime.PipefyClient")
     def test_construction_resolves_no_credential(
-        self, mock_pipefy_client_class, monkeypatch
+        self, mock_pipefy_client_class, clear_auth_env
     ):
         """Building the runtime never resolves a credential; that is the root's job.
 
@@ -79,8 +67,6 @@ class TestMcpRuntime:
         keychain read, so a poisoned ``resolve_pipefy_auth`` proves neither arm
         touches it.
         """
-        for key in _AUTH_ENV_KEYS:
-            monkeypatch.delenv(key, raising=False)
         mock_pipefy_client_class.return_value = Mock(spec=PipefyClient)
 
         def _poison(**_kwargs):

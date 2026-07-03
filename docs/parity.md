@@ -78,7 +78,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `export_organization_report` | `pipefy report-org export` | shipped | Exports + organization reports. |
 | `export_pipe_audit_logs` | `pipefy audit export` | shipped | (`--pipe`); API queues export (JSON payload only). |
 | `export_pipe_report` | `pipefy report-pipe export` | shipped | Exports + reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
-| `fill_card_phase_fields` | — | deferred | Card bulk fill; not in initial launch command list (may follow card field updates). |
+| `fill_card_phase_fields` | `pipefy card fill` | shipped | (`--phase`, `--fields` JSON, optional `--required-only`). Non-interactive; filters to editable phase field IDs before `update_card`. |
 | `find_cards` | `pipefy card find` | shipped | (`--pipe`, `--field`, `--value`). |
 | `find_records` | `pipefy record find` | shipped | (`--filter` JSON with `field_id` + `field_value`). Unified MCP envelope: top-level `pagination` uses `has_more` / `end_cursor` / `page_size` (same as `get_table_records`). |
 | `get_agents_usage` | `pipefy usage agents` | shipped | (`--organization`, `--from`, `--to`, optional `--filters` / `--search` / `--sort` JSON). |

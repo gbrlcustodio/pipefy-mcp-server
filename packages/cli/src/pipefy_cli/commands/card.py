@@ -21,6 +21,7 @@ from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
     format_card_get_transport_query_error,
+    parse_json_object,
     parse_json_value,
     resource_id_argument,
     run_cli_command,
@@ -91,6 +92,32 @@ def _split_csv_ids(raw: str | None) -> list[str | int] | None:
         else:
             out.append(p)
     return out
+
+
+def _filter_editable_field_definitions(
+    field_definitions: list[Any],
+) -> list[dict[str, Any]]:
+    editable_fields: list[dict[str, Any]] = []
+    for field_def in field_definitions:
+        if not isinstance(field_def, dict):
+            continue
+        if field_def.get("editable", True):
+            editable_fields.append(field_def)
+    return editable_fields
+
+
+def _filter_fields_by_definitions(
+    fields: dict[str, Any],
+    field_definitions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not fields:
+        return {}
+    editable_ids = {field_def["id"] for field_def in field_definitions}
+    return {
+        field_id: value
+        for field_id, value in fields.items()
+        if field_id in editable_ids
+    }
 
 
 @card_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
@@ -362,6 +389,48 @@ def card_move(
 
     async def factory(client: PipefyClient):
         return await client.move_card_to_phase(card_id, phase_id)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@card_app.command("fill", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def card_fill(
+    ctx: typer.Context,
+    card_id: str = resource_id_argument(help="Card id."),
+    phase_id: str = typer.Option(
+        ...,
+        "--phase",
+        help="Phase id whose fields to fill.",
+    ),
+    fields_json: str = typer.Option(
+        ...,
+        "--fields",
+        help='JSON object of field id to value, e.g. \'{"campo":"v"}\'.',
+    ),
+    required_only: bool = typer.Option(
+        False,
+        "--required-only",
+        help="Only load required phase fields when resolving editable field ids.",
+    ),
+    json_out: bool = typer.Option(False, "--json", "-j"),
+) -> None:
+    """Fill phase fields on a card (non-interactive; MCP skip_elicitation equivalent)."""
+
+    fields = parse_json_object(fields_json, "--fields") or {}
+
+    async def factory(client: PipefyClient):
+        phase_fields_result = await client.get_phase_fields(phase_id, required_only)
+        expected_fields = _filter_editable_field_definitions(
+            phase_fields_result.get("fields", [])
+        )
+        field_data = _filter_fields_by_definitions(fields, expected_fields)
+        if not field_data:
+            return {"success": True, "message": "No fields to update."}
+        field_updates = [
+            {"field_id": field_id, "value": value}
+            for field_id, value in field_data.items()
+        ]
+        return await client.update_card(card_id, field_updates=field_updates)
 
     run_cli_command(ctx, json_out, factory)
 

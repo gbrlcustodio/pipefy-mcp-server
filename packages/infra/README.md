@@ -1,8 +1,8 @@
 # pipefy-infra
 
-Schema-agnostic infrastructure helpers shared by `pipefy-sdk` and `pipefy-auth`. Sits at the bottom of the workspace dependency graph; depends only on stdlib + `pydantic` / `pydantic-settings`.
+Schema-agnostic infrastructure helpers shared by `pipefy` and `pipefy-auth`. Sits at the bottom of the workspace dependency graph; depends only on stdlib + `pydantic` / `pydantic-settings`.
 
-Adapter layer between Pipefy's application code (`pipefy-sdk`, `pipefy-auth`) and external concerns (filesystem, OS, network boundary). Each submodule owns one bounded context; the package root exposes only `__version__`.
+Adapter layer between Pipefy's application code (`pipefy`, `pipefy-auth`) and external concerns (filesystem, OS, network boundary). Each submodule owns one bounded context; the package root exposes only `__version__`.
 
 ## `pipefy_infra.config`
 

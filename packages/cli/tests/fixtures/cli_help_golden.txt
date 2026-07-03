@@ -1,7 +1,7 @@
 ### HELP _
 Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 
- Pipefy CLI (GraphQL via pipefy-sdk).
+ Pipefy CLI (GraphQL via pipefy).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --base-url                                       TEXT  Override              │

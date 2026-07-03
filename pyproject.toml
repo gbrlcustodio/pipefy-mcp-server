@@ -13,7 +13,7 @@ package = false
 members = ["packages/sdk", "packages/mcp", "packages/cli", "packages/auth", "packages/infra"]
 
 [tool.uv.sources]
-pipefy-sdk = { workspace = true }
+pipefy = { workspace = true }
 pipefy-mcp-server = { workspace = true }
 pipefy-cli = { workspace = true }
 pipefy-auth = { workspace = true }
@@ -21,7 +21,7 @@ pipefy-infra = { workspace = true }
 
 [dependency-groups]
 dev = [
-    "pipefy-sdk",
+    "pipefy",
     "pipefy-mcp-server",
     "pipefy-cli",
     "pipefy-auth",

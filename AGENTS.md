@@ -10,19 +10,52 @@
 - **`docs/dependencies.md`** — Rationale for runtime dependencies.
 - **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior).
 - **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
-- **`docs/sdk/README.md`** — Using `pipefy-sdk` as a library.
+- **`docs/sdk/README.md`** — Using `pipefy` as a library.
 - **`skills/AGENTS.md`** — Skill-authoring guide (frontmatter, naming, style). Start here before adding a skill.
 
 ## Project structure
 
 ```
-packages/sdk/   → pipefy-sdk        (Vendor API SDK — GraphQL, models, services)
-packages/mcp/   → pipefy-mcp-server (MCP tools, server lifecycle; depends on pipefy-sdk)
-packages/cli/   → pipefy-cli        (Typer CLI; depends on pipefy-sdk)
+packages/sdk/   → pipefy            (Vendor API SDK — GraphQL, models, services; dist named `pipefy`, import module `pipefy_sdk`)
+packages/mcp/   → pipefy-mcp-server (MCP tools, server lifecycle; depends on pipefy)
+packages/cli/   → pipefy-cli        (Typer CLI; depends on pipefy)
 skills/         → agent skills catalog (Markdown; no Python package)
 ```
 
-**Vendor API SDK** means the GraphQL-facing library (`pipefy-sdk`) used by both MCP and CLI, distinct from app glue or generic shared helpers.
+**Vendor API SDK** means the GraphQL-facing library (`pipefy`) used by both MCP and CLI, distinct from app glue or generic shared helpers.
+
+## Import namespace migration: `pipefy_sdk` → `pipefy`
+
+The SDK distribution is named `pipefy`, but its import module is still `pipefy_sdk`. The
+import module is being renamed to `pipefy` gradually, so the distribution and import names
+converge. New code should target `pipefy`; existing `pipefy_sdk` imports are migrated in
+small batches rather than one sweep.
+
+The mechanism that lets both paths work during the transition is a `sys.modules` alias. The
+real code lives at the new location and the old name is aliased to the *same module object*,
+so `import pipefy_sdk` keeps resolving. Once code moves under a `pipefy/` package:
+
+```python
+# src/pipefy_sdk/__init__.py (transitional shim)
+import sys
+
+import pipefy as _pipefy
+
+sys.modules[__name__] = _pipefy
+```
+
+Rules for the migration:
+
+- Do NOT shim with `from pipefy import *`. That re-imports and creates two copies of every
+  class under two names, which breaks `isinstance` checks and module-level singletons. The
+  `sys.modules` alias preserves a single module identity; use it.
+- Migrate call sites incrementally. New code imports `pipefy`; touch old `pipefy_sdk` imports
+  as you pass through their files.
+- Add a lint/grep guard so new `pipefy_sdk` imports fail once the migration starts, so the old
+  surface only ever shrinks.
+- On completion: remove the shim, repoint the ruff banned-api paths (`pipefy_sdk.services`,
+  `pipefy_sdk.queries` → `pipefy.services`/`.queries`), move `__version__` into
+  `pipefy/__init__.py`, and rename the directory `packages/sdk` → `packages/pipefy`.
 
 ## Build, test, and development
 

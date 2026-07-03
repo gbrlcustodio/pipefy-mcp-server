@@ -73,7 +73,7 @@ jobs:
           from pathlib import Path
 
           dist = Path("dist")
-          for prefix in ("pipefy_sdk", "pipefy_mcp_server", "pipefy_cli", "pipefy_auth", "pipefy_infra"):
+          for prefix in ("pipefy", "pipefy_mcp_server", "pipefy_cli", "pipefy_auth", "pipefy_infra"):
               wheels = list(dist.glob(f"{prefix}-*.whl"))
               if len(wheels) != 1:
                   print(
@@ -92,7 +92,7 @@ jobs:
         run: |
           mkdir -p dist-pypi
           shopt -s nullglob
-          sdk=(dist/pipefy_sdk-*.whl)
+          sdk=(dist/pipefy-*.whl)
           cli=(dist/pipefy_cli-*.whl)
           mcp=(dist/pipefy_mcp_server-*.whl)
           auth=(dist/pipefy_auth-*.whl)

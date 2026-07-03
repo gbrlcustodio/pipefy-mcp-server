@@ -88,7 +88,6 @@ jobs:
           files: dist/*.whl
           body_path: CHANGELOG_RELEASE_BODY.md
       - name: Stage PyPI wheels (SDK + CLI + MCP + Auth + Infra)
-        if: startsWith(github.ref_name, 'v1.') && !contains(github.ref_name, '-')
         run: |
           mkdir -p dist-pypi
           shopt -s nullglob
@@ -105,7 +104,6 @@ jobs:
           fi
           cp "${sdk[0]}" "${cli[0]}" "${mcp[0]}" "${auth[0]}" "${infra[0]}" dist-pypi/
       - name: Smoke install staged wheels (clean venv)
-        if: startsWith(github.ref_name, 'v1.') && !contains(github.ref_name, '-')
         run: |
           python -m venv .venv-pypi-smoke
           .venv-pypi-smoke/bin/python -m pip install --upgrade pip
@@ -113,7 +111,6 @@ jobs:
           .venv-pypi-smoke/bin/pipefy --help
           .venv-pypi-smoke/bin/pipefy-mcp-server --help
       - name: Upload to PyPI
-        if: startsWith(github.ref_name, 'v1.') && !contains(github.ref_name, '-')
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist-pypi/

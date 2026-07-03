@@ -12,7 +12,6 @@ from __future__ import annotations
 __version__ = "0.2.0-beta.4"
 
 from pipefy_auth.bearer import (
-    CallableBearerAuth,
     RefreshableBearerAuth,
     StaticBearerAuth,
 )
@@ -70,7 +69,6 @@ __all__ = [
     "JwtValidationSettings",
     "RequireAudience",
     "SkipAudience",
-    "CallableBearerAuth",
     "DEFAULT_AUTH_CLIENT_ID",
     "DiscoveryPolicy",
     "JwtValidator",

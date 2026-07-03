@@ -597,13 +597,12 @@ Usage: pipefy automation create [OPTIONS]
 │    --extra                                     TEXT  Optional JSON object:   │
 │                                                      extra                   │
 │                                                      CreateAutomationInput   │
-│                                                      fields, using the API   │
-│                                                      field names (e.g.       │
+│                                                      fields. Top-level keys  │
+│                                                      are snake_case (e.g.    │
 │                                                      action_params,          │
-│                                                      event_params).          │
-│                                                      camelCase aliases such  │
-│                                                      as actionParams are     │
-│                                                      accepted and rewritten. │
+│                                                      event_params);          │
+│                                                      camelCase is also       │
+│                                                      accepted.               │
 │    --json                   -j                       Print machine-readable  │
 │                                                      JSON to stdout.         │
 │    --help                                            Show this message and   │
@@ -822,10 +821,10 @@ Usage: pipefy automation update [OPTIONS] AUTOMATION_ID
 │ *    automation_id      TEXT  Automation rule id. [required]                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --extra          TEXT  JSON object: fields to patch, using the            │
-│                           UpdateAutomationInput API field names (e.g.        │
-│                           action_params, event_params). camelCase aliases    │
-│                           such as actionParams are accepted and rewritten.   │
+│ *  --extra          TEXT  JSON object: UpdateAutomationInput fields to       │
+│                           patch. Top-level keys are snake_case (e.g.         │
+│                           action_params, event_params); camelCase is also    │
+│                           accepted.                                          │
 │                           [required]                                         │
 │    --json   -j            Print machine-readable JSON to stdout.             │
 │    --help                 Show this message and exit.                        │

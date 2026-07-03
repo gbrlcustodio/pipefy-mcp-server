@@ -704,10 +704,9 @@ class PipefyClient:
             action_repo_id: Pipe ID where the action executes. Defaults to ``pipe_id``.
                 For cross-pipe actions (``create_connected_card``, ``move_card_to_pipe``),
                 pass the **destination** pipe ID.
-            extra_input: Extra ``CreateAutomationInput`` keys, using the API field names
-                (``action_params``, ``event_params``, ``schedulerCron``, ...). Top-level
-                camelCase/snake_case aliases are rewritten to the API names before sending;
-                ``active`` here overrides the ``active`` argument.
+            extra_input: Extra ``CreateAutomationInput`` keys. Top-level keys are snake_case
+                (``action_params``, ``event_params``, ...) and are normalized to the exact API
+                field names before sending. ``active`` here overrides the ``active`` argument.
 
         Raises:
             AutomationPreflightError: When the move-card transition or ``field_map``
@@ -761,8 +760,8 @@ class PipefyClient:
     ) -> UpdateAutomationMutationResult:
         """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names).
 
-        Top-level camelCase/snake_case aliases in ``extra_input`` are rewritten to the API
-        field names before sending, as in :meth:`create_automation`.
+        Top-level ``extra_input`` keys are snake_case and are normalized to the exact API field
+        names before sending, as in :meth:`create_automation`.
 
         Does not run ``field_map`` or move-transition preflight (those run on ``create_automation`` only).
         """

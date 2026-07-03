@@ -415,6 +415,71 @@ def test_card_fill_filters_editable_and_updates(
     )
 
 
+def test_card_fill_missing_editable_key_counts_as_editable(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("fill-card-missing-editable")
+    update_resp = {"updateFieldsValues": {"success": True}}
+    mock_client = MagicMock()
+    mock_client.get_phase_fields = AsyncMock(
+        return_value={
+            "phase_id": "100",
+            "fields": [{"id": "status", "type": "short_text"}],
+        }
+    )
+    mock_client.update_card = AsyncMock(return_value=update_resp)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "fill",
+                "99",
+                "--phase",
+                "100",
+                "--fields",
+                '{"status": "done"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == update_resp
+    mock_client.update_card.assert_awaited_once_with(
+        "99",
+        field_updates=[{"field_id": "status", "value": "done"}],
+    )
+
+
+def test_card_fill_invalid_fields_exit_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("fill-card-bad-json")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "fill",
+                "99",
+                "--phase",
+                "100",
+                "--fields",
+                "not-json",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.get_phase_fields.assert_not_called()
+    mock_client.update_card.assert_not_called()
+
+
 def test_card_fill_no_fields_when_input_empty(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):

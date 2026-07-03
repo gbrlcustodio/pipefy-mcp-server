@@ -9,8 +9,11 @@ resource server does no network I/O.
 
 from __future__ import annotations
 
+from mcp.server.auth.middleware.auth_context import AuthenticatedUser
+from mcp.server.auth.provider import AccessToken
 from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_sdk import PipefySettings
+from starlette.requests import Request
 
 from pipefy_mcp.settings import McpSettings, ResourceServerSettings, Settings
 
@@ -28,3 +31,17 @@ def remote_rs_settings() -> Settings:
         rs=ResourceServerSettings(resource_server_url=RS_RESOURCE),
         jwt=JwtValidationSettings(issuer_url=RS_ISSUER, jwks_uri=RS_JWKS_URI),
     )
+
+
+def authenticated_user(token: str) -> AuthenticatedUser:
+    """The RS-validated user the resource-server middleware leaves on a request."""
+    return AuthenticatedUser(AccessToken(token=token, client_id=token, scopes=[]))
+
+
+def request_with_user(user: AuthenticatedUser | None) -> Request:
+    """A Starlette request whose ``scope["user"]`` is what the RS validated.
+
+    Mirrors what the resource-server middleware leaves on each message's request:
+    an ``AuthenticatedUser`` when a bearer validated, or ``None`` otherwise.
+    """
+    return Request({"type": "http", "headers": [], "user": user})

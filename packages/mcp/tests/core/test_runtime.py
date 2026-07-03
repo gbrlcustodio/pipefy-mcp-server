@@ -3,9 +3,7 @@ from unittest.mock import patch
 
 import httpx
 import pytest
-from _rs_fixtures import remote_rs_settings
-from mcp.server.auth.middleware.auth_context import AuthenticatedUser
-from mcp.server.auth.provider import AccessToken
+from _rs_fixtures import authenticated_user, remote_rs_settings, request_with_user
 from pipefy_auth import (
     AuthSettings,
     RefreshableBearerAuth,
@@ -14,7 +12,6 @@ from pipefy_auth import (
 )
 from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefyClient, PipefySettings
-from starlette.requests import Request
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.core.runtime import (
@@ -30,15 +27,6 @@ def _settings() -> Settings:
         pipefy=PipefySettings(base_url="https://api.pipefy.com"),
         auth=AuthSettings(),
     )
-
-
-def _authenticated(token: str) -> AuthenticatedUser:
-    return AuthenticatedUser(AccessToken(token=token, client_id=token, scopes=[]))
-
-
-def _request(user: AuthenticatedUser | None) -> Request:
-    """A Starlette request carrying the RS-validated user, as the handler sees it."""
-    return Request({"type": "http", "headers": [], "user": user})
 
 
 def _bearer_of(client: PipefyClient) -> str:
@@ -94,7 +82,9 @@ class TestMcpRuntime:
         """The hosted profile snapshots the request's validated bearer into the session."""
         runtime = McpRuntime(_settings(), RequestScopedIdentity())
 
-        client = runtime.session_for_request(_request(_authenticated("caller-token")))
+        client = runtime.session_for_request(
+            request_with_user(authenticated_user("caller-token"))
+        )
 
         assert _bearer_of(client) == "Bearer caller-token"
 
@@ -107,8 +97,10 @@ class TestMcpRuntime:
         """
         runtime = McpRuntime(_settings(), RequestScopedIdentity())
 
-        alice = runtime.session_for_request(_request(_authenticated("alice")))
-        bob = runtime.session_for_request(_request(_authenticated("bob")))
+        alice = runtime.session_for_request(
+            request_with_user(authenticated_user("alice"))
+        )
+        bob = runtime.session_for_request(request_with_user(authenticated_user("bob")))
 
         assert _bearer_of(alice) == "Bearer alice"
         assert _bearer_of(bob) == "Bearer bob"
@@ -140,7 +132,9 @@ class TestForProfile:
         """A session opened under the remote profile carries the request's validated bearer."""
         runtime = McpRuntime.for_profile(remote_rs_settings())
 
-        client = runtime.session_for_request(_request(_authenticated("caller-token")))
+        client = runtime.session_for_request(
+            request_with_user(authenticated_user("caller-token"))
+        )
 
         assert _bearer_of(client) == "Bearer caller-token"
 

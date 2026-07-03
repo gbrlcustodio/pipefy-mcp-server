@@ -11,6 +11,7 @@ from pipefy_auth import (
     resolve_pipefy_auth,
 )
 from pipefy_sdk import PipefyClient, PipefyEngine
+from starlette.requests import Request
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.auth.request_identity import require_request_bearer
@@ -59,7 +60,7 @@ class StartupIdentity:
             )
         return cls(build_httpx_auth(resolved))
 
-    def resolve(self, request: object | None) -> Auth:
+    def resolve(self, request: Request | None) -> Auth:
         # The startup credential is request-independent; the request the runtime
         # threads through for the hosted profile has nothing to resolve here.
         return self.auth
@@ -78,7 +79,7 @@ class RequestScopedIdentity:
     to what this method returns, nothing else.
     """
 
-    def resolve(self, request: object | None) -> Auth:
+    def resolve(self, request: Request | None) -> Auth:
         return StaticBearerAuth(require_request_bearer(request))
 
 
@@ -166,7 +167,7 @@ class McpRuntime:
             return cls(settings, RequestScopedIdentity(), inbound_auth=inbound_auth)
         return cls(settings, StartupIdentity.from_configured_credential(settings))
 
-    def session_for_request(self, request: object | None) -> PipefyClient:
+    def session_for_request(self, request: Request | None) -> PipefyClient:
         """Open a session bound to the current request's identity.
 
         Cheap per call: it binds the identity's resolved ``auth`` to the shared

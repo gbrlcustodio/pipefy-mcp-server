@@ -266,7 +266,7 @@ class TestCreateCardTool:
         )
 
         runtime = McpRuntime(settings, RequestScopedIdentity())
-        runtime.session_for_request = lambda *_: mock_pipefy_client
+        runtime.session_for_request = lambda _req: mock_pipefy_client
 
         ctx = MagicMock()
         ctx.debug = AsyncMock()

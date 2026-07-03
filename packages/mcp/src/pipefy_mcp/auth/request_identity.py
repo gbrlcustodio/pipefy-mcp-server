@@ -18,8 +18,11 @@ caller.
 
 from __future__ import annotations
 
+from mcp.server.auth.middleware.auth_context import AuthenticatedUser
+from starlette.requests import Request
 
-def require_request_bearer(request: object | None) -> str:
+
+def require_request_bearer(request: Request | None) -> str:
     """Return the validated bearer token off the in-flight request.
 
     The resource-server middleware sets ``request.user`` to the
@@ -30,14 +33,16 @@ def require_request_bearer(request: object | None) -> str:
     first bearer.
 
     Raises when no validated bearer is present (called outside the resource-server
-    request scope, or the request bore no authenticated user), so a missing
-    identity fails loudly instead of issuing an unauthenticated Pipefy call.
+    request scope, or the request bore no ``AuthenticatedUser``), so a missing
+    identity fails loudly instead of issuing an unauthenticated Pipefy call. The
+    ``isinstance`` guard keeps that fail-loud property on a typed contract: an
+    unauthenticated request carries a different user type, not an
+    ``AuthenticatedUser`` with an empty token.
     """
-    user = getattr(request, "user", None)
-    access = getattr(user, "access_token", None)
-    if access is None or not access.token:
+    user = request.user if request is not None else None
+    if not isinstance(user, AuthenticatedUser) or not user.access_token.token:
         raise RuntimeError(
             "No authenticated access token on the request; the resource-server "
             "profile must validate a bearer before a tool runs."
         )
-    return access.token
+    return user.access_token.token

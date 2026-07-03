@@ -25,7 +25,7 @@ def build_tool_test_server(name, register, client):
     @asynccontextmanager
     async def _lifespan(_app):
         runtime = McpRuntime(settings, RequestScopedIdentity())
-        runtime.session_for_request = lambda *_: client
+        runtime.session_for_request = lambda _req: client
         yield runtime
 
     mcp = FastMCP(name, lifespan=_lifespan)

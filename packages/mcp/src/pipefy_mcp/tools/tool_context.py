@@ -9,15 +9,15 @@ from pipefy_mcp.core.runtime import McpRuntime
 
 
 def get_pipefy_client(ctx: Context) -> PipefyClient:
-    """Return the live Pipefy client for the in-flight request.
+    """Return a Pipefy client session bound to the in-flight request's identity.
 
     The server builds the app-scoped :class:`McpRuntime` at startup and its
-    lifespan yields it as the request ``lifespan_context``. The runtime wires its
-    shared client at construction, so it always holds one. Tools read the client
-    from it per call rather than closing over one at registration. The client is
-    shared; under the hosted profile it applies the request's own identity via
-    its httpx auth, so reading it per call (not per registration) is what keeps
-    identity request-scoped without re-registering the tool table.
+    lifespan yields it as the request ``lifespan_context``. The runtime owns the
+    shared engine and opens a cheap session here, per call, bound to the caller's
+    identity (see :meth:`McpRuntime.session_for_request`). Resolving per call, not
+    at registration, is what keeps identity request-scoped: under the hosted
+    profile the session carries this request's validated bearer, so concurrent
+    callers each act as themselves without re-registering the tool table.
     """
     runtime: McpRuntime = ctx.request_context.lifespan_context
-    return runtime.pipefy_client
+    return runtime.session_for_request()

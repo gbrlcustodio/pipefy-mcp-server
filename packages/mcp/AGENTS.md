@@ -41,11 +41,12 @@ Bind host/port come from `PIPEFY_MCP_HOST` / `PIPEFY_MCP_PORT` (defaults
 `127.0.0.1:8000`), overridable with `--host` / `--port`, and matter only over HTTP.
 
 Under `remote` the server acts on behalf of each caller: it validates the inbound
-bearer per request and the one shared client reads that validated bearer per call,
-so concurrent callers each act as themselves rather than as a single identity
-resolved at startup. `local` runs as the one credential resolved at startup. The
-transport still binds loopback-only until the DNS-rebinding host/Origin allowlist
-lands.
+bearer per request and opens a per-request session carrying a snapshot of that
+validated bearer, so concurrent callers each act as themselves rather than as a
+single identity resolved at startup. All sessions share one process-scoped engine
+(the GraphQL endpoints and their schema cache). `local` runs as the one credential
+resolved at startup. The transport still binds loopback-only until the
+DNS-rebinding host/Origin allowlist lands.
 
 **Resource-server profile.** Config is split by domain. *Token validation* is an
 auth concern and lives in `pipefy_auth.JwtValidationSettings` (`settings.jwt`,
@@ -90,14 +91,13 @@ under Streamable HTTP) and so must not mutate the tool table.
 
 Tools take no client at registration. Each tool function declares a
 `ctx: Context` parameter (FastMCP injects it and keeps it out of the tool's
-input schema) and resolves the live client per request with
-`get_pipefy_client(ctx)` (`tools/tool_context.py`), which reads
-`ctx.request_context.lifespan_context.pipefy_client`. Because the client is
-looked up per call rather than captured at registration, tools observe whatever
-the runtime holds without re-registering; under the hosted profile the one shared
-client applies each request's identity itself (via its request-context bearer), so
-identity is per-request even though the client is stable. That is why there is no
-repeat-visit bookkeeping: registration never repeats.
+input schema) and resolves its client per request with `get_pipefy_client(ctx)`
+(`tools/tool_context.py`), which calls
+`ctx.request_context.lifespan_context.session_for_request()`. Because a session is
+opened per call rather than captured at registration, tools act as whoever is
+calling without re-registering; under the hosted profile each session carries a
+snapshot of that request's validated bearer, so identity is per-request. That is
+why there is no repeat-visit bookkeeping: registration never repeats.
 
 When adding a tool, give it a `ctx: Context` parameter and start its body with
 `client = get_pipefy_client(ctx)`; do not pass a client through `register`.
@@ -114,21 +114,21 @@ pair (failing fast when that profile has no resource server); every other profil
 resolves the one startup credential and fails fast when none is configured
 (`StartupIdentity.from_configured_credential`). So a missing credential (or, under
 `remote`, a missing resource server) surfaces when the server is built at startup,
-not on the first tool call. The runtime wires its shared client to whichever
-identity's `httpx.Auth` it was handed and exposes the inbound pair as
-`inbound_auth`, which `build_pipefy_mcp_server` reads into FastMCP. (This also
-means `build_pipefy_mcp_server` resolves the credential, so the live integration
-tests that build the app at import skip themselves when no creds are configured.) Wiring the client at construction is safe off the event
-loop: `PipefyClient` construction does no network I/O and binds nothing to a
-running loop, because its executors open a fresh per-request transport at call
-time; the client built at startup works on whatever loop later serves requests.
-Streamable HTTP re-entering the lifespan per session just yields the same
-already-wired runtime, so there is nothing to rebuild. The runtime holds no
-per-request state: both identity variants carry an `httpx.Auth` the shared client
-applies to every outbound call. `StartupIdentity` carries the one credential
-resolved at startup (stdio/local), while `RequestScopedIdentity` carries a
-`RequestContextBearerAuth` that reads each caller's validated bearer from the
-request context, so one client serves every concurrent caller as themselves.
+not on the first tool call. The runtime exposes the inbound pair as `inbound_auth`,
+which `build_pipefy_mcp_server` reads into FastMCP. (This also means
+`build_pipefy_mcp_server` resolves the credential, so the live integration tests
+that build the app at import skip themselves when no creds are configured.)
+Building the engine at construction is safe off the event loop: `PipefyEngine`
+construction does no network I/O and binds nothing to a running loop, because its
+endpoints open a fresh per-request transport at call time; the engine built at
+startup serves whatever loop later handles requests. Streamable HTTP re-entering
+the lifespan per session just yields the same already-wired runtime, so there is
+nothing to rebuild. The runtime holds no per-request state: it opens a cheap
+session per request via `session_for_request`, binding the identity's resolved
+`httpx.Auth` to the shared endpoints. `StartupIdentity` resolves to the one
+credential resolved at startup (stdio/local), while `RequestScopedIdentity`
+snapshots each caller's validated bearer from the request context, so every session
+acts as its own caller.
 
 ## Remote-profile tool marker
 

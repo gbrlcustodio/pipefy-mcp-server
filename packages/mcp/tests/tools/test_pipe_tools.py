@@ -17,7 +17,6 @@ from mcp.types import (
 )
 from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.auth import RequestContextBearerAuth
 from pipefy_mcp.core.runtime import McpRuntime, RequestScopedIdentity
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.pipe_tool_helpers import (
@@ -266,10 +265,8 @@ class TestCreateCardTool:
             "Pipefy MCP Test Server", PipeTools.register, mock_pipefy_client
         )
 
-        runtime = McpRuntime(
-            settings, RequestScopedIdentity(RequestContextBearerAuth())
-        )
-        runtime.pipefy_client = mock_pipefy_client
+        runtime = McpRuntime(settings, RequestScopedIdentity())
+        runtime.session_for_request = lambda: mock_pipefy_client
 
         ctx = MagicMock()
         ctx.debug = AsyncMock()

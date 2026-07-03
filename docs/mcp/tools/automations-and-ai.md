@@ -8,7 +8,7 @@ Traditional automations (if/then rules) and AI-powered automations and agents. *
 
 Ten tools manage Pipefy traditional automations: if/then rules bound to a pipe via the standard GraphQL API.
 
-**Tip:** For **send-a-task** rules (`send_a_task` action), use `create_send_task_automation` (pipe, trigger, task title, recipients) instead of hand-building `action_params.taskParams` on `create_automation`. For other actions, call `get_automation_events` (global event catalog) and `get_automation_actions` with the target pipe (`repoId`) before `create_automation` to pick valid `trigger_id` / `action_id` values. Writes accept optional `extra_input` (camelCase API keys) and `debug=true` on errors.
+**Tip:** For **send-a-task** rules (`send_a_task` action), use `create_send_task_automation` (pipe, trigger, task title, recipients) instead of hand-building `action_params.taskParams` on `create_automation`. For other actions, call `get_automation_events` (global event catalog) and `get_automation_actions` with the target pipe (`repoId`) before `create_automation` to pick valid `trigger_id` / `action_id` values. Writes accept optional `extra_input` (top-level keys are snake_case, e.g. `action_params`, `event_params`; mirror `get_automation` output) and `debug=true` on errors.
 
 | Tool | Read-only | Role |
 |------|-----------|------|
@@ -107,7 +107,7 @@ For `card_moved` + `move_single_card`, when `extra_input` includes source and de
 1. **Discover** — `get_automation_events(pipe_id)`, `get_automation_actions(pipe_id)`, `get_automation_event_attributes()` for official `field_map` tokens; field ids via `get_start_form_fields` / `get_phase_fields`.
 2. **Create disabled** — `create_automation` with `active: false` and the `extra_input` payload above.
 3. **Verify** — `get_automation(automation_id)` and confirm `action_params.field_map` round-trip.
-4. **Enable** — `update_automation` with `extra_input: { "active": true }` (or camelCase `active` per API).
+4. **Enable** — `update_automation` with `extra_input: { "active": true }`.
 
 ---
 

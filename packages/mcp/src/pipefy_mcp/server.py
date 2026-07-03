@@ -107,9 +107,9 @@ def _assert_safe_http_bind(*, host: str) -> None:
     """Refuse to bind the HTTP transport to a non-loopback host.
 
     The HTTP transport is restricted to loopback for now. The resource-server
-    profile now carries per-request on-behalf-of identity (each call runs as the
-    validated caller, not a single startup identity), so that is no longer the
-    blocker; the remaining one is DNS-rebinding protection, the configurable
+    profile carries per-request on-behalf-of identity (each call runs as the
+    validated caller, not a single startup identity), so inbound identity is not
+    the constraint; the constraint is DNS-rebinding protection, the configurable
     host / Origin allowlist. (The filesystem tools, e.g. the attachment uploads,
     also only make sense on loopback, where the server shares the client's disk;
     remote-safe file inputs are separate follow-up work.)

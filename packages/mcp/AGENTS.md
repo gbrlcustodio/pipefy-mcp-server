@@ -71,9 +71,9 @@ The runtime (`McpRuntime.for_profile`) calls it for the `remote` profile and hol
 the pair as `inbound_auth`, which `server.py` wires into the app.
 
 **Loopback bind.** `_assert_safe_http_bind` restricts the HTTP transport to a
-loopback bind, unconditionally for now. Per-request on-behalf-of identity now
-exists (each call runs as the validated caller, not a single startup identity), so
-that is no longer the blocker; the remaining one is DNS-rebinding protection, the
+loopback bind, unconditionally for now. Per-request on-behalf-of identity (each
+call runs as the validated caller, not a single startup identity) means inbound
+identity is not the constraint; the constraint is DNS-rebinding protection, the
 configurable host / Origin allowlist for a proxied deployment. Off-loopback binding
 stays off until that lands (see `experiments/hosted-obo/RFC-OUTLINE.md`). The
 attachment tools' local `file_path` inputs also still assume a loopback peer that

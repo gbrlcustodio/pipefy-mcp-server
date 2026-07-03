@@ -6,7 +6,7 @@ that each carry a different validated token, must attach each task's own token
 and never another's. This is what lets a single app-scoped client serve every
 caller as themselves under a multi-worker deployment.
 
-The stateful-topology test is the transport-level acceptance check for #302: the
+The stateful-topology test is the transport-level acceptance criterion: the
 adapter must read each MCP message's own bearer, not the one captured when the
 session's server task was spawned at ``initialize``. See the module docstring of
 :mod:`pipefy_mcp.auth.request_identity` for why the two diverge under stateful
@@ -112,9 +112,9 @@ async def test_stateful_session_task_reads_current_message_bearer():
     ``tools/call`` messages run in that same task but carry their own request
     (bearer B) via ``request_ctx``. The adapter must attach B, the current caller.
 
-    Before the fix (reading ``get_access_token()``) this yields ``Bearer token-A``
-    and fails; the same-task unit tests above stay green because they never span
-    the two-task topology this reproduces.
+    Reading the session-frozen ``get_access_token()`` instead would attach
+    ``Bearer token-A`` here; the same-task unit tests above cannot catch that
+    because they never span the two-task topology this reproduces.
     """
     auth = RequestContextBearerAuth()
     seen: list[str] = []

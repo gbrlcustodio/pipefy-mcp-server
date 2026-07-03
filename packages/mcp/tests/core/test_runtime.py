@@ -4,10 +4,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 from _rs_fixtures import remote_rs_settings
-from mcp.server.auth.middleware.auth_context import (
-    AuthenticatedUser,
-    auth_context_var,
-)
+from mcp.server.auth.middleware.auth_context import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
 from pipefy_auth import (
     AuthSettings,
@@ -17,6 +14,7 @@ from pipefy_auth import (
 )
 from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefyClient, PipefySettings
+from starlette.requests import Request
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.core.runtime import (
@@ -36,6 +34,11 @@ def _settings() -> Settings:
 
 def _authenticated(token: str) -> AuthenticatedUser:
     return AuthenticatedUser(AccessToken(token=token, client_id=token, scopes=[]))
+
+
+def _request(user: AuthenticatedUser | None) -> Request:
+    """A Starlette request carrying the RS-validated user, as the handler sees it."""
+    return Request({"type": "http", "headers": [], "user": user})
 
 
 def _bearer_of(client: PipefyClient) -> str:
@@ -81,7 +84,7 @@ class TestMcpRuntime:
         auth = StaticBearerAuth("startup-token")
         runtime = McpRuntime(_settings(), StartupIdentity(auth))
 
-        client = runtime.session_for_request()
+        client = runtime.session_for_request(None)
 
         assert client._pipe_service._executor.auth is auth
         assert _bearer_of(client) == "Bearer startup-token"
@@ -91,11 +94,7 @@ class TestMcpRuntime:
         """The hosted profile snapshots the request's validated bearer into the session."""
         runtime = McpRuntime(_settings(), RequestScopedIdentity())
 
-        handle = auth_context_var.set(_authenticated("caller-token"))
-        try:
-            client = runtime.session_for_request()
-        finally:
-            auth_context_var.reset(handle)
+        client = runtime.session_for_request(_request(_authenticated("caller-token")))
 
         assert _bearer_of(client) == "Bearer caller-token"
 
@@ -108,17 +107,8 @@ class TestMcpRuntime:
         """
         runtime = McpRuntime(_settings(), RequestScopedIdentity())
 
-        handle = auth_context_var.set(_authenticated("alice"))
-        try:
-            alice = runtime.session_for_request()
-        finally:
-            auth_context_var.reset(handle)
-
-        handle = auth_context_var.set(_authenticated("bob"))
-        try:
-            bob = runtime.session_for_request()
-        finally:
-            auth_context_var.reset(handle)
+        alice = runtime.session_for_request(_request(_authenticated("alice")))
+        bob = runtime.session_for_request(_request(_authenticated("bob")))
 
         assert _bearer_of(alice) == "Bearer alice"
         assert _bearer_of(bob) == "Bearer bob"
@@ -150,11 +140,7 @@ class TestForProfile:
         """A session opened under the remote profile carries the request's validated bearer."""
         runtime = McpRuntime.for_profile(remote_rs_settings())
 
-        handle = auth_context_var.set(_authenticated("caller-token"))
-        try:
-            client = runtime.session_for_request()
-        finally:
-            auth_context_var.reset(handle)
+        client = runtime.session_for_request(_request(_authenticated("caller-token")))
 
         assert _bearer_of(client) == "Bearer caller-token"
 
@@ -183,7 +169,7 @@ class TestForProfile:
         runtime = McpRuntime.for_profile(settings)
 
         assert runtime.inbound_auth is None
-        assert _bearer_of(runtime.session_for_request()) == "Bearer env-bearer"
+        assert _bearer_of(runtime.session_for_request(None)) == "Bearer env-bearer"
 
     @pytest.mark.unit
     @patch("pipefy_auth.resolver.load_session", lambda **_: None)
@@ -211,5 +197,5 @@ class TestForProfile:
             runtime = McpRuntime.for_profile(settings)
 
         assert runtime.inbound_auth is None
-        client = runtime.session_for_request()
+        client = runtime.session_for_request(None)
         assert isinstance(client._pipe_service._executor.auth, RefreshableBearerAuth)

@@ -92,12 +92,14 @@ under Streamable HTTP) and so must not mutate the tool table.
 Tools take no client at registration. Each tool function declares a
 `ctx: Context` parameter (FastMCP injects it and keeps it out of the tool's
 input schema) and resolves its client per request with `get_pipefy_client(ctx)`
-(`tools/tool_context.py`), which calls
-`ctx.request_context.lifespan_context.session_for_request()`. Because a session is
-opened per call rather than captured at registration, tools act as whoever is
-calling without re-registering; under the hosted profile each session carries a
-snapshot of that request's validated bearer, so identity is per-request. That is
-why there is no repeat-visit bookkeeping: registration never repeats.
+(`tools/tool_context.py`), which reads the runtime off
+`ctx.request_context.lifespan_context` and opens a session via
+`session_for_request(ctx.request_context.request)`. Because a session is opened per
+call rather than captured at registration, tools act as whoever is calling without
+re-registering; under the hosted profile each session snapshots the bearer off that
+request (the message's own validated request, not a session-wide contextvar frozen
+at `initialize`), so identity is per-request. That is why there is no repeat-visit
+bookkeeping: registration never repeats.
 
 When adding a tool, give it a `ctx: Context` parameter and start its body with
 `client = get_pipefy_client(ctx)`; do not pass a client through `register`.

@@ -19,20 +19,25 @@ def _runtime() -> McpRuntime:
     return McpRuntime(settings, RequestScopedIdentity())
 
 
-def _ctx_with_runtime(runtime: McpRuntime) -> Mock:
-    """A minimal Context whose request_context carries ``runtime``."""
+def _ctx_with_runtime(runtime: McpRuntime, request: object | None = None) -> Mock:
+    """A minimal Context whose request_context carries ``runtime`` and ``request``."""
     ctx = Mock()
-    ctx.request_context = SimpleNamespace(lifespan_context=runtime)
+    ctx.request_context = SimpleNamespace(lifespan_context=runtime, request=request)
     return ctx
 
 
 @pytest.mark.unit
-def test_returns_the_session_opened_by_the_lifespan_runtime():
+def test_returns_the_session_opened_for_the_requests_identity():
     runtime = _runtime()
     client = Mock()
-    runtime.session_for_request = lambda: client
+    request = object()
+    seen: list[object | None] = []
+    runtime.session_for_request = lambda req: seen.append(req) or client
 
-    assert get_pipefy_client(_ctx_with_runtime(runtime)) is client
+    ctx = _ctx_with_runtime(runtime, request)
+    assert get_pipefy_client(ctx) is client
+    # The message's own request is threaded through, so identity is per-caller.
+    assert seen == [request]
 
 
 @pytest.mark.unit
@@ -42,8 +47,8 @@ def test_opens_a_session_per_call():
     first, second = Mock(), Mock()
     ctx = _ctx_with_runtime(runtime)
 
-    runtime.session_for_request = lambda: first
+    runtime.session_for_request = lambda req: first
     assert get_pipefy_client(ctx) is first
 
-    runtime.session_for_request = lambda: second
+    runtime.session_for_request = lambda req: second
     assert get_pipefy_client(ctx) is second

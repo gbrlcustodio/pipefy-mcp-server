@@ -266,12 +266,12 @@ class TestCreateCardTool:
         )
 
         runtime = McpRuntime(settings, RequestScopedIdentity())
-        runtime.session_for_request = lambda: mock_pipefy_client
+        runtime.session_for_request = lambda *_: mock_pipefy_client
 
         ctx = MagicMock()
         ctx.debug = AsyncMock()
         ctx.session = SimpleNamespace(client_params=SimpleNamespace())
-        ctx.request_context = SimpleNamespace(lifespan_context=runtime)
+        ctx.request_context = SimpleNamespace(lifespan_context=runtime, request=None)
 
         result = await mcp._tool_manager.call_tool(
             "create_card",

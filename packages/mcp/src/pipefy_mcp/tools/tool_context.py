@@ -16,8 +16,10 @@ def get_pipefy_client(ctx: Context) -> PipefyClient:
     shared engine and opens a cheap session here, per call, bound to the caller's
     identity (see :meth:`McpRuntime.session_for_request`). Resolving per call, not
     at registration, is what keeps identity request-scoped: under the hosted
-    profile the session carries this request's validated bearer, so concurrent
-    callers each act as themselves without re-registering the tool table.
+    profile the session carries this request's validated bearer, read off the
+    message's own ``request_context.request`` and passed in, so concurrent callers
+    each act as themselves without re-registering the tool table.
     """
-    runtime: McpRuntime = ctx.request_context.lifespan_context
-    return runtime.session_for_request()
+    request_context = ctx.request_context
+    runtime: McpRuntime = request_context.lifespan_context
+    return runtime.session_for_request(request_context.request)

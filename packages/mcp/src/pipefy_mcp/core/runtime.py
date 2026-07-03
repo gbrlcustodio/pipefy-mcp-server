@@ -59,7 +59,9 @@ class StartupIdentity:
             )
         return cls(build_httpx_auth(resolved))
 
-    def resolve(self) -> Auth:
+    def resolve(self, request: object | None) -> Auth:
+        # The startup credential is request-independent; the request the runtime
+        # threads through for the hosted profile has nothing to resolve here.
         return self.auth
 
 
@@ -67,22 +69,24 @@ class StartupIdentity:
 class RequestScopedIdentity:
     """The calling user's identity, resolved per request (hosted profile).
 
-    :meth:`resolve` snapshots the request's validated bearer (read in the caller's
-    task, where FastMCP's ``AuthContextMiddleware`` set the contextvar) into a
-    static credential for that one session, so concurrent callers never share
-    identity. A future auth transform (OBO exchange, a distinct downstream
-    audience) is a change to what this method returns, nothing else.
+    :meth:`resolve` snapshots the validated bearer off the ``request`` the tool
+    handler passes in into a static credential for that one session, so concurrent
+    callers never share identity. Reading the request the handler received (rather
+    than ``auth_context_var``, which stateful Streamable HTTP freezes at the
+    session's first bearer) is what keeps the snapshot on the current caller. A
+    future auth transform (OBO exchange, a distinct downstream audience) is a change
+    to what this method returns, nothing else.
     """
 
-    def resolve(self) -> Auth:
-        return StaticBearerAuth(require_request_bearer())
+    def resolve(self, request: object | None) -> Auth:
+        return StaticBearerAuth(require_request_bearer(request))
 
 
 # The identity source for a request's session, chosen by profile at the
 # composition root (:meth:`McpRuntime.for_profile`): each variant's :meth:`resolve`
-# returns the ``httpx.Auth`` the per-request session binds. Both arms speak that one
-# contract, so the runtime opens every session uniformly with no per-variant
-# branching.
+# takes the in-flight request and returns the ``httpx.Auth`` the per-request session
+# binds. Both arms speak that one contract, so the runtime opens every session
+# uniformly with no per-variant branching.
 AuthSource = StartupIdentity | RequestScopedIdentity
 
 
@@ -162,15 +166,16 @@ class McpRuntime:
             return cls(settings, RequestScopedIdentity(), inbound_auth=inbound_auth)
         return cls(settings, StartupIdentity.from_configured_credential(settings))
 
-    def session_for_request(self) -> PipefyClient:
+    def session_for_request(self, request: object | None) -> PipefyClient:
         """Open a session bound to the current request's identity.
 
         Cheap per call: it binds the identity's resolved ``auth`` to the shared
-        endpoints. Under the hosted profile the identity snapshots the request's
-        validated bearer, so concurrent callers each act as themselves; under the
-        stdio profile it returns the one credential resolved at startup.
+        endpoints. Under the hosted profile the identity snapshots the bearer off
+        ``request`` (the message's own validated request, passed down from the tool
+        handler), so concurrent callers each act as themselves; under the stdio
+        profile the identity ignores it and returns the one startup credential.
         """
-        return self._engine.session(self._identity.resolve())
+        return self._engine.session(self._identity.resolve(request))
 
     @property
     def settings(self) -> Settings:

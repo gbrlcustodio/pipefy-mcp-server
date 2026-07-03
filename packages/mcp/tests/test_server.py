@@ -18,7 +18,7 @@ from pipefy_mcp.server import (
     build_pipefy_mcp_server,
     run_server,
 )
-from pipefy_mcp.settings import McpSettings, Settings
+from pipefy_mcp.settings import McpSettings, Settings, resolve_mcp_settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
@@ -99,7 +99,9 @@ def test_run_server_builds_the_stdio_server_and_runs_it(monkeypatch):
     monkeypatch.delenv("PIPEFY_MCP_PROFILE", raising=False)
     monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
     with patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build:
-        run_server()
+        run_server(
+            resolve_mcp_settings(profile=None, transport=None, host=None, port=None)
+        )
         mock_build.assert_called_once()
         (built_settings,), _ = mock_build.call_args
         assert built_settings.mcp.profile == "local"
@@ -227,7 +229,9 @@ def test_run_server_stdio_logs_the_argv_resolved_profile(monkeypatch):
         patch("pipefy_mcp.server.build_pipefy_mcp_server"),
         patch("pipefy_mcp.server.logger") as mock_logger,
     ):
-        run_server(profile="local")
+        run_server(
+            resolve_mcp_settings(profile="local", transport=None, host=None, port=None)
+        )
 
     logged = " ".join(str(call.args) for call in mock_logger.info.call_args_list)
     assert "local" in logged
@@ -245,7 +249,11 @@ def test_run_server_local_profile_over_http_serves_without_inbound_auth():
     with patch(
         "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
     ) as mock_build:
-        run_server(profile="local", transport="http", host="127.0.0.1", port=9200)
+        run_server(
+            resolve_mcp_settings(
+                profile="local", transport="http", host="127.0.0.1", port=9200
+            )
+        )
 
     mock_build.assert_called_once()
     (built_settings,), _ = mock_build.call_args
@@ -265,7 +273,11 @@ def test_run_server_remote_profile_defaults_to_http_transport(
     with patch(
         "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
     ) as mock_build:
-        run_server(profile="remote", host="127.0.0.1", port=9300)
+        run_server(
+            resolve_mcp_settings(
+                profile="remote", transport=None, host="127.0.0.1", port=9300
+            )
+        )
 
     fake_app.run.assert_called_once_with("streamable-http")
     (built_settings,), _ = mock_build.call_args
@@ -279,7 +291,11 @@ def test_run_server_http_builds_the_app_and_serves_over_streamable_http(remote_r
     with patch(
         "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
     ) as mock_build:
-        run_server(profile="remote", transport="http", host="127.0.0.1", port=9123)
+        run_server(
+            resolve_mcp_settings(
+                profile="remote", transport="http", host="127.0.0.1", port=9123
+            )
+        )
 
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.profile == "remote"
@@ -301,7 +317,11 @@ def test_run_server_remote_without_resource_server_fails_fast(monkeypatch):
     """
     monkeypatch.delenv("PIPEFY_MCP_RS_RESOURCE_SERVER_URL", raising=False)
     with pytest.raises(RuntimeError, match="requires a resource server"):
-        run_server(profile="remote", transport="http", host="127.0.0.1", port=9123)
+        run_server(
+            resolve_mcp_settings(
+                profile="remote", transport="http", host="127.0.0.1", port=9123
+            )
+        )
 
 
 @pytest.mark.unit
@@ -315,7 +335,11 @@ def test_run_server_http_fills_host_and_port_from_settings_when_unset(
     with patch(
         "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
     ) as mock_build:
-        run_server(profile="remote", transport="http")
+        run_server(
+            resolve_mcp_settings(
+                profile="remote", transport="http", host=None, port=None
+            )
+        )
 
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.host == "127.0.0.1"
@@ -329,7 +353,11 @@ def test_run_server_http_respects_an_explicit_zero_port(remote_rs_env):
     with patch(
         "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
     ) as mock_build:
-        run_server(profile="remote", transport="http", host="127.0.0.1", port=0)
+        run_server(
+            resolve_mcp_settings(
+                profile="remote", transport="http", host="127.0.0.1", port=0
+            )
+        )
 
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.port == 0
@@ -340,7 +368,11 @@ def test_run_server_http_refuses_non_loopback_before_building(remote_rs_env):
     """The loopback guard fires before the app is built or served."""
     with patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build:
         with pytest.raises(RuntimeError, match="Refusing to serve"):
-            run_server(profile="remote", transport="http", host="0.0.0.0", port=9123)
+            run_server(
+                resolve_mcp_settings(
+                    profile="remote", transport="http", host="0.0.0.0", port=9123
+                )
+            )
 
     mock_build.assert_not_called()
 

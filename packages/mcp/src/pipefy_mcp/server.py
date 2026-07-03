@@ -8,7 +8,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.runtime import McpRuntime
-from pipefy_mcp.settings import Settings, resolve_mcp_settings
+from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
 
@@ -126,27 +126,22 @@ def _assert_safe_http_bind(*, host: str) -> None:
     )
 
 
-def run_server(
-    *,
-    profile: str | None = None,
-    transport: str | None = None,
-    host: str | None = None,
-    port: int | None = None,
-) -> None:
+def run_server(settings: Settings) -> None:
     """Run the Pipefy MCP server. The single serve entry point for both transports.
 
-    The launch flags are resolved once through :func:`resolve_mcp_settings` (argv
-    beats ``PIPEFY_MCP_*``), which fills the profile-derived transport default and
-    rejects an incompatible pair. ``transport == "stdio"`` speaks MCP over stdio;
-    ``transport == "http"`` serves over Streamable HTTP on ``host``/``port``
-    (defaulting to ``PIPEFY_MCP_HOST`` / ``PIPEFY_MCP_PORT``), restricted to a
-    loopback bind until the hosted on-behalf-of profile lands (see
-    :func:`_assert_safe_http_bind`).
+    Takes a fully-resolved :class:`Settings`. The console entry point resolves the
+    launch flags through :func:`resolve_mcp_settings` (argv beats ``PIPEFY_MCP_*``,
+    filling the profile-derived transport default and rejecting an incompatible
+    pair) and passes the result, so this module reads no process globals.
 
-    ``profile == "remote"`` selects the default-deny remote-safe tool surface and
-    validates an inbound bearer per request; it requires a configured resource
-    server (:meth:`McpRuntime.for_profile` fails fast otherwise). ``local`` registers
-    every tool and runs as the one startup credential.
+    ``settings.mcp.transport == "stdio"`` speaks MCP over stdio; ``"http"`` serves
+    over Streamable HTTP on ``host``/``port``, restricted to a loopback bind until
+    the hosted on-behalf-of profile lands (see :func:`_assert_safe_http_bind`).
+
+    ``settings.mcp.profile == "remote"`` selects the default-deny remote-safe tool
+    surface and validates an inbound bearer per request; it requires a configured
+    resource server (:meth:`McpRuntime.for_profile` fails fast otherwise). ``local``
+    registers every tool and runs as the one startup credential.
 
     The server is built here, at startup rather than at import. Building registers
     every tool and reads the profile, so building at import would make
@@ -159,17 +154,11 @@ def run_server(
     profile has no resource server). They differ only in the transport ``run`` and
     HTTP's bind concerns.
     """
-    # The composition root: argv folds into the launch surface, the rest comes from
-    # the environment, so the builder receives one fully-resolved Settings and this
-    # module reads no process globals.
-    resolved = resolve_mcp_settings(
-        profile=profile, transport=transport, host=host, port=port
-    )
-    mcp = resolved.mcp
+    mcp = settings.mcp
 
     if mcp.transport == "stdio":
         logger.info("Starting Pipefy MCP server over stdio (profile=%s)", mcp.profile)
-        build_pipefy_mcp_server(resolved).run()
+        build_pipefy_mcp_server(settings).run()
         return
 
     # The remote profile validates a per-request bearer; a local server over
@@ -186,4 +175,4 @@ def run_server(
     )
     _assert_safe_http_bind(host=mcp.host)
 
-    build_pipefy_mcp_server(resolved).run("streamable-http")
+    build_pipefy_mcp_server(settings).run("streamable-http")

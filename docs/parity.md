@@ -124,11 +124,11 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `get_pipe_report_filterable_fields` | `pipefy report-pipe filterable-fields` | shipped | Reports domain. |
 | `get_pipe_reports` | `pipefy report-pipe list` | shipped | Reports domain. |
 | `get_portal` | `pipefy portal get` | shipped | Interfaces schema; read-only; includes `published`. |
-| `get_start_form_fields` | `pipefy pipe start-form` | shipped | — |
+| `get_start_form_fields` | `pipefy pipe start-form` | shipped | optional ``--required-only``. |
 | `get_table` | `pipefy table get` | shipped | — |
 | `get_table_record` | `pipefy record get` | shipped | — |
 | `get_table_records` | `pipefy record find` | shipped | (omit `field_id`/`field_value` in `--filter`; uses ``--first`` / ``--after``). |
-| `get_table_relations` | `pipefy relation table list` | shipped | — |
+| `get_table_relations` | `pipefy relation table list` | shipped | ``--ids`` CSV of table-relation IDs (not database ``table_id``). |
 | `get_tables` | `pipefy table list --ids` | shipped | name search uses the same command without ``--ids``. |
 | `get_webhooks` | `pipefy webhook list` | shipped | — |
 | `introspect_mutation` | `pipefy introspect mutation` | shipped | (JSON default; optional `--rich`). |

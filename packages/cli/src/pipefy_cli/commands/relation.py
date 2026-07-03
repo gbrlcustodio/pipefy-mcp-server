@@ -117,7 +117,7 @@ def relation_table_list(
 ) -> None:
     """Load table relations by ID (Pipefy root ``table_relations``).
 
-    Do not pass a database table ID — only **table relation** identifiers
+    Do not pass a database table ID; only table relation identifiers
     (the link object between tables). Obtain these IDs from the Pipefy UI,
     saved metadata, or GraphQL/introspection; ``relation pipe list`` does
     not return them (``get_pipe_relations`` is a different API).

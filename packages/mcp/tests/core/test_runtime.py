@@ -2,9 +2,9 @@ import time
 from unittest.mock import Mock, patch
 
 import pytest
+from _rs_fixtures import remote_rs_settings
 from pipefy_auth import (
     AuthSettings,
-    JwtValidationSettings,
     RefreshableBearerAuth,
     StaticBearerAuth,
     TokenResponse,
@@ -19,27 +19,13 @@ from pipefy_mcp.core.runtime import (
     RequestScopedIdentity,
     StartupIdentity,
 )
-from pipefy_mcp.settings import McpSettings, ResourceServerSettings, Settings
-
-_RS_ISSUER = "https://idp.example.com/realms/x"
-_RS_RESOURCE = "https://mcp.example.com/mcp"
+from pipefy_mcp.settings import McpSettings, Settings
 
 
 def _settings() -> Settings:
     return Settings(
         pipefy=PipefySettings(base_url="https://api.pipefy.com"),
         auth=AuthSettings(),
-    )
-
-
-def _remote_rs_settings() -> Settings:
-    """Remote profile with a fully-configured resource server (no network at build)."""
-    return Settings(
-        pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-        auth=AuthSettings(),
-        mcp=McpSettings(profile="remote"),
-        rs=ResourceServerSettings(resource_server_url=_RS_RESOURCE),
-        jwt=JwtValidationSettings(issuer_url=_RS_ISSUER, jwks_uri=f"{_RS_ISSUER}/jwks"),
     )
 
 
@@ -134,7 +120,7 @@ class TestForProfile:
             raise AssertionError("remote must not resolve a startup credential")
 
         with patch("pipefy_mcp.core.runtime.resolve_pipefy_auth", _poison):
-            runtime = McpRuntime.for_profile(_remote_rs_settings())
+            runtime = McpRuntime.for_profile(remote_rs_settings())
 
         assert runtime.inbound_auth is not None
         assert isinstance(

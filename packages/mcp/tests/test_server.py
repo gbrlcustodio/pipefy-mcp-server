@@ -3,11 +3,12 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from _rs_fixtures import RS_ISSUER, RS_JWKS_URI, RS_RESOURCE, remote_rs_settings
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_auth import AuthSettings, JwtValidationSettings
+from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.server import (
@@ -17,12 +18,8 @@ from pipefy_mcp.server import (
     build_pipefy_mcp_server,
     run_server,
 )
-from pipefy_mcp.settings import McpSettings, ResourceServerSettings, Settings
+from pipefy_mcp.settings import McpSettings, Settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
-
-_RS_ISSUER = "https://idp.example.com/realms/x"
-_RS_RESOURCE = "https://mcp.example.com/mcp"
-
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
     pipefy=PipefySettings(base_url="https://api.pipefy.com"),
@@ -37,19 +34,9 @@ _REMOTE_PROFILE_SETTINGS = _MINIMAL_PIPEFY_SETTINGS.model_copy(
 
 # A fully-configured remote deployment: the remote profile plus the resource-server
 # identity and JWT validation config. The runtime's ``for_profile`` builds the
-# inbound ``(verifier, auth)`` pair from these with no network at build (the
-# explicit ``jwks_uri`` skips OIDC discovery, and the explicit ``issuer_url`` needs
-# no login-issuer fallback), so builder tests can exercise inbound auth without
-# creds or a mocked runtime.
-_REMOTE_RS_SETTINGS = _MINIMAL_PIPEFY_SETTINGS.model_copy(
-    update={
-        "mcp": McpSettings(profile="remote"),
-        "rs": ResourceServerSettings(resource_server_url=_RS_RESOURCE),
-        "jwt": JwtValidationSettings(
-            issuer_url=_RS_ISSUER, jwks_uri="https://idp.example.com/jwks"
-        ),
-    }
-)
+# inbound ``(verifier, auth)`` pair from these with no network at build, so builder
+# tests can exercise inbound auth without creds or a mocked runtime.
+_REMOTE_RS_SETTINGS = remote_rs_settings()
 
 
 @pytest.fixture
@@ -61,9 +48,9 @@ def remote_rs_env(monkeypatch):
     values as a configured deployment). The explicit ``JWKS_URI`` skips OIDC
     discovery, so building the resource server does no network I/O.
     """
-    monkeypatch.setenv("PIPEFY_MCP_RS_RESOURCE_SERVER_URL", _RS_RESOURCE)
-    monkeypatch.setenv("PIPEFY_JWT_ISSUER_URL", _RS_ISSUER)
-    monkeypatch.setenv("PIPEFY_JWT_JWKS_URI", "https://idp.example.com/jwks")
+    monkeypatch.setenv("PIPEFY_MCP_RS_RESOURCE_SERVER_URL", RS_RESOURCE)
+    monkeypatch.setenv("PIPEFY_JWT_ISSUER_URL", RS_ISSUER)
+    monkeypatch.setenv("PIPEFY_JWT_JWKS_URI", RS_JWKS_URI)
 
 
 @pytest.fixture
@@ -373,7 +360,7 @@ def test_build_with_resource_server_wires_inbound_auth():
     """The remote profile with a configured RS wires FastMCP's auth + token verifier."""
     app = build_pipefy_mcp_server(_REMOTE_RS_SETTINGS)
     assert app.settings.auth is not None
-    assert str(app.settings.auth.resource_server_url).rstrip("/") == _RS_RESOURCE
+    assert str(app.settings.auth.resource_server_url).rstrip("/") == RS_RESOURCE
 
 
 def _asgi_client(app):
@@ -405,6 +392,6 @@ async def test_http_serves_protected_resource_metadata():
         resp = await client.get("/.well-known/oauth-protected-resource/mcp")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["resource"].rstrip("/") == _RS_RESOURCE
+    assert body["resource"].rstrip("/") == RS_RESOURCE
     advertised = [s.rstrip("/") for s in body["authorization_servers"]]
-    assert _RS_ISSUER in advertised
+    assert RS_ISSUER in advertised

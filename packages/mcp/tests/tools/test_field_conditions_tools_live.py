@@ -38,7 +38,7 @@ from pipefy_mcp.settings import settings
 if not pipefy_live_configured():
     pytest.skip("live MCP tests require Pipefy credentials", allow_module_level=True)
 
-mcp_server = build_pipefy_mcp_server()
+mcp_server = build_pipefy_mcp_server(settings)
 
 
 @pytest.mark.integration
@@ -54,7 +54,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
         )
     phase_id = int(phase_raw)
 
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=120),
@@ -104,7 +104,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
     condition_id_created: str | None = None
     deleted_successfully = False
     try:
-        with patch("pipefy_mcp.server.settings", settings):
+        with patch("pipefy_mcp.settings.settings", settings):
             async with create_client_session(
                 mcp_server,
                 read_timeout_seconds=timedelta(seconds=120),
@@ -126,7 +126,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
         condition_id_created = created.get("condition_id")
         assert condition_id_created, created
 
-        with patch("pipefy_mcp.server.settings", settings):
+        with patch("pipefy_mcp.settings.settings", settings):
             async with create_client_session(
                 mcp_server,
                 read_timeout_seconds=timedelta(seconds=120),
@@ -142,7 +142,7 @@ async def test_live_field_condition_tools_only_happy_path(extract_payload):
         deleted_successfully = True
     finally:
         if condition_id_created and not deleted_successfully:
-            with patch("pipefy_mcp.server.settings", settings):
+            with patch("pipefy_mcp.settings.settings", settings):
                 async with create_client_session(
                     mcp_server,
                     read_timeout_seconds=timedelta(seconds=120),

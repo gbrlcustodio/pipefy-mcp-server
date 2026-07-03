@@ -39,7 +39,7 @@ from pipefy_mcp.settings import settings
 if not pipefy_live_configured():
     pytest.skip("live MCP tests require Pipefy credentials", allow_module_level=True)
 
-mcp_server = build_pipefy_mcp_server()
+mcp_server = build_pipefy_mcp_server(settings)
 
 _LEGACY_TASK6_PIPE_ID = "TASK6_SIGNOFF_PIPE_ID"
 _LEGACY_TASK6_PHASE_ID = "TASK6_SIGNOFF_PHASE_ID"
@@ -90,7 +90,7 @@ async def test_live_get_pipe_then_get_ai_agents(extract_payload):
             "(see module docstring)"
         )
 
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=90),
@@ -108,7 +108,7 @@ async def test_live_get_pipe_then_get_ai_agents(extract_payload):
     phases = pipe.get("phases")
     assert isinstance(phases, list), "pipe.phases should be a list"
 
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=90),
@@ -136,7 +136,7 @@ async def test_live_get_ai_agent_when_env_set(extract_payload):
             "Set PIPE_CONFIG_SIGNOFF_AGENT_UUID to run get_ai_agent live check (optional)"
         )
 
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=60),
@@ -164,7 +164,7 @@ async def test_live_get_phase_fields_includes_internal_id_and_uuid(
             "(phase with fields — see test_field_conditions_tools_live.py)"
         )
 
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=90),

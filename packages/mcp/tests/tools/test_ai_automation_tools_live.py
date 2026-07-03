@@ -43,7 +43,7 @@ from pipefy_mcp.settings import settings
 if not pipefy_live_configured():
     pytest.skip("live MCP tests require Pipefy credentials", allow_module_level=True)
 
-mcp_server = build_pipefy_mcp_server()
+mcp_server = build_pipefy_mcp_server(settings)
 
 
 @pytest.mark.integration
@@ -68,7 +68,7 @@ async def test_live_create_ai_automation_omits_condition_uses_default_placeholde
     token = uuid.uuid4().hex[:10]
     name = f"MCP AI auto live {token}"
 
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=120),
@@ -90,7 +90,7 @@ async def test_live_create_ai_automation_omits_condition_uses_default_placeholde
     automation_id = str(payload.get("automation_id") or "").strip()
     assert automation_id, f"Missing automation_id in payload: {payload!r}"
 
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=120),

@@ -29,7 +29,7 @@ from pipefy_mcp.server import (
     build_pipefy_mcp_server,
     run_server,
 )
-from pipefy_mcp.settings import ResourceServerSettings, Settings
+from pipefy_mcp.settings import McpSettings, ResourceServerSettings, Settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
 
 _RS_ISSUER = "https://idp.example.com/realms/x"
@@ -81,17 +81,25 @@ _MINIMAL_PIPEFY_SETTINGS = Settings(
     auth=AuthSettings(),
 )
 
-# A valid remote deployment: the resource-server URL (and an issuer to validate
-# against) are configured, so `run_server` builds a resource server and the remote
-# profile acts on behalf of the caller. Serving `remote` without this fails fast.
-_REMOTE_RS_SETTINGS = Settings(
-    pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-    auth=AuthSettings(),
-    rs=ResourceServerSettings(resource_server_url=_RS_RESOURCE),
-    jwt=JwtValidationSettings(
-        issuer_url=_RS_ISSUER, jwks_uri="https://idp.example.com/jwks"
-    ),
+# The same minimal settings under the remote profile, for builder tests that need
+# the default-deny remote-safe surface without going through run_server.
+_REMOTE_PROFILE_SETTINGS = _MINIMAL_PIPEFY_SETTINGS.model_copy(
+    update={"mcp": McpSettings(profile="remote")}
 )
+
+
+@pytest.fixture
+def remote_rs_env(monkeypatch):
+    """Configure the resource-server env so the remote profile resolves an RS.
+
+    ``resolve_mcp_settings`` builds the rs/jwt models from the environment, so the
+    remote profile's mandatory resource server comes from these vars (the same
+    values as a configured deployment). The explicit ``JWKS_URI`` skips OIDC
+    discovery, so building the resource server does no network I/O.
+    """
+    monkeypatch.setenv("PIPEFY_MCP_RS_RESOURCE_SERVER_URL", _RS_RESOURCE)
+    monkeypatch.setenv("PIPEFY_JWT_ISSUER_URL", _RS_ISSUER)
+    monkeypatch.setenv("PIPEFY_JWT_JWKS_URI", "https://idp.example.com/jwks")
 
 
 @pytest.fixture
@@ -191,11 +199,11 @@ class TestSelectAuthSource:
 async def test_register_tools(mocked_runtime):
     """The full Pipefy tool surface is reachable through an MCP session.
 
-    Builds its own app with an explicit ``remote_mode=False`` (so the ambient
-    ``PIPEFY_MCP_REMOTE_MODE`` cannot change the surface) under ``mocked_runtime``
-    (so entering the lifespan does not resolve real auth).
+    Builds its own app from local-profile settings (so the ambient environment
+    cannot change the surface) under ``mocked_runtime`` (so entering the lifespan
+    does not resolve real auth).
     """
-    app = build_pipefy_mcp_server(remote_mode=False)
+    app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
     session = create_client_session(
         app,
         read_timeout_seconds=timedelta(seconds=10),
@@ -217,7 +225,10 @@ def test_run_server_builds_the_stdio_server_and_runs_it(monkeypatch):
     monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
     with patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build:
         run_server()
-        mock_build.assert_called_once_with(remote_mode=False)
+        mock_build.assert_called_once()
+        (built_settings,), _ = mock_build.call_args
+        assert built_settings.mcp.profile == "local"
+        assert built_settings.mcp.transport == "stdio"
         mock_build.return_value.run.assert_called_once_with()
 
 
@@ -227,7 +238,7 @@ def test_run_server_builds_the_stdio_server_and_runs_it(monkeypatch):
 @pytest.mark.unit
 def test_build_server_registers_the_full_surface(mocked_runtime):
     """The default (local) profile registers every Pipefy tool up front."""
-    app = build_pipefy_mcp_server(remote_mode=False)
+    app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
     registered = {t.name for t in app._tool_manager.list_tools()}
     assert registered == set(PIPEFY_TOOL_NAMES)
 
@@ -235,7 +246,7 @@ def test_build_server_registers_the_full_surface(mocked_runtime):
 @pytest.mark.unit
 def test_build_server_remote_mode_exposes_only_the_remote_safe_seed(mocked_runtime):
     """The remote profile withholds every tool not marked remote-safe."""
-    app = build_pipefy_mcp_server(remote_mode=True)
+    app = build_pipefy_mcp_server(_REMOTE_PROFILE_SETTINGS)
     exposed = {t.name for t in app._tool_manager.list_tools()} & PIPEFY_TOOL_NAMES
     assert 0 < len(exposed) < len(PIPEFY_TOOL_NAMES)
     assert "get_organization" in exposed
@@ -254,7 +265,7 @@ def test_second_registration_pass_is_rejected_by_collision_preflight(mocked_runt
     to forbid. This is why registration runs once, at construction, and the
     lifespan (which Streamable HTTP re-enters per session) never re-registers.
     """
-    app = build_pipefy_mcp_server(remote_mode=False)
+    app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
     with pytest.raises(RuntimeError, match="already exist"):
         _register_pipefy_tools(app, remote_mode=False)
 
@@ -356,60 +367,56 @@ def test_run_server_local_profile_over_http_serves_without_inbound_auth():
     (inbound bearer validation) is built even when serving over HTTP.
     """
     fake_app = MagicMock()
-    with (
-        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
-        patch(
-            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-        ) as mock_build,
-    ):
+    with patch(
+        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+    ) as mock_build:
         run_server(profile="local", transport="http", host="127.0.0.1", port=9200)
 
-    mock_build.assert_called_once_with(
-        remote_mode=False, host="127.0.0.1", port=9200, resource_server=None
-    )
+    mock_build.assert_called_once()
+    (built_settings,), kwargs = mock_build.call_args
+    assert built_settings.mcp.profile == "local"
+    assert built_settings.mcp.host == "127.0.0.1"
+    assert built_settings.mcp.port == 9200
+    assert kwargs["resource_server"] is None
     fake_app.run.assert_called_once_with("streamable-http")
 
 
 @pytest.mark.unit
-def test_run_server_remote_profile_defaults_to_http_transport(monkeypatch):
+def test_run_server_remote_profile_defaults_to_http_transport(
+    monkeypatch, remote_rs_env
+):
     """``--profile remote`` with no ``--transport`` serves HTTP (profile-derived default)."""
     monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
     fake_app = MagicMock()
-    with (
-        patch("pipefy_mcp.server.settings", _REMOTE_RS_SETTINGS),
-        patch(
-            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-        ) as mock_build,
-    ):
+    with patch(
+        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+    ) as mock_build:
         run_server(profile="remote", host="127.0.0.1", port=9300)
 
     fake_app.run.assert_called_once_with("streamable-http")
-    _, kwargs = mock_build.call_args
-    assert kwargs["remote_mode"] is True
+    (built_settings,), _ = mock_build.call_args
+    assert built_settings.mcp.profile == "remote"
 
 
 @pytest.mark.unit
-def test_run_server_http_builds_the_app_and_serves_over_streamable_http():
+def test_run_server_http_builds_the_app_and_serves_over_streamable_http(remote_rs_env):
     """The remote HTTP path builds through the shared builder with a resource server."""
     fake_app = MagicMock()
-    with (
-        patch("pipefy_mcp.server.settings", _REMOTE_RS_SETTINGS),
-        patch(
-            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-        ) as mock_build,
-    ):
+    with patch(
+        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+    ) as mock_build:
         run_server(profile="remote", transport="http", host="127.0.0.1", port=9123)
 
-    _, kwargs = mock_build.call_args
-    assert kwargs["remote_mode"] is True
-    assert kwargs["host"] == "127.0.0.1"
-    assert kwargs["port"] == 9123
+    (built_settings,), kwargs = mock_build.call_args
+    assert built_settings.mcp.profile == "remote"
+    assert built_settings.mcp.host == "127.0.0.1"
+    assert built_settings.mcp.port == 9123
     assert kwargs["resource_server"] is not None
     fake_app.run.assert_called_once_with("streamable-http")
 
 
 @pytest.mark.unit
-def test_run_server_remote_without_resource_server_fails_fast():
+def test_run_server_remote_without_resource_server_fails_fast(monkeypatch):
     """``--profile remote`` with no RESOURCE_SERVER_URL fails fast, never builds the app.
 
     The remote profile acts on behalf of the caller, so it needs a per-request
@@ -417,10 +424,8 @@ def test_run_server_remote_without_resource_server_fails_fast():
     per-request identity, and silently falling back to the single startup
     credential would defeat the profile, so startup is refused.
     """
-    with (
-        patch("pipefy_mcp.server.settings", _MINIMAL_PIPEFY_SETTINGS),
-        patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build,
-    ):
+    monkeypatch.delenv("PIPEFY_MCP_RS_RESOURCE_SERVER_URL", raising=False)
+    with patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build:
         with pytest.raises(RuntimeError, match="requires a resource server"):
             run_server(profile="remote", transport="http", host="127.0.0.1", port=9123)
 
@@ -428,47 +433,40 @@ def test_run_server_remote_without_resource_server_fails_fast():
 
 
 @pytest.mark.unit
-def test_run_server_http_fills_host_and_port_from_settings_when_unset(monkeypatch):
+def test_run_server_http_fills_host_and_port_from_settings_when_unset(
+    monkeypatch, remote_rs_env
+):
     """Unset host/port resolve to the configured PIPEFY_MCP_HOST / PIPEFY_MCP_PORT."""
     monkeypatch.delenv("PIPEFY_MCP_HOST", raising=False)
     monkeypatch.delenv("PIPEFY_MCP_PORT", raising=False)
     fake_app = MagicMock()
-    with (
-        patch("pipefy_mcp.server.settings", _REMOTE_RS_SETTINGS),
-        patch(
-            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-        ) as mock_build,
-    ):
+    with patch(
+        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+    ) as mock_build:
         run_server(profile="remote", transport="http")
 
-    _, kwargs = mock_build.call_args
-    assert kwargs["host"] == "127.0.0.1"
-    assert kwargs["port"] == 8000
+    (built_settings,), _ = mock_build.call_args
+    assert built_settings.mcp.host == "127.0.0.1"
+    assert built_settings.mcp.port == 8000
 
 
 @pytest.mark.unit
-def test_run_server_http_respects_an_explicit_zero_port():
+def test_run_server_http_respects_an_explicit_zero_port(remote_rs_env):
     """``port=0`` (let the OS pick) must not be swallowed as a falsy default."""
     fake_app = MagicMock()
-    with (
-        patch("pipefy_mcp.server.settings", _REMOTE_RS_SETTINGS),
-        patch(
-            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-        ) as mock_build,
-    ):
+    with patch(
+        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+    ) as mock_build:
         run_server(profile="remote", transport="http", host="127.0.0.1", port=0)
 
-    _, kwargs = mock_build.call_args
-    assert kwargs["port"] == 0
+    (built_settings,), _ = mock_build.call_args
+    assert built_settings.mcp.port == 0
 
 
 @pytest.mark.unit
-def test_run_server_http_refuses_non_loopback_before_building():
+def test_run_server_http_refuses_non_loopback_before_building(remote_rs_env):
     """The loopback guard fires before the app is built or served."""
-    with (
-        patch("pipefy_mcp.server.settings", _REMOTE_RS_SETTINGS),
-        patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build,
-    ):
+    with patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build:
         with pytest.raises(RuntimeError, match="Refusing to serve"):
             run_server(profile="remote", transport="http", host="0.0.0.0", port=9123)
 
@@ -481,7 +479,7 @@ def test_run_server_http_refuses_non_loopback_before_building():
 @pytest.mark.unit
 def test_stdio_build_has_no_inbound_auth(mocked_runtime):
     """The stdio profile builds with no inbound auth wired into FastMCP."""
-    app = build_pipefy_mcp_server(remote_mode=False)
+    app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
     assert app.settings.auth is None
 
 
@@ -489,7 +487,7 @@ def test_stdio_build_has_no_inbound_auth(mocked_runtime):
 def test_build_with_resource_server_wires_inbound_auth(mocked_runtime):
     """An enabled resource-server pair wires FastMCP's auth + token verifier."""
     app = build_pipefy_mcp_server(
-        remote_mode=True, resource_server=_resource_server_pair()
+        _REMOTE_PROFILE_SETTINGS, resource_server=_resource_server_pair()
     )
     assert app.settings.auth is not None
     assert str(app.settings.auth.resource_server_url).rstrip("/") == _RS_RESOURCE
@@ -508,7 +506,7 @@ async def test_http_unauthenticated_request_gets_401_challenge(mocked_runtime):
     network) is needed: the challenge points at the protected-resource metadata.
     """
     app = build_pipefy_mcp_server(
-        remote_mode=True, resource_server=_resource_server_pair()
+        _REMOTE_PROFILE_SETTINGS, resource_server=_resource_server_pair()
     )
     async with _asgi_client(app) as client:
         resp = await client.post(
@@ -522,7 +520,7 @@ async def test_http_unauthenticated_request_gets_401_challenge(mocked_runtime):
 async def test_http_serves_protected_resource_metadata(mocked_runtime):
     """The RFC 9728 metadata route is served at the resource's well-known path."""
     app = build_pipefy_mcp_server(
-        remote_mode=True, resource_server=_resource_server_pair()
+        _REMOTE_PROFILE_SETTINGS, resource_server=_resource_server_pair()
     )
     async with _asgi_client(app) as client:
         resp = await client.get("/.well-known/oauth-protected-resource/mcp")

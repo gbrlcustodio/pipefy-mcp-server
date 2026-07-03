@@ -37,7 +37,7 @@ from tools.conftest import build_tool_test_server
 if not pipefy_live_configured():
     pytest.skip("live MCP tests require Pipefy credentials", allow_module_level=True)
 
-mcp_server = build_pipefy_mcp_server()
+mcp_server = build_pipefy_mcp_server(settings)
 
 
 def _live_pipefy_client() -> PipefyClient:
@@ -210,7 +210,7 @@ async def test_live_pipeclaw_mcp_upload_attachment_to_card(
     file_path = tmp_path / file_name
     file_path.write_bytes(body)
 
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=120),

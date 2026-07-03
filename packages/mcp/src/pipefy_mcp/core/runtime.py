@@ -103,3 +103,8 @@ class McpRuntime:
         self.pipefy_client: PipefyClient = PipefyClient(
             settings=settings.pipefy, auth=identity.auth, surface="mcp"
         )
+
+    @property
+    def settings(self) -> Settings:
+        """The resolved settings this runtime was built from."""
+        return self._settings

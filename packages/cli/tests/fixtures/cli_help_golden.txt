@@ -2956,23 +2956,52 @@ Usage: pipefy usage execution-metrics [OPTIONS]
  paging with ``--after``.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --organization,--org          TEXT     Organization ID (numeric org id,   │
-│                                           same as in the Pipefy URL).        │
-│                                           [required]                         │
-│    --automation          -a      TEXT     Automation ID to fetch metrics for │
-│                                           (repeat for multiple; omit to      │
-│                                           fetch all automations in the       │
-│                                           organization).                     │
-│    --repo                        TEXT     Optional pipe/repo ID to scope the │
-│                                           query.                             │
-│    --period                      TEXT     FIFTEEN_MINUTES | SIXTY_MINUTES |  │
-│                                           TWELVE_HOURS | TWENTY_FOUR_HOURS   │
-│                                           [default: SIXTY_MINUTES]           │
-│    --first                       INTEGER  Page size (1-50). [default: 50]    │
-│    --after                       TEXT     Cursor from a previous page's      │
-│                                           page_info.endCursor.               │
+│ *  --organization,--org                    TEXT     Organization ID (numeric │
+│                                                     org id, same as in the   │
+│                                                     Pipefy URL).             │
+│                                                     [required]               │
+│    --automation          -a                TEXT     Automation ID to fetch   │
+│                                                     metrics for (repeat for  │
+│                                                     multiple; omit to fetch  │
+│                                                     all automations in the   │
+│                                                     organization).           │
+│    --repo                                  TEXT     Optional pipe/repo ID to │
+│                                                     scope the query.         │
+│    --action                                TEXT     Action ID to filter by   │
+│                                                     (repeat for multiple).   │
+│    --event                                 TEXT     Filter by trigger event: │
+│                                                     card_moved |             │
+│                                                     field_updated |          │
+│                                                     card_created | scheduler │
+│                                                     | sla_based |            │
+│                                                     card_left_phase |        │
+│                                                     card_inbox_received_ema… │
+│                                                     | all_children_in_phase  │
+│                                                     | http_response_received │
+│                                                     | manually_triggered.    │
+│    --active                  --inactive             Filter enabled           │
+│                                                     (--active) or disabled   │
+│                                                     (--inactive)             │
+│                                                     automations.             │
+│    --search                                TEXT     Free-text match on       │
+│                                                     automation name.         │
+│    --sort-by                               TEXT     Sort field: created_at | │
+│                                                     name.                    │
+│    --sort-order                            TEXT     Sort direction: asc |    │
+│                                                     desc.                    │
+│    --period                                TEXT     FIFTEEN_MINUTES |        │
+│                                                     SIXTY_MINUTES |          │
+│                                                     TWELVE_HOURS |           │
+│                                                     TWENTY_FOUR_HOURS        │
+│                                                     [default: SIXTY_MINUTES] │
+│    --first                                 INTEGER  Page size (1-50).        │
+│                                                     [default: 50]            │
+│    --after                                 TEXT     Cursor from a previous   │
+│                                                     page's                   │
+│                                                     page_info.endCursor.     │
 │    --json                -j                                                  │
-│    --help                                 Show this message and exit.        │
+│    --help                                           Show this message and    │
+│                                                     exit.                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP webhook

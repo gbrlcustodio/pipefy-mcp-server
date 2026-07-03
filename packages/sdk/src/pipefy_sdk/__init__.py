@@ -36,7 +36,10 @@ from pipefy_sdk.models import (
 )
 from pipefy_sdk.models.form import create_form_model
 from pipefy_sdk.queries.observability_queries import (
+    AUTOMATION_EVENT_IDS,
     AUTOMATION_EXECUTION_METRICS_PERIODS,
+    AUTOMATION_SORT_BY,
+    AUTOMATION_SORT_ORDER,
 )
 from pipefy_sdk.services.automation_graphql_types import (
     AutomationActionRow,
@@ -63,8 +66,11 @@ from pipefy_sdk.settings import PipefySettings
 __all__ = [
     "__version__",
     "AiAgentGraphPayload",
+    "AUTOMATION_EVENT_IDS",
     "AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE",
     "AUTOMATION_EXECUTION_METRICS_PERIODS",
+    "AUTOMATION_SORT_BY",
+    "AUTOMATION_SORT_ORDER",
     "Attachment",
     "AttachmentTarget",
     "AttachmentUploadError",

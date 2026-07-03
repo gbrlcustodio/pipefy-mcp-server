@@ -95,6 +95,22 @@ def _build_usage_variables(
     return variables
 
 
+def _build_sort_criteria(
+    sort_by: str | None, sort_order: str | None
+) -> dict[str, str] | None:
+    """Assemble an ``AutomationSortCriteria`` input, or ``None`` when unset.
+
+    Each field is included only when provided, so a caller may sort by field
+    alone, order alone, or both.
+    """
+    sort: dict[str, str] = {}
+    if sort_by is not None:
+        sort["by"] = sort_by
+    if sort_order is not None:
+        sort["order"] = sort_order
+    return sort or None
+
+
 def _build_execution_metrics_variables(
     organization_id: str,
     automation_ids: list[str] | None,
@@ -103,6 +119,12 @@ def _build_execution_metrics_variables(
     period: str,
     first: int,
     after: str | None,
+    action_ids: list[str] | None = None,
+    event_id: str | None = None,
+    active: bool | None = None,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str | None = None,
 ) -> dict[str, Any]:
     """Build the execution-metrics variables, omitting optional filters that are ``None``."""
     variables: dict[str, Any] = {
@@ -114,6 +136,17 @@ def _build_execution_metrics_variables(
         variables["automationIds"] = automation_ids
     if repo_id is not None:
         variables["repoId"] = repo_id
+    if action_ids is not None:
+        variables["actionIds"] = action_ids
+    if event_id is not None:
+        variables["eventId"] = event_id
+    if active is not None:
+        variables["active"] = active
+    if search is not None:
+        variables["search"] = search
+    sort = _build_sort_criteria(sort_by, sort_order)
+    if sort is not None:
+        variables["sort"] = sort
     if after is not None:
         variables["after"] = after
     return variables
@@ -164,6 +197,12 @@ class ObservabilityService:
         automation_ids: list[str] | None = None,
         *,
         repo_id: str | None = None,
+        action_ids: list[str] | None = None,
+        event_id: str | None = None,
+        active: bool | None = None,
+        search: str | None = None,
+        sort_by: str | None = None,
+        sort_order: str | None = None,
         period: str = "SIXTY_MINUTES",
         first: int = AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
         after: str | None = None,
@@ -177,8 +216,15 @@ class ObservabilityService:
         Args:
             organization_id: Numeric org id, not a UUID.
             automation_ids: IDs to fetch metrics for. ``None`` fetches every
-                automation in the organization (optionally scoped by ``repo_id``).
+                automation in the organization (optionally narrowed by the
+                filters below).
             repo_id: Optional pipe/repo ID to scope the query.
+            action_ids: Optional action IDs to filter by.
+            event_id: Optional trigger event, one of ``AUTOMATION_EVENT_IDS``.
+            active: Optional enabled/disabled filter.
+            search: Optional free-text match on automation name.
+            sort_by: Optional sort field, one of ``AUTOMATION_SORT_BY``.
+            sort_order: Optional sort direction, one of ``AUTOMATION_SORT_ORDER``.
             period: One of ``AUTOMATION_EXECUTION_METRICS_PERIODS`` (default
                 SIXTY_MINUTES, the API default).
             first: Page size (default and max 50).
@@ -191,6 +237,12 @@ class ObservabilityService:
             period=period,
             first=first,
             after=after,
+            action_ids=action_ids,
+            event_id=event_id,
+            active=active,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
         result = await self._executor.execute_query_allow_partial(
             GET_AUTOMATION_EXECUTION_METRICS_QUERY, variables

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import typer
 from pipefy_sdk import (
+    AUTOMATION_EVENT_IDS,
     AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
     AUTOMATION_EXECUTION_METRICS_PERIODS,
+    AUTOMATION_SORT_BY,
+    AUTOMATION_SORT_ORDER,
     PipefyClient,
 )
 
@@ -14,6 +17,9 @@ from pipefy_cli.commands._common import parse_json_object, run_cli_command
 usage_app = typer.Typer(help="AI and automation usage metrics.", no_args_is_help=True)
 
 _EXECUTION_METRICS_PERIOD_HELP = " | ".join(AUTOMATION_EXECUTION_METRICS_PERIODS)
+_EXECUTION_METRICS_EVENT_HELP = " | ".join(AUTOMATION_EVENT_IDS)
+_EXECUTION_METRICS_SORT_BY_HELP = " | ".join(AUTOMATION_SORT_BY)
+_EXECUTION_METRICS_SORT_ORDER_HELP = " | ".join(AUTOMATION_SORT_ORDER)
 
 
 def _parse_date_range(from_iso: str, to_iso: str) -> dict[str, str]:
@@ -105,6 +111,32 @@ def usage_execution_metrics(
     repo: str | None = typer.Option(
         None, "--repo", help="Optional pipe/repo ID to scope the query."
     ),
+    action_ids: list[str] = typer.Option(
+        [],
+        "--action",
+        help="Action ID to filter by (repeat for multiple).",
+    ),
+    event: str | None = typer.Option(
+        None,
+        "--event",
+        help=f"Filter by trigger event: {_EXECUTION_METRICS_EVENT_HELP}.",
+    ),
+    active: bool | None = typer.Option(
+        None,
+        "--active/--inactive",
+        help="Filter enabled (--active) or disabled (--inactive) automations.",
+    ),
+    search: str | None = typer.Option(
+        None, "--search", help="Free-text match on automation name."
+    ),
+    sort_by: str | None = typer.Option(
+        None, "--sort-by", help=f"Sort field: {_EXECUTION_METRICS_SORT_BY_HELP}."
+    ),
+    sort_order: str | None = typer.Option(
+        None,
+        "--sort-order",
+        help=f"Sort direction: {_EXECUTION_METRICS_SORT_ORDER_HELP}.",
+    ),
     period: str = typer.Option(
         "SIXTY_MINUTES",
         "--period",
@@ -131,6 +163,12 @@ def usage_execution_metrics(
             organization,
             automation_ids or None,
             repo_id=repo,
+            action_ids=action_ids or None,
+            event_id=event,
+            active=active,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
             period=period,
             first=first,
             after=after,

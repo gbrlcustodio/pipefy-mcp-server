@@ -348,7 +348,18 @@ async def test_get_automation_execution_metrics_partial_success(
 
     assert result.isError is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
-        "3", ["25", "124"], repo_id="16", period="SIXTY_MINUTES", first=50, after=None
+        "3",
+        ["25", "124"],
+        repo_id="16",
+        action_ids=None,
+        event_id=None,
+        active=None,
+        search=None,
+        sort_by=None,
+        sort_order=None,
+        period="SIXTY_MINUTES",
+        first=50,
+        after=None,
     )
     payload = extract_payload(result)
     assert payload["success"] is True
@@ -375,7 +386,18 @@ async def test_get_automation_execution_metrics_without_ids_fetches_all(
 
     assert result.isError is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
-        "3", None, repo_id=None, period="SIXTY_MINUTES", first=50, after=None
+        "3",
+        None,
+        repo_id=None,
+        action_ids=None,
+        event_id=None,
+        active=None,
+        search=None,
+        sort_by=None,
+        sort_order=None,
+        period="SIXTY_MINUTES",
+        first=50,
+        after=None,
     )
     assert extract_payload(result)["success"] is True
 
@@ -459,10 +481,109 @@ async def test_get_automation_execution_metrics_forwards_pagination(
 
     assert result.isError is False
     mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
-        "3", None, repo_id=None, period="SIXTY_MINUTES", first=50, after="cur-0"
+        "3",
+        None,
+        repo_id=None,
+        action_ids=None,
+        event_id=None,
+        active=None,
+        search=None,
+        sort_by=None,
+        sort_order=None,
+        period="SIXTY_MINUTES",
+        first=50,
+        after="cur-0",
     )
     payload = extract_payload(result)
     assert payload["data"]["page_info"] == {"hasNextPage": True, "endCursor": "cur-1"}
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_execution_metrics_forwards_filters(
+    observability_session, mock_observability_client, extract_payload
+):
+    """All filter params reach the client; search is stripped."""
+    mock_observability_client.get_automation_execution_metrics.return_value = {
+        "automations": [],
+        "partial_errors": [],
+    }
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_execution_metrics",
+            {
+                "organization_id": "3",
+                "action_ids": ["9", "10"],
+                "event_id": "card_moved",
+                "active": True,
+                "search": "  welcome  ",
+                "sort_by": "name",
+                "sort_order": "asc",
+            },
+        )
+
+    assert result.isError is False
+    mock_observability_client.get_automation_execution_metrics.assert_awaited_once_with(
+        "3",
+        None,
+        repo_id=None,
+        action_ids=["9", "10"],
+        event_id="card_moved",
+        active=True,
+        search="welcome",
+        sort_by="name",
+        sort_order="asc",
+        period="SIXTY_MINUTES",
+        first=50,
+        after=None,
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+@pytest.mark.parametrize(
+    ("arg", "value"),
+    [
+        ("event_id", "bogus_event"),
+        ("sort_by", "priority"),
+        ("sort_order", "descending"),
+    ],
+)
+async def test_get_automation_execution_metrics_rejects_invalid_enum(
+    observability_session, mock_observability_client, extract_payload, arg, value
+):
+    """Invalid enum-valued filters are rejected before any API call."""
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_execution_metrics",
+            {"organization_id": "3", arg: value},
+        )
+
+    assert result.isError is False
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert arg in tool_error_message(p)
+    mock_observability_client.get_automation_execution_metrics.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_execution_metrics_rejects_empty_action_ids(
+    observability_session, mock_observability_client, extract_payload
+):
+    """A present-but-empty action_ids list is rejected like automation_ids."""
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_execution_metrics",
+            {"organization_id": "3", "action_ids": []},
+        )
+
+    assert result.isError is False
+    p = extract_payload(result)
+    assert p["success"] is False
+    assert "action_ids" in tool_error_message(p)
+    mock_observability_client.get_automation_execution_metrics.assert_not_awaited()
 
 
 @pytest.mark.anyio

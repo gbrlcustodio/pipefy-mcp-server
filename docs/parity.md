@@ -92,7 +92,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `get_automation` | `pipefy automation get` | shipped | — |
 | `get_automation_actions` | `pipefy automation actions list` | shipped | (`--pipe`). |
 | `get_automation_event_attributes` | `pipefy automation event-attributes` | shipped | Official ``field_map`` event-attribute token catalog. |
-| `get_automation_execution_metrics` | `pipefy usage execution-metrics` | shipped | (`--organization`, optional repeatable `--automation`, optional `--repo`, `--period`). Omit `--automation` to fetch metrics for all automations in the org. Partial success: returns metrics for permitted automations plus `partial_errors` for denied ids. |
+| `get_automation_execution_metrics` | `pipefy usage execution-metrics` | shipped | (`--organization`, optional repeatable `--automation`, optional `--repo`, `--period`; filters `--action`, `--event`, `--active/--inactive`, `--search`, `--sort-by`, `--sort-order`; paging `--first`, `--after`). Omit `--automation` to fetch metrics for all automations in the org. Partial success: returns metrics for permitted automations plus `partial_errors` for denied ids. |
 | `get_automation_events` | `pipefy automation events list` | shipped | (`--pipe`). |
 | `get_automation_jobs_export` | `pipefy automation export status` | shipped | (export id argument). |
 | `get_automation_jobs_export_csv` | `pipefy export automation-jobs-csv` (also `pipefy automation export csv`) | shipped | (export id argument). |

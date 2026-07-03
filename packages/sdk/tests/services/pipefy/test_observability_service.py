@@ -718,3 +718,64 @@ async def test_get_automation_execution_metrics_paginates_with_first_and_after()
     assert variables["first"] == 50
     assert variables["after"] == "cur-0"
     assert result["page_info"] == {"hasNextPage": True, "endCursor": "cur-1"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_forwards_all_filters():
+    """search, active, event_id, action_ids, and sort_by/order map onto the variables."""
+    partial_result = PartialQueryResult(
+        data={"automations": {"edges": [{"node": _metrics_node("25", total_runs=3)}]}},
+        errors=[],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    await service.get_automation_execution_metrics(
+        "3",
+        action_ids=["9", "10"],
+        event_id="card_moved",
+        active=True,
+        search="welcome",
+        sort_by="name",
+        sort_order="asc",
+    )
+
+    _, variables = executor.execute_query_allow_partial.call_args[0]
+    assert variables["actionIds"] == ["9", "10"]
+    assert variables["eventId"] == "card_moved"
+    assert variables["active"] is True
+    assert variables["search"] == "welcome"
+    assert variables["sort"] == {"by": "name", "order": "asc"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_omits_unset_filters():
+    """Unset optional filters are absent from the variables (never sent as nulls)."""
+    partial_result = PartialQueryResult(
+        data={"automations": {"edges": []}},
+        errors=[],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    await service.get_automation_execution_metrics("3")
+
+    _, variables = executor.execute_query_allow_partial.call_args[0]
+    for absent in ("actionIds", "eventId", "active", "search", "sort"):
+        assert absent not in variables
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_partial_sort_criteria():
+    """sort_by alone yields a sort input with only the `by` field set."""
+    partial_result = PartialQueryResult(
+        data={"automations": {"edges": []}},
+        errors=[],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    await service.get_automation_execution_metrics("3", sort_by="created_at")
+
+    _, variables = executor.execute_query_allow_partial.call_args[0]
+    assert variables["sort"] == {"by": "created_at"}

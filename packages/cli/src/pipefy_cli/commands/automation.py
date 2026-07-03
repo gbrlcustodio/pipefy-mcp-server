@@ -105,9 +105,8 @@ def automation_create(
         None,
         "--extra",
         help=(
-            "Optional JSON object: extra CreateAutomationInput fields, using the API "
-            "field names (e.g. action_params, event_params). camelCase aliases such "
-            "as actionParams are accepted and rewritten."
+            "Optional JSON object: extra CreateAutomationInput fields. Top-level keys "
+            "are snake_case (e.g. action_params, event_params); camelCase is also accepted."
         ),
     ),
     json_out: bool = typer.Option(
@@ -142,9 +141,8 @@ def automation_update(
         ...,
         "--extra",
         help=(
-            "JSON object: fields to patch, using the UpdateAutomationInput API field "
-            "names (e.g. action_params, event_params). camelCase aliases such as "
-            "actionParams are accepted and rewritten."
+            "JSON object: UpdateAutomationInput fields to patch. Top-level keys are "
+            "snake_case (e.g. action_params, event_params); camelCase is also accepted."
         ),
     ),
     json_out: bool = typer.Option(

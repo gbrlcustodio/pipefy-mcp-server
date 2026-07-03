@@ -5,7 +5,6 @@ import httpx
 import pytest
 from gql import gql
 from gql.graphql_request import GraphQLRequest
-from gql.transport.exceptions import TransportQueryError
 from gql.transport.httpx import HTTPXAsyncTransport
 from pipefy_auth import StaticBearerAuth
 
@@ -215,8 +214,8 @@ async def test_execute_query_allow_partial_success_carries_no_errors():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_allow_partial_raises_when_no_data():
-    """A response with null data (the lookup failed outright) reraises, not a partial."""
+async def test_execute_query_allow_partial_null_data_yields_empty_result():
+    """A fully null response yields empty data with errors kept; classifying it is the caller's job."""
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
@@ -229,8 +228,10 @@ async def test_execute_query_allow_partial_raises_when_no_data():
 
     with _patched_transport(handler):
         executor = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-        with pytest.raises(TransportQueryError):
-            await executor.execute_query_allow_partial(_sample_query(), {})
+        result = await executor.execute_query_allow_partial(_sample_query(), {})
+
+    assert result.data == {}
+    assert result.errors[0]["message"] == "Couldn't find Organization with 'id'=999"
 
 
 @pytest.mark.unit

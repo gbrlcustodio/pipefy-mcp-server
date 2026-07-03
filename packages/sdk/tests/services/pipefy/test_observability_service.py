@@ -672,6 +672,20 @@ async def test_get_automation_execution_metrics_null_connection_without_errors_r
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_get_automation_execution_metrics_empty_data_raises():
+    """A fully null response (executor hands back empty data) fails through the same decision."""
+    partial_result = PartialQueryResult(
+        data={},
+        errors=[{"message": "Couldn't find Organization with 'id'=999"}],
+    )
+    service, _ = _make_partial_service(partial_result)
+
+    with pytest.raises(ValueError, match="Couldn't find Organization"):
+        await service.get_automation_execution_metrics("999", ["25"])
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_get_automation_execution_metrics_without_ids_omits_filter():
     """Omitting automation_ids drops the automationIds variable so the query returns all."""
     partial_result = PartialQueryResult(

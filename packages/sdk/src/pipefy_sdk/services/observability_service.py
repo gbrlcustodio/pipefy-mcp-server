@@ -166,8 +166,9 @@ def _partial_error(err: dict[str, Any]) -> dict[str, Any]:
 def _normalize_execution_metrics_result(result: PartialQueryResult) -> dict[str, Any]:
     """Split a partial ``automations.executionMetrics`` response into nodes and errors.
 
-    A null ``automations`` connection means the lookup itself failed (bad org, no
-    org access), so it raises ``ValueError``; an empty ``edges`` list (every
+    The sole failure decision for this query: a missing or null ``automations``
+    connection means the lookup itself failed (bad org, no org access, or a fully
+    null response), so it raises ``ValueError``. An empty ``edges`` list (every
     requested automation denied) stays a partial success. ``page_info`` carries
     the connection's ``pageInfo`` for cursor paging.
     """

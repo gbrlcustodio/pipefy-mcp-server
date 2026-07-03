@@ -18,7 +18,7 @@ class PartialQueryResult:
     """GraphQL ``data`` plus the raw per-node error dicts from one response.
 
     Owned by the executor so services and their tests never touch gql objects.
-    ``data`` is always a dict: a response with no data raises instead.
+    ``data`` is always a dict; a fully null response yields an empty one.
     """
 
     data: dict[str, Any]
@@ -171,13 +171,14 @@ class HttpxGraphQLExecutor:
 
         gql raises on any ``errors`` but attaches the partial ``data`` and the raw
         error dicts to the exception; this rebuilds them into a
-        :class:`PartialQueryResult`. A response with no ``data`` at all reraises
-        like :meth:`execute_query`.
+        :class:`PartialQueryResult`. A fully null response yields ``data={}`` with
+        its errors preserved: whether an empty result is a failure is the caller's
+        decision, not the transport's.
         """
         try:
             data = await self._execute_request(query, variables)
         except TransportQueryError as exc:
-            if exc.data is None:
-                self._reraise_graphql_error(exc)
-            return PartialQueryResult(data=exc.data, errors=list(exc.errors or []))
+            return PartialQueryResult(
+                data=exc.data or {}, errors=list(exc.errors or [])
+            )
         return PartialQueryResult(data=data, errors=[])

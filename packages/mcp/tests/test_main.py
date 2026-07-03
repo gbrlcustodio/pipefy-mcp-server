@@ -15,11 +15,13 @@ def test_entrypoint(mocker):
 
 @pytest.mark.unit
 def test_help_skips_server(mocker, capsys):
-    """``--help`` must short-circuit before entering the stdio loop."""
+    """``--help`` prints usage and exits 0 before entering the stdio loop."""
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
-    main(["--help"])
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--help"])
 
+    assert excinfo.value.code == 0
     server_mock.assert_not_called()
     captured = capsys.readouterr()
     assert "pipefy-mcp-server" in captured.out
@@ -29,11 +31,13 @@ def test_help_skips_server(mocker, capsys):
 
 @pytest.mark.unit
 def test_version_skips_server(mocker, capsys):
-    """``--version`` must print the installed version and skip the server."""
+    """``--version`` prints the installed version, exits 0, and skips the server."""
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
-    main(["--version"])
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--version"])
 
+    assert excinfo.value.code == 0
     server_mock.assert_not_called()
     assert capsys.readouterr().out.strip() == __version__
 

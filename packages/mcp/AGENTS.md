@@ -66,8 +66,9 @@ The JWKS/RS256 validation lives in `pipefy_auth` (`JwtValidator`); the MCP adapt
 `auth/resource_server.py` (`JwtTokenVerifier`) maps validated claims onto the
 SDK's `AccessToken`. FastMCP serves the RFC 9728 protected-resource metadata and
 the `401` + `WWW-Authenticate` challenge; `build_resource_server_auth` (same
-module, the composition root) resolves the inbound issuer and pairs the verifier
-with `AuthSettings`, which `server.py` wires into the app.
+module) resolves the inbound issuer and pairs the verifier with `AuthSettings`.
+The runtime (`McpRuntime.for_profile`) calls it for the `remote` profile and holds
+the pair as `inbound_auth`, which `server.py` wires into the app.
 
 **Loopback bind.** `_assert_safe_http_bind` restricts the HTTP transport to a
 loopback bind, unconditionally for now. Per-request on-behalf-of identity now
@@ -105,16 +106,19 @@ Both transports launch through the single `run_server` entry point, which resolv
 the profile/transport once (via `resolve_mcp_settings`) and builds the same app
 through `build_pipefy_mcp_server` (same runtime-bound lifespan, same
 `_register_pipefy_tools`), differing only in the transport `run` and HTTP's bind
-concerns. `build_pipefy_mcp_server` constructs one app-scoped `McpRuntime`
-(`core/runtime.py`) and binds the lifespan to it. The composition root selects
-the identity source (`_select_auth_source`): on the stdio profile it resolves the
-one startup credential and fails fast when none is configured
-(`StartupIdentity.from_configured_credential`), so a missing credential surfaces
-when the server is built at startup, not on the first tool call. The runtime then
-wires its shared client to whichever identity's `httpx.Auth` it was handed. (This
-also means `build_pipefy_mcp_server` resolves the credential, so the live
-integration tests that build the app at import skip themselves when no creds are
-configured.) Wiring the client at construction is safe off the event
+concerns. `build_pipefy_mcp_server` constructs one app-scoped `McpRuntime` via
+`McpRuntime.for_profile` (`core/runtime.py`) and binds the lifespan to it.
+`for_profile` is the composition root's one build step: the `remote` profile picks
+a per-request identity and builds the inbound resource-server `(verifier, auth)`
+pair (failing fast when that profile has no resource server); every other profile
+resolves the one startup credential and fails fast when none is configured
+(`StartupIdentity.from_configured_credential`). So a missing credential (or, under
+`remote`, a missing resource server) surfaces when the server is built at startup,
+not on the first tool call. The runtime wires its shared client to whichever
+identity's `httpx.Auth` it was handed and exposes the inbound pair as
+`inbound_auth`, which `build_pipefy_mcp_server` reads into FastMCP. (This also
+means `build_pipefy_mcp_server` resolves the credential, so the live integration
+tests that build the app at import skip themselves when no creds are configured.) Wiring the client at construction is safe off the event
 loop: `PipefyClient` construction does no network I/O and binds nothing to a
 running loop, because its executors open a fresh per-request transport at call
 time; the client built at startup works on whatever loop later serves requests.

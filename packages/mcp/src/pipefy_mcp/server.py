@@ -7,17 +7,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from mcp.server.fastmcp import FastMCP
 
-from pipefy_mcp.auth import (
-    RequestContextBearerAuth,
-    ResourceServerAuth,
-    build_resource_server_auth,
-)
-from pipefy_mcp.core.runtime import (
-    AuthSource,
-    McpRuntime,
-    RequestScopedIdentity,
-    StartupIdentity,
-)
+from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.settings import Settings, resolve_mcp_settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
@@ -66,23 +56,6 @@ def _make_lifespan(
     return lifespan
 
 
-def _select_auth_source(
-    settings: Settings, resource_server: ResourceServerAuth | None
-) -> AuthSource:
-    """Parse the transport profile into the shared client's identity source.
-
-    The resource-server profile validates a per-request bearer, so the shared
-    client acts on behalf of each caller (:class:`RequestScopedIdentity`, reading
-    the request context per call). Without it (stdio, or the disabled HTTP
-    profile) there is no inbound identity, so the one startup credential is
-    resolved from settings (and fails fast when none is configured); see
-    :meth:`StartupIdentity.from_configured_credential`.
-    """
-    if resource_server is not None:
-        return RequestScopedIdentity(RequestContextBearerAuth())
-    return StartupIdentity.from_configured_credential(settings)
-
-
 def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     """Register every Pipefy tool on ``app`` exactly once, at construction.
 
@@ -99,30 +72,24 @@ def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     registry.apply_remote_profile(remote_mode=remote_mode)
 
 
-def build_pipefy_mcp_server(
-    settings: Settings,
-    *,
-    resource_server: ResourceServerAuth | None = None,
-) -> FastMCP:
+def build_pipefy_mcp_server(settings: Settings) -> FastMCP:
     """Build the FastMCP app with its tools registered once, before serving.
 
     Reads everything from the resolved ``settings`` the composition root
     (:func:`run_server`) hands in: the ``remote`` profile selects the default-deny
     remote-safe tool surface, and ``settings.mcp.host`` / ``settings.mcp.port`` give
-    the HTTP bind (they matter only for the HTTP transport; stdio ignores them). It
-    builds the one app-scoped :class:`McpRuntime` (its identity source chosen by
-    :func:`_select_auth_source` from the profile) and binds the lifespan to it; only
-    the transport ``run`` differs.
+    the HTTP bind (they matter only for the HTTP transport; stdio ignores them).
 
-    ``resource_server`` is the ``(verifier, auth)`` pair from
-    :func:`pipefy_mcp.auth.build_resource_server_auth`. When present, FastMCP
-    validates the inbound bearer per request and serves the resource-server
-    metadata; when ``None`` (stdio, or an HTTP local profile) the app has no
-    inbound auth.
+    The one app-scoped :class:`McpRuntime` is built via
+    :meth:`McpRuntime.for_profile`, which owns both the outbound identity and (under
+    ``remote``) the inbound resource-server ``(verifier, auth)`` pair. When that pair
+    is present FastMCP validates the inbound bearer per request and serves the
+    resource-server metadata; when it is ``None`` (stdio, or a ``local`` HTTP
+    profile) the app has no inbound auth. The lifespan is bound to that runtime; only
+    the transport ``run`` differs.
     """
-    remote_profile = settings.mcp.profile == "remote"
-    verifier, auth = resource_server or (None, None)
-    runtime = McpRuntime(settings, _select_auth_source(settings, resource_server))
+    runtime = McpRuntime.for_profile(settings)
+    verifier, auth = runtime.inbound_auth or (None, None)
     app = FastMCP(
         "pipefy",
         instructions=PIPEFY_INSTRUCTIONS,
@@ -132,7 +99,7 @@ def build_pipefy_mcp_server(
         token_verifier=verifier,
         auth=auth,
     )
-    _register_pipefy_tools(app, remote_mode=remote_profile)
+    _register_pipefy_tools(app, remote_mode=settings.mcp.profile == "remote")
     return app
 
 
@@ -176,18 +143,21 @@ def run_server(
     loopback bind until the hosted on-behalf-of profile lands (see
     :func:`_assert_safe_http_bind`).
 
-    ``profile == "remote"`` selects the default-deny remote-safe tool surface and,
-    when ``resource_server_url`` is configured, validates an inbound bearer per
-    request. ``local`` registers every tool and runs as the one startup credential.
+    ``profile == "remote"`` selects the default-deny remote-safe tool surface and
+    validates an inbound bearer per request; it requires a configured resource
+    server (:meth:`McpRuntime.for_profile` fails fast otherwise). ``local`` registers
+    every tool and runs as the one startup credential.
 
     The server is built here, at startup rather than at import. Building registers
     every tool and reads the profile, so building at import would make
     ``--version``/``--help`` pay the full cost and turn any registration error into
     an import failure.
 
-    Both transports build the same app through :func:`build_pipefy_mcp_server`
-    (same runtime-bound lifespan, same :func:`_register_pipefy_tools`) and differ
-    only in the transport ``run`` and HTTP's bind concerns.
+    Both transports build the same app through :func:`build_pipefy_mcp_server`,
+    which builds the app-scoped runtime via :meth:`McpRuntime.for_profile` (owning
+    the inbound resource-server pair for ``remote`` and failing fast when that
+    profile has no resource server). They differ only in the transport ``run`` and
+    HTTP's bind concerns.
     """
     # The composition root: argv folds into the launch surface, the rest comes from
     # the environment, so the builder receives one fully-resolved Settings and this
@@ -202,35 +172,18 @@ def run_server(
         build_pipefy_mcp_server(resolved).run()
         return
 
-    # The resource server (inbound bearer validation) is only meaningful for the
-    # remote profile; a local server over loopback HTTP trusts its peer and skips
-    # it. The remote profile acts on behalf of the caller, so it needs a
-    # per-request bearer to validate: a configured resource server is mandatory.
-    # Without one the builder returns None and there would be no per-request
-    # identity to act as, so fail fast rather than silently fall back to a single
-    # startup credential.
-    resource_server = None
-    if mcp.profile == "remote":
-        oidc_client = resolved.auth.to_oidc_client()
-        resource_server = build_resource_server_auth(
-            resolved.rs,
-            resolved.jwt,
-            default_issuer_url=oidc_client.issuer_url if oidc_client else None,
-        )
-        if resource_server is None:
-            raise RuntimeError(
-                "the 'remote' profile requires a resource server: set "
-                "PIPEFY_MCP_RS_RESOURCE_SERVER_URL so the server validates a "
-                "per-request bearer and acts on behalf of the caller."
-            )
+    # The remote profile validates a per-request bearer; a local server over
+    # loopback HTTP trusts its peer and wires no inbound auth. The runtime owns that
+    # decision (and the fail-fast when remote has no resource server), so it holds
+    # for a serving remote server: profile == "remote" is exactly when inbound
+    # validation is active.
     logger.info(
         "Starting Pipefy MCP server over HTTP on %s:%d (profile=%s, resource_server=%s)",
         mcp.host,
         mcp.port,
         mcp.profile,
-        "active" if resource_server is not None else "inactive",
+        "active" if mcp.profile == "remote" else "inactive",
     )
     _assert_safe_http_bind(host=mcp.host)
 
-    app = build_pipefy_mcp_server(resolved, resource_server=resource_server)
-    app.run("streamable-http")
+    build_pipefy_mcp_server(resolved).run("streamable-http")

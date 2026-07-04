@@ -85,3 +85,56 @@ def test_root_project_version_re_rejects_missing_version(pyproject: str) -> None
         r'\1"REPLACED"', pyproject, count=1
     )
     assert count == 0, f"expected no match in {pyproject!r}"
+
+
+@pytest.mark.parametrize(
+    ("dep", "text"),
+    [
+        # Unpinned dependency
+        ("pipefy", '    "pipefy",\n'),
+        # Already pinned (re-pin to a new version)
+        ("pipefy", '    "pipefy==0.1.0",\n'),
+        ("pipefy-auth", '    "pipefy-auth==0.2.0-beta.3",\n'),
+    ],
+)
+def test_workspace_dep_pin_re_matches_and_repins(dep: str, text: str) -> None:
+    new_text, count = _bump.workspace_dep_pin_re(dep).subn(
+        rf"\g<1>{dep}==9.9.9\g<2>", text, count=1
+    )
+    assert count == 1
+    assert f'"{dep}==9.9.9"' in new_text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # `pipefy` must not match the longer sibling name
+        '    "pipefy-infra",\n',
+        '    "pipefy-infra==0.1.0",\n',
+        # Unquoted [tool.uv.sources] key
+        "pipefy = { workspace = true }\n",
+        # A package's own name field is `pipefy-cli`, not a bare `pipefy`
+        'name = "pipefy-cli"\n',
+        # Bare mention inside a quoted description
+        'description = "Typer CLI for Pipefy (pipefy)."\n',
+    ],
+)
+def test_workspace_dep_pin_re_pipefy_does_not_overmatch(text: str) -> None:
+    _new_text, count = _bump.workspace_dep_pin_re("pipefy").subn(
+        r"\g<1>pipefy==9.9.9\g<2>", text, count=1
+    )
+    assert count == 0, f"expected no match in {text!r}"
+
+
+def test_workspace_dep_pins_never_list_own_name() -> None:
+    # The re matches a package's own `name = "..."`, so a self-listing would
+    # rewrite the name field. Guard the invariant the docstring relies on.
+    own_names = {
+        "packages/sdk/pyproject.toml": "pipefy",
+        "packages/auth/pyproject.toml": "pipefy-auth",
+        "packages/cli/pyproject.toml": "pipefy-cli",
+        "packages/mcp/pyproject.toml": "pipefy-mcp-server",
+    }
+    for path, deps in _bump.WORKSPACE_DEP_PINS.items():
+        rel = str(path.relative_to(_bump.REPO_ROOT))
+        assert own_names[rel] not in deps

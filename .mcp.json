@@ -3,12 +3,8 @@
     "pipefy": {
       "command": "uvx",
       "args": [
-        "--with",
-        "pipefy @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk",
-        "--with",
-        "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth",
-        "--from",
-        "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/mcp",
+        "--prerelease",
+        "allow",
         "pipefy-mcp-server"
       ]
     }

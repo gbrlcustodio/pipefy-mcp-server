@@ -6,6 +6,8 @@ Releases are versioned in lockstep across workspace members (`pipefy`, `pipefy-m
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
 ## [0.3.0-alpha.1] - 2026-07-04
 
 ### Added

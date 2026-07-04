@@ -114,3 +114,6 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist-pypi/
+          # Idempotent re-runs: a re-pushed tag at an already-published version
+          # skips files already on PyPI instead of failing on PyPI's 400.
+          skip-existing: true

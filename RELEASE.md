@@ -42,6 +42,8 @@ The Release workflow requires the git tag (without leading `v`) to **exactly mat
    git tag -f latest vX.Y.Z && git push --force-with-lease origin latest
    ```
 
+   **Skip this step for a pre-release tag** (`aN` / `bN` / `rcN` or the dashed `-alpha.N` / `-beta.N` forms). `latest` drives default installs, so it must track the newest stable release, not a pre-release.
+
 7. Wait for the **Release** workflow (`.github/workflows/release.yml`) to finish.
 8. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, `pipefy-*.whl`, `pipefy_auth-*.whl`, and `pipefy_infra-*.whl`). Optionally verify install from the tag, for example:
 

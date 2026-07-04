@@ -99,7 +99,7 @@ def test_root_project_version_re_rejects_missing_version(pyproject: str) -> None
 )
 def test_workspace_dep_pin_re_matches_and_repins(dep: str, text: str) -> None:
     new_text, count = _bump.workspace_dep_pin_re(dep).subn(
-        rf"\g<1>{dep}==9.9.9\g<2>", text, count=1
+        rf"\g<1>{dep}==9.9.9\g<1>", text, count=1
     )
     assert count == 1
     assert f'"{dep}==9.9.9"' in new_text
@@ -121,9 +121,26 @@ def test_workspace_dep_pin_re_matches_and_repins(dep: str, text: str) -> None:
 )
 def test_workspace_dep_pin_re_pipefy_does_not_overmatch(text: str) -> None:
     _new_text, count = _bump.workspace_dep_pin_re("pipefy").subn(
-        r"\g<1>pipefy==9.9.9\g<2>", text, count=1
+        r"\g<1>pipefy==9.9.9\g<1>", text, count=1
     )
     assert count == 0, f"expected no match in {text!r}"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_version"),
+    [
+        ('    "pipefy==0.3.0-alpha.1",\n', "0.3.0-alpha.1"),
+        ('    "pipefy==1.2.3",\n', "1.2.3"),
+        # Unpinned: matches, but group 2 is None (verify treats this as missing)
+        ('    "pipefy",\n', None),
+    ],
+)
+def test_workspace_dep_pin_re_captures_pin(
+    text: str, expected_version: str | None
+) -> None:
+    m = _bump.workspace_dep_pin_re("pipefy").search(text)
+    assert m is not None
+    assert m.group(2) == expected_version
 
 
 def test_workspace_dep_pins_never_list_own_name() -> None:

@@ -109,17 +109,21 @@ def write_version_to_all_files(new_version: str) -> None:
 
 
 def workspace_dep_pin_re(dep_name: str) -> re.Pattern[str]:
-    """Match a quoted ``dep_name`` requirement, with or without an existing ``==`` pin.
+    """Match a quoted ``dep_name`` requirement; group 2 captures its ``==`` pin.
+
+    Group 2 is the pinned version, or ``None`` when the requirement is unpinned
+    (``"pipefy"``), so this one pattern serves both the writer (rewrites the
+    pin) and the verifier (reads it, treating ``None`` as unpinned).
 
     The name must fill the entire quoted string, so an unquoted
     ``[tool.uv.sources]`` key (``pipefy = { workspace = true }``) and a bare
     mention inside a description are not matched, and ``pipefy`` does not match
-    ``"pipefy-infra"`` (the trailing quote must follow immediately). A package's
+    ``"pipefy-infra"`` (the closing quote must follow immediately). A package's
     own ``name = "..."`` field IS a full quoted string and would match; that
     collision is avoided by ``WORKSPACE_DEP_PINS`` never listing a package's
     own name (a package cannot depend on itself).
     """
-    return re.compile(rf'(["\']){re.escape(dep_name)}(?:\s*==[^"\']*)?(["\'])')
+    return re.compile(rf'(["\']){re.escape(dep_name)}(?:\s*==([^"\']*))?\1')
 
 
 def write_dep_pins(new_version: str) -> None:
@@ -128,7 +132,7 @@ def write_dep_pins(new_version: str) -> None:
         text = path.read_text(encoding="utf-8")
         for dep in deps:
             text, count = workspace_dep_pin_re(dep).subn(
-                rf"\g<1>{dep}=={new_version}\g<2>",
+                rf"\g<1>{dep}=={new_version}\g<1>",
                 text,
                 count=1,
             )
@@ -276,8 +280,8 @@ def verify_lockstep() -> int:
     for path, deps in WORKSPACE_DEP_PINS.items():
         text = path.read_text(encoding="utf-8")
         for dep in deps:
-            m = re.search(rf'(["\']){re.escape(dep)}==([^"\']+)\1', text)
-            if not m:
+            m = workspace_dep_pin_re(dep).search(text)
+            if not m or m.group(2) is None:
                 print(f"missing pinned {dep!r} dependency in {path}", file=sys.stderr)
                 return 1
             raw[f"{path.relative_to(REPO_ROOT)}::{dep}"] = m.group(2)

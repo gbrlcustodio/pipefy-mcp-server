@@ -143,6 +143,31 @@ def test_workspace_dep_pin_re_captures_pin(
     assert m.group(2) == expected_version
 
 
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        '{\n  "name": "pipefy",\n  "version": "0.2.0-beta.1"\n}\n',
+        # version before name, and with extra whitespace around the colon
+        '{\n  "version" :  "0.2.0-beta.1",\n  "name": "pipefy"\n}\n',
+    ],
+)
+def test_plugin_manifest_version_re_replaces_version(manifest: str) -> None:
+    new_text, count = _bump.PLUGIN_MANIFEST_VERSION_RE.subn(
+        r"\g<prefix>9.9.9\g<suffix>", manifest, count=1
+    )
+    assert count == 1
+    assert '"version"' in new_text and "9.9.9" in new_text
+    # The name key must not be rewritten.
+    assert '"pipefy"' in new_text
+
+
+def test_plugin_manifest_version_matches_real_manifest() -> None:
+    text = _bump.PLUGIN_MANIFEST.read_text(encoding="utf-8")
+    m = _bump.PLUGIN_MANIFEST_VERSION_RE.search(text)
+    assert m is not None
+    assert m.group("value") == _bump.read_sdk_version()
+
+
 def test_workspace_dep_pins_never_list_own_name() -> None:
     # The re matches a package's own `name = "..."`, so a self-listing would
     # rewrite the name field. Guard the invariant the docstring relies on.

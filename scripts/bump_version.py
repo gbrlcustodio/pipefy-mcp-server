@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra, and root workspace meta.
+"""Bump the lockstep workspace version across SDK, MCP, CLI, Auth, Infra, the Claude plugin manifest, and root workspace meta.
 
 After rewriting the version strings, runs ``uv lock`` so the workspace
 lockfile's ``pipefy-workspace`` entry tracks the new version.
@@ -20,6 +20,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ROOT_PYPROJECT = REPO_ROOT / "pyproject.toml"
+PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin/plugin.json"
 INIT_PATHS = (
     REPO_ROOT / "packages/sdk/src/pipefy_sdk/__init__.py",
     REPO_ROOT / "packages/mcp/src/pipefy_mcp/__init__.py",
@@ -60,6 +61,13 @@ ROOT_PROJECT_VERSION_RE = re.compile(
 VERSION_ASSIGN_RE = re.compile(
     r'^(__version__\s*=\s*)["\']([^"\']+)["\']',
     re.MULTILINE,
+)
+
+# The Claude plugin manifest carries the release version too (it is what the
+# marketplace shows), so it moves with every bump. plugin.json has a single
+# top-level "version" key.
+PLUGIN_MANIFEST_VERSION_RE = re.compile(
+    r'(?P<prefix>"version"\s*:\s*")(?P<value>[^"]+)(?P<suffix>")',
 )
 
 CORE_VER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)")
@@ -106,6 +114,17 @@ def write_version_to_all_files(new_version: str) -> None:
         )
         raise ValueError(msg)
     ROOT_PYPROJECT.write_text(new_root, encoding="utf-8")
+
+    manifest_text = PLUGIN_MANIFEST.read_text(encoding="utf-8")
+    new_manifest, manifest_count = PLUGIN_MANIFEST_VERSION_RE.subn(
+        rf"\g<prefix>{new_version}\g<suffix>",
+        manifest_text,
+        count=1,
+    )
+    if manifest_count != 1:
+        msg = f'Expected one "version" key in {PLUGIN_MANIFEST}, replaced {manifest_count}'
+        raise ValueError(msg)
+    PLUGIN_MANIFEST.write_text(new_manifest, encoding="utf-8")
 
 
 def workspace_dep_pin_re(dep_name: str) -> re.Pattern[str]:
@@ -303,6 +322,17 @@ def verify_lockstep() -> int:
             file=sys.stderr,
         )
         return 1
+
+    try:
+        manifest_text = PLUGIN_MANIFEST.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"could not read {PLUGIN_MANIFEST}: {exc}", file=sys.stderr)
+        return 1
+    m = PLUGIN_MANIFEST_VERSION_RE.search(manifest_text)
+    if not m:
+        print(f'missing "version" in {PLUGIN_MANIFEST}', file=sys.stderr)
+        return 1
+    raw[str(PLUGIN_MANIFEST.relative_to(REPO_ROOT))] = m.group("value")
 
     canonical = {label: str(Version(v)) for label, v in raw.items()}
     if len(set(canonical.values())) != 1:

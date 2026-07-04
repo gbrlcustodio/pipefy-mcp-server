@@ -1,4 +1,4 @@
-"""Typer CLI entry surface for Pipefy (pipefy-sdk)."""
+"""Typer CLI entry surface for Pipefy (pipefy)."""
 
 from __future__ import annotations
 

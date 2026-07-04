@@ -1,6 +1,6 @@
 # Release process
 
-Workspace distributions (`pipefy-sdk`, `pipefy-mcp-server`, `pipefy-cli`, `pipefy-auth`, `pipefy-infra`) share a single **lockstep** version string in each package's `__init__.py`. CI fails if those values diverge.
+Workspace distributions (`pipefy`, `pipefy-mcp-server`, `pipefy-cli`, `pipefy-auth`, `pipefy-infra`) share a single **lockstep** version string in each package's `__init__.py`. CI fails if those values diverge.
 
 ## Pre-launch (v0.x): GitHub Release only
 
@@ -43,7 +43,7 @@ The Release workflow requires the git tag (without leading `v`) to **exactly mat
    ```
 
 7. Wait for the **Release** workflow (`.github/workflows/release.yml`) to finish.
-8. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, `pipefy_sdk-*.whl`, `pipefy_auth-*.whl`, and `pipefy_infra-*.whl`). Optionally verify install from the tag, for example:
+8. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, `pipefy-*.whl`, `pipefy_auth-*.whl`, and `pipefy_infra-*.whl`). Optionally verify install from the tag, for example:
 
    ```bash
    uvx --from git+https://github.com/<owner>/<repo>.git@vX.Y.Z --refresh pipefy-cli --version
@@ -74,11 +74,11 @@ uvx --from "git+https://github.com/pipefy/ai-toolkit.git@vX.Y.Z" --refresh pipef
 
 ## v1.0 and later: GitHub Release + PyPI
 
-Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.0.0` or `v1.0.0rc1`), the release workflow also runs **Trusted Publishing** to upload the **`pipefy-cli`** and **`pipefy-mcp-server`** wheels to PyPI via `pypa/gh-action-pypi-publish` (the `pipefy-sdk` wheel is built for the GitHub Release but is **not** uploaded to PyPI until maintainers enable it in the workflow; see **Repository setup** below).
+Same steps as above. For tags whose name starts with **`v1.`** (for example `v1.0.0` or `v1.0.0rc1`), the release workflow also runs **Trusted Publishing** to upload the **`pipefy-cli`** and **`pipefy-mcp-server`** wheels to PyPI via `pypa/gh-action-pypi-publish` (the `pipefy` wheel is built for the GitHub Release but is **not** uploaded to PyPI until maintainers enable it in the workflow; see **Repository setup** below).
 
 **Repository setup (maintainers):**
 
-- Configure [Trusted Publishers](https://docs.pypi.org/trusted-publishers/using-a-publisher/) on PyPI for **`pipefy-cli`** and **`pipefy-mcp-server`** (and `pipefy-sdk` later if you enable it in the workflow).
+- Configure [Trusted Publishers](https://docs.pypi.org/trusted-publishers/using-a-publisher/) on PyPI for **`pipefy-cli`** and **`pipefy-mcp-server`** (and `pipefy` later if you enable it in the workflow).
 - No long-lived PyPI token is required when using OIDC; the workflow requests `id-token: write`.
 
 **After a v1.x tag:**

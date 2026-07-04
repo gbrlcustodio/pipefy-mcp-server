@@ -1,6 +1,6 @@
 # Shared configuration file (`config.toml`)
 
-`pipefy-sdk` and `pipefy-auth` read an optional TOML file in addition to environment variables. The file lets operators pin defaults (base URLs, org IDs, service-account credentials, ...) per host without exporting shell variables on every invocation.
+`pipefy` and `pipefy-auth` read an optional TOML file in addition to environment variables. The file lets operators pin defaults (base URLs, org IDs, service-account credentials, ...) per host without exporting shell variables on every invocation.
 
 This page documents the path, schema, and precedence. The file is strictly optional — settings models work with environment variables and their defaults exactly as before when no file exists.
 

@@ -1,12 +1,12 @@
 # pipefy-cli
 
-Typer-based CLI for Pipefy. Exposes all MCP tool capabilities as terminal commands and scripts. Depends on [`pipefy-sdk`](../sdk/README.md) for GraphQL calls.
+Typer-based CLI for Pipefy. Exposes all MCP tool capabilities as terminal commands and scripts. Depends on [`pipefy`](../sdk/README.md) for GraphQL calls.
 
 ## Install (pre-launch, v0.1 → v0.5)
 
 ```sh
 uvx \
-  --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
+  --with "pipefy @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
   --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
   --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/cli" \
   --refresh pipefy-cli
@@ -16,7 +16,7 @@ Or persistently:
 
 ```sh
 uv tool install \
-  --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
+  --with "pipefy @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
   --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
   "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/cli"
 ```

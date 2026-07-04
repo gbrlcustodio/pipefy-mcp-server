@@ -10,7 +10,7 @@ dependencies = [
     # Workspace resolves versions in dev; PyPI releases stage these wheels alongside CLI/MCP (see release workflow).
     "pipefy-auth",
     "pipefy-infra",
-    "pipefy-sdk",
+    "pipefy",
     "pydantic>=2.13.4,<3",
     "pydantic-settings>=2.8.1",
 ]
@@ -18,7 +18,7 @@ dependencies = [
 [tool.uv.sources]
 pipefy-auth = { workspace = true }
 pipefy-infra = { workspace = true }
-pipefy-sdk = { workspace = true }
+pipefy = { workspace = true }
 
 [project.scripts]
 pipefy-mcp-server = "pipefy_mcp.main:main"

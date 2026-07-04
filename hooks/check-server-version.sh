@@ -20,7 +20,7 @@ manifest="${CLAUDE_PLUGIN_ROOT:-}/.claude-plugin/plugin.json"
 plugin=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -n1)
 [ -n "$plugin" ] || exit 0
 
-installed=$(pipefy-mcp-server --version 2>/dev/null | tr -d '[:space:]') || exit 0
+installed=$(pipefy-mcp-server --version 2>/dev/null | tr -d '[:space:]')
 [ -n "$installed" ] || exit 0
 
 if [ "$installed" != "$plugin" ]; then

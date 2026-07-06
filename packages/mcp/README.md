@@ -5,10 +5,10 @@ MCP server for Pipefy — **152 tools** for AI agents (Cursor, Claude Desktop, C
 ## Install
 
 ```sh
-uvx --prerelease allow pipefy-mcp-server
+uvx pipefy-mcp-server
 ```
 
-`pipefy-mcp-server` and its workspace dependencies (`pipefy`, `pipefy-auth`, `pipefy-infra`) are published to PyPI, so `uvx` resolves the whole set from there. `--prerelease allow` is required while the toolkit ships pre-release versions (the 0.x line); once a stable release exists, `uvx pipefy-mcp-server` resolves it without the flag.
+`pipefy-mcp-server` and its workspace dependencies (`pipefy`, `pipefy-auth`, `pipefy-infra`) are published to PyPI, so `uvx` resolves the whole set from there. While the toolkit ships only pre-release versions (the 0.x line), `uvx` resolves the latest pre-release automatically; once a stable release exists it resolves that instead. Do not pass a global `--prerelease allow`: it also lets transitive dependencies jump to their own pre-releases, which can pull a broken build.
 
 For per-client wiring (Claude Code / Cursor / Claude Desktop / Codex), see [root `README.md#installation`](../../README.md#installation).
 
@@ -40,7 +40,7 @@ Useful when you want to wire the server without editing `~/.claude.json` by hand
 
 ```bash
 claude mcp add --scope project pipefy \
-  -- uvx --prerelease allow pipefy-mcp-server
+  -- uvx pipefy-mcp-server
 ```
 
 Then (repeat for each key you need):

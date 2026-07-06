@@ -3,8 +3,6 @@
     "pipefy": {
       "command": "uvx",
       "args": [
-        "--prerelease",
-        "allow",
         "pipefy-mcp-server"
       ]
     }

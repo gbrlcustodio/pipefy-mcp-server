@@ -180,3 +180,92 @@ def test_workspace_dep_pins_never_list_own_name() -> None:
     for path, deps in _bump.WORKSPACE_DEP_PINS.items():
         rel = str(path.relative_to(_bump.REPO_ROOT))
         assert own_names[rel] not in deps
+
+
+def test_package_pyprojects_derived_from_workspace() -> None:
+    # Derived from [tool.uv.workspace].members, not a second hand-maintained
+    # list, so a new member cannot skip the pin-map reconciliation.
+    assert _bump.PACKAGE_PYPROJECTS
+    for path in _bump.PACKAGE_PYPROJECTS:
+        assert path.exists()
+
+
+def test_verify_pin_map_consistent_with_repo() -> None:
+    # Guards the invariant in CI: WORKSPACE_DEP_PINS lists exactly the
+    # workspace siblings each package actually depends on.
+    assert _bump.verify_pin_map() == []
+
+
+def test_declared_sibling_deps_keeps_only_workspace_members(tmp_path: Path) -> None:
+    members = {"pipefy", "pipefy-auth", "pipefy-infra"}
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        "[project]\n"
+        'name = "pipefy-cli"\n'
+        'version = "0.1.0"\n'
+        "dependencies = [\n"
+        '    "pipefy==0.3.0-alpha.1",\n'
+        '    "pipefy-auth==0.3.0-alpha.1",\n'
+        '    "typer>=0.12",\n'
+        "]\n",
+        encoding="utf-8",
+    )
+    assert _bump.declared_sibling_deps(pyproject, members) == {"pipefy", "pipefy-auth"}
+
+
+def _write_pkg(path: Path, name: str, deps: tuple[str, ...]) -> None:
+    dep_lines = "".join(f'    "{d}",\n' for d in deps)
+    path.write_text(
+        f'[project]\nname = "{name}"\nversion = "0.1.0"\n'
+        f"dependencies = [\n{dep_lines}]\n",
+        encoding="utf-8",
+    )
+
+
+def test_verify_pin_map_flags_unpinned_sibling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sdk = tmp_path / "sdk.toml"
+    infra = tmp_path / "infra.toml"
+    # sdk depends on pipefy-infra, but the pin map has no entry for it.
+    _write_pkg(sdk, "pipefy", ("pipefy-infra==0.1.0",))
+    _write_pkg(infra, "pipefy-infra", ())
+    monkeypatch.setattr(_bump, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(_bump, "PACKAGE_PYPROJECTS", (sdk, infra))
+    monkeypatch.setattr(_bump, "WORKSPACE_DEP_PINS", {})
+
+    errors = _bump.verify_pin_map()
+
+    assert any("missing from WORKSPACE_DEP_PINS" in e for e in errors)
+
+
+def test_verify_pin_map_flags_stale_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sdk = tmp_path / "sdk.toml"
+    infra = tmp_path / "infra.toml"
+    # The map pins pipefy-infra for sdk, but sdk no longer declares it.
+    _write_pkg(sdk, "pipefy", ())
+    _write_pkg(infra, "pipefy-infra", ())
+    monkeypatch.setattr(_bump, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(_bump, "PACKAGE_PYPROJECTS", (sdk, infra))
+    monkeypatch.setattr(_bump, "WORKSPACE_DEP_PINS", {sdk: ("pipefy-infra",)})
+
+    errors = _bump.verify_pin_map()
+
+    assert any("no longer declares" in e for e in errors)
+
+
+def test_verify_pin_map_flags_unknown_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sdk = tmp_path / "sdk.toml"
+    stray = tmp_path / "stray.toml"
+    _write_pkg(sdk, "pipefy", ())
+    monkeypatch.setattr(_bump, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(_bump, "PACKAGE_PYPROJECTS", (sdk,))
+    monkeypatch.setattr(_bump, "WORKSPACE_DEP_PINS", {stray: ("pipefy",)})
+
+    errors = _bump.verify_pin_map()
+
+    assert any("is not a workspace package" in e for e in errors)

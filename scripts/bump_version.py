@@ -29,12 +29,38 @@ INIT_PATHS = (
     REPO_ROOT / "packages/infra/src/pipefy_infra/__init__.py",
 )
 
+
+def _workspace_pyprojects() -> tuple[Path, ...]:
+    """Resolve package pyproject paths from the root ``[tool.uv.workspace]`` members.
+
+    uv is the source of truth for workspace membership: a package it does not
+    know about is never built, locked, or published. Deriving from that list
+    (rather than a second hand-maintained copy) means adding a member cannot
+    silently escape the pin-map reconciliation below. Members may be literal
+    paths or globs (``packages/*``); both resolve here.
+    """
+    data = tomllib.loads(ROOT_PYPROJECT.read_text(encoding="utf-8"))
+    members = data["tool"]["uv"]["workspace"]["members"]
+    paths: list[Path] = []
+    for pattern in members:
+        paths.extend(sorted(REPO_ROOT.glob(f"{pattern}/pyproject.toml")))
+    return tuple(paths)
+
+
+# Every workspace package, derived from uv's member list. verify reconciles
+# WORKSPACE_DEP_PINS against the sibling dependencies each of these actually
+# declares, so a new inter-package dependency that skips the pin map is a CI
+# failure rather than a silently-unpinned sibling in the built wheel.
+PACKAGE_PYPROJECTS: tuple[Path, ...] = _workspace_pyprojects()
+
 # Each published package pins its workspace siblings to the exact lockstep
 # version in its built metadata, so `pip install pipefy-cli==X` pulls its
 # siblings at X rather than a newer sibling that happens to be on PyPI. The
 # [tool.uv.sources] workspace mapping overrides these pins for in-repo dev.
 # Keys are dependency (distribution) names, not import names: the SDK's
-# distribution is `pipefy`.
+# distribution is `pipefy`. A package with no workspace-sibling dependency (the
+# infra leaf) has no entry here. verify_pin_map keeps this in sync with the
+# real dependency lists.
 WORKSPACE_DEP_PINS: dict[Path, tuple[str, ...]] = {
     REPO_ROOT / "packages/sdk/pyproject.toml": ("pipefy-infra",),
     REPO_ROOT / "packages/auth/pyproject.toml": ("pipefy-infra",),
@@ -161,6 +187,76 @@ def write_dep_pins(new_version: str) -> None:
         path.write_text(text, encoding="utf-8")
 
 
+def workspace_members() -> set[str]:
+    """Canonical distribution names of the five workspace packages."""
+    from packaging.utils import canonicalize_name
+
+    return {
+        canonicalize_name(
+            tomllib.loads(path.read_text(encoding="utf-8"))["project"]["name"]
+        )
+        for path in PACKAGE_PYPROJECTS
+    }
+
+
+def declared_sibling_deps(path: Path, members: set[str]) -> set[str]:
+    """Canonical names of the workspace siblings a package's ``[project]`` depends on.
+
+    Reads ``[project.dependencies]`` and keeps the requirements whose
+    distribution name is another workspace member, so it sees exactly the deps
+    that ought to appear in ``WORKSPACE_DEP_PINS`` for this package.
+    """
+    from packaging.requirements import Requirement
+    from packaging.utils import canonicalize_name
+
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    deps = data.get("project", {}).get("dependencies", [])
+    found: set[str] = set()
+    for spec in deps:
+        name = canonicalize_name(Requirement(spec).name)
+        if name in members:
+            found.add(name)
+    return found
+
+
+def verify_pin_map() -> list[str]:
+    """Assert ``WORKSPACE_DEP_PINS`` matches the sibling deps each package declares.
+
+    The pin map is hand-maintained, so a sibling dependency added to (or
+    removed from) a package's ``pyproject.toml`` without a matching map edit
+    would go unpinned in the built wheel (or leave a pin for a dep that no
+    longer exists). This compares both directions for every package and returns
+    a list of human-readable errors, empty when consistent.
+    """
+    from packaging.utils import canonicalize_name
+
+    members = workspace_members()
+    errors: list[str] = []
+
+    for path in WORKSPACE_DEP_PINS:
+        if path not in PACKAGE_PYPROJECTS:
+            rel = path.relative_to(REPO_ROOT)
+            errors.append(f"WORKSPACE_DEP_PINS key {rel} is not a workspace package")
+
+    for path in PACKAGE_PYPROJECTS:
+        declared = declared_sibling_deps(path, members)
+        mapped = {canonicalize_name(dep) for dep in WORKSPACE_DEP_PINS.get(path, ())}
+        rel = path.relative_to(REPO_ROOT)
+        unpinned = declared - mapped
+        stale = mapped - declared
+        if unpinned:
+            errors.append(
+                f"{rel}: sibling deps declared but missing from WORKSPACE_DEP_PINS: "
+                f"{sorted(unpinned)}"
+            )
+        if stale:
+            errors.append(
+                f"{rel}: WORKSPACE_DEP_PINS lists deps the package no longer declares: "
+                f"{sorted(stale)}"
+            )
+    return errors
+
+
 def parse_core(version: str) -> tuple[int, int, int]:
     """Parse leading ``X.Y.Z`` from a version string."""
     m = CORE_VER_RE.match(version.strip())
@@ -280,12 +376,20 @@ def read_uv_lock_workspace_version() -> str:
 def verify_lockstep() -> int:
     """Assert every version-bearing file holds the same version; print mismatches.
 
+    First reconciles ``WORKSPACE_DEP_PINS`` against the sibling dependencies
+    each package declares (see ``verify_pin_map``), then checks the versions.
     Returns 0 on success, 1 on any mismatch or missing field. Compares
     canonical PEP 440 forms via ``packaging.version.Version`` so the
     pyproject string ``0.2.0-beta.2.dev1`` matches uv.lock's normalized
     ``0.2.0b2.dev1``.
     """
     from packaging.version import Version
+
+    pin_map_errors = verify_pin_map()
+    if pin_map_errors:
+        for err in pin_map_errors:
+            print(err, file=sys.stderr)
+        return 1
 
     raw: dict[str, str] = {}
     for path in INIT_PATHS:

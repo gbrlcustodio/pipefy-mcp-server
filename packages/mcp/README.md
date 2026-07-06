@@ -2,17 +2,13 @@
 
 MCP server for Pipefy — **152 tools** for AI agents (Cursor, Claude Desktop, Claude Code, Codex, and any MCP-compatible client). Depends on [`pipefy`](../sdk/README.md) for all GraphQL and API logic.
 
-## Install (pre-launch, v0.1 → v0.5)
+## Install
 
 ```sh
-uvx \
-  --with "pipefy @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
-  --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
-  --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/mcp" \
-  --refresh pipefy-mcp-server
+uvx pipefy-mcp-server
 ```
 
-The `--with pipefy` / `pipefy-auth` flags are required pre-1.0 because the workspace members are not yet on PyPI. At v1.0 this collapses to `uvx pipefy-mcp-server`.
+`pipefy-mcp-server` and its workspace dependencies (`pipefy`, `pipefy-auth`, `pipefy-infra`) are published to PyPI, so `uvx` resolves the whole set from there. While the toolkit ships only pre-release versions (the 0.x line), `uvx` resolves the latest pre-release automatically; once a stable release exists it resolves that instead. Do not pass a global `--prerelease allow`: it also lets transitive dependencies jump to their own pre-releases, which can pull a broken build.
 
 For per-client wiring (Claude Code / Cursor / Claude Desktop / Codex), see [root `README.md#installation`](../../README.md#installation).
 
@@ -44,11 +40,7 @@ Useful when you want to wire the server without editing `~/.claude.json` by hand
 
 ```bash
 claude mcp add --scope project pipefy \
-  -- uvx \
-       --with "pipefy @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
-       --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
-       --from "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/mcp" \
-       pipefy-mcp-server
+  -- uvx pipefy-mcp-server
 ```
 
 Then (repeat for each key you need):

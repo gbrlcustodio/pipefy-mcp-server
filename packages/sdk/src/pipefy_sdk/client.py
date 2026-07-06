@@ -9,6 +9,7 @@ from httpx import Auth
 
 from pipefy_sdk import __version__
 from pipefy_sdk.ai_pipe_validation import resolve_and_populate_field_refs
+from pipefy_sdk.automation_input import normalize_automation_input_keys
 from pipefy_sdk.automation_preflight import (
     validate_automation_field_map_field_ids,
     validate_traditional_automation_move_transition,
@@ -45,7 +46,10 @@ from pipefy_sdk.services.automation_graphql_types import (
 from pipefy_sdk.services.automation_service import AutomationService
 from pipefy_sdk.services.card_service import CardService
 from pipefy_sdk.services.member_service import MemberService
-from pipefy_sdk.services.observability_service import ObservabilityService
+from pipefy_sdk.services.observability_service import (
+    AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+    ObservabilityService,
+)
 from pipefy_sdk.services.organization_service import OrganizationService
 from pipefy_sdk.services.pipe_config_service import PipeConfigService
 from pipefy_sdk.services.pipe_service import (
@@ -700,12 +704,15 @@ class PipefyClient:
             action_repo_id: Pipe ID where the action executes. Defaults to ``pipe_id``.
                 For cross-pipe actions (``create_connected_card``, ``move_card_to_pipe``),
                 pass the **destination** pipe ID.
-            extra_input: Extra ``CreateAutomationInput`` keys; ``active`` here overrides the ``active`` argument.
+            extra_input: Extra ``CreateAutomationInput`` keys. Top-level keys are snake_case
+                (``action_params``, ``event_params``, ...) and are normalized to the exact API
+                field names before sending. ``active`` here overrides the ``active`` argument.
 
         Raises:
             AutomationPreflightError: When the move-card transition or ``field_map``
                 destination ``fieldId`` is invalid.
         """
+        extra_input = normalize_automation_input_keys(extra_input)
         await validate_traditional_automation_move_transition(
             self, trigger_id, action_id, extra_input
         )
@@ -753,8 +760,12 @@ class PipefyClient:
     ) -> UpdateAutomationMutationResult:
         """Update a traditional automation (optional ``extra_input`` uses UpdateAutomationInput field names).
 
+        Top-level ``extra_input`` keys are snake_case and are normalized to the exact API field
+        names before sending, as in :meth:`create_automation`.
+
         Does not run ``field_map`` or move-transition preflight (those run on ``create_automation`` only).
         """
+        extra_input = normalize_automation_input_keys(extra_input)
         return await self._automation_service.update_automation(
             automation_id, **(extra_input or {})
         )
@@ -1803,6 +1814,60 @@ class PipefyClient:
         """
         return await self._observability_service.get_automations_usage(
             organization_uuid, filter_date, filters=filters, search=search, sort=sort
+        )
+
+    async def get_automation_execution_metrics(
+        self,
+        organization_id: str,
+        automation_ids: list[str] | None = None,
+        *,
+        repo_id: str | None = None,
+        action_ids: list[str] | None = None,
+        event_id: str | None = None,
+        active: bool | None = None,
+        search: str | None = None,
+        sort_by: str | None = None,
+        sort_order: str | None = None,
+        period: str = "SIXTY_MINUTES",
+        first: int = AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+        after: str | None = None,
+    ) -> dict[str, Any]:
+        """Get execution metrics for automations within a rolling period.
+
+        Partial success: returns metrics for the automations this token may read
+        plus a ``partial_errors`` list naming any that failed. ``page_info``
+        carries the cursor for paging past the 50-automation max page.
+
+        Args:
+            organization_id: Numeric org id, not a UUID.
+            automation_ids: IDs to fetch metrics for. Omit to fetch every
+                automation in the organization (optionally narrowed by the
+                filters below).
+            repo_id: Optional pipe/repo ID to scope the query.
+            action_ids: Optional action IDs to filter by.
+            event_id: Optional trigger event, one of ``AUTOMATION_EVENT_IDS``.
+            active: Optional enabled/disabled filter.
+            search: Optional free-text match on automation name.
+            sort_by: Optional sort field, one of ``AUTOMATION_SORT_BY``.
+            sort_order: Optional sort direction, one of ``AUTOMATION_SORT_ORDER``.
+            period: One of ``AUTOMATION_EXECUTION_METRICS_PERIODS`` (default
+                SIXTY_MINUTES, the API default).
+            first: Page size (default and max 50).
+            after: Cursor from the previous page's ``page_info.endCursor``.
+        """
+        return await self._observability_service.get_automation_execution_metrics(
+            organization_id,
+            automation_ids,
+            repo_id=repo_id,
+            action_ids=action_ids,
+            event_id=event_id,
+            active=active,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            period=period,
+            first=first,
+            after=after,
         )
 
     async def get_ai_credit_usage(

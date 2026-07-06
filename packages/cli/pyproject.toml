@@ -1,11 +1,11 @@
 [project]
 name = "pipefy-cli"
 dynamic = ["version"]
-description = "Typer CLI for Pipefy (pipefy-sdk)."
+description = "Typer CLI for Pipefy (pipefy)."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "pipefy-sdk",
+    "pipefy",
     "pipefy-auth",
     "typer>=0.12",
     "rich>=13",
@@ -16,7 +16,7 @@ dependencies = [
 pipefy = "pipefy_cli.main:app"
 
 [tool.uv.sources]
-pipefy-sdk = { workspace = true }
+pipefy = { workspace = true }
 pipefy-auth = { workspace = true }
 
 [dependency-groups]

@@ -14,6 +14,7 @@ from typing import Sequence
 
 from pipefy_mcp import __version__
 from pipefy_mcp.server import run_server
+from pipefy_mcp.settings import resolve_mcp_settings
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -71,25 +72,28 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = _build_parser()
     args, _ = parser.parse_known_args(argv)
 
-    # A cross-field rule argparse cannot express. The settings model rejects it
-    # too, but failing here keeps it a clean usage error (exit 2) at the boundary.
-    if args.profile == "remote" and args.transport == "stdio":
-        parser.error(
-            "the 'remote' profile requires --transport http "
-            "(a per-request bearer has no stdio equivalent)"
-        )
     # An empty --host would reach resolve_mcp_settings as an explicit init-kwarg,
     # displacing the 127.0.0.1 default and later failing the loopback check with a
     # misleading non-loopback error. Reject it as a usage error instead.
     if args.host is not None and not args.host.strip():
         parser.error("--host must not be empty")
 
-    run_server(
-        profile=args.profile,
-        transport=args.transport,
-        host=args.host,
-        port=args.port,
-    )
+    # The cross-field launch rules (e.g. 'remote' over stdio) live in one place,
+    # the McpSettings validator, surfaced by resolve_mcp_settings as a user-facing
+    # ValueError. Resolve here and render an incompatible pair as a clean usage
+    # error (exit 2). Only the resolution is wrapped: a failure while building or
+    # serving is not a usage error and must surface as itself, not as exit 2.
+    try:
+        resolved = resolve_mcp_settings(
+            profile=args.profile,
+            transport=args.transport,
+            host=args.host,
+            port=args.port,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    run_server(resolved)
 
 
 if __name__ == "__main__":

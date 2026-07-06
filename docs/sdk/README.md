@@ -1,6 +1,6 @@
 # SDK documentation
 
-This tree summarizes how to work with **`pipefy-sdk`**: the vendor GraphQL client, services, models, and queries shared by the MCP server and CLI.
+This tree summarizes how to work with **`pipefy`**: the vendor GraphQL client, services, models, and queries shared by the MCP server and CLI.
 
 ## Using the library
 
@@ -16,4 +16,4 @@ OAuth and endpoint variables are documented in **[`../config.md`](../config.md)*
 
 ## Relationship to MCP and CLI
 
-The SDK has **no** MCP or Typer dependencies. `pipefy-mcp-server` and `pipefy-cli` both depend on `pipefy-sdk` only. Feature parity between MCP tools and CLI commands is tracked in **[`../parity.md`](../parity.md)**.
+The SDK has **no** MCP or Typer dependencies. `pipefy-mcp-server` and `pipefy-cli` both depend on `pipefy` only. Feature parity between MCP tools and CLI commands is tracked in **[`../parity.md`](../parity.md)**.

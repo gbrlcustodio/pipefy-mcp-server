@@ -16,7 +16,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from _shared.live_settings import live_resolved_auth, require_live_creds
+from _shared.live_settings import (
+    live_resolved_auth,
+    pipefy_live_configured,
+    require_live_creds,
+)
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
@@ -27,7 +31,13 @@ from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.attachment_tools import AttachmentTools
 from tools.conftest import build_tool_test_server
 
-mcp_server = build_pipefy_mcp_server()
+# Building the app now resolves the Pipefy credential (the runtime wires its
+# client at construction), so this credential-dependent module skips itself
+# when no live creds are configured rather than failing at collection.
+if not pipefy_live_configured():
+    pytest.skip("live MCP tests require Pipefy credentials", allow_module_level=True)
+
+mcp_server = build_pipefy_mcp_server(settings)
 
 
 def _live_pipefy_client() -> PipefyClient:
@@ -200,7 +210,7 @@ async def test_live_pipeclaw_mcp_upload_attachment_to_card(
     file_path = tmp_path / file_name
     file_path.write_bytes(body)
 
-    with patch("pipefy_mcp.server.settings", settings):
+    with patch("pipefy_mcp.settings.settings", settings):
         async with create_client_session(
             mcp_server,
             read_timeout_seconds=timedelta(seconds=120),

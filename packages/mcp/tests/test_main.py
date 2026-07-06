@@ -58,56 +58,60 @@ def test_unknown_flag_still_starts_server(mocker):
 
 @pytest.mark.unit
 def test_profile_remote_passes_through(mocker):
-    """``--profile remote`` reaches ``run_server``; transport stays unset for it to resolve."""
+    """``--profile remote`` is resolved and the Settings handed to ``run_server``."""
+    resolve_mock = mocker.patch("pipefy_mcp.main.resolve_mcp_settings")
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
     main(["--profile", "remote"])
 
-    server_mock.assert_called_once()
-    _, kwargs = server_mock.call_args
-    assert kwargs["profile"] == "remote"
-    # Unset flags pass through as None; run_server resolves the profile-derived
-    # transport default and the PIPEFY_MCP_* host/port.
-    assert kwargs["transport"] is None
-    assert kwargs["host"] is None
-    assert kwargs["port"] is None
+    # Only the flags actually passed reach resolve_mcp_settings; the rest stay
+    # None so it applies the profile-derived transport and PIPEFY_MCP_* defaults.
+    resolve_mock.assert_called_once_with(
+        profile="remote", transport=None, host=None, port=None
+    )
+    server_mock.assert_called_once_with(resolve_mock.return_value)
 
 
 @pytest.mark.unit
 def test_explicit_transport_passes_through(mocker):
-    """``--transport`` reaches ``run_server`` alongside the profile (e.g. local over http)."""
+    """``--transport`` is resolved alongside the profile (e.g. local over http)."""
+    resolve_mock = mocker.patch("pipefy_mcp.main.resolve_mcp_settings")
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
     main(["--profile", "local", "--transport", "http"])
 
-    _, kwargs = server_mock.call_args
-    assert kwargs["profile"] == "local"
-    assert kwargs["transport"] == "http"
+    resolve_mock.assert_called_once_with(
+        profile="local", transport="http", host=None, port=None
+    )
+    server_mock.assert_called_once_with(resolve_mock.return_value)
 
 
 @pytest.mark.unit
 def test_host_and_port_overrides(mocker):
-    """``--host`` / ``--port`` override the settings defaults."""
+    """``--host`` / ``--port`` reach resolve_mcp_settings as overrides."""
+    resolve_mock = mocker.patch("pipefy_mcp.main.resolve_mcp_settings")
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
     main(["--profile", "remote", "--host", "0.0.0.0", "--port", "9001"])
 
-    _, kwargs = server_mock.call_args
-    assert kwargs["profile"] == "remote"
-    assert kwargs["host"] == "0.0.0.0"
-    assert kwargs["port"] == 9001
+    resolve_mock.assert_called_once_with(
+        profile="remote", transport=None, host="0.0.0.0", port=9001
+    )
+    server_mock.assert_called_once_with(resolve_mock.return_value)
 
 
 @pytest.mark.unit
 def test_host_and_port_equals_form(mocker):
     """``--host=`` / ``--port=`` forms are accepted too."""
+    resolve_mock = mocker.patch("pipefy_mcp.main.resolve_mcp_settings")
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
     main(["--profile", "remote", "--host=127.0.0.2", "--port=9002"])
 
-    _, kwargs = server_mock.call_args
-    assert kwargs["host"] == "127.0.0.2"
-    assert kwargs["port"] == 9002
+    resolve_mock.assert_called_once_with(
+        profile="remote", transport=None, host="127.0.0.2", port=9002
+    )
+    server_mock.assert_called_once_with(resolve_mock.return_value)
 
 
 @pytest.mark.unit
@@ -140,7 +144,11 @@ def test_rejects_unknown_choice(mocker, flag, value):
 
 @pytest.mark.unit
 def test_rejects_remote_over_stdio(mocker):
-    """``--profile remote --transport stdio`` is refused at the argv boundary."""
+    """``--profile remote --transport stdio`` exits 2 without starting the server.
+
+    The rule lives once, in the McpSettings validator; main resolves the flags
+    and surfaces the resulting ValueError as a usage error before run_server.
+    """
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
 
     with pytest.raises(SystemExit) as excinfo:

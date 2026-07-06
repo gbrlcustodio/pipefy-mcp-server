@@ -240,19 +240,20 @@ def resolve_mcp_settings(
     transport: str | None,
     host: str | None,
     port: int | None,
-) -> McpSettings:
-    """Resolve :class:`McpSettings` honoring the launch flags as init-kwargs.
+) -> Settings:
+    """Resolve the full :class:`Settings` honoring the launch flags as init-kwargs.
 
-    The composition root for the launch surface, mirroring
-    :func:`pipefy_cli.settings.resolve_cli_settings`: the flags are folded in as
-    init-kwargs, so argv outranks the environment (``init_kwargs > env > dotenv >
-    config.toml``, per ``settings_customise_sources``). Only the flags actually
-    passed override the environment; the rest fall back to ``PIPEFY_MCP_*`` (or
-    the field defaults). The returned settings have a concrete ``transport`` (the
-    profile-derived default is applied by the model validator).
+    The composition root for the serve path, mirroring
+    :func:`pipefy_cli.settings.resolve_cli_settings`: the launch flags are folded
+    into the ``mcp`` model as init-kwargs, so argv outranks the environment
+    (``init_kwargs > env > dotenv > config.toml``, per ``settings_customise_sources``).
+    Only the flags actually passed override the environment; the rest fall back to
+    ``PIPEFY_MCP_*`` (or the field defaults). The returned ``mcp`` has a concrete
+    ``transport`` (the profile-derived default is applied by the model validator).
 
-    Credential and resource-server config stay sourced from the process
-    environment; this resolves only the launch surface the flags control.
+    The credential, resource-server, and Pipefy models come from the process
+    environment (each nested model's own loading), so the caller receives one
+    fully-resolved ``Settings`` and reads no process globals.
 
     Raises:
         ValueError: On an unknown value or an incompatible profile/transport pair
@@ -268,7 +269,7 @@ def resolve_mcp_settings(
     if port is not None:
         init["port"] = port
     try:
-        return McpSettings(**init)
+        return Settings(mcp=McpSettings(**init))
     except ValidationError as exc:
         raise ValueError(str(exc)) from exc
 

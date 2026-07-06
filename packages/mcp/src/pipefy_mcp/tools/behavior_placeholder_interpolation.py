@@ -1,4 +1,4 @@
-"""Re-export behavior placeholder helpers from ``pipefy-sdk`` (single source of truth).
+"""Re-export behavior placeholder helpers from ``pipefy_sdk`` (single source of truth).
 
 New code should import from ``pipefy_sdk.behavior_placeholders``; this module remains
 for backward compatibility with existing ``pipefy_mcp.tools`` imports.

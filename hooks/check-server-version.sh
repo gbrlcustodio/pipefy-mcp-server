@@ -7,13 +7,33 @@
 # actually reinstalls the binary and re-registers the user-scope server;
 # /pipefy:install only installs the CLI).
 #
-# No-op for users on the pure plugin/uvx path: they have no installed binary,
-# so there is nothing shadowing the plugin and nothing to update.
+# No-op unless that user-scope override is registered: users on the pure
+# plugin/uvx path have no installed binary, and users who installed the binary
+# only for another client (e.g. --client cursor) still run the plugin's uvx
+# server here, so there is nothing shadowing the plugin to nudge about.
 set -eu
 
-# No installed binary means nothing shadows the plugin, so there is no
-# user-scope override that could drift -> nothing to nudge about.
+# Cheap pre-filter: no installed binary means nothing could shadow the plugin.
 command -v pipefy-mcp-server >/dev/null 2>&1 || exit 0
+
+# The precise trigger is a user-scope `pipefy` server whose command is that
+# binary. `command -v` alone is not enough: --client cursor also puts the
+# binary on PATH without registering a Claude Code override, so the plugin's
+# uvx server still runs here and there is nothing to sync. Fall through to no
+# nudge if python3 is missing or the config cannot be read.
+python3 - <<'PY' || exit 0
+import json
+import os
+import sys
+
+try:
+    servers = json.load(open(os.path.expanduser("~/.claude.json"))).get("mcpServers", {})
+except (OSError, ValueError):
+    sys.exit(1)
+entry = servers.get("pipefy") if isinstance(servers, dict) else None
+command = entry.get("command") if isinstance(entry, dict) else None
+sys.exit(0 if command == "pipefy-mcp-server" else 1)
+PY
 
 # Cheap checks first; only spawn the binary (Python cold start) once we have a
 # plugin version to compare against.

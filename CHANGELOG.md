@@ -2,11 +2,13 @@
 
 All notable changes to this repository are documented in this file.
 
-Releases are versioned in lockstep across workspace members (`pipefy-sdk`, `pipefy-mcp-server`, `pipefy-cli`).
+Releases are versioned in lockstep across workspace members (`pipefy`, `pipefy-mcp-server`, `pipefy-cli`).
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+## [0.3.0-alpha.1] - 2026-07-04
 
 ### Added
 
@@ -17,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **SDK**: PyPI distribution renamed from `pipefy-sdk` to `pipefy` (the previous name is refused by PyPI as too similar to the unrelated `pipefysdk`). The import package is unchanged (`pipefy_sdk`); update installs and `--with` / `uv add` / `pip install` references accordingly. The distribution now builds as `pipefy-<version>-*.whl`.
 - **MCP (breaking)**: replaced the `--remote` launch flag with two explicit, orthogonal flags: `--profile {local|remote}` (env `PIPEFY_MCP_PROFILE`) and `--transport {stdio|http}` (env `PIPEFY_MCP_TRANSPORT`). The `PIPEFY_MCP_REMOTE_MODE` env var and the `McpSettings.remote_mode` field are removed; the default-deny remote-safe tool surface now follows `profile == "remote"`. `local` (default) registers every tool; `remote` exposes only the remote-safe surface and validates an inbound bearer per request when a resource-server URL is set. Transport defaults from the profile (`local`->stdio, `remote`->http) and can be set explicitly to run `local` over loopback HTTP; `remote` over stdio is rejected (a per-request bearer has no stdio equivalent). The launch flags are resolved and validated once at startup by the new `resolve_mcp_settings` composition root, so argv outranks `PIPEFY_MCP_*`. The `remote` profile acts on behalf of the validated caller (see the request-scoped identity entry under Added); `local` runs as the one credential resolved at startup.
 - **SDK**: the httpx/gql adapter is split into an auth-less `GraphQLEndpoint` (URL, telemetry headers, error formatting, and the introspected schema cache) and a per-request `AuthenticatedExecutor` that binds one identity's `auth` to an endpoint, replacing `HttpxGraphQLExecutor`. `build_endpoints(settings)` builds the shared, identity-agnostic endpoints; `build_executors(settings, auth)` remains as a bind-in-one-step convenience over it. `PipefyClient` is now a per-request session over shared endpoints: construct it directly for back-compat, or open one via `PipefyEngine.session`.
 - **SDK**: services now receive GraphQL execution through their constructor instead of inheriting it. A narrow `GraphQLExecutor` protocol is the seam; `HttpxGraphQLExecutor` (formerly `BasePipefyClient`) is the only httpx/gql adapter, and `PipefyClient` builds one executor per endpoint via `build_executors` and injects them. Tests inject a fake executor rather than monkeypatching `execute_query`.

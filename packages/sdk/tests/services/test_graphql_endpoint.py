@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -16,6 +17,24 @@ GRAPHQL_URL = "https://api.pipefy.com/graphql"
 
 def _bearer() -> StaticBearerAuth:
     return StaticBearerAuth("test-token")
+
+
+@contextmanager
+def _patched_transport(handler):
+    """Route the executor's gql transport through an ``httpx.MockTransport``.
+
+    Runs the real gql Client and httpx stack, swapping only the network so the
+    executor's actual raise-on-errors behavior is exercised, not a mock's.
+    """
+
+    def transport_factory(**kwargs):
+        kwargs.pop("verify", None)
+        return HTTPXAsyncTransport(**kwargs, transport=httpx.MockTransport(handler))
+
+    with patch(
+        "pipefy_sdk.graphql_executor.HTTPXAsyncTransport", side_effect=transport_factory
+    ):
+        yield
 
 
 def _sample_query() -> GraphQLRequest:
@@ -173,6 +192,75 @@ async def test_execute_bubbles_up_execute_errors_unchanged():
             await endpoint.execute(query, variables, auth=_bearer())
 
     assert exc.value is expected_error
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_allow_partial_returns_data_and_errors_together():
+    """A response mixing data and per-node errors becomes a PartialQueryResult."""
+    partial_body = {
+        "data": {"automations": {"edges": [{"node": {"id": "25"}}]}},
+        "errors": [
+            {
+                "message": "Permission denied",
+                "extensions": {"code": "PERMISSION_DENIED", "automation_id": "124"},
+            }
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=partial_body)
+
+    with _patched_transport(handler):
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        result = await endpoint.execute_allow_partial(
+            _sample_query(), {}, auth=_bearer()
+        )
+
+    assert result.data == {"automations": {"edges": [{"node": {"id": "25"}}]}}
+    assert result.errors[0]["extensions"]["automation_id"] == "124"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_allow_partial_success_carries_no_errors():
+    """An error-free response yields a PartialQueryResult with an empty error list."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"automations": {"edges": []}}})
+
+    with _patched_transport(handler):
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        result = await endpoint.execute_allow_partial(
+            _sample_query(), {}, auth=_bearer()
+        )
+
+    assert result.data == {"automations": {"edges": []}}
+    assert result.errors == []
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_allow_partial_null_data_yields_empty_result():
+    """A fully null response yields empty data with errors kept; classifying it is the caller's job."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "data": None,
+                "errors": [{"message": "Couldn't find Organization with 'id'=999"}],
+            },
+        )
+
+    with _patched_transport(handler):
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        result = await endpoint.execute_allow_partial(
+            _sample_query(), {}, auth=_bearer()
+        )
+
+    assert result.data == {}
+    assert result.errors[0]["message"] == "Couldn't find Organization with 'id'=999"
 
 
 @pytest.mark.unit

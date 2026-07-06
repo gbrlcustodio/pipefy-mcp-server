@@ -75,7 +75,7 @@ jobs:
       run: |
         python -m venv .venv-cli-smoke
         .venv-cli-smoke/bin/pip install dist-packaging-smoke/pipefy_infra-*.whl \
-          dist-packaging-smoke/pipefy_sdk-*.whl \
+          dist-packaging-smoke/pipefy-*.whl \
           dist-packaging-smoke/pipefy_auth-*.whl \
           dist-packaging-smoke/pipefy_cli-*.whl
         .venv-cli-smoke/bin/pipefy --help

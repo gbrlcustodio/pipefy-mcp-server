@@ -100,6 +100,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "get_automation",
         "get_automation_actions",
         "get_automation_event_attributes",
+        "get_automation_execution_metrics",
         "get_automation_events",
         "get_automation_jobs_export",
         "get_automation_jobs_export_csv",

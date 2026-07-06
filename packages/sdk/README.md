@@ -1,10 +1,10 @@
-# pipefy-sdk
+# pipefy
 
 **Vendor API SDK** for Pipefy's GraphQL API: the shared library consumed by `pipefy-mcp-server` and `pipefy-cli` (not a generic “shared utils” layer). It owns HTTP/GraphQL transport, service classes, query constants, Pydantic models, shared settings, exceptions, and utilities.
 
 ## Status
 
-Workspace-internal in v0.1; publishing **`pipefy-sdk`** to PyPI is gated separately from CLI/MCP (see **`RELEASE.md`** Trusted Publishing notes).
+Workspace-internal in v0.1; publishing **`pipefy`** to PyPI is gated separately from CLI/MCP (see **`RELEASE.md`** Trusted Publishing notes).
 
 ## Usage (within the monorepo)
 

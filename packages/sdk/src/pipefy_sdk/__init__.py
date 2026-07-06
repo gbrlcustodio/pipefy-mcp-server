@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.2.0-beta.4"
+__version__ = "0.3.0-alpha.1"
 
 from pipefy_sdk.client import PipefyClient, PipefyEngine
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
@@ -35,6 +35,12 @@ from pipefy_sdk.models import (
     infer_content_type,
 )
 from pipefy_sdk.models.form import create_form_model
+from pipefy_sdk.queries.observability_queries import (
+    AUTOMATION_EVENT_IDS,
+    AUTOMATION_EXECUTION_METRICS_PERIODS,
+    AUTOMATION_SORT_BY,
+    AUTOMATION_SORT_ORDER,
+)
 from pipefy_sdk.services.automation_graphql_types import (
     AutomationActionRow,
     AutomationEventRow,
@@ -42,6 +48,9 @@ from pipefy_sdk.services.automation_graphql_types import (
     AutomationRuleSummary,
 )
 from pipefy_sdk.services.observability_export_csv import download_bytes, stream_bytes
+from pipefy_sdk.services.observability_service import (
+    AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+)
 from pipefy_sdk.services.table_service import (
     UPDATE_TABLE_RECORD_ALLOWED_FIELD_KEYS,
     UPDATE_TABLE_RECORD_FIELDS_ERROR_MESSAGE,
@@ -57,6 +66,11 @@ from pipefy_sdk.settings import PipefySettings
 __all__ = [
     "__version__",
     "AiAgentGraphPayload",
+    "AUTOMATION_EVENT_IDS",
+    "AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE",
+    "AUTOMATION_EXECUTION_METRICS_PERIODS",
+    "AUTOMATION_SORT_BY",
+    "AUTOMATION_SORT_ORDER",
     "Attachment",
     "AttachmentTarget",
     "AttachmentUploadError",

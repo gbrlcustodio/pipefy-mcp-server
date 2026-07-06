@@ -15,7 +15,7 @@ import re
 import subprocess
 import sys
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -105,10 +105,14 @@ def _sdk_pyproject() -> Path:
     """The SDK package pyproject, located by distribution name, not position.
 
     Workspace member order is not guaranteed (a ``packages/*`` glob sorts
-    alphabetically), so the source-of-truth package is found by name.
+    alphabetically), so the source-of-truth package is found by name, matched
+    with the same canonicalization the sibling-dependency checks use.
     """
+    from packaging.utils import canonicalize_name
+
+    target = canonicalize_name(SDK_DIST_NAME)
     for pyproject in PACKAGE_PYPROJECTS:
-        if _load_toml(pyproject)["project"]["name"] == SDK_DIST_NAME:
+        if canonicalize_name(_load_toml(pyproject)["project"]["name"]) == target:
             return pyproject
     msg = f"workspace has no {SDK_DIST_NAME!r} package"
     raise ValueError(msg)
@@ -194,13 +198,9 @@ def write_dep_pins(new_version: str) -> None:
     ``[project.dependencies]``, so a newly added inter-package dependency is
     pinned automatically with no hand-maintained list to update.
     """
-    members = workspace_members()
-    for path in PACKAGE_PYPROJECTS:
-        deps = declared_sibling_deps(path, members)
-        if not deps:
-            continue
+    for path, deps in _packages_with_sibling_deps():
         text = path.read_text(encoding="utf-8")
-        for dep in sorted(deps):
+        for dep in deps:
             text, count = workspace_dep_pin_re(dep).subn(
                 rf"\g<1>{dep}=={new_version}\g<1>",
                 text,
@@ -239,6 +239,19 @@ def declared_sibling_deps(path: Path, members: set[str]) -> set[str]:
         for spec in deps
         if canonicalize_name((req := Requirement(spec)).name) in members
     }
+
+
+def _packages_with_sibling_deps() -> Iterator[tuple[Path, list[str]]]:
+    """Yield each package and its declared workspace-sibling deps, skipping none.
+
+    Shared by the pin writer and the verifier so both walk the workspace and
+    resolve siblings the same way.
+    """
+    members = workspace_members()
+    for path in PACKAGE_PYPROJECTS:
+        deps = sorted(declared_sibling_deps(path, members))
+        if deps:
+            yield path, deps
 
 
 def parse_core(version: str) -> tuple[int, int, int]:
@@ -376,13 +389,9 @@ def verify_lockstep() -> int:
             return 1
         raw[str(path.relative_to(REPO_ROOT))] = m.group(2)
 
-    members = workspace_members()
-    for path in PACKAGE_PYPROJECTS:
-        deps = declared_sibling_deps(path, members)
-        if not deps:
-            continue
+    for path, deps in _packages_with_sibling_deps():
         text = path.read_text(encoding="utf-8")
-        for dep in sorted(deps):
+        for dep in deps:
             m = workspace_dep_pin_re(dep).search(text)
             if not m or m.group(2) is None:
                 print(f"missing pinned {dep!r} dependency in {path}", file=sys.stderr)

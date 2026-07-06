@@ -45,7 +45,10 @@ from pipefy_sdk.services.automation_graphql_types import (
 from pipefy_sdk.services.automation_service import AutomationService
 from pipefy_sdk.services.card_service import CardService
 from pipefy_sdk.services.member_service import MemberService
-from pipefy_sdk.services.observability_service import ObservabilityService
+from pipefy_sdk.services.observability_service import (
+    AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+    ObservabilityService,
+)
 from pipefy_sdk.services.organization_service import OrganizationService
 from pipefy_sdk.services.pipe_config_service import PipeConfigService
 from pipefy_sdk.services.pipe_service import (
@@ -1803,6 +1806,60 @@ class PipefyClient:
         """
         return await self._observability_service.get_automations_usage(
             organization_uuid, filter_date, filters=filters, search=search, sort=sort
+        )
+
+    async def get_automation_execution_metrics(
+        self,
+        organization_id: str,
+        automation_ids: list[str] | None = None,
+        *,
+        repo_id: str | None = None,
+        action_ids: list[str] | None = None,
+        event_id: str | None = None,
+        active: bool | None = None,
+        search: str | None = None,
+        sort_by: str | None = None,
+        sort_order: str | None = None,
+        period: str = "SIXTY_MINUTES",
+        first: int = AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
+        after: str | None = None,
+    ) -> dict[str, Any]:
+        """Get execution metrics for automations within a rolling period.
+
+        Partial success: returns metrics for the automations this token may read
+        plus a ``partial_errors`` list naming any that failed. ``page_info``
+        carries the cursor for paging past the 50-automation max page.
+
+        Args:
+            organization_id: Numeric org id, not a UUID.
+            automation_ids: IDs to fetch metrics for. Omit to fetch every
+                automation in the organization (optionally narrowed by the
+                filters below).
+            repo_id: Optional pipe/repo ID to scope the query.
+            action_ids: Optional action IDs to filter by.
+            event_id: Optional trigger event, one of ``AUTOMATION_EVENT_IDS``.
+            active: Optional enabled/disabled filter.
+            search: Optional free-text match on automation name.
+            sort_by: Optional sort field, one of ``AUTOMATION_SORT_BY``.
+            sort_order: Optional sort direction, one of ``AUTOMATION_SORT_ORDER``.
+            period: One of ``AUTOMATION_EXECUTION_METRICS_PERIODS`` (default
+                SIXTY_MINUTES, the API default).
+            first: Page size (default and max 50).
+            after: Cursor from the previous page's ``page_info.endCursor``.
+        """
+        return await self._observability_service.get_automation_execution_metrics(
+            organization_id,
+            automation_ids,
+            repo_id=repo_id,
+            action_ids=action_ids,
+            event_id=event_id,
+            active=active,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            period=period,
+            first=first,
+            after=after,
         )
 
     async def get_ai_credit_usage(

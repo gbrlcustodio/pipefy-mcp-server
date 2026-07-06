@@ -14,7 +14,7 @@ This policy applies **after v1.0.0**, when published `pipefy-cli` and `pipefy-mc
 
 1. **CLI** (`pipefy`): command and subcommand names, flag names and meanings, documented exit codes, and **machine-readable** output when `--json` is used (documented keys and value types).
 2. **MCP** (`pipefy-mcp-server`): tool names, documented argument shapes, and stable fields in tool responses where `docs/mcp/` describes a contract.
-3. **`pipefy-sdk` public API** (when consumed as a library): symbols and behaviors described as public in `docs/sdk/` and package `__init__` exports.
+3. **`pipefy` public API** (when consumed as a library): symbols and behaviors described as public in `docs/sdk/` and package `__init__` exports.
 
 Responses from Pipefy’s GraphQL API may gain or reshape fields at any time; consumers should ignore unknown keys and follow vendor docs for domain semantics.
 

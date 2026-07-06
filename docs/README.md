@@ -1,6 +1,6 @@
 # Documentation index
 
-Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-toolkit)** monorepo (packages: `pipefy-mcp-server`, `pipefy-cli`, `pipefy-sdk`). Use the sections below to load only the surface you need.
+Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-toolkit)** monorepo (packages: `pipefy-mcp-server`, `pipefy-cli`, `pipefy`). Use the sections below to load only the surface you need.
 
 ## By surface
 
@@ -8,7 +8,7 @@ Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-t
 |------|------|----------|
 | **MCP server** | [`docs/mcp/`](mcp/README.md) | MCP tool reference (`mcp/tools/`), conventions shared by tools |
 | **CLI** | [`docs/cli/`](cli/README.md) | Typer usage patterns, discover-then-execute flows |
-| **SDK** | [`docs/sdk/`](sdk/README.md) | Using `pipefy-sdk` as a library (within or outside the workspace) |
+| **SDK** | [`docs/sdk/`](sdk/README.md) | Using `pipefy` as a library (within or outside the workspace) |
 
 ## Shared (all packages)
 

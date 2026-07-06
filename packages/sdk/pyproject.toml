@@ -1,5 +1,5 @@
 [project]
-name = "pipefy-sdk"
+name = "pipefy"
 dynamic = ["version"]
 description = "Pipefy GraphQL client, models, and services (shared by MCP and CLI)."
 readme = "README.md"

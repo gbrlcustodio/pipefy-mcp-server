@@ -37,7 +37,7 @@ from pipefy_cli.settings import resolve_cli_settings
 
 app = typer.Typer(
     name="pipefy",
-    help="Pipefy CLI (GraphQL via pipefy-sdk).",
+    help="Pipefy CLI (GraphQL via pipefy).",
     no_args_is_help=True,
 )
 

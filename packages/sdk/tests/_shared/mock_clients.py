@@ -8,16 +8,28 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from pipefy_sdk.graphql_executor import GraphQLExecutor
+from pipefy_sdk.graphql_executor import PartialGraphQLExecutor, PartialQueryResult
 
 
-def mock_executor(return_value: dict | None = None, *, side_effect=None) -> MagicMock:
-    """A MagicMock standing in for a :class:`GraphQLExecutor`.
+def mock_executor(
+    return_value: dict | None = None,
+    *,
+    side_effect=None,
+    partial_result: PartialQueryResult | None = None,
+    partial_side_effect=None,
+) -> MagicMock:
+    """A MagicMock standing in for a :class:`PartialGraphQLExecutor`.
 
-    Pass ``return_value`` to set what ``execute_query`` resolves to, or
-    ``side_effect`` for the error-path tests. Assert on the returned mock's
-    ``execute_query`` to verify the query and variables a service sent.
+    Spec'd on the wide protocol so one fake serves every service.
+    ``return_value``/``side_effect`` drive ``execute_query``;
+    ``partial_result``/``partial_side_effect`` drive
+    ``execute_query_allow_partial``. Both are stubbed explicitly: an
+    auto-created method would resolve to a bare MagicMock and feed services
+    silent garbage instead of a failure.
     """
-    mock = MagicMock(spec=GraphQLExecutor)
+    mock = MagicMock(spec=PartialGraphQLExecutor)
     mock.execute_query = AsyncMock(return_value=return_value, side_effect=side_effect)
+    mock.execute_query_allow_partial = AsyncMock(
+        return_value=partial_result, side_effect=partial_side_effect
+    )
     return mock

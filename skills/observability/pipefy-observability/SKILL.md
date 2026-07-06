@@ -3,13 +3,13 @@ name: pipefy-observability
 description: >
   Use this skill when the user wants to check AI agent logs, automation
   execution logs, org-level usage stats, AI credit consumption, or export
-  automation job history. Covers 10 MCP tools.
+  automation job history. Covers 11 MCP tools.
 tags: [pipefy, observability, logs, usage, credits, exports]
 ---
 
 # Observability
 
-Monitor AI agent and automation execution, usage stats, credit consumption, and export job history. **10 MCP tools.**
+Monitor AI agent and automation execution, usage stats, credit consumption, and export job history. **11 MCP tools.**
 
 **CLI status (v0.1):** use MCP tools below. Observability Typer commands are planned for v0.3+.
 
@@ -35,6 +35,7 @@ Monitor AI agent and automation execution, usage stats, credit consumption, and 
 | `get_automation_logs_by_repo` | — (CLI v0.3+) | Yes | Automation logs filtered by pipe UUID. |
 | `get_agents_usage` | — (CLI v0.3+) | Yes | Org-level AI agent execution count and trends. |
 | `get_automations_usage` | — (CLI v0.3+) | Yes | Org-level automation execution stats. |
+| `get_automation_execution_metrics` | `pipefy usage execution-metrics` | Yes | Per-automation execution metrics (totalRuns, success/failure rate, avg duration, lastRun) over a rolling window; partial success returns `partial_errors` for denied ids. |
 | `get_ai_credit_usage` | — (CLI v0.3+) | Yes | AI credit consumption and remaining balance. |
 | `export_automation_jobs` | — (CLI v0.3+) | Yes | Trigger async export of automation job history. |
 | `get_automation_jobs_export` | — (CLI v0.3+) | Yes | Poll export job status (after `export_automation_jobs`). |

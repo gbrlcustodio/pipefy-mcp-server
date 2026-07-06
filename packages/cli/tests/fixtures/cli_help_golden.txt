@@ -1,7 +1,7 @@
 ### HELP _
 Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 
- Pipefy CLI (GraphQL via pipefy-sdk).
+ Pipefy CLI (GraphQL via pipefy).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --base-url                                       TEXT  Override              │
@@ -597,7 +597,12 @@ Usage: pipefy automation create [OPTIONS]
 │    --extra                                     TEXT  Optional JSON object:   │
 │                                                      extra                   │
 │                                                      CreateAutomationInput   │
-│                                                      fields (camelCase).     │
+│                                                      fields. Top-level keys  │
+│                                                      are snake_case (e.g.    │
+│                                                      action_params,          │
+│                                                      event_params);          │
+│                                                      camelCase is also       │
+│                                                      accepted.               │
 │    --json                   -j                       Print machine-readable  │
 │                                                      JSON to stdout.         │
 │    --help                                            Show this message and   │
@@ -816,8 +821,10 @@ Usage: pipefy automation update [OPTIONS] AUTOMATION_ID
 │ *    automation_id      TEXT  Automation rule id. [required]                 │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --extra          TEXT  JSON object: fields to patch                       │
-│                           (UpdateAutomationInput, camelCase).                │
+│ *  --extra          TEXT  JSON object: UpdateAutomationInput fields to       │
+│                           patch. Top-level keys are snake_case (e.g.         │
+│                           action_params, event_params); camelCase is also    │
+│                           accepted.                                          │
 │                           [required]                                         │
 │    --json   -j            Print machine-readable JSON to stdout.             │
 │    --help                 Show this message and exit.                        │
@@ -2914,9 +2921,11 @@ Usage: pipefy usage [OPTIONS] COMMAND [ARGS]...
 │ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ agents        AI agent usage for an org (``get_agents_usage``).              │
-│ automations   Automation usage for an org (``get_automations_usage``).       │
-│ credits       AI credit usage dashboard (``get_ai_credit_usage``).           │
+│ agents              AI agent usage for an org (``get_agents_usage``).        │
+│ automations         Automation usage for an org (``get_automations_usage``). │
+│ execution-metrics   Automation execution metrics                             │
+│                     (``get_automation_execution_metrics``).                  │
+│ credits             AI credit usage dashboard (``get_ai_credit_usage``).     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP usage/agents
@@ -2968,6 +2977,64 @@ Usage: pipefy usage credits [OPTIONS]
 │                                        [default: current_month]              │
 │    --json                -j                                                  │
 │    --help                              Show this message and exit.           │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP usage/execution-metrics
+Usage: pipefy usage execution-metrics [OPTIONS]
+
+ Automation execution metrics (``get_automation_execution_metrics``).
+
+ Returns metrics for the automations the token may read plus a
+ ``partial_errors`` list naming any that were denied, and a ``page_info`` for
+ paging with ``--after``.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --organization,--org                    TEXT     Organization ID (numeric │
+│                                                     org id, same as in the   │
+│                                                     Pipefy URL).             │
+│                                                     [required]               │
+│    --automation          -a                TEXT     Automation ID to fetch   │
+│                                                     metrics for (repeat for  │
+│                                                     multiple; omit to fetch  │
+│                                                     all automations in the   │
+│                                                     organization).           │
+│    --repo                                  TEXT     Optional pipe/repo ID to │
+│                                                     scope the query.         │
+│    --action                                TEXT     Action ID to filter by   │
+│                                                     (repeat for multiple).   │
+│    --event                                 TEXT     Filter by trigger event: │
+│                                                     card_moved |             │
+│                                                     field_updated |          │
+│                                                     card_created | scheduler │
+│                                                     | sla_based |            │
+│                                                     card_left_phase |        │
+│                                                     card_inbox_received_ema… │
+│                                                     | all_children_in_phase  │
+│                                                     | http_response_received │
+│                                                     | manually_triggered.    │
+│    --active                  --inactive             Filter enabled           │
+│                                                     (--active) or disabled   │
+│                                                     (--inactive)             │
+│                                                     automations.             │
+│    --search                                TEXT     Free-text match on       │
+│                                                     automation name.         │
+│    --sort-by                               TEXT     Sort field: created_at | │
+│                                                     name.                    │
+│    --sort-order                            TEXT     Sort direction: asc |    │
+│                                                     desc.                    │
+│    --period                                TEXT     FIFTEEN_MINUTES |        │
+│                                                     SIXTY_MINUTES |          │
+│                                                     TWELVE_HOURS |           │
+│                                                     TWENTY_FOUR_HOURS        │
+│                                                     [default: SIXTY_MINUTES] │
+│    --first                                 INTEGER  Page size (1-50).        │
+│                                                     [default: 50]            │
+│    --after                                 TEXT     Cursor from a previous   │
+│                                                     page's                   │
+│                                                     page_info.endCursor.     │
+│    --json                -j                                                  │
+│    --help                                           Show this message and    │
+│                                                     exit.                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP webhook

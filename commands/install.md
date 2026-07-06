@@ -1,6 +1,6 @@
 ---
 name: install
-description: Install the Pipefy CLI (pipefy-cli + pipefy-auth + pipefy-sdk) as a persistent uv tool.
+description: Install the Pipefy CLI (pipefy-cli + pipefy-auth + pipefy) as a persistent uv tool.
 disable-model-invocation: true
 ---
 
@@ -10,7 +10,7 @@ Otherwise prompt the user to confirm running:
 
 ```
 uv tool install --force \
-  --with "pipefy-sdk @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
+  --with "pipefy @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/sdk" \
   --with "pipefy-auth @ git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/auth" \
   "git+https://github.com/pipefy/ai-toolkit@latest#subdirectory=packages/cli"
 ```

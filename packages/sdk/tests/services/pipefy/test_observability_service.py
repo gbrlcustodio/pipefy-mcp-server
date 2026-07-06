@@ -10,12 +10,14 @@ from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
 from openpyxl import Workbook
 
+from pipefy_sdk.graphql_executor import PartialQueryResult
 from pipefy_sdk.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
     GET_AGENTS_USAGE_QUERY,
     GET_AI_AGENT_LOG_DETAILS_QUERY,
     GET_AI_AGENT_LOGS_QUERY,
     GET_AI_CREDIT_USAGE_QUERY,
+    GET_AUTOMATION_EXECUTION_METRICS_QUERY,
     GET_AUTOMATION_JOBS_EXPORT_QUERY,
     GET_AUTOMATION_LOGS_BY_REPO_QUERY,
     GET_AUTOMATION_LOGS_QUERY,
@@ -29,6 +31,29 @@ def _make_service(return_value):
     executor = mock_executor(return_value)
     service = ObservabilityService(executor=executor)
     return service, executor
+
+
+def _make_partial_service(partial_result):
+    executor = mock_executor(partial_result=partial_result)
+    service = ObservabilityService(executor=executor)
+    return service, executor
+
+
+def _metrics_node(automation_id: str, *, total_runs: int) -> dict:
+    return {
+        "id": automation_id,
+        "name": f"Automation {automation_id}",
+        "event_id": "card_moved",
+        "action_id": "update_card_field",
+        "event_repo": {"id": "16", "name": "Execution Metrics 16"},
+        "executionMetrics": {
+            "lastRun": None,
+            "failureRate": 0.0,
+            "successRate": 0.0,
+            "averageDuration": None,
+            "totalRuns": total_runs,
+        },
+    }
 
 
 @pytest.mark.unit
@@ -517,3 +542,254 @@ async def test_get_automations_usage_resolves_numeric_organization_id():
     assert calls[1][0][0] is GET_AUTOMATIONS_USAGE_QUERY
     assert calls[1][0][1]["organizationUuid"] == EXAMPLE_ORG_UUID
     assert result["automationsUsage"]["totalExecutions"] == 42
+
+
+def _denied_error(automation_id: str) -> dict:
+    return {
+        "message": "Permission denied",
+        "extensions": {
+            "code": "PERMISSION_DENIED",
+            "automation_id": automation_id,
+            "correlation_id": "c86ccfa6",
+        },
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_all_permitted():
+    """Full success: all requested automations return metrics, no partial errors."""
+    partial_result = PartialQueryResult(
+        data={
+            "automations": {
+                "pageInfo": {"hasNextPage": False, "endCursor": "cur-2"},
+                "edges": [
+                    {"node": _metrics_node("25", total_runs=3)},
+                    {"node": _metrics_node("107", total_runs=0)},
+                ],
+            }
+        },
+        errors=[],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    result = await service.get_automation_execution_metrics(
+        "3", ["25", "107"], repo_id="16", period="TWENTY_FOUR_HOURS"
+    )
+
+    executor.execute_query_allow_partial.assert_awaited_once()
+    query, variables = executor.execute_query_allow_partial.call_args[0]
+    assert query is GET_AUTOMATION_EXECUTION_METRICS_QUERY
+    assert variables == {
+        "organizationId": "3",
+        "automationIds": ["25", "107"],
+        "period": "TWENTY_FOUR_HOURS",
+        "repoId": "16",
+        "first": 50,
+    }
+    assert [a["id"] for a in result["automations"]] == ["25", "107"]
+    assert result["automations"][0]["executionMetrics"]["totalRuns"] == 3
+    assert result["partial_errors"] == []
+    assert result["page_info"] == {"hasNextPage": False, "endCursor": "cur-2"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_partial_permission_denied():
+    """Partial success: permitted nodes returned, denied ids surfaced in partial_errors."""
+    partial_result = PartialQueryResult(
+        data={"automations": {"edges": [{"node": _metrics_node("25", total_runs=3)}]}},
+        errors=[_denied_error("124"), _denied_error("65")],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    result = await service.get_automation_execution_metrics("3", ["25", "124", "65"])
+
+    assert [a["id"] for a in result["automations"]] == ["25"]
+    assert result["partial_errors"] == [
+        {
+            "automation_id": "124",
+            "code": "PERMISSION_DENIED",
+            "message": "Permission denied",
+            "correlation_id": "c86ccfa6",
+        },
+        {
+            "automation_id": "65",
+            "code": "PERMISSION_DENIED",
+            "message": "Permission denied",
+            "correlation_id": "c86ccfa6",
+        },
+    ]
+    _, variables = executor.execute_query_allow_partial.call_args[0]
+    assert "repoId" not in variables
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_all_denied_stays_partial():
+    """Every requested id denied but the connection is present: empty list, not a raise."""
+    partial_result = PartialQueryResult(
+        data={"automations": {"edges": []}},
+        errors=[_denied_error("124"), _denied_error("65")],
+    )
+    service, _ = _make_partial_service(partial_result)
+
+    result = await service.get_automation_execution_metrics("3", ["124", "65"])
+
+    assert result["automations"] == []
+    assert [e["automation_id"] for e in result["partial_errors"]] == ["124", "65"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_null_connection_raises():
+    """A null automations connection (lookup failed) is a total failure, not empty success."""
+    partial_result = PartialQueryResult(
+        data={"automations": None},
+        errors=[
+            {
+                "message": "Couldn't find Organization with 'id'=999",
+                "extensions": {"code": "NOT_FOUND"},
+            }
+        ],
+    )
+    service, _ = _make_partial_service(partial_result)
+
+    with pytest.raises(ValueError, match="Couldn't find Organization"):
+        await service.get_automation_execution_metrics("999", ["25"])
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_null_connection_without_errors_raises():
+    """A null connection raises even when the response carries no error to quote."""
+    partial_result = PartialQueryResult(data={"automations": None}, errors=[])
+    service, _ = _make_partial_service(partial_result)
+
+    with pytest.raises(ValueError, match="Query failed."):
+        await service.get_automation_execution_metrics("999", ["25"])
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_empty_data_raises():
+    """A fully null response (executor hands back empty data) fails through the same decision."""
+    partial_result = PartialQueryResult(
+        data={},
+        errors=[{"message": "Couldn't find Organization with 'id'=999"}],
+    )
+    service, _ = _make_partial_service(partial_result)
+
+    with pytest.raises(ValueError, match="Couldn't find Organization"):
+        await service.get_automation_execution_metrics("999", ["25"])
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_without_ids_omits_filter():
+    """Omitting automation_ids drops the automationIds variable so the query returns all."""
+    partial_result = PartialQueryResult(
+        data={
+            "automations": {
+                "edges": [
+                    {"node": _metrics_node("25", total_runs=3)},
+                    {"node": _metrics_node("107", total_runs=0)},
+                ]
+            }
+        },
+        errors=[],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    result = await service.get_automation_execution_metrics("3")
+
+    _, variables = executor.execute_query_allow_partial.call_args[0]
+    assert "automationIds" not in variables
+    assert variables == {"organizationId": "3", "period": "SIXTY_MINUTES", "first": 50}
+    assert [a["id"] for a in result["automations"]] == ["25", "107"]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_paginates_with_first_and_after():
+    """first and after are forwarded; after is omitted when not supplied."""
+    partial_result = PartialQueryResult(
+        data={
+            "automations": {
+                "pageInfo": {"hasNextPage": True, "endCursor": "cur-1"},
+                "edges": [{"node": _metrics_node("25", total_runs=3)}],
+            }
+        },
+        errors=[],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    result = await service.get_automation_execution_metrics(
+        "3", first=50, after="cur-0"
+    )
+
+    _, variables = executor.execute_query_allow_partial.call_args[0]
+    assert variables["first"] == 50
+    assert variables["after"] == "cur-0"
+    assert result["page_info"] == {"hasNextPage": True, "endCursor": "cur-1"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_forwards_all_filters():
+    """search, active, event_id, action_ids, and sort_by/order map onto the variables."""
+    partial_result = PartialQueryResult(
+        data={"automations": {"edges": [{"node": _metrics_node("25", total_runs=3)}]}},
+        errors=[],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    await service.get_automation_execution_metrics(
+        "3",
+        action_ids=["9", "10"],
+        event_id="card_moved",
+        active=True,
+        search="welcome",
+        sort_by="name",
+        sort_order="asc",
+    )
+
+    _, variables = executor.execute_query_allow_partial.call_args[0]
+    assert variables["actionIds"] == ["9", "10"]
+    assert variables["eventId"] == "card_moved"
+    assert variables["active"] is True
+    assert variables["search"] == "welcome"
+    assert variables["sort"] == {"by": "name", "order": "asc"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_omits_unset_filters():
+    """Unset optional filters are absent from the variables (never sent as nulls)."""
+    partial_result = PartialQueryResult(
+        data={"automations": {"edges": []}},
+        errors=[],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    await service.get_automation_execution_metrics("3")
+
+    _, variables = executor.execute_query_allow_partial.call_args[0]
+    for absent in ("actionIds", "eventId", "active", "search", "sort"):
+        assert absent not in variables
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_get_automation_execution_metrics_partial_sort_criteria():
+    """sort_by alone yields a sort input with only the `by` field set."""
+    partial_result = PartialQueryResult(
+        data={"automations": {"edges": []}},
+        errors=[],
+    )
+    service, executor = _make_partial_service(partial_result)
+
+    await service.get_automation_execution_metrics("3", sort_by="created_at")
+
+    _, variables = executor.execute_query_allow_partial.call_args[0]
+    assert variables["sort"] == {"by": "created_at"}

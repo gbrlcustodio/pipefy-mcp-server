@@ -12,6 +12,9 @@ from pipefy_sdk import (
     PipefyClient,
     UpdateCommentInput,
     copy_card_search,
+    filter_editable_field_definitions,
+    filter_fields_by_definitions,
+    skipped_field_ids,
 )
 from pydantic import ValidationError
 
@@ -92,32 +95,6 @@ def _split_csv_ids(raw: str | None) -> list[str | int] | None:
         else:
             out.append(p)
     return out
-
-
-def _filter_editable_field_definitions(
-    field_definitions: list[Any],
-) -> list[dict[str, Any]]:
-    editable_fields: list[dict[str, Any]] = []
-    for field_def in field_definitions:
-        if not isinstance(field_def, dict):
-            continue
-        if field_def.get("editable", True):
-            editable_fields.append(field_def)
-    return editable_fields
-
-
-def _filter_fields_by_definitions(
-    fields: dict[str, Any],
-    field_definitions: list[dict[str, Any]],
-) -> dict[str, Any]:
-    if not fields:
-        return {}
-    editable_ids = {field_def["id"] for field_def in field_definitions}
-    return {
-        field_id: value
-        for field_id, value in fields.items()
-        if field_id in editable_ids
-    }
 
 
 @card_app.command("get", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
@@ -405,7 +382,11 @@ def card_fill(
     fields_json: str = typer.Option(
         ...,
         "--fields",
-        help='JSON object of field id to value, e.g. \'{"campo":"v"}\'.',
+        help=(
+            'JSON object of field id to value, e.g. \'{"campo":"v"}\'. '
+            "For ad-hoc updates without phase discovery, use "
+            "`card update --field-updates` (JSON array)."
+        ),
     ),
     required_only: bool = typer.Option(
         False,
@@ -414,23 +395,41 @@ def card_fill(
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Fill phase fields on a card (non-interactive; MCP skip_elicitation equivalent)."""
+    """Fill phase fields on a card (non-interactive).
+
+    Filters ``--fields`` to editable phase field IDs before ``update_card``.
+    Stricter than MCP ``fill_card_phase_fields`` when the phase reports no
+    editable fields (CLI no-ops; MCP may pass values through unfiltered).
+    """
 
     fields = parse_json_object(fields_json, "--fields") or {}
 
     async def factory(client: PipefyClient):
+        if not fields:
+            return {"success": True, "message": "No fields to update."}
+
         phase_fields_result = await client.get_phase_fields(phase_id, required_only)
-        expected_fields = _filter_editable_field_definitions(
+        expected_fields = filter_editable_field_definitions(
             phase_fields_result.get("fields", [])
         )
-        field_data = _filter_fields_by_definitions(fields, expected_fields)
+        field_data = filter_fields_by_definitions(fields, expected_fields)
+        dropped = skipped_field_ids(fields, field_data)
         if not field_data:
-            return {"success": True, "message": "No fields to update."}
+            result: dict[str, Any] = {
+                "success": True,
+                "message": "No fields to update.",
+            }
+            if dropped:
+                result["skipped_field_ids"] = dropped
+            return result
         field_updates = [
             {"field_id": field_id, "value": value}
             for field_id, value in field_data.items()
         ]
-        return await client.update_card(card_id, field_updates=field_updates)
+        api_response = await client.update_card(card_id, field_updates=field_updates)
+        if dropped:
+            return {**api_response, "skipped_field_ids": dropped}
+        return api_response
 
     run_cli_command(ctx, json_out, factory)
 

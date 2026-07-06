@@ -150,7 +150,7 @@ This returns valid `type` enum values and their descriptions.
 | `get_cards` | `pipefy card list --pipe <id>` | Yes | Paginated card list by pipe. |
 | `find_cards` | `pipefy card find --pipe <id>` | Yes | Filter by a single field value. |
 | `create_card` | `pipefy card create <pipe_id>` | No | Default: start form. Optional `--phase-id` / `phase_id` creates in that phase; interactive clients may elicit start-form fields unless `skip_elicitation=true`. |
-| `fill_card_phase_fields` | `pipefy card fill <id> --phase <id>` | No | Fill phase fields non-interactively; filters to editable IDs (`skip_elicitation` equivalent). |
+| `fill_card_phase_fields` | `pipefy card fill <id> --phase <id>` | No | Fill phase fields non-interactively; filters to editable IDs. Uses `--fields` JSON object; for ad-hoc updates use `card update --field-updates` (JSON array). |
 | `update_card` | `pipefy card update <id>` | No | Update title, assignee, due date, fields. |
 | `move_card_to_phase` | `pipefy card move <id> --phase <id>` | No | Call `get_phase_allowed_move_targets` on the source phase first. |
 | `delete_card` | `pipefy card delete <id>` | No | **Two-step destructive.** |

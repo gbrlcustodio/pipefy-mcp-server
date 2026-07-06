@@ -407,7 +407,10 @@ def test_card_fill_filters_editable_and_updates(
             ],
         )
     assert result.exit_code == 0, result.stdout + (result.stderr or "")
-    assert json.loads(result.stdout) == update_resp
+    assert json.loads(result.stdout) == {
+        **update_resp,
+        "skipped_field_ids": ["readonly"],
+    }
     mock_client.get_phase_fields.assert_awaited_once_with("100", True)
     mock_client.update_card.assert_awaited_once_with(
         "99",
@@ -514,6 +517,45 @@ def test_card_fill_no_fields_when_input_empty(
         "success": True,
         "message": "No fields to update.",
     }
+    mock_client.get_phase_fields.assert_not_called()
+    mock_client.update_card.assert_not_called()
+
+
+def test_card_fill_typo_reports_skipped_field_ids(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("fill-card-typo")
+    mock_client = MagicMock()
+    mock_client.get_phase_fields = AsyncMock(
+        return_value={
+            "phase_id": "100",
+            "fields": [{"id": "status", "editable": True}],
+        }
+    )
+    mock_client.update_card = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "fill",
+                "99",
+                "--phase",
+                "100",
+                "--fields",
+                '{"stauts": "done"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == {
+        "success": True,
+        "message": "No fields to update.",
+        "skipped_field_ids": ["stauts"],
+    }
     mock_client.update_card.assert_not_called()
 
 
@@ -550,6 +592,7 @@ def test_card_fill_no_fields_when_only_non_editable(
     assert json.loads(result.stdout) == {
         "success": True,
         "message": "No fields to update.",
+        "skipped_field_ids": ["readonly"],
     }
     mock_client.update_card.assert_not_called()
 

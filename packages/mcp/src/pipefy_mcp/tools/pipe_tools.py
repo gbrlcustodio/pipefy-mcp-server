@@ -16,6 +16,12 @@ from pipefy_sdk import (
     copy_card_search,
     create_form_model,
 )
+from pipefy_sdk import (
+    filter_editable_field_definitions as _filter_editable_field_definitions,
+)
+from pipefy_sdk import (
+    filter_fields_by_definitions as _filter_fields_by_definitions,
+)
 from pipefy_sdk.models.form import MalformedFieldDefinitionError
 from pydantic import ValidationError
 
@@ -42,8 +48,6 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     DeleteCommentPayload,
     UpdateCommentPayload,
     UserCancelledError,
-    _filter_editable_field_definitions,
-    _filter_fields_by_definitions,
     _merge_phase_and_start_form_field_values,
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,

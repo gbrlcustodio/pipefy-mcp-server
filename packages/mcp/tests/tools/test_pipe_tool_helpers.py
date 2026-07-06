@@ -21,8 +21,6 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     ADD_CARD_COMMENT_VALIDATION_FALLBACK_MSG,
     FIND_CARDS_EMPTY_MESSAGE,
     UserCancelledError,
-    _filter_editable_field_definitions,
-    _filter_fields_by_definitions,
     _merge_phase_and_start_form_field_values,
     build_add_card_comment_error_payload,
     build_add_card_comment_success_payload,
@@ -414,66 +412,8 @@ def test_build_delete_card_error_payload():
 
 
 # =============================================================================
-# _filter_editable_field_definitions
+# _merge_phase_and_start_form_field_values
 # =============================================================================
-
-
-@pytest.mark.unit
-def test_filter_editable_field_definitions_empty_list():
-    """Empty list returns empty list."""
-    assert _filter_editable_field_definitions([]) == []
-
-
-@pytest.mark.unit
-def test_filter_editable_field_definitions_editable_true_included():
-    """Field with editable=True is included."""
-    fields = [{"id": "f1", "label": "A", "editable": True}]
-    assert _filter_editable_field_definitions(fields) == fields
-
-
-@pytest.mark.unit
-def test_filter_editable_field_definitions_editable_false_excluded():
-    """Field with editable=False is excluded."""
-    fields = [
-        {"id": "f1", "editable": True},
-        {"id": "f2", "editable": False},
-    ]
-    result = _filter_editable_field_definitions(fields)
-    assert result == [{"id": "f1", "editable": True}]
-
-
-@pytest.mark.unit
-def test_filter_editable_field_definitions_default_editable():
-    """Field without 'editable' key is included (default True)."""
-    fields = [{"id": "f1", "label": "X"}]
-    assert _filter_editable_field_definitions(fields) == fields
-
-
-@pytest.mark.unit
-def test_filter_editable_field_definitions_skips_non_dict():
-    """Non-dict items in list are skipped."""
-    fields = [{"id": "f1"}, "not a dict", None, {"id": "f2"}]
-    result = _filter_editable_field_definitions(fields)
-    assert result == [{"id": "f1"}, {"id": "f2"}]
-
-
-# =============================================================================
-# _filter_fields_by_definitions
-# =============================================================================
-
-
-@pytest.mark.unit
-def test_filter_fields_by_definitions_none_returns_empty():
-    """None fields returns empty dict."""
-    defs = [{"id": "a", "type": "short_text"}]
-    assert _filter_fields_by_definitions(None, defs) == {}
-
-
-@pytest.mark.unit
-def test_filter_fields_by_definitions_empty_returns_empty():
-    """Empty fields returns empty dict."""
-    defs = [{"id": "a", "type": "short_text"}]
-    assert _filter_fields_by_definitions({}, defs) == {}
 
 
 @pytest.mark.unit
@@ -487,14 +427,6 @@ def test_merge_phase_and_start_form_field_values_keeps_both_subsets():
         start_form_field_definitions=defs_sf,
     )
     assert result == {"sf1": "a", "pf1": "b"}
-
-
-def test_filter_fields_by_definitions_keeps_only_editable_ids():
-    """Only field IDs present in definitions are kept."""
-    fields = {"a": 1, "b": 2, "c": 3}
-    defs = [{"id": "a", "type": "short_text"}, {"id": "c", "type": "short_text"}]
-    result = _filter_fields_by_definitions(fields, defs)
-    assert result == {"a": 1, "c": 3}
 
 
 # =============================================================================

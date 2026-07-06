@@ -871,6 +871,7 @@ Usage: pipefy card [OPTIONS] COMMAND [ARGS]...
 │           updates).                                                          │
 │ delete    Delete a card permanently.                                         │
 │ move      Move a card to another phase.                                      │
+│ fill      Fill phase fields on a card (non-interactive).                     │
 │ comment   Card comments.                                                     │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
@@ -961,6 +962,31 @@ Usage: pipefy card delete [OPTIONS] CARD_ID
 │ --yes   -y        Skip confirmation prompt.                                  │
 │ --json  -j                                                                   │
 │ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP card/fill
+Usage: pipefy card fill [OPTIONS] CARD_ID
+
+ Fill phase fields on a card (non-interactive).
+
+ Filters ``--fields`` to editable phase field IDs before ``update_card``.
+ Stricter than MCP ``fill_card_phase_fields`` when the phase reports no
+ editable fields (CLI no-ops; MCP may pass values through unfiltered).
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    card_id      TEXT  Card id. [required]                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --phase                  TEXT  Phase id whose fields to fill. [required]  │
+│ *  --fields                 TEXT  JSON object of field id to value, e.g.     │
+│                                   '{"campo":"v"}'. For ad-hoc updates        │
+│                                   without phase discovery, use `card update  │
+│                                   --field-updates` (JSON array).             │
+│                                   [required]                                 │
+│    --required-only                Only load required phase fields when       │
+│                                   resolving editable field ids.              │
+│    --json           -j                                                       │
+│    --help                         Show this message and exit.                │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP card/find

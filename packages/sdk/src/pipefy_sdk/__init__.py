@@ -6,6 +6,11 @@ __version__ = "0.2.0-beta.4"
 
 from pipefy_sdk.client import PipefyClient
 from pipefy_sdk.exceptions import PipefyAPIError, PipefyError
+from pipefy_sdk.field_filters import (
+    filter_editable_field_definitions,
+    filter_fields_by_definitions,
+    skipped_field_ids,
+)
 from pipefy_sdk.models import (
     Attachment,
     AttachmentTarget,
@@ -80,6 +85,8 @@ __all__ = [
     "CreateSendTaskAutomationInput",
     "DeleteCommentInput",
     "download_bytes",
+    "filter_editable_field_definitions",
+    "filter_fields_by_definitions",
     "MePayload",
     "MemberInvite",
     "NonBlankStr",
@@ -98,5 +105,6 @@ __all__ = [
     "copy_card_search",
     "create_form_model",
     "infer_content_type",
+    "skipped_field_ids",
     "stream_bytes",
 ]

@@ -129,7 +129,7 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
 | `get_phase_fields` | `pipefy field list --phase <id>` | Yes | List fields on a phase. |
-| `get_start_form_fields` | — | Yes | List start-form fields for card creation. |
+| `get_start_form_fields` | `pipefy pipe start-form <pipe_id>` | Yes | List start-form fields for card creation. |
 | `create_phase_field` | `pipefy field create --phase <id>` | No | Add field to a phase. |
 | `update_phase_field` | `pipefy field update <id>` | No | Rename, reorder, change required flag. |
 | `delete_phase_field` | `pipefy field delete <id>` | No | **Two-step destructive.** |
@@ -162,7 +162,7 @@ This returns valid `type` enum values and their descriptions.
 
    MCP: `get_start_form_fields pipe_id=67890`
 
-   CLI: (use MCP or check pipe config)
+   CLI: `pipefy pipe start-form 67890 --json`
 
 2. **Create the card with fields:**
 

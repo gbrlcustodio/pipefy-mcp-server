@@ -8,6 +8,40 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from pipefy_cli.main import app
 
 
+def test_relation_table_relations_list_json(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("rel-tbl")
+    payload = {"table_relations": []}
+    mock_client = MagicMock()
+    mock_client.get_table_relations = AsyncMock(return_value=payload)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app, ["relation", "table", "list", "--ids", "10,20", "--json"]
+        )
+    assert result.exit_code == 0
+    mock_client.get_table_relations.assert_awaited_once_with(["10", "20"])
+
+
+def test_relation_table_relations_list_empty_ids_bad_parameter(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("rel-tbl-bad")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app, ["relation", "table", "list", "--ids", ",", "--json"]
+        )
+    assert result.exit_code == 2
+    mock_client.get_table_relations.assert_not_called()
+
+
 def test_relation_pipe_list_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("rel-p")
     payload = {"pipe": {"relations": []}}

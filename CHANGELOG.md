@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **CLI / Plugin (Claude Code)**: the CLI install path now installs `pipefy-cli` from PyPI instead of a `git+…#subdirectory=packages/cli` reference with `--with` sibling pins. The `/pipefy:install` slash command runs `uv tool install --force pipefy-cli`, and the documented snippets (root `README.md`, `packages/cli/README.md`, `docs/MIGRATION.md`) use `uvx --from pipefy-cli pipefy …` / `uv tool install pipefy-cli`. PyPI resolves `pipefy` and `pipefy-auth` transitively, so the explicit `--with` flags are gone and installs no longer pay a git clone plus build. This matches the MCP server's PyPI install (#368); do not pass a global `--prerelease allow`, which would let transitive dependencies jump to their own pre-releases. `RELEASE.md` verification snippets move to PyPI accordingly, and the now-unused `latest` moving-tag release step is removed. Closes #234.
+
 ## [0.3.0-alpha.1] - 2026-07-04
 
 ### Added

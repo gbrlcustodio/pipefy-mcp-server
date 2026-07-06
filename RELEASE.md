@@ -4,7 +4,7 @@ Workspace distributions (`pipefy`, `pipefy-mcp-server`, `pipefy-cli`, `pipefy-au
 
 ## Cutting a release
 
-The Release workflow publishes to PyPI on **every `v*` tag**: it builds and uploads all five workspace wheels via Trusted Publishing, whatever the version. A pre-release tag (`aN` / `bN` / `rcN`, or the dashed `-alpha.N` / `-beta.N` forms) uploads to PyPI as a pre-release, so `pip` / `uv` install it only with `--pre`, while a stable `vX.Y.Z` tag is what a plain install resolves. Git-reference installs stay available too (for example `uvx --from git+https://github.com/<owner>/<repo>.git@vX.Y.Z --refresh pipefy-cli`).
+The Release workflow publishes to PyPI on **every `v*` tag**: it builds and uploads all five workspace wheels via Trusted Publishing, whatever the version. A pre-release tag (`aN` / `bN` / `rcN`, or the dashed `-alpha.N` / `-beta.N` forms) uploads to PyPI as a pre-release; a plain `uv` / `pip` install resolves it only while no stable version exists, otherwise pass `--pre` or pin the exact pre-release. A stable `vX.Y.Z` tag is what a plain install resolves by default.
 
 ### Public beta line (`v0.2.0-beta.*`)
 
@@ -36,19 +36,11 @@ The Release workflow requires the git tag (without leading `v`) to **exactly mat
    git tag vX.Y.Z && git push origin main && git push origin vX.Y.Z
    ```
 
-6. Roll the `latest` moving tag to point at the same commit. The README install snippets and shipping `.mcp.json` pin `@latest`, so this is what makes new installs pick up the release:
+6. Wait for the **Release** workflow (`.github/workflows/release.yml`) to finish.
+7. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, `pipefy-*.whl`, `pipefy_auth-*.whl`, and `pipefy_infra-*.whl`). Optionally verify the published version installs from PyPI (use the PEP 440 form, e.g. `0.2.0b1`, not the `v0.2.0-beta.1` git tag):
 
    ```bash
-   git tag -f latest vX.Y.Z && git push --force-with-lease origin latest
-   ```
-
-   **Skip this step for a pre-release tag** (`aN` / `bN` / `rcN` or the dashed `-alpha.N` / `-beta.N` forms). `latest` drives default installs, so it must track the newest stable release, not a pre-release.
-
-7. Wait for the **Release** workflow (`.github/workflows/release.yml`) to finish.
-8. Confirm the GitHub Release lists the built wheels (`pipefy_cli-*.whl`, `pipefy_mcp_server-*.whl`, `pipefy-*.whl`, `pipefy_auth-*.whl`, and `pipefy_infra-*.whl`). Optionally verify install from the tag, for example:
-
-   ```bash
-   uvx --from git+https://github.com/<owner>/<repo>.git@vX.Y.Z --refresh pipefy-cli --version
+   uvx --from "pipefy-cli==0.2.0b1" pipefy --version
    ```
 
    Sanity-check that the curl installer on `main` resolves the just-cut tag (no per-release maintenance needed; it hits the GitHub API at runtime):
@@ -62,16 +54,16 @@ The Release workflow requires the git tag (without leading `v`) to **exactly mat
 
 ## Verification (cross-platform smoke test)
 
-After tagging a release, run the following on macOS and a Linux machine (or CI runner) to confirm the wheels install correctly:
+After tagging a release, run the following on macOS and a Linux machine (or CI runner) to confirm the wheels install correctly. Pin the **PyPI/PEP 440** version (e.g. `0.2.0b1`), which differs from the `v0.2.0-beta.1` git tag:
 
 ```bash
-# Install CLI from the tagged release
-uvx --from "git+https://github.com/pipefy/ai-toolkit.git@vX.Y.Z" --refresh pipefy-cli --version
-# Expected: X.Y.Z
+# Install CLI from PyPI at the just-published version
+uvx --from "pipefy-cli==0.2.0b1" pipefy --version
+# Expected: the published version
 
 # Verify MCP server starts
-uvx --from "git+https://github.com/pipefy/ai-toolkit.git@vX.Y.Z" --refresh pipefy-mcp-server --help
-# Expected: help text (server may block in stdio mode — Ctrl-C after banner)
+uvx "pipefy-mcp-server==0.2.0b1" --help
+# Expected: help text (server may block in stdio mode, Ctrl-C after banner)
 ```
 
 ## v1.0 and later: stable PyPI installs

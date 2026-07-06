@@ -101,6 +101,22 @@ PRERELEASE_SUFFIX_RE = re.compile(
 )
 
 
+def _sole_match(pattern: re.Pattern[str], text: str) -> re.Match[str] | None:
+    """Return the single match of ``pattern`` in ``text``, or ``None`` for zero or many.
+
+    The tokens this script reads (a package's ``__version__``, a quoted sibling
+    dependency) must be unique in their file. Resolving to the first hit would
+    let a decoy (a second ``__version__`` line, the same dep quoted in a
+    dependency group) be silently read; treating "more than one" as no match
+    surfaces it as a failure instead.
+    """
+    matches = pattern.finditer(text)
+    first = next(matches, None)
+    if first is None or next(matches, None) is not None:
+        return None
+    return first
+
+
 def _sdk_pyproject() -> Path:
     """The SDK package pyproject, located by distribution name, not position.
 
@@ -122,9 +138,9 @@ def read_sdk_version() -> str:
     """Return the current ``__version__`` from the SDK package (source of truth)."""
     path = _hatch_version_path(_sdk_pyproject())
     text = path.read_text(encoding="utf-8")
-    m = VERSION_ASSIGN_RE.search(text)
+    m = _sole_match(VERSION_ASSIGN_RE, text)
     if not m:
-        msg = f"No __version__ assignment found in {path}"
+        msg = f"Expected exactly one __version__ assignment in {path}"
         raise ValueError(msg)
     return m.group(2)
 
@@ -136,7 +152,6 @@ def write_version_to_all_files(new_version: str) -> None:
         new_text, count = VERSION_ASSIGN_RE.subn(
             rf'\1"{new_version}"',
             text,
-            count=1,
         )
         if count != 1:
             msg = f"Expected one __version__ assignment in {path}, replaced {count}"
@@ -147,7 +162,6 @@ def write_version_to_all_files(new_version: str) -> None:
     new_root, root_count = ROOT_PROJECT_VERSION_RE.subn(
         rf'\1"{new_version}"',
         root_text,
-        count=1,
     )
     if root_count != 1:
         msg = (
@@ -161,7 +175,6 @@ def write_version_to_all_files(new_version: str) -> None:
     new_manifest, manifest_count = PLUGIN_MANIFEST_VERSION_RE.subn(
         rf"\g<prefix>{new_version}\g<suffix>",
         manifest_text,
-        count=1,
     )
     if manifest_count != 1:
         msg = f'Expected one "version" key in {PLUGIN_MANIFEST}, replaced {manifest_count}'
@@ -204,7 +217,6 @@ def write_dep_pins(new_version: str) -> None:
             text, count = workspace_dep_pin_re(dep).subn(
                 rf"\g<1>{dep}=={new_version}\g<1>",
                 text,
-                count=1,
             )
             if count != 1:
                 msg = f"Expected one {dep!r} dependency in {path}, replaced {count}"
@@ -383,18 +395,21 @@ def verify_lockstep() -> int:
     raw: dict[str, str] = {}
     for path in INIT_PATHS:
         text = path.read_text(encoding="utf-8")
-        m = VERSION_ASSIGN_RE.search(text)
+        m = _sole_match(VERSION_ASSIGN_RE, text)
         if not m:
-            print(f"missing __version__ in {path}", file=sys.stderr)
+            print(f"expected exactly one __version__ in {path}", file=sys.stderr)
             return 1
         raw[str(path.relative_to(REPO_ROOT))] = m.group(2)
 
     for path, deps in _packages_with_sibling_deps():
         text = path.read_text(encoding="utf-8")
         for dep in deps:
-            m = workspace_dep_pin_re(dep).search(text)
+            m = _sole_match(workspace_dep_pin_re(dep), text)
             if not m or m.group(2) is None:
-                print(f"missing pinned {dep!r} dependency in {path}", file=sys.stderr)
+                print(
+                    f"missing or ambiguous pinned {dep!r} dependency in {path}",
+                    file=sys.stderr,
+                )
                 return 1
             raw[f"{path.relative_to(REPO_ROOT)}::{dep}"] = m.group(2)
 

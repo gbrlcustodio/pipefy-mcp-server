@@ -247,3 +247,52 @@ def test_write_dep_pins_pins_declared_siblings(
     cli_text = cli.read_text(encoding="utf-8")
     assert '"pipefy==9.9.9"' in cli_text
     assert '"typer>=0.12"' in cli_text
+
+
+def test_sole_match_treats_zero_or_many_as_no_match() -> None:
+    pat = _bump.VERSION_ASSIGN_RE
+    assert _bump._sole_match(pat, "") is None
+    assert _bump._sole_match(pat, '__version__ = "1.0.0"\n').group(2) == "1.0.0"
+    two = '__version__ = "1.0.0"\n__version__ = "2.0.0"\n'
+    assert _bump._sole_match(pat, two) is None
+
+
+def test_read_sdk_version_rejects_duplicate_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A decoy second __version__ (e.g. in a docstring example) must fail loudly,
+    # not resolve to the first hit.
+    (tmp_path / "sdk" / "src").mkdir(parents=True)
+    (tmp_path / "sdk" / "src" / "__init__.py").write_text(
+        '__version__ = "1.0.0"\n__version__ = "2.0.0"\n', encoding="utf-8"
+    )
+    pyproject = tmp_path / "sdk" / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "pipefy"\nversion = "0.0.0"\n'
+        '[tool.hatch.version]\npath = "src/__init__.py"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(_bump, "PACKAGE_PYPROJECTS", (pyproject,))
+
+    with pytest.raises(ValueError, match="Expected exactly one __version__"):
+        _bump.read_sdk_version()
+
+
+def test_write_dep_pins_rejects_duplicate_dep_occurrence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # `pipefy` is quoted in both [project.dependencies] and a dependency group;
+    # pinning the first and leaving the other would drift, so it must fail.
+    sdk = tmp_path / "sdk.toml"
+    cli = tmp_path / "cli.toml"
+    _write_pkg(sdk, "pipefy", ())
+    cli.write_text(
+        '[project]\nname = "pipefy-cli"\nversion = "0.1.0"\n'
+        'dependencies = ["pipefy"]\n'
+        '[dependency-groups]\ndev = ["pipefy==0.0.0"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(_bump, "PACKAGE_PYPROJECTS", (sdk, cli))
+
+    with pytest.raises(ValueError, match="Expected one 'pipefy' dependency"):
+        _bump.write_dep_pins("9.9.9")

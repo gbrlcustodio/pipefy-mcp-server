@@ -3,7 +3,9 @@
 # server (the persistent pipefy-mcp-server binary, which shadows the plugin's
 # bundled uvx entry), plugin auto-updates no longer reach that running server.
 # This compares the installed binary's version against the plugin's declared
-# version and, on drift, asks the user to re-run /pipefy:install.
+# version and, on drift, tells the user to re-run install.sh (the path that
+# actually reinstalls the binary and re-registers the user-scope server;
+# /pipefy:install only installs the CLI).
 #
 # No-op for users on the pure plugin/uvx path: they have no installed binary,
 # so there is nothing shadowing the plugin and nothing to update.
@@ -24,6 +26,6 @@ installed=$(pipefy-mcp-server --version 2>/dev/null | tr -d '[:space:]')
 [ -n "$installed" ] || exit 0
 
 if [ "$installed" != "$plugin" ]; then
-    echo "Pipefy: the installed MCP server ($installed) differs from this plugin ($plugin); re-run /pipefy:install to sync."
+    echo "Pipefy: the installed MCP server ($installed) differs from this plugin ($plugin). Re-run the installer to sync: curl -fsSL https://raw.githubusercontent.com/pipefy/ai-toolkit/main/install.sh | sh -s -- --client claude-code"
 fi
 exit 0

@@ -177,6 +177,23 @@ def _write_pkg(path: Path, name: str, deps: tuple[str, ...]) -> None:
     )
 
 
+def _write_hatch_pkg(root: Path, name: str, init_body: str) -> Path:
+    """Write a hatch package (src/__init__.py + pyproject) under root/name.
+
+    Returns the pyproject path. Used by tests that exercise version reading via
+    the [tool.hatch.version] path.
+    """
+    (root / name / "src").mkdir(parents=True)
+    (root / name / "src" / "__init__.py").write_text(init_body, encoding="utf-8")
+    pyproject = root / name / "pyproject.toml"
+    pyproject.write_text(
+        f'[project]\nname = "{name}"\nversion = "0.0.0"\n'
+        '[tool.hatch.version]\npath = "src/__init__.py"\n',
+        encoding="utf-8",
+    )
+    return pyproject
+
+
 def test_package_pyprojects_derived_from_workspace() -> None:
     # Derived from [tool.uv.workspace].members, not a hand-maintained list, so a
     # new member cannot skip sibling-dependency pinning.
@@ -199,21 +216,8 @@ def test_read_sdk_version_locates_sdk_by_name(
 ) -> None:
     # A non-SDK package is listed first; read_sdk_version must still find pipefy
     # by name rather than trusting member order.
-    def _pkg(name: str, version: str) -> Path:
-        (tmp_path / name / "src").mkdir(parents=True)
-        (tmp_path / name / "src" / "__init__.py").write_text(
-            f'__version__ = "{version}"\n', encoding="utf-8"
-        )
-        pyproject = tmp_path / name / "pyproject.toml"
-        pyproject.write_text(
-            f'[project]\nname = "{name}"\nversion = "0.0.0"\n'
-            '[tool.hatch.version]\npath = "src/__init__.py"\n',
-            encoding="utf-8",
-        )
-        return pyproject
-
-    auth = _pkg("pipefy-auth", "1.1.1")
-    sdk = _pkg("pipefy", "2.2.2")
+    auth = _write_hatch_pkg(tmp_path, "pipefy-auth", '__version__ = "1.1.1"\n')
+    sdk = _write_hatch_pkg(tmp_path, "pipefy", '__version__ = "2.2.2"\n')
     monkeypatch.setattr(_bump, "PACKAGE_PYPROJECTS", (auth, sdk))
 
     assert _bump.read_sdk_version() == "2.2.2"
@@ -262,15 +266,8 @@ def test_read_sdk_version_rejects_duplicate_version(
 ) -> None:
     # A decoy second __version__ (e.g. in a docstring example) must fail loudly,
     # not resolve to the first hit.
-    (tmp_path / "sdk" / "src").mkdir(parents=True)
-    (tmp_path / "sdk" / "src" / "__init__.py").write_text(
-        '__version__ = "1.0.0"\n__version__ = "2.0.0"\n', encoding="utf-8"
-    )
-    pyproject = tmp_path / "sdk" / "pyproject.toml"
-    pyproject.write_text(
-        '[project]\nname = "pipefy"\nversion = "0.0.0"\n'
-        '[tool.hatch.version]\npath = "src/__init__.py"\n',
-        encoding="utf-8",
+    pyproject = _write_hatch_pkg(
+        tmp_path, "pipefy", '__version__ = "1.0.0"\n__version__ = "2.0.0"\n'
     )
     monkeypatch.setattr(_bump, "PACKAGE_PYPROJECTS", (pyproject,))
 

@@ -117,6 +117,22 @@ def _sole_match(pattern: re.Pattern[str], text: str) -> re.Match[str] | None:
     return first
 
 
+def _sub_exactly_one(
+    pattern: re.Pattern[str], repl: str, text: str, *, what: str, where: Path
+) -> str:
+    """Substitute the one expected match of ``pattern`` in ``text``; raise otherwise.
+
+    The write-side twin of ``_sole_match``: replacing every match and asserting
+    the count is exactly one means a decoy occurrence fails loudly instead of
+    being silently rewritten (first hit) or left behind.
+    """
+    new_text, count = pattern.subn(repl, text)
+    if count != 1:
+        msg = f"Expected one {what} in {where}, replaced {count}"
+        raise ValueError(msg)
+    return new_text
+
+
 def _sdk_pyproject() -> Path:
     """The SDK package pyproject, located by distribution name, not position.
 
@@ -149,36 +165,33 @@ def write_version_to_all_files(new_version: str) -> None:
     """Replace ``__version__`` in each package ``__init__.py`` and root workspace meta."""
     for path in INIT_PATHS:
         text = path.read_text(encoding="utf-8")
-        new_text, count = VERSION_ASSIGN_RE.subn(
+        new_text = _sub_exactly_one(
+            VERSION_ASSIGN_RE,
             rf'\1"{new_version}"',
             text,
+            what="__version__ assignment",
+            where=path,
         )
-        if count != 1:
-            msg = f"Expected one __version__ assignment in {path}, replaced {count}"
-            raise ValueError(msg)
         path.write_text(new_text, encoding="utf-8")
 
     root_text = ROOT_PYPROJECT.read_text(encoding="utf-8")
-    new_root, root_count = ROOT_PROJECT_VERSION_RE.subn(
+    new_root = _sub_exactly_one(
+        ROOT_PROJECT_VERSION_RE,
         rf'\1"{new_version}"',
         root_text,
+        what="[project] version assignment",
+        where=ROOT_PYPROJECT,
     )
-    if root_count != 1:
-        msg = (
-            f"Expected one [project] version assignment in {ROOT_PYPROJECT}, "
-            f"replaced {root_count}"
-        )
-        raise ValueError(msg)
     ROOT_PYPROJECT.write_text(new_root, encoding="utf-8")
 
     manifest_text = PLUGIN_MANIFEST.read_text(encoding="utf-8")
-    new_manifest, manifest_count = PLUGIN_MANIFEST_VERSION_RE.subn(
+    new_manifest = _sub_exactly_one(
+        PLUGIN_MANIFEST_VERSION_RE,
         rf"\g<prefix>{new_version}\g<suffix>",
         manifest_text,
+        what='"version" key',
+        where=PLUGIN_MANIFEST,
     )
-    if manifest_count != 1:
-        msg = f'Expected one "version" key in {PLUGIN_MANIFEST}, replaced {manifest_count}'
-        raise ValueError(msg)
     PLUGIN_MANIFEST.write_text(new_manifest, encoding="utf-8")
 
 
@@ -214,13 +227,13 @@ def write_dep_pins(new_version: str) -> None:
     for path, deps in _packages_with_sibling_deps():
         text = path.read_text(encoding="utf-8")
         for dep in deps:
-            text, count = workspace_dep_pin_re(dep).subn(
+            text = _sub_exactly_one(
+                workspace_dep_pin_re(dep),
                 rf"\g<1>{dep}=={new_version}\g<1>",
                 text,
+                what=f"{dep!r} dependency",
+                where=path,
             )
-            if count != 1:
-                msg = f"Expected one {dep!r} dependency in {path}, replaced {count}"
-                raise ValueError(msg)
         path.write_text(text, encoding="utf-8")
 
 
@@ -436,9 +449,9 @@ def verify_lockstep() -> int:
     except OSError as exc:
         print(f"could not read {PLUGIN_MANIFEST}: {exc}", file=sys.stderr)
         return 1
-    m = PLUGIN_MANIFEST_VERSION_RE.search(manifest_text)
+    m = _sole_match(PLUGIN_MANIFEST_VERSION_RE, manifest_text)
     if not m:
-        print(f'missing "version" in {PLUGIN_MANIFEST}', file=sys.stderr)
+        print(f'expected exactly one "version" in {PLUGIN_MANIFEST}', file=sys.stderr)
         return 1
     raw[str(PLUGIN_MANIFEST.relative_to(REPO_ROOT))] = m.group("value")
 

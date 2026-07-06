@@ -49,7 +49,7 @@ def pipe_start_form(
     """List start-form fields for card creation (``get_start_form_fields``)."""
 
     async def factory(client: PipefyClient):
-        return await client.get_start_form_fields(pipe_id, required_only)
+        return await client.get_start_form_fields(pipe_id, required_only=required_only)
 
     run_cli_command(ctx, json_out, factory)
 

@@ -24,7 +24,7 @@ def test_pipe_start_form_required_only_json(
         )
     assert result.exit_code == 0
     assert json.loads(result.stdout) == payload
-    mock_client.get_start_form_fields.assert_awaited_once_with("10", True)
+    mock_client.get_start_form_fields.assert_awaited_once_with("10", required_only=True)
 
 
 def test_pipe_start_form_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
@@ -38,7 +38,7 @@ def test_pipe_start_form_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     ):
         result = runner.invoke(app, ["pipe", "start-form", "10", "--json"])
     assert result.exit_code == 0
-    mock_client.get_start_form_fields.assert_awaited_once_with("10", False)
+    mock_client.get_start_form_fields.assert_awaited_once_with("10", required_only=False)
 
 
 def test_pipe_get_rejects_option_like_positional_exit_2(

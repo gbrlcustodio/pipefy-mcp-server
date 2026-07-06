@@ -73,7 +73,8 @@ jobs:
           from pathlib import Path
 
           dist = Path("dist")
-          for prefix in ("pipefy", "pipefy_mcp_server", "pipefy_cli", "pipefy_auth", "pipefy_infra"):
+          expected = ("pipefy", "pipefy_mcp_server", "pipefy_cli", "pipefy_auth", "pipefy_infra")
+          for prefix in expected:
               wheels = list(dist.glob(f"{prefix}-*.whl"))
               if len(wheels) != 1:
                   print(
@@ -81,6 +82,17 @@ jobs:
                       file=sys.stderr,
                   )
                   sys.exit(1)
+          # Bound the set: a new workspace member builds a wheel that is not in
+          # `expected` and so never gets staged for PyPI, shipping a partial
+          # release. Fail here so adding a package forces updating this list.
+          all_wheels = list(dist.glob("*.whl"))
+          if len(all_wheels) != len(expected):
+              print(
+                  f"expected exactly {len(expected)} wheels in dist/, got "
+                  f"{sorted(w.name for w in all_wheels)!r}",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
           PY
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

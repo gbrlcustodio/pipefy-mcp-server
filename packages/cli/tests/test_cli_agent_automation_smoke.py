@@ -171,6 +171,32 @@ def test_usage_credits_invokes_client(
     mock_client.get_ai_credit_usage.assert_awaited_once()
 
 
+def test_usage_execution_metrics_invokes_client(
+    runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("usage-em")
+    mock_client = MagicMock()
+    mock_client.get_automation_execution_metrics = AsyncMock(
+        return_value={"automations": [], "partial_errors": [], "page_info": {}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "usage",
+                "execution-metrics",
+                "--organization",
+                "1",
+                "--json",
+            ],
+        )
+    assert r.exit_code == 0
+    mock_client.get_automation_execution_metrics.assert_awaited_once()
+
+
 def test_org_get_json(runner: CliRunner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("org-g")
     mock_client = MagicMock()

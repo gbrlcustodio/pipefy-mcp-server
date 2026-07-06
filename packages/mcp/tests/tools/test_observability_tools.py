@@ -588,6 +588,28 @@ async def test_get_automation_execution_metrics_rejects_empty_action_ids(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("observability_session", [None], indirect=True)
+async def test_get_automation_execution_metrics_value_error_from_client(
+    observability_session, mock_observability_client, extract_payload
+):
+    """A total failure (SDK raises ValueError) comes back as a plain error envelope."""
+    mock_observability_client.get_automation_execution_metrics.side_effect = ValueError(
+        "Couldn't find Organization with 'id'=999"
+    )
+
+    async with observability_session as session:
+        result = await session.call_tool(
+            "get_automation_execution_metrics",
+            {"organization_id": "999"},
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "Couldn't find Organization" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("observability_session", [None], indirect=True)
 async def test_get_ai_credit_usage_success(
     observability_session, mock_observability_client, extract_payload
 ):

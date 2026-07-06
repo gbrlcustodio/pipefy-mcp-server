@@ -444,7 +444,7 @@ class ObservabilityTools:
                 period: One of FIFTEEN_MINUTES, SIXTY_MINUTES (default), TWELVE_HOURS, TWENTY_FOUR_HOURS.
                 first: Page size, 1 to 50 (default 50).
                 after: Cursor from a previous page's page_info.endCursor.
-                debug: When True, append GraphQL codes and correlation_id to errors.
+                debug: When True, append GraphQL codes and correlation_id to transport-level GraphQL errors. Top-level failures (unknown org, no org access) return a plain message; per-automation denials already carry correlation_id in partial_errors.
             """
             client = get_pipefy_client(ctx)
             organization_id, err = validate_tool_id(organization_id, "organization_id")

@@ -3,13 +3,13 @@ name: pipefy-observability
 description: >
   Use this skill when the user wants to check AI agent logs, automation
   execution logs, org-level usage stats, AI credit consumption, or export
-  automation job history. Covers 10 MCP tools.
+  automation job history. Covers 11 MCP tools.
 tags: [pipefy, observability, logs, usage, credits, exports]
 ---
 
 # Observability
 
-Monitor AI agent and automation execution, usage stats, credit consumption, and export job history. **10 MCP tools.**
+Monitor AI agent and automation execution, usage stats, credit consumption, and export job history. **11 MCP tools.**
 
 **CLI status (v0.1):** use MCP tools below. Observability Typer commands are planned for v0.3+.
 

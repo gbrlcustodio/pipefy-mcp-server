@@ -185,6 +185,40 @@ def test_package_pyprojects_derived_from_workspace() -> None:
         assert path.exists()
 
 
+def test_init_paths_derived_from_hatch_config() -> None:
+    # Derived from each package's [tool.hatch.version].path, not a hardcoded
+    # list, so a new member's __version__ file is bumped and verified too.
+    assert len(_bump.INIT_PATHS) == len(_bump.PACKAGE_PYPROJECTS)
+    for path in _bump.INIT_PATHS:
+        assert path.exists()
+        assert path.name == "__init__.py"
+
+
+def test_read_sdk_version_locates_sdk_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A non-SDK package is listed first; read_sdk_version must still find pipefy
+    # by name rather than trusting member order.
+    def _pkg(name: str, version: str) -> Path:
+        (tmp_path / name / "src").mkdir(parents=True)
+        (tmp_path / name / "src" / "__init__.py").write_text(
+            f'__version__ = "{version}"\n', encoding="utf-8"
+        )
+        pyproject = tmp_path / name / "pyproject.toml"
+        pyproject.write_text(
+            f'[project]\nname = "{name}"\nversion = "0.0.0"\n'
+            '[tool.hatch.version]\npath = "src/__init__.py"\n',
+            encoding="utf-8",
+        )
+        return pyproject
+
+    auth = _pkg("pipefy-auth", "1.1.1")
+    sdk = _pkg("pipefy", "2.2.2")
+    monkeypatch.setattr(_bump, "PACKAGE_PYPROJECTS", (auth, sdk))
+
+    assert _bump.read_sdk_version() == "2.2.2"
+
+
 def test_declared_sibling_deps_keeps_only_workspace_members(tmp_path: Path) -> None:
     members = {"pipefy", "pipefy-auth", "pipefy-infra"}
     pyproject = tmp_path / "pyproject.toml"

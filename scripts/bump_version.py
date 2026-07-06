@@ -21,13 +21,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ROOT_PYPROJECT = REPO_ROOT / "pyproject.toml"
 PLUGIN_MANIFEST = REPO_ROOT / ".claude-plugin/plugin.json"
-INIT_PATHS = (
-    REPO_ROOT / "packages/sdk/src/pipefy_sdk/__init__.py",
-    REPO_ROOT / "packages/mcp/src/pipefy_mcp/__init__.py",
-    REPO_ROOT / "packages/cli/src/pipefy_cli/__init__.py",
-    REPO_ROOT / "packages/auth/src/pipefy_auth/__init__.py",
-    REPO_ROOT / "packages/infra/src/pipefy_infra/__init__.py",
-)
+
+# The SDK distribution; its __version__ is the lockstep source of truth every
+# other version-bearing file is compared against.
+SDK_DIST_NAME = "pipefy"
 
 
 def _load_toml(path: Path) -> dict:
@@ -41,8 +38,8 @@ def _workspace_pyprojects() -> tuple[Path, ...]:
     uv is the source of truth for workspace membership: a package it does not
     know about is never built, locked, or published. Deriving from that list
     (rather than a second hand-maintained copy) means adding a member cannot
-    silently escape the pin-map reconciliation below. Members may be literal
-    paths or globs (``packages/*``); both resolve here.
+    silently escape sibling-dependency pinning or version bumping. Members may
+    be literal paths or globs (``packages/*``); both resolve here.
     """
     members = _load_toml(ROOT_PYPROJECT)["tool"]["uv"]["workspace"]["members"]
     paths: list[Path] = []
@@ -56,6 +53,22 @@ def _workspace_pyprojects() -> tuple[Path, ...]:
 # from here (see declared_sibling_deps), so pinning follows the real dependency
 # lists with no hand-maintained pin map to keep in sync.
 PACKAGE_PYPROJECTS: tuple[Path, ...] = _workspace_pyprojects()
+
+
+def _hatch_version_path(pyproject: Path) -> Path:
+    """Resolve a package's ``__version__`` file from its ``[tool.hatch.version]`` path.
+
+    hatch already declares which file holds the version (``path`` under
+    ``[tool.hatch.version]``, relative to the package directory), so deriving
+    from it keeps the version files in step with the packages, no second list.
+    """
+    rel = _load_toml(pyproject)["tool"]["hatch"]["version"]["path"]
+    return pyproject.parent / rel
+
+
+# Each package's __version__ file, derived from hatch's version-path config so a
+# new workspace member is bumped and verified without editing a hardcoded list.
+INIT_PATHS: tuple[Path, ...] = tuple(_hatch_version_path(p) for p in PACKAGE_PYPROJECTS)
 
 # Anchored to the [project] table. The middle alternation walks lines that
 # don't start with `[` (so a sibling [tool.X] header ends the run), but the
@@ -88,12 +101,26 @@ PRERELEASE_SUFFIX_RE = re.compile(
 )
 
 
+def _sdk_pyproject() -> Path:
+    """The SDK package pyproject, located by distribution name, not position.
+
+    Workspace member order is not guaranteed (a ``packages/*`` glob sorts
+    alphabetically), so the source-of-truth package is found by name.
+    """
+    for pyproject in PACKAGE_PYPROJECTS:
+        if _load_toml(pyproject)["project"]["name"] == SDK_DIST_NAME:
+            return pyproject
+    msg = f"workspace has no {SDK_DIST_NAME!r} package"
+    raise ValueError(msg)
+
+
 def read_sdk_version() -> str:
     """Return the current ``__version__`` from the SDK package (source of truth)."""
-    text = INIT_PATHS[0].read_text(encoding="utf-8")
+    path = _hatch_version_path(_sdk_pyproject())
+    text = path.read_text(encoding="utf-8")
     m = VERSION_ASSIGN_RE.search(text)
     if not m:
-        msg = f"No __version__ assignment found in {INIT_PATHS[0]}"
+        msg = f"No __version__ assignment found in {path}"
         raise ValueError(msg)
     return m.group(2)
 

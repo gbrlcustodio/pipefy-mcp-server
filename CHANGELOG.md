@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **CLI**: `pipefy card fill <card_id> --phase <phase_id> --fields '{"…"}'` fills phase fields non-interactively; filters to editable phase field IDs before `update_card`. Optional `--required-only` limits the phase field lookup to required fields. JSON responses may include `skipped_field_ids` when `--fields` keys are dropped by the filter.
+- **SDK**: `pipefy_sdk.field_filters` exports `filter_editable_field_definitions`, `filter_fields_by_definitions`, and `skipped_field_ids` for shared MCP/CLI field filtering.
+
 ## [0.3.0-alpha.1] - 2026-07-04
 
 ### Added

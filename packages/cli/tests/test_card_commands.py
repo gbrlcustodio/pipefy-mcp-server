@@ -362,6 +362,241 @@ def test_card_move_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     mock_client.move_card_to_phase.assert_awaited_once_with("501", "999")
 
 
+def test_card_fill_filters_editable_and_updates(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("fill-card")
+    phase_fields = {
+        "phase_id": "100",
+        "phase_name": "Review",
+        "fields": [
+            {
+                "id": "status",
+                "label": "Status",
+                "type": "select",
+                "editable": True,
+            },
+            {
+                "id": "readonly",
+                "label": "RO",
+                "type": "short_text",
+                "editable": False,
+            },
+        ],
+    }
+    update_resp = {"updateFieldsValues": {"success": True}}
+    mock_client = MagicMock()
+    mock_client.get_phase_fields = AsyncMock(return_value=phase_fields)
+    mock_client.update_card = AsyncMock(return_value=update_resp)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "fill",
+                "99",
+                "--phase",
+                "100",
+                "--fields",
+                '{"status": "done", "readonly": "nope"}',
+                "--required-only",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == {
+        **update_resp,
+        "skipped_field_ids": ["readonly"],
+    }
+    mock_client.get_phase_fields.assert_awaited_once_with("100", True)
+    mock_client.update_card.assert_awaited_once_with(
+        "99",
+        field_updates=[{"field_id": "status", "value": "done"}],
+    )
+
+
+def test_card_fill_missing_editable_key_counts_as_editable(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("fill-card-missing-editable")
+    update_resp = {"updateFieldsValues": {"success": True}}
+    mock_client = MagicMock()
+    mock_client.get_phase_fields = AsyncMock(
+        return_value={
+            "phase_id": "100",
+            "fields": [{"id": "status", "type": "short_text"}],
+        }
+    )
+    mock_client.update_card = AsyncMock(return_value=update_resp)
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "fill",
+                "99",
+                "--phase",
+                "100",
+                "--fields",
+                '{"status": "done"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == update_resp
+    mock_client.update_card.assert_awaited_once_with(
+        "99",
+        field_updates=[{"field_id": "status", "value": "done"}],
+    )
+
+
+def test_card_fill_invalid_fields_exit_2(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("fill-card-bad-json")
+    mock_client = MagicMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "fill",
+                "99",
+                "--phase",
+                "100",
+                "--fields",
+                "not-json",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 2
+    mock_client.get_phase_fields.assert_not_called()
+    mock_client.update_card.assert_not_called()
+
+
+def test_card_fill_no_fields_when_input_empty(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("fill-card-empty")
+    mock_client = MagicMock()
+    mock_client.get_phase_fields = AsyncMock(
+        return_value={
+            "phase_id": "100",
+            "fields": [{"id": "status", "editable": True}],
+        }
+    )
+    mock_client.update_card = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "fill",
+                "99",
+                "--phase",
+                "100",
+                "--fields",
+                "{}",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == {
+        "success": True,
+        "message": "No fields to update.",
+    }
+    mock_client.get_phase_fields.assert_not_called()
+    mock_client.update_card.assert_not_called()
+
+
+def test_card_fill_typo_reports_skipped_field_ids(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("fill-card-typo")
+    mock_client = MagicMock()
+    mock_client.get_phase_fields = AsyncMock(
+        return_value={
+            "phase_id": "100",
+            "fields": [{"id": "status", "editable": True}],
+        }
+    )
+    mock_client.update_card = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "fill",
+                "99",
+                "--phase",
+                "100",
+                "--fields",
+                '{"stauts": "done"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == {
+        "success": True,
+        "message": "No fields to update.",
+        "skipped_field_ids": ["stauts"],
+    }
+    mock_client.update_card.assert_not_called()
+
+
+def test_card_fill_no_fields_when_only_non_editable(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("fill-card-non-editable")
+    mock_client = MagicMock()
+    mock_client.get_phase_fields = AsyncMock(
+        return_value={
+            "phase_id": "100",
+            "fields": [{"id": "readonly", "editable": False}],
+        }
+    )
+    mock_client.update_card = AsyncMock()
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "card",
+                "fill",
+                "99",
+                "--phase",
+                "100",
+                "--fields",
+                '{"readonly": "nope"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout) == {
+        "success": True,
+        "message": "No fields to update.",
+        "skipped_field_ids": ["readonly"],
+    }
+    mock_client.update_card.assert_not_called()
+
+
 def test_card_comment_update_json(runner, clean_pipefy_env, saved_cwd, oauth_env):
     oauth_env("cmt-upd")
     payload = {"updateComment": {"comment": {"id": "c1"}}}

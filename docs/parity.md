@@ -170,7 +170,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_portal_element` | `pipefy portal element update` | shipped | positional element + page UUIDs; `--type` + full `--metadata` JSON (API replace-all). |
 | `update_sub_portal_element` | `pipefy portal sub-portal attach` | shipped | positional portal, element, and sub-portal UUIDs; internal_api `updateSubPortalElement`. |
 | `update_table` | `pipefy table update` | shipped | — |
-| `update_table_field` | `pipefy table field update` | shipped | `--table` recommended. |
+| `update_table_field` | `pipefy table field update` | shipped | `--table` recommended; `--label`/`--description`/`--required`/`--options` or `--extra`. |
 | `update_table_record` | `pipefy record update` | shipped | (``--fields`` JSON). |
 | `update_webhook` | `pipefy webhook update` | shipped | — |
 | `upload_attachment_to_card` | `pipefy attachment upload --card` | shipped | (also needs `--organization`, `--field`, `--file`). |

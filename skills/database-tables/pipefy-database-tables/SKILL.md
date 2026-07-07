@@ -40,7 +40,7 @@ Tables, records (rows), schema columns (table fields), and attachments for Pipef
 | Tool (MCP) | CLI | Purpose |
 |------------|-----|---------|
 | `create_table_field` | `pipefy table field create <table_id> --label <name> --type <type>` | Add a column to a table schema. |
-| `update_table_field` | `pipefy table field update <field_id> --table <table_id> --label <name>` | Rename or change column settings. |
+| `update_table_field` | `pipefy table field update <field_id> --table <table_id> --label <name>` | Rename or change column settings (`--description`, `--required`, `--options`). |
 | `delete_table_field` | `pipefy table field delete <field_id> --table <table_id>` | **Two-step destructive.** Requires `table_id`. |
 
 ---

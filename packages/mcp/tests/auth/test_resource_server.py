@@ -50,9 +50,30 @@ async def test_maps_claims_to_access_token() -> None:
     assert token is not None
     assert token.token == "the-token"
     assert token.client_id == "client-abc"
+    assert token.sub == "user-123"
     assert token.scopes == ["read", "write"]
     assert token.expires_at == _EXP
     assert token.resource == _RESOURCE
+
+
+@pytest.mark.unit
+async def test_sub_is_none_when_claim_absent() -> None:
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "exp": _EXP})
+    ).verify_token("t")
+    assert token is not None
+    assert token.client_id == "client-abc"
+    assert token.sub is None
+
+
+@pytest.mark.unit
+async def test_sub_preserved_when_azp_is_client_id() -> None:
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "sub": "user-123", "exp": _EXP})
+    ).verify_token("t")
+    assert token is not None
+    assert token.client_id == "client-abc"
+    assert token.sub == "user-123"
 
 
 @pytest.mark.unit

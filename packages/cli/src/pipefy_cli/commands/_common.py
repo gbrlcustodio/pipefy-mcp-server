@@ -303,6 +303,23 @@ def parse_json_object(raw: str | None, option_name: str) -> dict[str, Any] | Non
     return parsed
 
 
+def merge_extra_attrs(
+    explicit: dict[str, Any],
+    extra: dict[str, Any] | None,
+    *,
+    reserved: frozenset[str],
+) -> dict[str, Any]:
+    """Merge ``--extra`` into attrs; skip reserved keys and null values."""
+    merged: dict[str, Any] = {}
+    for key, value in (extra or {}).items():
+        if key not in reserved and value is not None:
+            merged[key] = value
+    for key, value in explicit.items():
+        if value is not None:
+            merged[key] = value
+    return merged
+
+
 def confirm_destructive(*, yes: bool, description: str, verb: str = "delete") -> None:
     """Prompt before a destructive action unless ``yes`` is True."""
     if yes:

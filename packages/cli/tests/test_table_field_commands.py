@@ -114,3 +114,153 @@ def test_table_field_delete_aborts_when_user_denies_confirm(
         )
     assert result.exit_code != 0
     mock_client.delete_table_field.assert_not_called()
+
+
+def test_table_field_create_strips_reserved_keys_from_extra(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("tbl-field-create-extra")
+    mock_client = MagicMock()
+    mock_client.create_table_field = AsyncMock(
+        return_value={"createTableField": {"table_field": {"id": "f1"}}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "table",
+                "field",
+                "create",
+                "42",
+                "--label",
+                "Phone",
+                "--type",
+                "phone",
+                "--extra",
+                '{"label":"Shadow","table_id":"99","type":"short_text","description":"ok"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0
+    mock_client.create_table_field.assert_awaited_once_with(
+        "42", "Phone", "phone", description="ok"
+    )
+
+
+def test_table_field_update_strips_id_from_extra(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("tbl-field-update-extra-id")
+    mock_client = MagicMock()
+    mock_client.update_table_field = AsyncMock(
+        return_value={"updateTableField": {"table_field": {"id": "f1"}}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "table",
+                "field",
+                "update",
+                "f1",
+                "--label",
+                "Phone 2",
+                "--extra",
+                '{"id":"999"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0
+    mock_client.update_table_field.assert_awaited_once_with(
+        "f1", table_id=None, label="Phone 2"
+    )
+
+
+def test_table_field_update_accepts_table_id_from_extra(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("tbl-field-update-extra-table")
+    mock_client = MagicMock()
+    mock_client.update_table_field = AsyncMock(
+        return_value={"updateTableField": {"table_field": {"id": "f1"}}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "table",
+                "field",
+                "update",
+                "f1",
+                "--label",
+                "Phone 2",
+                "--extra",
+                '{"table_id":"42"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0
+    mock_client.update_table_field.assert_awaited_once_with(
+        "f1", table_id="42", label="Phone 2"
+    )
+
+
+def test_table_field_update_prefers_table_flag_over_extra_table_id(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("tbl-field-update-table-priority")
+    mock_client = MagicMock()
+    mock_client.update_table_field = AsyncMock(
+        return_value={"updateTableField": {"table_field": {"id": "f1"}}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "table",
+                "field",
+                "update",
+                "f1",
+                "--table",
+                "42",
+                "--label",
+                "Phone 2",
+                "--extra",
+                '{"table_id":"99"}',
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0
+    mock_client.update_table_field.assert_awaited_once_with(
+        "f1", table_id="42", label="Phone 2"
+    )
+
+
+def test_table_field_update_rejects_empty_attrs(
+    runner, clean_pipefy_env, saved_cwd, oauth_env
+):
+    oauth_env("tbl-field-update-empty")
+    mock_client = MagicMock()
+    mock_client.update_table_field = AsyncMock(return_value={})
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            ["table", "field", "update", "f1", "--json"],
+        )
+    assert result.exit_code != 0
+    mock_client.update_table_field.assert_not_called()

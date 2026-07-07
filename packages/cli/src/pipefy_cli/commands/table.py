@@ -10,18 +10,17 @@ from pipefy_sdk import PipefyClient
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
+    merge_extra_attrs,
     parse_json_object,
     resource_id_argument,
     run_cli_command,
 )
 
+_CREATE_TABLE_FIELD_EXTRA_RESERVED = frozenset({"table_id", "label", "type"})
+_UPDATE_TABLE_FIELD_EXTRA_RESERVED = frozenset({"id"})
+
 table_app = typer.Typer(help="Database table operations.", no_args_is_help=True)
-table_field_app = typer.Typer(
-    help=(
-        "Table field (column) operations. For pipe phase fields, use `pipefy field`."
-    ),
-    no_args_is_help=True,
-)
+table_field_app = typer.Typer(help="Table field operations.", no_args_is_help=True)
 
 
 @table_app.command("list")
@@ -175,7 +174,7 @@ def table_field_create(
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Create a field (column) on a database table."""
+    """Create a field on a database table."""
 
     extra = parse_json_object(extra_json, "--extra") or {}
     lab = label.strip()
@@ -183,6 +182,7 @@ def table_field_create(
     if not lab or not ft:
         typer.echo("--label and --type must be non-empty.", err=True)
         raise typer.Exit(2)
+    extra = merge_extra_attrs({}, extra, reserved=_CREATE_TABLE_FIELD_EXTRA_RESERVED)
 
     async def factory(client: PipefyClient):
         return await client.create_table_field(table_id, lab, ft, **extra)
@@ -197,7 +197,7 @@ def table_field_update(
     table: str | None = typer.Option(
         None,
         "--table",
-        help="Table id containing this field (recommended; required by API).",
+        help="Table id containing this field.",
     ),
     label: str | None = typer.Option(None, "--label", "-l", help="New field label."),
     extra_json: str | None = typer.Option(
@@ -207,20 +207,24 @@ def table_field_update(
     ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Update a database table field (column)."""
+    """Update a database table field."""
 
     extra = parse_json_object(extra_json, "--extra") or {}
     attrs: dict[str, Any] = {}
     if label is not None:
         attrs["label"] = label
-    attrs.update(extra)
+    reserved = _UPDATE_TABLE_FIELD_EXTRA_RESERVED
+    if table is not None:
+        reserved = reserved | frozenset({"table_id"})
+    attrs = merge_extra_attrs(attrs, extra, reserved=reserved)
     if not attrs:
         raise typer.BadParameter(
             "Provide at least one of: --label, --extra (non-empty)."
         )
+    table_id = table if table is not None else attrs.pop("table_id", None)
 
     async def factory(client: PipefyClient):
-        return await client.update_table_field(field_id, table_id=table, **attrs)
+        return await client.update_table_field(field_id, table_id=table_id, **attrs)
 
     run_cli_command(ctx, json_out, factory)
 
@@ -233,7 +237,7 @@ def table_field_delete(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
-    """Delete a database table field (column) permanently."""
+    """Delete a database table field permanently."""
 
     confirm_destructive(yes=yes, description=f"table field {field_id}")
 

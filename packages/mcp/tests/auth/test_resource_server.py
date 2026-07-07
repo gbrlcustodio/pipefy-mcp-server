@@ -77,6 +77,17 @@ async def test_sub_preserved_when_azp_is_client_id() -> None:
 
 
 @pytest.mark.unit
+async def test_non_string_sub_degrades_to_none_instead_of_rejecting() -> None:
+    """sub feeds logging only; a malformed sub must not reject a valid token."""
+    token = await JwtTokenVerifier(
+        _StubValidator(claims={"azp": "client-abc", "sub": 12345, "exp": _EXP})
+    ).verify_token("t")
+    assert token is not None
+    assert token.client_id == "client-abc"
+    assert token.sub is None
+
+
+@pytest.mark.unit
 async def test_client_id_falls_back_to_client_id_then_sub() -> None:
     by_client_id = await JwtTokenVerifier(
         _StubValidator(claims={"client_id": "cid", "sub": "user-123", "exp": _EXP})

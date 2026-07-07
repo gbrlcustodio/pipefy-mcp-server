@@ -110,6 +110,11 @@ class JwtTokenVerifier(TokenVerifier):
         if exp is None:
             raise ValueError("token has no exp claim")
 
+        # sub feeds request logging only; a malformed (non-string) sub must
+        # degrade to None, not reject a token the verifier accepted before the
+        # field existed.
+        sub_claim = claims.get("sub")
+
         return PipefyAccessToken(
             token=token,
             client_id=client_id,
@@ -118,7 +123,7 @@ class JwtTokenVerifier(TokenVerifier):
             # wants an int.
             expires_at=int(exp),
             resource=self._resource,
-            sub=claims.get("sub"),
+            sub=sub_claim if isinstance(sub_claim, str) else None,
         )
 
 

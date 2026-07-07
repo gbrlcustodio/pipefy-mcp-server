@@ -80,6 +80,23 @@ stays off until that lands (see `experiments/hosted-obo/RFC-OUTLINE.md`). The
 attachment tools' local `file_path` inputs also still assume a loopback peer that
 shares the client's disk (remote-safe file inputs are separate follow-up work).
 
+## Hosted structured logging
+
+The HTTP transport emits one JSON line per request on stdout for hosted
+observability (`pipefy_mcp/observability/`). Stdio does **not** install request
+logging: under stdio, stdout is the JSON-RPC wire, so structured lines there
+would corrupt the protocol.
+
+Wiring lives in `wire_hosted_observability` (`observability/wiring.py`): it calls
+`streamable_http_app()` once, attaches request middleware, and returns the Starlette app.
+`run_server` serves that app with uvicorn directly (`access_log=False`) so the
+structured request line replaces uvicorn's text access log.
+
+The request logger is **pure-ASGI middleware** (`RequestLogMiddleware`), never
+Starlette `BaseHTTPMiddleware`: `BaseHTTPMiddleware` buffers the response body,
+which breaks long-lived Streamable HTTP / SSE streams. The pure-ASGI middleware
+only inspects `http.response.start` (status + headers) and passes the body through.
+
 ## Tool registration
 
 Tools are registered **once, at construction** (via `_register_pipefy_tools` in

@@ -5,6 +5,7 @@ import textwrap
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
+import anyio
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.runtime import McpRuntime
@@ -14,6 +15,7 @@ from pipefy_mcp.core.tool_middleware import (
 )
 from pipefy_mcp.observability.json_logging import configure_observability_logging
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
+from pipefy_mcp.observability.wiring import wire_hosted_observability
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
@@ -166,6 +168,23 @@ def _assert_safe_http_bind(*, host: str) -> None:
     )
 
 
+async def _serve_streamable_http(app: FastMCP, settings: Settings) -> None:
+    """Serve Streamable HTTP with hosted observability middleware wired in."""
+    import uvicorn
+
+    http_app = wire_hosted_observability(app, settings)
+    mcp = settings.mcp
+    config = uvicorn.Config(
+        http_app,
+        host=mcp.host,
+        port=mcp.port,
+        log_level=mcp.log_level.lower(),
+        access_log=False,
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
 def run_server(settings: Settings) -> None:
     """Run the Pipefy MCP server. The single serve entry point for both transports.
 
@@ -216,4 +235,4 @@ def run_server(settings: Settings) -> None:
     )
     _assert_safe_http_bind(host=mcp.host)
 
-    build_pipefy_mcp_server(settings).run("streamable-http")
+    anyio.run(_serve_streamable_http, build_pipefy_mcp_server(settings), settings)

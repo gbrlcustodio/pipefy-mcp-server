@@ -109,7 +109,8 @@ def test_build_pipefy_mcp_server_passes_log_level_to_fastmcp(mocked_runtime):
 
 
 @pytest.mark.unit
-def test_run_server_configures_structured_logging(monkeypatch):
+def test_run_server_stdio_does_not_configure_structured_logging(monkeypatch):
+    """Stdio must not carry a stdout log handler: stdout is the JSON-RPC wire."""
     monkeypatch.delenv("PIPEFY_MCP_PROFILE", raising=False)
     monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
     with (
@@ -119,7 +120,7 @@ def test_run_server_configures_structured_logging(monkeypatch):
         run_server(
             resolve_mcp_settings(profile=None, transport=None, host=None, port=None)
         )
-    mock_configure.assert_called_once_with(log_level="INFO")
+    mock_configure.assert_not_called()
 
 
 @pytest.mark.unit
@@ -391,6 +392,7 @@ async def test_serve_streamable_http_disables_uvicorn_access_log(remote_rs_env):
         profile="remote", transport="http", host="127.0.0.1", port=9123
     )
     with (
+        patch("pipefy_mcp.server.configure_observability_logging") as mock_configure,
         patch(
             "pipefy_mcp.server.wire_hosted_observability",
             return_value=mock_http_app,
@@ -401,6 +403,7 @@ async def test_serve_streamable_http_disables_uvicorn_access_log(remote_rs_env):
         mock_server_cls.return_value.serve = AsyncMock()
         await _serve_streamable_http(fake_app, settings)
 
+    mock_configure.assert_called_once_with(log_level="INFO")
     mock_wire.assert_called_once_with(fake_app, settings)
     mock_config_cls.assert_called_once_with(
         mock_http_app,

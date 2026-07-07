@@ -8,8 +8,9 @@ from typing import Any
 
 import anyio
 import pytest
-from mcp.server.auth.middleware.auth_context import AuthenticatedUser
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
+from starlette.authentication import UnauthenticatedUser
 
 from pipefy_mcp.auth.resource_server import PipefyAccessToken
 from pipefy_mcp.observability.json_logging import (
@@ -148,16 +149,17 @@ async def test_does_not_buffer_streaming_response_body(capsys):
         downstream_messages.append(message)
 
     middleware = RequestLogMiddleware(streaming_app)
-    async with anyio.create_task_group() as tg:
-        tg.start_soon(middleware, scope, _noop_receive, recording_send)
-        await first_chunk_sent.wait()
-        body_messages = [
-            message
-            for message in downstream_messages
-            if message["type"] == "http.response.body"
-        ]
-        assert body_messages[0]["body"] == b"partial"
-        unblock_app.set()
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(middleware, scope, _noop_receive, recording_send)
+            await first_chunk_sent.wait()
+            body_messages = [
+                message
+                for message in downstream_messages
+                if message["type"] == "http.response.body"
+            ]
+            assert body_messages[0]["body"] == b"partial"
+            unblock_app.set()
 
     assert len(_read_log_lines(capsys)) == 1
 
@@ -182,6 +184,32 @@ async def test_disconnect_mid_stream_still_emits_one_line(capsys):
         return {"type": "http.disconnect"}
 
     await _run_middleware(streaming_app, _http_scope(), receive=disconnect_receive)
+
+    lines = _read_log_lines(capsys)
+    assert len(lines) == 1
+    assert lines[0]["status"] == 200
+
+
+@pytest.mark.anyio
+async def test_send_failure_mid_stream_still_emits_one_line(capsys):
+    """A send that raises after the first chunk (aborted socket) still logs once."""
+    _configure_for_capture()
+    sent_count = 0
+
+    async def streaming_app(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"one", "more_body": True})
+        await send({"type": "http.response.body", "body": b"two", "more_body": False})
+
+    async def failing_send(message: dict[str, Any]) -> None:
+        nonlocal sent_count
+        sent_count += 1
+        if sent_count == 3:
+            raise RuntimeError("peer closed connection")
+
+    middleware = RequestLogMiddleware(streaming_app)
+    with pytest.raises(RuntimeError, match="peer closed connection"):
+        await middleware(_http_scope(), _noop_receive, failing_send)
 
     lines = _read_log_lines(capsys)
     assert len(lines) == 1
@@ -248,12 +276,34 @@ async def test_sub_and_client_id_from_scope_user(capsys):
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"", "more_body": False})
 
-    scope = _http_scope(user=AuthenticatedUser(access_token))
+    scope = _http_scope(
+        user=AuthenticatedUser(access_token),
+        headers=[(b"authorization", b"Bearer the-token")],
+    )
     await _run_middleware(app, scope)
 
     lines = _read_log_lines(capsys)
     assert lines[0]["sub"] == "user-123"
     assert lines[0]["client_id"] == "client-abc"
+    assert "the-token" not in json.dumps(lines)
+
+
+@pytest.mark.anyio
+async def test_unauthenticated_user_yields_null_identity(capsys):
+    """The real auth stack sets UnauthenticatedUser, not a missing key."""
+    _configure_for_capture()
+
+    async def app(scope, receive, send):
+        await send({"type": "http.response.start", "status": 401, "headers": []})
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+    scope = _http_scope(user=UnauthenticatedUser())
+    await _run_middleware(app, scope)
+
+    lines = _read_log_lines(capsys)
+    assert lines[0]["sub"] is None
+    assert lines[0]["client_id"] is None
+    assert lines[0]["status"] == 401
 
 
 @pytest.mark.anyio
@@ -302,9 +352,13 @@ async def test_plain_access_token_yields_null_sub(capsys):
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"", "more_body": False})
 
-    scope = _http_scope(user=AuthenticatedUser(access_token))
+    scope = _http_scope(
+        user=AuthenticatedUser(access_token),
+        headers=[(b"authorization", b"Bearer the-token")],
+    )
     await _run_middleware(app, scope)
 
     lines = _read_log_lines(capsys)
     assert lines[0]["sub"] is None
     assert lines[0]["client_id"] == "client-abc"
+    assert "the-token" not in json.dumps(lines)

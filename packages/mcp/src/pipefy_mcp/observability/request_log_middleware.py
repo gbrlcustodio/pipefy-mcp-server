@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable, MutableMapping
 from typing import Any
 from uuid import uuid4
 
-from mcp.server.auth.middleware.auth_context import AuthenticatedUser
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 
 from pipefy_mcp.auth.resource_server import PipefyAccessToken
 from pipefy_mcp.observability.json_logging import (

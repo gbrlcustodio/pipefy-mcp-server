@@ -163,6 +163,19 @@ def test_mcp_settings_defaults():
     assert mcp.transport == "stdio"
     assert mcp.host == "127.0.0.1"
     assert mcp.port == 8000
+    assert mcp.log_level == "INFO"
+
+
+@pytest.mark.unit
+def test_mcp_settings_log_level_from_env_normalizes_case(monkeypatch):
+    monkeypatch.setenv("PIPEFY_MCP_LOG_LEVEL", "warning")
+    assert Settings().mcp.log_level == "WARNING"
+
+
+@pytest.mark.unit
+def test_mcp_settings_log_level_rejects_unknown_value():
+    with pytest.raises(ValidationError):
+        McpSettings(log_level="verbose")
 
 
 @pytest.mark.unit

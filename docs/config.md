@@ -42,6 +42,7 @@ unified_envelope = true
 remote_mode = false
 host = "127.0.0.1"
 port = 8000
+log_level = "INFO"
 ```
 
 Keys use **bare pydantic field names**, not the upper-case `PIPEFY_<NAME>` environment variable names. The env-only aliases (`PIPEFY_TOKEN`, `PIPEFY_OAUTH_CLIENT`, ...) exist to refuse unprefixed environment leakage and do not double as TOML keys.
@@ -115,3 +116,16 @@ Storing OAuth credentials in `config.toml` puts them on disk in plain text. The 
 ```
 
 A future file-backed keyring backend (#237) will write its credential store as `~/.config/pipefy/keyring.cfg` next to these — a separate file with its own format.
+
+## MCP server (`pipefy-mcp-server`)
+
+These variables load into `pipefy_mcp.McpSettings` (`settings.mcp`). TOML keys use the bare field names under the same top-level file (see [Schema](#schema)).
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `PIPEFY_MCP_PROFILE` | `local` | Launch profile: `local` registers every tool; `remote` exposes only remote-safe tools and validates an inbound bearer per request. |
+| `PIPEFY_MCP_TRANSPORT` | derived from profile | `stdio` or `http`. Unset: `local` → `stdio`, `remote` → `http`. |
+| `PIPEFY_MCP_HOST` | `127.0.0.1` | HTTP bind host (loopback only until hosted OBO lands). |
+| `PIPEFY_MCP_PORT` | `8000` | HTTP bind port. |
+| `PIPEFY_MCP_UNIFIED_ENVELOPE` | `true` | When true, migrated tools return `{success, data, ...}`. |
+| `PIPEFY_MCP_LOG_LEVEL` | `INFO` | Governs **both** hosted structured JSON lines on **stdout** and the FastMCP root logger (RichHandler text on **stderr**). Accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (case-insensitive). The server passes the resolved level to `FastMCP(log_level=...)` at construction, so this is the single operator knob for MCP logging. Some MCP tooling documents a separate `FASTMCP_LOG_LEVEL` env var; when using `pipefy-mcp-server`, prefer `PIPEFY_MCP_LOG_LEVEL` — it configures the root logger explicitly and keeps structured events on the same level. |

@@ -94,6 +94,30 @@ async def test_register_tools(mocked_runtime):
 
 
 @pytest.mark.unit
+def test_build_pipefy_mcp_server_passes_log_level_to_fastmcp(mocked_runtime):
+    settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
+        update={"mcp": McpSettings(log_level="WARNING")}
+    )
+    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
+        build_pipefy_mcp_server(settings)
+    assert mock_fastmcp.call_args.kwargs["log_level"] == "WARNING"
+
+
+@pytest.mark.unit
+def test_run_server_configures_structured_logging(monkeypatch):
+    monkeypatch.delenv("PIPEFY_MCP_PROFILE", raising=False)
+    monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
+    with (
+        patch("pipefy_mcp.server.configure_observability_logging") as mock_configure,
+        patch("pipefy_mcp.server.build_pipefy_mcp_server"),
+    ):
+        run_server(
+            resolve_mcp_settings(profile=None, transport=None, host=None, port=None)
+        )
+    mock_configure.assert_called_once_with(log_level="INFO")
+
+
+@pytest.mark.unit
 def test_run_server_builds_the_stdio_server_and_runs_it(monkeypatch):
     """The default (local/stdio) profile builds at startup and delegates to mcp.run()."""
     monkeypatch.delenv("PIPEFY_MCP_PROFILE", raising=False)

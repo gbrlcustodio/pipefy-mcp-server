@@ -6,12 +6,20 @@ from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_infra import security
 from pipefy_infra.config import PipefyTomlConfigSource
 from pipefy_sdk import PipefySettings
-from pydantic import AliasChoices, Field, ValidationError, model_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
+
+McpLogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 
 class McpSettings(BaseSettings):
@@ -23,7 +31,7 @@ class McpSettings(BaseSettings):
     re-attaches it so the operator-facing ``PIPEFY_MCP_*`` env vars stay
     byte-identical. The shared ``config.toml`` source keys off the bare field
     names, so TOML keys are ``unified_envelope``, ``profile``, ``transport``,
-    ``host``, ``port``.
+    ``host``, ``port``, ``log_level``.
     """
 
     model_config = SettingsConfigDict(
@@ -101,6 +109,23 @@ class McpSettings(BaseSettings):
             "Only consulted when serving over HTTP (--transport http)."
         ),
     )
+
+    log_level: McpLogLevel = Field(
+        default="INFO",
+        description=(
+            "Log level for hosted structured JSON events on stdout and the "
+            "FastMCP root logger on stderr (env: PIPEFY_MCP_LOG_LEVEL). "
+            "Accepts DEBUG, INFO, WARNING, ERROR, or CRITICAL; normalized to "
+            "uppercase."
+        ),
+    )
+
+    @field_validator("log_level", mode="before")
+    @classmethod
+    def _normalize_log_level(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.upper()
+        return value
 
     @model_validator(mode="after")
     def _resolve_transport(self) -> Self:
@@ -279,6 +304,7 @@ settings = Settings()
 __all__ = [
     "AuthSettings",
     "JwtValidationSettings",
+    "McpLogLevel",
     "McpSettings",
     "PipefySettings",
     "ResourceServerSettings",

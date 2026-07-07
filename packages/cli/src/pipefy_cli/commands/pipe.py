@@ -35,6 +35,25 @@ def pipe_get(
     run_cli_command(ctx, json_out, factory)
 
 
+@pipe_app.command("start-form", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def pipe_start_form(
+    ctx: typer.Context,
+    pipe_id: str = resource_id_argument(help="Pipe id."),
+    required_only: bool = typer.Option(
+        False,
+        "--required-only",
+        help="Return only required fields.",
+    ),
+    json_out: bool = typer.Option(False, "--json", "-j"),
+) -> None:
+    """List start-form fields for card creation (``get_start_form_fields``)."""
+
+    async def factory(client: PipefyClient):
+        return await client.get_start_form_fields(pipe_id, required_only=required_only)
+
+    run_cli_command(ctx, json_out, factory)
+
+
 @pipe_app.command("list")
 def pipe_list(
     ctx: typer.Context,

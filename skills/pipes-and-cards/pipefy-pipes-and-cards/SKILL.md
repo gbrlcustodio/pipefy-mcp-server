@@ -129,7 +129,7 @@ Use this workflow to place at least one card in each workflow phase (demos, QA c
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
 | `get_phase_fields` | `pipefy field list --phase <id>` | Yes | List fields on a phase. |
-| `get_start_form_fields` | — | Yes | List start-form fields for card creation. |
+| `get_start_form_fields` | `pipefy pipe start-form <pipe_id>` | Yes | List start-form fields for card creation. |
 | `create_phase_field` | `pipefy field create --phase <id>` | No | Add field to a phase. |
 | `update_phase_field` | `pipefy field update <id>` | No | Rename, reorder, change required flag. |
 | `delete_phase_field` | `pipefy field delete <id>` | No | **Two-step destructive.** |
@@ -150,6 +150,7 @@ This returns valid `type` enum values and their descriptions.
 | `get_cards` | `pipefy card list --pipe <id>` | Yes | Paginated card list by pipe. |
 | `find_cards` | `pipefy card find --pipe <id>` | Yes | Filter by a single field value. |
 | `create_card` | `pipefy card create <pipe_id>` | No | Default: start form. Optional `--phase-id` / `phase_id` creates in that phase; interactive clients may elicit start-form fields unless `skip_elicitation=true`. |
+| `fill_card_phase_fields` | `pipefy card fill <id> --phase <id>` | No | Fill phase fields non-interactively; filters to editable IDs. Uses `--fields` JSON object; for ad-hoc updates use `card update --field-updates` (JSON array). |
 | `update_card` | `pipefy card update <id>` | No | Update title, assignee, due date, fields. |
 | `move_card_to_phase` | `pipefy card move <id> --phase <id>` | No | Call `get_phase_allowed_move_targets` on the source phase first. |
 | `delete_card` | `pipefy card delete <id>` | No | **Two-step destructive.** |
@@ -161,7 +162,7 @@ This returns valid `type` enum values and their descriptions.
 
    MCP: `get_start_form_fields pipe_id=67890`
 
-   CLI: (use MCP or check pipe config)
+   CLI: `pipefy pipe start-form 67890 --json`
 
 2. **Create the card with fields:**
 

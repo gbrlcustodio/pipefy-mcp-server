@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **CLI**: `pipefy relation table list --ids <id,...>` mirrors MCP `get_table_relations` (table-relation IDs, not database table IDs).
+- **CLI**: `pipefy pipe start-form <pipe_id>` mirrors MCP `get_start_form_fields` (optional `--required-only`).
+- **CLI**: `pipefy card fill <card_id> --phase <phase_id> --fields '{"…"}'` fills phase fields non-interactively; filters to editable phase field IDs before `update_card`. Optional `--required-only` limits the phase field lookup to required fields. JSON responses may include `skipped_field_ids` when `--fields` keys are dropped by the filter.
+- **SDK**: `pipefy_sdk.field_filters` exports `filter_editable_field_definitions`, `filter_fields_by_definitions`, and `skipped_field_ids` for shared MCP/CLI field filtering.
+
 ### Changed
 
 - **CLI / Plugin (Claude Code)**: the CLI install path now installs `pipefy-cli` from PyPI instead of a `git+…#subdirectory=packages/cli` reference with `--with` sibling pins. The `/pipefy:install` slash command runs `uv tool install --force pipefy-cli`, and the documented snippets (root `README.md`, `packages/cli/README.md`, `docs/MIGRATION.md`) use `uvx --from pipefy-cli pipefy …` / `uv tool install pipefy-cli`. PyPI resolves `pipefy` and `pipefy-auth` transitively, so the explicit `--with` flags are gone and installs no longer pay a git clone plus build. This matches the MCP server's PyPI install (#368); do not pass a global `--prerelease allow`, which would let transitive dependencies jump to their own pre-releases. `RELEASE.md` verification snippets move to PyPI accordingly, and the now-unused `latest` moving-tag release step is removed. Closes #234.

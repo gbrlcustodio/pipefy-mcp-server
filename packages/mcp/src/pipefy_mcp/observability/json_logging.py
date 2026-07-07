@@ -41,12 +41,26 @@ TOOL_CALL_EVENT_KEYS = frozenset(
 )
 
 
+_LOG_LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
+
+
 def normalize_log_level(log_level: str) -> int:
-    """Map a settings/env log level string to a ``logging`` level constant."""
+    """Map a settings/env log level string to a ``logging`` level constant.
+
+    An explicit map rather than ``getattr(logging, ...)``: the module carries
+    uppercase attributes that are not levels (``BASIC_FORMAT``) and aliases the
+    settings ``Literal`` rejects (``WARN``, ``FATAL``); both must fail here too.
+    """
     normalized = log_level.upper()
     try:
-        return getattr(logging, normalized)
-    except AttributeError as exc:
+        return _LOG_LEVELS[normalized]
+    except KeyError as exc:
         raise ValueError(
             f"invalid log level: received {log_level!r}, expected one of "
             "DEBUG, INFO, WARNING, ERROR, CRITICAL"

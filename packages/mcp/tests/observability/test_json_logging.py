@@ -18,6 +18,7 @@ from pipefy_mcp.observability.json_logging import (
     build_tool_call_event,
     configure_observability_logging,
     emit_structured_event,
+    normalize_log_level,
     reset_observability_logging,
 )
 
@@ -219,3 +220,32 @@ class TestObservabilityLoggingEmitter:
         assert len(logger.handlers) == 1
         assert logger.handlers[0].stream is sys.stdout
         assert logger.propagate is False
+
+    def test_configure_twice_keeps_one_handler_and_one_line(self, capsys):
+        configure_observability_logging(log_level="INFO")
+        configure_observability_logging(log_level="INFO")
+
+        emit_structured_event(
+            build_tool_call_event(
+                tool="get_card",
+                outcome="ok",
+                duration_ms=1,
+                arg_keys=[],
+                request_id="req-once",
+                timestamp=_FIXED_TIMESTAMP,
+            )
+        )
+
+        logger = logging.getLogger(OBSERVABILITY_LOGGER_NAME)
+        assert len(logger.handlers) == 1
+        assert len(capsys.readouterr().out.strip().splitlines()) == 1
+
+    def test_normalize_log_level_rejects_unknown_name(self):
+        with pytest.raises(ValueError, match="invalid log level"):
+            normalize_log_level("verbose")
+
+    def test_normalize_log_level_rejects_non_level_logging_attribute(self):
+        # getattr(logging, ...) resolves module attributes that are not levels;
+        # anything that does not map to an int level must be rejected.
+        with pytest.raises(ValueError, match="invalid log level"):
+            normalize_log_level("BASIC_FORMAT")

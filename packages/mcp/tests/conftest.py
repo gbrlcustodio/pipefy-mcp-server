@@ -2,6 +2,7 @@
 
 import pytest
 
+from pipefy_mcp.observability.json_logging import reset_observability_logging
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
 
 # Same validation envelope as ``server.py`` lifespan (idempotent).
@@ -30,3 +31,17 @@ def clear_auth_env(monkeypatch):
     """Strip ambient ``PIPEFY_*`` auth env so ``AuthSettings()`` is hermetic."""
     for key in _AUTH_ENV_KEYS:
         monkeypatch.delenv(key, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _reset_observability_logging_between_tests():
+    """Drop observability handlers after every test.
+
+    The observability logger is process-global. Any test that reaches
+    ``configure_observability_logging`` (directly or through ``run_server``)
+    would otherwise leave a handler bound to that test's captured stdout, and a
+    later ``emit_structured_event`` in an unrelated test would write into a
+    closed stream.
+    """
+    yield
+    reset_observability_logging()

@@ -12,6 +12,7 @@ from pipefy_cli.commands._common import (
     confirm_destructive,
     merge_extra_attrs,
     parse_json_object,
+    parse_json_value,
     resource_id_argument,
     run_cli_command,
 )
@@ -200,6 +201,19 @@ def table_field_update(
         help="Table id containing this field.",
     ),
     label: str | None = typer.Option(None, "--label", "-l", help="New field label."),
+    description: str | None = typer.Option(
+        None, "--description", "-d", help="New field description."
+    ),
+    required: bool | None = typer.Option(
+        None,
+        "--required/--not-required",
+        help="Whether the field is required.",
+    ),
+    options_json: str | None = typer.Option(
+        None,
+        "--options",
+        help="JSON array or object of field options, if changing.",
+    ),
     extra_json: str | None = typer.Option(
         None,
         "--extra",
@@ -210,16 +224,24 @@ def table_field_update(
     """Update a database table field."""
 
     extra = parse_json_object(extra_json, "--extra") or {}
+    options = parse_json_value(options_json, "--options") if options_json else None
     attrs: dict[str, Any] = {}
     if label is not None:
         attrs["label"] = label
+    if description is not None:
+        attrs["description"] = description
+    if required is not None:
+        attrs["required"] = required
+    if options is not None:
+        attrs["options"] = options
     reserved = _UPDATE_TABLE_FIELD_EXTRA_RESERVED
     if table is not None:
         reserved = reserved | frozenset({"table_id"})
     attrs = merge_extra_attrs(attrs, extra, reserved=reserved)
     if not attrs:
         raise typer.BadParameter(
-            "Provide at least one of: --label, --extra (non-empty)."
+            "Provide at least one of: --label, --description, --required, "
+            "--options, --extra (non-empty)."
         )
     table_id = table if table is not None else attrs.pop("table_id", None)
 

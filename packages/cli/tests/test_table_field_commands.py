@@ -248,6 +248,40 @@ def test_table_field_update_prefers_table_flag_over_extra_table_id(
     )
 
 
+def test_table_field_update_typed_flags(runner, clean_pipefy_env, saved_cwd, oauth_env):
+    oauth_env("tbl-field-update-typed")
+    mock_client = MagicMock()
+    mock_client.update_table_field = AsyncMock(
+        return_value={"updateTableField": {"table_field": {"id": "f1"}}}
+    )
+    with patch(
+        "pipefy_cli.commands._common.get_authenticated_client",
+        return_value=mock_client,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "table",
+                "field",
+                "update",
+                "f1",
+                "--table",
+                "42",
+                "--description",
+                "Work phone",
+                "--required",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0
+    mock_client.update_table_field.assert_awaited_once_with(
+        "f1",
+        table_id="42",
+        description="Work phone",
+        required=True,
+    )
+
+
 def test_table_field_update_rejects_empty_attrs(
     runner, clean_pipefy_env, saved_cwd, oauth_env
 ):

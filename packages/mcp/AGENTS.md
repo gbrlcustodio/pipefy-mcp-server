@@ -214,7 +214,10 @@ runtime.register_tool_middleware(quota)   # before install_tool_call_middleware(
 
 The chain installs on every profile (a pass-through when nothing is registered);
 the built-in structured logger (`observability/tool_log_middleware.py`) is seeded
-only under the `remote` profile. That logger emits through the `logging` module
+by default only under the `remote` profile. That is a default, not a capability
+boundary: per-call concerns like observability and downstream protection apply to
+any deployment (only per-user concerns are hosted-specific), so a local deployment
+can register its own middleware. The logger emits through the `logging` module
 (stderr), never stdout, which is the stdio transport's JSON-RPC stream.
 
 The wrap targets a FastMCP internal and is tested against `mcp==1.25.0`; the

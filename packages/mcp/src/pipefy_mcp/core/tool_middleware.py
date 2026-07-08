@@ -1,12 +1,14 @@
 """Ordered middleware chain around MCP tool invocation.
 
-The hosted profile needs to run cross-cutting logic around each tool call with
-the caller's validated identity in hand: logging, per-user quotas, rate limiting,
-cost weighting, downstream 429/circuit-breaking. The MCP SDK offers no seam for
-this: FastMCP dispatches every tool call through a single ``CallToolRequest``
-entry in the low-level server's ``request_handlers`` dict, and the only way to
-observe or govern a call is to overwrite that one private slot, so the next
-feature that needs it clobbers the previous.
+The server needs a seam to run cross-cutting logic around each tool call. Some of
+it spans every deployment (observability, and downstream protection such as
+honoring the API's 429s or circuit-breaking); some is specific to the multi-tenant
+hosted profile (per-user quotas, rate limiting, and cost attribution keyed on the
+validated caller). The MCP SDK offers no such seam: FastMCP dispatches every tool
+call through a single ``CallToolRequest`` entry in the low-level server's
+``request_handlers`` dict, and the only way to observe or govern a call is to
+overwrite that one private slot, so the next feature that needs it clobbers the
+previous.
 
 This module turns that single slot into an ordered chain. Middleware register on
 :class:`~pipefy_mcp.core.runtime.McpRuntime` (the public seam) and this module

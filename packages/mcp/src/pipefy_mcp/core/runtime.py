@@ -168,10 +168,12 @@ class McpRuntime:
                     "per-request bearer and acts on behalf of the caller."
                 )
             runtime = cls(settings, RequestScopedIdentity(), inbound_auth=inbound_auth)
-            # Structured tool-call logging is a hosted-operations concern; seed it
-            # only under the remote profile. The chain itself is installed on every
-            # profile (see install_tool_call_middleware), but the built-in logger
-            # stays off the stdio/local path.
+            # Default the built-in tool-call logger on under the hosted profile,
+            # where structured logs are how operators attribute activity. This is a
+            # default, not a capability boundary: the chain installs on every profile
+            # (see install_tool_call_middleware), so a local deployment can register
+            # its own middleware, and tool logging could later become a config toggle
+            # a local user opts into.
             runtime.register_tool_middleware(tool_log_middleware)
             return runtime
         return cls(settings, StartupIdentity.from_configured_credential(settings))

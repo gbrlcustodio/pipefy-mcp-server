@@ -180,9 +180,11 @@ dispatches every tool call through one `request_handlers[CallToolRequest]` slot;
 registered middleware around it. The middleware chain is the extension surface;
 the private slot is wrapped, not written to directly.
 
-A middleware is a plain async callable. Add it to the chain at the composition
-root (`default_tool_middlewares` in `server.py`), never by touching FastMCP
-internals:
+A middleware is a plain async callable. A built-in middleware joins the per-profile
+defaults (`default_tool_middlewares` in `server.py`); a consumer of
+`build_pipefy_mcp_server` passes its own through `extra_tool_middlewares`, which the
+builder folds into the single install after the built-ins (so the default
+observability layer stays outermost). Neither path touches FastMCP internals:
 
 ```python
 from pipefy_mcp.core.tool_middleware import ToolCallContext, CallNext, short_circuit_error
@@ -192,8 +194,8 @@ async def quota(ctx: ToolCallContext, call_next: CallNext):
         return short_circuit_error("quota exceeded", code="RATE_LIMITED")
     return await call_next(ctx)
 
-# server.py builds the list per profile and hands it to install:
-#   install_tool_call_middleware(app, default_tool_middlewares(settings))
+# a serving layer registers its own middleware through the public builder:
+#   app = build_pipefy_mcp_server(settings, extra_tool_middlewares=[quota])
 ```
 
 - **Order**: list order runs outer to inner around the tool. `[A, B]` runs A,

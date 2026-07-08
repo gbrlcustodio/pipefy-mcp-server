@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import textwrap
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from mcp.server.fastmcp import FastMCP
@@ -94,13 +94,23 @@ def default_tool_middlewares(settings: Settings) -> list[ToolCallMiddleware]:
     return []
 
 
-def build_pipefy_mcp_server(settings: Settings) -> FastMCP:
+def build_pipefy_mcp_server(
+    settings: Settings,
+    extra_tool_middlewares: Sequence[ToolCallMiddleware] = (),
+) -> FastMCP:
     """Build the FastMCP app with its tools registered once, before serving.
 
     Reads everything from the resolved ``settings`` the composition root
     (:func:`run_server`) hands in: the ``remote`` profile selects the default-deny
     remote-safe tool surface, and ``settings.mcp.host`` / ``settings.mcp.port`` give
     the HTTP bind (they matter only for the HTTP transport; stdio ignores them).
+
+    ``extra_tool_middlewares`` is the public registration seam for a consumer of this
+    builder (a hosted serving layer that wants per-tool metrics, say): the chain
+    installs once, so a consumer folds its middleware in here rather than reaching
+    into the private ``request_handlers`` slot or re-wrapping the handler. The
+    built-in middleware runs outer to the consumer's, so the default observability
+    layer records every call including those a consumer's middleware short-circuits.
 
     The one app-scoped :class:`McpRuntime` is built via
     :meth:`McpRuntime.for_profile`, which owns both the outbound identity and (under
@@ -122,10 +132,12 @@ def build_pipefy_mcp_server(settings: Settings) -> FastMCP:
         auth=auth,
     )
     _register_pipefy_tools(app, remote_mode=settings.mcp.profile == "remote")
-    # Wrap the tool-call handler with the profile's built-in middleware chain. Both
-    # transports serve this app, so tool calls over stdio and HTTP alike run through
-    # the chain; the install is a no-op when the list is empty.
-    install_tool_call_middleware(app, default_tool_middlewares(settings))
+    # Wrap the tool-call handler with the built-in chain plus any consumer middleware.
+    # Both transports serve this app, so tool calls over stdio and HTTP alike run
+    # through the chain; the install is a no-op when the combined list is empty.
+    install_tool_call_middleware(
+        app, [*default_tool_middlewares(settings), *extra_tool_middlewares]
+    )
     return app
 
 

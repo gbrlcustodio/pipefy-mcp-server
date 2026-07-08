@@ -16,40 +16,38 @@ stray log line there corrupts the protocol.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
 from typing import Literal
 
-from mcp import types
+from mcp import UrlElicitationRequiredError, types
 
 from pipefy_mcp.core.tool_middleware import CallNext, ToolCallContext
 
 logger = logging.getLogger("pipefy_mcp.observability.tool_call")
 
-ToolCallOutcome = Literal["ok", "error"]
+# "cancelled" (client disconnect) and "elicitation" (the tool is asking the client
+# to visit a URL) are normal control flow, kept out of "error" so an error-rate
+# alert is not tripped by them. A governance short-circuit still reads as "error":
+# it returns isError=True and is indistinguishable from a tool-reported failure at
+# the result boundary.
+ToolCallOutcome = Literal["ok", "error", "cancelled", "elicitation"]
 
 
 def _outcome(result: types.ServerResult) -> ToolCallOutcome:
     """Map a terminal result to an outcome.
 
-    Reads ``isError`` off the result's ``CallToolResult`` root. The attribute is
-    read defensively: an experimental ``CreateTaskResult`` root has no ``isError``,
-    which should read as ``ok`` rather than raise.
+    Reads ``isError`` off the result's root defensively: an experimental
+    ``CreateTaskResult`` root has no ``isError`` and reads as ``ok`` rather than
+    raising.
     """
-    root = getattr(result, "root", None)
-    return "error" if getattr(root, "isError", False) else "ok"
+    return "error" if getattr(result.root, "isError", False) else "ok"
 
 
 def _emit(event: dict[str, object]) -> None:
-    """Write one structured line via logging (stderr), never stdout.
-
-    Serialization runs before ``logger.info``, so it would otherwise be paid even
-    when the line is discarded; the ``isEnabledFor`` guard skips it when the level
-    is off.
-    """
-    if not logger.isEnabledFor(logging.INFO):
-        return
+    """Write one structured line via logging (stderr), never stdout."""
     logger.info(json.dumps(event, separators=(",", ":")))
 
 
@@ -60,12 +58,13 @@ async def tool_log_middleware(
 
     A tool body error surfaces as a result with ``isError=True`` (FastMCP's
     terminal turns tool exceptions into an error result), so the common path logs
-    from the returned result. The exceptions that DO propagate through the chain,
-    ``CancelledError`` (client disconnect / ``notifications/cancelled``) and
-    ``UrlElicitationRequiredError``, are logged as errors and re-raised: swallowing
-    them would break cancellation and elicitation. ``BaseException`` (not
-    ``Exception``) is caught so a ``CancelledError`` cannot skip the handler and let
-    ``finally`` emit a stale ``ok``.
+    from the returned result. The two exceptions that DO propagate through the
+    chain each get their own non-error outcome and are re-raised: ``CancelledError``
+    (client disconnect / ``notifications/cancelled``) and
+    ``UrlElicitationRequiredError`` (the client must visit a URL to continue).
+    Swallowing either would break cancellation and elicitation. ``BaseException``
+    (not ``Exception``) is caught so a ``CancelledError`` cannot skip the handler
+    and let ``finally`` emit a stale ``ok``.
     """
     started_at = time.perf_counter()
     outcome: ToolCallOutcome = "ok"
@@ -73,19 +72,28 @@ async def tool_log_middleware(
         result = await call_next(ctx)
         outcome = _outcome(result)
         return result
+    except asyncio.CancelledError:
+        outcome = "cancelled"
+        raise
+    except UrlElicitationRequiredError:
+        outcome = "elicitation"
+        raise
     except BaseException:
         outcome = "error"
         raise
     finally:
-        duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
-        _emit(
-            {
-                "event": "tool_call",
-                "tool": ctx.tool_name,
-                "outcome": outcome,
-                "duration_ms": duration_ms,
-                "arg_keys": list(ctx.argument_keys),
-                "client_id": ctx.identity.client_id,
-                "request_id": ctx.request_id,
-            }
-        )
+        # Guard here, not inside _emit, so the event dict is not built when the
+        # line would be discarded.
+        if logger.isEnabledFor(logging.INFO):
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
+            _emit(
+                {
+                    "event": "tool_call",
+                    "tool": ctx.tool_name,
+                    "outcome": outcome,
+                    "duration_ms": duration_ms,
+                    "arg_keys": list(ctx.argument_keys),
+                    "client_id": ctx.identity.client_id,
+                    "request_id": ctx.request_id,
+                }
+            )

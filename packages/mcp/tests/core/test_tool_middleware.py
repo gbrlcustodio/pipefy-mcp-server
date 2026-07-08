@@ -46,8 +46,6 @@ def _call_tool_request(**arguments: object) -> types.CallToolRequest:
 def _bare_context(**arguments: object) -> ToolCallContext:
     """A minimal context for exercising the chain without a request scope."""
     return ToolCallContext(
-        tool_name="echo",
-        arguments=arguments,
         argument_keys=tuple(sorted(arguments)),
         identity=None,  # type: ignore[arg-type]
         request_id=None,
@@ -213,6 +211,19 @@ def test_install_is_idempotent_per_app():
     second = app._mcp_server.request_handlers[types.CallToolRequest]
 
     assert first is second
+
+
+@pytest.mark.unit
+def test_reinstall_with_a_different_middleware_set_raises():
+    """A second install with a changed set fails loud instead of dropping it."""
+
+    async def other(ctx: ToolCallContext, call_next):
+        return await call_next(ctx)
+
+    app = _app()
+    install_tool_call_middleware(app, [_noop])
+    with pytest.raises(RuntimeError, match="different middleware set"):
+        install_tool_call_middleware(app, [_noop, other])
 
 
 @pytest.mark.unit

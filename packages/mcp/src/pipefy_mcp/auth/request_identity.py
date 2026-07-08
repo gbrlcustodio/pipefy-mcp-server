@@ -89,7 +89,9 @@ def require_request_bearer(request: Request | None) -> str:
     user = _authenticated_user(request)
     if user is None or not user.access_token.token:
         raise RuntimeError(
-            "No authenticated access token on the request; the resource-server "
-            "profile must validate a bearer before a tool runs."
+            "No authenticated access token on the request. Under the "
+            "resource-server profile this means either the caller sent no valid "
+            "bearer or the authentication middleware is not wired into the ASGI "
+            "stack; a tool must not run without a validated caller."
         )
     return user.access_token.token

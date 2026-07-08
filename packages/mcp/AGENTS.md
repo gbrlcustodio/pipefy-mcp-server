@@ -177,8 +177,8 @@ rate limiting, cost weighting, downstream 429/circuit-breaking) register as
 ordered middleware, not by overwriting the server's internal handler. The MCP SDK
 dispatches every tool call through one `request_handlers[CallToolRequest]` slot;
 `core/tool_middleware.py` wraps that slot once, at build time, and composes the
-registered middleware around it. The private slot is no longer the extension
-surface.
+registered middleware around it. The middleware chain is the extension surface;
+the private slot is wrapped, not written to directly.
 
 Register through the runtime, never by touching FastMCP internals:
 

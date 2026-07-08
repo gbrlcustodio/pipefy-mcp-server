@@ -169,3 +169,57 @@ than a local `file_path`), enforce that in the tool body gated on
 `settings.mcp.profile == "remote"` at call time, not via the marker. A tool whose
 exclusion deserves a reason gets a plain code comment stating why; the exclusion
 itself needs no annotation.
+
+## Tool-call middleware
+
+Cross-cutting concerns that wrap a tool invocation (logging, per-user quotas,
+rate limiting, cost weighting, downstream 429/circuit-breaking) register as
+ordered middleware, not by overwriting the server's internal handler. The MCP SDK
+dispatches every tool call through one `request_handlers[CallToolRequest]` slot;
+`core/tool_middleware.py` wraps that slot once, at build time, and composes the
+registered middleware around it. The private slot is no longer the extension
+surface.
+
+Register through the runtime, never by touching FastMCP internals:
+
+```python
+from pipefy_mcp.core.tool_middleware import ToolCallContext, CallNext, short_circuit_error
+
+async def quota(ctx: ToolCallContext, call_next: CallNext):
+    if over_quota(ctx.identity.client_id):
+        return short_circuit_error("quota exceeded", code="RATE_LIMITED")
+    return await call_next(ctx)
+
+runtime.register_tool_middleware(quota)   # before install_tool_call_middleware(app)
+```
+
+- **Order**: registration order runs outer to inner around the tool. `[A, B]`
+  runs A, then B, then the tool, and unwinds in reverse.
+- **Short-circuit**: a middleware that returns without awaiting `call_next` skips
+  the inner chain and the tool. Use `short_circuit_error`, which carries the
+  canonical `tool_error` envelope but sets `isError=True` deliberately: a
+  governance stop means the tool never ran, distinct from a tool that ran and
+  reported a business error (`isError=False`).
+- **Identity** (`ctx.identity`): the validated caller's `client_id` and `scopes`,
+  read off the request's bearer, never re-decoded. Empty under stdio/local (no
+  inbound bearer). The end-user `subject` is intentionally absent until its
+  consumer (per-user quotas) exists.
+- **`request_id`**: correlates a call to its HTTP request when available, else the
+  JSON-RPC message id, which is client-chosen and only unique within a session.
+- **Raw arguments**: FastMCP registers the terminal with `validate_input=False`
+  and coerces arguments downstream, so middleware sees the un-coerced, client-sent
+  arguments. `ctx.argument_keys` is bounded (count and length caps) and values-free
+  for privacy-sensitive consumers; `ctx.arguments` values are passed unbounded to
+  any consumer that opts to read them. Never log a bearer or argument values.
+
+The chain installs on every profile (a pass-through when nothing is registered);
+the built-in structured logger (`observability/tool_log_middleware.py`) is seeded
+only under the `remote` profile. That logger emits through the `logging` module
+(stderr), never stdout, which is the stdio transport's JSON-RPC stream.
+
+The wrap targets a FastMCP internal and is tested against `mcp==1.25.0`; the
+install is idempotent per app (the sentinel is per handler, not a global). This is
+a separate seam from the argument-validation envelope
+(`tools/validation_envelope.py`), which patches `Tool.run` to reshape a pydantic
+`ValidationError` inside FastMCP's executor: that error's structured detail exists
+only there, below this chain, so the two are complementary, not interchangeable.

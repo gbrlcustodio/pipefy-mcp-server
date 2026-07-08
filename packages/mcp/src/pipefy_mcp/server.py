@@ -8,6 +8,7 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.runtime import McpRuntime
+from pipefy_mcp.core.tool_middleware import install_tool_call_middleware
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
@@ -101,6 +102,11 @@ def build_pipefy_mcp_server(settings: Settings) -> FastMCP:
         auth=auth,
     )
     _register_pipefy_tools(app, remote_mode=settings.mcp.profile == "remote")
+    # Wrap the tool-call handler with the runtime's registered middleware chain.
+    # Both transports serve this app, so tool calls over stdio and HTTP alike run
+    # through the chain; the built-in logger is seeded per profile (see
+    # McpRuntime.for_profile) and this is a no-op when nothing is registered.
+    install_tool_call_middleware(app, runtime.tool_middlewares)
     return app
 
 

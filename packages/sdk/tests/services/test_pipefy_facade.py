@@ -33,11 +33,11 @@ def mock_settings():
 def test_pipefy_client_forwards_caller_provided_auth(mock_settings):
     auth = StaticBearerAuth("unit-token")
     client = PipefyClient(mock_settings, auth=auth)
-    # Public services share one executor built from the caller's auth, so GraphQL
+    # Public services share one executor bound to the caller's auth, so GraphQL
     # auth cannot drift across services.
-    assert client._card_service._executor._auth is auth
-    assert client._pipe_service._executor._auth is auth
-    assert client._internal_executor._auth is auth
+    assert client._card_service._executor.auth is auth
+    assert client._pipe_service._executor.auth is auth
+    assert client._internal_executor.auth is auth
 
 
 @pytest.mark.unit
@@ -45,43 +45,43 @@ def test_build_executors_routes_each_endpoint_to_its_url(mock_settings):
     ex = build_executors(mock_settings, StaticBearerAuth("unit-token"))
     # Each executor must target its own endpoint; a copy-paste that aimed
     # interfaces or internal at the public graphql_url would route silently.
-    assert ex.public._graphql_url == mock_settings.graphql_url
-    assert ex.interfaces._graphql_url == mock_settings.interfaces_graphql_url
-    assert ex.internal._graphql_url == mock_settings.internal_api_url
+    assert ex.public.endpoint._graphql_url == mock_settings.graphql_url
+    assert ex.interfaces.endpoint._graphql_url == mock_settings.interfaces_graphql_url
+    assert ex.internal.endpoint._graphql_url == mock_settings.internal_api_url
 
 
 @pytest.mark.unit
-def test_build_executors_stamps_each_executor_with_telemetry_headers():
+def test_build_executors_stamps_each_endpoint_with_telemetry_headers():
     settings = PipefySettings(base_url="https://api.pipefy.com")
     ex = build_executors(settings, StaticBearerAuth("unit-token"), surface="mcp")
     expected = telemetry_headers(surface="mcp", version=__version__)
-    assert ex.public._headers == expected
-    assert ex.interfaces._headers == expected
-    assert ex.internal._headers == expected
+    assert ex.public.endpoint._headers == expected
+    assert ex.interfaces.endpoint._headers == expected
+    assert ex.internal.endpoint._headers == expected
 
 
 @pytest.mark.unit
 def test_build_executors_defaults_surface_to_sdk():
-    """Direct SDK use passes no surface, so the executors stamp the 'sdk' default."""
+    """Direct SDK use passes no surface, so the endpoints stamp the 'sdk' default."""
     ex = build_executors(
         PipefySettings(base_url="https://api.pipefy.com"),
         StaticBearerAuth("unit-token"),
     )
     expected = telemetry_headers(surface="sdk", version=__version__)
-    assert ex.public._headers == expected
-    assert ex.interfaces._headers == expected
-    assert ex.internal._headers == expected
+    assert ex.public.endpoint._headers == expected
+    assert ex.interfaces.endpoint._headers == expected
+    assert ex.internal.endpoint._headers == expected
 
 
 @pytest.mark.unit
-def test_pipefy_client_threads_surface_to_executors():
-    """The surface passed to the facade reaches the executors it builds."""
+def test_pipefy_client_threads_surface_to_endpoints():
+    """The surface passed to the facade reaches the endpoints it builds."""
     client = PipefyClient(
         PipefySettings(base_url="https://api.pipefy.com"),
         auth=StaticBearerAuth("unit-token"),
         surface="cli",
     )
-    assert client._internal_executor._headers == telemetry_headers(
+    assert client._internal_executor.endpoint._headers == telemetry_headers(
         surface="cli", version=__version__
     )
 
@@ -98,7 +98,7 @@ def test_env_var_cannot_forge_surface(monkeypatch: pytest.MonkeyPatch):
         PipefySettings(base_url="https://api.pipefy.com"),
         auth=StaticBearerAuth("unit-token"),
     )
-    assert client._internal_executor._headers == telemetry_headers(
+    assert client._internal_executor.endpoint._headers == telemetry_headers(
         surface="sdk", version=__version__
     )
 
@@ -658,7 +658,7 @@ def test_pipefy_client_creates_services_with_shared_auth():
     shared_executor = client._pipe_service._executor
     assert client._card_service._executor is shared_executor
     assert client._table_service._executor is shared_executor
-    assert shared_executor._auth is auth
+    assert shared_executor.auth is auth
 
 
 @pytest.mark.unit
@@ -786,7 +786,10 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
     )
 
     client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
-    client._internal_executor.execute_query = AsyncMock(
+    # The facade and RelationService share the one internal executor, which
+    # delegates to its shared endpoint; swap that endpoint's network seam.
+    internal = client._internal_executor
+    internal.endpoint.execute = AsyncMock(
         return_value={"deleteCardRelation": {"success": True}}
     )
 
@@ -798,9 +801,10 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
 
     result = await client.delete_card_relation("c1", "p2", "src-3")
 
-    client._internal_executor.execute_query.assert_awaited_once_with(
+    internal.endpoint.execute.assert_awaited_once_with(
         INTERNAL_DELETE_CARD_RELATION_MUTATION,
         {"childId": "c1", "parentId": "p2", "sourceId": "src-3"},
+        auth=internal.auth,
     )
     assert result == {"deleteCardRelation": {"success": True}}
 
@@ -811,13 +815,15 @@ async def test_sub_portal_mutation_routes_through_internal_api_client(mock_setti
     """A sub-portal mutation reaches the Internal API client the facade builds at
     construction; PortalService and the facade share that one instance."""
     client = PipefyClient(settings=mock_settings, auth=StaticBearerAuth("t"))
-    client._internal_executor.execute_query = AsyncMock(
+    # PortalService and the facade share the one internal executor and its endpoint.
+    internal = client._internal_executor
+    internal.endpoint.execute = AsyncMock(
         return_value={"updateSubPortalElement": {"success": True}}
     )
 
     result = await client.publish_sub_portal("portal-1", "element-2", "sub-3")
 
-    client._internal_executor.execute_query.assert_awaited()
+    internal.endpoint.execute.assert_awaited()
     assert result == {"updateSubPortalElement": {"success": True}}
 
 

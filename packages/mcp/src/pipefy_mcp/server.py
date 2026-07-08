@@ -36,10 +36,11 @@ def _make_lifespan(
     :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so both transports
     must run a lifespan for tools to find a client.
 
-    The one runtime is built once at server construction (which wires its client)
+    The one runtime is built once at server construction (which builds its engine)
     and captured here. Streamable HTTP re-enters this context manager per session;
     each entry yields the same already-wired runtime, so every session shares one
-    client and there is nothing to rebuild. See AGENTS.md for the fuller rationale.
+    engine and opens its own cheap per-request session. See AGENTS.md for the fuller
+    rationale.
 
     Tools are registered once, up front, by :func:`_register_pipefy_tools`, never
     here, so re-entry cannot race the tool table.
@@ -59,10 +60,10 @@ def _make_lifespan(
 def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     """Register every Pipefy tool on ``app`` exactly once, at construction.
 
-    Shared by both transports. Tools take no client at registration: each
-    resolves the live client per request from the lifespan context (see
+    Shared by both transports. Tools take no client at registration: each opens a
+    session per request from the lifespan context (see
     :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so registration is
-    decoupled from how or when the runtime wires its client. Registration never
+    decoupled from how or when the runtime builds its engine. Registration never
     repeats, so there is no repeat-visit bookkeeping to maintain.
     """
     install_pipefy_validation_envelope()

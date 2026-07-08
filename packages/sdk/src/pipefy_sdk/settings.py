@@ -111,7 +111,7 @@ class PipefySettings(BaseSettings):
         default=False,
         description=(
             "When true (env: PIPEFY_GQL_REUSE_FETCHED_GRAPHQL_SCHEMA), the first GraphQL "
-            "request per HttpxGraphQLExecutor fetches the remote schema via introspection, "
+            "request per GraphQLEndpoint fetches the remote schema via introspection, "
             "caches the GraphQLSchema in memory, and later requests reuse it so gql does "
             "not repeat the introspection round-trip. Default false avoids extra work and "
             "keeps a cold process fast; enable if profiling shows significant duplicate "

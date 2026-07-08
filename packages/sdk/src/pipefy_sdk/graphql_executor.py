@@ -62,14 +62,15 @@ def _graphql_request_with_variables(
     return GraphQLRequest(query, variable_values=variables if variables else None)
 
 
-class HttpxGraphQLExecutor:
-    """The sole httpx/gql adapter implementing :class:`GraphQLExecutor`.
+class GraphQLEndpoint:
+    """The shared, auth-less half of a Pipefy GraphQL connection.
 
-    Creates a fresh transport per execute_query() call so parallel requests
-    never share mutable transport state (avoids TransportAlreadyConnected).
-    The ``auth`` instance is shared across calls to reuse the token cache.
-    Pass the same instance to multiple services (e.g. from PipefyClient) so
-    only one token cache exists for the whole client.
+    Holds everything about one endpoint that does not depend on the caller's
+    identity: its URL, telemetry headers, error formatting, and the introspected
+    schema cache. Built once and shared across identities; the execute methods take
+    the ``auth`` per call so the same endpoint (and its one schema cache) serves
+    every caller. A fresh transport is opened per call so concurrent requests never
+    share mutable transport state (avoids ``TransportAlreadyConnected``).
     """
 
     GRAPHQL_REQUEST_TIMEOUT_SECONDS: ClassVar[int] = 30
@@ -78,42 +79,42 @@ class HttpxGraphQLExecutor:
         self,
         *,
         url: str,
-        auth: Auth,
         cache_schema: bool = False,
         headers: dict[str, str] | None = None,
         on_graphql_error: Callable[[list[dict]], str] | None = None,
     ) -> None:
-        # Fully resolved endpoint URL; the adapter does no settings resolution itself.
+        # Fully resolved endpoint URL; the endpoint does no settings resolution itself.
         self._graphql_url = url
-        self._auth = auth
         self._cache_schema = cache_schema
         self._headers = headers
         # When set, ``TransportQueryError`` is converted to ``ValueError`` using the
-        # formatter's output. Used by the Internal API executor to surface its
+        # formatter's output. Used by the Internal API endpoint to surface its
         # ``[code=…] [correlation_id=…]`` envelope; ``None`` leaves gql exceptions
-        # untouched (the public executor's behaviour).
+        # untouched (the public endpoint's behaviour).
         self._on_graphql_error = on_graphql_error
         # Caches the introspected schema so it is fetched once, not per Client.
         self._fetched_gql_schema: GraphQLSchema | None = None
         self._fetched_gql_schema_lock = asyncio.Lock()
 
     async def _execute_request(
-        self, query: DocumentNode, variables: dict[str, Any]
+        self, query: DocumentNode, variables: dict[str, Any], *, auth: Auth
     ) -> dict:
         """Run a GraphQL request on a fresh transport, honoring schema caching.
 
         A fresh HTTPXAsyncTransport is created per call so concurrent invocations
-        each get their own isolated connection state.
+        each get their own isolated connection state. ``auth`` is supplied by the
+        caller (the per-session executor) rather than captured at construction, so
+        one endpoint serves every identity.
         By default the gql client does not fetch the remote schema (no introspection
         per request). When ``cache_schema`` is True the schema is fetched once per
-        executor instance, cached, and reused for local validation.
+        endpoint instance, cached, and reused for local validation.
 
         Any GraphQL ``errors`` raise ``TransportQueryError`` (even alongside partial
         ``data``); the exception carries both ``data`` and ``errors``.
         """
         transport = HTTPXAsyncTransport(
             url=self._graphql_url,
-            auth=self._auth,
+            auth=auth,
             timeout=Timeout(timeout=self.GRAPHQL_REQUEST_TIMEOUT_SECONDS),
             verify=True,
             headers=self._headers,
@@ -150,22 +151,21 @@ class HttpxGraphQLExecutor:
             raise exc
         raise ValueError(self._on_graphql_error(exc.errors or [])) from exc
 
-    async def execute_query(
-        self, query: DocumentNode, variables: dict[str, Any]
+    async def execute(
+        self, query: DocumentNode, variables: dict[str, Any], *, auth: Auth
     ) -> dict:
-        """Execute a GraphQL query/mutation with variables.
+        """Execute a GraphQL query/mutation with variables under ``auth``.
 
         All-or-nothing: any GraphQL ``errors`` raise and partial ``data`` is
-        discarded; for responses that mix both, use
-        :meth:`execute_query_allow_partial`.
+        discarded; for responses that mix both, use :meth:`execute_allow_partial`.
         """
         try:
-            return await self._execute_request(query, variables)
+            return await self._execute_request(query, variables, auth=auth)
         except TransportQueryError as exc:
             self._reraise_graphql_error(exc)
 
-    async def execute_query_allow_partial(
-        self, query: DocumentNode, variables: dict[str, Any]
+    async def execute_allow_partial(
+        self, query: DocumentNode, variables: dict[str, Any], *, auth: Auth
     ) -> PartialQueryResult:
         """Execute a query preserving partial ``data`` alongside GraphQL ``errors``.
 
@@ -176,9 +176,34 @@ class HttpxGraphQLExecutor:
         decision, not the transport's.
         """
         try:
-            data = await self._execute_request(query, variables)
+            data = await self._execute_request(query, variables, auth=auth)
         except TransportQueryError as exc:
             return PartialQueryResult(
                 data=exc.data or {}, errors=list(exc.errors or [])
             )
         return PartialQueryResult(data=data, errors=[])
+
+
+@dataclass(frozen=True)
+class AuthenticatedExecutor:
+    """A :class:`GraphQLEndpoint` bound to one identity's ``auth``.
+
+    The cheap per-session executor: it implements :class:`PartialGraphQLExecutor`
+    by delegating to the shared endpoint with its own ``auth``. Cheap to build one
+    per request; the endpoint (and its schema cache) is reused across all of them.
+    """
+
+    endpoint: GraphQLEndpoint
+    auth: Auth
+
+    async def execute_query(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> dict:
+        return await self.endpoint.execute(query, variables, auth=self.auth)
+
+    async def execute_query_allow_partial(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> PartialQueryResult:
+        return await self.endpoint.execute_allow_partial(
+            query, variables, auth=self.auth
+        )

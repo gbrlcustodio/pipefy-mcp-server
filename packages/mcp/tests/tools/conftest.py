@@ -6,29 +6,26 @@ from contextlib import asynccontextmanager
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from pipefy_mcp.auth import RequestContextBearerAuth
 from pipefy_mcp.core.runtime import McpRuntime, RequestScopedIdentity
 from pipefy_mcp.settings import settings
 
 
 def build_tool_test_server(name, register, client):
-    """Build a FastMCP server whose lifespan yields a runtime holding ``client``.
+    """Build a FastMCP server whose lifespan yields a runtime serving ``client``.
 
-    Tools resolve the live client from the request ``lifespan_context`` (see
-    :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so a test injects
-    its mock by overwriting the runtime's client with ``client``. The
-    request-scoped strategy wires a client without resolving any credential (no
-    keychain or network I/O), so the runtime constructs cleanly before the mock
-    replaces its client. ``register`` is a tool group's ``register``
-    staticmethod, called with the app alone.
+    Tools resolve their client per request from the ``lifespan_context`` by calling
+    :meth:`McpRuntime.session_for_request` (see
+    :func:`pipefy_mcp.tools.tool_context.get_pipefy_client`), so a test injects its
+    mock by overriding that method to return ``client``. The request-scoped source
+    resolves no credential at construction (no keychain or network I/O), so the
+    runtime builds cleanly before the override lands. ``register`` is a tool
+    group's ``register`` staticmethod, called with the app alone.
     """
 
     @asynccontextmanager
     async def _lifespan(_app):
-        runtime = McpRuntime(
-            settings, RequestScopedIdentity(RequestContextBearerAuth())
-        )
-        runtime.pipefy_client = client
+        runtime = McpRuntime(settings, RequestScopedIdentity())
+        runtime.session_for_request = lambda _req: client
         yield runtime
 
     mcp = FastMCP(name, lifespan=_lifespan)

@@ -60,11 +60,11 @@ def mocked_runtime():
     ``build_pipefy_mcp_server`` builds the app-scoped runtime via
     :meth:`McpRuntime.for_profile`, which on the local profile resolves a credential
     and fails fast. This intercepts the factory so building resolves no real
-    credential, ``pipefy_client`` is a stand-in a tool can resolve, and
+    credential, ``session_for_request`` yields a stand-in a tool can resolve, and
     ``inbound_auth`` is ``None`` (no resource server, matching the local profile).
     """
     runtime = MagicMock()
-    runtime.pipefy_client = MagicMock()
+    runtime.session_for_request.return_value = MagicMock()
     runtime.inbound_auth = None
     with patch("pipefy_mcp.server.McpRuntime.for_profile", return_value=runtime):
         yield runtime

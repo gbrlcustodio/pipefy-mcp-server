@@ -9,7 +9,7 @@ from gql.transport.httpx import HTTPXAsyncTransport
 from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk import __version__
-from pipefy_sdk.graphql_executor import HttpxGraphQLExecutor
+from pipefy_sdk.graphql_executor import GraphQLEndpoint
 from pipefy_sdk.telemetry import telemetry_headers
 
 GRAPHQL_URL = "https://api.pipefy.com/graphql"
@@ -43,7 +43,7 @@ def _sample_query() -> GraphQLRequest:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_builds_transport_with_tls_verification():
+async def test_execute_builds_transport_with_tls_verification():
     """HTTPXAsyncTransport must explicitly enable TLS certificate verification."""
     query = _sample_query()
     variables: dict = {}
@@ -57,8 +57,8 @@ async def test_execute_query_builds_transport_with_tls_verification():
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-        await base.execute_query(query, variables)
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        await endpoint.execute(query, variables, auth=_bearer())
 
     mock_transport_cls.assert_called_once()
     assert mock_transport_cls.call_args.kwargs["verify"] is True
@@ -66,8 +66,31 @@ async def test_execute_query_builds_transport_with_tls_verification():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_passes_variables_to_session():
-    """Test execute_query creates a session and passes variable_values unchanged."""
+async def test_execute_binds_the_passed_auth_on_the_transport():
+    """The endpoint applies the per-call ``auth``, not one captured at construction."""
+    query = _sample_query()
+    variables: dict = {}
+    auth = _bearer()
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value={"ok": True})
+
+    with (
+        patch("pipefy_sdk.graphql_executor.HTTPXAsyncTransport") as mock_transport_cls,
+        patch("pipefy_sdk.graphql_executor.Client") as mock_client_cls,
+    ):
+        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        await endpoint.execute(query, variables, auth=auth)
+
+    assert mock_transport_cls.call_args.kwargs["auth"] is auth
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_passes_variables_to_session():
+    """Test execute creates a session and passes variable_values unchanged."""
     query = _sample_query()
     variables = {"a": 1, "nested": {"b": 2}}
 
@@ -78,8 +101,8 @@ async def test_execute_query_passes_variables_to_session():
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-        result = await base.execute_query(query, variables)
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        result = await endpoint.execute(query, variables, auth=_bearer())
 
     mock_session.execute.assert_called_once()
     request = mock_session.execute.call_args[0][0]
@@ -92,7 +115,7 @@ async def test_execute_query_passes_variables_to_session():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_omits_variable_values_for_empty_dict():
+async def test_execute_omits_variable_values_for_empty_dict():
     """Empty variables omits variable_values on the bound GraphQLRequest."""
     query = _sample_query()
     variables: dict = {}
@@ -104,8 +127,8 @@ async def test_execute_query_omits_variable_values_for_empty_dict():
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-        await base.execute_query(query, variables)
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        await endpoint.execute(query, variables, auth=_bearer())
 
     request = mock_session.execute.call_args[0][0]
     assert isinstance(request, GraphQLRequest)
@@ -114,7 +137,7 @@ async def test_execute_query_omits_variable_values_for_empty_dict():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_reuse_fetches_once_then_passes_cached_schema():
+async def test_execute_reuse_fetches_once_then_passes_cached_schema():
     """With cache_schema, first Client run introspects; next reuses schema."""
     query = _sample_query()
     variables: dict = {}
@@ -134,9 +157,9 @@ async def test_execute_query_reuse_fetches_once_then_passes_cached_schema():
         second.schema = None
         mock_client_cls.side_effect = [first, second]
 
-        base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer(), cache_schema=True)
-        assert await base.execute_query(query, variables) == {"one": 1}
-        assert await base.execute_query(query, variables) == {"two": 2}
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL, cache_schema=True)
+        assert await endpoint.execute(query, variables, auth=_bearer()) == {"one": 1}
+        assert await endpoint.execute(query, variables, auth=_bearer()) == {"two": 2}
 
     assert mock_client_cls.call_count == 2
     assert (
@@ -150,8 +173,8 @@ async def test_execute_query_reuse_fetches_once_then_passes_cached_schema():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_bubbles_up_execute_errors_unchanged():
-    """Test execute_query does not wrap exceptions raised by the GraphQL session."""
+async def test_execute_bubbles_up_execute_errors_unchanged():
+    """Test execute does not wrap exceptions raised by the GraphQL session."""
     query = _sample_query()
     variables = {"x": 1}
     expected_error = RuntimeError("boom")
@@ -163,10 +186,10 @@ async def test_execute_query_bubbles_up_execute_errors_unchanged():
         mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
 
-        base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
 
         with pytest.raises(RuntimeError) as exc:
-            await base.execute_query(query, variables)
+            await endpoint.execute(query, variables, auth=_bearer())
 
     assert exc.value is expected_error
 
@@ -189,8 +212,10 @@ async def test_execute_query_allow_partial_returns_data_and_errors_together():
         return httpx.Response(200, json=partial_body)
 
     with _patched_transport(handler):
-        executor = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-        result = await executor.execute_query_allow_partial(_sample_query(), {})
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        result = await endpoint.execute_allow_partial(
+            _sample_query(), {}, auth=_bearer()
+        )
 
     assert result.data == {"automations": {"edges": [{"node": {"id": "25"}}]}}
     assert result.errors[0]["extensions"]["automation_id"] == "124"
@@ -205,8 +230,10 @@ async def test_execute_query_allow_partial_success_carries_no_errors():
         return httpx.Response(200, json={"data": {"automations": {"edges": []}}})
 
     with _patched_transport(handler):
-        executor = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-        result = await executor.execute_query_allow_partial(_sample_query(), {})
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        result = await endpoint.execute_allow_partial(
+            _sample_query(), {}, auth=_bearer()
+        )
 
     assert result.data == {"automations": {"edges": []}}
     assert result.errors == []
@@ -227,8 +254,10 @@ async def test_execute_query_allow_partial_null_data_yields_empty_result():
         )
 
     with _patched_transport(handler):
-        executor = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-        result = await executor.execute_query_allow_partial(_sample_query(), {})
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        result = await endpoint.execute_allow_partial(
+            _sample_query(), {}, auth=_bearer()
+        )
 
     assert result.data == {}
     assert result.errors[0]["message"] == "Couldn't find Organization with 'id'=999"
@@ -236,30 +265,30 @@ async def test_execute_query_allow_partial_null_data_yields_empty_result():
 
 @pytest.mark.unit
 def test_init_connects_to_given_url():
-    """The executor connects to exactly the URL it is handed, no derivation."""
+    """The endpoint connects to exactly the URL it is handed, no derivation."""
     url = "https://api.pipefy.com/graphql/interfaces"
-    base = HttpxGraphQLExecutor(url=url, auth=_bearer())
-    assert base._graphql_url == url
+    endpoint = GraphQLEndpoint(url=url)
+    assert endpoint._graphql_url == url
 
 
 @pytest.mark.unit
 def test_init_defaults_cache_schema_to_false():
     """Schema caching is off unless explicitly enabled."""
-    base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-    assert base._cache_schema is False
+    endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+    assert endpoint._cache_schema is False
 
 
 @pytest.mark.unit
 def test_init_defaults_headers_to_none():
-    """No telemetry headers unless the executor is handed them."""
-    base = HttpxGraphQLExecutor(url=GRAPHQL_URL, auth=_bearer())
-    assert base._headers is None
+    """No telemetry headers unless the endpoint is handed them."""
+    endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+    assert endpoint._headers is None
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_sends_telemetry_headers_on_the_request():
-    """Headers handed to the executor ride the real outbound GraphQL request.
+async def test_execute_sends_telemetry_headers_on_the_request():
+    """Headers handed to the endpoint ride the real outbound GraphQL request.
 
     Runs the real gql Client and httpx client, swapping only the network
     transport for an ``httpx.MockTransport`` that captures the sent headers; the
@@ -279,10 +308,8 @@ async def test_execute_query_sends_telemetry_headers_on_the_request():
     with patch(
         "pipefy_sdk.graphql_executor.HTTPXAsyncTransport", side_effect=transport_factory
     ):
-        executor = HttpxGraphQLExecutor(
-            url=GRAPHQL_URL, auth=_bearer(), headers=headers
-        )
-        await executor.execute_query(_sample_query(), {})
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL, headers=headers)
+        await endpoint.execute(_sample_query(), {}, auth=_bearer())
 
     sent = captured["headers"]
     assert sent["user-agent"] == f"pipefy-sdk/{__version__} (mcp)"

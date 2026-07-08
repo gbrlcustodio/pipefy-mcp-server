@@ -19,8 +19,6 @@ from pipefy_mcp.auth.resource_server import (
     ResourceServerAuth,
     build_resource_server_auth,
 )
-from pipefy_mcp.core.tool_middleware import ToolCallMiddleware
-from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.settings import Settings
 
 
@@ -135,7 +133,6 @@ class McpRuntime:
         self._identity = identity
         self.inbound_auth = inbound_auth
         self._engine = PipefyEngine.build(settings.pipefy, surface="mcp")
-        self._tool_middlewares: list[ToolCallMiddleware] = []
 
     @classmethod
     def for_profile(cls, settings: Settings) -> McpRuntime:
@@ -167,15 +164,7 @@ class McpRuntime:
                     "PIPEFY_MCP_RS_RESOURCE_SERVER_URL so the server validates a "
                     "per-request bearer and acts on behalf of the caller."
                 )
-            runtime = cls(settings, RequestScopedIdentity(), inbound_auth=inbound_auth)
-            # Default the built-in tool-call logger on under the hosted profile,
-            # where structured logs are how operators attribute activity. This is a
-            # default, not a capability boundary: the chain installs on every profile
-            # (see install_tool_call_middleware), so a local deployment can register
-            # its own middleware, and tool logging could later become a config toggle
-            # a local user opts into.
-            runtime.register_tool_middleware(tool_log_middleware)
-            return runtime
+            return cls(settings, RequestScopedIdentity(), inbound_auth=inbound_auth)
         return cls(settings, StartupIdentity.from_configured_credential(settings))
 
     def session_for_request(self, request: Request | None) -> PipefyClient:
@@ -188,21 +177,6 @@ class McpRuntime:
         profile the identity ignores it and returns the one startup credential.
         """
         return self._engine.session(self._identity.resolve(request))
-
-    def register_tool_middleware(self, middleware: ToolCallMiddleware) -> None:
-        """Register a tool-call middleware, run outer-to-inner in registration order.
-
-        The public seam for cross-cutting concerns (logging, quotas, rate limiting):
-        callers register here and never touch the server's internal request handlers.
-        The wiring layer reads :attr:`tool_middlewares` and installs the chain onto
-        the app at build time.
-        """
-        self._tool_middlewares.append(middleware)
-
-    @property
-    def tool_middlewares(self) -> tuple[ToolCallMiddleware, ...]:
-        """The registered tool-call middleware, in registration order."""
-        return tuple(self._tool_middlewares)
 
     @property
     def settings(self) -> Settings:

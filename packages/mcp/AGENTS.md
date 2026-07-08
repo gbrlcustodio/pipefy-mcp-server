@@ -180,7 +180,9 @@ dispatches every tool call through one `request_handlers[CallToolRequest]` slot;
 registered middleware around it. The middleware chain is the extension surface;
 the private slot is wrapped, not written to directly.
 
-Register through the runtime, never by touching FastMCP internals:
+A middleware is a plain async callable. Add it to the chain at the composition
+root (`default_tool_middlewares` in `server.py`), never by touching FastMCP
+internals:
 
 ```python
 from pipefy_mcp.core.tool_middleware import ToolCallContext, CallNext, short_circuit_error
@@ -190,11 +192,12 @@ async def quota(ctx: ToolCallContext, call_next: CallNext):
         return short_circuit_error("quota exceeded", code="RATE_LIMITED")
     return await call_next(ctx)
 
-runtime.register_tool_middleware(quota)   # before install_tool_call_middleware(app)
+# server.py builds the list per profile and hands it to install:
+#   install_tool_call_middleware(app, default_tool_middlewares(settings))
 ```
 
-- **Order**: registration order runs outer to inner around the tool. `[A, B]`
-  runs A, then B, then the tool, and unwinds in reverse.
+- **Order**: list order runs outer to inner around the tool. `[A, B]` runs A,
+  then B, then the tool, and unwinds in reverse.
 - **Short-circuit**: a middleware that returns without awaiting `call_next` skips
   the inner chain and the tool. Use `short_circuit_error`, which carries the
   canonical `tool_error` envelope but sets `isError=True` deliberately: a
@@ -212,8 +215,8 @@ runtime.register_tool_middleware(quota)   # before install_tool_call_middleware(
   for privacy-sensitive consumers; `ctx.arguments` values are passed unbounded to
   any consumer that opts to read them. Never log a bearer or argument values.
 
-The chain installs on every profile (a pass-through when nothing is registered);
-the built-in structured logger (`observability/tool_log_middleware.py`) is seeded
+The chain installs on every profile (a no-op when the list is empty); the
+built-in structured logger (`observability/tool_log_middleware.py`) is seeded
 by default only under the `remote` profile. That is a default, not a capability
 boundary: per-call concerns like observability and downstream protection apply to
 any deployment (only per-user concerns are hosted-specific), so a local deployment

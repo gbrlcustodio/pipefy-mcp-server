@@ -19,7 +19,6 @@ from pipefy_mcp.core.runtime import (
     RequestScopedIdentity,
     StartupIdentity,
 )
-from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.settings import McpSettings, Settings
 
 
@@ -165,25 +164,6 @@ class TestForProfile:
 
         assert runtime.inbound_auth is None
         assert _bearer_of(runtime.session_for_request(None)) == "Bearer env-bearer"
-
-    @pytest.mark.unit
-    def test_remote_seeds_the_tool_log_middleware(self):
-        """The hosted profile seeds structured tool-call logging on the chain."""
-        runtime = McpRuntime.for_profile(remote_rs_settings())
-
-        assert runtime._tool_middlewares == [tool_log_middleware]
-
-    @pytest.mark.unit
-    def test_local_seeds_no_tool_middleware(self, clear_auth_env):
-        """The local profile leaves the chain empty (logging is a hosted concern)."""
-        settings = Settings(
-            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-            auth=AuthSettings(static_token="env-bearer"),
-        )
-
-        runtime = McpRuntime.for_profile(settings)
-
-        assert runtime._tool_middlewares == []
 
     @pytest.mark.unit
     @patch("pipefy_auth.resolver.load_session", lambda **_: None)

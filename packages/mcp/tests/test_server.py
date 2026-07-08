@@ -11,11 +11,13 @@ from mcp.shared.memory import (
 from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
 
+from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.server import (
     _assert_safe_http_bind,
     _make_lifespan,
     _register_pipefy_tools,
     build_pipefy_mcp_server,
+    default_tool_middlewares,
     run_server,
 )
 from pipefy_mcp.settings import McpSettings, Settings, resolve_mcp_settings
@@ -129,6 +131,18 @@ def test_build_server_remote_mode_exposes_only_the_remote_safe_seed(mocked_runti
     assert "get_organization" in exposed
     assert "upload_attachment_to_card" not in exposed
     assert "execute_graphql" not in exposed
+
+
+@pytest.mark.unit
+def test_default_tool_middlewares_seeds_the_logger_under_remote():
+    """The composition root seeds structured tool-call logging for the hosted profile."""
+    assert default_tool_middlewares(_REMOTE_PROFILE_SETTINGS) == [tool_log_middleware]
+
+
+@pytest.mark.unit
+def test_default_tool_middlewares_seeds_nothing_under_local():
+    """The local profile gets no default middleware; the chain stays empty."""
+    assert default_tool_middlewares(_MINIMAL_PIPEFY_SETTINGS) == []
 
 
 @pytest.mark.unit

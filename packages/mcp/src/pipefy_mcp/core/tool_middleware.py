@@ -10,12 +10,12 @@ call through a single ``CallToolRequest`` entry in the low-level server's
 overwrite that one private slot, so the next feature that needs it clobbers the
 previous.
 
-This module turns that single slot into an ordered chain. Middleware register on
-:class:`~pipefy_mcp.core.runtime.McpRuntime` (the public seam) and this module
-wraps FastMCP's handler exactly once, at build time, composing the registered
-middleware around it. Middleware run outer-to-inner in registration order, may
-short-circuit (return an error result without invoking the tool), and read the
-validated caller from the per-message request context.
+This module turns that single slot into an ordered chain. The composition root
+builds the middleware list per profile and passes it to
+:func:`install_tool_call_middleware`, which wraps FastMCP's handler exactly once,
+at build time, composing the middleware around it. Middleware run outer-to-inner
+in list order, may short-circuit (return an error result without invoking the
+tool), and read the validated caller from the per-message request context.
 
 The wrap targets ``app._mcp_server.request_handlers[CallToolRequest]`` and is
 tested against ``mcp==1.25.0``. If that pin moves, re-verify the handler is still
@@ -233,7 +233,7 @@ def install_tool_call_middleware(
     different app (built later in the same process) wraps its own fresh handler. A
     repeat install with a *different* set raises rather than silently drop the
     newcomers, because the marker snapshots the set at install time (the supported
-    pattern is to register everything, then install once). Raises too if FastMCP
+    pattern is to build the full list, then install once). Raises too if FastMCP
     has not registered the handler, so an SDK-internal change fails loud rather than
     silently skipping the chain.
     """

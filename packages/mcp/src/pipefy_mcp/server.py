@@ -8,7 +8,11 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.runtime import McpRuntime
-from pipefy_mcp.core.tool_middleware import install_tool_call_middleware
+from pipefy_mcp.core.tool_middleware import (
+    ToolCallMiddleware,
+    install_tool_call_middleware,
+)
+from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
@@ -74,6 +78,22 @@ def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     registry.apply_remote_profile(remote_mode=remote_mode)
 
 
+def default_tool_middlewares(settings: Settings) -> list[ToolCallMiddleware]:
+    """The built-in tool-call middleware to seed for the resolved profile.
+
+    Structured tool-call logging is on by default under the hosted ``remote``
+    profile, where operators rely on it to attribute activity. This is a default,
+    not a capability boundary: the chain installs on every profile, so any
+    deployment can register its own middleware, and this could later become a
+    config toggle a local deployment opts into. Deciding the seed here, at the
+    composition root, keeps the runtime free of any dependency on a concrete
+    middleware.
+    """
+    if settings.mcp.profile == "remote":
+        return [tool_log_middleware]
+    return []
+
+
 def build_pipefy_mcp_server(settings: Settings) -> FastMCP:
     """Build the FastMCP app with its tools registered once, before serving.
 
@@ -102,11 +122,10 @@ def build_pipefy_mcp_server(settings: Settings) -> FastMCP:
         auth=auth,
     )
     _register_pipefy_tools(app, remote_mode=settings.mcp.profile == "remote")
-    # Wrap the tool-call handler with the runtime's registered middleware chain.
-    # Both transports serve this app, so tool calls over stdio and HTTP alike run
-    # through the chain; the built-in logger is seeded per profile (see
-    # McpRuntime.for_profile) and this is a no-op when nothing is registered.
-    install_tool_call_middleware(app, runtime.tool_middlewares)
+    # Wrap the tool-call handler with the profile's built-in middleware chain. Both
+    # transports serve this app, so tool calls over stdio and HTTP alike run through
+    # the chain; the install is a no-op when the list is empty.
+    install_tool_call_middleware(app, default_tool_middlewares(settings))
     return app
 
 

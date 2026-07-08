@@ -34,10 +34,10 @@ class CallerIdentity:
     stdio/local profile there is no inbound bearer, so middleware sees an
     anonymous identity rather than a failure.
 
-    The end-user subject is intentionally deferred: the consumer that keys on it
-    (per-user quotas) is not built yet. Both profiles could supply it when it
-    lands: the remote profile from the validated ``sub`` claim, the local profile
-    by decoding the configured JWT credential once at startup.
+    The end-user subject is intentionally deferred: its consumer (per-user
+    quotas) is not built yet. Both profiles can source it when it lands, the
+    remote profile from the validated ``sub`` claim and the local profile from
+    the configured JWT credential.
     """
 
     client_id: str | None = None
@@ -51,8 +51,8 @@ def _authenticated_user(request: Request | None) -> AuthenticatedUser | None:
     asserts ``AuthenticationMiddleware`` is installed, which holds only under the
     ``remote`` profile, so touching the property would raise on a ``local`` HTTP
     request. This is the one place both request-scoped readers agree on how the
-    validated caller is located (per-message request, never ``auth_context_var``,
-    which stateful Streamable HTTP freezes at the session's first bearer).
+    validated caller is located: off the per-message request, never
+    ``auth_context_var``.
     """
     user = request.scope.get("user") if request is not None else None
     return user if isinstance(user, AuthenticatedUser) else None
@@ -75,8 +75,8 @@ def caller_identity(request: Request | None) -> CallerIdentity:
 def require_request_bearer(request: Request | None) -> str:
     """Return the validated bearer token off the in-flight request.
 
-    The resource-server middleware sets ``request.user`` to the
-    ``AuthenticatedUser`` it validated; this reads its access token. Taking the
+    The resource-server middleware sets the validated ``AuthenticatedUser`` on
+    the request; this reads its access token. Taking the
     request as an argument (the runtime passes ``ctx.request_context.request`` from
     the tool handler) keeps the read on the current caller: it never touches
     ``auth_context_var``, which stateful Streamable HTTP freezes at the session's

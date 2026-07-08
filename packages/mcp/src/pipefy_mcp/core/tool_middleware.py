@@ -68,8 +68,8 @@ class ToolCallContext:
 
     ``arguments`` is the raw JSON-RPC argument map: FastMCP registers the terminal
     with ``validate_input=False`` and does its own coercion/defaulting downstream,
-    so middleware observes the un-coerced, client-sent arguments (defaults not
-    applied, types not coerced). ``argument_keys`` is the bounded, values-free view
+    so middleware observes the un-coerced, client-sent arguments. ``argument_keys``
+    is the bounded, values-free view
     a privacy-sensitive consumer (logging) should prefer; ``arguments`` values are
     passed unbounded to any consumer that opts to read them.
 

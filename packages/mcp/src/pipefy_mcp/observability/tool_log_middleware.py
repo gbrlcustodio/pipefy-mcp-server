@@ -3,8 +3,8 @@
 The first consumer of the tool-call middleware chain (see
 :mod:`pipefy_mcp.core.tool_middleware`): it emits one JSON line per call with the
 tool name, outcome, duration, the caller's client id, argument key names, and a
-request id for correlation. It proves a real cross-cutting concern rides the seam
-without touching FastMCP internals.
+request id for correlation. Being the first consumer, it also exercises the
+chain end to end.
 
 Privacy: never logs the bearer, and never logs argument values, only their
 (bounded) key names.

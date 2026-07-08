@@ -18,8 +18,57 @@ caller.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 from mcp.server.auth.middleware.auth_context import AuthenticatedUser
 from starlette.requests import Request
+
+
+@dataclass(frozen=True)
+class CallerIdentity:
+    """The validated caller a tool-call middleware acts on behalf of.
+
+    Sourced from the request's validated bearer, never re-decoded. ``client_id``
+    is the OAuth client (``azp``/``client_id``, falling back to ``sub`` for a
+    user token) and ``scopes`` its granted scopes. Both default empty: under the
+    stdio/local profile there is no inbound bearer, so middleware sees an
+    anonymous identity rather than a failure.
+
+    The end-user subject is intentionally absent: exposing it needs an
+    ``AccessToken`` subtype and its only consumer is per-user quotas, which are
+    not built yet. Add ``subject`` here when that lands.
+    """
+
+    client_id: str | None = None
+    scopes: tuple[str, ...] = field(default_factory=tuple)
+
+
+def _authenticated_user(request: Request | None) -> AuthenticatedUser | None:
+    """Return the RS-validated user off the request, or None.
+
+    Reads ``request.scope`` directly rather than ``request.user``: the latter
+    asserts ``AuthenticationMiddleware`` is installed, which holds only under the
+    ``remote`` profile, so touching the property would raise on a ``local`` HTTP
+    request. This is the one place both request-scoped readers agree on how the
+    validated caller is located (per-message request, never ``auth_context_var``,
+    which stateful Streamable HTTP freezes at the session's first bearer).
+    """
+    user = request.scope.get("user") if request is not None else None
+    return user if isinstance(user, AuthenticatedUser) else None
+
+
+def caller_identity(request: Request | None) -> CallerIdentity:
+    """Return the validated caller off the in-flight request, or an anonymous one.
+
+    Runs on every profile (a tool-call middleware wraps both transports), so a
+    missing or non-authenticated user yields the empty :class:`CallerIdentity`
+    rather than an error.
+    """
+    user = _authenticated_user(request)
+    if user is None:
+        return CallerIdentity()
+    token = user.access_token
+    return CallerIdentity(client_id=token.client_id, scopes=tuple(token.scopes))
 
 
 def require_request_bearer(request: Request | None) -> str:
@@ -34,13 +83,10 @@ def require_request_bearer(request: Request | None) -> str:
 
     Raises when no validated bearer is present (called outside the resource-server
     request scope, or the request bore no ``AuthenticatedUser``), so a missing
-    identity fails loudly instead of issuing an unauthenticated Pipefy call. The
-    ``isinstance`` guard keeps that fail-loud property on a typed contract: an
-    unauthenticated request carries a different user type, not an
-    ``AuthenticatedUser`` with an empty token.
+    identity fails loudly instead of issuing an unauthenticated Pipefy call.
     """
-    user = request.user if request is not None else None
-    if not isinstance(user, AuthenticatedUser) or not user.access_token.token:
+    user = _authenticated_user(request)
+    if user is None or not user.access_token.token:
         raise RuntimeError(
             "No authenticated access token on the request; the resource-server "
             "profile must validate a bearer before a tool runs."

@@ -34,9 +34,10 @@ class CallerIdentity:
     stdio/local profile there is no inbound bearer, so middleware sees an
     anonymous identity rather than a failure.
 
-    The end-user subject is intentionally absent: exposing it needs an
-    ``AccessToken`` subtype and its only consumer is per-user quotas, which are
-    not built yet. Add ``subject`` here when that lands.
+    The end-user subject is intentionally deferred: the consumer that keys on it
+    (per-user quotas) is not built yet. Both profiles could supply it when it
+    lands: the remote profile from the validated ``sub`` claim, the local profile
+    by decoding the configured JWT credential once at startup.
     """
 
     client_id: str | None = None

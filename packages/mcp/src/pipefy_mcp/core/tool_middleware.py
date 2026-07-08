@@ -40,7 +40,6 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CallNext",
-    "CallerIdentity",
     "ToolCallContext",
     "ToolCallMiddleware",
     "compose",
@@ -55,12 +54,11 @@ __all__ = [
 _MAX_ARG_KEYS = 64
 _MAX_ARG_KEY_LENGTH = 200
 
-# Holds the middleware set the installed chain was built from, so a second install
-# with the same set is a no-op and one with a different set fails loud rather than
-# silently dropping the newcomers. The marker lives on the wrapped function (per
-# app), not on a module or class global: each FastMCP instance has its own handler,
-# so a global would wrap the first app and silently skip every later one built in
-# the same process.
+# Marks the wrapped handler so a second install on the same app fails loud instead
+# of silently stacking or dropping middleware. The marker lives on the wrapped
+# function (per app), not on a module or class global: each FastMCP instance has
+# its own handler, so a global would wrap the first app and silently skip every
+# later one built in the same process.
 _INSTALLED_MARKER = "__pipefy_tool_call_chain__"
 
 
@@ -228,13 +226,10 @@ def install_tool_call_middleware(
     the default (no middleware) path pays nothing per call rather than routing every
     tool call through a pass-through wrapper that builds and discards a context.
 
-    Idempotent per app: the marker lives on the installed handler, so a repeat
-    install on the same app with the same middleware set is a no-op while a
-    different app (built later in the same process) wraps its own fresh handler. A
-    repeat install with a *different* set raises rather than silently drop the
-    newcomers, because the marker snapshots the set at install time (the supported
-    pattern is to build the full list, then install once). Raises too if FastMCP
-    has not registered the handler, so an SDK-internal change fails loud rather than
+    Installed once per app: a second install on the same app raises (build the full
+    middleware list and install it once), while a different app built later in the
+    same process wraps its own fresh handler. Raises too if FastMCP has not
+    registered the handler, so an SDK-internal change fails loud rather than
     silently skipping the chain.
     """
     if not middlewares:
@@ -248,20 +243,16 @@ def install_tool_call_middleware(
         )
 
     terminal = handlers[types.CallToolRequest]
-    installed = getattr(terminal, _INSTALLED_MARKER, None)
-    if installed is not None:
-        if tuple(middlewares) != installed:
-            raise RuntimeError(
-                "a tool-call chain is already installed on this app with a "
-                "different middleware set; register all middleware before calling "
-                "install_tool_call_middleware once"
-            )
-        return
+    if getattr(terminal, _INSTALLED_MARKER, False):
+        raise RuntimeError(
+            "a tool-call chain is already installed on this app; build the full "
+            "middleware list and install it once"
+        )
 
     chain = compose(middlewares, terminal)
 
     async def chained(req: types.CallToolRequest) -> types.ServerResult:
         return await chain(context_from_request(req))
 
-    setattr(chained, _INSTALLED_MARKER, tuple(middlewares))
+    setattr(chained, _INSTALLED_MARKER, True)
     handlers[types.CallToolRequest] = chained

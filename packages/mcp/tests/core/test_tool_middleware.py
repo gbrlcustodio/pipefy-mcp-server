@@ -2,7 +2,7 @@
 
 Covers the seam mechanics against a real FastMCP app: composition order,
 short-circuit, exception propagation, the short-circuit envelope shape, the
-per-app idempotent install, and the argument-context build.
+once-per-app install, and the argument-context build.
 """
 
 from __future__ import annotations
@@ -201,28 +201,16 @@ def test_install_with_no_middleware_leaves_the_handler_untouched():
 
 
 @pytest.mark.unit
-def test_install_is_idempotent_per_app():
-    """A second install on the same app is a no-op (same wrapped handler)."""
-    app = _app()
-    install_tool_call_middleware(app, [_noop])
-    first = app._mcp_server.request_handlers[types.CallToolRequest]
-
-    install_tool_call_middleware(app, [_noop])
-    second = app._mcp_server.request_handlers[types.CallToolRequest]
-
-    assert first is second
-
-
-@pytest.mark.unit
-def test_reinstall_with_a_different_middleware_set_raises():
-    """A second install with a changed set fails loud instead of dropping it."""
+def test_reinstalling_on_the_same_app_raises():
+    """Install is once-per-app: a second install fails loud instead of silently
+    stacking or dropping middleware. Build the full list, install once."""
 
     async def other(ctx: ToolCallContext, call_next):
         return await call_next(ctx)
 
     app = _app()
     install_tool_call_middleware(app, [_noop])
-    with pytest.raises(RuntimeError, match="different middleware set"):
+    with pytest.raises(RuntimeError, match="already installed"):
         install_tool_call_middleware(app, [_noop, other])
 
 

@@ -46,7 +46,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_sub_portal` | `pipefy portal sub-portal create` | shipped | `--main-portal-uuid`; optional `--name`. Interfaces `createSubPortal`. |
 | `create_send_task_automation` | `pipefy automation send-task create` | shipped | (task title + recipients; optional `--event-params` / `--condition` JSON). |
 | `create_table` | `pipefy table create` | shipped | — |
-| `create_table_field` | — | deferred | Table fields; not in initial launch list (table CRUD only). |
+| `create_table_field` | `pipefy table field create` | shipped | — |
 | `create_table_record` | `pipefy record create` | shipped | — |
 | `create_webhook` | `pipefy webhook create` | shipped | — |
 | `delete_ai_agent` | `pipefy agent delete` | shipped | AI Agents domain. |
@@ -69,7 +69,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `delete_sub_portal` | `pipefy portal sub-portal delete` | shipped | destructive: `--yes` or MCP `confirm`; internal_api `deleteSubPortalInterface` (irreversible). |
 | `delete_sub_portal_element` | `pipefy portal sub-portal detach` | shipped | destructive: `--yes` or MCP `confirm`; internal_api `deleteSubPortalElement` (removes element wiring). |
 | `delete_table` | `pipefy table delete` | shipped | destructive: `--yes`. |
-| `delete_table_field` | — | deferred | Table fields; not in launch list. |
+| `delete_table_field` | `pipefy table field delete` | shipped | destructive: `--yes`; `--table` required. |
 | `delete_table_record` | `pipefy record delete` | shipped | destructive: `--yes`. |
 | `delete_webhook` | `pipefy webhook delete` | shipped | destructive: `--yes`. |
 | `duplicate_portal_element` | `pipefy portal element duplicate` | shipped | `--element-id`, `--portal-uuid` (portal that owns the page), `--page-id` (page containing the element). |
@@ -171,7 +171,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `update_portal_element` | `pipefy portal element update` | shipped | positional element + page UUIDs; `--type` + full `--metadata` JSON (API replace-all). |
 | `update_sub_portal_element` | `pipefy portal sub-portal attach` | shipped | positional portal, element, and sub-portal UUIDs; internal_api `updateSubPortalElement`. |
 | `update_table` | `pipefy table update` | shipped | — |
-| `update_table_field` | — | deferred | Table fields; not in launch list. |
+| `update_table_field` | `pipefy table field update` | shipped | `--table` recommended; `--label`/`--description`/`--required`/`--options` or `--extra`. |
 | `update_table_record` | `pipefy record update` | shipped | (``--fields`` JSON). |
 | `update_webhook` | `pipefy webhook update` | shipped | — |
 | `upload_attachment_to_card` | `pipefy attachment upload --card` | shipped | (also needs `--organization`, `--field`, `--file`). |

@@ -87,9 +87,10 @@ layers = [
 ]
 
 # Next ratchet (disabled): lock the domain as framework-free once it has a home.
-# The pure domain (payload and error-envelope builders) currently lives as helper
-# functions under tools/, so there is no module to lock yet. When it moves into a
-# dedicated framework-free module, set `include_external_packages = true` on
+# The pure domain is still scattered: the error/success envelope lives in
+# core/tool_error_envelope.py and the payload builders under tools/, with no single
+# framework-free module to lock yet. When it moves into a dedicated module, set
+# `include_external_packages = true` on
 # [tool.importlinter] above and enable a forbidden contract so the domain cannot
 # import the MCP SDK, Starlette, or the vendor SDK:
 #

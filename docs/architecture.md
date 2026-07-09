@@ -24,11 +24,11 @@ Three roles:
 ### How the roles map onto `pipefy_mcp` today
 
 - Composition root: `server.py` (`build_pipefy_mcp_server`), `main.py`, and `core/runtime.py` (`McpRuntime.for_profile`).
-- Driving adapter: `tools/` (MCP tool registration and the GraphQL calls behind each tool) and `core/fastmcp_tool_lifecycle.py` (FastMCP lifecycle).
+- Driving adapter: `tools/` (MCP tool registration and the GraphQL calls behind each tool), plus `core/fastmcp_tool_lifecycle.py` and `core/tool_middleware.py` (the FastMCP lifecycle helper and the tool-call middleware chain), which are adapter code that currently lives under `core/`.
 - Auth adapter: `auth/` (inbound bearer validation; `JwtTokenVerifier` maps validated claims onto the SDK `AccessToken`).
 - Driven side: Pipefy data access through the `pipefy` SDK (`PipefyClient` / `PipefyEngine`), which is a separate package, consumed concretely.
 - Config boundary: `settings.py` (pydantic-settings parses `PIPEFY_*` into typed settings).
-- Domain: currently thin and scattered as helper functions under `tools/` (payload builders, `tool_error_envelope.py`, `tool_context.py`). It has no dedicated framework-free module yet. Consolidating it is the incremental target that unlocks the framework-free check described under Enforcement.
+- Domain: currently thin and scattered, with no dedicated framework-free module yet. The result envelope (`core/tool_error_envelope.py`) is a framework-free value object shared by the tool adapters and the tool-call middleware; other helpers (payload builders, `tools/tool_context.py`) still sit under `tools/`. The envelope lives in `core/` next to the runtime and the adapter modules, so `core/` is a mixed tier rather than the domain home. Consolidating these into a dedicated module is the incremental target that unlocks the framework-free check described under Enforcement.
 
 ## Dependency rule
 

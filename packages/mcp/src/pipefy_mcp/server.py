@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import logging
 import textwrap
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.runtime import McpRuntime
+from pipefy_mcp.core.tool_middleware import (
+    ToolCallMiddleware,
+    install_tool_call_middleware,
+)
+from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
@@ -73,13 +78,39 @@ def _register_pipefy_tools(app: FastMCP, *, remote_mode: bool) -> None:
     registry.apply_remote_profile(remote_mode=remote_mode)
 
 
-def build_pipefy_mcp_server(settings: Settings) -> FastMCP:
+def default_tool_middlewares(settings: Settings) -> list[ToolCallMiddleware]:
+    """The built-in tool-call middleware to seed for the resolved profile.
+
+    Structured tool-call logging is on by default under the hosted ``remote``
+    profile, where operators rely on it to attribute activity. This is a default,
+    not a capability boundary: the chain installs on every profile, so any
+    deployment can register its own middleware, and this could later become a
+    config toggle a local deployment opts into. Deciding the seed here, at the
+    composition root, keeps the runtime free of any dependency on a concrete
+    middleware.
+    """
+    if settings.mcp.profile == "remote":
+        return [tool_log_middleware]
+    return []
+
+
+def build_pipefy_mcp_server(
+    settings: Settings,
+    extra_tool_middlewares: Sequence[ToolCallMiddleware] = (),
+) -> FastMCP:
     """Build the FastMCP app with its tools registered once, before serving.
 
     Reads everything from the resolved ``settings`` the composition root
     (:func:`run_server`) hands in: the ``remote`` profile selects the default-deny
     remote-safe tool surface, and ``settings.mcp.host`` / ``settings.mcp.port`` give
     the HTTP bind (they matter only for the HTTP transport; stdio ignores them).
+
+    ``extra_tool_middlewares`` is the public registration seam for a consumer of this
+    builder (a hosted serving layer that wants per-tool metrics, say): the chain
+    installs once, so a consumer folds its middleware in here rather than reaching
+    into the private ``request_handlers`` slot or re-wrapping the handler. The
+    built-in middleware runs outer to the consumer's, so the default observability
+    layer records every call including those a consumer's middleware short-circuits.
 
     The one app-scoped :class:`McpRuntime` is built via
     :meth:`McpRuntime.for_profile`, which owns both the outbound identity and (under
@@ -101,6 +132,12 @@ def build_pipefy_mcp_server(settings: Settings) -> FastMCP:
         auth=auth,
     )
     _register_pipefy_tools(app, remote_mode=settings.mcp.profile == "remote")
+    # Wrap the tool-call handler with the built-in chain plus any consumer middleware.
+    # Both transports serve this app, so tool calls over stdio and HTTP alike run
+    # through the chain; the install is a no-op when the combined list is empty.
+    install_tool_call_middleware(
+        app, [*default_tool_middlewares(settings), *extra_tool_middlewares]
+    )
     return app
 
 

@@ -169,3 +169,65 @@ than a local `file_path`), enforce that in the tool body gated on
 `settings.mcp.profile == "remote"` at call time, not via the marker. A tool whose
 exclusion deserves a reason gets a plain code comment stating why; the exclusion
 itself needs no annotation.
+
+## Tool-call middleware
+
+Cross-cutting concerns that wrap a tool invocation (logging, per-user quotas,
+rate limiting, cost weighting, downstream 429/circuit-breaking) register as
+ordered middleware, not by overwriting the server's internal handler. The MCP SDK
+dispatches every tool call through one `request_handlers[CallToolRequest]` slot;
+`core/tool_middleware.py` wraps that slot once, at build time, and composes the
+registered middleware around it. The middleware chain is the extension surface;
+the private slot is wrapped, not written to directly.
+
+A middleware is a plain async callable. A built-in middleware joins the per-profile
+defaults (`default_tool_middlewares` in `server.py`); a consumer of
+`build_pipefy_mcp_server` passes its own through `extra_tool_middlewares`, which the
+builder folds into the single install after the built-ins (so the default
+observability layer stays outermost). Neither path touches FastMCP internals:
+
+```python
+from pipefy_mcp.core.tool_middleware import ToolCallContext, CallNext, short_circuit_error
+
+async def quota(ctx: ToolCallContext, call_next: CallNext):
+    if over_quota(ctx.identity.client_id):
+        return short_circuit_error("quota exceeded", code="RATE_LIMITED")
+    return await call_next(ctx)
+
+# a serving layer registers its own middleware through the public builder:
+#   app = build_pipefy_mcp_server(settings, extra_tool_middlewares=[quota])
+```
+
+- **Order**: list order runs outer to inner around the tool. `[A, B]` runs A,
+  then B, then the tool, and unwinds in reverse.
+- **Short-circuit**: a middleware that returns without awaiting `call_next` skips
+  the inner chain and the tool. Use `short_circuit_error`, which carries the
+  canonical `tool_error` envelope but sets `isError=True` deliberately: a
+  governance stop means the tool never ran, distinct from a tool that ran and
+  reported a business error (`isError=False`).
+- **Identity** (`ctx.identity`): the validated caller's `client_id` and `scopes`,
+  read off the request's bearer, never re-decoded. Empty under stdio/local (no
+  inbound bearer). The end-user `subject` is intentionally absent until its
+  consumer (per-user quotas) exists.
+- **`request_id`**: correlates a call to its HTTP request when available, else the
+  JSON-RPC message id, which is client-chosen and only unique within a session.
+- **Raw arguments**: FastMCP registers the terminal with `validate_input=False`
+  and coerces arguments downstream, so middleware sees the un-coerced, client-sent
+  arguments. `ctx.argument_keys` is bounded (count and length caps) and values-free
+  for privacy-sensitive consumers; `ctx.arguments` values are passed unbounded to
+  any consumer that opts to read them. Never log a bearer or argument values.
+
+The chain installs on every profile (a no-op when the list is empty); the
+built-in structured logger (`observability/tool_log_middleware.py`) is seeded
+by default only under the `remote` profile. That is a default, not a capability
+boundary: per-call concerns like observability and downstream protection apply to
+any deployment (only per-user concerns are hosted-specific), so a local deployment
+can register its own middleware. The logger emits through the `logging` module
+(stderr), never stdout, which is the stdio transport's JSON-RPC stream.
+
+The wrap targets a FastMCP internal and is tested against `mcp==1.25.0`; the
+install is idempotent per app (the sentinel is per handler, not a global). This is
+a separate seam from the argument-validation envelope
+(`tools/validation_envelope.py`), which patches `Tool.run` to reshape a pydantic
+`ValidationError` inside FastMCP's executor: that error's structured detail exists
+only there, below this chain, so the two are complementary, not interchangeable.

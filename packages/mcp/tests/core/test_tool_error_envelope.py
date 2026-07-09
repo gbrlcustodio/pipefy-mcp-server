@@ -1,6 +1,6 @@
 """Unit tests for canonical tool error helpers."""
 
-from pipefy_mcp.tools.tool_error_envelope import (
+from pipefy_mcp.core.tool_error_envelope import (
     tool_error,
     tool_error_message,
 )

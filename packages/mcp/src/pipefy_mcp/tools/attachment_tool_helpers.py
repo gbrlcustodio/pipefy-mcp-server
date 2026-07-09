@@ -6,8 +6,8 @@ from typing import Any, Literal
 
 from pydantic import ValidationError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
-from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 UploadFlowStep = Literal[
     "validation",

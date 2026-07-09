@@ -15,6 +15,7 @@ from gql.transport.exceptions import TransportQueryError
 from pipefy_sdk.exceptions import PortalPermissionError
 from pydantic import ValidationError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     extract_graphql_error_codes,
@@ -24,7 +25,6 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 _PORTAL_PERMISSION_GUIDANCE = (

@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.lowlevel.server import request_ctx
 from mcp.shared.context import RequestContext
 
+from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.core.tool_middleware import (
     ToolCallContext,
     compose,
@@ -24,7 +25,6 @@ from pipefy_mcp.core.tool_middleware import (
     install_tool_call_middleware,
     short_circuit_error,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 
 def _app() -> FastMCP:

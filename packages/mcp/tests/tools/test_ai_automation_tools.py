@@ -10,8 +10,8 @@ from mcp.shared.memory import (
 )
 from pipefy_sdk import PipefyClient
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from tools.conftest import (
     assert_invalid_arguments_envelope,
     build_tool_test_server,

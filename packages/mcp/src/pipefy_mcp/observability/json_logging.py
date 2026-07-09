@@ -1,0 +1,152 @@
+"""Pure builders and stdout JSON emitter for hosted structured log events."""
+
+from __future__ import annotations
+
+import json
+import logging
+import sys
+from datetime import UTC, datetime
+from typing import Any, Literal
+
+ToolCallOutcome = Literal["ok", "error"]
+
+OBSERVABILITY_LOGGER_NAME = "pipefy_mcp.observability.structured"
+
+HTTP_REQUEST_EVENT_KEYS = frozenset(
+    {
+        "event",
+        "timestamp",
+        "method",
+        "path",
+        "status",
+        "duration_ms",
+        "client_ip",
+        "session_id",
+        "request_id",
+        "sub",
+        "client_id",
+    }
+)
+
+TOOL_CALL_EVENT_KEYS = frozenset(
+    {
+        "event",
+        "timestamp",
+        "tool",
+        "outcome",
+        "duration_ms",
+        "arg_keys",
+        "request_id",
+    }
+)
+
+
+_LOG_LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
+
+
+def normalize_log_level(log_level: str) -> int:
+    """Map a settings/env log level string to a ``logging`` level constant.
+
+    An explicit map rather than ``getattr(logging, ...)``: the module carries
+    uppercase attributes that are not levels (``BASIC_FORMAT``) and aliases the
+    settings ``Literal`` rejects (``WARN``, ``FATAL``); both must fail here too.
+    """
+    normalized = log_level.upper()
+    try:
+        return _LOG_LEVELS[normalized]
+    except KeyError as exc:
+        raise ValueError(
+            f"invalid log level: received {log_level!r}, expected one of "
+            "DEBUG, INFO, WARNING, ERROR, CRITICAL"
+        ) from exc
+
+
+def configure_observability_logging(*, log_level: str) -> logging.Logger:
+    """Attach a stdout JSON-line handler that does not propagate to the root logger."""
+    logger = logging.getLogger(OBSERVABILITY_LOGGER_NAME)
+    logger.handlers.clear()
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    level = normalize_log_level(log_level)
+    handler.setLevel(level)
+    logger.setLevel(level)
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger
+
+
+def reset_observability_logging() -> None:
+    """Remove observability handlers (test isolation)."""
+    logger = logging.getLogger(OBSERVABILITY_LOGGER_NAME)
+    logger.handlers.clear()
+    logger.propagate = True
+
+
+def emit_structured_event(event: dict[str, Any]) -> None:
+    """Emit one allowlisted event as a single JSON line on stdout."""
+    line = json.dumps(event, separators=(",", ":"))
+    logging.getLogger(OBSERVABILITY_LOGGER_NAME).info(line)
+
+
+def _utc_timestamp_iso(timestamp: datetime | None) -> str:
+    instant = timestamp or datetime.now(UTC)
+    if instant.tzinfo is None:
+        instant = instant.replace(tzinfo=UTC)
+    return instant.astimezone(UTC).isoformat()
+
+
+def build_http_request_event(
+    *,
+    method: str,
+    path: str,
+    status: int | None,
+    duration_ms: int | float,
+    client_ip: str | None,
+    session_id: str | None,
+    request_id: str,
+    sub: str | None,
+    client_id: str | None,
+    timestamp: datetime | None = None,
+) -> dict[str, Any]:
+    """Build the allowlisted dict for one HTTP request log line."""
+    return {
+        "event": "http_request",
+        "timestamp": _utc_timestamp_iso(timestamp),
+        "method": method,
+        "path": path,
+        "status": status,
+        "duration_ms": duration_ms,
+        "client_ip": client_ip,
+        "session_id": session_id,
+        "request_id": request_id,
+        "sub": sub,
+        "client_id": client_id,
+    }
+
+
+def build_tool_call_event(
+    *,
+    tool: str,
+    outcome: ToolCallOutcome,
+    duration_ms: int | float,
+    arg_keys: list[str],
+    request_id: str | None,
+    timestamp: datetime | None = None,
+) -> dict[str, Any]:
+    """Build the allowlisted dict for one tool-call log line."""
+    return {
+        "event": "tool_call",
+        "timestamp": _utc_timestamp_iso(timestamp),
+        "tool": tool,
+        "outcome": outcome,
+        "duration_ms": duration_ms,
+        "arg_keys": arg_keys,
+        "request_id": request_id,
+    }

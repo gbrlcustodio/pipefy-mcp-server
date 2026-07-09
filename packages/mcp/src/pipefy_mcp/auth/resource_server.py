@@ -39,6 +39,12 @@ from pipefy_mcp.settings import ResourceServerSettings
 logger = logging.getLogger(__name__)
 
 
+class PipefyAccessToken(AccessToken):
+    """AccessToken with the JWT ``sub`` claim preserved for request logging."""
+
+    sub: str | None = None
+
+
 def _parse_scopes(scope: Any) -> list[str]:
     """Normalize the ``scope`` claim to a list of strings.
 
@@ -104,7 +110,12 @@ class JwtTokenVerifier(TokenVerifier):
         if exp is None:
             raise ValueError("token has no exp claim")
 
-        return AccessToken(
+        # sub feeds request logging only; a malformed (non-string) sub must
+        # degrade to None, not reject a token the verifier accepted before the
+        # field existed.
+        sub_claim = claims.get("sub")
+
+        return PipefyAccessToken(
             token=token,
             client_id=client_id,
             scopes=_parse_scopes(claims.get("scope")),
@@ -112,6 +123,7 @@ class JwtTokenVerifier(TokenVerifier):
             # wants an int.
             expires_at=int(exp),
             resource=self._resource,
+            sub=sub_claim if isinstance(sub_claim, str) else None,
         )
 
 

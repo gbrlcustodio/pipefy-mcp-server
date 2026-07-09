@@ -12,6 +12,7 @@ from pipefy_mcp.core.tool_middleware import (
     ToolCallMiddleware,
     install_tool_call_middleware,
 )
+from pipefy_mcp.observability.json_logging import configure_observability_logging
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import ToolRegistry
@@ -128,6 +129,7 @@ def build_pipefy_mcp_server(
         lifespan=_make_lifespan(runtime),
         host=settings.mcp.host,
         port=settings.mcp.port,
+        log_level=settings.mcp.log_level,
         token_verifier=verifier,
         auth=auth,
     )
@@ -193,6 +195,7 @@ def run_server(settings: Settings) -> None:
     HTTP's bind concerns.
     """
     mcp = settings.mcp
+    configure_observability_logging(log_level=mcp.log_level)
 
     if mcp.transport == "stdio":
         logger.info("Starting Pipefy MCP server over stdio (profile=%s)", mcp.profile)

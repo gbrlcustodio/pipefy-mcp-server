@@ -8,9 +8,14 @@ import sys
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-ToolCallOutcome = Literal["ok", "error"]
+ToolCallOutcome = Literal["ok", "error", "cancelled", "elicitation"]
 
 OBSERVABILITY_LOGGER_NAME = "pipefy_mcp.observability.structured"
+
+# Structured events always emit at INFO on this logger. PIPEFY_MCP_LOG_LEVEL
+# governs the FastMCP root logger (text) only, so quieting noisy text logs does
+# not silently drop hosted request/tool lines.
+STRUCTURED_LOG_LEVEL = logging.INFO
 
 HTTP_REQUEST_EVENT_KEYS = frozenset(
     {
@@ -37,6 +42,7 @@ TOOL_CALL_EVENT_KEYS = frozenset(
         "duration_ms",
         "arg_keys",
         "request_id",
+        "client_id",
     }
 )
 
@@ -67,16 +73,20 @@ def normalize_log_level(log_level: str) -> int:
         ) from exc
 
 
-def configure_observability_logging(*, log_level: str) -> logging.Logger:
-    """Attach a stderr JSON-line handler that does not propagate to the root logger."""
+def configure_observability_logging() -> logging.Logger:
+    """Attach a stderr JSON-line handler pinned at INFO (``propagate=False``).
+
+    Does not take ``PIPEFY_MCP_LOG_LEVEL``: that knob configures FastMCP's root
+    logger only. Hosted structured lines stay at INFO so an operator can quiet
+    text logs without losing request/tool debugging events.
+    """
     logger = logging.getLogger(OBSERVABILITY_LOGGER_NAME)
     logger.handlers.clear()
 
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter("%(message)s"))
-    level = normalize_log_level(log_level)
-    handler.setLevel(level)
-    logger.setLevel(level)
+    handler.setLevel(STRUCTURED_LOG_LEVEL)
+    logger.setLevel(STRUCTURED_LOG_LEVEL)
     logger.addHandler(handler)
     logger.propagate = False
     return logger
@@ -138,6 +148,7 @@ def build_tool_call_event(
     duration_ms: int | float,
     arg_keys: list[str],
     request_id: str | None,
+    client_id: str | None = None,
     timestamp: datetime | None = None,
 ) -> dict[str, Any]:
     """Build the allowlisted dict for one tool-call log line."""
@@ -149,4 +160,5 @@ def build_tool_call_event(
         "duration_ms": duration_ms,
         "arg_keys": arg_keys,
         "request_id": request_id,
+        "client_id": client_id,
     }

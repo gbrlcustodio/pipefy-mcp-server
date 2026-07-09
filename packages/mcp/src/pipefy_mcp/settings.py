@@ -113,8 +113,9 @@ class McpSettings(BaseSettings):
     log_level: McpLogLevel = Field(
         default="INFO",
         description=(
-            "Log level for hosted structured JSON events on stderr and the "
-            "FastMCP root logger on stderr (env: PIPEFY_MCP_LOG_LEVEL). "
+            "Log level for the FastMCP root logger on stderr "
+            "(env: PIPEFY_MCP_LOG_LEVEL). Hosted structured JSON events use a "
+            "dedicated logger pinned at INFO and are not governed by this knob. "
             "Accepts DEBUG, INFO, WARNING, ERROR, or CRITICAL; normalized to "
             "uppercase."
         ),

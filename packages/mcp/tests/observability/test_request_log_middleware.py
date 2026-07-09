@@ -88,7 +88,7 @@ def _isolated_observability_logger():
 
 
 def _configure_for_capture() -> None:
-    configure_observability_logging(log_level="INFO")
+    configure_observability_logging()
 
 
 @pytest.mark.anyio

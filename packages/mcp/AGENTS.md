@@ -82,15 +82,21 @@ shares the client's disk (remote-safe file inputs are separate follow-up work).
 
 ## Hosted structured logging
 
-The HTTP transport emits one JSON line per request on stderr for hosted
-observability (`pipefy_mcp/observability/`). Stdio does **not** install request
-logging: under stdio, stdout is the JSON-RPC wire, and the structured emitter is
-HTTP-only so local installs never arm that process-global handler.
+The HTTP transport emits allowlisted JSON lines on stderr for hosted **debugging**
+(`pipefy_mcp/observability/`): one `http_request` line per request and one
+`tool_call` line per tool invocation (via `tool_log_middleware`). Fields are
+privacy-bounded (no bearer, no argument values, no query string, no exception
+messages). Stdio does **not** install the structured emitter: under stdio,
+stdout is the JSON-RPC wire, and local installs should not arm that
+process-global handler.
 
 Wiring lives in `wire_hosted_observability` (`observability/wiring.py`): it calls
 `streamable_http_app()` once, attaches request middleware, and returns the Starlette app.
 `run_server` serves that app with uvicorn directly (`access_log=False`) so the
 structured request line replaces uvicorn's text access log.
+`configure_observability_logging` pins the dedicated structured logger at `INFO`
+independently of `PIPEFY_MCP_LOG_LEVEL` (which only governs FastMCP/root text
+logs), so quieting noisy text does not drop request/tool lines.
 
 The request logger is **pure-ASGI middleware** (`RequestLogMiddleware`), never
 Starlette `BaseHTTPMiddleware`: `BaseHTTPMiddleware` buffers the response body,
@@ -98,7 +104,8 @@ which breaks long-lived Streamable HTTP / SSE streams. The pure-ASGI middleware
 only inspects `http.response.start` (status + headers) and passes the body through.
 `request_id` prefers inbound `x-request-id`, then `x-correlation-id`, and mints a
 UUID only when both are absent (or blank), so an upstream proxy can keep one id
-across service boundaries.
+across service boundaries. Tool lines go through the same emitter builders as
+HTTP lines (`build_tool_call_event` / `emit_structured_event`).
 
 ## Tool registration
 
@@ -242,8 +249,8 @@ built-in structured logger (`observability/tool_log_middleware.py`) is seeded
 by default only under the `remote` profile. That is a default, not a capability
 boundary: per-call concerns like observability and downstream protection apply to
 any deployment (only per-user concerns are hosted-specific), so a local deployment
-can register its own middleware. The logger emits through the `logging` module
-(stderr), never stdout, which is the stdio transport's JSON-RPC stream.
+can register its own middleware. Tool lines use the same stderr JSON emitter as
+HTTP request lines (`emit_structured_event`), never stdout.
 
 The wrap targets a FastMCP internal and is tested against `mcp==1.25.0`; the
 install is idempotent per app (the sentinel is per handler, not a global). This is

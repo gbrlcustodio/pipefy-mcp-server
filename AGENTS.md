@@ -8,6 +8,7 @@
 - **`docs/parity.md`** — MCP tool ↔ CLI command parity matrix. Source of truth for coverage and deferrals.
 - **`docs/MIGRATION.md`** — What existing MCP users need to know about v0.1.
 - **`docs/dependencies.md`** — Rationale for runtime dependencies.
+- **`docs/architecture.md`**: Intra-package layering (domain, adapter, composition root), type ownership at boundaries, ports, and the alternative-constructor guide.
 - **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior).
 - **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
 - **`docs/sdk/README.md`** — Using `pipefy` as a library.
@@ -111,6 +112,8 @@ A parsed type rejects invalid construction itself; it does not rely on the pipel
 ### Composition: the per-app runtime
 
 Parsed types are decisions and cost no I/O to build. Effects (keychain reads, network, building clients or verifiers) live in a per-application runtime built once at startup: the single place raw settings become domain types and wired resources. Downstream depends on the runtime or the types it holds, never on raw settings or an ad-hoc resolve. The runtime lives in the app package; shared packages export parsed types and resolvers, not app wiring or effects. Whether an app wires eagerly (fail fast at boot) or keeps effectful members lazy is a per-app choice.
+
+The layer model this sits inside (domain, adapter, composition root), the rule that domain types do not carry framework or SDK types, and where an alternative constructor lives (classmethod on the type versus free factory in the adapter) are in [`docs/architecture.md`](docs/architecture.md). Intra-package layering is enforced by import-linter in `packages/mcp`; the inter-package direction is enforced by ruff `TID251`.
 
 ## Testing
 - `pytest-asyncio`, `pytest-cov`, `pytest-mock`.

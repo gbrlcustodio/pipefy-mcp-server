@@ -3,9 +3,13 @@
 This document describes how code is layered inside a package and how types cross a boundary. It fills the gap between two things that are already written down:
 
 - `docs/dependencies.md` and the root `AGENTS.md` cover the direction between packages (`pipefy-infra` is the leaf; `pipefy` and `pipefy-auth` sit above it; `pipefy-mcp-server` and `pipefy-cli` sit on top). That direction is enforced per package by ruff `TID251` banned-api and the CI "banned upward imports" steps.
-- `AGENTS.md` ("type validation at boundaries", "parse, don't validate", "parsed types are self-guaranteeing", "composition: the per-app runtime") and the coding principles cover how data is parsed at the edge and where effects live.
+- `AGENTS.md` ("type validation at boundaries", "parse, don't validate", "parsed types are self-guaranteeing", "composition: the per-app runtime") covers how data is parsed at the edge and where effects live.
 
-What was missing is the layer model *within* a package: which module is domain, which is an adapter, which is the composition root, and what each is allowed to import. This document states that model, the type-ownership rule at boundaries, the port and inversion seam, the per-app composition root, and a decision guide for alternative constructors. It reinforces the existing rules rather than replacing them; the reconciliation section at the end lists where the two meet.
+What was missing is the layer model *within* a package: which module is domain, which is an adapter, which is the composition root, and what each is allowed to import. This document states that model, the type-ownership rule at boundaries, the port and inversion seam, the per-app composition root, and a decision guide for alternative constructors.
+
+These rules are repo-wide. They apply to every package (`pipefy-infra`, `pipefy`, `pipefy-auth`, `pipefy-mcp-server`, `pipefy-cli`), and every package is expected to converge on them. The worked examples and the automated check below are drawn from `pipefy-mcp-server` because it is the first package where the model is written down and enforced, not because it is the only package the model governs; the others follow. Where a section says "this package", read it as that instance, not a limit on the rule.
+
+It reinforces the existing rules rather than replacing them; the reconciliation section at the end lists where the two meet.
 
 ## Layer model
 
@@ -32,7 +36,7 @@ Imports point inward: an outer role may import an inner one, never the reverse. 
 
 The enforced spine is the actual acyclic import chain that holds today, from outer to inner: `server` above `tools` above `core` above `auth` above `settings`. This is a conservative encoding of "inward only": it reflects the direction imports run in the code, not the conceptual role names. The two do not line up one-to-one yet (the runtime is the composition root but lives under `core/`, which the spine places below `tools/` because tools import the runtime to get their dependencies). Converging the physical layering with the conceptual roles is part of the incremental work, not a precondition for the check.
 
-The two ports of this package:
+Every package has at least one driving port (how it is entered) and, if it reaches outside, a driven port (how it reaches out). In `pipefy-mcp-server` today:
 
 - Driving port: tool invocation. The MCP SDK enters here; `tools/` is the adapter.
 - Driven port: Pipefy data access. Consumed today as the concrete `pipefy` SDK. Introducing an owned interface for it is the inversion described under Ports.
@@ -47,11 +51,11 @@ This is the ownership half of the boundary rules in `AGENTS.md`: "type validatio
 
 ## Ports and dependency inversion
 
-Coding principle 3 ("depend on abstractions you own") holds without exception: business logic depends on an interface shaped by what it needs, and the adapter implements it. This document only names where that seam sits so "invert" does not get read as "invert everything".
+The rule to depend on abstractions you own holds without exception: business logic depends on an interface shaped by what it needs, and the adapter implements it. This document only names where that seam sits so "invert" does not get read as "invert everything".
 
 The seam is domain to infrastructure: a vendor SDK, the network, a database. You define a narrow interface in the domain (`find_by_email`, not `Database.query`), scoped to one need, and let an adapter satisfy it. You do not invert stdlib calls, and you do not invert calls that stay inside the domain; wrapping `dict` or a pure helper behind an interface buys nothing.
 
-Today this package owns almost no such interface: the Pipefy engine is consumed as the concrete `pipefy` SDK. Introducing an owned port is incremental and starts where there is payoff, a test seam or a second implementation. The clearest first candidate is a narrow protocol over the Pipefy engine so tool logic can be exercised against a fake without the real client.
+In `pipefy-mcp-server` today the package owns almost no such interface: the Pipefy engine is consumed as the concrete `pipefy` SDK. Introducing an owned port is incremental and starts where there is payoff, a test seam or a second implementation. The clearest first candidate is a narrow protocol over the Pipefy engine so tool logic can be exercised against a fake without the real client.
 
 ## Composition root
 
@@ -81,7 +85,7 @@ Precedents in the tree:
 
 ## Testing at boundaries
 
-A port defines a contract, and the same contract test suite runs against the real adapter and against any fake that implements the port. The fake exists to isolate the driving side (drive a tool without the live Pipefy API); it does not replace the real adapter's own tests. The preference in coding principle 4 stands: exercise real infrastructure over mocks, because a mock only tests your understanding of a dependency. The port contract is what keeps a fake honest, since the real adapter must pass the identical suite.
+A port defines a contract, and the same contract test suite runs against the real adapter and against any fake that implements the port. The fake exists to isolate the driving side (drive a tool without the live Pipefy API); it does not replace the real adapter's own tests. The preference for testing against a contract rather than an implementation stands: exercise real infrastructure over mocks, because a mock only tests your understanding of a dependency. The port contract is what keeps a fake honest, since the real adapter must pass the identical suite.
 
 Drive a package through its driving port, not through internals. A test that constructs the app and invokes the tool handler exercises the same path a client does.
 
@@ -93,13 +97,13 @@ Within `pipefy_mcp`: import-linter. The contract lives in `packages/mcp/pyprojec
 
 The next ratchet is disabled until the domain has a home. Once the scattered domain helpers move into a dedicated framework-free module, a forbidden contract locks it so it cannot import the MCP SDK, Starlette, or the vendor SDK. It cannot target `pipefy_mcp.core` today, because that package holds the runtime (the composition root), which must import those. The disabled contract and the switch to turn it on are recorded in `packages/mcp/pyproject.toml`.
 
-This is a pilot on `pipefy_mcp`. The other packages keep their `TID251` inter-package guards; extending intra-package contracts to them is a later step.
+The rules above are repo-wide; the intra-package *check* is what starts on `pipefy_mcp` as a pilot, not the model itself. The other packages keep their `TID251` inter-package guards and are held to the same model by review; extending the import-linter contract to them is a later step, not a narrower scope for the rules.
 
 ## Reconciliation with the existing rules
 
-This document reinforces the rules already in `AGENTS.md` and the coding principles; four points are worth stating so they are not misread:
+This document reinforces the rules already in `AGENTS.md`; four points are worth stating so they are not misread:
 
 - The composition root is per app, not one for the repo, and keeps the name `AGENTS.md` already uses (the per-app runtime).
-- "Invert only where there is payoff" is a statement about where the seam sits (domain to infrastructure), not a relaxation of coding principle 3. Direct concrete imports in the domain remain an inversion violation.
+- "Invert only where there is payoff" is a statement about where the seam sits (domain to infrastructure), not a relaxation of the rule to depend on abstractions you own. Direct concrete imports in the domain remain an inversion violation.
 - "Contract tests at ports" is not a preference for mocks. The real-infrastructure preference stands; the port contract is the shared spec a fake and the real adapter must both satisfy.
 - A free factory maps or assembles; it does not take over invariant enforcement. The domain type's constructor still self-guarantees.

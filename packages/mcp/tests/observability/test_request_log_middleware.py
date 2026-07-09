@@ -17,7 +17,10 @@ from pipefy_mcp.observability.json_logging import (
     configure_observability_logging,
     reset_observability_logging,
 )
-from pipefy_mcp.observability.request_log_middleware import RequestLogMiddleware
+from pipefy_mcp.observability.request_log_middleware import (
+    RequestLogMiddleware,
+    resolve_request_id,
+)
 
 ASGIApp = Callable[
     [
@@ -245,6 +248,69 @@ async def test_request_id_is_stored_on_scope_state(capsys):
 
     lines = _read_log_lines(capsys)
     assert lines[0]["request_id"] == scope["state"]["request_id"]
+
+
+@pytest.mark.anyio
+async def test_request_id_from_x_request_id_header(capsys):
+    _configure_for_capture()
+
+    async def app(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+    scope = _http_scope(headers=[(b"x-request-id", b"upstream-req-1")])
+    await _run_middleware(app, scope)
+
+    lines = _read_log_lines(capsys)
+    assert lines[0]["request_id"] == "upstream-req-1"
+    assert scope["state"]["request_id"] == "upstream-req-1"
+
+
+@pytest.mark.anyio
+async def test_request_id_falls_back_to_x_correlation_id(capsys):
+    _configure_for_capture()
+
+    async def app(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+    scope = _http_scope(headers=[(b"x-correlation-id", b"corr-abc")])
+    await _run_middleware(app, scope)
+
+    lines = _read_log_lines(capsys)
+    assert lines[0]["request_id"] == "corr-abc"
+
+
+@pytest.mark.anyio
+async def test_x_request_id_wins_over_x_correlation_id(capsys):
+    _configure_for_capture()
+
+    async def app(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+    scope = _http_scope(
+        headers=[
+            (b"x-correlation-id", b"corr-loses"),
+            (b"x-request-id", b"req-wins"),
+        ]
+    )
+    await _run_middleware(app, scope)
+
+    lines = _read_log_lines(capsys)
+    assert lines[0]["request_id"] == "req-wins"
+
+
+def test_resolve_request_id_ignores_blank_headers_and_mints():
+    scope = _http_scope(
+        headers=[
+            (b"x-request-id", b"   "),
+            (b"x-correlation-id", b""),
+        ]
+    )
+    minted = resolve_request_id(scope)
+    assert minted
+    assert minted.strip() == minted
 
 
 @pytest.mark.anyio

@@ -96,6 +96,9 @@ The request logger is **pure-ASGI middleware** (`RequestLogMiddleware`), never
 Starlette `BaseHTTPMiddleware`: `BaseHTTPMiddleware` buffers the response body,
 which breaks long-lived Streamable HTTP / SSE streams. The pure-ASGI middleware
 only inspects `http.response.start` (status + headers) and passes the body through.
+`request_id` prefers inbound `x-request-id`, then `x-correlation-id`, and mints a
+UUID only when both are absent (or blank), so an upstream proxy can keep one id
+across service boundaries.
 
 ## Tool registration
 

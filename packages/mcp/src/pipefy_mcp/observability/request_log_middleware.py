@@ -27,6 +27,7 @@ ASGIReceive = Callable[[], Awaitable[MutableMapping[str, Any]]]
 ASGISend = Callable[[MutableMapping[str, Any]], Awaitable[None]]
 
 MCP_SESSION_ID_HEADER = "mcp-session-id"
+REQUEST_ID_HEADERS = ("x-request-id", "x-correlation-id")
 
 
 def _header_from_scope(scope: MutableMapping[str, Any], name: str) -> str | None:
@@ -43,6 +44,23 @@ def _header_from_response(headers: list[tuple[bytes, bytes]], name: str) -> str 
         if key.lower() == name_bytes:
             return value.decode("latin-1")
     return None
+
+
+def resolve_request_id(scope: MutableMapping[str, Any]) -> str:
+    """Prefer an inbound correlation header; otherwise mint a server-side id.
+
+    Honors ``x-request-id`` first, then ``x-correlation-id``. Empty or
+    whitespace-only values are ignored so a proxy that sends a blank header
+    does not suppress generation.
+    """
+    for name in REQUEST_ID_HEADERS:
+        raw = _header_from_scope(scope, name)
+        if raw is None:
+            continue
+        candidate = raw.strip()
+        if candidate:
+            return candidate
+    return str(uuid4())
 
 
 def _client_ip(scope: MutableMapping[str, Any]) -> str | None:
@@ -80,7 +98,7 @@ class RequestLogMiddleware:
             return
 
         started_at = time.perf_counter()
-        request_id = str(uuid4())
+        request_id = resolve_request_id(scope)
         scope.setdefault("state", {})["request_id"] = request_id
 
         status: int | None = None

@@ -11,6 +11,7 @@ from pipefy_sdk import CreateSendTaskAutomationInput, PipefyId
 from pipefy_sdk.automation_preflight import AutomationPreflightError
 from pydantic import ValidationError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.automation_tool_helpers import (
     build_automation_error_payload,
     build_automation_mutation_success_payload,
@@ -21,7 +22,6 @@ from pipefy_mcp.tools.automation_tool_helpers import (
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
 from pipefy_mcp.tools.tool_context import get_pipefy_client
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     validate_optional_tool_id,

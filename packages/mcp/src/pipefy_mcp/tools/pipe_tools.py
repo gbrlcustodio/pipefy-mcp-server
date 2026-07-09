@@ -25,6 +25,12 @@ from pipefy_sdk import (
 from pipefy_sdk.models.form import MalformedFieldDefinitionError
 from pydantic import ValidationError
 
+from pipefy_mcp.core.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_error,
+    tool_error_message,
+    tool_success,
+)
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
@@ -70,12 +76,6 @@ from pipefy_mcp.tools.relation_tool_helpers import (
 )
 from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
-from pipefy_mcp.tools.tool_error_envelope import (
-    is_unified_envelope_enabled,
-    tool_error,
-    tool_error_message,
-    tool_success,
-)
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 # Key for findCards response; used when reading edges and adding empty message.

@@ -16,6 +16,7 @@ from pipefy_sdk.ai_preflight import (
 )
 from pydantic import ValidationError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.ai_tool_helpers import (
     build_ai_tool_error,
     build_create_automation_success,
@@ -29,7 +30,6 @@ from pipefy_mcp.tools.automation_tool_helpers import (
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.tool_context import get_pipefy_client
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
     validate_tool_id,

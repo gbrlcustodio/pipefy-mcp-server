@@ -34,6 +34,7 @@ from mcp import types
 from mcp.server.lowlevel.server import request_ctx
 
 from pipefy_mcp.auth.request_identity import CallerIdentity, caller_identity
+from pipefy_mcp.core.tool_error_envelope import tool_error
 
 if TYPE_CHECKING:
     from mcp.server.fastmcp import FastMCP
@@ -201,11 +202,6 @@ def short_circuit_error(
     (where an in-tool error carries it too) and in ``structuredContent``. The match to
     an in-tool error is on the decoded envelope, not the byte serialization.
     """
-    # Imported lazily: pipefy_mcp.tools.tool_error_envelope pulls the tools
-    # package, which imports the runtime, which imports this module. A top-level
-    # import would form a cycle at load time.
-    from pipefy_mcp.tools.tool_error_envelope import tool_error
-
     envelope = tool_error(message, code=code, details=details)
     return types.ServerResult(
         types.CallToolResult(

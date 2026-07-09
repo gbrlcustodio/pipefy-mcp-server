@@ -10,8 +10,8 @@ from mcp.shared.memory import (
 )
 from pipefy_sdk import PipefyClient
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.organization_tools import OrganizationTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 from tools.conftest import build_tool_test_server
 
 

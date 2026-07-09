@@ -14,18 +14,18 @@ from pipefy_sdk.models.comment import MAX_COMMENT_TEXT_LENGTH
 from pydantic import ValidationError
 from typing_extensions import TypedDict
 
-from pipefy_mcp.tools.destructive_tool_guard import (
-    DestructiveCancelledPayload,
-    DestructivePreviewPayload,
-)
-from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
-from pipefy_mcp.tools.tool_error_envelope import (
+from pipefy_mcp.core.tool_error_envelope import (
     ToolErrorDetail,
     ToolSuccessPayload,
     is_unified_envelope_enabled,
     tool_error,
     tool_success,
 )
+from pipefy_mcp.tools.destructive_tool_guard import (
+    DestructiveCancelledPayload,
+    DestructivePreviewPayload,
+)
+from pipefy_mcp.tools.graphql_error_helpers import extract_error_strings
 
 
 class UserCancelledError(Exception):

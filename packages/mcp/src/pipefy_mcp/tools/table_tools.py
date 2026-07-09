@@ -13,6 +13,11 @@ from pipefy_sdk import (
     PipefyId,
 )
 
+from pipefy_mcp.core.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_error_message,
+    tool_success,
+)
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_graphql_correlation_id,
@@ -36,11 +41,6 @@ from pipefy_mcp.tools.table_tool_helpers import (
     map_delete_table_error_to_message,
 )
 from pipefy_mcp.tools.tool_context import get_pipefy_client
-from pipefy_mcp.tools.tool_error_envelope import (
-    is_unified_envelope_enabled,
-    tool_error_message,
-    tool_success,
-)
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
     validate_optional_tool_id,

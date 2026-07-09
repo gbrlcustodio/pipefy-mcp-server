@@ -24,6 +24,7 @@ from pipefy_mcp.core.tool_middleware import (
     install_tool_call_middleware,
     short_circuit_error,
 )
+from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 
 def _app() -> FastMCP:
@@ -189,6 +190,42 @@ def test_short_circuit_error_shape():
         "success": False,
         "error": {"message": "quota exceeded", "code": "RATE_LIMITED"},
     }
+
+
+@pytest.mark.unit
+def test_short_circuit_matches_the_in_tool_error_envelope():
+    """A short-circuit decodes to the same envelope a client reads from an in-tool error.
+
+    A governance stop should carry the same ``tool_error`` payload an agent gets when a
+    tool runs and fails, so the client needs no special-casing. The two are compared on
+    the parsed envelope, not the bytes: FastMCP serializes a dict return through its own
+    encoder (non-ASCII left raw, ``structuredContent`` unset for a schema-less tool),
+    while ``short_circuit_error`` uses ``json.dumps`` and fills ``structuredContent``.
+    Comparing decoded JSON pins the contract that matters and fails loud if either
+    encoder or the envelope shape drifts, without false-alarming on cosmetics. The one
+    intended divergence: the short-circuit is ``isError=True`` (the tool never ran). The
+    non-ASCII value below crosses the encoders' escaping difference to prove the point.
+    """
+    message, code, details = "blocked", "DENIED", {"reason": "quota (café)"}
+
+    app = FastMCP("parity")
+
+    @app.tool()
+    async def failing() -> dict:
+        return tool_error(message, code=code, details=details)
+
+    request = types.CallToolRequest(
+        method="tools/call",
+        params=types.CallToolRequestParams(name="failing", arguments={}),
+    )
+    in_tool = asyncio.run(_invoke(app, request)).root
+    short_circuit = short_circuit_error(message, code=code, details=details).root
+
+    assert json.loads(in_tool.content[0].text) == json.loads(
+        short_circuit.content[0].text
+    )
+    assert in_tool.isError is False
+    assert short_circuit.isError is True
 
 
 @pytest.mark.unit

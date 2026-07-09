@@ -193,12 +193,13 @@ def short_circuit_error(
 ) -> types.ServerResult:
     """A short-circuit result a middleware returns instead of running the tool.
 
-    Carries the canonical ``tool_error`` envelope so the body matches an in-tool
-    failure, but sets ``isError=True`` deliberately: a governance stop (quota,
-    rate limit) means the tool never ran, which is distinct from a tool that ran
-    and reported a business error (``isError=False``). Because this bypasses
-    FastMCP's terminal, it replicates FastMCP's dict normalization itself (the
-    same envelope in both ``structuredContent`` and serialized ``content``).
+    Carries the canonical ``tool_error`` envelope so a client reads a governance
+    stop (quota, rate limit) the same way it reads a tool's own failure, but sets
+    ``isError=True`` deliberately: the tool never ran, distinct from a tool that ran
+    and reported a business error (``isError=False``). Bypassing FastMCP's terminal,
+    it builds the result directly, putting the envelope in the serialized ``content``
+    (where an in-tool error carries it too) and in ``structuredContent``. The match to
+    an in-tool error is on the decoded envelope, not the byte serialization.
     """
     # Imported lazily: pipefy_mcp.tools.tool_error_envelope pulls the tools
     # package, which imports the runtime, which imports this module. A top-level

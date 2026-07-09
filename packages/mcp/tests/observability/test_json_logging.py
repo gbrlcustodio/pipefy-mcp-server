@@ -147,7 +147,7 @@ class TestObservabilityLoggingEmitter:
         yield
         reset_observability_logging()
 
-    def test_emits_valid_json_one_liner_on_stdout(self, capsys):
+    def test_emits_valid_json_one_liner_on_stderr(self, capsys):
         configure_observability_logging(log_level="INFO")
         event = build_http_request_event(
             method="POST",
@@ -164,7 +164,9 @@ class TestObservabilityLoggingEmitter:
 
         emit_structured_event(event)
 
-        line = capsys.readouterr().out.strip()
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        line = captured.err.strip()
         assert "\n" not in line
         assert json.loads(line) == event
 
@@ -181,7 +183,9 @@ class TestObservabilityLoggingEmitter:
             )
         )
 
-        assert capsys.readouterr().out == ""
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
 
     def test_does_not_propagate_to_root_logger(self):
         root = logging.getLogger()
@@ -214,11 +218,11 @@ class TestObservabilityLoggingEmitter:
         finally:
             root.removeHandler(root_handler)
 
-    def test_handler_targets_stdout_explicitly(self):
+    def test_handler_targets_stderr_explicitly(self):
         configure_observability_logging(log_level="INFO")
         logger = logging.getLogger(OBSERVABILITY_LOGGER_NAME)
         assert len(logger.handlers) == 1
-        assert logger.handlers[0].stream is sys.stdout
+        assert logger.handlers[0].stream is sys.stderr
         assert logger.propagate is False
 
     def test_configure_twice_keeps_one_handler_and_one_line(self, capsys):
@@ -238,7 +242,7 @@ class TestObservabilityLoggingEmitter:
 
         logger = logging.getLogger(OBSERVABILITY_LOGGER_NAME)
         assert len(logger.handlers) == 1
-        assert len(capsys.readouterr().out.strip().splitlines()) == 1
+        assert len(capsys.readouterr().err.strip().splitlines()) == 1
 
     def test_normalize_log_level_rejects_unknown_name(self):
         with pytest.raises(ValueError, match="invalid log level"):

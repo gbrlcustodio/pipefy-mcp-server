@@ -113,7 +113,7 @@ class McpSettings(BaseSettings):
     log_level: McpLogLevel = Field(
         default="INFO",
         description=(
-            "Log level for hosted structured JSON events on stdout and the "
+            "Log level for hosted structured JSON events on stderr and the "
             "FastMCP root logger on stderr (env: PIPEFY_MCP_LOG_LEVEL). "
             "Accepts DEBUG, INFO, WARNING, ERROR, or CRITICAL; normalized to "
             "uppercase."

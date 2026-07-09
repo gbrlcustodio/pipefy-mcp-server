@@ -1,4 +1,4 @@
-"""Pure builders and stdout JSON emitter for hosted structured log events."""
+"""Pure builders and stderr JSON emitter for hosted structured log events."""
 
 from __future__ import annotations
 
@@ -68,11 +68,11 @@ def normalize_log_level(log_level: str) -> int:
 
 
 def configure_observability_logging(*, log_level: str) -> logging.Logger:
-    """Attach a stdout JSON-line handler that does not propagate to the root logger."""
+    """Attach a stderr JSON-line handler that does not propagate to the root logger."""
     logger = logging.getLogger(OBSERVABILITY_LOGGER_NAME)
     logger.handlers.clear()
 
-    handler = logging.StreamHandler(sys.stdout)
+    handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(logging.Formatter("%(message)s"))
     level = normalize_log_level(log_level)
     handler.setLevel(level)
@@ -90,7 +90,7 @@ def reset_observability_logging() -> None:
 
 
 def emit_structured_event(event: dict[str, Any]) -> None:
-    """Emit one allowlisted event as a single JSON line on stdout."""
+    """Emit one allowlisted event as a single JSON line on stderr."""
     line = json.dumps(event, separators=(",", ":"))
     logging.getLogger(OBSERVABILITY_LOGGER_NAME).info(line)
 

@@ -39,7 +39,7 @@ def _reset_observability_logging_between_tests():
 
     The observability logger is process-global. Any test that reaches
     ``configure_observability_logging`` (directly or through ``run_server``)
-    would otherwise leave a handler bound to that test's captured stdout, and a
+    would otherwise leave a handler bound to that test's captured stderr, and a
     later ``emit_structured_event`` in an unrelated test would write into a
     closed stream.
     """

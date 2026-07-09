@@ -110,7 +110,7 @@ def test_build_pipefy_mcp_server_passes_log_level_to_fastmcp(mocked_runtime):
 
 @pytest.mark.unit
 def test_run_server_stdio_does_not_configure_structured_logging(monkeypatch):
-    """Stdio must not carry a stdout log handler: stdout is the JSON-RPC wire."""
+    """Stdio must not install the structured emitter (HTTP-only configuration)."""
     monkeypatch.delenv("PIPEFY_MCP_PROFILE", raising=False)
     monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
     with (

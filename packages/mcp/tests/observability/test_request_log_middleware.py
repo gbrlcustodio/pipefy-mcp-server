@@ -72,7 +72,7 @@ async def _run_middleware(
 def _read_log_lines(capsys: pytest.CaptureFixture[str]) -> list[dict[str, Any]]:
     return [
         json.loads(line)
-        for line in capsys.readouterr().out.splitlines()
+        for line in capsys.readouterr().err.splitlines()
         if line.strip()
     ]
 

@@ -171,10 +171,10 @@ def _assert_safe_http_bind(*, host: str) -> None:
 async def _serve_streamable_http(app: FastMCP, settings: Settings) -> None:
     """Serve Streamable HTTP with hosted observability middleware wired in.
 
-    The stdout emitter is configured here, not in :func:`run_server`, so the
-    stdio path never carries a stdout log handler: under stdio, stdout is the
-    JSON-RPC wire, and a configured handler there would be one stray
-    ``emit_structured_event`` call away from corrupting the protocol.
+    The structured emitter is configured here, not in :func:`run_server`, so the
+    stdio path never installs it. Structured lines go to stderr (not the JSON-RPC
+    stdout wire); keeping configuration off the stdio path still avoids arming a
+    process-global handler that local installs do not need.
     """
     import uvicorn
 

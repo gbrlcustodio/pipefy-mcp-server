@@ -82,10 +82,10 @@ shares the client's disk (remote-safe file inputs are separate follow-up work).
 
 ## Hosted structured logging
 
-The HTTP transport emits one JSON line per request on stdout for hosted
+The HTTP transport emits one JSON line per request on stderr for hosted
 observability (`pipefy_mcp/observability/`). Stdio does **not** install request
-logging: under stdio, stdout is the JSON-RPC wire, so structured lines there
-would corrupt the protocol.
+logging: under stdio, stdout is the JSON-RPC wire, and the structured emitter is
+HTTP-only so local installs never arm that process-global handler.
 
 Wiring lives in `wire_hosted_observability` (`observability/wiring.py`): it calls
 `streamable_http_app()` once, attaches request middleware, and returns the Starlette app.

@@ -25,7 +25,9 @@ def test_wire_hosted_observability_calls_streamable_http_app_once() -> None:
     app = FastMCP("test")
     starlette_app = MagicMock()
 
-    with patch.object(app, "streamable_http_app", return_value=starlette_app) as mock_app:
+    with patch.object(
+        app, "streamable_http_app", return_value=starlette_app
+    ) as mock_app:
         result = wire_hosted_observability(app, _SETTINGS)
 
     mock_app.assert_called_once_with()

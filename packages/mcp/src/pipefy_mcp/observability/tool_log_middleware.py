@@ -12,6 +12,14 @@ Privacy: never logs the bearer, and never logs argument values, only their
 Output goes through the standard ``logging`` module, which writes to stderr. It
 must never write to stdout: the stdio transport frames JSON-RPC over stdout, so a
 stray log line there corrupts the protocol.
+
+Line integrity depends on the process's root log handler, which this module does
+not configure. FastMCP's default ``RichHandler`` wraps at width 80 in a non-TTY,
+which would split an event across physical lines; and a deployment that
+reconfigures root logging before construction can drop these INFO lines. The
+hosted logging wiring (the structured-log emitter) owns installing a plain,
+non-wrapping formatter at INFO so the one-line contract holds; until then a host
+that cares must install one.
 """
 
 from __future__ import annotations

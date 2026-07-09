@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
@@ -11,11 +12,14 @@ from mcp.shared.memory import (
 from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
 
+from pipefy_mcp.core.tool_middleware import ToolCallContext, short_circuit_error
+from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.server import (
     _assert_safe_http_bind,
     _make_lifespan,
     _register_pipefy_tools,
     build_pipefy_mcp_server,
+    default_tool_middlewares,
     run_server,
 )
 from pipefy_mcp.settings import McpSettings, Settings, resolve_mcp_settings
@@ -153,6 +157,49 @@ def test_build_server_remote_mode_exposes_only_the_remote_safe_seed(mocked_runti
     assert "get_organization" in exposed
     assert "upload_attachment_to_card" not in exposed
     assert "execute_graphql" not in exposed
+
+
+@pytest.mark.unit
+def test_default_tool_middlewares_seeds_the_logger_under_remote():
+    """The composition root seeds structured tool-call logging for the hosted profile."""
+    assert default_tool_middlewares(_REMOTE_PROFILE_SETTINGS) == [tool_log_middleware]
+
+
+@pytest.mark.unit
+def test_default_tool_middlewares_seeds_nothing_under_local():
+    """The local profile gets no default middleware; the chain stays empty."""
+    assert default_tool_middlewares(_MINIMAL_PIPEFY_SETTINGS) == []
+
+
+@pytest.mark.anyio
+async def test_extra_tool_middlewares_register_through_the_public_builder(
+    mocked_runtime,
+):
+    """A consumer's middleware installs via ``extra_tool_middlewares``, no private reach.
+
+    Drives a real MCP session against an app built through the public builder: a
+    short-circuiting middleware passed as ``extra_tool_middlewares`` returns its
+    envelope, so the consumer's middleware demonstrably runs in the installed chain
+    (the tool never executes, so no live client is needed). The short-circuit
+    envelope's shape is pinned elsewhere; this asserts only that the seam wires it in.
+    """
+
+    async def deny(ctx: ToolCallContext, call_next):
+        return short_circuit_error("blocked by consumer", code="DENIED")
+
+    app = build_pipefy_mcp_server(
+        _MINIMAL_PIPEFY_SETTINGS, extra_tool_middlewares=[deny]
+    )
+    session = create_client_session(
+        app,
+        read_timeout_seconds=timedelta(seconds=10),
+        raise_exceptions=True,
+    )
+    async with session as s:
+        result = await s.call_tool("get_organization", {})
+
+    assert result.isError is True
+    assert json.loads(result.content[0].text)["error"]["code"] == "DENIED"
 
 
 @pytest.mark.unit

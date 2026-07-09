@@ -1,8 +1,8 @@
-"""Hosted observability: structured JSON request and tool-call logging.
+"""Hosted observability: structured JSON logging and tool-call middleware.
 
-Only the stdlib-only emitter surface is re-exported here; the middleware and
-wiring stay submodule imports so importing this package never pulls
-``starlette`` or the MCP SDK.
+Only the stdlib-only emitter surface is re-exported here; ``tool_log_middleware``
+and (later) HTTP wiring stay submodule imports so importing this package never
+pulls ``starlette`` or the MCP SDK.
 """
 
 from pipefy_mcp.observability.json_logging import (

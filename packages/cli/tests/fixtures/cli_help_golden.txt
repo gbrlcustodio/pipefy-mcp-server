@@ -2881,6 +2881,7 @@ Usage: pipefy table [OPTIONS] COMMAND [ARGS]...
 │ create   Create a database table.                                            │
 │ update   Update table attributes.                                            │
 │ delete   Delete a database table permanently.                                │
+│ field    Table field operations.                                             │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP table/create
@@ -2911,6 +2912,73 @@ Usage: pipefy table delete [OPTIONS] TABLE_ID
 │ --yes   -y        Skip confirmation prompt.                                  │
 │ --json  -j                                                                   │
 │ --help            Show this message and exit.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/field
+Usage: pipefy table field [OPTIONS] COMMAND [ARGS]...
+
+ Table field operations.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ create   Create a field on a database table.                                 │
+│ update   Update a database table field.                                      │
+│ delete   Delete a database table field permanently.                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/field/create
+Usage: pipefy table field create [OPTIONS] TABLE_ID
+
+ Create a field on a database table.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    table_id      TEXT  Table id. [required]                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --label  -l      TEXT  Field label in the UI. [required]                  │
+│ *  --type   -t      TEXT  Pipefy field type (e.g. short_text, phone).        │
+│                           [required]                                         │
+│    --extra          TEXT  JSON object of extra CreateTableFieldInput fields. │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/field/delete
+Usage: pipefy table field delete [OPTIONS] FIELD_ID
+
+ Delete a database table field permanently.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    field_id      TEXT  Table field id. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --table          TEXT  Table id containing this field. [required]         │
+│    --yes    -y            Skip confirmation prompt.                          │
+│    --json   -j                                                               │
+│    --help                 Show this message and exit.                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP table/field/update
+Usage: pipefy table field update [OPTIONS] FIELD_ID
+
+ Update a database table field.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────╮
+│ *    field_id      TEXT  Table field id. [required]                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --table                              TEXT  Table id containing this field.   │
+│ --label        -l                    TEXT  New field label.                  │
+│ --description  -d                    TEXT  New field description.            │
+│ --required         --not-required          Whether the field is required.    │
+│ --options                            TEXT  JSON array or object of field     │
+│                                            options, if changing.             │
+│ --extra                              TEXT  JSON object merged into           │
+│                                            UpdateTableFieldInput.            │
+│ --json         -j                                                            │
+│ --help                                     Show this message and exit.       │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP table/get

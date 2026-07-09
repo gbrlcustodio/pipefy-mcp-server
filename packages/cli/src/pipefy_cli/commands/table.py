@@ -10,12 +10,18 @@ from pipefy_sdk import PipefyClient
 from pipefy_cli.commands._common import (
     ID_POSITIONAL_CONTEXT_SETTINGS,
     confirm_destructive,
+    merge_extra_attrs,
     parse_json_object,
+    parse_json_value,
     resource_id_argument,
     run_cli_command,
 )
 
+_CREATE_TABLE_FIELD_EXTRA_RESERVED = frozenset({"table_id", "label", "type"})
+_UPDATE_TABLE_FIELD_EXTRA_RESERVED = frozenset({"id"})
+
 table_app = typer.Typer(help="Database table operations.", no_args_is_help=True)
+table_field_app = typer.Typer(help="Table field operations.", no_args_is_help=True)
 
 
 @table_app.command("list")
@@ -149,3 +155,118 @@ def table_delete(
         return await client.delete_table(table_id)
 
     run_cli_command(ctx, json_out, factory)
+
+
+@table_field_app.command("create", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def table_field_create(
+    ctx: typer.Context,
+    table_id: str = resource_id_argument(help="Table id."),
+    label: str = typer.Option(..., "--label", "-l", help="Field label in the UI."),
+    field_type: str = typer.Option(
+        ...,
+        "--type",
+        "-t",
+        help="Pipefy field type (e.g. short_text, phone).",
+    ),
+    extra_json: str | None = typer.Option(
+        None,
+        "--extra",
+        help="JSON object of extra CreateTableFieldInput fields.",
+    ),
+    json_out: bool = typer.Option(False, "--json", "-j"),
+) -> None:
+    """Create a field on a database table."""
+
+    extra = parse_json_object(extra_json, "--extra") or {}
+    lab = label.strip()
+    ft = field_type.strip()
+    if not lab or not ft:
+        typer.echo("--label and --type must be non-empty.", err=True)
+        raise typer.Exit(2)
+    extra = merge_extra_attrs({}, extra, reserved=_CREATE_TABLE_FIELD_EXTRA_RESERVED)
+
+    async def factory(client: PipefyClient):
+        return await client.create_table_field(table_id, lab, ft, **extra)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@table_field_app.command("update", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def table_field_update(
+    ctx: typer.Context,
+    field_id: str = resource_id_argument(help="Table field id."),
+    table: str | None = typer.Option(
+        None,
+        "--table",
+        help="Table id containing this field.",
+    ),
+    label: str | None = typer.Option(None, "--label", "-l", help="New field label."),
+    description: str | None = typer.Option(
+        None, "--description", "-d", help="New field description."
+    ),
+    required: bool | None = typer.Option(
+        None,
+        "--required/--not-required",
+        help="Whether the field is required.",
+    ),
+    options_json: str | None = typer.Option(
+        None,
+        "--options",
+        help="JSON array or object of field options, if changing.",
+    ),
+    extra_json: str | None = typer.Option(
+        None,
+        "--extra",
+        help="JSON object merged into UpdateTableFieldInput.",
+    ),
+    json_out: bool = typer.Option(False, "--json", "-j"),
+) -> None:
+    """Update a database table field."""
+
+    extra = parse_json_object(extra_json, "--extra") or {}
+    options = parse_json_value(options_json, "--options") if options_json else None
+    attrs: dict[str, Any] = {}
+    if label is not None:
+        attrs["label"] = label
+    if description is not None:
+        attrs["description"] = description
+    if required is not None:
+        attrs["required"] = required
+    if options is not None:
+        attrs["options"] = options
+    reserved = _UPDATE_TABLE_FIELD_EXTRA_RESERVED
+    if table is not None:
+        reserved = reserved | frozenset({"table_id"})
+    attrs = merge_extra_attrs(attrs, extra, reserved=reserved)
+    if not attrs:
+        raise typer.BadParameter(
+            "Provide at least one of: --label, --description, --required, "
+            "--options, --extra (non-empty)."
+        )
+    table_id = table if table is not None else attrs.pop("table_id", None)
+
+    async def factory(client: PipefyClient):
+        return await client.update_table_field(field_id, table_id=table_id, **attrs)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+@table_field_app.command("delete", context_settings=ID_POSITIONAL_CONTEXT_SETTINGS)
+def table_field_delete(
+    ctx: typer.Context,
+    field_id: str = resource_id_argument(help="Table field id."),
+    table: str = typer.Option(..., "--table", help="Table id containing this field."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt."),
+    json_out: bool = typer.Option(False, "--json", "-j"),
+) -> None:
+    """Delete a database table field permanently."""
+
+    confirm_destructive(yes=yes, description=f"table field {field_id}")
+
+    async def factory(client: PipefyClient):
+        return await client.delete_table_field(field_id, table)
+
+    run_cli_command(ctx, json_out, factory)
+
+
+table_app.add_typer(table_field_app, name="field")

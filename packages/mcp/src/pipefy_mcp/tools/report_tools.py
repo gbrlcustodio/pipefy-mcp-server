@@ -9,6 +9,10 @@ from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
+from pipefy_mcp.core.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_success,
+)
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.pagination_helpers import (
     build_pagination_info,
@@ -21,10 +25,6 @@ from pipefy_mcp.tools.report_tool_helpers import (
     handle_report_tool_graphql_error,
 )
 from pipefy_mcp.tools.tool_context import get_pipefy_client
-from pipefy_mcp.tools.tool_error_envelope import (
-    is_unified_envelope_enabled,
-    tool_success,
-)
 from pipefy_mcp.tools.validation_helpers import validate_tool_id
 
 

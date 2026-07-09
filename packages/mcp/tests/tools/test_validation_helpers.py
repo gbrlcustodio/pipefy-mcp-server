@@ -2,7 +2,7 @@
 
 import pytest
 
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.validation_helpers import (
     format_json_preview,
     mutation_error_if_not_optional_dict,

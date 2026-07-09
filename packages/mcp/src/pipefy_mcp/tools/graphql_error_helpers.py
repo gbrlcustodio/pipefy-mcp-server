@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from pipefy_sdk import PipefyClient
 
 import pipefy_mcp.settings as _settings_mod
-from pipefy_mcp.tools.tool_error_envelope import tool_error
+from pipefy_mcp.core.tool_error_envelope import tool_error
 
 # Suffixes appended by the Internal API executor for service-layer diagnostics;
 # MCP tools strip these from default user-visible errors.

@@ -18,13 +18,13 @@ from mcp.types import (
 from pipefy_sdk import PipefyClient
 
 from pipefy_mcp.core.runtime import McpRuntime, RequestScopedIdentity
+from pipefy_mcp.core.tool_error_envelope import tool_error, tool_error_message
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.pipe_tool_helpers import (
     FIND_CARDS_EMPTY_MESSAGE,
     DeleteCardErrorPayload,
 )
 from pipefy_mcp.tools.pipe_tools import FIND_CARDS_RESPONSE_KEY, PipeTools
-from pipefy_mcp.tools.tool_error_envelope import tool_error, tool_error_message
 from tools.conftest import build_tool_test_server
 
 # =============================================================================

@@ -11,6 +11,11 @@ from pipefy_sdk.phase_inventory import (
     is_get_phase_not_found_error,
 )
 
+from pipefy_mcp.core.tool_error_envelope import (
+    is_unified_envelope_enabled,
+    tool_error_message,
+    tool_success,
+)
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
@@ -38,11 +43,6 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
 from pipefy_mcp.tools.pipe_tool_helpers import find_label_dependents
 from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
-from pipefy_mcp.tools.tool_error_envelope import (
-    is_unified_envelope_enabled,
-    tool_error_message,
-    tool_success,
-)
 from pipefy_mcp.tools.validation_helpers import (
     validate_optional_tool_id,
     validate_tool_id,

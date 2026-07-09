@@ -11,6 +11,7 @@ import pytest
 from pipefy_sdk import CommentInput
 from pydantic import ValidationError
 
+from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     extract_graphql_correlation_id,
@@ -31,7 +32,6 @@ from pipefy_mcp.tools.pipe_tool_helpers import (
     map_delete_card_error_to_message,
     message_for_add_card_comment_validation_error,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error
 
 # =============================================================================
 # UserCancelledError

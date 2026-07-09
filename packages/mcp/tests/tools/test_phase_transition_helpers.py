@@ -17,10 +17,10 @@ from pipefy_sdk.ai_phase_transition_validation import (
     collect_ai_behavior_move_transition_problems,
 )
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.phase_transition_helpers import (
     try_enrich_move_card_to_phase_failure,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 @pytest.fixture

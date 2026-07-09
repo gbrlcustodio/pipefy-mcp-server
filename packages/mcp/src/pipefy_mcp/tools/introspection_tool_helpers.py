@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pipefy_mcp.tools.tool_error_envelope import tool_error
+from pipefy_mcp.core.tool_error_envelope import tool_error
 
 
 def _format_graphql_data_for_llm(data: dict[str, Any]) -> str:

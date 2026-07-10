@@ -27,9 +27,16 @@ class GraphQLResult:
 
 
 def _graphql_error_message(errors: list[dict[str, Any]]) -> str:
-    """Join the human-readable messages from raw GraphQL error dicts."""
-    joined = "; ".join(err.get("message") or "Unknown error" for err in errors)
-    return joined or "Query failed."
+    """Join the human-readable messages from raw GraphQL error dicts.
+
+    Tolerates a non-conforming ``errors`` element that is not a dict (a server may
+    return a bare string), matching the sibling extractors in the MCP tool layer.
+    """
+    parts = [
+        (err.get("message") if isinstance(err, dict) else str(err)) or "Unknown error"
+        for err in errors
+    ]
+    return "; ".join(parts) or "Query failed."
 
 
 class PipefyGraphQLError(Exception):

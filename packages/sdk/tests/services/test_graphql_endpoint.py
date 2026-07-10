@@ -315,6 +315,14 @@ def test_data_or_raise_returns_data_on_clean_result():
 
 
 @pytest.mark.unit
+def test_pipefy_graphql_error_tolerates_non_dict_error_item():
+    """A non-conforming error element that is not a dict does not crash the message."""
+    exc = PipefyGraphQLError(["a bare string", {"message": "a real message"}])
+    assert "a bare string" in str(exc)
+    assert "a real message" in str(exc)
+
+
+@pytest.mark.unit
 def test_data_or_raise_raises_pipefy_graphql_error_on_errors():
     """A result carrying errors raises ``PipefyGraphQLError`` with those errors."""
     errors = [

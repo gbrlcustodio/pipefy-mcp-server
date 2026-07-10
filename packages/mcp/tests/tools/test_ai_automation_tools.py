@@ -806,14 +806,19 @@ class TestUpdateAiAutomation:
         assert payload["success"] is False
         assert "error" in payload
 
-    async def test_internal_api_style_error_strips_code_and_correlation_on_update(
+    async def test_update_structured_error_omits_markers_from_message(
         self,
         client_session,
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.update_ai_automation.side_effect = ValueError(
-            "Not found [code=NOT_FOUND] [correlation_id=corr-9]"
+        mock_pipefy_client.update_ai_automation.side_effect = PipefyGraphQLError(
+            [
+                {
+                    "message": "Not found",
+                    "extensions": {"code": "NOT_FOUND", "correlation_id": "corr-9"},
+                }
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(

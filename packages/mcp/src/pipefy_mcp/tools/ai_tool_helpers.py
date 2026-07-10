@@ -320,9 +320,8 @@ def enrich_behavior_error(
 ) -> str:
     """Build an enriched error message with behavior context and actionable hints.
 
-    Extracts GraphQL messages, strips internal_api-style ``[code=…]`` /
-    ``[correlation_id=…]`` markers from the primary line, appends a behavior
-    summary, and matches known error patterns to actionable advice.
+    Extracts the GraphQL messages, appends a behavior summary, and matches known
+    error patterns to actionable advice.
 
     Args:
         exc: The exception from the service call.

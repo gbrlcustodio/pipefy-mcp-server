@@ -197,7 +197,7 @@ def test_enrich_with_empty_behaviors():
 
 
 @pytest.mark.unit
-def test_enrich_strips_internal_api_diagnostic_markers():
+def test_enrich_returns_clean_message_from_structured_error():
     # A structured GraphQL error surfaces only its clean message; the code and
     # correlation_id live in extensions and never leak into user-facing text.
     exc = PipefyGraphQLError(
@@ -220,7 +220,7 @@ def test_enrich_strips_internal_api_diagnostic_markers():
 
 
 @pytest.mark.unit
-def test_enrich_only_diagnostic_markers_uses_generic_fallback():
+def test_enrich_blank_message_uses_generic_fallback():
     # A structured error carrying a code but no human-readable message falls back
     # to the generic guidance while still summarizing the behaviors that were sent.
     exc = PipefyGraphQLError(

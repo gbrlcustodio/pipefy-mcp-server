@@ -37,7 +37,7 @@ def test_map_portal_error_permission_denied_transport_query_error() -> None:
 
 
 @pytest.mark.unit
-def test_map_portal_error_permission_denied_internal_api_value_error() -> None:
+def test_map_portal_error_permission_denied_internal_api() -> None:
     """A PERMISSION_DENIED GraphQL error maps to portal permission guidance."""
     exc = PipefyGraphQLError(
         [
@@ -55,9 +55,7 @@ def test_map_portal_error_permission_denied_internal_api_value_error() -> None:
 
 
 @pytest.mark.unit
-def test_map_portal_error_non_permission_internal_api_value_error_strips_markers() -> (
-    None
-):
+def test_map_portal_error_non_permission_internal_api_returns_clean_message() -> None:
     """A non-permission GraphQL error surfaces its clean message (no markers)."""
     exc = PipefyGraphQLError(
         [

@@ -14,11 +14,13 @@ from httpx import Auth, Timeout
 
 
 @dataclass(frozen=True)
-class PartialQueryResult:
+class GraphQLResult:
     """GraphQL ``data`` plus the raw per-node error dicts from one response.
 
-    Owned by the executor so services and their tests never touch gql objects.
-    ``data`` is always a dict; a fully null response yields an empty one.
+    A GraphQL response can carry readable ``data`` and per-node ``errors`` at the
+    same time, so the primitive hands both back together. Owned by the executor
+    so services and their tests never touch gql objects. ``data`` is always a
+    dict; a fully null response yields an empty one.
     """
 
     data: dict[str, Any]
@@ -28,28 +30,30 @@ class PartialQueryResult:
 class GraphQLExecutor(Protocol):
     """The GraphQL execution seam services depend on.
 
-    Narrow by design: it exposes only the operation services need and leaks
-    nothing about the httpx/gql transport. Services receive an implementation
-    through their constructor and call ``execute_query``; tests inject a fake.
+    Narrow by design: it exposes only what services need. Its return types are
+    owned (:class:`GraphQLResult` and a plain ``dict``); the one gql type it
+    surfaces is the ``TransportQueryError`` a formatter-less :meth:`execute_query`
+    raises. Services receive an implementation through their constructor and call
+    one of two methods; tests inject a fake.
+
+    :meth:`execute` is the primitive: it performs the request and returns
+    ``data`` and ``errors`` together, deciding nothing about what the errors
+    mean. :meth:`execute_query` is the raise-on-error convenience layered over
+    it, for the callers that want data or an exception and nothing in between. A
+    service that needs partial-success handling calls :meth:`execute` and hands
+    the errors to its own classifier.
+
     ``query`` is a parsed ``DocumentNode``: callers build one with ``gql()`` (the
     raw ``execute_graphql`` passthrough parses its string before reaching here).
     """
 
+    async def execute(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> GraphQLResult: ...
+
     async def execute_query(
         self, query: DocumentNode, variables: dict[str, Any]
     ) -> dict: ...
-
-
-class PartialGraphQLExecutor(GraphQLExecutor, Protocol):
-    """:class:`GraphQLExecutor` plus a partial-tolerant execute path.
-
-    For services whose queries mix ``data`` with per-node ``errors`` in one
-    response; everything else depends on the narrower protocol.
-    """
-
-    async def execute_query_allow_partial(
-        self, query: DocumentNode, variables: dict[str, Any]
-    ) -> PartialQueryResult: ...
 
 
 def _graphql_request_with_variables(
@@ -87,10 +91,11 @@ class GraphQLEndpoint:
         self._graphql_url = url
         self._cache_schema = cache_schema
         self._headers = headers
-        # When set, ``TransportQueryError`` is converted to ``ValueError`` using the
-        # formatter's output. Used by the Internal API endpoint to surface its
-        # ``[code=…] [correlation_id=…]`` envelope; ``None`` leaves gql exceptions
-        # untouched (the public endpoint's behaviour).
+        # How execute_query surfaces GraphQL errors. When set, it raises a
+        # ValueError carrying the formatter's output; used by the Internal API
+        # endpoint for its [code=…] [correlation_id=…] envelope. When None it
+        # re-raises the gql TransportQueryError shape (the public endpoint's
+        # behaviour). The primitive execute never applies it.
         self._on_graphql_error = on_graphql_error
         # Caches the introspected schema so it is fetched once, not per Client.
         self._fetched_gql_schema: GraphQLSchema | None = None
@@ -146,64 +151,66 @@ class GraphQLEndpoint:
         ) as session:
             return await session.execute(request)
 
-    def _reraise_graphql_error(self, exc: TransportQueryError) -> NoReturn:
-        if self._on_graphql_error is None:
-            raise exc
-        raise ValueError(self._on_graphql_error(exc.errors or [])) from exc
-
     async def execute(
         self, query: DocumentNode, variables: dict[str, Any], *, auth: Auth
-    ) -> dict:
-        """Execute a GraphQL query/mutation with variables under ``auth``.
+    ) -> GraphQLResult:
+        """Execute a query and return its ``data`` and raw ``errors`` together.
 
-        All-or-nothing: any GraphQL ``errors`` raise and partial ``data`` is
-        discarded; for responses that mix both, use :meth:`execute_allow_partial`.
-        """
-        try:
-            return await self._execute_request(query, variables, auth=auth)
-        except TransportQueryError as exc:
-            self._reraise_graphql_error(exc)
-
-    async def execute_allow_partial(
-        self, query: DocumentNode, variables: dict[str, Any], *, auth: Auth
-    ) -> PartialQueryResult:
-        """Execute a query preserving partial ``data`` alongside GraphQL ``errors``.
-
-        gql raises on any ``errors`` but attaches the partial ``data`` and the raw
-        error dicts to the exception; this rebuilds them into a
-        :class:`PartialQueryResult`. A fully null response yields ``data={}`` with
-        its errors preserved: whether an empty result is a failure is the caller's
-        decision, not the transport's.
+        The primitive: it performs the effect and decides nothing about what the
+        errors mean. gql raises on any ``errors`` but attaches the partial ``data``
+        and the raw error dicts to the exception; this rebuilds them into a
+        :class:`GraphQLResult`. A fully null response yields ``data={}`` with its
+        errors preserved. Genuine transport/network failures (timeouts, non-2xx)
+        still raise.
         """
         try:
             data = await self._execute_request(query, variables, auth=auth)
         except TransportQueryError as exc:
-            return PartialQueryResult(
-                data=exc.data or {}, errors=list(exc.errors or [])
-            )
-        return PartialQueryResult(data=data, errors=[])
+            return GraphQLResult(data=exc.data or {}, errors=list(exc.errors or []))
+        return GraphQLResult(data=data, errors=[])
+
+    async def execute_query(
+        self, query: DocumentNode, variables: dict[str, Any], *, auth: Auth
+    ) -> dict:
+        """Run :meth:`execute` and return ``data``, raising if the response held errors.
+
+        The raise-on-error convenience the query/mutation tools use: they want
+        ``data`` or an exception, not partial success. On GraphQL ``errors`` the
+        error formatter decides the exception (see :meth:`_raise_for_errors`).
+        """
+        result = await self.execute(query, variables, auth=auth)
+        if result.errors:
+            self._raise_for_errors(result.errors, data=result.data)
+        return result.data
+
+    def _raise_for_errors(
+        self, errors: list[dict[str, Any]], *, data: dict[str, Any]
+    ) -> NoReturn:
+        if self._on_graphql_error is not None:
+            raise ValueError(self._on_graphql_error(errors))
+        # Without a formatter, re-raise gql's error shape so callers that read the
+        # structured ``errors`` list off the exception keep working unchanged.
+        raise TransportQueryError(str(errors[0]), errors=errors, data=data)
 
 
 @dataclass(frozen=True)
 class AuthenticatedExecutor:
     """A :class:`GraphQLEndpoint` bound to one identity's ``auth``.
 
-    The cheap per-session executor: it implements :class:`PartialGraphQLExecutor`
-    by delegating to the shared endpoint with its own ``auth``. Cheap to build one
+    The cheap per-session executor: it implements :class:`GraphQLExecutor` by
+    delegating to the shared endpoint with its own ``auth``. Cheap to build one
     per request; the endpoint (and its schema cache) is reused across all of them.
     """
 
     endpoint: GraphQLEndpoint
     auth: Auth
 
+    async def execute(
+        self, query: DocumentNode, variables: dict[str, Any]
+    ) -> GraphQLResult:
+        return await self.endpoint.execute(query, variables, auth=self.auth)
+
     async def execute_query(
         self, query: DocumentNode, variables: dict[str, Any]
     ) -> dict:
-        return await self.endpoint.execute(query, variables, auth=self.auth)
-
-    async def execute_query_allow_partial(
-        self, query: DocumentNode, variables: dict[str, Any]
-    ) -> PartialQueryResult:
-        return await self.endpoint.execute_allow_partial(
-            query, variables, auth=self.auth
-        )
+        return await self.endpoint.execute_query(query, variables, auth=self.auth)

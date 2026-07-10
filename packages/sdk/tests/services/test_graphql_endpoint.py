@@ -5,6 +5,7 @@ import httpx
 import pytest
 from gql import gql
 from gql.graphql_request import GraphQLRequest
+from gql.transport.exceptions import TransportQueryError
 from gql.transport.httpx import HTTPXAsyncTransport
 from pipefy_auth import StaticBearerAuth
 
@@ -108,7 +109,7 @@ async def test_execute_passes_variables_to_session():
     request = mock_session.execute.call_args[0][0]
     assert isinstance(request, GraphQLRequest)
     assert request.variable_values == variables
-    assert result == {"ok": True}
+    assert result.data == {"ok": True}
     assert mock_client_cls.call_args.kwargs["fetch_schema_from_transport"] is False
     assert "schema" not in mock_client_cls.call_args.kwargs
 
@@ -158,8 +159,10 @@ async def test_execute_reuse_fetches_once_then_passes_cached_schema():
         mock_client_cls.side_effect = [first, second]
 
         endpoint = GraphQLEndpoint(url=GRAPHQL_URL, cache_schema=True)
-        assert await endpoint.execute(query, variables, auth=_bearer()) == {"one": 1}
-        assert await endpoint.execute(query, variables, auth=_bearer()) == {"two": 2}
+        first_result = await endpoint.execute(query, variables, auth=_bearer())
+        second_result = await endpoint.execute(query, variables, auth=_bearer())
+        assert first_result.data == {"one": 1}
+        assert second_result.data == {"two": 2}
 
     assert mock_client_cls.call_count == 2
     assert (
@@ -196,8 +199,8 @@ async def test_execute_bubbles_up_execute_errors_unchanged():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_allow_partial_returns_data_and_errors_together():
-    """A response mixing data and per-node errors becomes a PartialQueryResult."""
+async def test_execute_returns_data_and_errors_together():
+    """A response mixing data and per-node errors becomes a GraphQLResult."""
     partial_body = {
         "data": {"automations": {"edges": [{"node": {"id": "25"}}]}},
         "errors": [
@@ -213,9 +216,7 @@ async def test_execute_query_allow_partial_returns_data_and_errors_together():
 
     with _patched_transport(handler):
         endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
-        result = await endpoint.execute_allow_partial(
-            _sample_query(), {}, auth=_bearer()
-        )
+        result = await endpoint.execute(_sample_query(), {}, auth=_bearer())
 
     assert result.data == {"automations": {"edges": [{"node": {"id": "25"}}]}}
     assert result.errors[0]["extensions"]["automation_id"] == "124"
@@ -223,17 +224,15 @@ async def test_execute_query_allow_partial_returns_data_and_errors_together():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_allow_partial_success_carries_no_errors():
-    """An error-free response yields a PartialQueryResult with an empty error list."""
+async def test_execute_success_carries_no_errors():
+    """An error-free response yields a GraphQLResult with an empty error list."""
 
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"data": {"automations": {"edges": []}}})
 
     with _patched_transport(handler):
         endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
-        result = await endpoint.execute_allow_partial(
-            _sample_query(), {}, auth=_bearer()
-        )
+        result = await endpoint.execute(_sample_query(), {}, auth=_bearer())
 
     assert result.data == {"automations": {"edges": []}}
     assert result.errors == []
@@ -241,7 +240,7 @@ async def test_execute_query_allow_partial_success_carries_no_errors():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_allow_partial_null_data_yields_empty_result():
+async def test_execute_null_data_yields_empty_result():
     """A fully null response yields empty data with errors kept; classifying it is the caller's job."""
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -255,12 +254,74 @@ async def test_execute_query_allow_partial_null_data_yields_empty_result():
 
     with _patched_transport(handler):
         endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
-        result = await endpoint.execute_allow_partial(
-            _sample_query(), {}, auth=_bearer()
-        )
+        result = await endpoint.execute(_sample_query(), {}, auth=_bearer())
 
     assert result.data == {}
     assert result.errors[0]["message"] == "Couldn't find Organization with 'id'=999"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_returns_data_on_success():
+    """The raise-on-error convenience unwraps a clean response to its ``data`` dict."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"data": {"__typename": "Query"}})
+
+    with _patched_transport(handler):
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        result = await endpoint.execute_query(_sample_query(), {}, auth=_bearer())
+
+    assert result == {"__typename": "Query"}
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_raises_transport_query_error_with_structured_errors():
+    """Without an error formatter, ``execute_query`` raises a ``TransportQueryError``
+    that still carries the structured ``errors`` list the tool layer reads."""
+    error_body = {
+        "data": {"automations": {"edges": [{"node": {"id": "25"}}]}},
+        "errors": [
+            {
+                "message": "Permission denied",
+                "extensions": {"code": "PERMISSION_DENIED", "automation_id": "124"},
+            }
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=error_body)
+
+    with _patched_transport(handler):
+        endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
+        with pytest.raises(TransportQueryError) as excinfo:
+            await endpoint.execute_query(_sample_query(), {}, auth=_bearer())
+
+    assert excinfo.value.errors[0]["message"] == "Permission denied"
+    assert excinfo.value.errors[0]["extensions"]["code"] == "PERMISSION_DENIED"
+    # The tool layer's correlation-id and part of its code extraction regex only
+    # str(exc), so pin that the reconstructed message still carries the code.
+    assert "PERMISSION_DENIED" in str(excinfo.value)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_execute_query_applies_error_formatter_when_configured():
+    """With an error formatter, ``execute_query`` raises the formatter's message as a ValueError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json={"errors": [{"message": "boom", "extensions": {"code": "X"}}]}
+        )
+
+    with _patched_transport(handler):
+        endpoint = GraphQLEndpoint(
+            url=GRAPHQL_URL,
+            on_graphql_error=lambda errs: "; ".join(e["message"] for e in errs),
+        )
+        with pytest.raises(ValueError, match=r"^boom$"):
+            await endpoint.execute_query(_sample_query(), {}, auth=_bearer())
 
 
 @pytest.mark.unit

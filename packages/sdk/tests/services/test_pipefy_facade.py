@@ -5,6 +5,7 @@ from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk import __version__
 from pipefy_sdk.client import PipefyClient, build_executors
+from pipefy_sdk.graphql_executor import GraphQLResult
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_service import AutomationService
@@ -790,7 +791,9 @@ async def test_delete_card_relation_delegates_to_internal_api_client(mock_settin
     # delegates to its shared endpoint; swap that endpoint's network seam.
     internal = client._internal_executor
     internal.endpoint.execute = AsyncMock(
-        return_value={"deleteCardRelation": {"success": True}}
+        return_value=GraphQLResult(
+            data={"deleteCardRelation": {"success": True}}, errors=[]
+        )
     )
 
     # Pin the snake_case input keys that the Internal API expects
@@ -818,7 +821,9 @@ async def test_sub_portal_mutation_routes_through_internal_api_client(mock_setti
     # PortalService and the facade share the one internal executor and its endpoint.
     internal = client._internal_executor
     internal.endpoint.execute = AsyncMock(
-        return_value={"updateSubPortalElement": {"success": True}}
+        return_value=GraphQLResult(
+            data={"updateSubPortalElement": {"success": True}}, errors=[]
+        )
     )
 
     result = await client.publish_sub_portal("portal-1", "element-2", "sub-3")

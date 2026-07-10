@@ -8,7 +8,7 @@ from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.ai_automation_tools import AiAutomationTools
@@ -598,8 +598,16 @@ class TestCreateAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.create_ai_automation.side_effect = ValueError(
-            "Invalid prompt [code=INVALID_PROMPT] [correlation_id=abc-123-def]"
+        mock_pipefy_client.create_ai_automation.side_effect = PipefyGraphQLError(
+            [
+                {
+                    "message": "Invalid prompt",
+                    "extensions": {
+                        "code": "INVALID_PROMPT",
+                        "correlation_id": "abc-123-def",
+                    },
+                }
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -627,8 +635,16 @@ class TestCreateAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.create_ai_automation.side_effect = ValueError(
-            "Invalid prompt [code=INVALID_PROMPT] [correlation_id=abc-123-def]"
+        mock_pipefy_client.create_ai_automation.side_effect = PipefyGraphQLError(
+            [
+                {
+                    "message": "Invalid prompt",
+                    "extensions": {
+                        "code": "INVALID_PROMPT",
+                        "correlation_id": "abc-123-def",
+                    },
+                }
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -820,8 +836,16 @@ class TestUpdateAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.update_ai_automation.side_effect = ValueError(
-            "Not found [code=NOT_FOUND] [correlation_id=corr-9]"
+        mock_pipefy_client.update_ai_automation.side_effect = PipefyGraphQLError(
+            [
+                {
+                    "message": "Not found",
+                    "extensions": {
+                        "code": "NOT_FOUND",
+                        "correlation_id": "corr-9",
+                    },
+                }
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(
@@ -871,8 +895,16 @@ class TestUpdateAiAutomation:
         mock_pipefy_client,
         extract_payload,
     ):
-        mock_pipefy_client.update_ai_automation.side_effect = ValueError(
-            "Permission denied [code=PERMISSION_DENIED] [correlation_id=c1]"
+        mock_pipefy_client.update_ai_automation.side_effect = PipefyGraphQLError(
+            [
+                {
+                    "message": "Permission denied",
+                    "extensions": {
+                        "code": "PERMISSION_DENIED",
+                        "correlation_id": "c1",
+                    },
+                }
+            ]
         )
         async with client_session as session:
             result = await session.call_tool(

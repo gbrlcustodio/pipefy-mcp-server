@@ -5,12 +5,16 @@ import httpx
 import pytest
 from gql import gql
 from gql.graphql_request import GraphQLRequest
-from gql.transport.exceptions import TransportQueryError
 from gql.transport.httpx import HTTPXAsyncTransport
 from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk import __version__
-from pipefy_sdk.graphql_executor import GraphQLEndpoint
+from pipefy_sdk.graphql_executor import (
+    GraphQLEndpoint,
+    GraphQLResult,
+    PipefyGraphQLError,
+    data_or_raise,
+)
 from pipefy_sdk.telemetry import telemetry_headers
 
 GRAPHQL_URL = "https://api.pipefy.com/graphql"
@@ -277,9 +281,9 @@ async def test_execute_query_returns_data_on_success():
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-async def test_execute_query_raises_transport_query_error_with_structured_errors():
-    """Without an error formatter, ``execute_query`` raises a ``TransportQueryError``
-    that still carries the structured ``errors`` list the tool layer reads."""
+async def test_execute_query_raises_pipefy_graphql_error_with_structured_errors():
+    """On GraphQL errors ``execute_query`` raises ``PipefyGraphQLError`` carrying the
+    structured ``errors`` list; codes come off ``.errors``, not the message string."""
     error_body = {
         "data": {"automations": {"edges": [{"node": {"id": "25"}}]}},
         "errors": [
@@ -295,33 +299,32 @@ async def test_execute_query_raises_transport_query_error_with_structured_errors
 
     with _patched_transport(handler):
         endpoint = GraphQLEndpoint(url=GRAPHQL_URL)
-        with pytest.raises(TransportQueryError) as excinfo:
+        with pytest.raises(PipefyGraphQLError) as excinfo:
             await endpoint.execute_query(_sample_query(), {}, auth=_bearer())
 
     assert excinfo.value.errors[0]["message"] == "Permission denied"
     assert excinfo.value.errors[0]["extensions"]["code"] == "PERMISSION_DENIED"
-    # The tool layer's correlation-id and part of its code extraction regex only
-    # str(exc), so pin that the reconstructed message still carries the code.
-    assert "PERMISSION_DENIED" in str(excinfo.value)
+    assert str(excinfo.value) == "Permission denied"
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
-async def test_execute_query_applies_error_formatter_when_configured():
-    """With an error formatter, ``execute_query`` raises the formatter's message as a ValueError."""
+def test_data_or_raise_returns_data_on_clean_result():
+    """A result with no errors passes its ``data`` through unchanged."""
+    result = GraphQLResult(data={"pipe": {"id": "1"}}, errors=[])
+    assert data_or_raise(result) == {"pipe": {"id": "1"}}
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(
-            200, json={"errors": [{"message": "boom", "extensions": {"code": "X"}}]}
-        )
 
-    with _patched_transport(handler):
-        endpoint = GraphQLEndpoint(
-            url=GRAPHQL_URL,
-            on_graphql_error=lambda errs: "; ".join(e["message"] for e in errs),
-        )
-        with pytest.raises(ValueError, match=r"^boom$"):
-            await endpoint.execute_query(_sample_query(), {}, auth=_bearer())
+@pytest.mark.unit
+def test_data_or_raise_raises_pipefy_graphql_error_on_errors():
+    """A result carrying errors raises ``PipefyGraphQLError`` with those errors."""
+    errors = [
+        {"message": "Permission denied", "extensions": {"code": "PERMISSION_DENIED"}}
+    ]
+    result = GraphQLResult(data={}, errors=errors)
+    with pytest.raises(PipefyGraphQLError) as excinfo:
+        data_or_raise(result)
+    assert excinfo.value.errors == errors
+    assert str(excinfo.value) == "Permission denied"
 
 
 @pytest.mark.unit

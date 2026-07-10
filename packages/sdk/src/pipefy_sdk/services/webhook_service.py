@@ -5,10 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from gql.transport.exceptions import TransportQueryError
 from pipefy_infra import security
 
-from pipefy_sdk.graphql_executor import GraphQLExecutor
+from pipefy_sdk.graphql_executor import GraphQLExecutor, PipefyGraphQLError
 from pipefy_sdk.queries.webhook_queries import (
     CREATE_AND_SEND_INBOX_EMAIL_MUTATION,
     CREATE_WEBHOOK_MUTATION,
@@ -98,7 +97,7 @@ class WebhookService:
             pipe_id = pipe_obj.get("id") if isinstance(pipe_obj, dict) else None
             if pipe_id is not None:
                 return {**attrs, "repoId": str(pipe_id)}
-        except (TransportQueryError, KeyError, TypeError):
+        except (PipefyGraphQLError, KeyError, TypeError):
             logger.debug(
                 "Could not auto-resolve repoId for card %s",
                 card_id,

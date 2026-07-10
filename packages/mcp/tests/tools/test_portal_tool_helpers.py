@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from gql.transport.exceptions import TransportQueryError
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.exceptions import PortalPermissionError
 
 from pipefy_mcp.tools.portal_tool_helpers import (
@@ -37,8 +38,18 @@ def test_map_portal_error_permission_denied_transport_query_error() -> None:
 
 @pytest.mark.unit
 def test_map_portal_error_permission_denied_internal_api_value_error() -> None:
-    """Internal API ValueError with [code=PERMISSION_DENIED] maps to guidance."""
-    exc = ValueError("User denied [code=PERMISSION_DENIED] [correlation_id=abc-123]")
+    """A PERMISSION_DENIED GraphQL error maps to portal permission guidance."""
+    exc = PipefyGraphQLError(
+        [
+            {
+                "message": "User denied",
+                "extensions": {
+                    "code": "PERMISSION_DENIED",
+                    "correlation_id": "abc-123",
+                },
+            }
+        ]
+    )
     message = map_portal_error_to_message(exc)
     assert "create_portal" in message or "manage_portals" in message
 
@@ -47,8 +58,15 @@ def test_map_portal_error_permission_denied_internal_api_value_error() -> None:
 def test_map_portal_error_non_permission_internal_api_value_error_strips_markers() -> (
     None
 ):
-    """Non-permission Internal API ValueError returns marker-free text."""
-    exc = ValueError("Bad request [code=BAD_REQUEST] [correlation_id=abc-123]")
+    """A non-permission GraphQL error surfaces its clean message (no markers)."""
+    exc = PipefyGraphQLError(
+        [
+            {
+                "message": "Bad request",
+                "extensions": {"code": "BAD_REQUEST", "correlation_id": "abc-123"},
+            }
+        ]
+    )
     assert map_portal_error_to_message(exc) == "Bad request"
 
 

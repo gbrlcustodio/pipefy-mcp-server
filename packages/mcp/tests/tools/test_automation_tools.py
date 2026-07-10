@@ -8,7 +8,7 @@ from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import AutomationConditionInput, PipefyClient
+from pipefy_sdk import AutomationConditionInput, PipefyClient, PipefyGraphQLError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.automation_tools import AutomationTools
@@ -714,9 +714,8 @@ async def test_create_automation_error(
 async def test_create_automation_error_only_diagnostic_markers_uses_fallback(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.create_automation.side_effect = TransportQueryError(
-        " [code=X] [correlation_id=Y]",
-        errors=[{"message": " [code=X] [correlation_id=Y]"}],
+    mock_automation_client.create_automation.side_effect = PipefyGraphQLError(
+        [{"message": "   ", "extensions": {"code": "X", "correlation_id": "Y"}}]
     )
 
     async with automation_session as session:
@@ -742,9 +741,8 @@ async def test_create_automation_error_only_diagnostic_markers_uses_fallback(
 async def test_create_automation_error_only_markers_with_debug_keeps_fallback(
     automation_session, mock_automation_client, extract_payload
 ):
-    mock_automation_client.create_automation.side_effect = TransportQueryError(
-        " [code=X] [correlation_id=Y]",
-        errors=[{"message": " [code=X] [correlation_id=Y]"}],
+    mock_automation_client.create_automation.side_effect = PipefyGraphQLError(
+        [{"message": "   ", "extensions": {"code": "X", "correlation_id": "Y"}}]
     )
 
     async with automation_session as session:

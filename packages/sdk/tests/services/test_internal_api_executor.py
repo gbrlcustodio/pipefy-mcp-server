@@ -1,9 +1,8 @@
 """Unit tests for the Internal API executor and PipefySettings.internal_api_url.
 
-These tests intentionally assert the full GraphQL error text produced by the
-Internal API executor (the ``HttpxGraphQLExecutor`` that ``build_executors``
-aims at ``internal_api_url`` with the ``[code=...]`` / ``[correlation_id=...]``
-envelope formatter).
+The internal endpoint raises ``PipefyGraphQLError`` on GraphQL errors, carrying
+the raw ``errors`` list; code and correlation_id come off each error's
+``extensions`` rather than a formatted message string.
 """
 
 import json
@@ -16,7 +15,7 @@ from gql.transport.exceptions import TransportConnectionFailed, TransportServerE
 from pipefy_auth import StaticBearerAuth
 
 from pipefy_sdk.client import build_executors
-from pipefy_sdk.graphql_executor import GraphQLExecutor
+from pipefy_sdk.graphql_executor import GraphQLExecutor, PipefyGraphQLError
 from pipefy_sdk.settings import PipefySettings
 
 DEFAULT_INTERNAL_API_URL = "https://app.pipefy.com/internal_api"
@@ -104,7 +103,7 @@ async def test_execute_query_raises_on_graphql_errors_in_body(respx_mock):
         return_value=httpx.Response(200, json=graphql_error_response)
     )
 
-    with pytest.raises(ValueError, match=r"^Something went wrong$"):
+    with pytest.raises(PipefyGraphQLError, match=r"^Something went wrong$"):
         await _build_executor().execute_query(gql("query { x }"), {})
 
 
@@ -114,7 +113,7 @@ async def test_execute_query_raises_on_graphql_errors_in_body(respx_mock):
 async def test_execute_query_error_includes_extensions_code_and_correlation_id(
     respx_mock,
 ):
-    """GraphQL error message includes extensions code and correlation_id when present."""
+    """The raised error carries extensions code and correlation_id in its structured errors."""
     graphql_error_response = {
         "errors": [
             {
@@ -130,11 +129,13 @@ async def test_execute_query_error_includes_extensions_code_and_correlation_id(
         return_value=httpx.Response(200, json=graphql_error_response)
     )
 
-    with pytest.raises(
-        ValueError,
-        match=r"Permission Denied \[code=PERMISSION_DENIED\] \[correlation_id=abc-123\]",
-    ):
+    with pytest.raises(PipefyGraphQLError) as excinfo:
         await _build_executor().execute_query(gql("query { x }"), {})
+
+    extensions = excinfo.value.errors[0]["extensions"]
+    assert extensions["code"] == "PERMISSION_DENIED"
+    assert extensions["correlation_id"] == "abc-123"
+    assert str(excinfo.value) == "Permission Denied"
 
 
 @pytest.mark.unit
@@ -143,7 +144,7 @@ async def test_execute_query_error_includes_extensions_code_and_correlation_id(
 async def test_execute_query_error_includes_correlation_id_when_code_absent(
     respx_mock,
 ):
-    """``correlation_id`` is appended even when ``extensions.code`` is missing."""
+    """``correlation_id`` is carried in the structured errors even without ``extensions.code``."""
     graphql_error_response = {
         "errors": [
             {
@@ -156,18 +157,20 @@ async def test_execute_query_error_includes_correlation_id_when_code_absent(
         return_value=httpx.Response(200, json=graphql_error_response)
     )
 
-    with pytest.raises(
-        ValueError,
-        match=r"^Rate limited \[correlation_id=corr-only-99\]$",
-    ):
+    with pytest.raises(PipefyGraphQLError) as excinfo:
         await _build_executor().execute_query(gql("query { x }"), {})
+
+    extensions = excinfo.value.errors[0]["extensions"]
+    assert "code" not in extensions
+    assert extensions["correlation_id"] == "corr-only-99"
+    assert str(excinfo.value) == "Rate limited"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 @respx.mock(assert_all_mocked=False, assert_all_called=False)
 async def test_execute_query_error_concatenates_multiple_errors(respx_mock):
-    """Multiple GraphQL errors are joined with '; ' in the raised ValueError message."""
+    """Multiple GraphQL error messages are joined with '; ' in the raised message."""
     graphql_error_response = {
         "errors": [
             {"message": "Error one"},
@@ -178,18 +181,22 @@ async def test_execute_query_error_concatenates_multiple_errors(respx_mock):
         return_value=httpx.Response(200, json=graphql_error_response)
     )
 
-    with pytest.raises(
-        ValueError,
-        match=r"^Error one; Error two \[code=BAD_INPUT\]$",
-    ):
+    with pytest.raises(PipefyGraphQLError) as excinfo:
         await _build_executor().execute_query(gql("query { x }"), {})
+
+    assert str(excinfo.value) == "Error one; Error two"
+    assert [e.get("message") for e in excinfo.value.errors] == [
+        "Error one",
+        "Error two",
+    ]
+    assert excinfo.value.errors[1]["extensions"]["code"] == "BAD_INPUT"
 
 
 @pytest.mark.unit
 @pytest.mark.asyncio
 @respx.mock(assert_all_mocked=False, assert_all_called=False)
 async def test_execute_query_error_without_message_uses_fallback(respx_mock):
-    """GraphQL error dict without message uses 'Unknown error' as the base text."""
+    """GraphQL error dict without message uses 'Unknown error' as the joined text."""
     graphql_error_response = {
         "errors": [{"extensions": {"code": "UNKNOWN"}}],
     }
@@ -197,11 +204,11 @@ async def test_execute_query_error_without_message_uses_fallback(respx_mock):
         return_value=httpx.Response(200, json=graphql_error_response)
     )
 
-    with pytest.raises(
-        ValueError,
-        match=r"^Unknown error \[code=UNKNOWN\]$",
-    ):
+    with pytest.raises(PipefyGraphQLError) as excinfo:
         await _build_executor().execute_query(gql("query { x }"), {})
+
+    assert str(excinfo.value) == "Unknown error"
+    assert excinfo.value.errors[0]["extensions"]["code"] == "UNKNOWN"
 
 
 @pytest.mark.unit

@@ -20,7 +20,6 @@ from pipefy_sdk.graphql_executor import (
     GraphQLEndpoint,
     GraphQLExecutor,
 )
-from pipefy_sdk.internal_api_errors import format_internal_api_error
 from pipefy_sdk.models.ai_agent import (
     BehaviorInput,
     CreateAiAgentInput,
@@ -137,9 +136,7 @@ def build_endpoints(
     """Build one auth-less endpoint per Pipefy API endpoint from ``settings``.
 
     This is the seam that resolves each endpoint URL from settings; the endpoints
-    take a ready URL and stay agnostic to endpoint topology and to identity. Only
-    the internal endpoint carries the ``[code=…][correlation_id=…]`` error
-    envelope; the others leave gql exceptions untouched.
+    take a ready URL and stay agnostic to endpoint topology and to identity.
 
     The client telemetry headers are resolved once here from ``surface`` and the
     package version, then shared by all three endpoints: every endpoint targets a
@@ -162,7 +159,6 @@ def build_endpoints(
             url=settings.internal_api_url,
             cache_schema=cache_schema,
             headers=headers,
-            on_graphql_error=format_internal_api_error,
         ),
     )
 

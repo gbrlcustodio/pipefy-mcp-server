@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from _shared.fixture_ids import EXAMPLE_NUMERIC_ORG_ID, EXAMPLE_PIPE_REPO_ID
-from gql.transport.exceptions import TransportQueryError
+from gql.transport.exceptions import TransportError, TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import PipefyClient, PipefyGraphQLError
 from pipefy_sdk.exceptions import PortalPermissionError
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
@@ -63,9 +63,13 @@ _PORTAL_PERMISSION_DENIED_MSG = (
     "`create_portal` or `manage_portals` from your admin."
 )
 
-_INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR = ValueError(
-    "User does not have permission to manage portals "
-    "[code=PERMISSION_DENIED] [correlation_id=abc-123]"
+_INTERNAL_API_PERMISSION_DENIED_ERROR = PipefyGraphQLError(
+    [
+        {
+            "message": "User does not have permission to manage portals",
+            "extensions": {"code": "PERMISSION_DENIED", "correlation_id": "abc-123"},
+        }
+    ]
 )
 
 _PORTAL_UUID = "portal-uuid-1"
@@ -1586,8 +1590,10 @@ async def test_create_sub_portal_rejects_blank_main_portal_uuid(
 async def test_create_sub_portal_transport_error_not_permission_envelope(
     portal_session, mock_portal_client, extract_payload
 ):
+    # A genuine transport failure (timeout/network), not a GraphQL error envelope:
+    # its message must surface verbatim and must not be mistaken for a permission denial.
     mock_portal_client.create_sub_portal = AsyncMock(
-        side_effect=TransportQueryError("failed", errors=[{"message": "timeout"}])
+        side_effect=TransportError("timeout")
     )
 
     async with portal_session as session:
@@ -1831,7 +1837,7 @@ async def test_sub_portal_internal_api_permission_denied_returns_actionable_erro
     setattr(
         mock_portal_client,
         client_method,
-        AsyncMock(side_effect=_INTERNAL_API_PERMISSION_DENIED_VALUE_ERROR),
+        AsyncMock(side_effect=_INTERNAL_API_PERMISSION_DENIED_ERROR),
     )
 
     async with portal_session as session:

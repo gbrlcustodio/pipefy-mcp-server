@@ -7,10 +7,9 @@ import re
 from typing import Any
 
 from gql import gql
-from gql.transport.exceptions import TransportQueryError
 from graphql import GraphQLError, GraphQLSyntaxError
 
-from pipefy_sdk.graphql_executor import GraphQLExecutor
+from pipefy_sdk.graphql_executor import GraphQLExecutor, PipefyGraphQLError
 from pipefy_sdk.queries.introspection_queries import (
     INTROSPECT_MUTATION_QUERY,
     INTROSPECT_QUERY_QUERY,
@@ -229,7 +228,7 @@ class SchemaIntrospectionService:
                         f"not a {current_type.lower()}. "
                         f"Use a {other_type.lower()} operation instead."
                     )
-        except (TransportQueryError, GraphQLError, KeyError, TypeError):
+        except (PipefyGraphQLError, GraphQLError, KeyError, TypeError):
             return None
         except Exception:
             logger.exception(
@@ -256,7 +255,7 @@ class SchemaIntrospectionService:
             return {"error": str(exc)}
         try:
             return await self._executor.execute_query(document, variables or {})
-        except TransportQueryError as exc:
+        except PipefyGraphQLError as exc:
             errors = list(exc.errors) if exc.errors else [{"message": str(exc)}]
             for err in errors:
                 if isinstance(err, dict):

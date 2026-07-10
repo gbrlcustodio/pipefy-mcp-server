@@ -11,6 +11,7 @@ from pipefy_sdk.field_filters import (
     filter_fields_by_definitions,
     skipped_field_ids,
 )
+from pipefy_sdk.graphql_executor import PipefyGraphQLError
 from pipefy_sdk.graphql_problem import (
     GraphQLProblem,
     GraphQLProblemKind,
@@ -156,6 +157,7 @@ __all__ = [
     "PipefyClient",
     "PipefyEngine",
     "PipefyError",
+    "PipefyGraphQLError",
     "PipefyId",
     "PipefySettings",
     "TableRecordTarget",

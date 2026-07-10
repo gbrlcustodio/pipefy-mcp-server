@@ -37,15 +37,6 @@ if TYPE_CHECKING:
 import pipefy_mcp.settings as _settings_mod
 from pipefy_mcp.core.tool_error_envelope import tool_error
 
-# Suffixes appended by the Internal API executor for service-layer diagnostics;
-# MCP tools strip these from default user-visible errors.
-_INTERNAL_API_CODE_SUFFIX_RE = re.compile(r"\s*\[code=[^\]]*\]")
-_INTERNAL_API_CORRELATION_SUFFIX_RE = re.compile(r"\s*\[correlation_id=[^\]]*\]")
-_INTERNAL_API_CODE_BRACKET_CAPTURE_RE = re.compile(r"\[code=([^\]]*)\]")
-_INTERNAL_API_CORRELATION_BRACKET_CAPTURE_RE = re.compile(
-    r"\[correlation_id=([^\]]*)\]"
-)
-
 _DICT_REPR_PREFIX_RE = re.compile(r"^\s*\{\s*['\"]message['\"]\s*:")
 
 
@@ -73,54 +64,11 @@ def _try_extract_message_from_dict_repr(raw: str) -> str | None:
     return None
 
 
-def strip_internal_api_diagnostic_markers(message: str) -> str:
-    """Remove ``[code=…]`` / ``[correlation_id=…]`` markers from a message string.
-
-    The Internal API executor appends these to GraphQL error text for logs and
-    tests. Multiple occurrences (e.g. ``; ``-joined errors) are all removed.
-
-    Args:
-        message: Raw error text, often ``str(ValueError(...))`` from the executor.
-    """
-    stripped = _INTERNAL_API_CORRELATION_SUFFIX_RE.sub("", message)
-    stripped = _INTERNAL_API_CODE_SUFFIX_RE.sub("", stripped)
-    return stripped.strip()
-
-
-def extract_internal_api_bracket_codes(message: str) -> list[str]:
-    """Collect distinct ``code`` values from ``[code=…]`` markers (Internal API executor).
-
-    Args:
-        message: Raw exception text before stripping markers.
-    """
-    seen: set[str] = set()
-    out: list[str] = []
-    for raw_code in _INTERNAL_API_CODE_BRACKET_CAPTURE_RE.findall(message):
-        code = raw_code.strip()
-        if code and code not in seen:
-            seen.add(code)
-            out.append(code)
-    return out
-
-
-def extract_internal_api_bracket_correlation_id(message: str) -> str | None:
-    """Return the first non-empty correlation id from ``[correlation_id=…]`` markers.
-
-    Args:
-        message: Raw exception text before stripping markers.
-    """
-    for raw_cid in _INTERNAL_API_CORRELATION_BRACKET_CAPTURE_RE.findall(message):
-        cid = raw_cid.strip()
-        if cid:
-            return cid
-    return None
-
-
 def extract_error_strings(exc: BaseException) -> list[str]:
     """Best-effort extraction of error messages from gql/GraphQL exceptions.
 
-    When the exception carries a structured ``errors`` list (e.g. gql
-    ``TransportQueryError``), only the extracted ``message`` strings are
+    When the exception carries a structured ``errors`` list (e.g.
+    ``PipefyGraphQLError``), only the extracted ``message`` strings are
     returned; the raw ``str(exc)`` is skipped because it often contains
     the full error dict with ``locations`` / ``extensions`` noise.  The
     raw string is used as a fallback only when no structured messages
@@ -173,7 +121,6 @@ def extract_graphql_error_codes(exc: BaseException) -> list[str]:
     if raw:
         for match in re.findall(r"""['"]code['"]\s*[:=]\s*['"]([A-Z_]+)['"]""", raw):
             codes.append(match)
-        codes.extend(extract_internal_api_bracket_codes(raw))
 
     seen: set[str] = set()
     unique: list[str] = []
@@ -185,7 +132,23 @@ def extract_graphql_error_codes(exc: BaseException) -> list[str]:
 
 
 def extract_graphql_correlation_id(exc: BaseException) -> str | None:
-    """Best-effort extraction of correlation_id from GraphQL exception strings."""
+    """Best-effort extraction of correlation_id from a GraphQL exception.
+
+    Reads the structured ``errors`` list first (each error's ``extensions``),
+    then falls back to a regex over ``str(exc)``.
+    """
+    errors = getattr(exc, "errors", None)
+    if isinstance(errors, list):
+        for item in errors:
+            if not isinstance(item, dict):
+                continue
+            extensions = item.get("extensions")
+            if not isinstance(extensions, dict):
+                continue
+            correlation_id = extensions.get("correlation_id")
+            if isinstance(correlation_id, str) and correlation_id:
+                return correlation_id
+
     raw = str(exc)
     if not raw:
         return None
@@ -193,7 +156,7 @@ def extract_graphql_correlation_id(exc: BaseException) -> str | None:
     match = re.search(r"""['"]correlation_id['"]\s*[:=]\s*['"]([^'"]+)['"]""", raw)
     if match:
         return match.group(1)
-    return extract_internal_api_bracket_correlation_id(raw)
+    return None
 
 
 def with_debug_suffix(
@@ -581,10 +544,7 @@ __all__ = [
     "extract_error_strings",
     "extract_graphql_correlation_id",
     "extract_graphql_error_codes",
-    "extract_internal_api_bracket_codes",
-    "extract_internal_api_bracket_correlation_id",
     "handle_tool_graphql_error",
-    "strip_internal_api_diagnostic_markers",
     "try_enrich_graphql_error",
     "with_debug_suffix",
 ]

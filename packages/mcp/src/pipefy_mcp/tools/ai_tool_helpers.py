@@ -28,7 +28,6 @@ from pipefy_mcp.core.tool_error_envelope import (
 )
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
-    strip_internal_api_diagnostic_markers,
 )
 
 logger = logging.getLogger(__name__)
@@ -331,7 +330,7 @@ def enrich_behavior_error(
     """
     msgs = extract_error_strings(exc)
     base = "; ".join(msgs) if msgs else str(exc)
-    base = strip_internal_api_diagnostic_markers(base).strip()
+    base = base.strip()
     if not base:
         base = _BEHAVIOR_ERROR_EMPTY_AFTER_SANITIZE
 

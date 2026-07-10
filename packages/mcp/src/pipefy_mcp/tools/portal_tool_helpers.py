@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from gql.transport.exceptions import TransportQueryError
+from pipefy_sdk import PipefyGraphQLError
 from pipefy_sdk.exceptions import PortalPermissionError
 from pydantic import ValidationError
 
@@ -19,7 +19,6 @@ from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     extract_graphql_error_codes,
-    strip_internal_api_diagnostic_markers,
 )
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
@@ -63,16 +62,12 @@ def map_portal_error_to_message(exc: BaseException) -> str:
     if "PERMISSION_DENIED" in codes or "permission denied" in lowered:
         return _PORTAL_PERMISSION_GUIDANCE
 
-    if isinstance(exc, TransportQueryError):
+    if isinstance(exc, PipefyGraphQLError):
         messages = extract_error_strings(exc)
         if messages:
-            return strip_internal_api_diagnostic_markers("; ".join(messages))
+            return "; ".join(messages)
 
-    return (
-        strip_internal_api_diagnostic_markers(text)
-        if text
-        else "Portal operation failed. Try again or contact support."
-    )
+    return text or "Portal operation failed. Try again or contact support."
 
 
 def validate_tool_ids(

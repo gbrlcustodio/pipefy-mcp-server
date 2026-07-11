@@ -9,6 +9,7 @@
 - **`docs/MIGRATION.md`** — What existing MCP users need to know about v0.1.
 - **`docs/dependencies.md`** — Rationale for runtime dependencies.
 - **`docs/architecture.md`**: Intra-package layering (domain, adapter, composition root), type ownership at boundaries, ports, and the alternative-constructor guide.
+- **`docs/target-architecture.md`**: North-star end-goal (repo-wide): app packages as thin delivery adapters over the `pipefy` SDK gateway; a small set of invariants (where a file lives, how it behaves) and the target directory structure for the monorepo. Enforcement machinery and the migration path live in `architecture.md`.
 - **`docs/mcp/tools/`** — Per-area MCP tool reference (parameters, edge cases, cross-cutting behavior).
 - **`docs/cli/`** — CLI-specific guides (e.g. introspect-then-execute).
 - **`docs/sdk/README.md`** — Using `pipefy` as a library.

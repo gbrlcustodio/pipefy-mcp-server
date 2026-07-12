@@ -21,6 +21,7 @@ Two questions, a short list of rules each.
 2. An app owns its delivery concerns but only carries Pipefy surfaces, and the two are not peers. Owned concerns (`auth`, `telemetry`, `response`, `wiring`, and the server's meta-tool surface `dispatch/`) are folders at the package root. The Pipefy surface groups under one delivery-role folder (`tools/` on the server, `commands/` on the CLI) because the app holds no Pipefy domain: a `cards/` folder at the root would be a hollow domain slot that invites SDK domain logic to leak upward, and it would mirror the SDK's context taxonomy as app structure. Inside that folder, one module per surface area named by the canonical Pipefy toolset (`pipes`, `cards`, `database`, `connections`, `reports`, `portal`, `automation`, `ai`, `access`, `integrations`, `introspection`), each a file until a second role earns it a folder. On the server that folder is a hidden catalog reached only through the meta-tool surface; the CLI exposes it directly.
 3. Only two positions are not concerns: the center and the composition root `wiring/`. The center holds stdlib-pure vocabulary that no single concern owns, and may be empty when every type has a concern that owns it. `wiring/` wires every concern and is imported only by `main`. `main.py` is the entry; `settings.py` is the config boundary.
 4. A type lives with the concern that owns its behavior and is published as that concern's contract; a type no concern owns lives at the center. Cross-cutting code lives in its concern, never a pattern bucket (no `middlewares/`, no `utils/`).
+5. Reaching into a third-party's private or undocumented surface (a monkeypatch, a private attribute, an internal slot) is its own concern and lives only in `vendor/`, one module or folder per vendor named for that vendor. Every other concern calls a `vendor/` shim, never the private symbol directly, so an unstable dependency has one owner and an SDK upgrade has one place to change. This is an owned anti-corruption layer rather than a technical bucket: it groups by the external surface it isolates, and a `TID251` ban keeps each vendor's private symbols out of every folder but this one.
 
 ### How it behaves
 
@@ -48,10 +49,10 @@ App package (the server shown; the CLI takes the same shape, below):
 pipefy_mcp/
   main.py            entry; imports wiring only
   settings.py        config boundary
-  wiring/            composition root: factory.py  runtime.py  catalog.py   (imported by none but main; builds the tool catalog once, owns the process-scoped SDK engine, hands the surface a per-request client provider)
+  wiring/            composition root: factory.py  runtime.py  catalog.py  lifespan.py   (imported by none but main; builds the tool catalog once, owns the process-scoped SDK engine, binds the SDK lifespan hook to that runtime, hands the surface a per-request client provider)
   dispatch/          the exposed meta-tool surface: meta_tools.py (search/describe/execute/categories)  parse.py (arguments against the catalog schema)   (the only Pipefy tools in tools/list; reads the wiring-built catalog; remote default-deny enforced here)
   graphql.py         the raw-GraphQL escape hatch (search_schema, introspect_*, execute_graphql): thin over SDK operations, exposure-gated
-  mcp_extensions/    MCP-SDK integration: tool_middleware.py  lifespan.py  capabilities.py
+  vendor/            anti-corruption shims over third-party private surfaces, one module or folder per vendor named for that vendor: fastmcp.py (installs the tool-call middleware into the private request_handlers slot; removes and lists catalog tools through the private _tool_manager)   (the only code that may touch a vendor private symbol; every concern calls a shim here, never the attribute)
   auth/              identity: identity.py  verifier.py  resolve.py  credentials.py   (identity.py published as contract)
   telemetry/         emission (a sink): emitter.py  log_middleware.py   (observes each dispatched body, not the meta-tool boundary)
   response/          response shaping: envelope.py  shaper.py
@@ -60,10 +61,10 @@ pipefy_mcp/
                      (each defines a schema + validated body into the catalog, not an @mcp.tool; a thickened surface becomes tools/pipes/ with parse.py)
 ```
 
-The CLI takes the same shape with delivery-specific concerns swapped: its delivery-role surface folder is `commands/` in place of `tools/` (same rule, one module per toolset), `output/` replaces `response/` (rendering, not enveloping), there is no `mcp_extensions/`, `dispatch/`, or `graphql.py` (a CLI is discovered by `--help`, so it exposes its commands directly with no meta-tool surface), and its composition root is `main.py` plus `runtime.py`.
+The CLI takes the same shape with delivery-specific concerns swapped: its delivery-role surface folder is `commands/` in place of `tools/` (same rule, one module per toolset), `output/` replaces `response/` (rendering, not enveloping), there is no `dispatch/` or `graphql.py` (a CLI is discovered by `--help`, so it exposes its commands directly with no meta-tool surface), it carries a `vendor/` folder only if it reaches into a Typer or Click internal, and its composition root is `main.py` plus `runtime.py`.
 
 ## Relationship to other artifacts
 
-- `architecture.md` holds the rules enforced today and the machinery that enforces them (the import-linter contract set, ruff `TID251`). The migration toward this end-state happens as incremental PRs, not as a plan recorded here.
+- `architecture.md` holds the rules enforced today and the machinery that enforces them (the import-linter contract set, ruff `TID251`, including the ban on each vendor's private symbols outside `vendor/`). The migration toward this end-state happens as incremental PRs, not as a plan recorded here.
 - `tools/toolsets.py` (server) is the static grouping (the `power`, `all`, `default` keywords) that seeds the catalog's categories, which `get_tool_categories` and `search_tools` serve at runtime; its area names align with the catalog modules under `tools/`.
 - The separately-maintained Pipefy domain model is the input to the SDK's context grouping only. It does not shape the app packages.

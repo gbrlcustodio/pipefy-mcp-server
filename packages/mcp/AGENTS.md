@@ -45,8 +45,9 @@ bearer per request and opens a per-request session carrying a snapshot of that
 validated bearer, so concurrent callers each act as themselves rather than as a
 single identity resolved at startup. All sessions share one process-scoped engine
 (the GraphQL endpoints and their schema cache). `local` runs as the one credential
-resolved at startup. The transport still binds loopback-only until the
-DNS-rebinding host/Origin allowlist lands.
+resolved at startup. The unauthenticated `local` profile binds loopback-only over
+HTTP unless the `PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` escape hatch is set; the
+authenticated `remote` profile binds any host (see "Bind-safety interlock" below).
 
 **Resource-server profile.** Config is split by domain. *Token validation* is an
 auth concern and lives in `pipefy_auth.JwtValidationSettings` (`settings.jwt`,
@@ -71,14 +72,23 @@ module) resolves the inbound issuer and pairs the verifier with `AuthSettings`.
 The runtime (`McpRuntime.for_profile`) calls it for the `remote` profile and holds
 the pair as `inbound_auth`, which `server.py` wires into the app.
 
-**Loopback bind.** `_assert_safe_http_bind` restricts the HTTP transport to a
-loopback bind, unconditionally for now. Per-request on-behalf-of identity (each
-call runs as the validated caller, not a single startup identity) means inbound
-identity is not the constraint; the constraint is DNS-rebinding protection, the
-configurable host / Origin allowlist for a proxied deployment. Off-loopback binding
-stays off until that lands (see `experiments/hosted-obo/RFC-OUTLINE.md`). The
-attachment tools' local `file_path` inputs also still assume a loopback peer that
-shares the client's disk (remote-safe file inputs are separate follow-up work).
+**Bind-safety interlock.** The property protected is auth posture, not bind
+interface: an unauthenticated profile must not be reachable by untrusted callers.
+`McpSettings._enforce_bind_safety` (a `model_validator` at the settings boundary)
+refuses a non-loopback HTTP bind under the unauthenticated `local` profile unless
+`PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` is set. Living at the settings boundary means
+no serving path routes around it: `build_pipefy_mcp_server` and a caller building
+the ASGI app directly both take a resolved `Settings`. The `remote` profile
+validates a per-request bearer, so its bind host is irrelevant and is not checked
+(a container binds `0.0.0.0` and is still private). Loopback detection is
+`pipefy_infra.security.is_loopback_host`, which covers all of `127.0.0.0/8` and
+`::1`. This replaced an earlier bind-interface guard (`_assert_safe_http_bind`) that
+false-positived on the entire hosted profile and lived in the run path where the
+ASGI-app path bypassed it. DNS-rebinding protection (the configurable host / Origin
+allowlist for a proxied deployment) is separate follow-up work; see
+`experiments/hosted-obo/RFC-OUTLINE.md`. The attachment tools' local `file_path`
+inputs also still assume a loopback peer that shares the client's disk (remote-safe
+file inputs are separate follow-up work).
 
 ## Tool registration
 

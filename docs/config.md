@@ -125,7 +125,8 @@ These variables load into `pipefy_mcp.McpSettings` (`settings.mcp`). TOML keys u
 |----------|---------|--------|
 | `PIPEFY_MCP_PROFILE` | `local` | Launch profile: `local` registers every tool; `remote` exposes only remote-safe tools and validates an inbound bearer per request. |
 | `PIPEFY_MCP_TRANSPORT` | derived from profile | `stdio` or `http`. Unset: `local` → `stdio`, `remote` → `http`. |
-| `PIPEFY_MCP_HOST` | `127.0.0.1` | HTTP bind host (loopback only until hosted OBO lands). |
+| `PIPEFY_MCP_HOST` | `127.0.0.1` | HTTP bind host. The unauthenticated `local` profile refuses a non-loopback bind unless `PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` is set; the authenticated `remote` profile binds any host. |
 | `PIPEFY_MCP_PORT` | `8000` | HTTP bind port. |
+| `PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` | `false` | Escape hatch: lets the unauthenticated `local` profile serve HTTP on a non-loopback host, exposing the full tool surface with no inbound bearer. The `remote` profile never needs it. |
 | `PIPEFY_MCP_UNIFIED_ENVELOPE` | `true` | When true, migrated tools return `{success, data, ...}`. |
 | `PIPEFY_MCP_LOG_LEVEL` | `INFO` | Governs **both** hosted structured JSON lines on **stdout** and the FastMCP root logger (RichHandler text on **stderr**). Accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (case-insensitive). The server passes the resolved level to `FastMCP(log_level=...)` at construction, so this is the single operator knob for MCP logging. Some MCP tooling documents a separate `FASTMCP_LOG_LEVEL` env var; when using `pipefy-mcp-server`, prefer `PIPEFY_MCP_LOG_LEVEL` — it configures the root logger explicitly and keeps structured events on the same level. |

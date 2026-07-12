@@ -165,7 +165,7 @@ def test_rejects_an_empty_host(mocker, bad_host):
 
     Without the guard, an empty value reaches ``resolve_mcp_settings`` as an
     explicit init-kwarg, silently displacing the ``127.0.0.1`` default and later
-    failing the loopback check with a misleading non-loopback error.
+    tripping the bind-safety interlock with a misleading non-loopback error.
     """
     server_mock = mocker.patch("pipefy_mcp.main.run_server")
     argv = [bad_host] if bad_host.startswith("--host=") else ["--host", bad_host]

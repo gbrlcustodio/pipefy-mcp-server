@@ -97,8 +97,9 @@ class McpSettings(BaseSettings):
         description=(
             "Bind host for the Streamable HTTP transport (env: PIPEFY_MCP_HOST). "
             "Only consulted when serving over HTTP (--transport http); the stdio "
-            "transport ignores it. Must stay loopback (the default): the HTTP "
-            "transport refuses a non-loopback bind while it is unauthenticated."
+            "transport ignores it. Under the unauthenticated 'local' profile a "
+            "non-loopback bind is refused unless PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND "
+            "is set; the authenticated 'remote' profile binds any host."
         ),
     )
 
@@ -117,6 +118,18 @@ class McpSettings(BaseSettings):
             "FastMCP root logger on stderr (env: PIPEFY_MCP_LOG_LEVEL). "
             "Accepts DEBUG, INFO, WARNING, ERROR, or CRITICAL; normalized to "
             "uppercase."
+        ),
+    )
+
+    allow_insecure_http_bind: bool = Field(
+        default=False,
+        description=(
+            "When true (env: PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND), the "
+            "unauthenticated 'local' profile may serve HTTP on a non-loopback "
+            "host. The escape hatch for exposing the full tool surface with no "
+            "inbound bearer to callers that are not on the local machine. The "
+            "authenticated 'remote' profile never needs it: it validates a "
+            "per-request bearer, so its bind host is unrestricted."
         ),
     )
 
@@ -142,6 +155,38 @@ class McpSettings(BaseSettings):
             raise ValueError(
                 "the 'remote' profile requires the 'http' transport "
                 "(a per-request bearer has no stdio equivalent)"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_bind_safety(self) -> Self:
+        """Refuse to serve the unauthenticated tool surface off loopback.
+
+        The property protected is auth posture, not bind interface: an
+        unauthenticated profile must not be reachable by untrusted callers. The
+        'local' profile registers every tool and wires no inbound bearer, so
+        over HTTP on a non-loopback host it exposes the full surface to whoever
+        can reach the port. The 'remote' profile validates a per-request bearer,
+        so its bind host is irrelevant and is not checked here (a container
+        binds 0.0.0.0 legitimately). Runs after :meth:`_resolve_transport`, so
+        ``transport`` is concrete.
+
+        ``allow_insecure_http_bind`` is the explicit escape hatch for operators
+        who accept an unauthenticated public bind.
+        """
+        if (
+            self.transport == "http"
+            and self.profile == "local"
+            and not self.allow_insecure_http_bind
+            and not security.is_loopback_host(self.host)
+        ):
+            raise ValueError(
+                "the 'local' profile serves every tool with no inbound bearer, "
+                f"so it refuses a non-loopback HTTP bind ({self.host!r}). Bind a "
+                "loopback host, switch to '--profile remote' with a resource "
+                "server to validate per-request callers, or set "
+                "PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND to accept an "
+                "unauthenticated public bind."
             )
         return self
 

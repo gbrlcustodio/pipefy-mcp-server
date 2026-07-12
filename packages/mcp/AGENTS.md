@@ -33,7 +33,8 @@ marker is described below.
     resource-server URL is configured, validates an inbound bearer per request.
 - **`--transport {stdio|http}`** (env `PIPEFY_MCP_TRANSPORT`). Left unset it follows
   the profile: `local` speaks stdio, `remote` serves over Streamable HTTP. Set it
-  explicitly to run `local` over loopback HTTP. `remote` over stdio is rejected: a
+  explicitly to run `local` over HTTP (loopback by default; see "Bind-safety
+  interlock"). `remote` over stdio is rejected: a
   per-request bearer has no stdio equivalent. The pair is resolved (and validated)
   once, at startup, by `resolve_mcp_settings`.
 

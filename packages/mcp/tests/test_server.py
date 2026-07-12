@@ -1,4 +1,5 @@
 import json
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
@@ -463,6 +464,25 @@ def _asgi_client(app):
     return httpx.AsyncClient(transport=transport, base_url="http://testserver")
 
 
+@asynccontextmanager
+async def _serving_asgi_client(app):
+    """An ASGI client with the app's lifespan running.
+
+    The transport's DNS-rebinding Host check sits behind the streamable-HTTP
+    session manager, whose task group is started by the ASGI lifespan. httpx's
+    ASGITransport does not run lifespan events, so drive Starlette's lifespan
+    context explicitly (the 401/metadata tests do not need this because they
+    short-circuit before the session manager).
+    """
+    asgi = app.streamable_http_app()
+    async with asgi.router.lifespan_context(asgi):
+        transport = httpx.ASGITransport(app=asgi)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as client:
+            yield client
+
+
 @pytest.mark.unit
 async def test_http_unauthenticated_request_gets_401_challenge():
     """A request with no bearer is rejected with a 401 + WWW-Authenticate challenge.
@@ -490,3 +510,62 @@ async def test_http_serves_protected_resource_metadata():
     assert body["resource"].rstrip("/") == RS_RESOURCE
     advertised = [s.rstrip("/") for s in body["authorization_servers"]]
     assert RS_ISSUER in advertised
+
+
+# --- transport allowlist (DNS-rebinding) reaches FastMCP and the transport ----
+
+_PUBLIC_HOST_PING = {
+    "json": {"jsonrpc": "2.0", "method": "ping", "id": 1},
+    "headers": {"host": "mcp.pipefy.com"},
+}
+
+
+@pytest.mark.unit
+def test_build_passes_none_transport_security_for_a_plain_local_build(mocked_runtime):
+    """With no resource URL or allowlist, FastMCP keeps its own loopback default."""
+    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
+        build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
+    assert mock_fastmcp.call_args.kwargs["transport_security"] is None
+
+
+@pytest.mark.unit
+def test_build_passes_the_derived_allowlist_to_fastmcp(mocked_runtime):
+    """A configured allowlist reaches the FastMCP constructor as transport_security."""
+    settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
+        update={"mcp": McpSettings(allowed_hosts=["mcp.pipefy.com"])}
+    )
+    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
+        build_pipefy_mcp_server(settings)
+    security = mock_fastmcp.call_args.kwargs["transport_security"]
+    assert security is not None
+    assert "mcp.pipefy.com" in security.allowed_hosts
+
+
+@pytest.mark.unit
+async def test_http_loopback_default_rejects_a_public_host(mocked_runtime):
+    """The default (loopback-only) allowlist answers 421 to a public Host header.
+
+    This is the behavior a fronted deployment hits before the allowlist is
+    configured: FastMCP auto-enables the loopback allowlist on the 127.0.0.1
+    construction host, so a proxied public Host is a DNS-rebinding rejection.
+    """
+    app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
+    async with _serving_asgi_client(app) as client:
+        resp = await client.post("/mcp", **_PUBLIC_HOST_PING)
+    assert resp.status_code == 421
+
+
+@pytest.mark.unit
+async def test_http_configured_allowlist_accepts_a_public_host(mocked_runtime):
+    """With the public host allowlisted, the same request clears the Host gate.
+
+    It no longer 421s; it reaches the transport handler (which then fails on the
+    missing session, not on DNS-rebinding), proving the allowlist widened the gate.
+    """
+    settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
+        update={"mcp": McpSettings(allowed_hosts=["mcp.pipefy.com"])}
+    )
+    app = build_pipefy_mcp_server(settings)
+    async with _serving_asgi_client(app) as client:
+        resp = await client.post("/mcp", **_PUBLIC_HOST_PING)
+    assert resp.status_code != 421

@@ -133,6 +133,28 @@ class McpSettings(BaseSettings):
         ),
     )
 
+    allowed_hosts: list[str] | None = Field(
+        default=None,
+        description=(
+            "Extra Host header values the HTTP transport accepts, on top of "
+            "loopback and the resource_server_url host (env: "
+            "PIPEFY_MCP_ALLOWED_HOSTS as a JSON array). Needed only when a proxy "
+            "forwards a public Host that differs from the resource-server URL; the "
+            "standard fronted deployment derives its allowlist from "
+            "resource_server_url and sets none. An entry matches an exact Host or, "
+            "as 'host:*', any port on that host."
+        ),
+    )
+
+    allowed_origins: list[str] | None = Field(
+        default=None,
+        description=(
+            "Origin header values the HTTP transport accepts (env: "
+            "PIPEFY_MCP_ALLOWED_ORIGINS as a JSON array). Overrides the derived "
+            "scheme://host Origin allowlist for a stricter or custom posture."
+        ),
+    )
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _normalize_log_level(cls, value: object) -> object:
@@ -194,6 +216,24 @@ class McpSettings(BaseSettings):
                 "unauthenticated public bind."
             )
         return self
+
+    @model_validator(mode="after")
+    def _normalize_allowlists(self) -> Self:
+        """Strip whitespace and drop empty entries from the transport allowlists.
+
+        Light normalization only: an entry is a Host or Origin the operator
+        vouches for, so this does not run the internal-host SSRF gate
+        (``localhost`` is a wanted loopback entry). ``None`` stays ``None``.
+        """
+        self.allowed_hosts = _stripped_nonempty(self.allowed_hosts)
+        self.allowed_origins = _stripped_nonempty(self.allowed_origins)
+        return self
+
+
+def _stripped_nonempty(values: list[str] | None) -> list[str] | None:
+    if values is None:
+        return None
+    return [stripped for value in values if (stripped := value.strip())]
 
 
 class ResourceServerSettings(BaseSettings):

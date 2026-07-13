@@ -11,8 +11,6 @@ tags: [pipefy, observability, logs, usage, credits, exports]
 
 Monitor AI agent and automation execution, usage stats, credit consumption, and export job history. **11 MCP tools.**
 
-**CLI status (v0.1):** use MCP tools below. Observability Typer commands are planned for v0.3+.
-
 ---
 
 ## Identifiers reference
@@ -29,17 +27,17 @@ Monitor AI agent and automation execution, usage stats, credit consumption, and 
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `get_ai_agent_logs` | — (CLI v0.3+) | Yes | Execution history for a specific AI agent. |
-| `get_ai_agent_log_details` | — (CLI v0.3+) | Yes | Single execution detail for an AI agent log entry. |
-| `get_automation_logs` | — (CLI v0.3+) | Yes | Execution history for an automation (by automation ID or pipe). |
-| `get_automation_logs_by_repo` | — (CLI v0.3+) | Yes | Automation logs filtered by pipe UUID. |
-| `get_agents_usage` | — (CLI v0.3+) | Yes | Org-level AI agent execution count and trends. |
-| `get_automations_usage` | — (CLI v0.3+) | Yes | Org-level automation execution stats. |
+| `get_ai_agent_logs` | `pipefy agent logs list` | Yes | Execution history for a specific AI agent. |
+| `get_ai_agent_log_details` | `pipefy agent logs get` | Yes | Single execution detail for an AI agent log entry. |
+| `get_automation_logs` | `pipefy automation logs --automation` | Yes | Execution history for an automation (by automation ID). |
+| `get_automation_logs_by_repo` | `pipefy automation logs --repo` | Yes | Automation logs filtered by pipe. |
+| `get_agents_usage` | `pipefy usage agents` | Yes | Org-level AI agent execution count and trends. |
+| `get_automations_usage` | `pipefy usage automations` | Yes | Org-level automation execution stats. |
 | `get_automation_execution_metrics` | `pipefy usage execution-metrics` | Yes | Per-automation execution metrics (totalRuns, success/failure rate, avg duration, lastRun) over a rolling window; partial success returns `partial_errors` for denied ids. |
-| `get_ai_credit_usage` | — (CLI v0.3+) | Yes | AI credit consumption and remaining balance. |
-| `export_automation_jobs` | — (CLI v0.3+) | Yes | Trigger async export of automation job history. |
-| `get_automation_jobs_export` | — (CLI v0.3+) | Yes | Poll export job status (after `export_automation_jobs`). |
-| `get_automation_jobs_export_csv` | — (CLI v0.3+) | Yes | Download finished automation-jobs export as CSV text. |
+| `get_ai_credit_usage` | `pipefy usage credits` | Yes | AI credit consumption and remaining balance. |
+| `export_automation_jobs` | `pipefy export automation-jobs` | Yes | Trigger async export of automation job history. |
+| `get_automation_jobs_export` | `pipefy automation export status` | Yes | Poll export job status (after `export_automation_jobs`). |
+| `get_automation_jobs_export_csv` | `pipefy export automation-jobs-csv` | Yes | Download finished automation-jobs export as CSV text. |
 
 ---
 

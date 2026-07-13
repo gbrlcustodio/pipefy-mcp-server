@@ -291,3 +291,21 @@ async def test_validate_and_assert_public_url_allow_insecure_skips_literal_ip():
             allow_insecure=True,
         )
         assert hostname == "127.0.0.1"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "host",
+    ["127.0.0.1", "127.0.0.2", "localhost", "LOCALHOST", "::1", "[::1]", " ::1 "],
+)
+def test_is_loopback_host_accepts_loopback(host: str) -> None:
+    assert security.is_loopback_host(host) is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "host",
+    ["0.0.0.0", "::", "203.0.113.5", "example.com", "", "   "],
+)
+def test_is_loopback_host_rejects_non_loopback(host: str) -> None:
+    assert security.is_loopback_host(host) is False

@@ -114,3 +114,25 @@ def test_explicit_allowed_origins_replace_the_derived_origins():
     )
     assert security is not None
     assert security.allowed_origins == ["https://mcp.pipefy.com"]
+
+
+@pytest.mark.unit
+def test_explicit_empty_origins_are_honored_as_the_strictest_override():
+    """An explicit empty origin list is kept verbatim (reject any Origin), not derived."""
+    security = _build(
+        resource_server_url="https://mcp.pipefy.com/mcp", allowed_origins=[]
+    )
+    assert security is not None
+    assert security.allowed_origins == []
+    # The host allowlist is still derived; only origins are the strict override.
+    assert "mcp.pipefy.com" in security.allowed_hosts
+
+
+@pytest.mark.unit
+def test_explicit_empty_origins_alone_still_enable_protection():
+    """Empty origins with no host still builds an allowlist (not FastMCP's default)."""
+    security = _build(allowed_origins=[])
+    assert security is not None
+    assert security.enable_dns_rebinding_protection is True
+    assert security.allowed_origins == []
+    assert _LOOPBACK_FORMS.issubset(set(security.allowed_hosts))

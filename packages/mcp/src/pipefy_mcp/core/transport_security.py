@@ -49,17 +49,23 @@ def build_transport_security(
 ) -> TransportSecuritySettings | None:
     """Resolve the transport allowlist, or ``None`` to keep FastMCP's default.
 
-    Returns ``None`` when there is nothing to add beyond loopback (no ``resource``
-    and no explicit ``allowed_hosts`` / ``allowed_origins``), so FastMCP applies its
-    own loopback auto-enable and current behavior is preserved. Otherwise it enables
-    DNS-rebinding protection over loopback plus the resource's public host and any
-    explicit entries.
+    Returns ``None`` only when there is nothing to configure: no ``resource``, no
+    ``allowed_hosts``, and an unset (``None``) ``allowed_origins``, so FastMCP applies
+    its own loopback auto-enable and current behavior is preserved. Otherwise it
+    enables DNS-rebinding protection over loopback plus the resource's public host and
+    any explicit entries. An explicit ``allowed_origins`` (including an empty list,
+    which rejects any request that sends an Origin) is honored verbatim; only an unset
+    list falls back to the origins derived from the allowed hosts.
     """
     public_hosts = list(resource.host_forms) if resource else []
     public_hosts += mcp.allowed_hosts or []
     explicit_origins = mcp.allowed_origins
 
-    if not public_hosts and not explicit_origins:
+    # An explicit origin allowlist (including an empty one) is an override worth
+    # honoring, so it keeps protection on even with no host to add: ``allowed_origins=[]``
+    # is the strictest posture, rejecting any request that sends an Origin. Only an
+    # unset origin list plus no host leaves nothing to configure.
+    if not public_hosts and explicit_origins is None:
         return None
 
     allowed_hosts: list[str] = []
@@ -68,7 +74,7 @@ def build_transport_security(
             if form not in allowed_hosts:
                 allowed_hosts.append(form)
 
-    if explicit_origins:
+    if explicit_origins is not None:
         allowed_origins = list(explicit_origins)
     else:
         allowed_origins = []

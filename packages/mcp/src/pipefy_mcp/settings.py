@@ -151,8 +151,10 @@ class McpSettings(BaseSettings):
         default=None,
         description=(
             "Origin header values the HTTP transport accepts (env: "
-            "PIPEFY_MCP_ALLOWED_ORIGINS as a JSON array). Overrides the derived "
-            "scheme://host Origin allowlist for a stricter or custom posture."
+            "PIPEFY_MCP_ALLOWED_ORIGINS as a JSON array). Unset derives the "
+            "scheme://host origins from the allowed hosts; a non-empty array replaces "
+            "them with a custom set, and an empty array is the strictest override, "
+            "rejecting any request that sends an Origin header."
         ),
     )
 

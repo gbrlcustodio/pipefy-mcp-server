@@ -158,42 +158,62 @@ class McpRuntime:
         """Build the runtime for the resolved profile, wiring inbound and outbound auth.
 
         The composition root's one build step: it parses the ``resource_server_url``
-        once, builds the transport allowlist from it, and ``settings.mcp.profile``
-        selects the outbound identity and, for ``remote``, the inbound resource-server
-        pair (fed the same parsed resource).
-
-        ``remote`` acts on behalf of each caller: it validates a per-request bearer
-        (the inbound ``(verifier, auth)`` pair) and each session replays that
-        caller's snapshotted bearer (:class:`RequestScopedIdentity`). A configured
-        resource server is mandatory there, so this fails fast when none resolves,
-        rather than serve an open endpoint or silently fall back to a startup
-        credential.
-
-        Every other profile (stdio, or ``local`` over loopback HTTP) has no inbound
-        identity: the one startup credential is resolved from settings (and fails
-        fast when none is configured) and every session acts as it.
+        once, builds the transport allowlist from that one parsed resource, and hands
+        both to the per-profile builder ``settings.mcp.profile`` selects. Parsing here
+        keeps the resource a single value both the allowlist and (for ``remote``) the
+        inbound-auth pair are derived from, so they cannot disagree on the host.
         """
         resource = _resource_server(settings.rs)
         transport_security = build_transport_security(settings.mcp, resource)
         if settings.mcp.profile == "remote":
-            if resource is None:
-                raise RuntimeError(
-                    "the 'remote' profile requires a resource server: set "
-                    "PIPEFY_MCP_RS_RESOURCE_SERVER_URL so the server validates a "
-                    "per-request bearer and acts on behalf of the caller."
-                )
-            inbound_auth = build_resource_server_auth(
-                resource,
-                settings.jwt,
-                required_scopes=settings.rs.required_scopes,
-                default_issuer_url=_login_issuer_url(settings),
+            return cls._for_remote_profile(settings, resource, transport_security)
+        return cls._for_local_profile(settings, transport_security)
+
+    @classmethod
+    def _for_remote_profile(
+        cls,
+        settings: Settings,
+        resource: ResourceServer | None,
+        transport_security: TransportSecuritySettings | None,
+    ) -> McpRuntime:
+        """The ``remote`` profile: a per-request identity and an inbound RS pair.
+
+        ``remote`` acts on behalf of each caller: it validates a per-request bearer
+        (the inbound ``(verifier, auth)`` pair) and each session replays that caller's
+        snapshotted bearer (:class:`RequestScopedIdentity`). A configured resource
+        server is mandatory here, so this fails fast when none resolves rather than
+        serve an open endpoint or silently fall back to a startup credential.
+        """
+        if resource is None:
+            raise RuntimeError(
+                "the 'remote' profile requires a resource server: set "
+                "PIPEFY_MCP_RS_RESOURCE_SERVER_URL so the server validates a "
+                "per-request bearer and acts on behalf of the caller."
             )
-            return cls(
-                settings,
-                RequestScopedIdentity(),
-                inbound_auth=inbound_auth,
-                transport_security=transport_security,
-            )
+        inbound_auth = build_resource_server_auth(
+            resource,
+            settings.jwt,
+            required_scopes=settings.rs.required_scopes,
+            default_issuer_url=_login_issuer_url(settings),
+        )
+        return cls(
+            settings,
+            RequestScopedIdentity(),
+            inbound_auth=inbound_auth,
+            transport_security=transport_security,
+        )
+
+    @classmethod
+    def _for_local_profile(
+        cls,
+        settings: Settings,
+        transport_security: TransportSecuritySettings | None,
+    ) -> McpRuntime:
+        """The ``local`` profile (stdio, or loopback HTTP): one startup credential.
+
+        No inbound identity: the one startup credential is resolved from settings (and
+        fails fast when none is configured) and every session acts as it.
+        """
         return cls(
             settings,
             StartupIdentity.from_configured_credential(settings),

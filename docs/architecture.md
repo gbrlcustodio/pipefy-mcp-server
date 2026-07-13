@@ -11,6 +11,8 @@ These rules are repo-wide. They apply to every package (`pipefy-infra`, `pipefy`
 
 It reinforces the existing rules rather than replacing them; the reconciliation section at the end lists where the two meet.
 
+This document describes the rules and structure enforced today. The end-goal they converge on, the app packages as thin delivery adapters over the `pipefy` SDK gateway plus the structural and behavioral rules the code has yet to obey, is described in `target-architecture.md`.
+
 ## Layer model
 
 We follow a hexagonal shape with a deliberately thin core. Most of this codebase is an adapter: `pipefy-mcp-server` wraps the MCP SDK and the Pipefy GraphQL API, `pipefy-cli` wraps Typer over the same SDK. The business logic that is genuinely ours is small, so the domain tier is small, and most modules legitimately touch a framework or the vendor SDK. That is the point of an adapter, not a leak.
@@ -93,7 +95,7 @@ Drive a package through its driving port, not through internals. A test that con
 
 Between packages: ruff `TID251` banned-api per package, run in CI ("banned upward imports").
 
-Within `pipefy_mcp`: import-linter. The contract lives in `packages/mcp/pyproject.toml` under `[tool.importlinter]` and runs in CI (`cd packages/mcp && uv run lint-imports`), alongside the ruff banned-import steps. It encodes the inward-only spine that holds today.
+Within `pipefy_mcp`: import-linter. The contract lives in `packages/mcp/pyproject.toml` under `[tool.importlinter]` and runs in CI (`cd packages/mcp && uv run lint-imports`), alongside the ruff banned-import steps. It encodes the inward-only spine that holds today. The end-goal that replaces this interim spine (a framework-free result contract as the only cross-tier center, and composition reached through a client-provider port so the surface stops importing the runtime) is described in `target-architecture.md`.
 
 The next ratchet is disabled until the domain has a home. Once the scattered domain helpers move into a dedicated framework-free module, a forbidden contract locks it so it cannot import the MCP SDK, Starlette, or the vendor SDK. It cannot target `pipefy_mcp.core` today, because that package holds the runtime (the composition root), which must import those. The disabled contract and the switch to turn it on are recorded in `packages/mcp/pyproject.toml`.
 

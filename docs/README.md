@@ -20,6 +20,7 @@ Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-t
 | [`MIGRATION.md`](MIGRATION.md) | Notes for existing MCP users across packaging changes |
 | [`dependencies.md`](dependencies.md) | Why each runtime dependency exists |
 | [`architecture.md`](architecture.md) | Intra-package layering, type ownership at boundaries, ports, and alternative constructors |
+| [`target-architecture.md`](target-architecture.md) | North-star end-goal (repo-wide): app packages as thin delivery adapters over the `pipefy` SDK gateway; a small set of invariants and the target directory structure for the monorepo |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Contributing skills (Markdown playbooks) |
 | [`../RELEASE.md`](../RELEASE.md) | Versioning and GitHub Releases |
 

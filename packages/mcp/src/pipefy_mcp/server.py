@@ -146,11 +146,7 @@ def run_server(settings: Settings) -> None:
     pair) and passes the result, so this module reads no process globals.
 
     ``settings.mcp.transport == "stdio"`` speaks MCP over stdio; ``"http"`` serves
-    over Streamable HTTP on ``host``/``port``. The bind-safety interlock lives at
-    the settings boundary (:class:`McpSettings._enforce_bind_safety`): the
-    unauthenticated ``local`` profile refuses a non-loopback HTTP bind unless
-    ``PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND`` is set, so no serving path here (or a
-    caller building the app directly) can route around it.
+    over Streamable HTTP on ``host``/``port``.
 
     ``settings.mcp.profile == "remote"`` selects the default-deny remote-safe tool
     surface and validates an inbound bearer per request; it requires a configured
@@ -179,8 +175,7 @@ def run_server(settings: Settings) -> None:
     # loopback HTTP trusts its peer and wires no inbound auth. The runtime owns that
     # decision (and the fail-fast when remote has no resource server), so it holds
     # for a serving remote server: profile == "remote" is exactly when inbound
-    # validation is active. The bind-safety interlock already ran at the settings
-    # boundary, so an unauthenticated non-loopback bind never reaches here.
+    # validation is active.
     logger.info(
         "Starting Pipefy MCP server over HTTP on %s:%d (profile=%s, resource_server=%s)",
         mcp.host,
@@ -189,4 +184,6 @@ def run_server(settings: Settings) -> None:
         "active" if mcp.profile == "remote" else "inactive",
     )
 
+    # Bind safety is enforced at the settings boundary (McpSettings._enforce_bind_safety);
+    # host/port arrive already vetted, so there is nothing to re-check here.
     build_pipefy_mcp_server(settings).run("streamable-http")

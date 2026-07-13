@@ -78,8 +78,8 @@ interface: an unauthenticated profile must not be reachable by untrusted callers
 `McpSettings._enforce_bind_safety` (a `model_validator` at the settings boundary)
 refuses a non-loopback HTTP bind under the unauthenticated `local` profile unless
 `PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` is set. Living at the settings boundary means
-no serving path routes around it: `build_pipefy_mcp_server` and a caller building
-the ASGI app directly both take a resolved `Settings`. The `remote` profile
+no serving path routes around it (the coverage argument, why every serving path
+inherits the guarantee, lives on the `_enforce_bind_safety` docstring). The `remote` profile
 validates a per-request bearer, so its bind host is irrelevant and is not checked
 (a container binds `0.0.0.0` and is still private). Loopback detection is
 `pipefy_infra.security.is_loopback_host`, which covers all of `127.0.0.0/8` and

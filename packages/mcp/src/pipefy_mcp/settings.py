@@ -171,6 +171,11 @@ class McpSettings(BaseSettings):
         binds 0.0.0.0 legitimately). Runs after :meth:`_resolve_transport`, so
         ``transport`` is concrete.
 
+        Enforcing at the settings boundary means every serving path inherits the
+        guarantee: :func:`build_pipefy_mcp_server` and a caller building the ASGI
+        app directly both take a resolved ``Settings``, so none re-checks the bind
+        or routes around it.
+
         ``allow_insecure_http_bind`` is the explicit escape hatch for operators
         who accept an unauthenticated public bind.
         """

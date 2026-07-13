@@ -4,6 +4,7 @@ from typing import Any, Literal, Self
 
 from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_infra import security
+from pipefy_infra.coerce import optional_str
 from pipefy_infra.config import PipefyTomlConfigSource
 from pipefy_sdk import PipefySettings
 from pydantic import (
@@ -233,7 +234,7 @@ class McpSettings(BaseSettings):
 def _stripped_nonempty(values: list[str] | None) -> list[str] | None:
     if values is None:
         return None
-    return [stripped for value in values if (stripped := value.strip())]
+    return [s for value in values if (s := optional_str(value)) is not None]
 
 
 class ResourceServerSettings(BaseSettings):

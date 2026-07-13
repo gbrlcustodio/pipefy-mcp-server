@@ -204,6 +204,17 @@ def test_build_stamps_resource_server_url_not_audience() -> None:
 
 
 @pytest.mark.unit
+def test_build_advertises_the_parsed_resource_url_in_the_metadata() -> None:
+    """AuthSettings' resource_server_url comes from the parsed ResourceServer carrier."""
+    _, auth = build_resource_server_auth(
+        ResourceServerSettings(resource_server_url=_RESOURCE),
+        JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
+        default_issuer_url=_ISSUER,
+    )
+    assert str(auth.resource_server_url).rstrip("/") == _RESOURCE
+
+
+@pytest.mark.unit
 def test_build_skips_audience_by_default() -> None:
     """No audience config folds to SkipAudience: the validator does not check aud."""
     verifier, _ = build_resource_server_auth(

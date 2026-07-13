@@ -188,6 +188,10 @@ def build_resource_server_auth(
     """
     if rs.resource_server_url is None:
         return None
+    # Parse the RFC 9728 resource identity into the ResourceServer this module owns,
+    # so the token's stamped resource and the advertised metadata both read from the
+    # one carrier rather than the raw setting.
+    resource = ResourceServer.from_url(rs.resource_server_url)
     issuer_url = jwt_validation.resolve_issuer_url(default_issuer_url)
     if issuer_url is None:
         raise RuntimeError(
@@ -211,11 +215,11 @@ def build_resource_server_auth(
             allow_insecure_urls=jwt_validation.allow_insecure_urls,
             jwks_uri=jwt_validation.jwks_uri,
         ),
-        resource=rs.resource_server_url,
+        resource=resource.url,
     )
     auth = FastMcpAuthSettings(
         issuer_url=issuer_url,
-        resource_server_url=rs.resource_server_url,
+        resource_server_url=resource.url,
         required_scopes=rs.required_scopes,
     )
     return verifier, auth

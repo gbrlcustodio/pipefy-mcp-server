@@ -32,7 +32,7 @@ git clone https://github.com/pipefy/ai-toolkit.git
 | **Database Tables** | [pipefy-database-tables](database-tables/pipefy-database-tables/SKILL.md) | Tables, records, schema, attachments. 17 MCP tools. |
 | **Relations** | [pipefy-relations](relations/pipefy-relations/SKILL.md) | Pipe and card relations. 8 MCP tools. |
 | **Reports** | [pipefy-reports](reports/pipefy-reports/SKILL.md) | Pipe and organization reports, async exports. 17 MCP tools. |
-| **Automations** | [pipefy-automations](automations/pipefy-automations/SKILL.md) | Traditional and AI automations, simulation. 15 MCP tools. |
+| **Automations** | [pipefy-automations](automations/pipefy-automations/SKILL.md) | Traditional and AI automations, simulation. 16 MCP tools. |
 | **AI Agents** | [pipefy-ai-agents](ai-agents/pipefy-ai-agents/SKILL.md) | Conversational AI agents and behaviors. 7 MCP tools. |
 | **Observability** | [pipefy-observability](observability/pipefy-observability/SKILL.md) | Logs, usage, credits, execution metrics, job exports. 11 MCP tools. |
 | **Members, Email & Webhooks** | [pipefy-members-email-webhooks](members-email-webhooks/pipefy-members-email-webhooks/SKILL.md) | Membership, email, webhooks. 11 MCP tools. |

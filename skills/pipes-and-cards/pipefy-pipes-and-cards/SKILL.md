@@ -32,6 +32,7 @@ Read, create, update, and delete pipes, phases, phase fields, labels, cards, att
 | `update_pipe` | `pipefy pipe update <id>` | No | Rename or change pipe settings. |
 | `delete_pipe` | `pipefy pipe delete <id>` | No | **Two-step destructive.** |
 | `clone_pipe` | `pipefy pipe clone <id>` | No | Clone an existing pipe. |
+| `get_pipe_members` | `pipefy member list --pipe <id>` | Yes | List members of a pipe. |
 
 ### Steps — create a pipe with phases
 
@@ -152,9 +153,13 @@ This returns valid `type` enum values and their descriptions.
 | `create_card` | `pipefy card create <pipe_id>` | No | Default: start form. Optional `--phase-id` / `phase_id` creates in that phase; interactive clients may elicit start-form fields unless `skip_elicitation=true`. |
 | `fill_card_phase_fields` | `pipefy card fill <id> --phase <id>` | No | Fill phase fields non-interactively; filters to editable IDs. Uses `--fields` JSON object; for ad-hoc updates use `card update --field-updates` (JSON array). |
 | `update_card` | `pipefy card update <id>` | No | Update title, assignee, due date, fields. |
+| `update_card_field` | `pipefy card update <id> --field-updates` | No | Single-field update (`updateCardField`); for several fields prefer `update_card` + `field_updates`. |
 | `move_card_to_phase` | `pipefy card move <id> --phase <id>` | No | Call `get_phase_allowed_move_targets` on the source phase first. |
 | `delete_card` | `pipefy card delete <id>` | No | **Two-step destructive.** |
 | `add_card_comment` | `pipefy card comment add <id>` | No | Add a text comment to a card. |
+| `update_comment` | `pipefy card comment update` | No | Update an existing card comment. |
+| `delete_comment` | `pipefy card comment delete` | No | **Two-step destructive.** |
+| `upload_attachment_to_card` | `pipefy attachment upload --card` | No | Upload a local file to an attachment field (`field_id` must be the field slug). |
 
 ### Steps — create a card
 
@@ -203,10 +208,11 @@ Read `pageInfo.hasNextPage` and `pageInfo.endCursor` from the response; pass `af
 
 | Tool (MCP) | CLI | Purpose |
 |------------|-----|---------|
-| `get_field_conditions` | — | List all field conditions on a phase. |
-| `create_field_condition` | — | Create show/hide rule. |
-| `update_field_condition` | — | Update condition action or rule. |
-| `delete_field_condition` | — | **Two-step destructive.** |
+| `get_field_conditions` | `pipefy field-condition list --phase <id>` | List all field conditions on a phase. |
+| `get_field_condition` | `pipefy field-condition get` | Load one field condition by ID. |
+| `create_field_condition` | `pipefy field-condition create` | Create show/hide rule. |
+| `update_field_condition` | `pipefy field-condition update` | Update condition action or rule. |
+| `delete_field_condition` | `pipefy field-condition delete` | **Two-step destructive.** |
 
 ---
 

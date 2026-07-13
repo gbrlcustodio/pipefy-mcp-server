@@ -218,7 +218,7 @@ Every `PIPEFY_*` env var is validated against a semantically meaningful regex at
 
 The login worked but `keyring` couldn't write the entry.
 
-**macOS (Keychain / `Keyring` backend).** OAuth can succeed while persistence fails with `Can't store password on keychain: (-25244, 'Unknown Error')`. That code is `errSecParam` from Security.framework — common when the calling process cannot surface the new-item ACL dialog (IDE slash commands, agent hosts, and other non-TTY subprocesses that do not share an interactive Aqua session). The fix is independent of how `pipefy` was installed (`uvx`, `uv tool install`, or a wheel).
+**macOS (Keychain / `Keyring` backend).** OAuth can succeed while persistence fails with `Can't store password on keychain: (-25244, 'Unknown Error')`. That code is `errSecParam` from Security.framework — common when the calling process cannot surface the new-item ACL dialog (IDE slash commands, agent hosts, and other non-TTY subprocesses that do not share an interactive Aqua session). The remediation procedure is the same regardless of install method. macOS binds the keychain ACL to the calling Python binary's path, so `uv tool install` and a wheel install give you a stable grant; with `uvx`, the cached environment's binary path can change (for example after `uvx --refresh` or a uv version bump), and macOS will prompt again from Terminal.app.
 
 1. Run `pipefy auth login` **once** from a regular **Terminal.app** session (not from inside the IDE).
 2. When macOS prompts for keychain access for the Python binary running `pipefy`, click **Always Allow**.

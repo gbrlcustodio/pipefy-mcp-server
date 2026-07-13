@@ -4,28 +4,30 @@ import platform
 
 import pytest
 
-from pipefy_cli.commands import auth_keychain_hints as hints
+from pipefy_cli.commands import _auth_keychain_hints as hints
 
 
 @pytest.mark.parametrize(
-    ("system", "expected_fragment"),
+    ("system", "required", "forbidden"),
     [
-        ("Darwin", "errSecParam"),
-        ("Darwin", "Terminal.app"),
-        ("Darwin", "Always Allow"),
-        ("Linux", "Secret Service"),
-        ("Windows", "Credential Manager"),
-        ("FreeBSD", "pipefy auth status"),
+        ("Darwin", ["errSecParam", "Terminal.app", "Always Allow"], ["Secret Service"]),
+        ("Linux", ["Secret Service"], ["Terminal.app", "Credential Manager"]),
+        ("Windows", ["Credential Manager"], ["Secret Service", "Terminal.app"]),
+        ("FreeBSD", ["pipefy auth status"], []),
     ],
 )
 def test_keychain_hint_for_platform(
-    monkeypatch: pytest.MonkeyPatch, system: str, expected_fragment: str
+    monkeypatch: pytest.MonkeyPatch,
+    system: str,
+    required: list[str],
+    forbidden: list[str],
 ) -> None:
     monkeypatch.setattr(platform, "system", lambda: system)
     hint = hints.keychain_store_failure_hint(backend="Keyring")
-    assert expected_fragment in hint
-    if system == "Darwin":
-        assert "Secret Service" not in hint
+    for fragment in required:
+        assert fragment in hint
+    for fragment in forbidden:
+        assert fragment not in hint
 
 
 def test_plaintext_backend_hint_ignores_platform(

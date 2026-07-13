@@ -32,7 +32,7 @@ Full reference (every `PIPEFY_*` variable, validation rules, TOML schema, preced
 
 ### macOS keychain `errSecParam (-25244)`
 
-`pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. The cause is not yet reliably diagnosed — direct `keyring.set_password` calls from the same uv-tool-installed Python succeed under repro testing, so this is likely a transient `Security.framework` condition rather than a deterministic per-binary ACL problem. If it occurs, retry the slash command (Claude Code) or `pipefy auth login` (terminal) first; as a fallback, run `pipefy auth login` once from a regular Terminal.app session and approve any macOS keychain dialog that appears. [Issue #235](https://github.com/pipefy/ai-toolkit/issues/235) tracks platform-aware error messaging.
+`pipefy auth login` may exit with `errSecParam (-25244)` at the final keychain-write step even though OAuth itself succeeded. That usually means the calling process could not surface the macOS keychain ACL dialog (IDE slash commands, agent hosts, and other non-TTY subprocesses). Run `pipefy auth login` once from a regular Terminal.app session and click **Always Allow** when prompted; refresh writes from the IDE or agent should then succeed. macOS binds the ACL to the calling Python binary's path, so a stable install (`uv tool install` / wheel) keeps the grant; with `uvx`, a path change (for example after `uvx --refresh`) can prompt again. See [`docs/cli/auth.md`](../../docs/cli/auth.md) for the full platform-specific troubleshooting.
 
 ### Claude Code: `claude mcp add` (per-project terminal flow)
 

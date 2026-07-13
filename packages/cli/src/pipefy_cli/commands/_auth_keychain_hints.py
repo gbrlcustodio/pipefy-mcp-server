@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import platform
 
+from pipefy_infra.config import config_dir
+
 from pipefy_cli._docs import DOCS_CLI_AUTH_REF
 
 _LINUX_HINT = (
@@ -37,8 +39,6 @@ _GENERIC_HINT = (
 def keychain_store_failure_hint(*, backend: str) -> str:
     """Return a remediation hint after ``store_session`` fails post-login."""
     if backend == "PlaintextKeyring":
-        from pipefy_infra.config import config_dir
-
         return (
             f"Ensure the config directory is writable ({config_dir()}), "
             "or use a static PIPEFY_TOKEN."

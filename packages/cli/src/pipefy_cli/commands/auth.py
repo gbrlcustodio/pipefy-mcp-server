@@ -43,8 +43,8 @@ from pipefy_cli.auth import (
     get_authenticated_client,
     to_display_source,
 )
+from pipefy_cli.commands._auth_keychain_hints import keychain_store_failure_hint
 from pipefy_cli.commands._common import settings_and_auth_from_ctx
-from pipefy_cli.commands.auth_keychain_hints import keychain_store_failure_hint
 from pipefy_cli.output import render_json
 
 AuthSessionState = Literal["active", "refresh-expired", "needs-login", "n/a"]

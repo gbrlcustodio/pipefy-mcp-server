@@ -12,7 +12,6 @@ from pipefy_mcp.core.tool_middleware import (
     ToolCallMiddleware,
     install_tool_call_middleware,
 )
-from pipefy_mcp.core.transport_security import build_transport_security
 from pipefy_mcp.observability.json_logging import configure_observability_logging
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.settings import Settings
@@ -101,11 +100,10 @@ def build_pipefy_mcp_server(
     remote-safe tool surface, and ``settings.mcp.host`` / ``settings.mcp.port`` give
     the HTTP bind (they matter only for the HTTP transport; stdio ignores them).
 
-    The DNS-rebinding allowlist for the HTTP transport is derived here by
-    :func:`pipefy_mcp.core.transport_security.build_transport_security` (from the
-    ``resource_server_url`` host plus any ``allowed_hosts`` / ``allowed_origins``)
-    and passed to FastMCP; it is ``None`` (FastMCP's own loopback default) when
-    nothing is configured, and irrelevant for stdio.
+    The DNS-rebinding allowlist for the HTTP transport is built by the runtime (from
+    the ``resource_server_url`` host plus any ``allowed_hosts`` / ``allowed_origins``)
+    and read off it here as ``runtime.transport_security``; it is ``None`` (FastMCP's
+    own loopback default) when nothing is configured, and irrelevant for stdio.
 
     ``extra_tool_middlewares`` is the public registration seam for a consumer of this
     builder (a hosted serving layer that wants per-tool metrics, say): the chain
@@ -133,7 +131,7 @@ def build_pipefy_mcp_server(
         log_level=settings.mcp.log_level,
         token_verifier=verifier,
         auth=auth,
-        transport_security=build_transport_security(settings),
+        transport_security=runtime.transport_security,
     )
     _register_pipefy_tools(app, remote_mode=settings.mcp.profile == "remote")
     # Wrap the tool-call handler with the built-in chain plus any consumer middleware.

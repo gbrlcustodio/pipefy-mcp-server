@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from httpx import Auth
+from mcp.server.transport_security import TransportSecuritySettings
 from pipefy_auth import (
     StaticBearerAuth,
     build_httpx_auth,
@@ -16,10 +17,12 @@ from starlette.requests import Request
 from pipefy_mcp._docs import DOCS_SETUP_REF
 from pipefy_mcp.auth.request_identity import require_request_bearer
 from pipefy_mcp.auth.resource_server import (
+    ResourceServer,
     ResourceServerAuth,
     build_resource_server_auth,
 )
-from pipefy_mcp.settings import Settings
+from pipefy_mcp.core.transport_security import build_transport_security
+from pipefy_mcp.settings import ResourceServerSettings, Settings
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,17 @@ class RequestScopedIdentity:
 AuthSource = StartupIdentity | RequestScopedIdentity
 
 
+def _resource_server(rs: ResourceServerSettings) -> ResourceServer | None:
+    """Parse the configured resource-server URL into its value object, or ``None``.
+
+    The one place the resource identity is parsed: the composition root feeds this
+    single :class:`ResourceServer` to both consumers (inbound auth and the transport
+    allowlist), so neither re-parses the URL and they cannot disagree on the host.
+    """
+    url = rs.resource_server_url
+    return ResourceServer.from_url(url) if url else None
+
+
 def _login_issuer_url(settings: Settings) -> str | None:
     """The issuer this process logs into, the fallback for the inbound issuer.
 
@@ -107,11 +121,14 @@ class McpRuntime:
 
     Built once at server startup via :meth:`for_profile`, which turns the resolved
     settings into wired resources: the outbound identity (whose :meth:`resolve`
-    backs each request's session) and, under the ``remote`` profile, the inbound
-    resource-server ``(verifier, auth)`` pair FastMCP uses to validate each caller's
-    bearer. It owns the process-scoped :class:`PipefyEngine` (the shared endpoints
-    and GraphQL schema cache, built auth-agnostic with no network I/O) and opens a
-    cheap per-request session bound to the caller's identity.
+    backs each request's session), the HTTP transport's DNS-rebinding allowlist, and,
+    under the ``remote`` profile, the inbound resource-server ``(verifier, auth)`` pair
+    FastMCP uses to validate each caller's bearer. It parses the ``resource_server_url``
+    into one :class:`ResourceServer` and feeds it to both the inbound-auth and the
+    allowlist builders, so they cannot disagree on the resource host. It owns the
+    process-scoped :class:`PipefyEngine` (the shared endpoints and GraphQL schema cache,
+    built auth-agnostic with no network I/O) and opens a cheap per-request session bound
+    to the caller's identity.
 
     Building the engine here is safe off the event loop: it does no network I/O and
     binds nothing to a running loop (its endpoints open a fresh per-request
@@ -119,7 +136,7 @@ class McpRuntime:
     later handles requests.
 
     This is a stepping stone toward a single per-app runtime; today it owns the
-    shared engine and the inbound-auth pair.
+    shared engine, the inbound-auth pair, and the transport allowlist.
     """
 
     def __init__(
@@ -128,18 +145,22 @@ class McpRuntime:
         identity: AuthSource,
         *,
         inbound_auth: ResourceServerAuth | None = None,
+        transport_security: TransportSecuritySettings | None = None,
     ) -> None:
         self._settings = settings
         self._identity = identity
         self.inbound_auth = inbound_auth
+        self.transport_security = transport_security
         self._engine = PipefyEngine.build(settings.pipefy, surface="mcp")
 
     @classmethod
     def for_profile(cls, settings: Settings) -> McpRuntime:
         """Build the runtime for the resolved profile, wiring inbound and outbound auth.
 
-        The composition root's one build step: ``settings.mcp.profile`` selects the
-        outbound identity and, for ``remote``, the inbound resource-server pair.
+        The composition root's one build step: it parses the ``resource_server_url``
+        once, builds the transport allowlist from it, and ``settings.mcp.profile``
+        selects the outbound identity and, for ``remote``, the inbound resource-server
+        pair (fed the same parsed resource).
 
         ``remote`` acts on behalf of each caller: it validates a per-request bearer
         (the inbound ``(verifier, auth)`` pair) and each session replays that
@@ -152,20 +173,32 @@ class McpRuntime:
         identity: the one startup credential is resolved from settings (and fails
         fast when none is configured) and every session acts as it.
         """
+        resource = _resource_server(settings.rs)
+        transport_security = build_transport_security(settings.mcp, resource)
         if settings.mcp.profile == "remote":
-            inbound_auth = build_resource_server_auth(
-                settings.rs,
-                settings.jwt,
-                default_issuer_url=_login_issuer_url(settings),
-            )
-            if inbound_auth is None:
+            if resource is None:
                 raise RuntimeError(
                     "the 'remote' profile requires a resource server: set "
                     "PIPEFY_MCP_RS_RESOURCE_SERVER_URL so the server validates a "
                     "per-request bearer and acts on behalf of the caller."
                 )
-            return cls(settings, RequestScopedIdentity(), inbound_auth=inbound_auth)
-        return cls(settings, StartupIdentity.from_configured_credential(settings))
+            inbound_auth = build_resource_server_auth(
+                resource,
+                settings.jwt,
+                required_scopes=settings.rs.required_scopes,
+                default_issuer_url=_login_issuer_url(settings),
+            )
+            return cls(
+                settings,
+                RequestScopedIdentity(),
+                inbound_auth=inbound_auth,
+                transport_security=transport_security,
+            )
+        return cls(
+            settings,
+            StartupIdentity.from_configured_credential(settings),
+            transport_security=transport_security,
+        )
 
     def session_for_request(self, request: Request | None) -> PipefyClient:
         """Open a session bound to the current request's identity.

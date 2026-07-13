@@ -20,7 +20,6 @@ from pipefy_mcp.auth import (
     ResourceServer,
     build_resource_server_auth,
 )
-from pipefy_mcp.settings import ResourceServerSettings
 
 _RESOURCE = "https://mcp.example.com/mcp"
 _ISSUER = "https://idp.example.com/realms/x"
@@ -191,7 +190,7 @@ def test_build_stamps_resource_server_url_not_audience() -> None:
     token's stamped resource must match it, not the (often unset) audience.
     """
     verifier, _ = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
+        ResourceServer.from_url(_RESOURCE),
         # audience set and distinct from resource_server_url: the stamped resource
         # must follow resource_server_url, not audience.
         JwtValidationSettings(
@@ -207,7 +206,7 @@ def test_build_stamps_resource_server_url_not_audience() -> None:
 def test_build_advertises_the_parsed_resource_url_in_the_metadata() -> None:
     """AuthSettings' resource_server_url comes from the parsed ResourceServer carrier."""
     _, auth = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
+        ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
         default_issuer_url=_ISSUER,
     )
@@ -218,7 +217,7 @@ def test_build_advertises_the_parsed_resource_url_in_the_metadata() -> None:
 def test_build_skips_audience_by_default() -> None:
     """No audience config folds to SkipAudience: the validator does not check aud."""
     verifier, _ = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
+        ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
         default_issuer_url=_ISSUER,
     )
@@ -230,7 +229,7 @@ def test_build_skips_audience_by_default() -> None:
 def test_build_requires_audience_when_verifying() -> None:
     """verify_audience with an audience folds to RequireAudience(audience)."""
     verifier, _ = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
+        ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(
             audience="api://x",
             verify_audience=True,
@@ -243,23 +242,10 @@ def test_build_requires_audience_when_verifying() -> None:
 
 
 @pytest.mark.unit
-def test_build_inactive_when_unconfigured() -> None:
-    """No resource_server_url means no auth: the profile is off, not an error."""
-    assert (
-        build_resource_server_auth(
-            ResourceServerSettings(),
-            JwtValidationSettings(),
-            default_issuer_url=_ISSUER,
-        )
-        is None
-    )
-
-
-@pytest.mark.unit
 def test_build_issuer_defaults_to_login_issuer() -> None:
     """With no inbound override, the inbound issuer is the login issuer."""
     _, auth = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
+        ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
         default_issuer_url=_ISSUER,
     )
@@ -271,7 +257,7 @@ def test_build_inbound_issuer_overrides_login_issuer() -> None:
     """An explicit inbound issuer wins over the login issuer."""
     override = "https://other-idp.example.com/realms/y"
     _, auth = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
+        ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(
             issuer_url=override, jwks_uri="https://other-idp.example.com/jwks"
         ),
@@ -285,7 +271,7 @@ def test_build_without_resolvable_issuer_raises() -> None:
     """resource_server_url set but no issuer (override or login) is a misconfiguration."""
     with pytest.raises(RuntimeError, match="no inbound issuer"):
         build_resource_server_auth(
-            ResourceServerSettings(resource_server_url=_RESOURCE),
+            ResourceServer.from_url(_RESOURCE),
             JwtValidationSettings(),
             default_issuer_url=None,
         )

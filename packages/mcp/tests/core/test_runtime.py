@@ -3,7 +3,12 @@ from unittest.mock import patch
 
 import httpx
 import pytest
-from _rs_fixtures import authenticated_user, remote_rs_settings, request_with_user
+from _rs_fixtures import (
+    RS_RESOURCE,
+    authenticated_user,
+    remote_rs_settings,
+    request_with_user,
+)
 from pipefy_auth import (
     AuthSettings,
     RefreshableBearerAuth,
@@ -126,6 +131,38 @@ class TestForProfile:
 
         assert runtime.inbound_auth is not None
         assert isinstance(runtime._identity, RequestScopedIdentity)
+
+    @pytest.mark.unit
+    def test_remote_feeds_one_resource_to_the_allowlist_and_the_inbound_metadata(self):
+        """The parsed resource host reaches the transport allowlist and the RS metadata.
+
+        The composition root parses ``resource_server_url`` once and feeds that one
+        :class:`ResourceServer` to both builders, so the allowlist's public host and
+        the advertised metadata resource cannot disagree.
+        """
+        runtime = McpRuntime.for_profile(remote_rs_settings())
+
+        assert runtime.transport_security is not None
+        assert "mcp.example.com" in runtime.transport_security.allowed_hosts
+        _, auth = runtime.inbound_auth
+        assert str(auth.resource_server_url).rstrip("/") == RS_RESOURCE
+
+    @pytest.mark.unit
+    def test_local_builds_the_transport_allowlist_from_explicit_hosts(
+        self, clear_auth_env
+    ):
+        """A local profile still builds the allowlist from PIPEFY_MCP_ALLOWED_HOSTS."""
+        settings = Settings(
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            auth=AuthSettings(static_token="env-bearer"),
+            mcp=McpSettings(allowed_hosts=["proxy.internal"]),
+        )
+
+        runtime = McpRuntime.for_profile(settings)
+
+        assert runtime.inbound_auth is None
+        assert runtime.transport_security is not None
+        assert "proxy.internal" in runtime.transport_security.allowed_hosts
 
     @pytest.mark.unit
     def test_remote_snapshots_the_callers_bearer_into_its_session(self):

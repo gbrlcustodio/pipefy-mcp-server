@@ -14,6 +14,7 @@ from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.core.tool_middleware import ToolCallContext, short_circuit_error
+from pipefy_mcp.core.transport_security import build_transport_security
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.server import (
     _make_lifespan,
@@ -70,6 +71,7 @@ def mocked_runtime():
     runtime = MagicMock()
     runtime.session_for_request.return_value = MagicMock()
     runtime.inbound_auth = None
+    runtime.transport_security = None
     with patch("pipefy_mcp.server.McpRuntime.for_profile", return_value=runtime):
         yield runtime
 
@@ -521,24 +523,25 @@ _PUBLIC_HOST_PING = {
 
 
 @pytest.mark.unit
-def test_build_passes_none_transport_security_for_a_plain_local_build(mocked_runtime):
-    """With no resource URL or allowlist, FastMCP keeps its own loopback default."""
+def test_build_passes_the_runtimes_none_transport_security_to_fastmcp(mocked_runtime):
+    """When the runtime built no allowlist, FastMCP keeps its own loopback default."""
     with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
         build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
     assert mock_fastmcp.call_args.kwargs["transport_security"] is None
 
 
 @pytest.mark.unit
-def test_build_passes_the_derived_allowlist_to_fastmcp(mocked_runtime):
-    """A configured allowlist reaches the FastMCP constructor as transport_security."""
-    settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
-        update={"mcp": McpSettings(allowed_hosts=["mcp.pipefy.com"])}
+def test_build_passes_the_runtimes_allowlist_to_fastmcp(mocked_runtime):
+    """The allowlist the runtime built reaches the FastMCP constructor verbatim."""
+    mocked_runtime.transport_security = build_transport_security(
+        McpSettings(allowed_hosts=["mcp.pipefy.com"]), None
     )
     with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
-        build_pipefy_mcp_server(settings)
-    security = mock_fastmcp.call_args.kwargs["transport_security"]
-    assert security is not None
-    assert "mcp.pipefy.com" in security.allowed_hosts
+        build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
+    assert (
+        mock_fastmcp.call_args.kwargs["transport_security"]
+        is mocked_runtime.transport_security
+    )
 
 
 @pytest.mark.unit
@@ -562,10 +565,10 @@ async def test_http_configured_allowlist_accepts_a_public_host(mocked_runtime):
     It no longer 421s; it reaches the transport handler (which then fails on the
     missing session, not on DNS-rebinding), proving the allowlist widened the gate.
     """
-    settings = _MINIMAL_PIPEFY_SETTINGS.model_copy(
-        update={"mcp": McpSettings(allowed_hosts=["mcp.pipefy.com"])}
+    mocked_runtime.transport_security = build_transport_security(
+        McpSettings(allowed_hosts=["mcp.pipefy.com"]), None
     )
-    app = build_pipefy_mcp_server(settings)
+    app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
     async with _serving_asgi_client(app) as client:
         resp = await client.post("/mcp", **_PUBLIC_HOST_PING)
     assert resp.status_code != 421

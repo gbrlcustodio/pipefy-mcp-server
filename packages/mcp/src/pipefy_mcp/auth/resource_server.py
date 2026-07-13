@@ -36,8 +36,6 @@ from pipefy_auth import (
     SkipAudience,
 )
 
-from pipefy_mcp.settings import ResourceServerSettings
-
 logger = logging.getLogger(__name__)
 
 
@@ -168,30 +166,24 @@ ResourceServerAuth = tuple[JwtTokenVerifier, FastMcpAuthSettings]
 
 
 def build_resource_server_auth(
-    rs: ResourceServerSettings,
+    resource: ResourceServer,
     jwt_validation: JwtValidationSettings,
     *,
+    required_scopes: list[str] | None = None,
     default_issuer_url: str | None,
-) -> ResourceServerAuth | None:
-    """Build the inbound bearer verifier and FastMCP auth config, or ``None``.
+) -> ResourceServerAuth:
+    """Build the inbound bearer verifier and FastMCP auth config for ``resource``.
 
-    The resource-server profile has no enable flag: it is active when this
-    server's ``resource_server_url`` is configured. Absent it, this returns
-    ``None`` and the unauthenticated foundation profile constructs ``FastMCP``
-    exactly as before.
+    Called only when the resource-server profile is active: the composition root
+    parses the configured ``resource_server_url`` into ``resource`` and gates on its
+    presence, so this receives an already-parsed identity and never a ``None``.
 
     The inbound issuer is ``jwt_validation.issuer_url`` if set, else
     ``default_issuer_url`` (see :class:`JwtValidationSettings` for why the login
-    issuer is the fallback). With ``resource_server_url`` set but no issuer
-    resolvable (the stored-session login is disabled and no override is given),
-    validation is impossible, so this raises rather than serve an open endpoint.
+    issuer is the fallback). With ``resource`` set but no issuer resolvable (the
+    stored-session login is disabled and no override is given), validation is
+    impossible, so this raises rather than serve an open endpoint.
     """
-    if rs.resource_server_url is None:
-        return None
-    # Parse the RFC 9728 resource identity into the ResourceServer this module owns,
-    # so the token's stamped resource and the advertised metadata both read from the
-    # one carrier rather than the raw setting.
-    resource = ResourceServer.from_url(rs.resource_server_url)
     issuer_url = jwt_validation.resolve_issuer_url(default_issuer_url)
     if issuer_url is None:
         raise RuntimeError(
@@ -220,6 +212,6 @@ def build_resource_server_auth(
     auth = FastMcpAuthSettings(
         issuer_url=issuer_url,
         resource_server_url=resource.url,
-        required_scopes=rs.required_scopes,
+        required_scopes=required_scopes,
     )
     return verifier, auth

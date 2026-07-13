@@ -57,7 +57,7 @@ def build_transport_security(
     which rejects any request that sends an Origin) is honored verbatim; only an unset
     list falls back to the origins derived from the allowed hosts.
     """
-    public_hosts = list(resource.host_forms) if resource else []
+    public_hosts = list(resource.host_authorities) if resource else []
     public_hosts += mcp.allowed_hosts or []
     explicit_origins = mcp.allowed_origins
 

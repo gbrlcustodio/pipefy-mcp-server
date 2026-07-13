@@ -44,31 +44,32 @@ class ResourceServer:
     """A validated resource-server URL paired with its parsed Host authorities.
 
     Built by :meth:`from_url` at composition, so holding one is proof its
-    ``host_forms`` are resolved before any read. ``url`` is the verbatim RFC 9728
-    resource identifier (kept exact, as clients compare against it); ``host_forms``
-    are the Host-header wire forms it presents, which the transport allowlist widens.
+    ``host_authorities`` are resolved before any read. ``url`` is the verbatim RFC 9728
+    resource identifier (kept exact, as clients compare against it); ``host_authorities``
+    are the ``host[:port]`` values it presents in the ``Host`` header, which the
+    transport allowlist widens.
     """
 
     url: str
-    host_forms: tuple[str, ...]
+    host_authorities: tuple[str, ...]
 
     @classmethod
     def from_url(cls, url: str) -> ResourceServer:
-        """Parse an already-validated URL into its wire-form Host authorities.
+        """Parse an already-validated URL into its ``Host`` header authorities.
 
         An IPv6 literal is bracketed, as the wire Host carries it (``urlparse``
         reports it unbracketed); a URL that names a port also contributes the
-        ``host:port`` form.
+        ``host:port`` authority.
         """
         parsed = urlparse(url)
         hostname = parsed.hostname
-        forms: list[str] = []
+        authorities: list[str] = []
         if hostname:
             host = f"[{hostname}]" if ":" in hostname else hostname
-            forms.append(host)
+            authorities.append(host)
             if parsed.port:
-                forms.append(f"{host}:{parsed.port}")
-        return cls(url=url, host_forms=tuple(forms))
+                authorities.append(f"{host}:{parsed.port}")
+        return cls(url=url, host_authorities=tuple(authorities))
 
 
 class PipefyAccessToken(AccessToken):

@@ -197,7 +197,7 @@ def test_build_stamps_resource_server_url_not_audience() -> None:
             audience="urn:some-other-audience",
             jwks_uri="https://idp.example.com/jwks",
         ),
-        default_issuer_url=_ISSUER,
+        issuer_url=_ISSUER,
     )
     assert verifier._resource == _RESOURCE
 
@@ -208,7 +208,7 @@ def test_build_advertises_the_parsed_resource_url_in_the_metadata() -> None:
     _, auth = build_resource_server_auth(
         ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
-        default_issuer_url=_ISSUER,
+        issuer_url=_ISSUER,
     )
     assert str(auth.resource_server_url).rstrip("/") == _RESOURCE
 
@@ -219,7 +219,7 @@ def test_build_skips_audience_by_default() -> None:
     verifier, _ = build_resource_server_auth(
         ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
-        default_issuer_url=_ISSUER,
+        issuer_url=_ISSUER,
     )
     assert verifier._validator._verify_aud is False
     assert verifier._validator._audience is None
@@ -235,46 +235,25 @@ def test_build_requires_audience_when_verifying() -> None:
             verify_audience=True,
             jwks_uri="https://idp.example.com/jwks",
         ),
-        default_issuer_url=_ISSUER,
+        issuer_url=_ISSUER,
     )
     assert verifier._validator._verify_aud is True
     assert verifier._validator._audience == "api://x"
 
 
 @pytest.mark.unit
-def test_build_issuer_defaults_to_login_issuer() -> None:
-    """With no inbound override, the inbound issuer is the login issuer."""
+def test_build_advertises_the_given_issuer() -> None:
+    """The resolved issuer the composition root passes is advertised verbatim.
+
+    Resolving the issuer (override vs login fallback, and the unresolvable fail-fast)
+    is the runtime's job; this pins only that the builder wires it onto AuthSettings.
+    """
     _, auth = build_resource_server_auth(
         ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
-        default_issuer_url=_ISSUER,
+        issuer_url=_ISSUER,
     )
     assert str(auth.issuer_url).rstrip("/") == _ISSUER
-
-
-@pytest.mark.unit
-def test_build_inbound_issuer_overrides_login_issuer() -> None:
-    """An explicit inbound issuer wins over the login issuer."""
-    override = "https://other-idp.example.com/realms/y"
-    _, auth = build_resource_server_auth(
-        ResourceServer.from_url(_RESOURCE),
-        JwtValidationSettings(
-            issuer_url=override, jwks_uri="https://other-idp.example.com/jwks"
-        ),
-        default_issuer_url=_ISSUER,
-    )
-    assert str(auth.issuer_url).rstrip("/") == override
-
-
-@pytest.mark.unit
-def test_build_without_resolvable_issuer_raises() -> None:
-    """resource_server_url set but no issuer (override or login) is a misconfiguration."""
-    with pytest.raises(RuntimeError, match="no inbound issuer"):
-        build_resource_server_auth(
-            ResourceServer.from_url(_RESOURCE),
-            JwtValidationSettings(),
-            default_issuer_url=None,
-        )
 
 
 # --- ResourceServer.from_url (host-authority parsing) -------------------------

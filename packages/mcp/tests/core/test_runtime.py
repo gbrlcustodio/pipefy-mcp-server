@@ -4,6 +4,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 from _rs_fixtures import (
+    RS_JWKS_URI,
     RS_RESOURCE,
     authenticated_user,
     remote_rs_settings,
@@ -11,6 +12,7 @@ from _rs_fixtures import (
 )
 from pipefy_auth import (
     AuthSettings,
+    JwtValidationSettings,
     RefreshableBearerAuth,
     StaticBearerAuth,
     TokenResponse,
@@ -187,6 +189,25 @@ class TestForProfile:
             mcp=McpSettings(profile="remote"),
         )
         with pytest.raises(RuntimeError, match="requires a resource server"):
+            McpRuntime.for_profile(settings)
+
+    @pytest.mark.unit
+    def test_remote_without_resolvable_issuer_fails_fast(self, monkeypatch):
+        """Remote with a resource but no inbound issuer (override or login) refuses to build.
+
+        The composition root resolves the inbound issuer and gates on it, so a
+        resource server with no issuer to validate its bearers fails fast here rather
+        than in the auth builder. Disabling the stored-session login drops the login
+        issuer and the delenv drops the explicit override, so neither source resolves.
+        """
+        monkeypatch.delenv("PIPEFY_JWT_ISSUER_URL", raising=False)
+        settings = remote_rs_settings().model_copy(
+            update={
+                "auth": AuthSettings(disable_stored_session=True),
+                "jwt": JwtValidationSettings(jwks_uri=RS_JWKS_URI),
+            }
+        )
+        with pytest.raises(RuntimeError, match="requires an inbound issuer"):
             McpRuntime.for_profile(settings)
 
     @pytest.mark.unit

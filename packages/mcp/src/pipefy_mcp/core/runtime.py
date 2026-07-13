@@ -180,9 +180,10 @@ class McpRuntime:
 
         ``remote`` acts on behalf of each caller: it validates a per-request bearer
         (the inbound ``(verifier, auth)`` pair) and each session replays that caller's
-        snapshotted bearer (:class:`RequestScopedIdentity`). A configured resource
-        server is mandatory here, so this fails fast when none resolves rather than
-        serve an open endpoint or silently fall back to a startup credential.
+        snapshotted bearer (:class:`RequestScopedIdentity`). A resource server and a
+        resolvable inbound issuer are both mandatory here, so this gates on each and
+        fails fast rather than serve an open endpoint or silently fall back to a
+        startup credential.
         """
         if resource is None:
             raise RuntimeError(
@@ -190,11 +191,21 @@ class McpRuntime:
                 "PIPEFY_MCP_RS_RESOURCE_SERVER_URL so the server validates a "
                 "per-request bearer and acts on behalf of the caller."
             )
+        # The inbound issuer is the explicit PIPEFY_JWT_ISSUER_URL override, else the
+        # login issuer this process authenticates against; with neither, the bearers
+        # cannot be validated, so refuse to build rather than serve an open endpoint.
+        issuer_url = settings.jwt.resolve_issuer_url(_login_issuer_url(settings))
+        if issuer_url is None:
+            raise RuntimeError(
+                "the 'remote' profile requires an inbound issuer: set "
+                "PIPEFY_JWT_ISSUER_URL, or leave the stored-session login enabled so "
+                "its issuer can be reused."
+            )
         inbound_auth = build_resource_server_auth(
             resource,
             settings.jwt,
+            issuer_url=issuer_url,
             required_scopes=settings.rs.required_scopes,
-            default_issuer_url=_login_issuer_url(settings),
         )
         return cls(
             settings,

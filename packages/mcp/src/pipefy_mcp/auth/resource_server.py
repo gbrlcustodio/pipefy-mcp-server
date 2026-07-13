@@ -169,29 +169,17 @@ def build_resource_server_auth(
     resource: ResourceServer,
     jwt_validation: JwtValidationSettings,
     *,
-    default_issuer_url: str | None,
+    issuer_url: str,
     required_scopes: list[str] | None = None,
 ) -> ResourceServerAuth:
     """Build the inbound bearer verifier and FastMCP auth config for ``resource``.
 
     Called only when the resource-server profile is active: the composition root
-    parses the configured ``resource_server_url`` into ``resource`` and gates on its
-    presence, so this receives an already-parsed identity and never a ``None``.
-
-    The inbound issuer is ``jwt_validation.issuer_url`` if set, else
-    ``default_issuer_url`` (see :class:`JwtValidationSettings` for why the login
-    issuer is the fallback). With ``resource`` set but no issuer resolvable (the
-    stored-session login is disabled and no override is given), validation is
-    impossible, so this raises rather than serve an open endpoint.
+    parses the configured ``resource_server_url`` into ``resource`` and resolves the
+    inbound ``issuer_url`` (gating on both, so an unresolvable issuer fails fast at
+    the root). This receives an already-parsed identity and a resolved issuer and just
+    wires them onto the validator and FastMCP's ``AuthSettings``.
     """
-    issuer_url = jwt_validation.resolve_issuer_url(default_issuer_url)
-    if issuer_url is None:
-        raise RuntimeError(
-            "The resource-server profile is active "
-            "(PIPEFY_MCP_RS_RESOURCE_SERVER_URL is set) but no inbound issuer is "
-            "resolvable: set PIPEFY_JWT_ISSUER_URL, or leave the stored-session "
-            "login enabled so its issuer can be reused."
-        )
     # Fold the loose audience pair into the AudiencePolicy sum type. A
     # verify-without-audience is already rejected at JwtValidationSettings
     # construction, so `is not None` only narrows the Optional for the type

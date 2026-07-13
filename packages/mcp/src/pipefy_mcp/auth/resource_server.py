@@ -169,8 +169,8 @@ def build_resource_server_auth(
     resource: ResourceServer,
     jwt_validation: JwtValidationSettings,
     *,
-    required_scopes: list[str] | None = None,
     default_issuer_url: str | None,
+    required_scopes: list[str] | None = None,
 ) -> ResourceServerAuth:
     """Build the inbound bearer verifier and FastMCP auth config for ``resource``.
 

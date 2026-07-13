@@ -16,17 +16,17 @@ owns no concern folder of its own, and the mcp-SDK type is kept out of
 ``settings.py`` so the config boundary stays framework-free.
 
 The public host is derived from ``resource_server_url`` (which the remote profile
-already requires), so the standard fronted deployment needs no allowlist config;
-``allowed_hosts`` / ``allowed_origins`` extend it. When nothing is configured the
-function returns ``None``, leaving FastMCP's own loopback default in force.
+already requires) via :class:`pipefy_mcp.auth.ResourceServer`, so the standard fronted deployment
+needs no allowlist config; ``allowed_hosts`` / ``allowed_origins`` extend it. When
+nothing is configured the function returns ``None``, leaving FastMCP's own loopback
+default in force.
 """
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
-
 from mcp.server.transport_security import TransportSecuritySettings
 
+from pipefy_mcp.auth import ResourceServer
 from pipefy_mcp.settings import Settings
 
 # Loopback entries kept in every explicit allowlist so widening for a proxy does
@@ -45,21 +45,6 @@ def _host_forms(host: str) -> tuple[str, str]:
     return host, f"{host}:*"
 
 
-def _resource_hosts(resource_server_url: str | None) -> list[str]:
-    """The public Host forms carried by ``resource_server_url``, if set."""
-    if not resource_server_url:
-        return []
-    parsed = urlparse(resource_server_url)
-    hosts: list[str] = []
-    if parsed.hostname:
-        hosts.append(parsed.hostname)
-    # netloc carries host:port; include it when a port is present so a proxy that
-    # forwards "host:port" as the Host still matches the exact form.
-    if parsed.port and parsed.netloc not in hosts:
-        hosts.append(parsed.netloc)
-    return hosts
-
-
 def build_transport_security(settings: Settings) -> TransportSecuritySettings | None:
     """Resolve the transport allowlist, or ``None`` to keep FastMCP's default.
 
@@ -69,7 +54,9 @@ def build_transport_security(settings: Settings) -> TransportSecuritySettings | 
     preserved. Otherwise it enables DNS-rebinding protection over loopback plus the
     derived public host and any explicit entries.
     """
-    public_hosts = _resource_hosts(settings.rs.resource_server_url)
+    url = settings.rs.resource_server_url
+    resource = ResourceServer.from_url(url) if url else None
+    public_hosts = list(resource.host_forms) if resource else []
     public_hosts += settings.mcp.allowed_hosts or []
     explicit_origins = settings.mcp.allowed_origins
 

@@ -53,6 +53,32 @@ def test_resource_server_url_with_explicit_port_keeps_host_and_hostport():
 
 
 @pytest.mark.unit
+def test_ipv6_literal_resource_url_is_bracketed_to_match_the_wire_host():
+    """An IPv6-literal host is bracketed, as the Host header carries it.
+
+    urlparse reports the hostname unbracketed ('2606:4700:4700::1111'), but a
+    client sends the bracketed form; without re-bracketing every request 421s.
+    """
+    security = build_transport_security(
+        _settings(resource_server_url="https://[2606:4700:4700::1111]/mcp")
+    )
+    assert security is not None
+    assert "[2606:4700:4700::1111]" in security.allowed_hosts
+    assert "[2606:4700:4700::1111]:*" in security.allowed_hosts
+
+
+@pytest.mark.unit
+def test_ipv6_literal_with_port_keeps_bracketed_host_and_hostport():
+    """A ported IPv6 URL contributes both the bracketed host and host:port."""
+    security = build_transport_security(
+        _settings(resource_server_url="https://[2606:4700:4700::1111]:8443/mcp")
+    )
+    assert security is not None
+    assert "[2606:4700:4700::1111]" in security.allowed_hosts
+    assert "[2606:4700:4700::1111]:8443" in security.allowed_hosts
+
+
+@pytest.mark.unit
 def test_explicit_allowed_hosts_extend_the_derived_set():
     """PIPEFY_MCP_ALLOWED_HOSTS adds to loopback and the resource host."""
     security = build_transport_security(

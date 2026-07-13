@@ -15,7 +15,11 @@ from typing import Any
 import pytest
 from pipefy_auth import JwtValidationSettings, TokenValidationError
 
-from pipefy_mcp.auth import JwtTokenVerifier, build_resource_server_auth
+from pipefy_mcp.auth import (
+    JwtTokenVerifier,
+    ResourceServer,
+    build_resource_server_auth,
+)
 from pipefy_mcp.settings import ResourceServerSettings
 
 _RESOURCE = "https://mcp.example.com/mcp"
@@ -274,3 +278,26 @@ def test_build_without_resolvable_issuer_raises() -> None:
             JwtValidationSettings(),
             default_issuer_url=None,
         )
+
+
+# --- ResourceServer.from_url (host-authority parsing) -------------------------
+
+
+@pytest.mark.unit
+def test_resource_server_keeps_the_verbatim_url_and_derives_bare_host() -> None:
+    resource = ResourceServer.from_url("https://mcp.pipefy.com/mcp")
+    assert resource.url == "https://mcp.pipefy.com/mcp"
+    assert resource.host_forms == ("mcp.pipefy.com",)
+
+
+@pytest.mark.unit
+def test_resource_server_adds_host_port_when_url_names_a_port() -> None:
+    resource = ResourceServer.from_url("https://mcp.pipefy.com:8443/mcp")
+    assert resource.host_forms == ("mcp.pipefy.com", "mcp.pipefy.com:8443")
+
+
+@pytest.mark.unit
+def test_resource_server_brackets_an_ipv6_literal() -> None:
+    """urlparse reports the host unbracketed; the wire Host is bracketed."""
+    resource = ResourceServer.from_url("https://[2001:db8::1]:8443/mcp")
+    assert resource.host_forms == ("[2001:db8::1]", "[2001:db8::1]:8443")

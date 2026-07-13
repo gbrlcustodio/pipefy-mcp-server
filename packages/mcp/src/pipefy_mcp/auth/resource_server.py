@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
@@ -37,6 +39,38 @@ from pipefy_auth import (
 from pipefy_mcp.settings import ResourceServerSettings
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ResourceServer:
+    """A validated resource-server URL paired with its parsed Host authorities.
+
+    Built by :meth:`from_url` at composition, so holding one is proof its
+    ``host_forms`` are resolved before any read. ``url`` is the verbatim RFC 9728
+    resource identifier (kept exact, as clients compare against it); ``host_forms``
+    are the Host-header wire forms it presents, which the transport allowlist widens.
+    """
+
+    url: str
+    host_forms: tuple[str, ...]
+
+    @classmethod
+    def from_url(cls, url: str) -> ResourceServer:
+        """Parse an already-validated URL into its wire-form Host authorities.
+
+        An IPv6 literal is bracketed, as the wire Host carries it (``urlparse``
+        reports it unbracketed); a URL that names a port also contributes the
+        ``host:port`` form.
+        """
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        forms: list[str] = []
+        if hostname:
+            host = f"[{hostname}]" if ":" in hostname else hostname
+            forms.append(host)
+            if parsed.port:
+                forms.append(f"{host}:{parsed.port}")
+        return cls(url=url, host_forms=tuple(forms))
 
 
 class PipefyAccessToken(AccessToken):

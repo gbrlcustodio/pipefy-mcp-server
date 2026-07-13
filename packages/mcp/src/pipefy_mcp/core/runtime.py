@@ -4,15 +4,13 @@ from mcp.server.transport_security import TransportSecuritySettings
 from pipefy_sdk import PipefyClient, PipefyEngine
 from starlette.requests import Request
 
-from pipefy_mcp.auth.resource_server import (
-    ResourceServer,
-    ResourceServerAuth,
-    build_resource_server_auth,
-)
-from pipefy_mcp.auth.session_identity import (
+from pipefy_mcp.auth import (
     AuthSource,
     RequestScopedIdentity,
+    ResourceServer,
+    ResourceServerAuth,
     StartupIdentity,
+    build_resource_server_auth,
 )
 from pipefy_mcp.core.transport_security import build_transport_security
 from pipefy_mcp.settings import ResourceServerSettings, Settings

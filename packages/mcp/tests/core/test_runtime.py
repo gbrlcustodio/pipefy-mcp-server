@@ -21,11 +21,8 @@ from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefyClient, PipefySettings
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
-from pipefy_mcp.core.runtime import (
-    McpRuntime,
-    RequestScopedIdentity,
-    StartupIdentity,
-)
+from pipefy_mcp.auth import RequestScopedIdentity, StartupIdentity
+from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.settings import McpSettings, Settings
 
 

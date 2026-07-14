@@ -306,3 +306,18 @@ def test_mcp_allowlists_strip_and_drop_empty_entries():
     )
     assert mcp.allowed_hosts == ["mcp.pipefy.com", "localhost"]
     assert mcp.allowed_origins == ["https://mcp.pipefy.com"]
+
+
+@pytest.mark.unit
+def test_mcp_all_blank_allowlist_collapses_to_none_not_empty():
+    """An all-blank list normalizes to None (unset), not the strict empty override.
+
+    ``allowed_origins=[]`` is the reject-all-Origin posture; a fat-fingered blank
+    value (an unfilled template) must not silently select it, so an all-blank list
+    reads as unset. An explicitly empty list is preserved.
+    """
+    mcp = McpSettings(allowed_hosts=["  ", ""], allowed_origins=[" "])
+    assert mcp.allowed_hosts is None
+    assert mcp.allowed_origins is None
+
+    assert McpSettings(allowed_origins=[]).allowed_origins == []

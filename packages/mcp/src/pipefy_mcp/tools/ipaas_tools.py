@@ -21,7 +21,8 @@ _NOT_CONFIGURED_MESSAGE = (
 
 
 def _first_line(text: str | None) -> str:
-    return (text or "").strip().splitlines()[0] if (text or "").strip() else ""
+    stripped = (text or "").strip()
+    return stripped.splitlines()[0] if stripped else ""
 
 
 class IpaasTools:

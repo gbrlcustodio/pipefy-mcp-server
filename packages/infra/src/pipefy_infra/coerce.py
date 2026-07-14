@@ -22,6 +22,7 @@ caller wants.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from typing import TypeVar
 
 T = TypeVar("T")
@@ -75,6 +76,16 @@ def optional_float(value: object) -> float | None:
     return result
 
 
+def nonempty_strs(values: Iterable[object]) -> list[str]:
+    """Strip each value via :func:`optional_str` and drop the ones that vanish.
+
+    The list counterpart to :func:`optional_str`: ``None``, empty, whitespace-only,
+    and misshapen (bool/bytes) entries are dropped, so the result holds only real,
+    trimmed strings. Order is preserved and duplicates are kept.
+    """
+    return [s for value in values if (s := optional_str(value)) is not None]
+
+
 def try_int(value: T) -> T | int:
     """Return ``int(value)``, or ``value`` unchanged if conversion fails.
 
@@ -92,4 +103,10 @@ def try_int(value: T) -> T | int:
         return value
 
 
-__all__ = ["optional_float", "optional_int", "optional_str", "try_int"]
+__all__ = [
+    "nonempty_strs",
+    "optional_float",
+    "optional_int",
+    "optional_str",
+    "try_int",
+]

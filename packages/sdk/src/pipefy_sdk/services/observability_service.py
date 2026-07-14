@@ -8,7 +8,7 @@ from zipfile import BadZipFile
 import httpx
 from openpyxl.utils.exceptions import InvalidFileException
 
-from pipefy_sdk.graphql_executor import PartialGraphQLExecutor, PartialQueryResult
+from pipefy_sdk.graphql_executor import GraphQLExecutor, GraphQLResult
 from pipefy_sdk.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
     GET_AGENTS_USAGE_QUERY,
@@ -163,7 +163,7 @@ def _partial_error(err: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _normalize_execution_metrics_result(result: PartialQueryResult) -> dict[str, Any]:
+def _normalize_execution_metrics_result(result: GraphQLResult) -> dict[str, Any]:
     """Split a partial ``automations.executionMetrics`` response into nodes and errors.
 
     The sole failure decision for this query: a missing or null ``automations``
@@ -189,7 +189,7 @@ def _normalize_execution_metrics_result(result: PartialQueryResult) -> dict[str,
 class ObservabilityService:
     """Reads for AI agent logs, automation logs, usage stats, and credit dashboard."""
 
-    def __init__(self, *, executor: PartialGraphQLExecutor) -> None:
+    def __init__(self, *, executor: GraphQLExecutor) -> None:
         self._executor = executor
 
     async def get_automation_execution_metrics(
@@ -245,7 +245,7 @@ class ObservabilityService:
             sort_by=sort_by,
             sort_order=sort_order,
         )
-        result = await self._executor.execute_query_allow_partial(
+        result = await self._executor.execute(
             GET_AUTOMATION_EXECUTION_METRICS_QUERY, variables
         )
         return _normalize_execution_metrics_result(result)

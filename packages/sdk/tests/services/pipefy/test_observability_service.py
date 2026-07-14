@@ -10,7 +10,7 @@ from _shared.mock_clients import mock_executor
 from gql.transport.exceptions import TransportQueryError
 from openpyxl import Workbook
 
-from pipefy_sdk.graphql_executor import PartialQueryResult
+from pipefy_sdk.graphql_executor import GraphQLResult
 from pipefy_sdk.queries.observability_queries import (
     CREATE_AUTOMATION_JOBS_EXPORT_MUTATION,
     GET_AGENTS_USAGE_QUERY,
@@ -34,7 +34,7 @@ def _make_service(return_value):
 
 
 def _make_partial_service(partial_result):
-    executor = mock_executor(partial_result=partial_result)
+    executor = mock_executor(execute_result=partial_result)
     service = ObservabilityService(executor=executor)
     return service, executor
 
@@ -559,7 +559,7 @@ def _denied_error(automation_id: str) -> dict:
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_all_permitted():
     """Full success: all requested automations return metrics, no partial errors."""
-    partial_result = PartialQueryResult(
+    partial_result = GraphQLResult(
         data={
             "automations": {
                 "pageInfo": {"hasNextPage": False, "endCursor": "cur-2"},
@@ -577,8 +577,8 @@ async def test_get_automation_execution_metrics_all_permitted():
         "3", ["25", "107"], repo_id="16", period="TWENTY_FOUR_HOURS"
     )
 
-    executor.execute_query_allow_partial.assert_awaited_once()
-    query, variables = executor.execute_query_allow_partial.call_args[0]
+    executor.execute.assert_awaited_once()
+    query, variables = executor.execute.call_args[0]
     assert query is GET_AUTOMATION_EXECUTION_METRICS_QUERY
     assert variables == {
         "organizationId": "3",
@@ -597,7 +597,7 @@ async def test_get_automation_execution_metrics_all_permitted():
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_partial_permission_denied():
     """Partial success: permitted nodes returned, denied ids surfaced in partial_errors."""
-    partial_result = PartialQueryResult(
+    partial_result = GraphQLResult(
         data={"automations": {"edges": [{"node": _metrics_node("25", total_runs=3)}]}},
         errors=[_denied_error("124"), _denied_error("65")],
     )
@@ -620,7 +620,7 @@ async def test_get_automation_execution_metrics_partial_permission_denied():
             "correlation_id": "c86ccfa6",
         },
     ]
-    _, variables = executor.execute_query_allow_partial.call_args[0]
+    _, variables = executor.execute.call_args[0]
     assert "repoId" not in variables
 
 
@@ -628,7 +628,7 @@ async def test_get_automation_execution_metrics_partial_permission_denied():
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_all_denied_stays_partial():
     """Every requested id denied but the connection is present: empty list, not a raise."""
-    partial_result = PartialQueryResult(
+    partial_result = GraphQLResult(
         data={"automations": {"edges": []}},
         errors=[_denied_error("124"), _denied_error("65")],
     )
@@ -644,7 +644,7 @@ async def test_get_automation_execution_metrics_all_denied_stays_partial():
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_null_connection_raises():
     """A null automations connection (lookup failed) is a total failure, not empty success."""
-    partial_result = PartialQueryResult(
+    partial_result = GraphQLResult(
         data={"automations": None},
         errors=[
             {
@@ -663,7 +663,7 @@ async def test_get_automation_execution_metrics_null_connection_raises():
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_null_connection_without_errors_raises():
     """A null connection raises even when the response carries no error to quote."""
-    partial_result = PartialQueryResult(data={"automations": None}, errors=[])
+    partial_result = GraphQLResult(data={"automations": None}, errors=[])
     service, _ = _make_partial_service(partial_result)
 
     with pytest.raises(ValueError, match="Query failed."):
@@ -674,7 +674,7 @@ async def test_get_automation_execution_metrics_null_connection_without_errors_r
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_empty_data_raises():
     """A fully null response (executor hands back empty data) fails through the same decision."""
-    partial_result = PartialQueryResult(
+    partial_result = GraphQLResult(
         data={},
         errors=[{"message": "Couldn't find Organization with 'id'=999"}],
     )
@@ -688,7 +688,7 @@ async def test_get_automation_execution_metrics_empty_data_raises():
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_without_ids_omits_filter():
     """Omitting automation_ids drops the automationIds variable so the query returns all."""
-    partial_result = PartialQueryResult(
+    partial_result = GraphQLResult(
         data={
             "automations": {
                 "edges": [
@@ -703,7 +703,7 @@ async def test_get_automation_execution_metrics_without_ids_omits_filter():
 
     result = await service.get_automation_execution_metrics("3")
 
-    _, variables = executor.execute_query_allow_partial.call_args[0]
+    _, variables = executor.execute.call_args[0]
     assert "automationIds" not in variables
     assert variables == {"organizationId": "3", "period": "SIXTY_MINUTES", "first": 50}
     assert [a["id"] for a in result["automations"]] == ["25", "107"]
@@ -713,7 +713,7 @@ async def test_get_automation_execution_metrics_without_ids_omits_filter():
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_paginates_with_first_and_after():
     """first and after are forwarded; after is omitted when not supplied."""
-    partial_result = PartialQueryResult(
+    partial_result = GraphQLResult(
         data={
             "automations": {
                 "pageInfo": {"hasNextPage": True, "endCursor": "cur-1"},
@@ -728,7 +728,7 @@ async def test_get_automation_execution_metrics_paginates_with_first_and_after()
         "3", first=50, after="cur-0"
     )
 
-    _, variables = executor.execute_query_allow_partial.call_args[0]
+    _, variables = executor.execute.call_args[0]
     assert variables["first"] == 50
     assert variables["after"] == "cur-0"
     assert result["page_info"] == {"hasNextPage": True, "endCursor": "cur-1"}
@@ -738,7 +738,7 @@ async def test_get_automation_execution_metrics_paginates_with_first_and_after()
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_forwards_all_filters():
     """search, active, event_id, action_ids, and sort_by/order map onto the variables."""
-    partial_result = PartialQueryResult(
+    partial_result = GraphQLResult(
         data={"automations": {"edges": [{"node": _metrics_node("25", total_runs=3)}]}},
         errors=[],
     )
@@ -754,7 +754,7 @@ async def test_get_automation_execution_metrics_forwards_all_filters():
         sort_order="asc",
     )
 
-    _, variables = executor.execute_query_allow_partial.call_args[0]
+    _, variables = executor.execute.call_args[0]
     assert variables["actionIds"] == ["9", "10"]
     assert variables["eventId"] == "card_moved"
     assert variables["active"] is True
@@ -766,7 +766,7 @@ async def test_get_automation_execution_metrics_forwards_all_filters():
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_omits_unset_filters():
     """Unset optional filters are absent from the variables (never sent as nulls)."""
-    partial_result = PartialQueryResult(
+    partial_result = GraphQLResult(
         data={"automations": {"edges": []}},
         errors=[],
     )
@@ -774,7 +774,7 @@ async def test_get_automation_execution_metrics_omits_unset_filters():
 
     await service.get_automation_execution_metrics("3")
 
-    _, variables = executor.execute_query_allow_partial.call_args[0]
+    _, variables = executor.execute.call_args[0]
     for absent in ("actionIds", "eventId", "active", "search", "sort"):
         assert absent not in variables
 
@@ -783,7 +783,7 @@ async def test_get_automation_execution_metrics_omits_unset_filters():
 @pytest.mark.asyncio
 async def test_get_automation_execution_metrics_partial_sort_criteria():
     """sort_by alone yields a sort input with only the `by` field set."""
-    partial_result = PartialQueryResult(
+    partial_result = GraphQLResult(
         data={"automations": {"edges": []}},
         errors=[],
     )
@@ -791,5 +791,5 @@ async def test_get_automation_execution_metrics_partial_sort_criteria():
 
     await service.get_automation_execution_metrics("3", sort_by="created_at")
 
-    _, variables = executor.execute_query_allow_partial.call_args[0]
+    _, variables = executor.execute.call_args[0]
     assert variables["sort"] == {"by": "created_at"}

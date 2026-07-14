@@ -17,7 +17,8 @@ from mcp.types import (
 )
 from pipefy_sdk import PipefyClient
 
-from pipefy_mcp.core.runtime import McpRuntime, RequestScopedIdentity
+from pipefy_mcp.auth import RequestScopedIdentity
+from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.core.tool_error_envelope import tool_error, tool_error_message
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.pipe_tool_helpers import (

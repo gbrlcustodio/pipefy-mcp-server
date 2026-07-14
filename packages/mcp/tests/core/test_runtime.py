@@ -3,9 +3,16 @@ from unittest.mock import patch
 
 import httpx
 import pytest
-from _rs_fixtures import authenticated_user, remote_rs_settings, request_with_user
+from _rs_fixtures import (
+    RS_JWKS_URI,
+    RS_RESOURCE,
+    authenticated_user,
+    remote_rs_settings,
+    request_with_user,
+)
 from pipefy_auth import (
     AuthSettings,
+    JwtValidationSettings,
     RefreshableBearerAuth,
     StaticBearerAuth,
     TokenResponse,
@@ -14,11 +21,8 @@ from pipefy_auth.storage import StoredSession
 from pipefy_sdk import PipefyClient, PipefySettings
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
-from pipefy_mcp.core.runtime import (
-    McpRuntime,
-    RequestScopedIdentity,
-    StartupIdentity,
-)
+from pipefy_mcp.auth import RequestScopedIdentity, StartupIdentity
+from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.settings import McpSettings, Settings
 
 
@@ -128,6 +132,38 @@ class TestForProfile:
         assert isinstance(runtime._identity, RequestScopedIdentity)
 
     @pytest.mark.unit
+    def test_remote_feeds_one_resource_to_the_allowlist_and_the_inbound_metadata(self):
+        """The parsed resource host reaches the transport allowlist and the RS metadata.
+
+        The composition root parses ``resource_server_url`` once and feeds that one
+        :class:`ResourceServer` to both builders, so the allowlist's public host and
+        the advertised metadata resource cannot disagree.
+        """
+        runtime = McpRuntime.for_profile(remote_rs_settings())
+
+        assert runtime.transport_security is not None
+        assert "mcp.example.com" in runtime.transport_security.allowed_hosts
+        _, auth = runtime.inbound_auth
+        assert str(auth.resource_server_url).rstrip("/") == RS_RESOURCE
+
+    @pytest.mark.unit
+    def test_local_builds_the_transport_allowlist_from_explicit_hosts(
+        self, clear_auth_env
+    ):
+        """A local profile still builds the allowlist from PIPEFY_MCP_ALLOWED_HOSTS."""
+        settings = Settings(
+            pipefy=PipefySettings(base_url="https://api.pipefy.com"),
+            auth=AuthSettings(static_token="env-bearer"),
+            mcp=McpSettings(allowed_hosts=["proxy.internal"]),
+        )
+
+        runtime = McpRuntime.for_profile(settings)
+
+        assert runtime.inbound_auth is None
+        assert runtime.transport_security is not None
+        assert "proxy.internal" in runtime.transport_security.allowed_hosts
+
+    @pytest.mark.unit
     def test_remote_snapshots_the_callers_bearer_into_its_session(self):
         """A session opened under the remote profile carries the request's validated bearer."""
         runtime = McpRuntime.for_profile(remote_rs_settings())
@@ -151,6 +187,49 @@ class TestForProfile:
         )
         with pytest.raises(RuntimeError, match="requires a resource server"):
             McpRuntime.for_profile(settings)
+
+    @pytest.mark.unit
+    def test_remote_without_resolvable_issuer_fails_fast(self, monkeypatch):
+        """Remote with a resource but no inbound issuer (override or login) refuses to build.
+
+        The composition root resolves the inbound issuer and gates on it, so a
+        resource server with no issuer to validate its bearers fails fast here rather
+        than in the auth builder. Disabling the stored-session login drops the login
+        issuer and the delenv drops the explicit override, so neither source resolves.
+        """
+        monkeypatch.delenv("PIPEFY_JWT_ISSUER_URL", raising=False)
+        settings = remote_rs_settings().model_copy(
+            update={
+                "auth": AuthSettings(disable_stored_session=True),
+                "jwt": JwtValidationSettings(jwks_uri=RS_JWKS_URI),
+            }
+        )
+        with pytest.raises(RuntimeError, match="requires an inbound issuer"):
+            McpRuntime.for_profile(settings)
+
+    @pytest.mark.unit
+    def test_remote_inbound_issuer_defaults_to_the_login_issuer(self, monkeypatch):
+        """With no PIPEFY_JWT_ISSUER_URL override, the inbound issuer is the login issuer.
+
+        A single-realm deployment reuses the IdP the server logs into as the issuer
+        that mints the inbound bearers it validates. ``remote_rs_settings`` pins an
+        explicit override, so drop it and configure only ``auth_url`` (the login
+        issuer) to pin the override-absent fallback the composition root owns
+        (``_login_issuer_url`` -> ``resolve_issuer_url``).
+        """
+        monkeypatch.delenv("PIPEFY_JWT_ISSUER_URL", raising=False)
+        login_issuer = "https://signin.pipefy.com/realms/pipefy"
+        settings = remote_rs_settings().model_copy(
+            update={
+                "auth": AuthSettings(auth_url=login_issuer),
+                "jwt": JwtValidationSettings(jwks_uri=RS_JWKS_URI),
+            }
+        )
+
+        runtime = McpRuntime.for_profile(settings)
+
+        _, auth = runtime.inbound_auth
+        assert str(auth.issuer_url).rstrip("/") == login_issuer
 
     @pytest.mark.unit
     def test_local_static_token_binds_the_static_bearer(self, clear_auth_env):

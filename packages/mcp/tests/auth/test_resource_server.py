@@ -4,8 +4,10 @@ The adapter tests (claims -> AccessToken, reject -> None) use a stub validator t
 pin :class:`JwtTokenVerifier`'s two jobs: mapping validated claims onto the SDK
 ``AccessToken`` and turning a validation failure into ``None`` (which FastMCP
 renders as a 401). The JWT/JWKS validation itself is covered in ``pipefy_auth``'s
-``test_verification.py``. The builder tests pin
-:func:`build_resource_server_auth`'s issuer resolution and active/inactive gating.
+``test_verification.py``. The builder tests pin that
+:func:`build_resource_server_auth` wires an already-resolved issuer onto the verifier
+and ``AuthSettings``; the issuer resolution and active/inactive gating it used to own
+now live at the composition root and are covered in ``core/test_runtime.py``.
 """
 
 from __future__ import annotations
@@ -15,8 +17,11 @@ from typing import Any
 import pytest
 from pipefy_auth import JwtValidationSettings, TokenValidationError
 
-from pipefy_mcp.auth import JwtTokenVerifier, build_resource_server_auth
-from pipefy_mcp.settings import ResourceServerSettings
+from pipefy_mcp.auth import (
+    JwtTokenVerifier,
+    ResourceServer,
+    build_resource_server_auth,
+)
 
 _RESOURCE = "https://mcp.example.com/mcp"
 _ISSUER = "https://idp.example.com/realms/x"
@@ -187,25 +192,36 @@ def test_build_stamps_resource_server_url_not_audience() -> None:
     token's stamped resource must match it, not the (often unset) audience.
     """
     verifier, _ = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
+        ResourceServer.from_url(_RESOURCE),
         # audience set and distinct from resource_server_url: the stamped resource
         # must follow resource_server_url, not audience.
         JwtValidationSettings(
             audience="urn:some-other-audience",
             jwks_uri="https://idp.example.com/jwks",
         ),
-        default_issuer_url=_ISSUER,
+        issuer_url=_ISSUER,
     )
     assert verifier._resource == _RESOURCE
+
+
+@pytest.mark.unit
+def test_build_advertises_the_parsed_resource_url_in_the_metadata() -> None:
+    """AuthSettings' resource_server_url comes from the parsed ResourceServer carrier."""
+    _, auth = build_resource_server_auth(
+        ResourceServer.from_url(_RESOURCE),
+        JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
+        issuer_url=_ISSUER,
+    )
+    assert str(auth.resource_server_url).rstrip("/") == _RESOURCE
 
 
 @pytest.mark.unit
 def test_build_skips_audience_by_default() -> None:
     """No audience config folds to SkipAudience: the validator does not check aud."""
     verifier, _ = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
+        ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
-        default_issuer_url=_ISSUER,
+        issuer_url=_ISSUER,
     )
     assert verifier._validator._verify_aud is False
     assert verifier._validator._audience is None
@@ -215,62 +231,51 @@ def test_build_skips_audience_by_default() -> None:
 def test_build_requires_audience_when_verifying() -> None:
     """verify_audience with an audience folds to RequireAudience(audience)."""
     verifier, _ = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
+        ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(
             audience="api://x",
             verify_audience=True,
             jwks_uri="https://idp.example.com/jwks",
         ),
-        default_issuer_url=_ISSUER,
+        issuer_url=_ISSUER,
     )
     assert verifier._validator._verify_aud is True
     assert verifier._validator._audience == "api://x"
 
 
 @pytest.mark.unit
-def test_build_inactive_when_unconfigured() -> None:
-    """No resource_server_url means no auth: the profile is off, not an error."""
-    assert (
-        build_resource_server_auth(
-            ResourceServerSettings(),
-            JwtValidationSettings(),
-            default_issuer_url=_ISSUER,
-        )
-        is None
-    )
+def test_build_advertises_the_given_issuer() -> None:
+    """The resolved issuer the composition root passes is advertised verbatim.
 
-
-@pytest.mark.unit
-def test_build_issuer_defaults_to_login_issuer() -> None:
-    """With no inbound override, the inbound issuer is the login issuer."""
+    Resolving the issuer (override vs login fallback, and the unresolvable fail-fast)
+    is the runtime's job; this pins only that the builder wires it onto AuthSettings.
+    """
     _, auth = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
+        ResourceServer.from_url(_RESOURCE),
         JwtValidationSettings(jwks_uri="https://idp.example.com/jwks"),
-        default_issuer_url=_ISSUER,
+        issuer_url=_ISSUER,
     )
     assert str(auth.issuer_url).rstrip("/") == _ISSUER
 
 
-@pytest.mark.unit
-def test_build_inbound_issuer_overrides_login_issuer() -> None:
-    """An explicit inbound issuer wins over the login issuer."""
-    override = "https://other-idp.example.com/realms/y"
-    _, auth = build_resource_server_auth(
-        ResourceServerSettings(resource_server_url=_RESOURCE),
-        JwtValidationSettings(
-            issuer_url=override, jwks_uri="https://other-idp.example.com/jwks"
-        ),
-        default_issuer_url=_ISSUER,
-    )
-    assert str(auth.issuer_url).rstrip("/") == override
+# --- ResourceServer.from_url (host-authority parsing) -------------------------
 
 
 @pytest.mark.unit
-def test_build_without_resolvable_issuer_raises() -> None:
-    """resource_server_url set but no issuer (override or login) is a misconfiguration."""
-    with pytest.raises(RuntimeError, match="no inbound issuer"):
-        build_resource_server_auth(
-            ResourceServerSettings(resource_server_url=_RESOURCE),
-            JwtValidationSettings(),
-            default_issuer_url=None,
-        )
+def test_resource_server_keeps_the_verbatim_url_and_derives_bare_host() -> None:
+    resource = ResourceServer.from_url("https://mcp.pipefy.com/mcp")
+    assert resource.url == "https://mcp.pipefy.com/mcp"
+    assert resource.host_authorities == ("mcp.pipefy.com",)
+
+
+@pytest.mark.unit
+def test_resource_server_adds_host_port_when_url_names_a_port() -> None:
+    resource = ResourceServer.from_url("https://mcp.pipefy.com:8443/mcp")
+    assert resource.host_authorities == ("mcp.pipefy.com", "mcp.pipefy.com:8443")
+
+
+@pytest.mark.unit
+def test_resource_server_brackets_an_ipv6_literal() -> None:
+    """urlparse reports the host unbracketed; the wire Host is bracketed."""
+    resource = ResourceServer.from_url("https://[2001:db8::1]:8443/mcp")
+    assert resource.host_authorities == ("[2001:db8::1]", "[2001:db8::1]:8443")

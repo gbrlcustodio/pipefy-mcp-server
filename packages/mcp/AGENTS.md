@@ -69,9 +69,10 @@ The JWKS/RS256 validation lives in `pipefy_auth` (`JwtValidator`); the MCP adapt
 `auth/resource_server.py` (`JwtTokenVerifier`) maps validated claims onto the
 SDK's `AccessToken`. FastMCP serves the RFC 9728 protected-resource metadata and
 the `401` + `WWW-Authenticate` challenge; `build_resource_server_auth` (same
-module) resolves the inbound issuer and pairs the verifier with `AuthSettings`.
-The runtime (`McpRuntime.for_profile`) calls it for the `remote` profile and holds
-the pair as `inbound_auth`, which `server.py` wires into the app.
+module) pairs the verifier with `AuthSettings` from an already-resolved issuer.
+The runtime (`McpRuntime.for_profile`) resolves the inbound issuer, gates on it,
+and calls the builder for the `remote` profile, holding the pair as `inbound_auth`,
+which `server.py` wires into the app.
 
 **Bind-safety interlock.** The property protected is auth posture, not bind
 interface: an unauthenticated profile must not be reachable by untrusted callers.
@@ -85,11 +86,23 @@ validates a per-request bearer, so its bind host is irrelevant and is not checke
 `pipefy_infra.security.is_loopback_host`, which covers all of `127.0.0.0/8` and
 `::1`. This replaced an earlier bind-interface guard (`_assert_safe_http_bind`) that
 false-positived on the entire hosted profile and lived in the run path where the
-ASGI-app path bypassed it. DNS-rebinding protection (the configurable host / Origin
-allowlist for a proxied deployment) is separate follow-up work; see
-`experiments/hosted-obo/RFC-OUTLINE.md`. The attachment tools' local `file_path`
-inputs also still assume a loopback peer that shares the client's disk (remote-safe
-file inputs are separate follow-up work).
+ASGI-app path bypassed it. The attachment tools' local `file_path` inputs also
+still assume a loopback peer that shares the client's disk (remote-safe file inputs
+are separate follow-up work).
+
+**Transport allowlist.** DNS-rebinding protection is a separate axis from the
+bind-safety interlock: it checks the inbound request's `Host` / `Origin`, not the
+bind interface. FastMCP auto-enables a loopback-only allowlist on the `127.0.0.1`
+construction host, so behind a proxy that forwards the public `Host` it answers
+`421 Misdirected Request`. `core/transport_security.py:build_transport_security`
+widens it by deriving the allowed host from `resource_server_url` (the public origin
+the `remote` profile already declares) plus loopback, and `build_pipefy_mcp_server`
+passes the result to FastMCP. `PIPEFY_MCP_ALLOWED_HOSTS` / `PIPEFY_MCP_ALLOWED_ORIGINS`
+(JSON) extend it for extra hostnames or a stricter Origin posture. Unset (no
+resource-server URL and no override) leaves FastMCP's loopback-only default in force,
+so the local subprocess case is unaffected. Being configuration derived at
+composition (mirroring `build_resource_server_auth`), it lives in the composition
+tier, not in `settings.py`, which keeps the mcp SDK out of the config boundary.
 
 ## Hosted structured logging
 

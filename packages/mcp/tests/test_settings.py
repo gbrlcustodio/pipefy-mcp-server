@@ -271,3 +271,58 @@ def test_mcp_remote_binds_any_host_without_the_escape_hatch():
     settings = McpSettings(profile="remote", transport="http", host="0.0.0.0")
     assert settings.host == "0.0.0.0"
     assert settings.allow_insecure_http_bind is False
+
+
+# --- transport allowlist fields (DNS-rebinding host/Origin allowlist) ---------
+
+
+@pytest.mark.unit
+def test_mcp_allowlists_default_to_none():
+    """Unset allowlists stay None so the builder can preserve FastMCP's default."""
+    mcp = McpSettings()
+    assert mcp.allowed_hosts is None
+    assert mcp.allowed_origins is None
+
+
+@pytest.mark.unit
+def test_mcp_allowed_hosts_from_env_parses_json(monkeypatch):
+    """PIPEFY_MCP_ALLOWED_HOSTS is a JSON array, like RS required_scopes."""
+    monkeypatch.setenv("PIPEFY_MCP_ALLOWED_HOSTS", '["mcp.pipefy.com", "mcp:8000"]')
+    assert Settings().mcp.allowed_hosts == ["mcp.pipefy.com", "mcp:8000"]
+
+
+@pytest.mark.unit
+def test_mcp_allowed_origins_from_env_parses_json(monkeypatch):
+    monkeypatch.setenv("PIPEFY_MCP_ALLOWED_ORIGINS", '["https://mcp.pipefy.com"]')
+    assert Settings().mcp.allowed_origins == ["https://mcp.pipefy.com"]
+
+
+@pytest.mark.unit
+def test_mcp_allowlist_trims_surrounding_whitespace():
+    """Each entry is trimmed; localhost is kept (no SSRF gate on operator entries)."""
+    mcp = McpSettings(
+        allowed_hosts=[" mcp.pipefy.com ", "localhost"],
+        allowed_origins=["  https://mcp.pipefy.com  "],
+    )
+    assert mcp.allowed_hosts == ["mcp.pipefy.com", "localhost"]
+    assert mcp.allowed_origins == ["https://mcp.pipefy.com"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("field", ["allowed_hosts", "allowed_origins"])
+def test_mcp_allowlist_rejects_a_blank_entry(field):
+    """A blank/whitespace entry is a config error, not a silently-dropped value.
+
+    Dropping it would hide the typo, and for allowed_origins could collapse the
+    list to the strict reject-all-Origin posture, so the settings boundary refuses.
+    """
+    with pytest.raises(ValidationError, match="blank entry"):
+        McpSettings(**{field: ["ok", "   "]})
+
+
+@pytest.mark.unit
+def test_mcp_explicit_empty_allowlist_is_preserved():
+    """An explicit [] is a deliberate value (reject-all-Origin), not a blank entry."""
+    mcp = McpSettings(allowed_hosts=[], allowed_origins=[])
+    assert mcp.allowed_hosts == []
+    assert mcp.allowed_origins == []

@@ -76,12 +76,13 @@ lint.extend-select = ["TID251"]
 root_package = "pipefy_mcp"
 
 [[tool.importlinter.contracts]]
-name = "Inward-only layers: composition root > adapters > core > auth > settings"
+name = "Inward-only layers: composition root > adapters > core > transport_security > auth > settings"
 type = "layers"
 layers = [
     "pipefy_mcp.server",
     "pipefy_mcp.tools",
     "pipefy_mcp.core",
+    "pipefy_mcp.transport_security",
     "pipefy_mcp.auth",
     "pipefy_mcp.settings",
 ]

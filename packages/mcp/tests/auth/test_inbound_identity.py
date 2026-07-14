@@ -16,7 +16,7 @@ from mcp.server.auth.middleware.auth_context import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
 from starlette.requests import Request
 
-from pipefy_mcp.auth.request_identity import (
+from pipefy_mcp.auth.inbound_identity import (
     CallerIdentity,
     caller_identity,
     require_request_bearer,

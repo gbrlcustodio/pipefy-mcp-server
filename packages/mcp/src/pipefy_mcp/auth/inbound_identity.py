@@ -5,7 +5,7 @@ The HTTP resource-server profile validates an inbound bearer on every request
 that caller rather than as one identity resolved at startup. This module reads
 the caller's validated bearer off the request the tool handler received, so the
 runtime can snapshot it into a per-session credential (see
-:meth:`pipefy_mcp.auth.session_identity.RequestScopedIdentity.resolve`).
+:meth:`pipefy_mcp.auth.outbound_identity.RequestScopedIdentity.resolve`).
 
 The bearer comes from the request the handler passes in
 (``ctx.request_context.request``), not from ``AuthContextMiddleware``'s

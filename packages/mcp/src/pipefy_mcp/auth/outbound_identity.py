@@ -1,6 +1,6 @@
 """Outbound identity for a request's SDK session: who each session acts as.
 
-The counterpart to :mod:`pipefy_mcp.auth.request_identity` (which extracts the
+The counterpart to :mod:`pipefy_mcp.auth.inbound_identity` (which extracts the
 *inbound* bearer a caller presents): these types resolve the *outbound*
 ``httpx.Auth`` the per-request SDK session binds. The two profiles pick a
 different variant at the composition root, and both speak one ``resolve`` contract
@@ -22,7 +22,7 @@ from pipefy_auth import (
 from starlette.requests import Request
 
 from pipefy_mcp._docs import DOCS_SETUP_REF
-from pipefy_mcp.auth.request_identity import require_request_bearer
+from pipefy_mcp.auth.inbound_identity import require_request_bearer
 from pipefy_mcp.settings import Settings
 
 

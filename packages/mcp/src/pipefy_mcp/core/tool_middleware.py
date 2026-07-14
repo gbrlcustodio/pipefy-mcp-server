@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any
 from mcp import types
 from mcp.server.lowlevel.server import request_ctx
 
-from pipefy_mcp.auth.request_identity import CallerIdentity, caller_identity
+from pipefy_mcp.auth.inbound_identity import CallerIdentity, caller_identity
 from pipefy_mcp.core.tool_error_envelope import tool_error
 
 if TYPE_CHECKING:

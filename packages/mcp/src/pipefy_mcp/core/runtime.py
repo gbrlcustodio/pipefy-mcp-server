@@ -13,18 +13,7 @@ from pipefy_mcp.auth import (
     build_resource_server_auth,
 )
 from pipefy_mcp.core.transport_security import build_transport_security
-from pipefy_mcp.settings import ResourceServerSettings, Settings
-
-
-def _resource_server(rs: ResourceServerSettings) -> ResourceServer | None:
-    """Parse the configured resource-server URL into its value object, or ``None``.
-
-    The one place the resource identity is parsed: the composition root feeds this
-    single :class:`ResourceServer` to both consumers (inbound auth and the transport
-    allowlist), so neither re-parses the URL and they cannot disagree on the host.
-    """
-    url = rs.resource_server_url
-    return ResourceServer.from_url(url) if url else None
+from pipefy_mcp.settings import Settings
 
 
 def _login_issuer_url(settings: Settings) -> str | None:
@@ -86,7 +75,8 @@ class McpRuntime:
         inbound-auth pair are derived from, so they cannot disagree on the host; the
         one ``cls(...)`` call then wires the fields common to both profiles.
         """
-        resource = _resource_server(settings.rs)
+        url = settings.rs.resource_server_url
+        resource = ResourceServer.from_url(url) if url else None
         transport_security = build_transport_security(settings.mcp, resource)
         if settings.mcp.profile == "remote":
             identity, inbound_auth = cls._remote_identity(settings, resource)

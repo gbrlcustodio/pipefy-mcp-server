@@ -93,15 +93,16 @@ are separate follow-up work).
 bind-safety interlock: it checks the inbound request's `Host` / `Origin`, not the
 bind interface. FastMCP auto-enables a loopback-only allowlist on the `127.0.0.1`
 construction host, so behind a proxy that forwards the public `Host` it answers
-`421 Misdirected Request`. `core/transport_security.py:build_transport_security`
+`421 Misdirected Request`. `transport_security.py:build_transport_security`
 widens it by deriving the allowed host from `resource_server_url` (the public origin
 the `remote` profile already declares) plus loopback, and `build_pipefy_mcp_server`
 passes the result to FastMCP. `PIPEFY_MCP_ALLOWED_HOSTS` / `PIPEFY_MCP_ALLOWED_ORIGINS`
 (JSON) extend it for extra hostnames or a stricter Origin posture. Unset (no
 resource-server URL and no override) leaves FastMCP's loopback-only default in force,
-so the local subprocess case is unaffected. Being configuration derived at
-composition (mirroring `build_resource_server_auth`), it lives in the composition
-tier, not in `settings.py`, which keeps the mcp SDK out of the config boundary.
+so the local subprocess case is unaffected. Transport security is its own concern
+module (a peer of `auth/`, consumed by the composition root); being configuration
+derived at composition (mirroring `build_resource_server_auth`), it stays out of
+`settings.py`, which keeps the mcp SDK out of the config boundary.
 
 ## Tool registration
 

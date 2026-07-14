@@ -12,8 +12,8 @@ from pipefy_mcp.auth import (
     StartupIdentity,
     build_resource_server_auth,
 )
-from pipefy_mcp.core.transport_security import build_transport_security
 from pipefy_mcp.settings import ResourceServerSettings, Settings
+from pipefy_mcp.transport_security import build_transport_security
 
 
 def _resource_server(rs: ResourceServerSettings) -> ResourceServer | None:

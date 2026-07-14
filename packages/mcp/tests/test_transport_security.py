@@ -3,8 +3,8 @@
 import pytest
 
 from pipefy_mcp.auth import ResourceServer
-from pipefy_mcp.core.transport_security import build_transport_security
 from pipefy_mcp.settings import McpSettings
+from pipefy_mcp.transport_security import build_transport_security
 
 _LOOPBACK_FORMS = {
     "127.0.0.1",

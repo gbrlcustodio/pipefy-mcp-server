@@ -14,7 +14,6 @@ from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.core.tool_middleware import ToolCallContext, short_circuit_error
-from pipefy_mcp.core.transport_security import build_transport_security
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.server import (
     _make_lifespan,
@@ -25,6 +24,7 @@ from pipefy_mcp.server import (
 )
 from pipefy_mcp.settings import McpSettings, Settings, resolve_mcp_settings
 from pipefy_mcp.tools.registry import PIPEFY_TOOL_NAMES
+from pipefy_mcp.transport_security import build_transport_security
 
 _MINIMAL_PIPEFY_SETTINGS = Settings(
     pipefy=PipefySettings(base_url="https://api.pipefy.com"),

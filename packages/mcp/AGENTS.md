@@ -96,37 +96,13 @@ file inputs are separate follow-up work).
 The HTTP transport emits allowlisted JSON lines on stderr for hosted **debugging**
 (`pipefy_mcp/observability/`): one `http_request` line per request and one
 `tool_call` line per tool invocation (via `tool_log_middleware`). Fields are
-privacy-bounded (no bearer, no argument values, no query string, no exception
-messages). Stdio does **not** install the structured emitter: under stdio,
-stdout is the JSON-RPC wire, and local installs should not arm that
-process-global handler.
-
-Wiring lives in `wire_hosted_observability` (`observability/wiring.py`): it calls
-`streamable_http_app()` once, attaches request middleware, and returns the Starlette app.
-`run_server` serves that app with uvicorn directly (`access_log=False`) so the
-structured request line replaces uvicorn's text access log.
-`configure_observability_logging` pins the dedicated structured logger at `INFO`
-independently of `PIPEFY_MCP_LOG_LEVEL` (which only governs FastMCP/root text
-logs), so quieting noisy text does not drop request/tool lines.
-
-The request logger is **pure-ASGI middleware** (`RequestLogMiddleware`), never
-Starlette `BaseHTTPMiddleware`: `BaseHTTPMiddleware` buffers the response body,
-which breaks long-lived Streamable HTTP / SSE streams. The pure-ASGI middleware
-only inspects `http.response.start` (status + headers) and passes the body through.
-`request_id` prefers inbound `x-request-id`, then `x-correlation-id`, and mints a
-UUID only when both are absent (or blank), so an upstream proxy can keep one id
-across service boundaries. Tool lines go through the same emitter builders as
-HTTP lines (`build_tool_call_event` / `emit_structured_event`).
-
-## Hosted structured logging
-
-The HTTP transport emits allowlisted JSON lines on stderr for hosted **debugging**
-(`pipefy_mcp/observability/`): one `http_request` line per request and one
-`tool_call` line per tool invocation (via `tool_log_middleware`). Fields are
-privacy-bounded (no bearer, no argument values, no query string, no exception
-messages). Stdio does **not** install the structured emitter: under stdio,
-stdout is the JSON-RPC wire, and local installs should not arm that
-process-global handler.
+privacy-bounded: **excluded** are bearer tokens, argument values, query strings,
+and exception messages; **included** on `http_request` lines are the caller's
+`sub` and `client_id` when an authenticated bearer is present (attribution for
+hosted debugging). `tool_call` lines deliberately omit `sub` until a consumer
+needs it (see Tool-call middleware); they still carry `client_id` when available.
+Stdio does **not** install the structured emitter: under stdio, stdout is the
+JSON-RPC wire, and local installs should not arm that process-global handler.
 
 Wiring lives in `wire_hosted_observability` (`observability/wiring.py`): it calls
 `streamable_http_app()` once, attaches request middleware, and returns the Starlette app.

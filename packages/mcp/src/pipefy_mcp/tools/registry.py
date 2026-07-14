@@ -13,6 +13,7 @@ from pipefy_mcp.tools.attachment_tools import AttachmentTools
 from pipefy_mcp.tools.automation_tools import AutomationTools
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
+from pipefy_mcp.tools.ipaas_tools import IpaasTools
 from pipefy_mcp.tools.member_tools import MemberTools
 from pipefy_mcp.tools.observability_tools import ObservabilityTools
 from pipefy_mcp.tools.organization_tools import OrganizationTools
@@ -115,6 +116,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "get_card_relations",
         "get_cards",
         "get_email_templates",
+        "get_ipaas_tools",
         "get_labels",
         "get_organization",
         "get_organization_report",
@@ -204,6 +206,7 @@ _TOOLSETS = (
     WebhookTools,
     AutomationTools,
     IntrospectionTools,
+    IpaasTools,
     OrganizationTools,
     PortalTools,
     ObservabilityTools,

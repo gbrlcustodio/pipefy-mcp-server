@@ -130,3 +130,14 @@ These variables load into `pipefy_mcp.McpSettings` (`settings.mcp`). TOML keys u
 | `PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` | `false` | Escape hatch: lets the unauthenticated `local` profile serve HTTP on a non-loopback host, exposing the full tool surface with no inbound bearer. The `remote` profile never needs it. |
 | `PIPEFY_MCP_UNIFIED_ENVELOPE` | `true` | When true, migrated tools return `{success, data, ...}`. |
 | `PIPEFY_MCP_LOG_LEVEL` | `INFO` | Governs the FastMCP root logger (RichHandler text on **stderr**) only. Accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (case-insensitive). Hosted structured JSON request/tool lines use a dedicated logger pinned at `INFO` on stderr, so raising this knob to quiet text logs does **not** drop those debugging events. Prefer `PIPEFY_MCP_LOG_LEVEL` over any `FASTMCP_LOG_LEVEL` env var when using `pipefy-mcp-server`. Structured lines stay on stderr so they never share the stdio JSON-RPC stdout channel. |
+
+### iPaaS (Advanced Automations)
+
+These variables load into `pipefy_mcp.IpaasSettings` (`settings.ipaas`) and enable the iPaaS tools (see [`mcp/tools/ipaas.md`](mcp/tools/ipaas.md)). Without the client credentials, `get_ipaas_tools` stays registered but answers with a "not configured" error.
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `PIPEFY_IPAAS_URL` | `https://ipaas.pipefy.com` | Base URL of the iPaaS (Advanced Automations) host. Override for staging or single-tenant deployments. |
+| `PIPEFY_IPAAS_OAUTH_CLIENT_ID` | unset | Client ID of the OAuth client pre-registered on the iPaaS host (a one-time operator step). |
+| `PIPEFY_IPAAS_OAUTH_CLIENT_SECRET` | unset | Companion secret. Treat as a secret. |
+| `PIPEFY_IPAAS_OAUTH_REDIRECT_URI` | `https://localhost/pipefy-mcp-callback` | Must byte-match a redirect URI registered on the OAuth client. Never actually followed (the flow is headless). |

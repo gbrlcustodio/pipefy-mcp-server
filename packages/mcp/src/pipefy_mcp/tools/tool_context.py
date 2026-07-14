@@ -5,7 +5,21 @@ from __future__ import annotations
 from mcp.server.fastmcp import Context
 from pipefy_sdk import PipefyClient
 
+from pipefy_mcp.core.ipaas_gateway import IpaasGateway
 from pipefy_mcp.core.runtime import McpRuntime
+
+
+def get_ipaas_gateway(ctx: Context) -> IpaasGateway | None:
+    """Return the deployment's iPaaS gateway, or None when unconfigured.
+
+    A per-deployment resource built once at startup (identical for every
+    caller — the gateway is stateless and holds no identity; the caller's
+    identity enters the chain through the pipe-scoped token the tool mints
+    via its own session). Tools translate None into a clear "not configured"
+    error payload rather than failing registration.
+    """
+    runtime: McpRuntime = ctx.request_context.lifespan_context
+    return runtime.ipaas_gateway
 
 
 def get_pipefy_client(ctx: Context) -> PipefyClient:

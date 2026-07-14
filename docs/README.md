@@ -20,6 +20,7 @@ Human-facing guides for the **[pipefy/ai-toolkit](https://github.com/pipefy/ai-t
 | [`MIGRATION.md`](MIGRATION.md) | Notes for existing MCP users across packaging changes |
 | [`dependencies.md`](dependencies.md) | Why each runtime dependency exists |
 | [`architecture.md`](architecture.md) | Intra-package layering, type ownership at boundaries, ports, and alternative constructors |
+| [`ipaas.md`](ipaas.md) | iPaaS (Advanced Automations) tools: meta-tool pattern, flow overview, vocabulary |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Contributing skills (Markdown playbooks) |
 | [`../RELEASE.md`](../RELEASE.md) | Versioning and GitHub Releases |
 

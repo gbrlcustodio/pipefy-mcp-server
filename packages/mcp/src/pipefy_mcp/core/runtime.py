@@ -19,6 +19,7 @@ from pipefy_mcp.auth.resource_server import (
     ResourceServerAuth,
     build_resource_server_auth,
 )
+from pipefy_mcp.core.ipaas_gateway import IpaasGateway
 from pipefy_mcp.settings import Settings
 
 
@@ -133,6 +134,18 @@ class McpRuntime:
         self._identity = identity
         self.inbound_auth = inbound_auth
         self._engine = PipefyEngine.build(settings.pipefy, surface="mcp")
+        # Per-deployment iPaaS wiring; None when the OAuth client credentials
+        # are absent, and the iPaaS tools report the capability unconfigured.
+        self._ipaas_gateway = (
+            IpaasGateway(
+                url=settings.ipaas.url,
+                oauth_client_id=settings.ipaas.oauth_client_id or "",
+                oauth_client_secret=settings.ipaas.oauth_client_secret or "",
+                oauth_redirect_uri=settings.ipaas.oauth_redirect_uri,
+            )
+            if settings.ipaas.configured
+            else None
+        )
 
     @classmethod
     def for_profile(cls, settings: Settings) -> McpRuntime:
@@ -182,3 +195,13 @@ class McpRuntime:
     def settings(self) -> Settings:
         """The resolved settings this runtime was built from."""
         return self._settings
+
+    @property
+    def ipaas_gateway(self) -> IpaasGateway | None:
+        """The deployment's iPaaS gateway, or None when unconfigured.
+
+        Built once at startup from :class:`pipefy_mcp.settings.IpaasSettings`
+        (a per-deployment value, identical for every caller); the gateway is
+        stateless, so sharing one instance across requests holds no identity.
+        """
+        return self._ipaas_gateway

@@ -214,12 +214,14 @@ The full list of shared-settings reads a tool call can hit, audited for #306:
 - `default_webhook_name` (SDK webhook service) — a cosmetic default name; the
   webhook tools aren't exposed remotely anyway.
 
-A related note: some tools (like `delete_card_relation`) say they "require
-service-account credentials" because they use Pipefy's Internal API. That isn't
-a shared-settings read — it's whatever credential the session already has. But
-in hosted mode that credential would be the caller's own token, and we haven't
-verified the Internal API accepts one. That's one reason those tools aren't
-marked remote-safe.
+A related note: some tool docstrings (like `delete_card_relation`'s) claim to
+"require service-account credentials" because they call Pipefy's Internal API.
+That claim is stale: the SDK binds the session's one credential to all three
+API endpoints (public, Interfaces, Internal), so the Internal API simply
+receives whatever credential the caller already has — nothing in the client is
+service-account-specific. Those tools stay off the remote seed for the
+ordinary reason every tool starts off it: they are write mutations that
+haven't been reviewed for remote exposure yet.
 
 **When this breaks (the rework trigger).** If one hosted server ever needs to
 serve *multiple* backends, or integrators with different config, the assumption

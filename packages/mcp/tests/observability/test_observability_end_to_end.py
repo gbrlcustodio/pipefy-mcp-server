@@ -25,6 +25,7 @@ import anyio
 import httpx
 import pytest
 from mcp.server.fastmcp import FastMCP
+
 from pipefy_mcp.core.tool_middleware import install_tool_call_middleware
 from pipefy_mcp.observability.json_logging import (
     configure_observability_logging,

@@ -15,9 +15,8 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
 from pipefy_mcp.tools.tool_context import get_ipaas_gateway, get_pipefy_client
 
 _NOT_CONFIGURED_MESSAGE = (
-    "iPaaS credentials are not configured on this server: set "
-    "PIPEFY_IPAAS_OAUTH_CLIENT_ID and PIPEFY_IPAAS_OAUTH_CLIENT_SECRET to "
-    "enable the iPaaS tools."
+    "The iPaaS tools are disabled on this server (PIPEFY_IPAAS_OAUTH_CLIENT_ID "
+    "is blank). Restore the default or set a client id to enable them."
 )
 
 

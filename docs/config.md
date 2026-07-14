@@ -133,11 +133,11 @@ These variables load into `pipefy_mcp.McpSettings` (`settings.mcp`). TOML keys u
 
 ### iPaaS (Advanced Automations)
 
-These variables load into `pipefy_mcp.IpaasSettings` (`settings.ipaas`) and enable the iPaaS tools (see [`mcp/tools/ipaas.md`](mcp/tools/ipaas.md)). Without the client credentials, `get_ipaas_tools` stays registered but answers with a "not configured" error.
+These variables load into `pipefy_mcp.IpaasSettings` (`settings.ipaas`) and back the iPaaS tools (see [`mcp/tools/ipaas.md`](mcp/tools/ipaas.md)). They work **out of the box**: the default OAuth client is Pipefy's canonical *public* PKCE client on the production iPaaS host — a publishable identifier (like the `pipefy-cli` OIDC client), not a secret; authorization is carried by the caller's pipe-scoped session, never by the client identity.
 
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `PIPEFY_IPAAS_URL` | `https://ipaas.pipefy.com` | Base URL of the iPaaS (Advanced Automations) host. Override for staging or single-tenant deployments. |
-| `PIPEFY_IPAAS_OAUTH_CLIENT_ID` | unset | Client ID of the OAuth client pre-registered on the iPaaS host (a one-time operator step). |
-| `PIPEFY_IPAAS_OAUTH_CLIENT_SECRET` | unset | Companion secret. Treat as a secret. |
+| `PIPEFY_IPAAS_OAUTH_CLIENT_ID` | canonical public client | OAuth client id on the iPaaS host. Override alongside a custom host; set blank to disable the iPaaS tools (they then answer with a clear "disabled" error). |
+| `PIPEFY_IPAAS_OAUTH_CLIENT_SECRET` | unset | Only for a confidential (`client_secret_post`) registration; the default public client has none. Treat as a secret. |
 | `PIPEFY_IPAAS_OAUTH_REDIRECT_URI` | `https://localhost/pipefy-mcp-callback` | Must byte-match a redirect URI registered on the OAuth client. Never actually followed (the flow is headless). |

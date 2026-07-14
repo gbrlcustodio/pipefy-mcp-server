@@ -296,10 +296,16 @@ class IpaasSettings(BaseSettings):
     Per-deployment values consumed only at the composition root: the runtime
     builds the iPaaS gateway from them at startup, and tools reach the built
     gateway through the lifespan context, never these settings (the
-    import-linter contract keeps it that way). The OAuth client is
-    pre-registered once against the iPaaS host by the operator; when the
-    credentials are absent the iPaaS tools stay registered but report the
-    capability as unconfigured.
+    import-linter contract keeps it that way).
+
+    Works out of the box: the default OAuth client is Pipefy's canonical
+    *public* PKCE client (``token_endpoint_auth_method: none``), registered
+    once on the production iPaaS host — sharable by design, like the
+    ``pipefy-cli`` OIDC client. The client id names the software, never the
+    caller: authorization is carried entirely by the caller's pipe-scoped
+    session and PKCE. Override the id (plus a secret, for a confidential
+    registration) for staging or single-tenant hosts; blank the id to disable
+    the iPaaS tools, which then answer with a clear "disabled" error.
 
     ``env_prefix="PIPEFY_IPAAS_"`` keeps these apart from the SDK's
     ``PIPEFY_*`` connection vars. ``allow_insecure_urls`` is aliased to the
@@ -344,11 +350,13 @@ class IpaasSettings(BaseSettings):
     )
 
     oauth_client_id: str | None = Field(
-        default=None,
+        default="1RLshr5qYWxeFda1H-2wI_HuaaQfWxwn",
         description=(
-            "Client ID of the OAuth client pre-registered on the iPaaS host "
-            "(env: PIPEFY_IPAAS_OAUTH_CLIENT_ID). No default: absent, the iPaaS "
-            "tools report the capability as unconfigured."
+            "Client ID of the OAuth client registered on the iPaaS host "
+            "(env: PIPEFY_IPAAS_OAUTH_CLIENT_ID). Defaults to Pipefy's canonical "
+            "public PKCE client on the production host — a publishable "
+            "identifier, not a secret. Override for staging or single-tenant "
+            "hosts; set blank to disable the iPaaS tools."
         ),
     )
 
@@ -356,7 +364,10 @@ class IpaasSettings(BaseSettings):
         default=None,
         description=(
             "Client secret paired with oauth_client_id "
-            "(env: PIPEFY_IPAAS_OAUTH_CLIENT_SECRET). A secret; never defaulted."
+            "(env: PIPEFY_IPAAS_OAUTH_CLIENT_SECRET). Only needed when the "
+            "configured client is a confidential registration "
+            "(client_secret_post); the default public client has none. A "
+            "secret; never defaulted."
         ),
     )
 
@@ -383,8 +394,8 @@ class IpaasSettings(BaseSettings):
 
     @property
     def configured(self) -> bool:
-        """Whether the pre-registered OAuth client credentials are present."""
-        return bool(self.oauth_client_id and self.oauth_client_secret)
+        """Whether an OAuth client id is present (blank = iPaaS tools disabled)."""
+        return bool(self.oauth_client_id and self.oauth_client_id.strip())
 
     @model_validator(mode="after")
     def _validate_configuration(self) -> Self:

@@ -47,8 +47,10 @@ class IpaasGateway:
 
     url: str
     oauth_client_id: str
-    oauth_client_secret: str
     oauth_redirect_uri: str
+    # Only for confidential (client_secret_post) registrations; the default
+    # public PKCE client has no secret.
+    oauth_client_secret: str | None = None
 
     async def list_tools(self, advanced_automations_token: str) -> list[dict[str, Any]]:
         """Return the MCP tool catalog of the pipe the token was minted for.
@@ -128,17 +130,16 @@ class IpaasGateway:
                 "iPaaS authorization approval returned no authorization code."
             )
 
-        response = await http.post(
-            f"{self.url}/token",
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "code_verifier": verifier,
-                "client_id": self.oauth_client_id,
-                "client_secret": self.oauth_client_secret,
-                "redirect_uri": self.oauth_redirect_uri,
-            },
-        )
+        token_form = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "code_verifier": verifier,
+            "client_id": self.oauth_client_id,
+            "redirect_uri": self.oauth_redirect_uri,
+        }
+        if self.oauth_client_secret:
+            token_form["client_secret"] = self.oauth_client_secret
+        response = await http.post(f"{self.url}/token", data=token_form)
         if response.status_code != 200:
             raise _step_error("iPaaS token exchange", response)
         return response.json()["access_token"]

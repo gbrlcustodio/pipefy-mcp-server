@@ -37,10 +37,12 @@ server replica can serve any call.
 
 ## Configuration
 
-The iPaaS base URL ships with a default; the iPaaS client credentials are secrets with no
-defaults (same treatment as `oauth_client`/`oauth_secret`). When the credentials are not
-configured, the tool reports "iPaaS credentials not configured" instead of registering a
-broken capability.
+Zero-config by default: the iPaaS base URL and OAuth client id ship with production
+defaults — the client is a *public* PKCE client (a publishable identifier, like the
+`pipefy-cli` OIDC client; the caller's pipe-scoped session, not the client identity,
+carries all authorization). Operators of staging or single-tenant hosts override the URL
+and client id (plus a secret for a confidential registration); blanking the client id
+disables the iPaaS tools, which then answer with a clear "disabled" error.
 
 ## Vocabulary
 

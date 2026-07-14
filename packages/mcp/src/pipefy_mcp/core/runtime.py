@@ -134,13 +134,13 @@ class McpRuntime:
         self._identity = identity
         self.inbound_auth = inbound_auth
         self._engine = PipefyEngine.build(settings.pipefy, surface="mcp")
-        # Per-deployment iPaaS wiring; None when the OAuth client credentials
-        # are absent, and the iPaaS tools report the capability unconfigured.
+        # Per-deployment iPaaS wiring; None only when the operator blanks the
+        # client id, and the iPaaS tools then report the capability disabled.
         self._ipaas_gateway = (
             IpaasGateway(
                 url=settings.ipaas.url,
                 oauth_client_id=settings.ipaas.oauth_client_id or "",
-                oauth_client_secret=settings.ipaas.oauth_client_secret or "",
+                oauth_client_secret=settings.ipaas.oauth_client_secret,
                 oauth_redirect_uri=settings.ipaas.oauth_redirect_uri,
             )
             if settings.ipaas.configured

@@ -134,7 +134,7 @@ async def test_unconfigured_gateway_reports_clearly(mock_client, extract_payload
 
     payload = extract_payload(result)
     assert payload["success"] is False
-    assert "not configured" in tool_error_message(payload)
+    assert "disabled" in tool_error_message(payload)
     mock_client.get_advanced_automations_token.assert_not_awaited()
 
 

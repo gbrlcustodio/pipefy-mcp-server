@@ -109,6 +109,26 @@ async def test_list_tools_walks_the_full_chain(respx_mock, gateway):
 
 @pytest.mark.anyio
 @respx.mock
+async def test_public_client_omits_client_secret(respx_mock):
+    """The default public PKCE client has no secret; the token form must not send one."""
+    _mock_happy_chain(respx_mock)
+    public_gateway = IpaasGateway(
+        url=IPAAS_URL,
+        oauth_client_id="public-client-id",
+        oauth_redirect_uri=REDIRECT_URI,
+    )
+
+    tools = await public_gateway.list_tools("embed-jwt")
+
+    assert tools == TOOLS
+    token_form = parse_qs(respx_mock.routes[3].calls.last.request.content.decode())
+    assert "client_secret" not in token_form
+    assert token_form["client_id"] == ["public-client-id"]
+    assert token_form["code_verifier"][0]
+
+
+@pytest.mark.anyio
+@respx.mock
 async def test_list_tools_parses_sse_encoded_response(respx_mock, gateway):
     _mock_happy_chain(respx_mock, sse_tools_list=True)
 

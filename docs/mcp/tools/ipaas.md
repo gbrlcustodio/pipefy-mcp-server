@@ -28,10 +28,11 @@ Never expand more than the tool you are about to use. See
 
 - The caller must be allowed to **create automations on the pipe** (pipe-admin
   ability); the organization must have **iPaaS enabled**.
-- The server deployment must have iPaaS credentials configured
-  (`PIPEFY_IPAAS_OAUTH_CLIENT_ID` / `PIPEFY_IPAAS_OAUTH_CLIENT_SECRET`, see
-  [`docs/config.md`](../../config.md)). Without them the tool answers with a
-  clear "not configured" error instead of failing registration.
+- No server configuration is needed against production: the deployment defaults
+  to Pipefy's canonical public OAuth client (see
+  [`docs/config.md`](../../config.md)). Staging/single-tenant hosts override
+  `PIPEFY_IPAAS_URL` + `PIPEFY_IPAAS_OAUTH_CLIENT_ID`; a blank client id
+  disables the tool, which then answers with a clear "disabled" error.
 
 ## Scoping
 

@@ -69,9 +69,10 @@ The JWKS/RS256 validation lives in `pipefy_auth` (`JwtValidator`); the MCP adapt
 `auth/resource_server.py` (`JwtTokenVerifier`) maps validated claims onto the
 SDK's `AccessToken`. FastMCP serves the RFC 9728 protected-resource metadata and
 the `401` + `WWW-Authenticate` challenge; `build_resource_server_auth` (same
-module) resolves the inbound issuer and pairs the verifier with `AuthSettings`.
-The runtime (`McpRuntime.for_profile`) calls it for the `remote` profile and holds
-the pair as `inbound_auth`, which `server.py` wires into the app.
+module) pairs the verifier with `AuthSettings` from an already-resolved issuer.
+The runtime (`McpRuntime.for_profile`) resolves the inbound issuer, gates on it,
+and calls the builder for the `remote` profile, holding the pair as `inbound_auth`,
+which `server.py` wires into the app.
 
 **Bind-safety interlock.** The property protected is auth posture, not bind
 interface: an unauthenticated profile must not be reachable by untrusted callers.

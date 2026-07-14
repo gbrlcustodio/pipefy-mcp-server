@@ -13,9 +13,11 @@ transport-agnostic auth primitive). This class maps the validated claims onto
 the SDK's ``AccessToken`` and turns a validation failure into the ``None`` the
 protocol reads as "reject".
 
-:func:`build_resource_server_auth` is the composition root for this profile: it
-resolves the inbound issuer, constructs the verifier over a ``JwtValidator``,
-and pairs it with FastMCP's ``AuthSettings`` for the server to wire in.
+:func:`build_resource_server_auth` constructs the verifier over a ``JwtValidator``
+and pairs it with FastMCP's ``AuthSettings`` for the server to wire in. It takes an
+already-resolved issuer: the composition root
+(:meth:`pipefy_mcp.core.runtime.McpRuntime.for_profile`) resolves the inbound issuer
+and gates on it, so this builder only wires the resolved values in.
 """
 
 from __future__ import annotations

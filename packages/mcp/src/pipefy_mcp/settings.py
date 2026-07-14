@@ -4,13 +4,13 @@ from typing import Any, Literal, Self
 
 from pipefy_auth import AuthSettings, JwtValidationSettings
 from pipefy_infra import security
-from pipefy_infra.coerce import nonempty_strs
 from pipefy_infra.config import PipefyTomlConfigSource
 from pipefy_sdk import PipefySettings
 from pydantic import (
     AliasChoices,
     Field,
     ValidationError,
+    ValidationInfo,
     field_validator,
     model_validator,
 )
@@ -222,23 +222,32 @@ class McpSettings(BaseSettings):
 
     @field_validator("allowed_hosts", "allowed_origins", mode="after")
     @classmethod
-    def _normalize_allowlist(cls, values: list[str] | None) -> list[str] | None:
-        """Trim entries and drop blanks from a transport allowlist; None stays None.
+    def _normalize_allowlist(
+        cls, values: list[str] | None, info: ValidationInfo
+    ) -> list[str] | None:
+        """Trim entries and reject a blank one; ``None`` stays ``None``.
 
-        Light normalization only: an entry is a Host or Origin the operator
-        vouches for, so this does not run the internal-host SSRF gate
-        (``localhost`` is a wanted loopback entry).
-
-        A list whose entries are all blank collapses to ``None`` (unset), not to
-        an empty list: an empty ``allowed_origins`` is the strict reject-all-Origin
-        posture, so a fat-fingered blank value (``[""]``, an unfilled template)
-        must not silently select it. An explicitly empty list is left as-is.
+        Each entry is a Host or Origin the operator vouches for, so surrounding
+        whitespace is trimmed (a stray space would break the transport's exact
+        match), but a blank entry (an empty string, or an unfilled template value)
+        raises rather than being silently dropped: a dropped entry hides the typo,
+        and for ``allowed_origins`` it could collapse the list to the strict
+        reject-all-Origin posture. An explicitly empty list is a deliberate value
+        and is kept. This does not run the internal-host SSRF gate (``localhost``
+        is a wanted loopback entry).
         """
         if values is None:
             return None
-        cleaned = nonempty_strs(values)
-        if values and not cleaned:
-            return None
+        cleaned: list[str] = []
+        for value in values:
+            entry = value.strip()
+            if not entry:
+                raise ValueError(
+                    f"{info.field_name} contains a blank entry; remove it or give "
+                    "a real Host/Origin value (an empty list is accepted, a blank "
+                    "entry is not)."
+                )
+            cleaned.append(entry)
         return cleaned
 
 

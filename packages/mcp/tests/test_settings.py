@@ -298,26 +298,31 @@ def test_mcp_allowed_origins_from_env_parses_json(monkeypatch):
 
 
 @pytest.mark.unit
-def test_mcp_allowlists_strip_and_drop_empty_entries():
-    """Normalization trims each entry and drops blanks; localhost is kept."""
+def test_mcp_allowlist_trims_surrounding_whitespace():
+    """Each entry is trimmed; localhost is kept (no SSRF gate on operator entries)."""
     mcp = McpSettings(
-        allowed_hosts=[" mcp.pipefy.com ", "", "   ", "localhost"],
-        allowed_origins=["  https://mcp.pipefy.com  ", " "],
+        allowed_hosts=[" mcp.pipefy.com ", "localhost"],
+        allowed_origins=["  https://mcp.pipefy.com  "],
     )
     assert mcp.allowed_hosts == ["mcp.pipefy.com", "localhost"]
     assert mcp.allowed_origins == ["https://mcp.pipefy.com"]
 
 
 @pytest.mark.unit
-def test_mcp_all_blank_allowlist_collapses_to_none_not_empty():
-    """An all-blank list normalizes to None (unset), not the strict empty override.
+@pytest.mark.parametrize("field", ["allowed_hosts", "allowed_origins"])
+def test_mcp_allowlist_rejects_a_blank_entry(field):
+    """A blank/whitespace entry is a config error, not a silently-dropped value.
 
-    ``allowed_origins=[]`` is the reject-all-Origin posture; a fat-fingered blank
-    value (an unfilled template) must not silently select it, so an all-blank list
-    reads as unset. An explicitly empty list is preserved.
+    Dropping it would hide the typo, and for allowed_origins could collapse the
+    list to the strict reject-all-Origin posture, so the settings boundary refuses.
     """
-    mcp = McpSettings(allowed_hosts=["  ", ""], allowed_origins=[" "])
-    assert mcp.allowed_hosts is None
-    assert mcp.allowed_origins is None
+    with pytest.raises(ValidationError, match="blank entry"):
+        McpSettings(**{field: ["ok", "   "]})
 
-    assert McpSettings(allowed_origins=[]).allowed_origins == []
+
+@pytest.mark.unit
+def test_mcp_explicit_empty_allowlist_is_preserved():
+    """An explicit [] is a deliberate value (reject-all-Origin), not a blank entry."""
+    mcp = McpSettings(allowed_hosts=[], allowed_origins=[])
+    assert mcp.allowed_hosts == []
+    assert mcp.allowed_origins == []

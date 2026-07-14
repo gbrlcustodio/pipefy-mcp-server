@@ -25,9 +25,6 @@ import anyio
 import httpx
 import pytest
 from mcp.server.fastmcp import FastMCP
-from pipefy_auth import AuthSettings
-from pipefy_sdk import PipefySettings
-
 from pipefy_mcp.core.tool_middleware import install_tool_call_middleware
 from pipefy_mcp.observability.json_logging import (
     configure_observability_logging,
@@ -35,13 +32,6 @@ from pipefy_mcp.observability.json_logging import (
 )
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.observability.wiring import wire_hosted_observability
-from pipefy_mcp.settings import McpSettings, Settings
-
-_SETTINGS = Settings(
-    pipefy=PipefySettings(base_url="https://api.pipefy.com"),
-    auth=AuthSettings(),
-    mcp=McpSettings(transport="http"),
-)
 
 _ACCEPT = "application/json, text/event-stream"
 
@@ -95,7 +85,7 @@ async def test_two_calls_in_one_session_correlate_to_their_own_posts(capsys):
         return text
 
     install_tool_call_middleware(app, [tool_log_middleware])
-    http_app = wire_hosted_observability(app, _SETTINGS)
+    http_app = wire_hosted_observability(app)
 
     with anyio.fail_after(15):
         async with http_app.router.lifespan_context(http_app):

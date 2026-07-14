@@ -389,7 +389,7 @@ async def test_serve_streamable_http_disables_uvicorn_access_log(remote_rs_env):
         await _serve_streamable_http(fake_app, settings)
 
     mock_configure.assert_called_once_with()
-    mock_wire.assert_called_once_with(fake_app, settings)
+    mock_wire.assert_called_once_with(fake_app)
     mock_config_cls.assert_called_once_with(
         mock_http_app,
         host="127.0.0.1",

@@ -150,7 +150,7 @@ async def _serve_streamable_http(app: FastMCP, settings: Settings) -> None:
     import uvicorn
 
     configure_observability_logging()
-    http_app = wire_hosted_observability(app, settings)
+    http_app = wire_hosted_observability(app)
     mcp = settings.mcp
     config = uvicorn.Config(
         http_app,

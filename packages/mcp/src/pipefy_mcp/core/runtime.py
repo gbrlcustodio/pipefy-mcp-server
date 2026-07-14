@@ -80,25 +80,30 @@ class McpRuntime:
         """Build the runtime for the resolved profile, wiring inbound and outbound auth.
 
         The composition root's one build step: it parses the ``resource_server_url``
-        once, builds the transport allowlist from that one parsed resource, and hands
-        both to the per-profile builder ``settings.mcp.profile`` selects. Parsing here
-        keeps the resource a single value both the allowlist and (for ``remote``) the
-        inbound-auth pair are derived from, so they cannot disagree on the host.
+        once, builds the transport allowlist from that one parsed resource, and
+        selects the per-profile identity (and, for ``remote``, the inbound-auth pair).
+        Parsing here keeps the resource a single value both the allowlist and the
+        inbound-auth pair are derived from, so they cannot disagree on the host; the
+        one ``cls(...)`` call then wires the fields common to both profiles.
         """
         resource = _resource_server(settings.rs)
         transport_security = build_transport_security(settings.mcp, resource)
         if settings.mcp.profile == "remote":
-            return cls._for_remote_profile(settings, resource, transport_security)
-        return cls._for_local_profile(settings, transport_security)
+            identity, inbound_auth = cls._remote_identity(settings, resource)
+        else:
+            identity, inbound_auth = cls._local_identity(settings), None
+        return cls(
+            settings,
+            identity,
+            inbound_auth=inbound_auth,
+            transport_security=transport_security,
+        )
 
-    @classmethod
-    def _for_remote_profile(
-        cls,
-        settings: Settings,
-        resource: ResourceServer | None,
-        transport_security: TransportSecuritySettings | None,
-    ) -> McpRuntime:
-        """The ``remote`` profile: a per-request identity and an inbound RS pair.
+    @staticmethod
+    def _remote_identity(
+        settings: Settings, resource: ResourceServer | None
+    ) -> tuple[AuthSource, ResourceServerAuth]:
+        """The ``remote`` profile's identity: a per-request bearer and an inbound RS pair.
 
         ``remote`` acts on behalf of each caller: it validates a per-request bearer
         (the inbound ``(verifier, auth)`` pair) and each session replays that caller's
@@ -129,29 +134,16 @@ class McpRuntime:
             issuer_url=issuer_url,
             required_scopes=settings.rs.required_scopes,
         )
-        return cls(
-            settings,
-            RequestScopedIdentity(),
-            inbound_auth=inbound_auth,
-            transport_security=transport_security,
-        )
+        return RequestScopedIdentity(), inbound_auth
 
-    @classmethod
-    def _for_local_profile(
-        cls,
-        settings: Settings,
-        transport_security: TransportSecuritySettings | None,
-    ) -> McpRuntime:
-        """The ``local`` profile (stdio, or loopback HTTP): one startup credential.
+    @staticmethod
+    def _local_identity(settings: Settings) -> AuthSource:
+        """The ``local`` profile's identity (stdio, or loopback HTTP): one startup credential.
 
         No inbound identity: the one startup credential is resolved from settings (and
         fails fast when none is configured) and every session acts as it.
         """
-        return cls(
-            settings,
-            StartupIdentity.from_configured_credential(settings),
-            transport_security=transport_security,
-        )
+        return StartupIdentity.from_configured_credential(settings)
 
     def session_for_request(self, request: Request | None) -> PipefyClient:
         """Open a session bound to the current request's identity.

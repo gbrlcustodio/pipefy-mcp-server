@@ -5,6 +5,7 @@ import textwrap
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
+import anyio
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.runtime import McpRuntime
@@ -14,6 +15,7 @@ from pipefy_mcp.core.tool_middleware import (
 )
 from pipefy_mcp.observability.json_logging import configure_observability_logging
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
+from pipefy_mcp.observability.wiring import wire_hosted_observability
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
@@ -137,6 +139,30 @@ def build_pipefy_mcp_server(
     return app
 
 
+async def _serve_streamable_http(app: FastMCP, settings: Settings) -> None:
+    """Serve Streamable HTTP with hosted observability middleware wired in.
+
+    The structured emitter is configured here, not in :func:`run_server`, so the
+    stdio path never installs it. Structured lines go to stderr (not the JSON-RPC
+    stdout wire); keeping configuration off the stdio path still avoids arming a
+    process-global handler that local installs do not need.
+    """
+    import uvicorn
+
+    configure_observability_logging()
+    http_app = wire_hosted_observability(app, settings)
+    mcp = settings.mcp
+    config = uvicorn.Config(
+        http_app,
+        host=mcp.host,
+        port=mcp.port,
+        log_level=mcp.log_level.lower(),
+        access_log=False,
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
 def run_server(settings: Settings) -> None:
     """Run the Pipefy MCP server. The single serve entry point for both transports.
 
@@ -164,7 +190,6 @@ def run_server(settings: Settings) -> None:
     profile has no resource server). They differ only in the transport ``run``.
     """
     mcp = settings.mcp
-    configure_observability_logging(log_level=mcp.log_level)
 
     if mcp.transport == "stdio":
         logger.info("Starting Pipefy MCP server over stdio (profile=%s)", mcp.profile)
@@ -186,4 +211,4 @@ def run_server(settings: Settings) -> None:
 
     # Bind safety is enforced at the settings boundary (McpSettings._enforce_bind_safety);
     # host/port arrive already vetted, so there is nothing to re-check here.
-    build_pipefy_mcp_server(settings).run("streamable-http")
+    anyio.run(_serve_streamable_http, build_pipefy_mcp_server(settings), settings)

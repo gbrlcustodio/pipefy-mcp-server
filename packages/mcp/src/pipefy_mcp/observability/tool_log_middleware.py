@@ -1,47 +1,33 @@
 """Structured per-tool-call logging as a tool-call middleware.
 
 The first consumer of the tool-call middleware chain (see
-:mod:`pipefy_mcp.core.tool_middleware`): it emits one JSON line per call with the
-tool name, outcome, duration, the caller's client id, argument key names, and a
-request id for correlation. Being the first consumer, it also exercises the
+:mod:`pipefy_mcp.core.tool_middleware`): it emits one JSON line per call via the
+hosted structured emitter (``build_tool_call_event`` /
+``emit_structured_event``). Being the first consumer, it also exercises the
 chain end to end.
 
 Privacy: never logs the bearer, and never logs argument values, only their
 (bounded) key names.
 
-Output goes through the standard ``logging`` module, which writes to stderr. It
-must never write to stdout: the stdio transport frames JSON-RPC over stdout, so a
-stray log line there corrupts the protocol.
-
-Line integrity depends on the process's root log handler, which this module does
-not configure. FastMCP's default ``RichHandler`` wraps at width 80 in a non-TTY,
-which would split an event across physical lines; and a deployment that
-reconfigures root logging before construction can drop these INFO lines. The
-hosted logging wiring (the structured-log emitter) owns installing a plain,
-non-wrapping formatter at INFO so the one-line contract holds; until then a host
-that cares must install one.
+Output goes through the dedicated observability logger on stderr. It must never
+write to stdout: the stdio transport frames JSON-RPC over stdout, so a stray log
+line there corrupts the protocol. Under HTTP, ``configure_observability_logging``
+pins that logger at INFO independently of ``PIPEFY_MCP_LOG_LEVEL``.
 """
 
 from __future__ import annotations
 
 import asyncio
-import json
-import logging
 import time
-from typing import Literal
 
 from mcp import UrlElicitationRequiredError, types
 
 from pipefy_mcp.core.tool_middleware import CallNext, ToolCallContext
-
-logger = logging.getLogger("pipefy_mcp.observability.tool_call")
-
-# "cancelled" (client disconnect) and "elicitation" (the tool is asking the client
-# to visit a URL) are normal control flow, kept out of "error" so an error-rate
-# alert is not tripped by them. A governance short-circuit still reads as "error":
-# it returns isError=True and is indistinguishable from a tool-reported failure at
-# the result boundary.
-ToolCallOutcome = Literal["ok", "error", "cancelled", "elicitation"]
+from pipefy_mcp.observability.json_logging import (
+    ToolCallOutcome,
+    build_tool_call_event,
+    emit_structured_event,
+)
 
 
 def _outcome(result: types.ServerResult) -> ToolCallOutcome:
@@ -52,11 +38,6 @@ def _outcome(result: types.ServerResult) -> ToolCallOutcome:
     raising.
     """
     return "error" if getattr(result.root, "isError", False) else "ok"
-
-
-def _emit(event: dict[str, object]) -> None:
-    """Write one structured line via logging (stderr), never stdout."""
-    logger.info(json.dumps(event, separators=(",", ":")))
 
 
 async def tool_log_middleware(
@@ -90,18 +71,14 @@ async def tool_log_middleware(
         outcome = "error"
         raise
     finally:
-        # Guard here, not inside _emit, so the event dict is not built when the
-        # line would be discarded.
-        if logger.isEnabledFor(logging.INFO):
-            duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
-            _emit(
-                {
-                    "event": "tool_call",
-                    "tool": ctx.tool_name,
-                    "outcome": outcome,
-                    "duration_ms": duration_ms,
-                    "arg_keys": list(ctx.argument_keys),
-                    "client_id": ctx.identity.client_id,
-                    "request_id": ctx.request_id,
-                }
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 3)
+        emit_structured_event(
+            build_tool_call_event(
+                tool=ctx.tool_name,
+                outcome=outcome,
+                duration_ms=duration_ms,
+                arg_keys=list(ctx.argument_keys),
+                request_id=ctx.request_id,
+                client_id=ctx.identity.client_id,
             )
+        )

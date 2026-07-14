@@ -22,6 +22,8 @@ Skills are Markdown-only — no Python, no `uv`, no test infrastructure required
 5. Open a PR. CI validates frontmatter, MCP tool names, and `pipefy` CLI
    subcommands referenced in each `SKILL.md`.
 
+> **Try your skill in Claude Code before opening the PR.** Point the plugin marketplace at your local clone so your branch loads live — see [Test the Claude Code plugin from a local checkout](README.md#test-the-claude-code-plugin-from-a-local-checkout).
+
 ### Frontmatter requirements
 
 Every `SKILL.md` must have valid YAML frontmatter with:

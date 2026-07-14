@@ -15,7 +15,7 @@ import sys
 import pytest
 from mcp import UrlElicitationRequiredError, types
 
-from pipefy_mcp.auth.request_identity import CallerIdentity
+from pipefy_mcp.auth.inbound_identity import CallerIdentity
 from pipefy_mcp.core.tool_middleware import ToolCallContext
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 

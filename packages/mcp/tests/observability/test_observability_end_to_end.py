@@ -9,7 +9,7 @@ a contextvar-based correlation would stamp the initialize request id on every
 tool line, and this test would fail.
 
 Tool lines come from ``tool_log_middleware`` (#378) via the shared structured
-emitter — not a second CallToolRequest wrap.
+emitter, not a second CallToolRequest wrap.
 
 ``json_response=True`` keeps responses as plain JSON (no SSE framing to
 parse); the dispatch path under test, transport metadata plus per-message

@@ -2,7 +2,7 @@
 
 Unit tests inject ``scope["user"]`` directly and only prove extraction. These
 tests drive ``wire_hosted_observability`` so AuthenticationMiddleware populates
-``scope["user"]`` before RequestLogMiddleware's ``finally`` reads it — locking
+``scope["user"]`` before RequestLogMiddleware's ``finally`` reads it, locking
 middleware order and identity fields together.
 """
 

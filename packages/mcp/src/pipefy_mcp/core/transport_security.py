@@ -34,16 +34,6 @@ from pipefy_mcp.settings import McpSettings
 _LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 
 
-def _host_forms(host: str) -> tuple[str, str]:
-    """The two match forms for a Host entry: exact, and any-port (``host:*``).
-
-    The SDK matches a Host header by exact string or a trailing ``:*`` port
-    wildcard, and ``localhost:*`` does not match a portless ``localhost``, so both
-    forms are listed to cover a Host sent with or without a port.
-    """
-    return host, f"{host}:*"
-
-
 def build_transport_security(
     mcp: McpSettings, resource: ResourceServer | None
 ) -> TransportSecuritySettings | None:
@@ -68,21 +58,28 @@ def build_transport_security(
     if not public_hosts and explicit_origins is None:
         return None
 
-    allowed_hosts: list[str] = []
-    for host in (*_LOOPBACK_HOSTS, *public_hosts):
-        for form in _host_forms(host):
-            if form not in allowed_hosts:
-                allowed_hosts.append(form)
+    # Each host contributes an exact form and a ``host:*`` any-port form: the SDK
+    # matches a Host header by exact string or trailing ``:*`` wildcard, and
+    # ``localhost:*`` does not match a portless ``localhost``, so both cover a Host
+    # sent with or without a port. ``dict.fromkeys`` dedupes while keeping order.
+    allowed_hosts = list(
+        dict.fromkeys(
+            form
+            for host in (*_LOOPBACK_HOSTS, *public_hosts)
+            for form in (host, f"{host}:*")
+        )
+    )
 
     if explicit_origins is not None:
         allowed_origins = list(explicit_origins)
     else:
-        allowed_origins = []
-        for host in allowed_hosts:
-            for scheme in ("http", "https"):
-                origin = f"{scheme}://{host}"
-                if origin not in allowed_origins:
-                    allowed_origins.append(origin)
+        # allowed_hosts is already deduped and (host, scheme) is injective, so no
+        # duplicate origin can arise; derive directly with no dedup pass.
+        allowed_origins = [
+            f"{scheme}://{host}"
+            for host in allowed_hosts
+            for scheme in ("http", "https")
+        ]
 
     return TransportSecuritySettings(
         enable_dns_rebinding_protection=True,

@@ -181,6 +181,61 @@ than a local `file_path`), enforce that in the tool body gated on
 exclusion deserves a reason gets a plain code comment stating why; the exclusion
 itself needs no annotation.
 
+### Process-global configuration and the single-backend assumption
+
+When the server runs in hosted (`remote`) mode, one process serves many users at
+the same time. Settings loaded from the environment are **shared by everyone** —
+there is one copy for the whole process, not one per user.
+
+That's fine when a setting answers a question about the *deployment* ("which
+Pipefy backend do we talk to?", "how long before a lookup times out?"). It's a
+problem if a setting ever answers a question about a *user* ("who is this call
+acting as?", "which org does this caller belong to?") — because then one shared
+value would silently apply to every user. The one truly per-user thing,
+identity, never comes from settings: in hosted mode each request carries its own
+validated token (`RequestScopedIdentity`), and the startup credential settings
+(`settings.auth`) are only ever read in local mode.
+
+Everything else that reads shared settings is safe because of one assumption,
+stated here on purpose so it isn't forgotten: **one hosted deployment serves a
+single integrator against a single backend.** In other words, every user of a
+deployment shares the same config because they genuinely share the same setup.
+The full list of shared-settings reads a tool call can hit, audited for #306:
+
+- `PIPEFY_BASE_URL` — which backend the server talks to. Everyone hits the
+  same one; this is the assumption itself.
+- The GraphQL schema cache (`gql_reuse_fetched_graphql_schema`) — shared
+  across users, which is fine because one backend means one schema.
+- `permission_denied_enrichment_timeout_seconds`
+  (`tools/graphql_error_helpers.py`) — a timeout knob. Same for everyone by
+  design.
+- `unified_envelope` (`core/tool_error_envelope.py`) — a flag that changes the
+  shape of tool responses. Applies identically to every caller.
+- `default_webhook_name` (SDK webhook service) — a cosmetic default name; the
+  webhook tools aren't exposed remotely anyway.
+
+A related note: some tools (like `delete_card_relation`) say they "require
+service-account credentials" because they use Pipefy's Internal API. That isn't
+a shared-settings read — it's whatever credential the session already has. But
+in hosted mode that credential would be the caller's own token, and we haven't
+verified the Internal API accepts one. That's one reason those tools aren't
+marked remote-safe.
+
+**When this breaks (the rework trigger).** If one hosted server ever needs to
+serve *multiple* backends, or integrators with different config, the assumption
+is gone: "same for everyone" stops being true, and each of the reads above
+becomes a per-user question. The fix is the same one identity already went
+through in #302 — stop reading the value from shared settings and resolve it
+from the incoming request instead.
+
+**How this is enforced.** An import-linter rule in `pyproject.toml` forbids
+tool code from reaching `pipefy_mcp.settings`, even indirectly through a helper
+(that indirect path is how `unified_envelope` was caught). Every existing read
+is an explicitly listed, commented exception. If someone adds a new settings
+read to a tool, `uv run lint-imports` fails, and the read only gets an
+exception after review confirms it's a per-deployment value — never a per-user
+one. Per-user values must come from the request.
+
 ## Tool-call middleware
 
 Cross-cutting concerns that wrap a tool invocation (logging, per-user quotas,

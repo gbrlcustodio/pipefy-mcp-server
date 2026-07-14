@@ -69,6 +69,8 @@ jobs:
       run: cd packages/auth && uv run ruff check src
     - name: Lint infra (banned upward imports)
       run: cd packages/infra && uv run ruff check src
+    - name: Lint mcp (intra-package layers)
+      run: cd packages/mcp && uv run lint-imports
     - name: Build workspace wheels (packaging smoke)
       run: uv build --all-packages --wheel -o dist-packaging-smoke
     - name: Smoke install CLI wheel (clean venv)

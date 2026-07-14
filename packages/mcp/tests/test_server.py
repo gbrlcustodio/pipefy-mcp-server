@@ -15,7 +15,6 @@ from pipefy_sdk import PipefySettings
 from pipefy_mcp.core.tool_middleware import ToolCallContext, short_circuit_error
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.server import (
-    _assert_safe_http_bind,
     _make_lifespan,
     _register_pipefy_tools,
     _serve_streamable_http,
@@ -275,20 +274,6 @@ async def test_repeat_lifespan_yields_the_same_runtime_and_leaves_tools_untouche
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1"])
-def test_loopback_http_bind_allows_loopback_hosts(host):
-    _assert_safe_http_bind(host=host)
-
-
-@pytest.mark.unit
-@pytest.mark.parametrize("host", ["0.0.0.0", "203.0.113.5"])
-def test_loopback_http_bind_refuses_non_loopback_hosts(host):
-    """A non-loopback bind is refused until the hosted on-behalf-of profile lands."""
-    with pytest.raises(RuntimeError, match="non-loopback host"):
-        _assert_safe_http_bind(host=host)
-
-
-@pytest.mark.unit
 def test_run_server_stdio_logs_the_argv_resolved_profile(monkeypatch):
     """The startup log reflects the argv-resolved profile, not the ambient env.
 
@@ -422,9 +407,7 @@ def test_run_server_remote_without_resource_server_fails_fast(monkeypatch):
     The remote profile acts on behalf of the caller, so it needs a per-request
     bearer to validate. Without a configured resource server there is no
     per-request identity, and silently falling back to the single startup
-    credential would defeat the profile, so the runtime refuses to build. The
-    loopback bind guard runs first, so the host here is loopback to reach the
-    resource-server check.
+    credential would defeat the profile, so the runtime refuses to build.
     """
     monkeypatch.delenv("PIPEFY_MCP_RS_RESOURCE_SERVER_URL", raising=False)
     with pytest.raises(RuntimeError, match="requires a resource server"):
@@ -481,17 +464,28 @@ def test_run_server_http_respects_an_explicit_zero_port(remote_rs_env):
 
 
 @pytest.mark.unit
-def test_run_server_http_refuses_non_loopback_before_building(remote_rs_env):
-    """The loopback guard fires before the app is built or served."""
-    with patch("pipefy_mcp.server.build_pipefy_mcp_server") as mock_build:
-        with pytest.raises(RuntimeError, match="Refusing to serve"):
-            run_server(
-                resolve_mcp_settings(
-                    profile="remote", transport="http", host="0.0.0.0", port=9123
-                )
-            )
+def test_run_server_remote_serves_off_loopback_without_a_bind_guard(remote_rs_env):
+    """The resource-server profile binds a non-loopback host with no guard or bypass.
 
-    mock_build.assert_not_called()
+    Auth posture, not bind interface, is the axis: ``remote`` validates a
+    per-request bearer, so ``0.0.0.0`` is a legitimate hosted bind and nothing
+    refuses it (a container binds ``0.0.0.0`` and is still private).
+    """
+    fake_app = MagicMock()
+    with (
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
+        patch("pipefy_mcp.server.anyio.run") as mock_anyio_run,
+    ):
+        settings = resolve_mcp_settings(
+            profile="remote", transport="http", host="0.0.0.0", port=9123
+        )
+        run_server(settings)
+
+    (built_settings,), _ = mock_build.call_args
+    assert built_settings.mcp.host == "0.0.0.0"
+    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
 
 
 # --- Resource-server role (OAuth 2.0 inbound bearer validation) --------------

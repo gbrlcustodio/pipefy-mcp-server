@@ -25,16 +25,12 @@ For AI agents (conversational agents with behaviors), see [skills/ai-agents/pipe
 | `update_automation` | `pipefy automation update` | Patch a rule via `extra_input` (`UpdateAutomationInput` fields). |
 | `delete_automation` | `pipefy automation delete` | **(Two-step destructive)** |
 | `simulate_automation` | `pipefy automation simulate` | **AI-only** dry-run (`generate_with_ai` action). |
-| `get_automation_logs` | `pipefy automation logs` | Execution history for one automation. |
-| `get_automation_logs_by_repo` | `pipefy automation logs --repo` | Logs across all automations in a pipe. |
 | `get_automation_events` | `pipefy automation events list` | Available trigger events. |
 | `get_automation_event_attributes` | `pipefy automation event-attributes` | Official `field_map.value` event-attribute tokens. |
 | `get_automation_actions` | `pipefy automation actions list` | Available action types for a pipe. |
 | `create_send_task_automation` | `pipefy automation send-task create` | Shortcut for send-a-task rules. |
-| `get_automations_usage` | `pipefy automation usage` / `pipefy usage automations` | Org usage stats (execution counts). |
-| `export_automation_jobs` | `pipefy automation export jobs` / `pipefy export automation-jobs` | Start async jobs export. |
-| `get_automation_jobs_export` | `pipefy automation export status` | Poll export status / URL. |
-| `get_automation_jobs_export_csv` | `pipefy automation export csv` / `pipefy export automation-jobs-csv` | Fetch CSV text when export is finished. |
+
+Logs, usage, and job exports for automations live in [skills/observability/pipefy-observability/SKILL.md](../../observability/pipefy-observability/SKILL.md) (`get_automation_logs`, `get_automation_logs_by_repo`, `get_automations_usage`, `export_automation_jobs`, and related tools).
 
 ---
 

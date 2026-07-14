@@ -6,7 +6,17 @@ Material in this tree describes **`pipefy-mcp-server`**: the MCP process, tool b
 
 | Path | Description |
 |------|-------------|
-| [`tools/`](tools/cross-cutting.md) | Per-domain MCP tool reference (parameters, edge cases, cross-cutting behavior) |
+| [`tools/cross-cutting.md`](tools/cross-cutting.md) | Shared conventions: pagination, IDs, `debug`, destructive deletes, permissions, errors |
+| [`tools/pipes-and-cards.md`](tools/pipes-and-cards.md) | Pipes, phases, fields, labels, cards, field conditions, card attachments |
+| [`tools/database-tables.md`](tools/database-tables.md) | Tables, records, table fields, table-record attachments |
+| [`tools/relations.md`](tools/relations.md) | Pipe and card relations |
+| [`tools/reports.md`](tools/reports.md) | Pipe and organization reports, async exports |
+| [`tools/automations-and-ai.md`](tools/automations-and-ai.md) | Traditional automations, AI automations, AI agents, validators |
+| [`tools/observability.md`](tools/observability.md) | Logs, usage, credits, execution metrics, job exports |
+| [`tools/members-email-webhooks.md`](tools/members-email-webhooks.md) | Membership, inbox email, webhooks |
+| [`tools/organization.md`](tools/organization.md) | Organization metadata |
+| [`tools/portal.md`](tools/portal.md) | Portals, pages, elements, sub-portals |
+| [`tools/introspection.md`](tools/introspection.md) | Schema discovery and raw GraphQL |
 
 Start with [`tools/cross-cutting.md`](tools/cross-cutting.md) for pagination, IDs, `debug`, permissions, and error shape — then open the domain guide you need.
 

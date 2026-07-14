@@ -6,13 +6,13 @@ from typing import Any, Literal
 
 from typing_extensions import TypedDict
 
-from pipefy_mcp.tools.graphql_error_helpers import (
-    handle_tool_graphql_error,
-)
-from pipefy_mcp.tools.tool_error_envelope import (
+from pipefy_mcp.core.tool_error_envelope import (
     is_unified_envelope_enabled,
     tool_error,
     tool_success,
+)
+from pipefy_mcp.tools.graphql_error_helpers import (
+    handle_tool_graphql_error,
 )
 
 # The ``Legacy*SuccessPayload`` TypedDicts below describe the flag=false shape

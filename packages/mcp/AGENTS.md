@@ -1,6 +1,6 @@
 # MCP package conventions
 
-Scoped to `packages/mcp/`. Repo-wide guidance lives in `../../AGENTS.md`.
+Scoped to `packages/mcp/`. Repo-wide guidance lives in `../../AGENTS.md`. The layer model, type-ownership rule, and alternative-constructor guide are in [`../../docs/architecture.md`](../../docs/architecture.md); this package's intra-package layering is enforced by import-linter (`uv run lint-imports`).
 
 ## Distribution model
 
@@ -33,7 +33,8 @@ marker is described below.
     resource-server URL is configured, validates an inbound bearer per request.
 - **`--transport {stdio|http}`** (env `PIPEFY_MCP_TRANSPORT`). Left unset it follows
   the profile: `local` speaks stdio, `remote` serves over Streamable HTTP. Set it
-  explicitly to run `local` over loopback HTTP. `remote` over stdio is rejected: a
+  explicitly to run `local` over HTTP (loopback by default; see "Bind-safety
+  interlock"). `remote` over stdio is rejected: a
   per-request bearer has no stdio equivalent. The pair is resolved (and validated)
   once, at startup, by `resolve_mcp_settings`.
 
@@ -45,8 +46,9 @@ bearer per request and opens a per-request session carrying a snapshot of that
 validated bearer, so concurrent callers each act as themselves rather than as a
 single identity resolved at startup. All sessions share one process-scoped engine
 (the GraphQL endpoints and their schema cache). `local` runs as the one credential
-resolved at startup. The transport still binds loopback-only until the
-DNS-rebinding host/Origin allowlist lands.
+resolved at startup. The unauthenticated `local` profile binds loopback-only over
+HTTP unless the `PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` escape hatch is set; the
+authenticated `remote` profile binds any host (see "Bind-safety interlock" below).
 
 **Resource-server profile.** Config is split by domain. *Token validation* is an
 auth concern and lives in `pipefy_auth.JwtValidationSettings` (`settings.jwt`,
@@ -71,14 +73,50 @@ module) resolves the inbound issuer and pairs the verifier with `AuthSettings`.
 The runtime (`McpRuntime.for_profile`) calls it for the `remote` profile and holds
 the pair as `inbound_auth`, which `server.py` wires into the app.
 
-**Loopback bind.** `_assert_safe_http_bind` restricts the HTTP transport to a
-loopback bind, unconditionally for now. Per-request on-behalf-of identity (each
-call runs as the validated caller, not a single startup identity) means inbound
-identity is not the constraint; the constraint is DNS-rebinding protection, the
-configurable host / Origin allowlist for a proxied deployment. Off-loopback binding
-stays off until that lands (see `experiments/hosted-obo/RFC-OUTLINE.md`). The
-attachment tools' local `file_path` inputs also still assume a loopback peer that
-shares the client's disk (remote-safe file inputs are separate follow-up work).
+**Bind-safety interlock.** The property protected is auth posture, not bind
+interface: an unauthenticated profile must not be reachable by untrusted callers.
+`McpSettings._enforce_bind_safety` (a `model_validator` at the settings boundary)
+refuses a non-loopback HTTP bind under the unauthenticated `local` profile unless
+`PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` is set. Living at the settings boundary means
+no serving path routes around it (the coverage argument, why every serving path
+inherits the guarantee, lives on the `_enforce_bind_safety` docstring). The `remote` profile
+validates a per-request bearer, so its bind host is irrelevant and is not checked
+(a container binds `0.0.0.0` and is still private). Loopback detection is
+`pipefy_infra.security.is_loopback_host`, which covers all of `127.0.0.0/8` and
+`::1`. This replaced an earlier bind-interface guard (`_assert_safe_http_bind`) that
+false-positived on the entire hosted profile and lived in the run path where the
+ASGI-app path bypassed it. DNS-rebinding protection (the configurable host / Origin
+allowlist for a proxied deployment) is separate follow-up work; see
+`experiments/hosted-obo/RFC-OUTLINE.md`. The attachment tools' local `file_path`
+inputs also still assume a loopback peer that shares the client's disk (remote-safe
+file inputs are separate follow-up work).
+
+## Hosted structured logging
+
+The HTTP transport emits allowlisted JSON lines on stderr for hosted **debugging**
+(`pipefy_mcp/observability/`): one `http_request` line per request and one
+`tool_call` line per tool invocation (via `tool_log_middleware`). Fields are
+privacy-bounded (no bearer, no argument values, no query string, no exception
+messages). Stdio does **not** install the structured emitter: under stdio,
+stdout is the JSON-RPC wire, and local installs should not arm that
+process-global handler.
+
+Wiring lives in `wire_hosted_observability` (`observability/wiring.py`): it calls
+`streamable_http_app()` once, attaches request middleware, and returns the Starlette app.
+`run_server` serves that app with uvicorn directly (`access_log=False`) so the
+structured request line replaces uvicorn's text access log.
+`configure_observability_logging` pins the dedicated structured logger at `INFO`
+independently of `PIPEFY_MCP_LOG_LEVEL` (which only governs FastMCP/root text
+logs), so quieting noisy text does not drop request/tool lines.
+
+The request logger is **pure-ASGI middleware** (`RequestLogMiddleware`), never
+Starlette `BaseHTTPMiddleware`: `BaseHTTPMiddleware` buffers the response body,
+which breaks long-lived Streamable HTTP / SSE streams. The pure-ASGI middleware
+only inspects `http.response.start` (status + headers) and passes the body through.
+`request_id` prefers inbound `x-request-id`, then `x-correlation-id`, and mints a
+UUID only when both are absent (or blank), so an upstream proxy can keep one id
+across service boundaries. Tool lines go through the same emitter builders as
+HTTP lines (`build_tool_call_event` / `emit_structured_event`).
 
 ## Hosted structured logging
 

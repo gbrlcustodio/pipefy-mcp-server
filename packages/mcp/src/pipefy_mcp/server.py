@@ -26,12 +26,6 @@ PIPEFY_INSTRUCTIONS = textwrap.dedent("""
     You are connected to a Pipefy MCP server for managing Kanban-style workflow processes.
     """).strip()
 
-# Hosts that keep the server reachable only from the local machine. The HTTP
-# transport refuses to bind anywhere else (a routable interface or 0.0.0.0)
-# until the DNS-rebinding host/Origin allowlist lands; see
-# _assert_safe_http_bind.
-_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
-
 
 def _make_lifespan(
     runtime: McpRuntime,
@@ -145,29 +139,6 @@ def build_pipefy_mcp_server(
     return app
 
 
-def _assert_safe_http_bind(*, host: str) -> None:
-    """Refuse to bind the HTTP transport to a non-loopback host.
-
-    The HTTP transport is restricted to loopback for now. The resource-server
-    profile carries per-request on-behalf-of identity (each call runs as the
-    validated caller, not a single startup identity), so inbound identity is not
-    the constraint; the constraint is DNS-rebinding protection, the configurable
-    host / Origin allowlist. (The filesystem tools, e.g. the attachment uploads,
-    also only make sense on loopback, where the server shares the client's disk;
-    remote-safe file inputs are separate follow-up work.)
-
-    Off-loopback binding stays off until that allowlist lands; see
-    experiments/hosted-obo/RFC-OUTLINE.md.
-    """
-    if host in _LOOPBACK_HOSTS:
-        return
-    raise RuntimeError(
-        f"Refusing to serve over HTTP on a non-loopback host ({host}). The HTTP "
-        f"transport is restricted to loopback (127.0.0.1/localhost/::1) until "
-        f"the hosted on-behalf-of profile lands."
-    )
-
-
 async def _serve_streamable_http(app: FastMCP, settings: Settings) -> None:
     """Serve Streamable HTTP with hosted observability middleware wired in.
 
@@ -201,8 +172,7 @@ def run_server(settings: Settings) -> None:
     pair) and passes the result, so this module reads no process globals.
 
     ``settings.mcp.transport == "stdio"`` speaks MCP over stdio; ``"http"`` serves
-    over Streamable HTTP on ``host``/``port``, restricted to a loopback bind until
-    the hosted on-behalf-of profile lands (see :func:`_assert_safe_http_bind`).
+    over Streamable HTTP on ``host``/``port``.
 
     ``settings.mcp.profile == "remote"`` selects the default-deny remote-safe tool
     surface and validates an inbound bearer per request; it requires a configured
@@ -217,8 +187,7 @@ def run_server(settings: Settings) -> None:
     Both transports build the same app through :func:`build_pipefy_mcp_server`,
     which builds the app-scoped runtime via :meth:`McpRuntime.for_profile` (owning
     the inbound resource-server pair for ``remote`` and failing fast when that
-    profile has no resource server). They differ only in the transport ``run`` and
-    HTTP's bind concerns.
+    profile has no resource server). They differ only in the transport ``run``.
     """
     mcp = settings.mcp
 
@@ -239,6 +208,7 @@ def run_server(settings: Settings) -> None:
         mcp.profile,
         "active" if mcp.profile == "remote" else "inactive",
     )
-    _assert_safe_http_bind(host=mcp.host)
 
+    # Bind safety is enforced at the settings boundary (McpSettings._enforce_bind_safety);
+    # host/port arrive already vetted, so there is nothing to re-check here.
     anyio.run(_serve_streamable_http, build_pipefy_mcp_server(settings), settings)

@@ -19,15 +19,15 @@ from pipefy_sdk.ai_pipe_validation import (
 )
 from typing_extensions import TypedDict
 
-from pipefy_mcp.tools.graphql_error_helpers import (
-    extract_error_strings,
-    strip_internal_api_diagnostic_markers,
-)
-from pipefy_mcp.tools.tool_error_envelope import (
+from pipefy_mcp.core.tool_error_envelope import (
     ToolErrorDetail,
     is_unified_envelope_enabled,
     tool_error,
     tool_success,
+)
+from pipefy_mcp.tools.graphql_error_helpers import (
+    extract_error_strings,
+    strip_internal_api_diagnostic_markers,
 )
 
 logger = logging.getLogger(__name__)

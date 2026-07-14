@@ -122,5 +122,5 @@ Never delete in a single call.
 
 ## See also
 
-- [skills/relations/pipefy-relations/SKILL.md](skills/relations/pipefy-relations/SKILL.md) — connect tables to pipes (and the table-relation ID namespace gotcha).
-- [skills/introspection/pipefy-introspection/SKILL.md](skills/introspection/pipefy-introspection/SKILL.md) — discover field input schemas.
+- [skills/relations/pipefy-relations/SKILL.md](../../relations/pipefy-relations/SKILL.md) — connect tables to pipes (and the table-relation ID namespace gotcha).
+- [skills/introspection/pipefy-introspection/SKILL.md](../../introspection/pipefy-introspection/SKILL.md) — discover field input schemas.

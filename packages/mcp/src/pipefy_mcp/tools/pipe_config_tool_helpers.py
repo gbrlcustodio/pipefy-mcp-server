@@ -6,10 +6,10 @@ from typing import Any, Literal, cast
 from pipefy_sdk import PipefyClient
 from typing_extensions import TypedDict
 
+from pipefy_mcp.core.tool_error_envelope import ToolErrorDetail, tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
     handle_tool_graphql_error,
 )
-from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
 from pipefy_mcp.tools.validation_helpers import UUID_RE, format_json_preview
 
 

@@ -13,6 +13,7 @@ from pipefy_sdk import (
 )
 from typing_extensions import TypedDict
 
+from pipefy_mcp.core.tool_error_envelope import ToolErrorDetail, tool_error
 from pipefy_mcp.tools.graphql_error_helpers import (
     extract_error_strings,
     extract_graphql_correlation_id,
@@ -21,7 +22,6 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     try_enrich_graphql_error,
     with_debug_suffix,
 )
-from pipefy_mcp.tools.tool_error_envelope import ToolErrorDetail, tool_error
 
 AutomationReadToolData = (
     AutomationRuleRecord

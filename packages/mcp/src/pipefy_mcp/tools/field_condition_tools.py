@@ -9,6 +9,7 @@ from mcp.server.session import ServerSession
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
+from pipefy_mcp.core.tool_error_envelope import tool_error
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.pipe_config_tool_helpers import (
     build_field_condition_delete_payload,
@@ -18,7 +19,6 @@ from pipefy_mcp.tools.pipe_config_tool_helpers import (
     handle_pipe_config_tool_graphql_error,
 )
 from pipefy_mcp.tools.tool_context import get_pipefy_client
-from pipefy_mcp.tools.tool_error_envelope import tool_error
 from pipefy_mcp.tools.validation_helpers import (
     validate_tool_id,
 )

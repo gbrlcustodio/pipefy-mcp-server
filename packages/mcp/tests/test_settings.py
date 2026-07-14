@@ -214,3 +214,60 @@ def test_mcp_remote_over_stdio_is_rejected():
     """'remote' has no stdio equivalent (no per-request bearer), so it is refused."""
     with pytest.raises(ValidationError, match="requires the 'http' transport"):
         McpSettings(profile="remote", transport="stdio")
+
+
+# --- bind-safety interlock (auth posture, not bind interface) ----------------
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("host", ["0.0.0.0", "203.0.113.5"])
+def test_mcp_local_http_refuses_non_loopback_bind(host):
+    """The unauthenticated 'local' profile refuses a non-loopback HTTP bind."""
+    with pytest.raises(ValidationError, match="non-loopback HTTP bind"):
+        McpSettings(profile="local", transport="http", host=host)
+
+
+@pytest.mark.unit
+def test_mcp_local_http_non_loopback_allowed_with_escape_hatch():
+    """The escape hatch opts in to an unauthenticated non-loopback bind."""
+    settings = McpSettings(
+        profile="local",
+        transport="http",
+        host="0.0.0.0",
+        allow_insecure_http_bind=True,
+    )
+    assert settings.host == "0.0.0.0"
+
+
+@pytest.mark.unit
+def test_mcp_local_http_escape_hatch_from_env(monkeypatch):
+    """The escape hatch is settable via PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND."""
+    monkeypatch.setenv("PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND", "true")
+    settings = McpSettings(profile="local", transport="http", host="0.0.0.0")
+    assert settings.allow_insecure_http_bind is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("host", ["127.0.0.1", "localhost", "::1", "127.0.0.2"])
+def test_mcp_local_http_allows_loopback_bind(host):
+    """Loopback covers all of 127.0.0.0/8 and ::1, not just literal 127.0.0.1."""
+    assert McpSettings(profile="local", transport="http", host=host).host == host
+
+
+@pytest.mark.unit
+def test_mcp_local_stdio_ignores_a_non_loopback_host():
+    """stdio never binds, so a non-loopback host is not checked."""
+    settings = McpSettings(profile="local", transport="stdio", host="0.0.0.0")
+    assert settings.host == "0.0.0.0"
+
+
+@pytest.mark.unit
+def test_mcp_remote_binds_any_host_without_the_escape_hatch():
+    """The authenticated 'remote' profile binds a non-loopback host unrestricted.
+
+    Its per-request bearer is the control, so bind interface is irrelevant. The
+    resource-server requirement is a separate runtime check, not this validator.
+    """
+    settings = McpSettings(profile="remote", transport="http", host="0.0.0.0")
+    assert settings.host == "0.0.0.0"
+    assert settings.allow_insecure_http_bind is False

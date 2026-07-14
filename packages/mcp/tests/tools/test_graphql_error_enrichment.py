@@ -2,13 +2,13 @@
 
 import pytest
 
+from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_ambiguous_access_error,
     enrich_invalid_arguments_error,
     enrich_not_found_error,
     handle_tool_graphql_error,
 )
-from pipefy_mcp.tools.tool_error_envelope import tool_error_message
 
 
 class _FakeGraphQLError(Exception):

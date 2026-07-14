@@ -11,8 +11,6 @@ tags: [pipefy, reports, exports, pipe-reports, organization-reports]
 
 Pipe reports and organization reports: discovery, CRUD, and async exports. **17 MCP tools.**
 
-**CLI status (v0.1):** use MCP tools below. Report-specific Typer commands are planned for v0.3+.
-
 ---
 
 ## Cross-cutting patterns
@@ -27,33 +25,33 @@ Pipe reports and organization reports: discovery, CRUD, and async exports. **17 
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `get_pipe_reports` | — (CLI v0.3+) | Yes | List all reports for a pipe. |
-| `get_pipe_report` | — (CLI v0.3+) | Yes | Single report data. |
-| `get_pipe_report_columns` | — (CLI v0.3+) | Yes | Discover available columns for a report filter. |
-| `get_pipe_report_filterable_fields` | — (CLI v0.3+) | Yes | Discover filterable fields for a report. |
-| `create_pipe_report` | — (CLI v0.3+) | No | Create a new pipe report. |
-| `update_pipe_report` | — (CLI v0.3+) | No | Update report name or filters. |
-| `delete_pipe_report` | — (CLI v0.3+) | No | **Two-step destructive.** |
-| `export_pipe_report` | — (CLI v0.3+) | No | Trigger async export. |
+| `get_pipe_reports` | `pipefy report-pipe list` | Yes | List all reports for a pipe. |
+| `get_pipe_report` | `pipefy report-pipe get` | Yes | Single report data. |
+| `get_pipe_report_columns` | `pipefy report-pipe columns` | Yes | Discover available columns for a report filter. |
+| `get_pipe_report_filterable_fields` | `pipefy report-pipe filterable-fields` | Yes | Discover filterable fields for a report. |
+| `create_pipe_report` | `pipefy report-pipe create` | No | Create a new pipe report. |
+| `update_pipe_report` | `pipefy report-pipe update` | No | Update report name or filters. |
+| `delete_pipe_report` | `pipefy report-pipe delete` | No | **Two-step destructive.** |
+| `export_pipe_report` | `pipefy report-pipe export` | No | Trigger async export. |
 
 ## Organization report tools
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `get_organization_reports` | — (CLI v0.3+) | Yes | List all org-level reports. |
-| `get_organization_report` | — (CLI v0.3+) | Yes | Single org report data. |
-| `create_organization_report` | — (CLI v0.3+) | No | Create an org-wide report. |
-| `update_organization_report` | — (CLI v0.3+) | No | Update report config. |
-| `delete_organization_report` | — (CLI v0.3+) | No | **Two-step destructive.** |
-| `export_organization_report` | — (CLI v0.3+) | No | Trigger async export. |
+| `get_organization_reports` | `pipefy report-org list` | Yes | List all org-level reports. |
+| `get_organization_report` | `pipefy report-org get` | Yes | Single org report data. |
+| `create_organization_report` | `pipefy report-org create` | No | Create an org-wide report. |
+| `update_organization_report` | `pipefy report-org update` | No | Update report config. |
+| `delete_organization_report` | `pipefy report-org delete` | No | **Two-step destructive.** |
+| `export_organization_report` | `pipefy report-org export` | No | Trigger async export. |
 
 ## Export status & download
 
 | Tool (MCP) | CLI | Purpose |
 |------------|-----|---------|
-| `get_pipe_report_export` | — (CLI v0.3+) | Poll pipe report export status (after `export_pipe_report`). |
-| `get_organization_report_export` | — (CLI v0.3+) | Poll org report export status (after `export_organization_report`). |
-| `export_pipe_audit_logs` | — (CLI v0.3+) | Export pipe audit logs (separate from card report exports). |
+| `get_pipe_report_export` | poll via `pipefy report-pipe export --format json` | Poll pipe report export status (after `export_pipe_report`). |
+| `get_organization_report_export` | poll via `pipefy report-org export --format json` | Poll org report export status (after `export_organization_report`). |
+| `export_pipe_audit_logs` | `pipefy audit export` | Export pipe audit logs (separate from card report exports). |
 
 ---
 

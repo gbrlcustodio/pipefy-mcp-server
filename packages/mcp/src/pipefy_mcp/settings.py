@@ -10,6 +10,7 @@ from pydantic import (
     AliasChoices,
     Field,
     ValidationError,
+    ValidationInfo,
     field_validator,
     model_validator,
 )
@@ -134,6 +135,30 @@ class McpSettings(BaseSettings):
         ),
     )
 
+    allowed_hosts: list[str] | None = Field(
+        default=None,
+        description=(
+            "Extra Host header values the HTTP transport accepts, on top of "
+            "loopback and the resource_server_url host (env: "
+            "PIPEFY_MCP_ALLOWED_HOSTS as a JSON array). Needed only when a proxy "
+            "forwards a public Host that differs from the resource-server URL; the "
+            "standard fronted deployment derives its allowlist from "
+            "resource_server_url and sets none. An entry matches an exact Host or, "
+            "as 'host:*', any port on that host."
+        ),
+    )
+
+    allowed_origins: list[str] | None = Field(
+        default=None,
+        description=(
+            "Origin header values the HTTP transport accepts (env: "
+            "PIPEFY_MCP_ALLOWED_ORIGINS as a JSON array). Unset derives the "
+            "scheme://host origins from the allowed hosts; a non-empty array replaces "
+            "them with a custom set, and an empty array is the strictest override, "
+            "rejecting any request that sends an Origin header."
+        ),
+    )
+
     @field_validator("log_level", mode="before")
     @classmethod
     def _normalize_log_level(cls, value: object) -> object:
@@ -195,6 +220,36 @@ class McpSettings(BaseSettings):
                 "unauthenticated public bind."
             )
         return self
+
+    @field_validator("allowed_hosts", "allowed_origins", mode="after")
+    @classmethod
+    def _normalize_allowlist(
+        cls, values: list[str] | None, info: ValidationInfo
+    ) -> list[str] | None:
+        """Trim entries and reject a blank one; ``None`` stays ``None``.
+
+        Each entry is a Host or Origin the operator vouches for, so surrounding
+        whitespace is trimmed (a stray space would break the transport's exact
+        match), but a blank entry (an empty string, or an unfilled template value)
+        raises rather than being silently dropped: a dropped entry hides the typo,
+        and for ``allowed_origins`` it could collapse the list to the strict
+        reject-all-Origin posture. An explicitly empty list is a deliberate value
+        and is kept. This does not run the internal-host SSRF gate (``localhost``
+        is a wanted loopback entry).
+        """
+        if values is None:
+            return None
+        cleaned: list[str] = []
+        for value in values:
+            entry = value.strip()
+            if not entry:
+                raise ValueError(
+                    f"{info.field_name} contains a blank entry; remove it or give "
+                    "a real Host/Origin value (an empty list is accepted, a blank "
+                    "entry is not)."
+                )
+            cleaned.append(entry)
+        return cleaned
 
 
 class ResourceServerSettings(BaseSettings):

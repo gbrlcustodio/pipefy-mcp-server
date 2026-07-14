@@ -13,16 +13,20 @@ transport-agnostic auth primitive). This class maps the validated claims onto
 the SDK's ``AccessToken`` and turns a validation failure into the ``None`` the
 protocol reads as "reject".
 
-:func:`build_resource_server_auth` is the composition root for this profile: it
-resolves the inbound issuer, constructs the verifier over a ``JwtValidator``,
-and pairs it with FastMCP's ``AuthSettings`` for the server to wire in.
+:func:`build_resource_server_auth` constructs the verifier over a ``JwtValidator``
+and pairs it with FastMCP's ``AuthSettings`` for the server to wire in. It takes an
+already-resolved issuer: the composition root
+(:meth:`pipefy_mcp.core.runtime.McpRuntime.for_profile`) resolves the inbound issuer
+and gates on it, so this builder only wires the resolved values in.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings as FastMcpAuthSettings
@@ -34,9 +38,40 @@ from pipefy_auth import (
     SkipAudience,
 )
 
-from pipefy_mcp.settings import ResourceServerSettings
-
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ResourceServer:
+    """A validated resource-server URL paired with its parsed Host authorities.
+
+    Built by :meth:`from_url` at composition, so holding one is proof its
+    ``host_authorities`` are resolved before any read. ``url`` is the verbatim RFC 9728
+    resource identifier (kept exact, as clients compare against it); ``host_authorities``
+    are the ``host[:port]`` values it presents in the ``Host`` header, which the
+    transport allowlist widens.
+    """
+
+    url: str
+    host_authorities: tuple[str, ...]
+
+    @classmethod
+    def from_url(cls, url: str) -> ResourceServer:
+        """Parse an already-validated URL into its ``Host`` header authorities.
+
+        An IPv6 literal is bracketed, as the wire Host carries it (``urlparse``
+        reports it unbracketed); a URL that names a port also contributes the
+        ``host:port`` authority.
+        """
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        authorities: list[str] = []
+        if hostname:
+            host = f"[{hostname}]" if ":" in hostname else hostname
+            authorities.append(host)
+            if parsed.port:
+                authorities.append(f"{host}:{parsed.port}")
+        return cls(url=url, host_authorities=tuple(authorities))
 
 
 class PipefyAccessToken(AccessToken):
@@ -134,34 +169,20 @@ ResourceServerAuth = tuple[JwtTokenVerifier, FastMcpAuthSettings]
 
 
 def build_resource_server_auth(
-    rs: ResourceServerSettings,
+    resource: ResourceServer,
     jwt_validation: JwtValidationSettings,
     *,
-    default_issuer_url: str | None,
-) -> ResourceServerAuth | None:
-    """Build the inbound bearer verifier and FastMCP auth config, or ``None``.
+    issuer_url: str,
+    required_scopes: list[str] | None = None,
+) -> ResourceServerAuth:
+    """Build the inbound bearer verifier and FastMCP auth config for ``resource``.
 
-    The resource-server profile has no enable flag: it is active when this
-    server's ``resource_server_url`` is configured. Absent it, this returns
-    ``None`` and the unauthenticated foundation profile constructs ``FastMCP``
-    exactly as before.
-
-    The inbound issuer is ``jwt_validation.issuer_url`` if set, else
-    ``default_issuer_url`` (see :class:`JwtValidationSettings` for why the login
-    issuer is the fallback). With ``resource_server_url`` set but no issuer
-    resolvable (the stored-session login is disabled and no override is given),
-    validation is impossible, so this raises rather than serve an open endpoint.
+    Called only when the resource-server profile is active: the composition root
+    parses the configured ``resource_server_url`` into ``resource`` and resolves the
+    inbound ``issuer_url`` (gating on both, so an unresolvable issuer fails fast at
+    the root). This receives an already-parsed identity and a resolved issuer and just
+    wires them onto the validator and FastMCP's ``AuthSettings``.
     """
-    if rs.resource_server_url is None:
-        return None
-    issuer_url = jwt_validation.resolve_issuer_url(default_issuer_url)
-    if issuer_url is None:
-        raise RuntimeError(
-            "The resource-server profile is active "
-            "(PIPEFY_MCP_RS_RESOURCE_SERVER_URL is set) but no inbound issuer is "
-            "resolvable: set PIPEFY_JWT_ISSUER_URL, or leave the stored-session "
-            "login enabled so its issuer can be reused."
-        )
     # Fold the loose audience pair into the AudiencePolicy sum type. A
     # verify-without-audience is already rejected at JwtValidationSettings
     # construction, so `is not None` only narrows the Optional for the type
@@ -177,11 +198,11 @@ def build_resource_server_auth(
             allow_insecure_urls=jwt_validation.allow_insecure_urls,
             jwks_uri=jwt_validation.jwks_uri,
         ),
-        resource=rs.resource_server_url,
+        resource=resource.url,
     )
     auth = FastMcpAuthSettings(
         issuer_url=issuer_url,
-        resource_server_url=rs.resource_server_url,
-        required_scopes=rs.required_scopes,
+        resource_server_url=resource.url,
+        required_scopes=required_scopes,
     )
     return verifier, auth

@@ -5,7 +5,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from pipefy_mcp.core.runtime import McpRuntime, RequestScopedIdentity
+from pipefy_mcp.auth import RequestScopedIdentity
+from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 

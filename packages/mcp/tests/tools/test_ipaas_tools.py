@@ -11,8 +11,9 @@ from mcp.shared.memory import (
 )
 from pipefy_sdk import PipefyClient
 
+from pipefy_mcp.auth import RequestScopedIdentity
 from pipefy_mcp.core.ipaas_gateway import IpaasGateway, IpaasGatewayError
-from pipefy_mcp.core.runtime import McpRuntime, RequestScopedIdentity
+from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.settings import settings
 from pipefy_mcp.tools.ipaas_tools import IpaasTools

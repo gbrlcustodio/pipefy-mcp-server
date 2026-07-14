@@ -208,6 +208,30 @@ class TestForProfile:
             McpRuntime.for_profile(settings)
 
     @pytest.mark.unit
+    def test_remote_inbound_issuer_defaults_to_the_login_issuer(self, monkeypatch):
+        """With no PIPEFY_JWT_ISSUER_URL override, the inbound issuer is the login issuer.
+
+        A single-realm deployment reuses the IdP the server logs into as the issuer
+        that mints the inbound bearers it validates. ``remote_rs_settings`` pins an
+        explicit override, so drop it and configure only ``auth_url`` (the login
+        issuer) to pin the override-absent fallback the composition root owns
+        (``_login_issuer_url`` -> ``resolve_issuer_url``).
+        """
+        monkeypatch.delenv("PIPEFY_JWT_ISSUER_URL", raising=False)
+        login_issuer = "https://signin.pipefy.com/realms/pipefy"
+        settings = remote_rs_settings().model_copy(
+            update={
+                "auth": AuthSettings(auth_url=login_issuer),
+                "jwt": JwtValidationSettings(jwks_uri=RS_JWKS_URI),
+            }
+        )
+
+        runtime = McpRuntime.for_profile(settings)
+
+        _, auth = runtime.inbound_auth
+        assert str(auth.issuer_url).rstrip("/") == login_issuer
+
+    @pytest.mark.unit
     def test_local_static_token_binds_the_static_bearer(self, clear_auth_env):
         """``PIPEFY_TOKEN`` resolves to a static-bearer startup identity, no inbound auth."""
         settings = Settings(

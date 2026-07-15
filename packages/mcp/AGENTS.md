@@ -187,14 +187,7 @@ When the server runs in hosted (`remote`) mode, one process serves many users at
 the same time. Settings loaded from the environment are **shared by everyone** —
 there is one copy for the whole process, not one per user.
 
-That's fine when a setting answers a question about the *deployment* ("which
-Pipefy backend do we talk to?", "how long before a lookup times out?"). It's a
-problem if a setting ever answers a question about a *user* ("who is this call
-acting as?", "which org does this caller belong to?") — because then one shared
-value would silently apply to every user. The one truly per-user thing,
-identity, never comes from settings: in hosted mode each request carries its own
-validated token (`RequestScopedIdentity`), and the startup credential settings
-(`settings.auth`) are only ever read in local mode.
+That's fine when a setting answers a question about the *deployment* ("which Pipefy backend do we talk to?", "how long before a lookup times out?"). It's a problem if a setting ever answers a question about a *user* ("who is this call acting as?", "which org does this caller belong to?") — because then one shared value would silently apply to every user. The one truly per-user thing, identity, never comes from settings: in hosted mode each request carries its own validated token (`RequestScopedIdentity`). `settings.auth` is read in both modes, but always for a per-deployment purpose: local mode resolves the one outbound startup credential from it, and remote mode reads it once at startup to derive the default inbound issuer URL (see "Resource-server profile" above) — safe under the same single-realm assumption.
 
 Everything else that reads shared settings is safe because of one assumption,
 stated here on purpose so it isn't forgotten: **one hosted deployment serves a
@@ -230,13 +223,7 @@ becomes a per-user question. The fix is the same one identity already went
 through in #302 — stop reading the value from shared settings and resolve it
 from the incoming request instead.
 
-**How this is enforced.** An import-linter rule in `pyproject.toml` forbids
-tool code from reaching `pipefy_mcp.settings`, even indirectly through a helper
-(that indirect path is how `unified_envelope` was caught). Every existing read
-is an explicitly listed, commented exception. If someone adds a new settings
-read to a tool, `uv run lint-imports` fails, and the read only gets an
-exception after review confirms it's a per-deployment value — never a per-user
-one. Per-user values must come from the request.
+**How this is enforced.** An import-linter rule in `pyproject.toml` forbids tool code from *importing* `pipefy_mcp.settings`, even indirectly through a helper (that indirect path is how `unified_envelope` was caught). Every existing import is an explicitly listed, commented exception. If someone adds a new settings import to tool-reachable code, `uv run lint-imports` fails, and it only gets an exception after review confirms it reads a per-deployment value — never a per-user one. Known limit: the rule sees imports, not reads. Code that already holds a settings object — `McpRuntime.settings`, reachable from any tool through its request context — can read a value without adding an import, so that path stays a manual-review item. Per-user values must come from the request.
 
 ## Tool-call middleware
 

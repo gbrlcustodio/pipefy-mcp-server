@@ -18,7 +18,12 @@ from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
 )
-from pipefy_mcp.tools.tool_context import get_ipaas_gateway, get_pipefy_client
+from pipefy_mcp.tools.remote_profile import REMOTE
+from pipefy_mcp.tools.tool_context import (
+    get_ipaas_gateway,
+    get_pipefy_client,
+    is_remote_profile,
+)
 
 _NOT_CONFIGURED_MESSAGE = (
     "The iPaaS tools are disabled on this server (PIPEFY_IPAAS_OAUTH_CLIENT_ID "
@@ -69,10 +74,10 @@ class IpaasTools:
     def register(mcp: FastMCP) -> None:
         """Register iPaaS-related tools on the MCP server."""
 
-        # Not marked remote-safe yet: the tool itself is per-user clean (the
-        # pipe token is minted with the caller's own session), but the iPaaS
-        # chain hasn't been reviewed for hosted exposure.
-        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+            meta=REMOTE,
+        )
         async def get_ipaas_tools(
             pipe_id: PipefyId,
             ctx: Context,
@@ -123,11 +128,11 @@ class IpaasTools:
 
             return await _run_ipaas_tool(ctx, pipe_id, work)
 
-        # Not marked remote-safe yet, for the same reason as get_ipaas_tools.
         @mcp.tool(
             annotations=ToolAnnotations(
                 readOnlyHint=False, destructiveHint=True, openWorldHint=True
-            )
+            ),
+            meta=REMOTE,
         )
         async def call_ipaas_tool(
             pipe_id: PipefyId,
@@ -166,8 +171,10 @@ class IpaasTools:
 
             return await _run_ipaas_tool(ctx, pipe_id, work)
 
-        # Not marked remote-safe yet, for the same reason as get_ipaas_tools.
-        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+            meta=REMOTE,
+        )
         async def get_ipaas_connection_auth_url(
             pipe_id: PipefyId,
             piece_name: str,
@@ -213,8 +220,7 @@ class IpaasTools:
 
             return await _run_ipaas_tool(ctx, pipe_id, work)
 
-        # Not marked remote-safe yet, for the same reason as get_ipaas_tools.
-        @mcp.tool(annotations=ToolAnnotations(openWorldHint=True))
+        @mcp.tool(annotations=ToolAnnotations(openWorldHint=True), meta=REMOTE)
         async def create_ipaas_connection(
             pipe_id: PipefyId,
             piece_name: str,
@@ -244,7 +250,9 @@ class IpaasTools:
               store it in the MCP server's environment and reference it as
               ``{"$env": "PIPEFY_IPAAS_CONNECTION_<NAME>"}`` anywhere a string
               is expected (requires the variable to be set before the server
-              starts). Never repeat a provided secret back in any reply.
+              starts; locally-run servers only — the hosted server rejects
+              env references, since its environment is shared by every
+              caller). Never repeat a provided secret back in any reply.
             * **OAuth pieces** — first call ``get_ipaas_connection_auth_url``;
               then pass ``oauth={"completion": <bundle, verbatim>,
               "authorization_response": "<pasted redirect URL or bare code>"}``.
@@ -270,7 +278,10 @@ class IpaasTools:
 
             async def work(gateway: IpaasGateway, token: str) -> dict:
                 upsert_type, upsert_value = _connection_request(
-                    connection_type, value, oauth
+                    connection_type,
+                    value,
+                    oauth,
+                    env_refs_allowed=not is_remote_profile(ctx),
                 )
                 connection_id = external_id or f"mcp-{uuid.uuid4().hex[:12]}"
                 connection = await gateway.upsert_connection(
@@ -311,6 +322,8 @@ def _connection_request(
     connection_type: str | None,
     value: dict[str, Any] | None,
     oauth: dict[str, Any] | None,
+    *,
+    env_refs_allowed: bool,
 ) -> tuple[str, dict[str, Any]]:
     """Normalize the tool's two modes into an upsert (type, value) pair."""
     if oauth is not None:
@@ -336,7 +349,7 @@ def _connection_request(
         raise ValueError(
             "value must be a non-empty object matching the piece's auth props."
         )
-    return connection_type, _resolve_env_refs(value)
+    return connection_type, _resolve_env_refs(value, allowed=env_refs_allowed)
 
 
 def _extract_authorization_code(authorization_response: str) -> str:
@@ -360,18 +373,27 @@ def _extract_authorization_code(authorization_response: str) -> str:
     return stripped
 
 
-def _resolve_env_refs(node: Any) -> Any:
+def _resolve_env_refs(node: Any, *, allowed: bool) -> Any:
     """Resolve {"$env": NAME} references from the server's environment.
 
     Only variables under the PIPEFY_IPAAS_CONNECTION_ prefix resolve; this is
     the boundary that keeps the tool from exfiltrating unrelated process
-    secrets. The semantics are local-profile: the environment is the single
-    server process's, so any future remote exposure of the connection tools
-    must revisit this (one deployment's variables would be resolvable by
-    every caller).
+    secrets. The semantics are single-user: the environment belongs to one
+    local server process. On the hosted ``remote`` profile the environment is
+    the deployment's, shared by every caller, so the tool passes
+    ``allowed=False`` there and any reference is rejected instead of
+    resolved.
     """
     if isinstance(node, dict):
         if "$env" in node:
+            if not allowed:
+                raise ValueError(
+                    '{"$env": ...} references are disabled on the hosted '
+                    "server: they resolve from the server's own environment, "
+                    "which is shared by every caller. Pass the credential "
+                    "value directly, or use the OAuth flow "
+                    "(get_ipaas_connection_auth_url) instead."
+                )
             if set(node) != {"$env"}:
                 raise ValueError(
                     'an {"$env": ...} reference must be an object whose only '
@@ -392,9 +414,11 @@ def _resolve_env_refs(node: Any) -> Any:
                     "the env block of its MCP configuration) and reconnect."
                 )
             return resolved
-        return {key: _resolve_env_refs(item) for key, item in node.items()}
+        return {
+            key: _resolve_env_refs(item, allowed=allowed) for key, item in node.items()
+        }
     if isinstance(node, list):
-        return [_resolve_env_refs(item) for item in node]
+        return [_resolve_env_refs(item, allowed=allowed) for item in node]
     return node
 
 

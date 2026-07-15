@@ -12,6 +12,14 @@ from pipefy_mcp.tools.remote_profile import REMOTE, REMOTE_META_KEY, is_remote_t
 # listed here, and the drift guard below asserts the two stay in lockstep.
 REMOTE_SEED = frozenset(
     {
+        # iPaaS meta tools: per-request identity end-to-end (the pipe token is
+        # minted with the caller's own bearer), stateless shared gateway, and
+        # the one process-global input ($env credential references) is
+        # rejected at call time under the remote profile.
+        "get_ipaas_tools",
+        "call_ipaas_tool",
+        "get_ipaas_connection_auth_url",
+        "create_ipaas_connection",
         "search_pipes",
         "get_organization",
         "get_pipe",

@@ -50,7 +50,9 @@ Two creation paths:
   it as `{"$env": "PIPEFY_IPAAS_CONNECTION_<NAME>"}` instead: only variables
   under that prefix resolve, and the value never enters the conversation. The
   variable must be set before the server starts (e.g. the `env` block of its
-  MCP configuration).
+  MCP configuration). `$env` references work on locally-run servers only: a
+  hosted (`remote`-profile) server rejects them, because its environment
+  belongs to the deployment and would be resolvable by every caller.
 - **OAuth pieces** — `get_ipaas_connection_auth_url` returns a consent URL and a
   `completion` bundle; the user opens the URL, authorizes, and pastes back the
   redirect URL they land on; `create_ipaas_connection` finishes with
@@ -69,6 +71,10 @@ creation time, so a bad token fails immediately with the host's own message.
 
 - The caller must be allowed to **create automations on the pipe** (pipe-admin
   ability); the organization must have **iPaaS enabled**.
+- All four tools are marked remote-safe and register on both profiles: every
+  call acts with the caller's own identity (the pipe-scoped token is minted
+  per request), so a hosted multi-user server needs no extra setup — with the
+  one `$env` restriction noted above.
 - No server configuration is needed against production: the deployment defaults
   to Pipefy's canonical public OAuth client (see
   [`docs/config.md`](../../config.md)). Staging/single-tenant hosts override

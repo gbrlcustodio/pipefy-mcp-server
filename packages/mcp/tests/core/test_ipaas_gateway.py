@@ -9,7 +9,12 @@ import httpx
 import pytest
 import respx
 
-from pipefy_mcp.core.ipaas_gateway import IpaasGateway, IpaasGatewayError
+from pipefy_mcp.core.ipaas_gateway import (
+    CALL_TIMEOUT_SECONDS,
+    REQUEST_TIMEOUT_SECONDS,
+    IpaasGateway,
+    IpaasGatewayError,
+)
 
 IPAAS_URL = "https://ipaas.test"
 REDIRECT_URI = "https://localhost/pipefy-mcp-callback"
@@ -38,8 +43,8 @@ def gateway() -> IpaasGateway:
     )
 
 
-def _mock_happy_chain(respx_mock: respx.MockRouter, *, sse_tools_list: bool = False):
-    """Wire every endpoint of the chain; return the /mcp route for inspection."""
+def _mock_auth_chain(respx_mock: respx.MockRouter) -> None:
+    """Wire every endpoint of the chain before /mcp (session + headless OAuth)."""
     respx_mock.post(f"{IPAAS_URL}/api/v1/managed-authn/external-token").respond(
         200, json={"token": "session-token", "projectId": "proj-1"}
     )
@@ -54,7 +59,25 @@ def _mock_happy_chain(respx_mock: respx.MockRouter, *, sse_tools_list: bool = Fa
         200, json={"access_token": "access-token", "expires_in": 900}
     )
 
-    tools_result = {"jsonrpc": "2.0", "id": 2, "result": {"tools": TOOLS}}
+
+def _mock_happy_chain(
+    respx_mock: respx.MockRouter,
+    *,
+    sse_tools_list: bool = False,
+    rpc_result: dict | None = None,
+):
+    """Wire every endpoint of the chain; return the /mcp route for inspection.
+
+    ``rpc_result`` is the JSON-RPC ``result`` the non-initialize MCP request
+    answers with; it defaults to the ``tools/list`` catalog.
+    """
+    _mock_auth_chain(respx_mock)
+
+    tools_result = {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {"tools": TOOLS} if rpc_result is None else rpc_result,
+    }
 
     def mcp_responder(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
@@ -180,19 +203,7 @@ async def test_redirect_without_auth_request_id_is_reported(respx_mock, gateway)
 @pytest.mark.anyio
 @respx.mock
 async def test_jsonrpc_error_from_tools_list_raises(respx_mock, gateway):
-    respx_mock.post(f"{IPAAS_URL}/api/v1/managed-authn/external-token").respond(
-        200, json={"token": "session-token", "projectId": "proj-1"}
-    )
-    respx_mock.get(url__startswith=f"{IPAAS_URL}/authorize").respond(
-        302,
-        headers={"location": f"{IPAAS_URL}/mcp-authorize?authRequestId=auth-req-jwt"},
-    )
-    respx_mock.post(f"{IPAAS_URL}/api/v1/mcp-oauth/approve").respond(
-        200, json={"redirectUrl": f"{REDIRECT_URI}?code=auth-code"}
-    )
-    respx_mock.post(f"{IPAAS_URL}/token").respond(
-        200, json={"access_token": "access-token"}
-    )
+    _mock_auth_chain(respx_mock)
     respx_mock.post(f"{IPAAS_URL}/mcp").respond(
         200,
         json={"jsonrpc": "2.0", "id": 2, "error": {"code": -32603, "message": "boom"}},
@@ -200,3 +211,151 @@ async def test_jsonrpc_error_from_tools_list_raises(respx_mock, gateway):
 
     with pytest.raises(IpaasGatewayError, match="tools/list returned an error"):
         await gateway.list_tools("embed-jwt")
+
+
+CALL_RESULT = {
+    "content": [{"type": "text", "text": "flow created: flow-1"}],
+    "isError": False,
+}
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_call_tool_posts_tools_call_with_arguments(respx_mock, gateway):
+    mcp_route = _mock_happy_chain(respx_mock, rpc_result=CALL_RESULT)
+
+    result = await gateway.call_tool("embed-jwt", "ap_create_flow", {"name": "My flow"})
+
+    assert result == CALL_RESULT
+    body = json.loads(mcp_route.calls.last.request.content)
+    assert body["method"] == "tools/call"
+    assert body["params"] == {
+        "name": "ap_create_flow",
+        "arguments": {"name": "My flow"},
+    }
+    assert (
+        mcp_route.calls.last.request.headers["authorization"] == "Bearer access-token"
+    )
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_call_tool_defaults_arguments_to_empty_object(respx_mock, gateway):
+    mcp_route = _mock_happy_chain(respx_mock, rpc_result=CALL_RESULT)
+
+    await gateway.call_tool("embed-jwt", "ap_list_flows")
+
+    body = json.loads(mcp_route.calls.last.request.content)
+    assert body["params"] == {"name": "ap_list_flows", "arguments": {}}
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_call_tool_gives_only_the_invocation_hop_the_long_timeout(
+    respx_mock, gateway
+):
+    """A called tool may run a real flow; the handshake hops keep 30s."""
+    mcp_route = _mock_happy_chain(respx_mock, rpc_result=CALL_RESULT)
+
+    await gateway.call_tool("embed-jwt", "ap_test_flow", {"flowId": "flow-1"})
+
+    initialize, invocation = mcp_route.calls[-2].request, mcp_route.calls[-1].request
+    assert initialize.extensions["timeout"]["read"] == REQUEST_TIMEOUT_SECONDS
+    assert invocation.extensions["timeout"]["read"] == CALL_TIMEOUT_SECONDS
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_call_tool_relays_host_error_results_without_raising(respx_mock, gateway):
+    """A tool-level isError is data for the caller, not a chain failure."""
+    error_result = {
+        "content": [{"type": "text", "text": "flow not found"}],
+        "isError": True,
+    }
+    _mock_happy_chain(respx_mock, rpc_result=error_result)
+
+    result = await gateway.call_tool("embed-jwt", "ap_delete_flow", {"id": "nope"})
+
+    assert result == error_result
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_call_tool_parses_sse_encoded_response(respx_mock, gateway):
+    _mock_happy_chain(respx_mock, sse_tools_list=True, rpc_result=CALL_RESULT)
+
+    result = await gateway.call_tool("embed-jwt", "ap_create_flow", {"name": "x"})
+
+    assert result == CALL_RESULT
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_jsonrpc_error_from_tools_call_names_the_method(respx_mock, gateway):
+    _mock_auth_chain(respx_mock)
+    respx_mock.post(f"{IPAAS_URL}/mcp").respond(
+        200,
+        json={"jsonrpc": "2.0", "id": 2, "error": {"code": -32602, "message": "boom"}},
+    )
+
+    with pytest.raises(IpaasGatewayError, match="tools/call returned an error"):
+        await gateway.call_tool("embed-jwt", "ap_create_flow", {})
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_call_tool_timeout_names_the_method_and_points_at_runs(
+    respx_mock, gateway
+):
+    """A timeout on the invocation hop must not surface as a bare httpx error."""
+    _mock_auth_chain(respx_mock)
+
+    def responder(request: httpx.Request) -> httpx.Response:
+        if json.loads(request.content)["method"] == "initialize":
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+        raise httpx.ReadTimeout("read timed out")
+
+    respx_mock.post(f"{IPAAS_URL}/mcp").mock(side_effect=responder)
+
+    with pytest.raises(
+        IpaasGatewayError, match="tools/call timed out after 120s.*run-listing"
+    ):
+        await gateway.call_tool("embed-jwt", "ap_test_flow", {"flowId": "flow-1"})
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_response_without_result_names_the_method(respx_mock, gateway):
+    _mock_auth_chain(respx_mock)
+    respx_mock.post(f"{IPAAS_URL}/mcp").respond(200, json={"jsonrpc": "2.0", "id": 2})
+
+    with pytest.raises(IpaasGatewayError, match="tools/call.*no result"):
+        await gateway.call_tool("embed-jwt", "ap_list_flows")
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_sse_notification_frames_before_the_response_are_skipped(
+    respx_mock, gateway
+):
+    """The response frame is selected by shape, not assumed to arrive first."""
+    _mock_auth_chain(respx_mock)
+    notification = {"jsonrpc": "2.0", "method": "notifications/message", "params": {}}
+    response = {"jsonrpc": "2.0", "id": 2, "result": CALL_RESULT}
+    sse_body = (
+        f"event: message\ndata: {json.dumps(notification)}\n\n"
+        f"event: message\ndata: {json.dumps(response)}\n\n"
+    )
+
+    def responder(request: httpx.Request) -> httpx.Response:
+        if json.loads(request.content)["method"] == "initialize":
+            return httpx.Response(200, json={"jsonrpc": "2.0", "id": 1, "result": {}})
+        return httpx.Response(
+            200, headers={"content-type": "text/event-stream"}, text=sse_body
+        )
+
+    respx_mock.post(f"{IPAAS_URL}/mcp").mock(side_effect=responder)
+
+    result = await gateway.call_tool("embed-jwt", "ap_create_flow", {"name": "x"})
+
+    assert result == CALL_RESULT

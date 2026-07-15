@@ -1,7 +1,7 @@
 # iPaaS (Advanced Automations) tools
 
-How the MCP server exposes Pipefy's iPaaS (Advanced Automations) capabilities to agents,
-starting with the `get_ipaas_tools` meta tool.
+How the MCP server exposes Pipefy's iPaaS (Advanced Automations) capabilities to agents:
+`get_ipaas_tools` for discovery and `call_ipaas_tool` for invocation.
 
 ## The meta-tool pattern
 
@@ -9,7 +9,10 @@ iPaaS offers a large tool surface. Loading it into every agent session would cro
 context, so the server exposes it lazily: `get_ipaas_tools(pipe_id)` returns a compact
 `name + description` catalog, and `get_ipaas_tools(pipe_id, tool_name=...)` drills into a
 single tool's full input schema on demand. Agents pay for the catalog only when they need
-it, and for a schema only when they are about to use that tool.
+it, and for a schema only when they are about to use that tool — then invoke it with
+`call_ipaas_tool(pipe_id, tool_name=..., arguments={...})`, which relays the result in
+full. The iPaaS host validates the arguments against its own schema, so its error
+messages come back verbatim.
 
 ## Flow
 
@@ -27,13 +30,15 @@ sequenceDiagram
     Pipefy-->>MCP: short-lived, pipe-scoped credential
     MCP->>iPaaS: authenticate to the pipe's iPaaS workspace
     iPaaS-->>MCP: session-scoped access
-    MCP->>iPaaS: list available tools
-    iPaaS-->>MCP: tool catalog
-    MCP-->>Agent: compact list<br/>(or one tool's schema via tool_name)
+    MCP->>iPaaS: list available tools · or invoke one (call_ipaas_tool)
+    iPaaS-->>MCP: tool catalog · or the tool's result
+    MCP-->>Agent: compact list, one tool's schema,<br/>or the invoked tool's full output
 ```
 
 Every call is stateless: credentials are minted per request and nothing is cached, so any
-server replica can serve any call.
+server replica can serve any call — invocation included. Invocation gets a longer
+network budget than discovery, since a called tool may execute a real flow; executions
+that outlive it are inspected through the catalog's own run-listing tools.
 
 ## Configuration
 
@@ -58,7 +63,11 @@ workspace.
 **Authorization** — acting on a pipe's iPaaS workspace requires the caller to be allowed
 to create automations on that pipe (a pipe-admin ability), evaluated against the identity
 the server resolves for the request. iPaaS-side activity is attributed per pipe.
+Invocation exposes the full catalog — including destructive operations — because the
+same caller already has that full surface in the product's Advanced Automations UI; the
+MCP path grants nothing beyond it, and `call_ipaas_tool` is annotated destructive so
+agent clients apply their approval flows.
 
 **Meta tool** — a tool whose job is to expose a catalog of *other* tools on demand (lazy
 discovery), so agents load large tool surfaces only when needed. `get_ipaas_tools` is the
-first one.
+first one; `call_ipaas_tool` is its invocation counterpart.

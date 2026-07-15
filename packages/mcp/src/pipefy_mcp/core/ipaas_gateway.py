@@ -9,7 +9,8 @@ authenticated ``tools/list`` against the pipe's iPaaS workspace:
    pre-registered client — the authorize redirect is parsed, never followed,
    and the approve step is a plain authenticated POST — yielding a short-lived
    access token.
-3. Call the iPaaS MCP endpoint (JSON-RPC ``initialize`` + ``tools/list``).
+3. Call the iPaaS MCP endpoint (JSON-RPC ``initialize`` + ``tools/list`` or
+   ``tools/call``).
 
 Every call is self-contained: no token, session, or client state is retained,
 so any server replica can serve any call. The construction values come from
@@ -28,6 +29,9 @@ import httpx
 from pipefy_auth.pkce import challenge_from_verifier, generate_verifier
 
 REQUEST_TIMEOUT_SECONDS = 30
+# The invocation hop only: a called tool may execute a real flow (test runs,
+# retries), which can legitimately outlast the 30s handshake budget.
+CALL_TIMEOUT_SECONDS = 120
 _MCP_PROTOCOL_VERSION = "2025-03-26"
 _ERROR_BODY_PREVIEW_CHARS = 300
 
@@ -66,16 +70,72 @@ class IpaasGateway:
             IpaasGatewayError: When any step of the chain is refused by the
                 iPaaS host; the message names the step.
         """
+        result = await self._authed_mcp_request(
+            advanced_automations_token, "tools/list", params={}
+        )
+        return result["tools"]
+
+    async def call_tool(
+        self,
+        advanced_automations_token: str,
+        tool_name: str,
+        arguments: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Invoke one tool in the pipe's iPaaS workspace and return its raw result.
+
+        The return value is the wire-format ``tools/call`` result
+        (``content`` list plus ``isError``); interpreting or reshaping it is
+        the caller's concern. Like :meth:`list_tools`, each call runs the full
+        stateless auth chain; only the invocation hop itself gets the longer
+        :data:`CALL_TIMEOUT_SECONDS` budget, since a called tool may execute a
+        real flow.
+
+        Args:
+            advanced_automations_token: Pipe-scoped token from
+                ``PipefyClient.get_advanced_automations_token``.
+            tool_name: Exact catalog name (see :meth:`list_tools`).
+            arguments: Tool arguments, forwarded verbatim; the iPaaS host
+                validates them against its own input schema.
+
+        Raises:
+            IpaasGatewayError: When any step of the chain is refused by the
+                iPaaS host; the message names the step.
+        """
+        return await self._authed_mcp_request(
+            advanced_automations_token,
+            "tools/call",
+            params={"name": tool_name, "arguments": arguments or {}},
+            timeout_seconds=CALL_TIMEOUT_SECONDS,
+        )
+
+    async def _authed_mcp_request(
+        self,
+        advanced_automations_token: str,
+        method: str,
+        params: dict[str, Any],
+        timeout_seconds: float = REQUEST_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        """One self-contained chain: fresh client, auth, then the MCP request."""
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS)
         ) as http:
-            session_token, project_id = await self._exchange_session(
-                http, advanced_automations_token
+            access_token = await self._access_token(http, advanced_automations_token)
+            return await self._mcp_request(
+                http, access_token, method, params, timeout_seconds
             )
-            access_token = await self._oauth_access_token(
-                http, session_token, project_id
-            )
-            return await self._tools_list(http, access_token)
+
+    async def _access_token(
+        self, http: httpx.AsyncClient, advanced_automations_token: str
+    ) -> str:
+        """The full auth chain: pipe token -> session -> headless OAuth token.
+
+        The one seam a replica-local token cache would wrap if per-call chain
+        cost ever matters; callers only ever see an access token.
+        """
+        session_token, project_id = await self._exchange_session(
+            http, advanced_automations_token
+        )
+        return await self._oauth_access_token(http, session_token, project_id)
 
     async def _exchange_session(
         self, http: httpx.AsyncClient, advanced_automations_token: str
@@ -144,10 +204,15 @@ class IpaasGateway:
             raise _step_error("iPaaS token exchange", response)
         return response.json()["access_token"]
 
-    async def _tools_list(
-        self, http: httpx.AsyncClient, access_token: str
-    ) -> list[dict[str, Any]]:
-        """MCP handshake against the iPaaS endpoint; return the raw tool list."""
+    async def _mcp_request(
+        self,
+        http: httpx.AsyncClient,
+        access_token: str,
+        method: str,
+        params: dict[str, Any],
+        timeout_seconds: float = REQUEST_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        """MCP handshake against the iPaaS endpoint; return the JSON-RPC result."""
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
@@ -171,19 +236,31 @@ class IpaasGateway:
             },
             headers=headers,
         )
-        response = await http.post(
-            mcp_url,
-            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
-            headers=headers,
-        )
+        try:
+            response = await http.post(
+                mcp_url,
+                json={"jsonrpc": "2.0", "id": 2, "method": method, "params": params},
+                headers=headers,
+                timeout=timeout_seconds,
+            )
+        except httpx.TimeoutException as exc:
+            raise IpaasGatewayError(
+                f"iPaaS {method} timed out after {timeout_seconds:.0f}s; a "
+                "long-running tool may still be executing on the iPaaS host — "
+                "inspect progress with the run-listing tools instead of retrying."
+            ) from exc
         if response.status_code != 200:
-            raise _step_error("iPaaS tools/list", response)
+            raise _step_error(f"iPaaS {method}", response)
         payload = _parse_mcp_response(response)
         if "error" in payload:
             raise IpaasGatewayError(
-                f"iPaaS tools/list returned an error: {payload['error']}"
+                f"iPaaS {method} returned an error: {payload['error']}"
             )
-        return payload["result"]["tools"]
+        if "result" not in payload:
+            raise IpaasGatewayError(
+                f"iPaaS {method} returned a response with no result."
+            )
+        return payload["result"]
 
 
 def _query_param(url: str, name: str) -> str | None:
@@ -192,15 +269,28 @@ def _query_param(url: str, name: str) -> str | None:
 
 
 def _parse_mcp_response(response: httpx.Response) -> dict[str, Any]:
-    """Decode a JSON-RPC response that may arrive as JSON or one SSE event."""
-    if "text/event-stream" in response.headers.get("content-type", ""):
-        for line in response.text.splitlines():
-            if line.startswith("data:"):
-                return json.loads(line[len("data:") :].strip())
-        raise IpaasGatewayError(
-            "iPaaS MCP endpoint returned an event stream with no data event."
-        )
-    return response.json()
+    """Decode a JSON-RPC response that may arrive as JSON or SSE events.
+
+    Today the host answers one data event per request, but the stream may
+    also carry notification frames (no ``result``/``error``) ahead of the
+    response on future host versions, so the response frame is selected
+    rather than assumed first.
+    """
+    if "text/event-stream" not in response.headers.get("content-type", ""):
+        return response.json()
+    frames = [
+        json.loads(line[len("data:") :].strip())
+        for line in response.text.splitlines()
+        if line.startswith("data:")
+    ]
+    for frame in frames:
+        if "result" in frame or "error" in frame:
+            return frame
+    if frames:
+        return frames[-1]
+    raise IpaasGatewayError(
+        "iPaaS MCP endpoint returned an event stream with no data event."
+    )
 
 
 __all__ = ["IpaasGateway", "IpaasGatewayError"]

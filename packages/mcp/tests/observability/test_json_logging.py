@@ -112,20 +112,23 @@ class TestBuildToolCallEvent:
             "duration_ms": 15,
             "arg_keys": ["card_id"],
             "request_id": "req-456",
+            "client_id": None,
         }
 
-    @pytest.mark.parametrize("outcome", ["ok", "error"])
-    def test_outcome_is_ok_or_error(self, outcome: ToolCallOutcome):
+    @pytest.mark.parametrize("outcome", ["ok", "error", "cancelled", "elicitation"])
+    def test_outcome_is_closed_set(self, outcome: ToolCallOutcome):
         event = build_tool_call_event(
             tool="find_cards",
             outcome=outcome,
             duration_ms=3,
             arg_keys=["pipe_id", "title"],
             request_id="req-outcome",
+            client_id="client-azp",
             timestamp=_FIXED_TIMESTAMP,
         )
 
         assert event["outcome"] == outcome
+        assert event["client_id"] == "client-azp"
 
     def test_request_id_null_when_uncorrelated(self):
         event = build_tool_call_event(
@@ -138,6 +141,7 @@ class TestBuildToolCallEvent:
         )
 
         assert event["request_id"] is None
+        assert event["client_id"] is None
 
 
 class TestObservabilityLoggingEmitter:
@@ -147,8 +151,8 @@ class TestObservabilityLoggingEmitter:
         yield
         reset_observability_logging()
 
-    def test_emits_valid_json_one_liner_on_stdout(self, capsys):
-        configure_observability_logging(log_level="INFO")
+    def test_emits_valid_json_one_liner_on_stderr(self, capsys):
+        configure_observability_logging()
         event = build_http_request_event(
             method="POST",
             path="/mcp",
@@ -164,24 +168,35 @@ class TestObservabilityLoggingEmitter:
 
         emit_structured_event(event)
 
-        line = capsys.readouterr().out.strip()
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        line = captured.err.strip()
         assert "\n" not in line
         assert json.loads(line) == event
 
-    def test_warning_level_suppresses_info_events(self, capsys):
-        configure_observability_logging(log_level="WARNING")
-        emit_structured_event(
-            build_tool_call_event(
-                tool="get_card",
-                outcome="ok",
-                duration_ms=1,
-                arg_keys=["card_id"],
-                request_id="req-muted",
-                timestamp=_FIXED_TIMESTAMP,
+    def test_structured_events_still_emit_when_root_level_is_warning(self, capsys):
+        """PIPEFY_MCP_LOG_LEVEL must not mute the dedicated structured logger."""
+        root = logging.getLogger()
+        previous = root.level
+        root.setLevel(logging.WARNING)
+        try:
+            configure_observability_logging()
+            emit_structured_event(
+                build_tool_call_event(
+                    tool="get_card",
+                    outcome="ok",
+                    duration_ms=1,
+                    arg_keys=["card_id"],
+                    request_id="req-pinned",
+                    timestamp=_FIXED_TIMESTAMP,
+                )
             )
-        )
+        finally:
+            root.setLevel(previous)
 
-        assert capsys.readouterr().out == ""
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert json.loads(captured.err.strip())["request_id"] == "req-pinned"
 
     def test_does_not_propagate_to_root_logger(self):
         root = logging.getLogger()
@@ -195,7 +210,7 @@ class TestObservabilityLoggingEmitter:
         root.addHandler(root_handler)
         root.setLevel(logging.DEBUG)
         try:
-            configure_observability_logging(log_level="INFO")
+            configure_observability_logging()
             emit_structured_event(
                 build_http_request_event(
                     method="GET",
@@ -214,16 +229,18 @@ class TestObservabilityLoggingEmitter:
         finally:
             root.removeHandler(root_handler)
 
-    def test_handler_targets_stdout_explicitly(self):
-        configure_observability_logging(log_level="INFO")
+    def test_handler_targets_stderr_explicitly(self):
+        configure_observability_logging()
         logger = logging.getLogger(OBSERVABILITY_LOGGER_NAME)
         assert len(logger.handlers) == 1
-        assert logger.handlers[0].stream is sys.stdout
+        assert logger.handlers[0].stream is sys.stderr
+        assert logger.handlers[0].level == logging.INFO
+        assert logger.level == logging.INFO
         assert logger.propagate is False
 
     def test_configure_twice_keeps_one_handler_and_one_line(self, capsys):
-        configure_observability_logging(log_level="INFO")
-        configure_observability_logging(log_level="INFO")
+        configure_observability_logging()
+        configure_observability_logging()
 
         emit_structured_event(
             build_tool_call_event(
@@ -238,7 +255,7 @@ class TestObservabilityLoggingEmitter:
 
         logger = logging.getLogger(OBSERVABILITY_LOGGER_NAME)
         assert len(logger.handlers) == 1
-        assert len(capsys.readouterr().out.strip().splitlines()) == 1
+        assert len(capsys.readouterr().err.strip().splitlines()) == 1
 
     def test_normalize_log_level_rejects_unknown_name(self):
         with pytest.raises(ValueError, match="invalid log level"):

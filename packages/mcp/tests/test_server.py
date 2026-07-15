@@ -1,6 +1,7 @@
 import json
+from contextlib import asynccontextmanager
 from datetime import timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -13,10 +14,12 @@ from pipefy_auth import AuthSettings
 from pipefy_sdk import PipefySettings
 
 from pipefy_mcp.core.tool_middleware import ToolCallContext, short_circuit_error
+from pipefy_mcp.core.transport_security import build_transport_security
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
 from pipefy_mcp.server import (
     _make_lifespan,
     _register_pipefy_tools,
+    _serve_streamable_http,
     build_pipefy_mcp_server,
     default_tool_middlewares,
     run_server,
@@ -69,6 +72,7 @@ def mocked_runtime():
     runtime = MagicMock()
     runtime.session_for_request.return_value = MagicMock()
     runtime.inbound_auth = None
+    runtime.transport_security = None
     with patch("pipefy_mcp.server.McpRuntime.for_profile", return_value=runtime):
         yield runtime
 
@@ -107,7 +111,8 @@ def test_build_pipefy_mcp_server_passes_log_level_to_fastmcp(mocked_runtime):
 
 
 @pytest.mark.unit
-def test_run_server_configures_structured_logging(monkeypatch):
+def test_run_server_stdio_does_not_configure_structured_logging(monkeypatch):
+    """Stdio must not install the structured emitter (HTTP-only configuration)."""
     monkeypatch.delenv("PIPEFY_MCP_PROFILE", raising=False)
     monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
     with (
@@ -117,7 +122,7 @@ def test_run_server_configures_structured_logging(monkeypatch):
         run_server(
             resolve_mcp_settings(profile=None, transport=None, host=None, port=None)
         )
-    mock_configure.assert_called_once_with(log_level="INFO")
+    mock_configure.assert_not_called()
 
 
 @pytest.mark.unit
@@ -302,21 +307,23 @@ def test_run_server_local_profile_over_http_serves_without_inbound_auth():
     (inbound bearer validation) is built even when serving over HTTP.
     """
     fake_app = MagicMock()
-    with patch(
-        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-    ) as mock_build:
-        run_server(
-            resolve_mcp_settings(
-                profile="local", transport="http", host="127.0.0.1", port=9200
-            )
+    with (
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
+        patch("pipefy_mcp.server.anyio.run") as mock_anyio_run,
+    ):
+        settings = resolve_mcp_settings(
+            profile="local", transport="http", host="127.0.0.1", port=9200
         )
+        run_server(settings)
 
     mock_build.assert_called_once()
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.profile == "local"
     assert built_settings.mcp.host == "127.0.0.1"
     assert built_settings.mcp.port == 9200
-    fake_app.run.assert_called_once_with("streamable-http")
+    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
 
 
 @pytest.mark.unit
@@ -326,16 +333,18 @@ def test_run_server_remote_profile_defaults_to_http_transport(
     """``--profile remote`` with no ``--transport`` serves HTTP (profile-derived default)."""
     monkeypatch.delenv("PIPEFY_MCP_TRANSPORT", raising=False)
     fake_app = MagicMock()
-    with patch(
-        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-    ) as mock_build:
-        run_server(
-            resolve_mcp_settings(
-                profile="remote", transport=None, host="127.0.0.1", port=9300
-            )
+    with (
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
+        patch("pipefy_mcp.server.anyio.run") as mock_anyio_run,
+    ):
+        settings = resolve_mcp_settings(
+            profile="remote", transport=None, host="127.0.0.1", port=9300
         )
+        run_server(settings)
 
-    fake_app.run.assert_called_once_with("streamable-http")
+    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.profile == "remote"
 
@@ -344,20 +353,54 @@ def test_run_server_remote_profile_defaults_to_http_transport(
 def test_run_server_http_builds_the_app_and_serves_over_streamable_http(remote_rs_env):
     """The remote HTTP path builds through the shared builder and serves streamable-http."""
     fake_app = MagicMock()
-    with patch(
-        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-    ) as mock_build:
-        run_server(
-            resolve_mcp_settings(
-                profile="remote", transport="http", host="127.0.0.1", port=9123
-            )
+    with (
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
+        patch("pipefy_mcp.server.anyio.run") as mock_anyio_run,
+    ):
+        settings = resolve_mcp_settings(
+            profile="remote", transport="http", host="127.0.0.1", port=9123
         )
+        run_server(settings)
 
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.profile == "remote"
     assert built_settings.mcp.host == "127.0.0.1"
     assert built_settings.mcp.port == 9123
-    fake_app.run.assert_called_once_with("streamable-http")
+    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
+
+
+@pytest.mark.anyio
+async def test_serve_streamable_http_disables_uvicorn_access_log(remote_rs_env):
+    """Structured request lines replace uvicorn access logs on the HTTP transport."""
+    fake_app = MagicMock()
+    mock_http_app = MagicMock()
+    settings = resolve_mcp_settings(
+        profile="remote", transport="http", host="127.0.0.1", port=9123
+    )
+    with (
+        patch("pipefy_mcp.server.configure_observability_logging") as mock_configure,
+        patch(
+            "pipefy_mcp.server.wire_hosted_observability",
+            return_value=mock_http_app,
+        ) as mock_wire,
+        patch("uvicorn.Config") as mock_config_cls,
+        patch("uvicorn.Server") as mock_server_cls,
+    ):
+        mock_server_cls.return_value.serve = AsyncMock()
+        await _serve_streamable_http(fake_app, settings)
+
+    mock_configure.assert_called_once_with()
+    mock_wire.assert_called_once_with(fake_app, settings)
+    mock_config_cls.assert_called_once_with(
+        mock_http_app,
+        host="127.0.0.1",
+        port=9123,
+        log_level="info",
+        access_log=False,
+    )
+    mock_server_cls.return_value.serve.assert_awaited_once()
 
 
 @pytest.mark.unit
@@ -386,9 +429,12 @@ def test_run_server_http_fills_host_and_port_from_settings_when_unset(
     monkeypatch.delenv("PIPEFY_MCP_HOST", raising=False)
     monkeypatch.delenv("PIPEFY_MCP_PORT", raising=False)
     fake_app = MagicMock()
-    with patch(
-        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-    ) as mock_build:
+    with (
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
+        patch("pipefy_mcp.server.anyio.run"),
+    ):
         run_server(
             resolve_mcp_settings(
                 profile="remote", transport="http", host=None, port=None
@@ -404,9 +450,12 @@ def test_run_server_http_fills_host_and_port_from_settings_when_unset(
 def test_run_server_http_respects_an_explicit_zero_port(remote_rs_env):
     """``port=0`` (let the OS pick) must not be swallowed as a falsy default."""
     fake_app = MagicMock()
-    with patch(
-        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-    ) as mock_build:
+    with (
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
+        patch("pipefy_mcp.server.anyio.run"),
+    ):
         run_server(
             resolve_mcp_settings(
                 profile="remote", transport="http", host="127.0.0.1", port=0
@@ -426,18 +475,20 @@ def test_run_server_remote_serves_off_loopback_without_a_bind_guard(remote_rs_en
     refuses it (a container binds ``0.0.0.0`` and is still private).
     """
     fake_app = MagicMock()
-    with patch(
-        "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
-    ) as mock_build:
-        run_server(
-            resolve_mcp_settings(
-                profile="remote", transport="http", host="0.0.0.0", port=9123
-            )
+    with (
+        patch(
+            "pipefy_mcp.server.build_pipefy_mcp_server", return_value=fake_app
+        ) as mock_build,
+        patch("pipefy_mcp.server.anyio.run") as mock_anyio_run,
+    ):
+        settings = resolve_mcp_settings(
+            profile="remote", transport="http", host="0.0.0.0", port=9123
         )
+        run_server(settings)
 
     (built_settings,), _ = mock_build.call_args
     assert built_settings.mcp.host == "0.0.0.0"
-    fake_app.run.assert_called_once_with("streamable-http")
+    mock_anyio_run.assert_called_once_with(_serve_streamable_http, fake_app, settings)
 
 
 # --- Resource-server role (OAuth 2.0 inbound bearer validation) --------------
@@ -461,6 +512,25 @@ def test_build_with_resource_server_wires_inbound_auth():
 def _asgi_client(app):
     transport = httpx.ASGITransport(app=app.streamable_http_app())
     return httpx.AsyncClient(transport=transport, base_url="http://testserver")
+
+
+@asynccontextmanager
+async def _serving_asgi_client(app):
+    """An ASGI client with the app's lifespan running.
+
+    The transport's DNS-rebinding Host check sits behind the streamable-HTTP
+    session manager, whose task group is started by the ASGI lifespan. httpx's
+    ASGITransport does not run lifespan events, so drive Starlette's lifespan
+    context explicitly (the 401/metadata tests do not need this because they
+    short-circuit before the session manager).
+    """
+    asgi = app.streamable_http_app()
+    async with asgi.router.lifespan_context(asgi):
+        transport = httpx.ASGITransport(app=asgi)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as client:
+            yield client
 
 
 @pytest.mark.unit
@@ -490,3 +560,63 @@ async def test_http_serves_protected_resource_metadata():
     assert body["resource"].rstrip("/") == RS_RESOURCE
     advertised = [s.rstrip("/") for s in body["authorization_servers"]]
     assert RS_ISSUER in advertised
+
+
+# --- transport allowlist (DNS-rebinding) reaches FastMCP and the transport ----
+
+_PUBLIC_HOST_PING = {
+    "json": {"jsonrpc": "2.0", "method": "ping", "id": 1},
+    "headers": {"host": "mcp.pipefy.com"},
+}
+
+
+@pytest.mark.unit
+def test_build_passes_the_runtimes_none_transport_security_to_fastmcp(mocked_runtime):
+    """When the runtime built no allowlist, FastMCP keeps its own loopback default."""
+    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
+        build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
+    assert mock_fastmcp.call_args.kwargs["transport_security"] is None
+
+
+@pytest.mark.unit
+def test_build_passes_the_runtimes_allowlist_to_fastmcp(mocked_runtime):
+    """The allowlist the runtime built reaches the FastMCP constructor verbatim."""
+    mocked_runtime.transport_security = build_transport_security(
+        McpSettings(allowed_hosts=["mcp.pipefy.com"]), None
+    )
+    with patch("pipefy_mcp.server.FastMCP") as mock_fastmcp:
+        build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
+    assert (
+        mock_fastmcp.call_args.kwargs["transport_security"]
+        is mocked_runtime.transport_security
+    )
+
+
+@pytest.mark.unit
+async def test_http_loopback_default_rejects_a_public_host(mocked_runtime):
+    """The default (loopback-only) allowlist answers 421 to a public Host header.
+
+    This is the behavior a fronted deployment hits before the allowlist is
+    configured: FastMCP auto-enables the loopback allowlist on the 127.0.0.1
+    construction host, so a proxied public Host is a DNS-rebinding rejection.
+    """
+    app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
+    async with _serving_asgi_client(app) as client:
+        resp = await client.post("/mcp", **_PUBLIC_HOST_PING)
+    assert resp.status_code == 421
+
+
+@pytest.mark.unit
+async def test_http_configured_allowlist_accepts_a_public_host(mocked_runtime):
+    """With the public host allowlisted, the same request clears the Host gate.
+
+    It no longer 421s; it reaches the transport handler (which then fails on the
+    missing session, not on DNS-rebinding), proving the allowlist widened the gate.
+    """
+    mocked_runtime.transport_security = build_transport_security(
+        McpSettings(allowed_hosts=["mcp.pipefy.com"]), None
+    )
+    app = build_pipefy_mcp_server(_MINIMAL_PIPEFY_SETTINGS)
+    async with _serving_asgi_client(app) as client:
+        resp = await client.post("/mcp", **_PUBLIC_HOST_PING)
+    assert resp.status_code != 421

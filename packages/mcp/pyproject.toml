@@ -97,13 +97,6 @@ name = "Tools read no process-global settings"
 type = "forbidden"
 source_modules = ["pipefy_mcp.tools"]
 forbidden_modules = ["pipefy_mcp.settings"]
-# The forbidden-path check below is the guarantee and always runs strictly. Only
-# the meta-check "is every ignore currently used?" is downgraded to a warning:
-# grimp's graph discovery is not identical across environments (CI drops the
-# transitive `auth.resource_server -> settings` edge that a local build records),
-# so under the default `error` no single ignore list stays green everywhere. Warn
-# keeps a genuinely stale ignore visible without breaking the build on that skew.
-unmatched_ignore_imports_alerting = "warn"
 ignore_imports = [
     # Reviewed: permission_denied_enrichment_timeout_seconds, a deployment
     # tuning knob, not a per-user decision.
@@ -115,10 +108,15 @@ ignore_imports = [
     # startup; tool_context only reads the already-built runtime off the
     # lifespan context, never settings at call time.
     "pipefy_mcp.core.runtime -> pipefy_mcp.settings",
-    # Reviewed: imports the ResourceServerSettings type for startup composition
-    # of the inbound auth pair, not a call-time read. Reached transitively via
-    # core.runtime; grimp does not always surface this edge (see note above).
-    "pipefy_mcp.auth.resource_server -> pipefy_mcp.settings",
+    # Reviewed: imports the Settings type for startup identity resolution.
+    # StartupIdentity receives settings from the composition root and
+    # RequestScopedIdentity resolves from the request bearer — no call-time
+    # global read. Reached transitively via core.runtime.
+    "pipefy_mcp.auth.session_identity -> pipefy_mcp.settings",
+    # Reviewed: reads McpSettings.host and the transport allowlist at startup
+    # for bind-safety / DNS-rebinding config — per-deployment, not a per-user
+    # decision. Reached transitively via core.runtime.
+    "pipefy_mcp.core.transport_security -> pipefy_mcp.settings",
 ]
 
 # Next ratchet (disabled): lock the domain as framework-free once it has a home.

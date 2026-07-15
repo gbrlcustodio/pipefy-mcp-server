@@ -43,6 +43,10 @@ remote_mode = false
 host = "127.0.0.1"
 port = 8000
 log_level = "INFO"
+# allowed_hosts / allowed_origins are optional; unset derives the allowlist from
+# the resource-server URL. Set them only for extra proxied hostnames.
+allowed_hosts = ["mcp.pipefy.com"]
+allowed_origins = ["https://mcp.pipefy.com"]
 ```
 
 Keys use **bare pydantic field names**, not the upper-case `PIPEFY_<NAME>` environment variable names. The env-only aliases (`PIPEFY_TOKEN`, `PIPEFY_OAUTH_CLIENT`, ...) exist to refuse unprefixed environment leakage and do not double as TOML keys.
@@ -128,5 +132,7 @@ These variables load into `pipefy_mcp.McpSettings` (`settings.mcp`). TOML keys u
 | `PIPEFY_MCP_HOST` | `127.0.0.1` | HTTP bind host. The unauthenticated `local` profile refuses a non-loopback bind unless `PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` is set; the authenticated `remote` profile binds any host. |
 | `PIPEFY_MCP_PORT` | `8000` | HTTP bind port. |
 | `PIPEFY_MCP_ALLOW_INSECURE_HTTP_BIND` | `false` | Escape hatch: lets the unauthenticated `local` profile serve HTTP on a non-loopback host, exposing the full tool surface with no inbound bearer. The `remote` profile never needs it. |
+| `PIPEFY_MCP_ALLOWED_HOSTS` | unset | JSON array of extra `Host` header values the HTTP transport accepts for DNS-rebinding protection, on top of loopback and the `PIPEFY_MCP_RS_RESOURCE_SERVER_URL` host. Unset derives the allowlist from the resource-server URL, so a proxied deployment usually needs none; set it only when a proxy forwards a public `Host` that differs. An entry matches an exact `Host` or, as `host:*`, any port. These are extra entries, so an empty array behaves like unset (the resource-server host is still derived). |
+| `PIPEFY_MCP_ALLOWED_ORIGINS` | unset | JSON array overriding the derived `scheme://host` `Origin` allowlist. Unset derives `http`/`https` origins from the allowed hosts; a non-empty array replaces them with a custom set (e.g. `https`-only); an empty array is the strictest override, rejecting any request that sends an `Origin` header (a request with no `Origin` still passes). |
 | `PIPEFY_MCP_UNIFIED_ENVELOPE` | `true` | When true, migrated tools return `{success, data, ...}`. |
-| `PIPEFY_MCP_LOG_LEVEL` | `INFO` | Governs **both** hosted structured JSON lines on **stdout** and the FastMCP root logger (RichHandler text on **stderr**). Accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (case-insensitive). The server passes the resolved level to `FastMCP(log_level=...)` at construction, so this is the single operator knob for MCP logging. Some MCP tooling documents a separate `FASTMCP_LOG_LEVEL` env var; when using `pipefy-mcp-server`, prefer `PIPEFY_MCP_LOG_LEVEL` — it configures the root logger explicitly and keeps structured events on the same level. |
+| `PIPEFY_MCP_LOG_LEVEL` | `INFO` | Governs the FastMCP root logger (RichHandler text on **stderr**) only. Accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (case-insensitive). Hosted structured JSON request/tool lines use a dedicated logger pinned at `INFO` on stderr, so raising this knob to quiet text logs does **not** drop those debugging events. Prefer `PIPEFY_MCP_LOG_LEVEL` over any `FASTMCP_LOG_LEVEL` env var when using `pipefy-mcp-server`. Structured lines stay on stderr so they never share the stdio JSON-RPC stdout channel. |

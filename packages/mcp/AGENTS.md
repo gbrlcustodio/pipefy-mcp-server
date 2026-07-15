@@ -69,9 +69,10 @@ The JWKS/RS256 validation lives in `pipefy_auth` (`JwtValidator`); the MCP adapt
 `auth/resource_server.py` (`JwtTokenVerifier`) maps validated claims onto the
 SDK's `AccessToken`. FastMCP serves the RFC 9728 protected-resource metadata and
 the `401` + `WWW-Authenticate` challenge; `build_resource_server_auth` (same
-module) resolves the inbound issuer and pairs the verifier with `AuthSettings`.
-The runtime (`McpRuntime.for_profile`) calls it for the `remote` profile and holds
-the pair as `inbound_auth`, which `server.py` wires into the app.
+module) pairs the verifier with `AuthSettings` from an already-resolved issuer.
+The runtime (`McpRuntime.for_profile`) resolves the inbound issuer, gates on it,
+and calls the builder for the `remote` profile, holding the pair as `inbound_auth`,
+which `server.py` wires into the app.
 
 **Bind-safety interlock.** The property protected is auth posture, not bind
 interface: an unauthenticated profile must not be reachable by untrusted callers.
@@ -85,11 +86,50 @@ validates a per-request bearer, so its bind host is irrelevant and is not checke
 `pipefy_infra.security.is_loopback_host`, which covers all of `127.0.0.0/8` and
 `::1`. This replaced an earlier bind-interface guard (`_assert_safe_http_bind`) that
 false-positived on the entire hosted profile and lived in the run path where the
-ASGI-app path bypassed it. DNS-rebinding protection (the configurable host / Origin
-allowlist for a proxied deployment) is separate follow-up work; see
-`experiments/hosted-obo/RFC-OUTLINE.md`. The attachment tools' local `file_path`
-inputs also still assume a loopback peer that shares the client's disk (remote-safe
-file inputs are separate follow-up work).
+ASGI-app path bypassed it. The attachment tools' local `file_path` inputs also
+still assume a loopback peer that shares the client's disk (remote-safe file inputs
+are separate follow-up work).
+
+**Transport allowlist.** DNS-rebinding protection is a separate axis from the
+bind-safety interlock: it checks the inbound request's `Host` / `Origin`, not the
+bind interface. FastMCP auto-enables a loopback-only allowlist on the `127.0.0.1`
+construction host, so behind a proxy that forwards the public `Host` it answers
+`421 Misdirected Request`. `core/transport_security.py:build_transport_security`
+widens it by deriving the allowed host from `resource_server_url` (the public origin
+the `remote` profile already declares) plus loopback, and `build_pipefy_mcp_server`
+passes the result to FastMCP. `PIPEFY_MCP_ALLOWED_HOSTS` / `PIPEFY_MCP_ALLOWED_ORIGINS`
+(JSON) extend it for extra hostnames or a stricter Origin posture. Unset (no
+resource-server URL and no override) leaves FastMCP's loopback-only default in force,
+so the local subprocess case is unaffected. Being configuration derived at
+composition (mirroring `build_resource_server_auth`), it lives in the composition
+tier, not in `settings.py`, which keeps the mcp SDK out of the config boundary.
+
+## Hosted structured logging
+
+The HTTP transport emits allowlisted JSON lines on stderr for hosted **debugging**
+(`pipefy_mcp/observability/`): one `http_request` line per request and one
+`tool_call` line per tool invocation (via `tool_log_middleware`). Fields are
+privacy-bounded (no bearer, no argument values, no query string, no exception
+messages). Stdio does **not** install the structured emitter: under stdio,
+stdout is the JSON-RPC wire, and local installs should not arm that
+process-global handler.
+
+Wiring lives in `wire_hosted_observability` (`observability/wiring.py`): it calls
+`streamable_http_app()` once, attaches request middleware, and returns the Starlette app.
+`run_server` serves that app with uvicorn directly (`access_log=False`) so the
+structured request line replaces uvicorn's text access log.
+`configure_observability_logging` pins the dedicated structured logger at `INFO`
+independently of `PIPEFY_MCP_LOG_LEVEL` (which only governs FastMCP/root text
+logs), so quieting noisy text does not drop request/tool lines.
+
+The request logger is **pure-ASGI middleware** (`RequestLogMiddleware`), never
+Starlette `BaseHTTPMiddleware`: `BaseHTTPMiddleware` buffers the response body,
+which breaks long-lived Streamable HTTP / SSE streams. The pure-ASGI middleware
+only inspects `http.response.start` (status + headers) and passes the body through.
+`request_id` prefers inbound `x-request-id`, then `x-correlation-id`, and mints a
+UUID only when both are absent (or blank), so an upstream proxy can keep one id
+across service boundaries. Tool lines go through the same emitter builders as
+HTTP lines (`build_tool_call_event` / `emit_structured_event`).
 
 ## Tool registration
 
@@ -193,6 +233,7 @@ Everything else that reads shared settings is safe because of one assumption, st
 - The GraphQL schema cache (`gql_reuse_fetched_graphql_schema`) — shared across users, which is fine because one backend means one schema.
 - `permission_denied_enrichment_timeout_seconds` (`tools/graphql_error_helpers.py`) — a timeout knob. Same for everyone by design.
 - `unified_envelope` (`core/tool_error_envelope.py`) — a flag that changes the shape of tool responses. Applies identically to every caller.
+- The bind host and transport allowlist (`core/transport_security.py`, from `McpSettings`) — DNS-rebinding / bind-safety config resolved once at startup. A property of the deployment's front door, not of any caller.
 - `default_webhook_name` (SDK webhook service) — a cosmetic default name; the webhook tools aren't exposed remotely anyway.
 
 A related note: some tool docstrings (like `delete_card_relation`'s) claim to "require service-account credentials" because they call Pipefy's Internal API. That claim is stale: the SDK binds the session's one credential to all three API endpoints (public, Interfaces, Internal), so the Internal API simply receives whatever credential the caller already has — nothing in the client is service-account-specific. Those tools stay off the remote seed for the ordinary reason every tool starts off it: they are write mutations that haven't been reviewed for remote exposure yet.
@@ -253,8 +294,8 @@ built-in structured logger (`observability/tool_log_middleware.py`) is seeded
 by default only under the `remote` profile. That is a default, not a capability
 boundary: per-call concerns like observability and downstream protection apply to
 any deployment (only per-user concerns are hosted-specific), so a local deployment
-can register its own middleware. The logger emits through the `logging` module
-(stderr), never stdout, which is the stdio transport's JSON-RPC stream.
+can register its own middleware. Tool lines use the same stderr JSON emitter as
+HTTP request lines (`emit_structured_event`), never stdout.
 
 The wrap targets a FastMCP internal and is tested against `mcp==1.25.0`; the
 install is idempotent per app (the sentinel is per handler, not a global). This is

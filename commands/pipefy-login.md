@@ -13,4 +13,4 @@ Otherwise prompt the user to confirm running:
 pipefy auth login $ARGUMENTS
 ```
 
-Requires `PIPEFY_AUTH_URL` set in the shell environment (the OIDC issuer URL).
+This targets Pipefy production by default. Only set `PIPEFY_AUTH_URL` (the OIDC issuer URL) in the shell environment when logging in to a non-prod IdP; it defaults to `https://signin.pipefy.com/realms/pipefy`.

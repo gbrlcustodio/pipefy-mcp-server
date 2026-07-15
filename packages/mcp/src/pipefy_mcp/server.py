@@ -5,6 +5,7 @@ import textwrap
 from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 
+import anyio
 from mcp.server.fastmcp import FastMCP
 
 from pipefy_mcp.core.runtime import McpRuntime
@@ -14,6 +15,7 @@ from pipefy_mcp.core.tool_middleware import (
 )
 from pipefy_mcp.observability.json_logging import configure_observability_logging
 from pipefy_mcp.observability.tool_log_middleware import tool_log_middleware
+from pipefy_mcp.observability.wiring import wire_hosted_observability
 from pipefy_mcp.settings import Settings
 from pipefy_mcp.tools.registry import ToolRegistry
 from pipefy_mcp.tools.validation_envelope import install_pipefy_validation_envelope
@@ -100,6 +102,11 @@ def build_pipefy_mcp_server(
     remote-safe tool surface, and ``settings.mcp.host`` / ``settings.mcp.port`` give
     the HTTP bind (they matter only for the HTTP transport; stdio ignores them).
 
+    The DNS-rebinding allowlist for the HTTP transport is built by the runtime (from
+    the ``resource_server_url`` host plus any ``allowed_hosts`` / ``allowed_origins``)
+    and read off it here as ``runtime.transport_security``; it is ``None`` (FastMCP's
+    own loopback default) when nothing is configured, and irrelevant for stdio.
+
     ``extra_tool_middlewares`` is the public registration seam for a consumer of this
     builder (a hosted serving layer that wants per-tool metrics, say): the chain
     installs once, so a consumer folds its middleware in here rather than reaching
@@ -126,6 +133,7 @@ def build_pipefy_mcp_server(
         log_level=settings.mcp.log_level,
         token_verifier=verifier,
         auth=auth,
+        transport_security=runtime.transport_security,
     )
     _register_pipefy_tools(app, remote_mode=settings.mcp.profile == "remote")
     # Wrap the tool-call handler with the built-in chain plus any consumer middleware.
@@ -135,6 +143,30 @@ def build_pipefy_mcp_server(
         app, [*default_tool_middlewares(settings), *extra_tool_middlewares]
     )
     return app
+
+
+async def _serve_streamable_http(app: FastMCP, settings: Settings) -> None:
+    """Serve Streamable HTTP with hosted observability middleware wired in.
+
+    The structured emitter is configured here, not in :func:`run_server`, so the
+    stdio path never installs it. Structured lines go to stderr (not the JSON-RPC
+    stdout wire); keeping configuration off the stdio path still avoids arming a
+    process-global handler that local installs do not need.
+    """
+    import uvicorn
+
+    configure_observability_logging()
+    http_app = wire_hosted_observability(app, settings)
+    mcp = settings.mcp
+    config = uvicorn.Config(
+        http_app,
+        host=mcp.host,
+        port=mcp.port,
+        log_level=mcp.log_level.lower(),
+        access_log=False,
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
 
 
 def run_server(settings: Settings) -> None:
@@ -164,7 +196,6 @@ def run_server(settings: Settings) -> None:
     profile has no resource server). They differ only in the transport ``run``.
     """
     mcp = settings.mcp
-    configure_observability_logging(log_level=mcp.log_level)
 
     if mcp.transport == "stdio":
         logger.info("Starting Pipefy MCP server over stdio (profile=%s)", mcp.profile)
@@ -186,4 +217,4 @@ def run_server(settings: Settings) -> None:
 
     # Bind safety is enforced at the settings boundary (McpSettings._enforce_bind_safety);
     # host/port arrive already vetted, so there is nothing to re-check here.
-    build_pipefy_mcp_server(settings).run("streamable-http")
+    anyio.run(_serve_streamable_http, build_pipefy_mcp_server(settings), settings)

@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 import pytest
 from mcp.server.fastmcp import FastMCP
 
-from pipefy_mcp.core.runtime import McpRuntime, RequestScopedIdentity
+from pipefy_mcp.auth import RequestScopedIdentity
+from pipefy_mcp.core.runtime import McpRuntime
 from pipefy_mcp.settings import settings
 
 

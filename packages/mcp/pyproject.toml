@@ -97,6 +97,13 @@ name = "Tools read no process-global settings"
 type = "forbidden"
 source_modules = ["pipefy_mcp.tools"]
 forbidden_modules = ["pipefy_mcp.settings"]
+# The forbidden-path check below is the guarantee and always runs strictly. Only
+# the meta-check "is every ignore currently used?" is downgraded to a warning:
+# grimp's graph discovery is not identical across environments (CI drops the
+# transitive `auth.resource_server -> settings` edge that a local build records),
+# so under the default `error` no single ignore list stays green everywhere. Warn
+# keeps a genuinely stale ignore visible without breaking the build on that skew.
+unmatched_ignore_imports_alerting = "warn"
 ignore_imports = [
     # Reviewed: permission_denied_enrichment_timeout_seconds, a deployment
     # tuning knob, not a per-user decision.
@@ -109,7 +116,8 @@ ignore_imports = [
     # lifespan context, never settings at call time.
     "pipefy_mcp.core.runtime -> pipefy_mcp.settings",
     # Reviewed: imports the ResourceServerSettings type for startup composition
-    # of the inbound auth pair, not a call-time read.
+    # of the inbound auth pair, not a call-time read. Reached transitively via
+    # core.runtime; grimp does not always surface this edge (see note above).
     "pipefy_mcp.auth.resource_server -> pipefy_mcp.settings",
 ]
 

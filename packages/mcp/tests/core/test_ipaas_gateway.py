@@ -325,12 +325,218 @@ async def test_call_tool_timeout_names_the_method_and_points_at_runs(
 
 @pytest.mark.anyio
 @respx.mock
+async def test_handshake_timeout_reports_retry_safe(respx_mock, gateway):
+    """An initialize timeout means nothing ran — not a long-running tool."""
+    _mock_auth_chain(respx_mock)
+
+    def responder(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("read timed out")
+
+    respx_mock.post(f"{IPAAS_URL}/mcp").mock(side_effect=responder)
+
+    with pytest.raises(IpaasGatewayError, match="handshake timed out.*safe to retry"):
+        await gateway.call_tool("embed-jwt", "ap_test_flow", {"flowId": "flow-1"})
+
+
+@pytest.mark.anyio
+@respx.mock
 async def test_response_without_result_names_the_method(respx_mock, gateway):
     _mock_auth_chain(respx_mock)
     respx_mock.post(f"{IPAAS_URL}/mcp").respond(200, json={"jsonrpc": "2.0", "id": 2})
 
     with pytest.raises(IpaasGatewayError, match="tools/call.*no result"):
         await gateway.call_tool("embed-jwt", "ap_list_flows")
+
+
+PIECE_NAME = "@example/piece-demo"
+
+
+def _mock_session_only(respx_mock: respx.MockRouter) -> None:
+    """Connection endpoints authenticate with the session alone (no OAuth)."""
+    respx_mock.post(f"{IPAAS_URL}/api/v1/managed-authn/external-token").respond(
+        200, json={"token": "session-token", "projectId": "proj-1"}
+    )
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_connection_auth_url_builds_url_and_completion_bundle(
+    respx_mock, gateway
+):
+    _mock_session_only(respx_mock)
+    respx_mock.get(f"{IPAAS_URL}/api/v1/pieces/{PIECE_NAME}").respond(
+        200, json={"auth": {"type": "OAUTH2", "scope": ["chat:write", "read"]}}
+    )
+    respx_mock.get(f"{IPAAS_URL}/api/v1/oauth-apps").respond(
+        200,
+        json={"data": [{"pieceName": PIECE_NAME, "clientId": "deployment-client"}]},
+    )
+    auth_url_route = respx_mock.post(
+        f"{IPAAS_URL}/api/v1/app-connections/oauth2/authorization-url"
+    ).respond(
+        200,
+        json={
+            "authorizationUrl": "https://third-party.test/consent?x=1",
+            "codeVerifier": "the-verifier",
+        },
+    )
+
+    result = await gateway.connection_auth_url("embed-jwt", PIECE_NAME)
+
+    assert result["authorization_url"] == "https://third-party.test/consent?x=1"
+    assert result["completion"] == {
+        "type": "PLATFORM_OAUTH2",
+        "client_id": "deployment-client",
+        "redirect_url": f"{IPAAS_URL}/redirect",
+        "scope": "chat:write read",
+        "code_verifier": "the-verifier",
+    }
+    request = auth_url_route.calls.last.request
+    assert request.headers["authorization"] == "Bearer session-token"
+    assert json.loads(request.content) == {
+        "pieceName": PIECE_NAME,
+        "clientId": "deployment-client",
+        "redirectUrl": f"{IPAAS_URL}/redirect",
+    }
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_connection_auth_url_joins_string_scope_verbatim(respx_mock, gateway):
+    """A piece publishing its scope as one string must not be split per char."""
+    _mock_session_only(respx_mock)
+    respx_mock.get(f"{IPAAS_URL}/api/v1/pieces/{PIECE_NAME}").respond(
+        200, json={"auth": {"type": "OAUTH2", "scope": "chat:write read"}}
+    )
+    respx_mock.get(f"{IPAAS_URL}/api/v1/oauth-apps").respond(
+        200, json={"data": [{"pieceName": PIECE_NAME, "clientId": "c"}]}
+    )
+    respx_mock.post(
+        f"{IPAAS_URL}/api/v1/app-connections/oauth2/authorization-url"
+    ).respond(200, json={"authorizationUrl": "https://third-party.test/consent"})
+
+    result = await gateway.connection_auth_url("embed-jwt", PIECE_NAME)
+
+    assert result["completion"]["scope"] == "chat:write read"
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_oauth_client_lookup_follows_pagination(respx_mock, gateway):
+    _mock_session_only(respx_mock)
+    respx_mock.get(f"{IPAAS_URL}/api/v1/pieces/{PIECE_NAME}").respond(
+        200, json={"auth": {"type": "OAUTH2", "scope": []}}
+    )
+    apps_route = respx_mock.get(f"{IPAAS_URL}/api/v1/oauth-apps").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "data": [{"pieceName": "@example/piece-other", "clientId": "x"}],
+                    "next": "cursor-2",
+                },
+            ),
+            httpx.Response(
+                200,
+                json={"data": [{"pieceName": PIECE_NAME, "clientId": "page2-client"}]},
+            ),
+        ]
+    )
+    respx_mock.post(
+        f"{IPAAS_URL}/api/v1/app-connections/oauth2/authorization-url"
+    ).respond(200, json={"authorizationUrl": "https://third-party.test/consent"})
+
+    result = await gateway.connection_auth_url("embed-jwt", PIECE_NAME)
+
+    assert result["completion"]["client_id"] == "page2-client"
+    assert apps_route.call_count == 2
+    assert "cursor=cursor-2" in str(apps_route.calls.last.request.url)
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_connection_auth_url_rejects_non_oauth_pieces(respx_mock, gateway):
+    _mock_session_only(respx_mock)
+    respx_mock.get(f"{IPAAS_URL}/api/v1/pieces/{PIECE_NAME}").respond(
+        200, json={"auth": {"type": "SECRET_TEXT"}}
+    )
+
+    with pytest.raises(IpaasGatewayError, match="does not use an OAuth connection"):
+        await gateway.connection_auth_url("embed-jwt", PIECE_NAME)
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_connection_auth_url_reports_missing_deployment_client(
+    respx_mock, gateway
+):
+    _mock_session_only(respx_mock)
+    respx_mock.get(f"{IPAAS_URL}/api/v1/pieces/{PIECE_NAME}").respond(
+        200, json={"auth": {"type": "OAUTH2", "scope": []}}
+    )
+    respx_mock.get(f"{IPAAS_URL}/api/v1/oauth-apps").respond(200, json={"data": []})
+
+    with pytest.raises(IpaasGatewayError, match="No OAuth client is configured"):
+        await gateway.connection_auth_url("embed-jwt", PIECE_NAME)
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_upsert_connection_posts_body_with_session_and_project(
+    respx_mock, gateway
+):
+    _mock_session_only(respx_mock)
+    upsert_route = respx_mock.post(f"{IPAAS_URL}/api/v1/app-connections").respond(
+        201,
+        json={
+            "id": "conn-1",
+            "externalId": "mcp-abc",
+            "displayName": "Demo",
+            "pieceName": PIECE_NAME,
+            "status": "ACTIVE",
+            "type": "SECRET_TEXT",
+        },
+    )
+
+    connection = await gateway.upsert_connection(
+        "embed-jwt",
+        piece_name=PIECE_NAME,
+        connection_type="SECRET_TEXT",
+        value={"secret_text": "shh"},
+        external_id="mcp-abc",
+        display_name="Demo",
+    )
+
+    assert connection["id"] == "conn-1"
+    request = upsert_route.calls.last.request
+    assert request.headers["authorization"] == "Bearer session-token"
+    assert json.loads(request.content) == {
+        "externalId": "mcp-abc",
+        "displayName": "Demo",
+        "pieceName": PIECE_NAME,
+        "projectId": "proj-1",
+        "type": "SECRET_TEXT",
+        "value": {"secret_text": "shh", "type": "SECRET_TEXT"},
+    }
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_upsert_connection_failure_names_the_step(respx_mock, gateway):
+    _mock_session_only(respx_mock)
+    respx_mock.post(f"{IPAAS_URL}/api/v1/app-connections").respond(
+        400, json={"code": "INVALID_APP_CONNECTION", "params": {}}
+    )
+
+    with pytest.raises(IpaasGatewayError, match="connection upsert.*400"):
+        await gateway.upsert_connection(
+            "embed-jwt",
+            piece_name=PIECE_NAME,
+            connection_type="SECRET_TEXT",
+            value={"secret_text": "bad"},
+            external_id="mcp-abc",
+            display_name="Demo",
+        )
 
 
 @pytest.mark.anyio

@@ -12,6 +12,7 @@ pay the ~30-80ms backend-discovery cost on every ``pipefy`` invocation.
 
 from __future__ import annotations
 
+import sys
 import time
 from typing import Annotated, Any, Literal
 from urllib.parse import urlparse
@@ -35,7 +36,7 @@ _KEYRING_FILENAME = "keyring.cfg"
 _TOKEN_FIELDS: frozenset[str] = frozenset(TokenResponse.model_fields.keys())
 
 
-def configure_keychain_backend(choice: Literal["auto", "file"]) -> None:
+def configure_keychain_backend(choice: Literal["auto", "file", "dpapi"]) -> None:
     """Apply the requested keyring backend before any session read or write.
 
     Idempotent: safe to call multiple times; the second ``"file"`` call
@@ -48,10 +49,33 @@ def configure_keychain_backend(choice: Literal["auto", "file"]) -> None:
             ``pipefy_infra.config.config_dir() / "keyring.cfg"``; the file stores
             credentials in plaintext on disk and is intended for headless
             Linux or CI runners where the OS keychain is unavailable.
+            ``"dpapi"`` (Windows only) swaps to
+            :class:`keyrings.alt.Windows.EncryptedKeyring`, a DPAPI-encrypted
+            file keyring. It sidesteps the Windows Credential Manager
+            ``CredWrite`` blob cap (``CRED_MAX_CREDENTIAL_BLOB_SIZE`` = 2560
+            bytes). The session blob (access + refresh + id tokens plus
+            metadata, UTF-16 encoded) exceeds that in practice — its exact
+            size varies with the token claims — so the ``auto`` backend fails
+            the write with ``WinError 1783``.
+
+    Raises:
+        RuntimeError: When ``"dpapi"`` is selected on a non-Windows platform.
     """
     if choice == "auto":
         return
     import keyring
+
+    if choice == "dpapi":
+        if sys.platform != "win32":
+            raise RuntimeError(
+                "keychain_backend='dpapi' is Windows-only (DPAPI via CRYPT32.DLL); "
+                "use 'auto' or 'file' on this platform."
+            )
+        from keyrings.alt.Windows import EncryptedKeyring
+
+        keyring.set_keyring(EncryptedKeyring())
+        return
+
     from keyrings.alt.file import PlaintextKeyring
     from pipefy_infra.config import config_dir
 

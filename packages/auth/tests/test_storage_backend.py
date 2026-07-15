@@ -5,6 +5,8 @@ and the on-disk blob round-trip for ``StoredSession``.
 from __future__ import annotations
 
 import json
+import sys
+import types
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -80,6 +82,36 @@ def test_file_backend_is_idempotent(
     assert isinstance(first, PlaintextKeyring)
     assert isinstance(second, PlaintextKeyring)
     assert first.file_path == second.file_path
+
+
+@pytest.mark.unit
+def test_dpapi_backend_rejected_off_windows(
+    _isolated_keyring: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``dpapi`` is Windows-only; selecting it elsewhere fails fast with guidance."""
+    monkeypatch.setattr("pipefy_auth.storage.sys.platform", "linux")
+    with pytest.raises(RuntimeError, match="dpapi.*Windows"):
+        configure_keychain_backend("dpapi")
+
+
+@pytest.mark.unit
+def test_dpapi_backend_installs_encrypted_keyring_on_windows(
+    _isolated_keyring: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """On Windows, ``dpapi`` installs the DPAPI-encrypted keyring.
+
+    ``keyrings.alt.Windows`` can't be imported off-Windows (it binds CRYPT32.DLL),
+    so stub the module to exercise the branch on any CI platform.
+    """
+    monkeypatch.setattr("pipefy_auth.storage.sys.platform", "win32")
+    fake_module = types.ModuleType("keyrings.alt.Windows")
+    fake_module.EncryptedKeyring = InMemoryKeyring  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "keyrings.alt.Windows", fake_module)
+
+    configure_keychain_backend("dpapi")
+    assert isinstance(keyring.get_keyring(), InMemoryKeyring)
 
 
 @pytest.mark.unit

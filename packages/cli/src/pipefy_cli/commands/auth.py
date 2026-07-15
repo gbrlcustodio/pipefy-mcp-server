@@ -203,9 +203,12 @@ def auth_login(
         else:
             hint = (
                 "On headless Linux, ensure a Secret Service daemon "
-                "(gnome-keyring, kwallet) is running, set "
-                "PIPEFY_KEYCHAIN_BACKEND=file to use a plaintext file backend, "
-                "or use a static PIPEFY_TOKEN."
+                "(gnome-keyring, kwallet) is running, or set "
+                "PIPEFY_KEYCHAIN_BACKEND=file for a plaintext file backend. "
+                "On Windows, if the session is too large for Credential Manager "
+                "(WinError 1783), set PIPEFY_KEYCHAIN_BACKEND=dpapi for a "
+                "DPAPI-encrypted keyring with no size cap. "
+                "Or use a static PIPEFY_TOKEN."
             )
         typer.echo(
             f"Login succeeded but the session could not be stored in your "

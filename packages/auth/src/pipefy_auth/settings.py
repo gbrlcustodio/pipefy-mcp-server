@@ -191,8 +191,8 @@ class AuthSettings(BaseSettings):
     @field_validator("keychain_backend", mode="before")
     @classmethod
     def _normalize_keychain_backend(cls, value: object) -> object:
-        # ``keychain_backend`` is ``Literal["auto", "file"]``; copy-pasted env
-        # values like ``PIPEFY_KEYCHAIN_BACKEND=' AUTO '`` should normalize to
+        # ``keychain_backend`` is ``Literal["auto", "file", "dpapi"]``; copy-pasted
+        # env values like ``PIPEFY_KEYCHAIN_BACKEND=' AUTO '`` should normalize to
         # ``"auto"`` rather than fail Literal validation with a cryptic enum
         # error. Case is meaningful for credential fields (kept strict via
         # ``_strip_str``), so the lowering applies only here.
@@ -301,7 +301,7 @@ class AuthSettings(BaseSettings):
         ),
     )
 
-    keychain_backend: Literal["auto", "file"] = Field(
+    keychain_backend: Literal["auto", "file", "dpapi"] = Field(
         default="auto",
         description=(
             "Active ``keyring`` backend (env: PIPEFY_KEYCHAIN_BACKEND). ``auto`` "
@@ -309,7 +309,10 @@ class AuthSettings(BaseSettings):
             "``keyrings.alt.file.PlaintextKeyring`` writing under "
             "``config_dir()/keyring.cfg``. The file backend stores credentials "
             "in plaintext on disk; opt-in only, intended for headless Linux "
-            "without Secret Service or for CI runners."
+            "without Secret Service or for CI runners. ``dpapi`` (Windows only) "
+            "swaps to a DPAPI-encrypted file keyring, sidestepping the Windows "
+            "Credential Manager blob cap (2560 bytes) that the Pipefy session "
+            "exceeds; selecting it off-Windows raises."
         ),
     )
 

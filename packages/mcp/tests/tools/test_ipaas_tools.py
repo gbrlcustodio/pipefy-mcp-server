@@ -783,6 +783,22 @@ async def test_connection_auth_url_relays_bundle_and_instructions(
 
 
 @pytest.mark.anyio
+async def test_connection_auth_url_is_not_read_only(mock_client, mock_gateway):
+    """Step 1 POSTs for a fresh single-use PKCE bundle, so it is not a pure read;
+    hosted clients must not treat it as a cacheable read-only call."""
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        listed = await session.list_tools()
+
+    by_name = {t.name: t for t in listed.tools}
+    auth_url = by_name["get_ipaas_connection_auth_url"]
+    assert auth_url.annotations is not None
+    assert auth_url.annotations.readOnlyHint is False
+    # The discovery meta-tool stays a genuine read.
+    assert by_name["get_ipaas_tools"].annotations.readOnlyHint is True
+
+
+@pytest.mark.anyio
 async def test_connection_tools_report_unconfigured_gateway(
     mock_client, extract_payload
 ):

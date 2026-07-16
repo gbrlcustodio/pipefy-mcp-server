@@ -173,8 +173,11 @@ class IpaasTools:
 
             return await _run_ipaas_tool(ctx, pipe_id, work)
 
+        # Not read-only despite fetching a URL: each call POSTs for a fresh,
+        # single-use PKCE bundle (code_verifier), so a hosted client must not
+        # treat it as a cacheable pure read and replay a stale verifier.
         @mcp.tool(
-            annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+            annotations=ToolAnnotations(readOnlyHint=False, openWorldHint=True),
             meta=REMOTE,
         )
         async def get_ipaas_connection_auth_url(

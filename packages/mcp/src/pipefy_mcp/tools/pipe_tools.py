@@ -522,15 +522,15 @@ class PipeTools:
             confirm: bool = False,
             debug: bool = False,
         ) -> dict:
-            """Remove a link between two related cards (requires service-account credentials).
+            """Remove a link between two related cards.
 
             ``source_id`` is the **pipe relation** id from ``get_pipe_relations`` (same as
             ``create_card_relation``). Two-step flow: preview with ``confirm=False`` (default),
             then execute with ``confirm=True`` after explicit approval.
 
-            Requires service-account credentials (PIPEFY_SERVICE_ACCOUNT_CLIENT_ID,
-            PIPEFY_SERVICE_ACCOUNT_CLIENT_SECRET) because the ``deleteCardRelation``
-            mutation is only available on the Internal API, not the public GraphQL schema.
+            The ``deleteCardRelation`` mutation is only available on the Internal API,
+            not the public GraphQL schema; it runs with the session's credential like
+            every other tool.
 
             Args:
                 child_id: Child card ID in the relation.

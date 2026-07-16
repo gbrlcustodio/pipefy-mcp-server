@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **154** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **155** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -26,6 +26,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | MCP tool name | CLI command (or target) | Status | Notes |
 | --- | --- | --- | --- |
 | `add_card_comment` | `pipefy card comment add` | shipped | — |
+| `call_ipaas_tool` | — | deferred | iPaaS (Advanced Automations) tool invocation; MCP-first surface, CLI twin considered once agent usage settles. |
 | `clone_pipe` | `pipefy pipe clone` | shipped | optional `--org`. |
 | `create_ai_agent` | `pipefy agent create` | shipped | AI Agents domain; post-v0.1 CLI unless explicitly rescoped. |
 | `create_ai_automation` | `pipefy ai-automation create` | shipped | AI Automations domain; post-v0.1 CLI unless explicitly rescoped. |
@@ -107,7 +108,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `get_email_templates` | `pipefy email template list` | shipped | (`--repo`). |
 | `get_field_condition` | `pipefy field-condition get` | shipped | — |
 | `get_field_conditions` | `pipefy field-condition list` | shipped | (`--phase`). |
-| `get_ipaas_tools` | — | deferred | iPaaS (Advanced Automations) tool discovery; MCP-first surface, CLI twin considered after the invocation phase ships. |
+| `get_ipaas_tools` | — | deferred | iPaaS (Advanced Automations) tool discovery; MCP-first surface, CLI twin considered alongside invocation's. |
 | `get_labels` | `pipefy label list` | shipped | — |
 | `get_organization` | `pipefy org get` | shipped | Organization-level read; out of v0.1 parity per spec. |
 | `get_organization_report` | `pipefy report-org get` | shipped | Organization reports. |
@@ -191,6 +192,6 @@ for n in m.body:
             print(len(v.args[0].elts))"
 ```
 
-Expect **154** tool names in `PIPEFY_TOOL_NAMES` and **154** data rows in the parity table (excluding the header rows).
+Expect **155** tool names in `PIPEFY_TOOL_NAMES` and **155** data rows in the parity table (excluding the header rows).
 
 When adding or removing an MCP tool, update **this file** and `PIPEFY_TOOL_NAMES` in the same change set.

@@ -91,6 +91,8 @@ async def test_compact_catalog_lists_names_and_first_lines(
     assert "Create a new flow" in payload["result"]
     assert "Longer guidance" not in payload["result"]
     assert "inputSchema" not in payload["result"]
+    # The hint names the full discover -> expand -> call loop.
+    assert "call_ipaas_tool" in payload["result"]
 
 
 @pytest.mark.anyio
@@ -183,3 +185,164 @@ async def test_int_pipe_id_is_coerced_to_string(
     payload = extract_payload(result)
     assert payload["success"] is True
     mock_client.get_advanced_automations_token.assert_awaited_once_with("303088927")
+
+
+@pytest.mark.anyio
+async def test_call_tool_forwards_arguments_and_relays_output(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.call_tool = AsyncMock(
+        return_value={
+            "content": [
+                {"type": "text", "text": "flow created"},
+                {"type": "text", "text": "id: flow-1"},
+            ],
+            "isError": False,
+        }
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool(
+            "call_ipaas_tool",
+            {
+                "pipe_id": "303088927",
+                "tool_name": "ap_create_flow",
+                "arguments": {"name": "My flow"},
+            },
+        )
+
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    mock_client.get_advanced_automations_token.assert_awaited_once_with("303088927")
+    mock_gateway.call_tool.assert_awaited_once_with(
+        "embed-jwt", "ap_create_flow", {"name": "My flow"}
+    )
+    # Text segments are joined and relayed in full.
+    assert "flow created" in payload["result"]
+    assert "id: flow-1" in payload["result"]
+    assert '"ap_create_flow"' in payload["result"]
+
+
+@pytest.mark.anyio
+async def test_call_tool_arguments_default_to_none(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.call_tool = AsyncMock(
+        return_value={"content": [{"type": "text", "text": "[]"}], "isError": False}
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool(
+            "call_ipaas_tool",
+            {"pipe_id": "303088927", "tool_name": "ap_list_flows"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    mock_gateway.call_tool.assert_awaited_once_with("embed-jwt", "ap_list_flows", None)
+
+
+@pytest.mark.anyio
+async def test_call_tool_maps_host_iserror_to_error_payload(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.call_tool = AsyncMock(
+        return_value={
+            "content": [{"type": "text", "text": "flow not found"}],
+            "isError": True,
+        }
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool(
+            "call_ipaas_tool",
+            {"pipe_id": "303088927", "tool_name": "ap_delete_flow"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "flow not found" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+async def test_call_tool_null_result_becomes_error_payload_not_attribute_error(
+    mock_client, mock_gateway, extract_payload
+):
+    """A host `result: null` surfaces (via the gateway guard) as the standard
+    envelope, never a bare `AttributeError` on a None result."""
+    mock_gateway.call_tool = AsyncMock(
+        side_effect=IpaasGatewayError("iPaaS tools/call returned a non-object result.")
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool(
+            "call_ipaas_tool",
+            {"pipe_id": "303088927", "tool_name": "ap_list_flows"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "non-object result" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+async def test_call_tool_passes_non_text_content_through(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.call_tool = AsyncMock(
+        return_value={
+            "content": [
+                {"type": "text", "text": "done"},
+                {"type": "image", "data": "aGk=", "mimeType": "image/png"},
+            ],
+            "isError": False,
+        }
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool(
+            "call_ipaas_tool",
+            {"pipe_id": "303088927", "tool_name": "ap_get_run"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert '"image"' in payload["result"]
+    assert "aGk=" in payload["result"]
+
+
+@pytest.mark.anyio
+async def test_call_tool_gateway_error_becomes_error_payload(
+    mock_client, mock_gateway, extract_payload
+):
+    mock_gateway.call_tool = AsyncMock(
+        side_effect=IpaasGatewayError("iPaaS tools/call failed (HTTP 500): boom")
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool(
+            "call_ipaas_tool",
+            {"pipe_id": "303088927", "tool_name": "ap_create_flow"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "tools/call" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+async def test_call_tool_unconfigured_gateway_reports_clearly(
+    mock_client, extract_payload
+):
+    server = build_ipaas_test_server(mock_client, gateway=None)
+    async with _session(server) as session:
+        result = await session.call_tool(
+            "call_ipaas_tool",
+            {"pipe_id": "303088927", "tool_name": "ap_create_flow"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "disabled" in tool_error_message(payload)
+    mock_client.get_advanced_automations_token.assert_not_awaited()

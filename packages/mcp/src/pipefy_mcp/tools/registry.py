@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 PIPEFY_TOOL_NAMES = frozenset(
     {
         "add_card_comment",
+        "call_ipaas_tool",
         "clone_pipe",
         "create_ai_agent",
         "create_ai_automation",

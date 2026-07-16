@@ -116,7 +116,9 @@ class IpaasTools:
                         "tools": catalog,
                         "hint": (
                             "Call get_ipaas_tools again with tool_name=<name> "
-                            "for a tool's full description and input schema."
+                            "for a tool's full description and input schema, "
+                            "then run it with call_ipaas_tool(pipe_id, "
+                            "tool_name=<name>, arguments={...})."
                         ),
                     }
                 )

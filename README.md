@@ -154,7 +154,7 @@ Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clien
 | **Relations** | 8 | Pipe and card relations. | [docs](docs/mcp/tools/relations.md) |
 | **Reports** | 17 | Pipe and organization reports, async exports. | [docs](docs/mcp/tools/reports.md) |
 | **Automations & AI** | 23 | Automations, AI automations, AI agents, validators. | [docs](docs/mcp/tools/automations-and-ai.md) |
-| **iPaaS** | 1 | Lazy discovery of a pipe's iPaaS (Advanced Automations) tool surface via the `get_ipaas_tools` meta tool. | [docs](docs/mcp/tools/ipaas.md) |
+| **iPaaS** | 4 | Lazy discovery, invocation, and app-connection setup for a pipe's iPaaS (Advanced Automations) workspace (`get_ipaas_tools`, `call_ipaas_tool`, plus the connection meta-tools). | [docs](docs/mcp/tools/ipaas.md) |
 | **Observability** | 11 | Logs, usage, credits, execution metrics, job exports. | [docs](docs/mcp/tools/observability.md) |
 | **Members, email & webhooks** | 11 | Membership, inbox email, webhooks. | [docs](docs/mcp/tools/members-email-webhooks.md) |
 | **Organization** | 1 | Organization metadata. | [docs](docs/mcp/tools/organization.md) |

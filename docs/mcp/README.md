@@ -16,6 +16,7 @@ Material in this tree describes **`pipefy-mcp-server`**: the MCP process, tool b
 | [`tools/members-email-webhooks.md`](tools/members-email-webhooks.md) | Membership, inbox email, webhooks |
 | [`tools/organization.md`](tools/organization.md) | Organization metadata |
 | [`tools/portal.md`](tools/portal.md) | Portals, pages, elements, sub-portals |
+| [`tools/ipaas.md`](tools/ipaas.md) | iPaaS (Advanced Automations) tool discovery |
 | [`tools/introspection.md`](tools/introspection.md) | Schema discovery and raw GraphQL |
 
 Start with [`tools/cross-cutting.md`](tools/cross-cutting.md) for pagination, IDs, `debug`, permissions, and error shape — then open the domain guide you need.

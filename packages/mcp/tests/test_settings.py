@@ -4,7 +4,7 @@ import pytest
 from pipefy_sdk import PipefySettings
 from pydantic import ValidationError
 
-from pipefy_mcp.settings import McpSettings, Settings
+from pipefy_mcp.settings import IpaasSettings, McpSettings, Settings
 
 
 @pytest.mark.unit
@@ -326,3 +326,38 @@ def test_mcp_explicit_empty_allowlist_is_preserved():
     mcp = McpSettings(allowed_hosts=[], allowed_origins=[])
     assert mcp.allowed_hosts == []
     assert mcp.allowed_origins == []
+
+
+# --- iPaaS (Advanced Automations) settings ------------------------------------
+
+
+@pytest.mark.unit
+def test_ipaas_settings_work_out_of_the_box():
+    """The default is Pipefy's canonical public PKCE client: no env, no secret."""
+    settings = IpaasSettings()
+    assert settings.configured is True
+    assert settings.oauth_client_id
+    assert settings.oauth_client_secret is None
+    assert settings.url == "https://ipaas.pipefy.com"
+
+
+@pytest.mark.unit
+def test_ipaas_settings_blank_client_id_disables():
+    assert IpaasSettings(oauth_client_id="").configured is False
+    assert IpaasSettings(oauth_client_id="  ").configured is False
+
+
+@pytest.mark.unit
+def test_ipaas_settings_url_normalized_and_https_enforced():
+    assert IpaasSettings(url="https://ipaas.test/ ").url == "https://ipaas.test"
+    with pytest.raises(ValidationError):
+        IpaasSettings(url="http://ipaas.test")
+
+
+@pytest.mark.unit
+def test_ipaas_settings_from_env(monkeypatch):
+    monkeypatch.setenv("PIPEFY_IPAAS_OAUTH_CLIENT_ID", "custom-client")
+    monkeypatch.setenv("PIPEFY_IPAAS_OAUTH_CLIENT_SECRET", "custom-secret")
+    settings = IpaasSettings()
+    assert settings.oauth_client_id == "custom-client"
+    assert settings.oauth_client_secret == "custom-secret"

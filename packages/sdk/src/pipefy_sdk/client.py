@@ -34,6 +34,7 @@ from pipefy_sdk.models.attachment import (
     AttachmentTarget,
     AttachmentUploadResult,
 )
+from pipefy_sdk.services.advanced_automations_service import AdvancedAutomationsService
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
 from pipefy_sdk.services.automation_graphql_types import (
@@ -277,6 +278,9 @@ class PipefyClient:
             table_service=self._table_service,
         )
         self._introspection_service = SchemaIntrospectionService(executor=ex.public)
+        self._advanced_automations_service = AdvancedAutomationsService(
+            internal_executor=ex.internal
+        )
         self._portal_service = PortalService(
             public_executor=ex.public,
             interfaces_executor=ex.interfaces,
@@ -1348,6 +1352,14 @@ class PipefyClient:
             organization_id: Numeric organization ID.
         """
         return await self._organization_service.get_organization(organization_id)
+
+    async def get_advanced_automations_token(self, pipe_id: str | int) -> str:
+        """Mint a short-lived advanced-automations (iPaaS) access token for a pipe.
+
+        Requires automation-create permission on the pipe and iPaaS enabled on
+        the organization; the Internal API rejects the request otherwise.
+        """
+        return await self._advanced_automations_service.get_token(pipe_id)
 
     async def list_portals(
         self,

@@ -136,3 +136,14 @@ These variables load into `pipefy_mcp.McpSettings` (`settings.mcp`). TOML keys u
 | `PIPEFY_MCP_ALLOWED_ORIGINS` | unset | JSON array overriding the derived `scheme://host` `Origin` allowlist. Unset derives `http`/`https` origins from the allowed hosts; a non-empty array replaces them with a custom set (e.g. `https`-only); an empty array is the strictest override, rejecting any request that sends an `Origin` header (a request with no `Origin` still passes). |
 | `PIPEFY_MCP_UNIFIED_ENVELOPE` | `true` | When true, migrated tools return `{success, data, ...}`. |
 | `PIPEFY_MCP_LOG_LEVEL` | `INFO` | Governs the FastMCP root logger (RichHandler text on **stderr**) only. Accepts `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL` (case-insensitive). Hosted structured JSON request/tool lines use a dedicated logger pinned at `INFO` on stderr, so raising this knob to quiet text logs does **not** drop those debugging events. Prefer `PIPEFY_MCP_LOG_LEVEL` over any `FASTMCP_LOG_LEVEL` env var when using `pipefy-mcp-server`. Structured lines stay on stderr so they never share the stdio JSON-RPC stdout channel. |
+
+### iPaaS (Advanced Automations)
+
+These variables load into `pipefy_mcp.IpaasSettings` (`settings.ipaas`) and back the iPaaS tools (see [`mcp/tools/ipaas.md`](mcp/tools/ipaas.md)). They work **out of the box**: the default OAuth client is Pipefy's canonical *public* PKCE client on the production iPaaS host — a publishable identifier (like the `pipefy-cli` OIDC client), not a secret; authorization is carried by the caller's pipe-scoped session, never by the client identity.
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `PIPEFY_IPAAS_URL` | `https://ipaas.pipefy.com` | Base URL of the iPaaS (Advanced Automations) host. Override for staging or single-tenant deployments. |
+| `PIPEFY_IPAAS_OAUTH_CLIENT_ID` | canonical public client | OAuth client id on the iPaaS host. Override alongside a custom host; set blank to disable the iPaaS tools (they then answer with a clear "disabled" error). |
+| `PIPEFY_IPAAS_OAUTH_CLIENT_SECRET` | unset | Only for a confidential (`client_secret_post`) registration; the default public client has none. Treat as a secret. |
+| `PIPEFY_IPAAS_OAUTH_REDIRECT_URI` | `https://localhost/pipefy-mcp-callback` | Must byte-match a redirect URI registered on the OAuth client. Never actually followed (the flow is headless). |

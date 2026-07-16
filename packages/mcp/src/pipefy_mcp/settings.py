@@ -345,6 +345,125 @@ class ResourceServerSettings(BaseSettings):
         return self
 
 
+class IpaasSettings(BaseSettings):
+    """iPaaS (Advanced Automations) connection knobs.
+
+    Per-deployment values consumed only at the composition root: the runtime
+    builds the iPaaS gateway from them at startup, and tools reach the built
+    gateway through the lifespan context, never these settings (the
+    import-linter contract keeps it that way).
+
+    Works out of the box: the default OAuth client is Pipefy's canonical
+    *public* PKCE client (``token_endpoint_auth_method: none``), registered
+    once on the production iPaaS host — sharable by design, like the
+    ``pipefy-cli`` OIDC client. The client id names the software, never the
+    caller: authorization is carried entirely by the caller's pipe-scoped
+    session and PKCE. Override the id (plus a secret, for a confidential
+    registration) for staging or single-tenant hosts; blank the id to disable
+    the iPaaS tools, which then answer with a clear "disabled" error.
+
+    ``env_prefix="PIPEFY_IPAAS_"`` keeps these apart from the SDK's
+    ``PIPEFY_*`` connection vars. ``allow_insecure_urls`` is aliased to the
+    shared ``PIPEFY_ALLOW_INSECURE_URLS`` so the whole deployment has a single
+    insecure-URL posture.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="PIPEFY_IPAAS_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        # Precedence: init_kwargs > env > dotenv > config.toml > file_secret.
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            PipefyTomlConfigSource(settings_cls),
+            file_secret_settings,
+        )
+
+    url: str = Field(
+        default="https://ipaas.pipefy.com",
+        description=(
+            "Base URL of the iPaaS (Advanced Automations) host (env: "
+            "PIPEFY_IPAAS_URL). The default is the production host the product "
+            "already surfaces to users; override for staging or single-tenant "
+            "deployments."
+        ),
+    )
+
+    oauth_client_id: str | None = Field(
+        default="1RLshr5qYWxeFda1H-2wI_HuaaQfWxwn",
+        description=(
+            "Client ID of the OAuth client registered on the iPaaS host "
+            "(env: PIPEFY_IPAAS_OAUTH_CLIENT_ID). Defaults to Pipefy's canonical "
+            "public PKCE client on the production host — a publishable "
+            "identifier, not a secret. Override for staging or single-tenant "
+            "hosts; set blank to disable the iPaaS tools."
+        ),
+    )
+
+    oauth_client_secret: str | None = Field(
+        default=None,
+        description=(
+            "Client secret paired with oauth_client_id "
+            "(env: PIPEFY_IPAAS_OAUTH_CLIENT_SECRET). Only needed when the "
+            "configured client is a confidential registration "
+            "(client_secret_post); the default public client has none. A "
+            "secret; never defaulted."
+        ),
+    )
+
+    oauth_redirect_uri: str = Field(
+        default="https://localhost/pipefy-mcp-callback",
+        description=(
+            "Redirect URI registered on the OAuth client (env: "
+            "PIPEFY_IPAAS_OAUTH_REDIRECT_URI). Never followed — the flow is "
+            "headless and reads the authorization code out of the approve "
+            "response — but it must byte-match one of the client's registered "
+            "redirect URIs."
+        ),
+    )
+
+    allow_insecure_urls: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PIPEFY_ALLOW_INSECURE_URLS"),
+        description=(
+            "When true (env: PIPEFY_ALLOW_INSECURE_URLS, shared across the "
+            "deployment), url may use http:// and internal hosts; local "
+            "development only."
+        ),
+    )
+
+    @property
+    def configured(self) -> bool:
+        """Whether an OAuth client id is present (blank = iPaaS tools disabled)."""
+        return bool(self.oauth_client_id and self.oauth_client_id.strip())
+
+    @model_validator(mode="after")
+    def _validate_configuration(self) -> Self:
+        # Persist the normalized value so the gateway can join paths naively.
+        stripped = self.url.strip().rstrip("/")
+        self.url = stripped
+        security.assert_url_has_no_query_or_fragment(stripped, field_label="url")
+        security.validate_https_url(
+            stripped, "url", allow_insecure=self.allow_insecure_urls
+        )
+        return self
+
+
 class Settings(BaseSettings):
     """Application configuration via pydantic-settings.
 
@@ -363,6 +482,7 @@ class Settings(BaseSettings):
     mcp: McpSettings = Field(default_factory=McpSettings)
     jwt: JwtValidationSettings = Field(default_factory=JwtValidationSettings)
     rs: ResourceServerSettings = Field(default_factory=ResourceServerSettings)
+    ipaas: IpaasSettings = Field(default_factory=IpaasSettings)
 
 
 def resolve_mcp_settings(

@@ -359,3 +359,27 @@ async def test_sse_notification_frames_before_the_response_are_skipped(
     result = await gateway.call_tool("embed-jwt", "ap_create_flow", {"name": "x"})
 
     assert result == CALL_RESULT
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_session_exchange_missing_key_names_the_step(respx_mock, gateway):
+    """A 200 with a body missing an expected key is a step error, not a raw KeyError."""
+    respx_mock.post(f"{IPAAS_URL}/api/v1/managed-authn/external-token").respond(
+        200, json={}
+    )
+
+    with pytest.raises(IpaasGatewayError, match="session exchange.*without 'token'"):
+        await gateway.list_tools("embed-jwt")
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_non_json_body_names_the_step(respx_mock, gateway):
+    """A 200 whose body is not JSON is a step error, not a raw ValueError."""
+    respx_mock.post(f"{IPAAS_URL}/api/v1/managed-authn/external-token").respond(
+        200, text="<html>not json</html>", headers={"content-type": "text/html"}
+    )
+
+    with pytest.raises(IpaasGatewayError, match="session exchange.*not valid JSON"):
+        await gateway.list_tools("embed-jwt")

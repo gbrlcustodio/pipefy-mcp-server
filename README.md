@@ -36,7 +36,7 @@ Open-source toolkit for **Pipefy** developers: a Model Context Protocol (MCP) se
 
 | Component | Package / path | Purpose |
 |-----------|----------------|---------|
-| **MCP server** | `pipefy-mcp-server` | Exposes **155** tools to MCP clients (Cursor, Claude Desktop, Claude Code, and others). |
+| **MCP server** | `pipefy-mcp-server` | Exposes **157** tools to MCP clients (Cursor, Claude Desktop, Claude Code, and others). |
 | **CLI** | `pipefy-cli` | Terminal commands aligned with MCP capabilities; see [`docs/parity.md`](docs/parity.md). |
 | **SDK** | `pipefy` | Vendor GraphQL client, services, and models shared by MCP and CLI. |
 | **Skills** | [`skills/`](skills/) | Markdown playbooks (Anthropic Skills format) for common Pipefy workflows. |
@@ -141,7 +141,7 @@ Deprecation and semver (post-1.0): [`docs/DEPRECATION.md`](docs/DEPRECATION.md).
 
 ## MCP server
 
-The server registers **155 tools** across eleven domains. Canonical names: `PIPEFY_TOOL_NAMES` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py).
+The server registers **157 tools** across eleven domains. Canonical names: `PIPEFY_TOOL_NAMES` in [`packages/mcp/src/pipefy_mcp/tools/registry.py`](packages/mcp/src/pipefy_mcp/tools/registry.py).
 
 Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clients show to models). Per-area reference docs cover parameters, edge cases, and cross-cutting behavior.
 
@@ -154,7 +154,7 @@ Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clien
 | **Relations** | 8 | Pipe and card relations. | [docs](docs/mcp/tools/relations.md) |
 | **Reports** | 17 | Pipe and organization reports, async exports. | [docs](docs/mcp/tools/reports.md) |
 | **Automations & AI** | 23 | Automations, AI automations, AI agents, validators. | [docs](docs/mcp/tools/automations-and-ai.md) |
-| **iPaaS** | 1 | Lazy discovery of a pipe's iPaaS (Advanced Automations) tool surface via the `get_ipaas_tools` meta tool. | [docs](docs/mcp/tools/ipaas.md) |
+| **iPaaS** | 4 | Lazy discovery, invocation, and app-connection setup for a pipe's iPaaS (Advanced Automations) workspace (`get_ipaas_tools`, `call_ipaas_tool`, plus the connection meta-tools). | [docs](docs/mcp/tools/ipaas.md) |
 | **Observability** | 11 | Logs, usage, credits, execution metrics, job exports. | [docs](docs/mcp/tools/observability.md) |
 | **Members, email & webhooks** | 11 | Membership, inbox email, webhooks. | [docs](docs/mcp/tools/members-email-webhooks.md) |
 | **Organization** | 1 | Organization metadata. | [docs](docs/mcp/tools/organization.md) |

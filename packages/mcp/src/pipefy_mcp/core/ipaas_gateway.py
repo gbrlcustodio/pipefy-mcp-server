@@ -12,6 +12,11 @@ authenticated ``tools/list`` against the pipe's iPaaS workspace:
 3. Call the iPaaS MCP endpoint (JSON-RPC ``initialize`` + ``tools/list`` or
    ``tools/call``).
 
+Connection management (:meth:`IpaasGateway.connection_auth_url`,
+:meth:`IpaasGateway.upsert_connection`) stops after step 1: those REST
+endpoints authenticate with the exchanged user session itself, so the OAuth
+steps do not apply to them.
+
 Every call is self-contained: no token, session, or client state is retained,
 so any server replica can serve any call. The construction values come from
 :class:`pipefy_mcp.settings.IpaasSettings` via the composition root; the
@@ -134,6 +139,154 @@ class IpaasGateway:
             timeout_seconds=CALL_TIMEOUT_SECONDS,
         )
 
+    async def connection_auth_url(
+        self, advanced_automations_token: str, piece_name: str
+    ) -> dict[str, Any]:
+        """Build the third-party consent URL for an OAuth piece.
+
+        Connection endpoints authenticate with the exchanged user session
+        directly — the MCP OAuth dance is not part of this chain. The return
+        value pairs the URL the user must open with a ``completion`` bundle
+        (client id, redirect URL, scope, PKCE verifier) that
+        :meth:`upsert_connection`'s caller passes back verbatim, so the
+        two-step flow needs no server-side state.
+
+        Raises:
+            IpaasGatewayError: When the piece does not use OAuth, no OAuth
+                client is configured for it on the iPaaS host, or a step is
+                refused; the message names the step.
+        """
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS)
+        ) as http:
+            session_token, _ = await self._exchange_session(
+                http, advanced_automations_token
+            )
+            headers = {"Authorization": f"Bearer {session_token}"}
+            auth = await self._piece_oauth_metadata(http, headers, piece_name)
+            client_id = await self._deployment_oauth_client_id(
+                http, headers, piece_name
+            )
+            redirect_url = f"{self.url}/redirect"
+            response = await http.post(
+                f"{self.url}/api/v1/app-connections/oauth2/authorization-url",
+                json={
+                    "pieceName": piece_name,
+                    "clientId": client_id,
+                    "redirectUrl": redirect_url,
+                },
+                headers=headers,
+            )
+            if response.status_code != 200:
+                raise _step_error("iPaaS authorization URL", response)
+            payload = response.json()
+        scope = auth.get("scope") or []
+        completion = {
+            "type": "PLATFORM_OAUTH2",
+            "client_id": client_id,
+            "redirect_url": redirect_url,
+            "scope": " ".join(scope) if isinstance(scope, list) else str(scope),
+        }
+        if payload.get("codeVerifier"):
+            completion["code_verifier"] = payload["codeVerifier"]
+        return {
+            "authorization_url": payload["authorizationUrl"],
+            "completion": completion,
+        }
+
+    async def upsert_connection(
+        self,
+        advanced_automations_token: str,
+        *,
+        piece_name: str,
+        connection_type: str,
+        value: dict[str, Any],
+        external_id: str,
+        display_name: str,
+    ) -> dict[str, Any]:
+        """Create (or, on an existing ``external_id``, replace) a connection.
+
+        Returns the created connection's wire object. The caller must not
+        relay it wholesale: pick the non-sensitive fields, since the create
+        response is not guaranteed to be credential-free.
+
+        Raises:
+            IpaasGatewayError: When the iPaaS host refuses a step (including
+                credential validation failures); the message names the step.
+        """
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS)
+        ) as http:
+            session_token, project_id = await self._exchange_session(
+                http, advanced_automations_token
+            )
+            response = await http.post(
+                f"{self.url}/api/v1/app-connections",
+                json={
+                    "externalId": external_id,
+                    "displayName": display_name,
+                    "pieceName": piece_name,
+                    "projectId": project_id,
+                    # The host's schema wants the discriminator in both
+                    # positions: the body's type and inside value.
+                    "type": connection_type,
+                    "value": {**value, "type": connection_type},
+                },
+                headers={"Authorization": f"Bearer {session_token}"},
+            )
+            if response.status_code not in (200, 201):
+                raise _step_error("iPaaS connection upsert", response)
+            return response.json()
+
+    async def _piece_oauth_metadata(
+        self, http: httpx.AsyncClient, headers: dict[str, str], piece_name: str
+    ) -> dict[str, Any]:
+        """The piece's OAuth auth metadata (scope list), or a clear refusal."""
+        response = await http.get(
+            f"{self.url}/api/v1/pieces/{piece_name}", headers=headers
+        )
+        if response.status_code != 200:
+            raise _step_error("iPaaS piece lookup", response)
+        auth = response.json().get("auth") or {}
+        # A piece may declare several auth options; pick the OAuth one.
+        if isinstance(auth, list):
+            auth = next((a for a in auth if a.get("type") == "OAUTH2"), {})
+        if auth.get("type") != "OAUTH2":
+            raise IpaasGatewayError(
+                f"iPaaS piece '{piece_name}' does not use an OAuth connection; "
+                "create it with a token-based connection type instead."
+            )
+        return auth
+
+    async def _deployment_oauth_client_id(
+        self, http: httpx.AsyncClient, headers: dict[str, str], piece_name: str
+    ) -> str:
+        """The deployment-configured OAuth client id for the piece.
+
+        The listing has no piece filter, so pages are walked until the piece
+        is found — the not-configured error below is definitive, never a
+        pagination artifact.
+        """
+        params: dict[str, Any] = {"limit": 100}
+        while True:
+            response = await http.get(
+                f"{self.url}/api/v1/oauth-apps", params=params, headers=headers
+            )
+            if response.status_code != 200:
+                raise _step_error("iPaaS OAuth client lookup", response)
+            page = response.json()
+            for entry in page.get("data", []):
+                if entry.get("pieceName") == piece_name:
+                    return entry["clientId"]
+            cursor = page.get("next")
+            if not cursor:
+                raise IpaasGatewayError(
+                    f"No OAuth client is configured for piece '{piece_name}' "
+                    "on the iPaaS host. Use a token-based connection type for "
+                    "this piece, or connect it once via the product UI."
+                )
+            params["cursor"] = cursor
+
     async def _authed_mcp_request(
         self,
         advanced_automations_token: str,
@@ -254,22 +407,31 @@ class IpaasGateway:
             "Accept": "application/json, text/event-stream",
         }
         mcp_url = f"{self.url}/mcp"
-        # The endpoint is stateless (no session id); initialize is informational
-        # but keeps us honest with clients that enforce the MCP lifecycle.
-        await http.post(
-            mcp_url,
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": _MCP_PROTOCOL_VERSION,
-                    "capabilities": {},
-                    "clientInfo": {"name": "pipefy-mcp-server", "version": "0"},
+        try:
+            # The endpoint is stateless (no session id); initialize is
+            # informational but keeps us honest with clients that enforce the
+            # MCP lifecycle.
+            await http.post(
+                mcp_url,
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": _MCP_PROTOCOL_VERSION,
+                        "capabilities": {},
+                        "clientInfo": {"name": "pipefy-mcp-server", "version": "0"},
+                    },
                 },
-            },
-            headers=headers,
-        )
+                headers=headers,
+            )
+        except httpx.TimeoutException as exc:
+            # Distinct from the invocation timeout below: nothing has been
+            # executed yet, so retrying is the right move, not run inspection.
+            raise IpaasGatewayError(
+                "iPaaS MCP handshake timed out; the host is slow or briefly "
+                "unavailable — nothing was executed, so it is safe to retry."
+            ) from exc
         try:
             response = await http.post(
                 mcp_url,
@@ -301,6 +463,40 @@ class IpaasGateway:
         if not isinstance(result, dict):
             raise IpaasGatewayError(f"iPaaS {method} returned a non-object result.")
         return result
+
+
+def oauth_connection_value(
+    completion: dict[str, Any], code: str
+) -> tuple[str, dict[str, Any]]:
+    """The upsert ``(type, value)`` for an OAuth connection from its bundle.
+
+    Lives in the gateway because it is wire-format knowledge: the field names
+    (including the quirk that ``code_challenge`` carries the PKCE *verifier*)
+    must stay in lockstep with :meth:`IpaasGateway.connection_auth_url`, which
+    mints the bundle this consumes.
+
+    Raises:
+        ValueError: When the bundle is missing required fields (i.e. it was
+            not passed back verbatim).
+    """
+    missing = [
+        key for key in ("type", "client_id", "redirect_url") if key not in completion
+    ]
+    if missing:
+        raise ValueError(
+            f"oauth.completion is missing {', '.join(missing)}; pass back the "
+            "bundle from get_ipaas_connection_auth_url verbatim."
+        )
+    value: dict[str, Any] = {
+        "client_id": completion["client_id"],
+        "code": code,
+        "scope": completion.get("scope", ""),
+        "redirect_url": completion["redirect_url"],
+    }
+    if completion.get("code_verifier"):
+        # The wire field is named code_challenge but carries the verifier.
+        value["code_challenge"] = completion["code_verifier"]
+    return completion["type"], value
 
 
 def _query_param(url: str, name: str) -> str | None:
@@ -337,4 +533,4 @@ def _parse_mcp_response(response: httpx.Response) -> dict[str, Any]:
     )
 
 
-__all__ = ["IpaasGateway", "IpaasGatewayError"]
+__all__ = ["IpaasGateway", "IpaasGatewayError", "oauth_connection_value"]

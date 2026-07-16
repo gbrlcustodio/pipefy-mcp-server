@@ -1,7 +1,9 @@
 # iPaaS (Advanced Automations) tools
 
 How the MCP server exposes Pipefy's iPaaS (Advanced Automations) capabilities to agents:
-`get_ipaas_tools` for discovery and `call_ipaas_tool` for invocation.
+`get_ipaas_tools` for discovery, `call_ipaas_tool` for invocation, and
+`create_ipaas_connection` / `get_ipaas_connection_auth_url` for connecting the external
+apps that flows orchestrate.
 
 ## The meta-tool pattern
 
@@ -67,6 +69,16 @@ Invocation exposes the full catalog — including destructive operations — bec
 same caller already has that full surface in the product's Advanced Automations UI; the
 MCP path grants nothing beyond it, and `call_ipaas_tool` is annotated destructive so
 agent clients apply their approval flows.
+
+**Connection** — an app credential stored in a pipe's iPaaS workspace, referenced by
+flow steps that act on that app (by its `external_id`). Token/API-key connections are
+created fully in-conversation; OAuth connections take one browser consent from the user,
+with the durable tokens exchanged and stored host-side. Secrets can be kept out of the
+conversation entirely via `{"$env": "PIPEFY_IPAAS_CONNECTION_<NAME>"}` references
+resolved from the MCP server's own environment — only variables under that prefix
+resolve, which keeps the tool from being steered into shipping unrelated process
+secrets. Creation is an upsert: reusing an `external_id` rotates that connection's
+credential.
 
 **Meta tool** — a tool whose job is to expose a catalog of *other* tools on demand (lazy
 discovery), so agents load large tool surfaces only when needed. `get_ipaas_tools` is the

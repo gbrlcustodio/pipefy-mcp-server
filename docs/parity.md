@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **155** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **157** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -34,6 +34,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_card` | `pipefy card create` | shipped | (`--fields` JSON, optional `--title`, optional `--phase-id` for `CreateCardInput.phase_id`). |
 | `create_card_relation` | `pipefy relation card create` | shipped | — |
 | `create_field_condition` | `pipefy field-condition create` | shipped | (`--phase`, `--name`, `--condition`, `--actions` JSON). |
+| `create_ipaas_connection` | — | deferred | iPaaS (Advanced Automations) connection creation; MCP-first surface, CLI twin considered with the other iPaaS tools. |
 | `create_label` | `pipefy label create` | shipped | `color` must be hex `#RGB` or `#RRGGBB` (validated before GraphQL). |
 | `create_organization_report` | `pipefy report-org create` | shipped | Organization reports; `filter` preflight validates ReportCardsFilter shape (nested `operator` + `queries`). |
 | `create_phase` | `pipefy phase create` | shipped | — |
@@ -106,6 +107,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `get_card_relations` | `pipefy relation card list` | shipped | (raw ``get_card_relations`` payload). |
 | `get_cards` | `pipefy card list` | shipped | ``list`` maps to ``get_cards`` (``--pipe``, ``--title``, ``--search`` JSON / ``CardSearch``, ``--include-fields``, ``--first`` / ``--after``). Use ``pipefy card find`` for ``find_cards`` (single field equality). |
 | `get_email_templates` | `pipefy email template list` | shipped | (`--repo`). |
+| `get_ipaas_connection_auth_url` | — | deferred | iPaaS (Advanced Automations) OAuth consent URL for connecting an app; MCP-first surface. |
 | `get_field_condition` | `pipefy field-condition get` | shipped | — |
 | `get_field_conditions` | `pipefy field-condition list` | shipped | (`--phase`). |
 | `get_ipaas_tools` | — | deferred | iPaaS (Advanced Automations) tool discovery; MCP-first surface, CLI twin considered alongside invocation's. |
@@ -192,6 +194,6 @@ for n in m.body:
             print(len(v.args[0].elts))"
 ```
 
-Expect **155** tool names in `PIPEFY_TOOL_NAMES` and **155** data rows in the parity table (excluding the header rows).
+Expect **157** tool names in `PIPEFY_TOOL_NAMES` and **157** data rows in the parity table (excluding the header rows).
 
 When adding or removing an MCP tool, update **this file** and `PIPEFY_TOOL_NAMES` in the same change set.

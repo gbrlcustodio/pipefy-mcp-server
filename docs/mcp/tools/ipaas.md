@@ -1,6 +1,6 @@
 # iPaaS (Advanced Automations)
 
-Discover and invoke the iPaaS tools available to a pipe's workspace. **2 tools.**
+Discover and invoke the iPaaS tools available to a pipe's workspace, and connect the apps those tools orchestrate. **4 tools.**
 
 ---
 
@@ -8,6 +8,8 @@ Discover and invoke the iPaaS tools available to a pipe's workspace. **2 tools.*
 |------|-----------|------|
 | `get_ipaas_tools` | Yes | Lists the iPaaS (Advanced Automations) tools available for a pipe; with `tool_name`, expands one tool's full description and input schema. |
 | `call_ipaas_tool` | No | Invokes one iPaaS tool by name with `arguments` matching its input schema, relaying the result in full. The catalog includes destructive operations (deleting flows, tables, records) — reserve those for explicit user intent. |
+| `get_ipaas_connection_auth_url` | Yes | Step 1 for OAuth-based apps: returns the consent URL the user opens in a browser, plus a `completion` bundle for step 2. |
+| `create_ipaas_connection` | No | Creates (or, on an existing `external_id`, rotates) an app connection in the pipe's workspace — token/API-key credentials directly, or OAuth via the two-step flow. |
 
 **`pipe_id`** matches GraphQL: use a **string** (unquoted JSON integers are coerced). See [Pipefy IDs in pipes & cards](pipes-and-cards.md#pipefy-ids-type-safety).
 
@@ -29,6 +31,39 @@ Never expand more than the tool you are about to use. Long-running executions
 (flow tests, retries) may still be in flight when the call returns — inspect
 progress with the catalog's run-listing tools instead of re-invoking. See
 [`docs/ipaas.md`](../../ipaas.md) for the flow overview and vocabulary.
+
+## Connections
+
+Flow steps that act on an external app need a **connection** (the app credential,
+stored in the pipe's iPaaS workspace). Before creating one, list what exists
+(the catalog's connection-listing tool) and prefer reuse — when several
+candidates serve the same piece, agents should name them and ask the user rather
+than pick silently.
+
+Two creation paths:
+
+- **Token / API-key pieces** — one `create_ipaas_connection` call with
+  `connection_type` (`SECRET_TEXT`, `BASIC_AUTH`, or `CUSTOM_AUTH`) and `value`
+  matching the piece's auth props. A literal secret passed this way transits the
+  conversation — including the model vendor's API. Users who don't accept that
+  trade-off can store the secret in the MCP server's environment and reference
+  it as `{"$env": "PIPEFY_IPAAS_CONNECTION_<NAME>"}` instead: only variables
+  under that prefix resolve, and the value never enters the conversation. The
+  variable must be set before the server starts (e.g. the `env` block of its
+  MCP configuration).
+- **OAuth pieces** — `get_ipaas_connection_auth_url` returns a consent URL and a
+  `completion` bundle; the user opens the URL, authorizes, and pastes back the
+  redirect URL they land on; `create_ipaas_connection` finishes with
+  `oauth={completion, authorization_response}`. The durable tokens are exchanged
+  and stored host-side — no lasting secret ever enters the conversation. This
+  path requires the deployment to have an OAuth client configured for the piece;
+  when it doesn't, the tool says so and the token path (or the product UI)
+  remains.
+
+Creation is an **upsert on `external_id`**: omitting it creates a fresh
+connection; passing an existing connection's `external_id` replaces its
+credential in place (rotation). Credentials are validated by the iPaaS host at
+creation time, so a bad token fails immediately with the host's own message.
 
 ## Requirements
 

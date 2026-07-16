@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import os
+import re
+import uuid
+from collections.abc import Awaitable, Callable
 from typing import Any
+from urllib.parse import unquote
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 from pipefy_sdk import PipefyId
 
+from pipefy_mcp.core.ipaas_gateway import IpaasGateway, oauth_connection_value
 from pipefy_mcp.tools.introspection_tool_helpers import (
     build_error_payload,
     build_success_payload,
@@ -19,10 +25,41 @@ _NOT_CONFIGURED_MESSAGE = (
     "is blank). Restore the default or set a client id to enable them."
 )
 
+# Only variables under this prefix are resolvable through {"$env": ...}
+# references, so the tool cannot be steered into shipping unrelated process
+# secrets to a workspace as a "connection".
+_ENV_REF_PREFIX = "PIPEFY_IPAAS_CONNECTION_"
+
+_SECRET_CONNECTION_TYPES = ("SECRET_TEXT", "BASIC_AUTH", "CUSTOM_AUTH")
+
 
 def _first_line(text: str | None) -> str:
     stripped = (text or "").strip()
     return stripped.splitlines()[0] if stripped else ""
+
+
+async def _run_ipaas_tool(
+    ctx: Context,
+    pipe_id: PipefyId,
+    work: Callable[[IpaasGateway, str], Awaitable[dict]],
+) -> dict:
+    """The iPaaS tools' shared preamble and error contract.
+
+    Resolves the gateway (reporting the capability disabled when
+    unconfigured), opens the caller's client, mints the pipe token, and maps
+    any failure onto the standard error payload. ``work(gateway, token)``
+    supplies the tool-specific call and its success payload.
+    """
+    gateway = get_ipaas_gateway(ctx)
+    if gateway is None:
+        return build_error_payload(_NOT_CONFIGURED_MESSAGE)
+
+    client = get_pipefy_client(ctx)
+    try:
+        token = await client.get_advanced_automations_token(pipe_id)
+        return await work(gateway, token)
+    except Exception as exc:  # noqa: BLE001
+        return build_error_payload(str(exc))
 
 
 class IpaasTools:
@@ -60,40 +97,33 @@ class IpaasTools:
                 tool_name: Exact tool name to expand. Omit for the compact
                     catalog.
             """
-            gateway = get_ipaas_gateway(ctx)
-            if gateway is None:
-                return build_error_payload(_NOT_CONFIGURED_MESSAGE)
 
-            client = get_pipefy_client(ctx)
-            try:
-                token = await client.get_advanced_automations_token(pipe_id)
+            async def work(gateway: IpaasGateway, token: str) -> dict:
                 tools = await gateway.list_tools(token)
-            except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                if tool_name is not None:
+                    return _single_tool_payload(tools, tool_name)
+                catalog = [
+                    {
+                        "name": tool.get("name", ""),
+                        "description": _first_line(tool.get("description")),
+                    }
+                    for tool in tools
+                ]
+                return build_success_payload(
+                    {
+                        "pipe_id": str(pipe_id),
+                        "count": len(catalog),
+                        "tools": catalog,
+                        "hint": (
+                            "Call get_ipaas_tools again with tool_name=<name> "
+                            "for a tool's full description and input schema, "
+                            "then run it with call_ipaas_tool(pipe_id, "
+                            "tool_name=<name>, arguments={...})."
+                        ),
+                    }
+                )
 
-            if tool_name is not None:
-                return _single_tool_payload(tools, tool_name)
-
-            catalog = [
-                {
-                    "name": tool.get("name", ""),
-                    "description": _first_line(tool.get("description")),
-                }
-                for tool in tools
-            ]
-            return build_success_payload(
-                {
-                    "pipe_id": str(pipe_id),
-                    "count": len(catalog),
-                    "tools": catalog,
-                    "hint": (
-                        "Call get_ipaas_tools again with tool_name=<name> for a "
-                        "tool's full description and input schema, then run it "
-                        "with call_ipaas_tool(pipe_id, tool_name=<name>, "
-                        "arguments={...})."
-                    ),
-                }
-            )
+            return await _run_ipaas_tool(ctx, pipe_id, work)
 
         # Not marked remote-safe yet, for the same reason as get_ipaas_tools.
         @mcp.tool(
@@ -131,18 +161,243 @@ class IpaasTools:
                 arguments: Arguments matching the tool's input schema. Omit
                     for tools that take none.
             """
-            gateway = get_ipaas_gateway(ctx)
-            if gateway is None:
-                return build_error_payload(_NOT_CONFIGURED_MESSAGE)
 
-            client = get_pipefy_client(ctx)
-            try:
-                token = await client.get_advanced_automations_token(pipe_id)
+            async def work(gateway: IpaasGateway, token: str) -> dict:
                 result = await gateway.call_tool(token, tool_name, arguments)
-            except Exception as exc:  # noqa: BLE001
-                return build_error_payload(str(exc))
+                return _call_result_payload(pipe_id, tool_name, result)
 
-            return _call_result_payload(pipe_id, tool_name, result)
+            return await _run_ipaas_tool(ctx, pipe_id, work)
+
+        # Not marked remote-safe yet, for the same reason as get_ipaas_tools.
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True))
+        async def get_ipaas_connection_auth_url(
+            pipe_id: PipefyId,
+            piece_name: str,
+            ctx: Context,
+        ) -> dict:
+            """Step 1 of connecting an OAuth-based app to a pipe's iPaaS workspace.
+
+            Returns an ``authorization_url`` the user must open in a browser to
+            grant consent, plus a ``completion`` bundle. Send the URL to the
+            user; after they authorize, they land on a page that keeps the
+            redirect URL (containing ``?code=...``) in the address bar — ask
+            them to paste that full URL back. Then call
+            ``create_ipaas_connection`` with ``oauth={"completion": <the bundle,
+            verbatim>, "authorization_response": "<what the user pasted>"}``.
+
+            The bundle is single-use and short-lived; nothing is stored between
+            the two steps. For pieces that use a token or API key instead of
+            OAuth, skip this tool and call ``create_ipaas_connection`` directly.
+
+            Args:
+                pipe_id: Numeric pipe ID whose iPaaS workspace to connect.
+                piece_name: Exact piece name (as returned by the catalog's
+                    piece-research tools).
+            """
+
+            async def work(gateway: IpaasGateway, token: str) -> dict:
+                result = await gateway.connection_auth_url(token, piece_name)
+                return build_success_payload(
+                    {
+                        "pipe_id": str(pipe_id),
+                        "piece_name": piece_name,
+                        **result,
+                        "instructions": (
+                            "Have the user open authorization_url and "
+                            "authorize. They will land on a page whose address "
+                            "bar holds the redirect URL with ?code=...; ask "
+                            "them to paste that full URL back, then call "
+                            "create_ipaas_connection with oauth={completion, "
+                            "authorization_response}."
+                        ),
+                    }
+                )
+
+            return await _run_ipaas_tool(ctx, pipe_id, work)
+
+        # Not marked remote-safe yet, for the same reason as get_ipaas_tools.
+        @mcp.tool(annotations=ToolAnnotations(openWorldHint=True))
+        async def create_ipaas_connection(
+            pipe_id: PipefyId,
+            piece_name: str,
+            ctx: Context,
+            connection_type: str | None = None,
+            value: dict[str, Any] | None = None,
+            oauth: dict[str, Any] | None = None,
+            display_name: str | None = None,
+            external_id: str | None = None,
+        ) -> dict:
+            """Create a connection (app credential) in a pipe's iPaaS workspace.
+
+            Before creating, list existing connections (the catalog's
+            connection-listing tool): if one already serves the piece, prefer
+            reusing it — and when several candidates exist, name them and ask
+            the user which to use instead of picking silently.
+
+            Two modes:
+
+            * **Token/API-key pieces** — pass ``connection_type`` (one of
+              ``SECRET_TEXT``, ``BASIC_AUTH``, ``CUSTOM_AUTH``) and ``value``
+              matching the piece's auth props (e.g. ``{"secret_text": "..."}``,
+              or ``{"props": {...}}`` for ``CUSTOM_AUTH``). A secret given as a
+              literal transits the conversation (and therefore the model
+              vendor) — tell the user this when asking for a credential. To
+              keep the secret out of the conversation entirely, the user can
+              store it in the MCP server's environment and reference it as
+              ``{"$env": "PIPEFY_IPAAS_CONNECTION_<NAME>"}`` anywhere a string
+              is expected (requires the variable to be set before the server
+              starts). Never repeat a provided secret back in any reply.
+            * **OAuth pieces** — first call ``get_ipaas_connection_auth_url``;
+              then pass ``oauth={"completion": <bundle, verbatim>,
+              "authorization_response": "<pasted redirect URL or bare code>"}``.
+
+            Creation is an upsert keyed on ``external_id``: omit it to create a
+            new connection under a generated id; pass an existing connection's
+            ``external_id`` only to rotate that connection's credential in
+            place. The iPaaS host validates credentials on creation, so a bad
+            token fails here, not at the first flow run.
+
+            Requires permission to create automations on the pipe and iPaaS
+            enabled on the organization.
+
+            Args:
+                pipe_id: Numeric pipe ID whose iPaaS workspace to connect.
+                piece_name: Exact piece name the connection is for.
+                connection_type: Token-mode auth type; omit in OAuth mode.
+                value: Token-mode auth props; omit in OAuth mode.
+                oauth: OAuth-mode payload; omit in token mode.
+                display_name: Human-readable name shown in the workspace.
+                external_id: Existing connection id to rotate; omit to create.
+            """
+
+            async def work(gateway: IpaasGateway, token: str) -> dict:
+                upsert_type, upsert_value = _connection_request(
+                    connection_type, value, oauth
+                )
+                connection_id = external_id or f"mcp-{uuid.uuid4().hex[:12]}"
+                connection = await gateway.upsert_connection(
+                    token,
+                    piece_name=piece_name,
+                    connection_type=upsert_type,
+                    value=upsert_value,
+                    external_id=connection_id,
+                    display_name=display_name or connection_id,
+                )
+                # Relay only non-sensitive fields; the create response is not
+                # guaranteed to be credential-free.
+                return build_success_payload(
+                    {
+                        "pipe_id": str(pipe_id),
+                        "connection": {
+                            key: connection.get(key)
+                            for key in (
+                                "id",
+                                "externalId",
+                                "displayName",
+                                "pieceName",
+                                "status",
+                                "type",
+                            )
+                        },
+                        "hint": (
+                            "Reference this connection from flow steps by its "
+                            "externalId."
+                        ),
+                    }
+                )
+
+            return await _run_ipaas_tool(ctx, pipe_id, work)
+
+
+def _connection_request(
+    connection_type: str | None,
+    value: dict[str, Any] | None,
+    oauth: dict[str, Any] | None,
+) -> tuple[str, dict[str, Any]]:
+    """Normalize the tool's two modes into an upsert (type, value) pair."""
+    if oauth is not None:
+        if connection_type is not None or value is not None:
+            raise ValueError("Pass either oauth or connection_type/value, not both.")
+        completion = oauth.get("completion")
+        if not isinstance(completion, dict):
+            raise ValueError(
+                "oauth.completion must be the bundle returned by "
+                "get_ipaas_connection_auth_url, passed back verbatim."
+            )
+        code = _extract_authorization_code(
+            str(oauth.get("authorization_response") or "")
+        )
+        return oauth_connection_value(completion, code)
+    if connection_type not in _SECRET_CONNECTION_TYPES:
+        raise ValueError(
+            "connection_type must be one of "
+            f"{', '.join(_SECRET_CONNECTION_TYPES)} (or pass oauth for OAuth "
+            "pieces, after get_ipaas_connection_auth_url)."
+        )
+    if not isinstance(value, dict) or not value:
+        raise ValueError(
+            "value must be a non-empty object matching the piece's auth props."
+        )
+    return connection_type, _resolve_env_refs(value)
+
+
+def _extract_authorization_code(authorization_response: str) -> str:
+    """Accept the full pasted redirect URL or a bare authorization code."""
+    stripped = authorization_response.strip()
+    if not stripped:
+        raise ValueError(
+            "oauth.authorization_response is empty; paste the full redirect "
+            "URL (containing ?code=...) or the bare code."
+        )
+    if "?" in stripped or "://" in stripped:
+        # Pull the raw value rather than form-decode the query: form decoding
+        # would turn an unencoded '+' inside the code into a space.
+        match = re.search(r"[?&]code=([^&#\s]+)", stripped)
+        if match is None:
+            raise ValueError(
+                "The pasted redirect URL contains no ?code= parameter; make "
+                "sure the user copied the URL they landed on after authorizing."
+            )
+        return unquote(match.group(1))
+    return stripped
+
+
+def _resolve_env_refs(node: Any) -> Any:
+    """Resolve {"$env": NAME} references from the server's environment.
+
+    Only variables under the PIPEFY_IPAAS_CONNECTION_ prefix resolve; this is
+    the boundary that keeps the tool from exfiltrating unrelated process
+    secrets. The semantics are local-profile: the environment is the single
+    server process's, so any future remote exposure of the connection tools
+    must revisit this (one deployment's variables would be resolvable by
+    every caller).
+    """
+    if isinstance(node, dict):
+        if "$env" in node:
+            if set(node) != {"$env"}:
+                raise ValueError(
+                    'an {"$env": ...} reference must be an object whose only '
+                    'key is "$env"; remove the other keys or nest the '
+                    "reference where the string is expected."
+                )
+            name = node["$env"]
+            if not isinstance(name, str) or not name.startswith(_ENV_REF_PREFIX):
+                raise ValueError(
+                    "$env references must name a variable starting with "
+                    f"{_ENV_REF_PREFIX}; got {name!r}."
+                )
+            resolved = os.environ.get(name)
+            if resolved is None:
+                raise ValueError(
+                    f"Environment variable {name!r} is not set in the MCP "
+                    "server process. Add it to the server's environment (e.g. "
+                    "the env block of its MCP configuration) and reconnect."
+                )
+            return resolved
+        return {key: _resolve_env_refs(item) for key, item in node.items()}
+    if isinstance(node, list):
+        return [_resolve_env_refs(item) for item in node]
+    return node
 
 
 def _call_result_payload(

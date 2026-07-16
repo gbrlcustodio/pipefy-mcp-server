@@ -86,6 +86,39 @@ layers = [
     "pipefy_mcp.settings",
 ]
 
+# Hosted per-user safety (#306): settings reachable from the tool layer are
+# process-global — under the remote profile they are shared across concurrent
+# callers, so such a read may only ever make a per-deployment decision, and each
+# one is reviewed onto ignore_imports (direct or via a core helper; the contract
+# checks transitive chains). The line and its rationale live in CLAUDE.md
+# ("Process-global configuration and the single-backend assumption").
+[[tool.importlinter.contracts]]
+name = "Tools read no process-global settings"
+type = "forbidden"
+source_modules = ["pipefy_mcp.tools"]
+forbidden_modules = ["pipefy_mcp.settings"]
+ignore_imports = [
+    # Reviewed: permission_denied_enrichment_timeout_seconds, a deployment
+    # tuning knob, not a per-user decision.
+    "pipefy_mcp.tools.graphql_error_helpers -> pipefy_mcp.settings",
+    # Reviewed: unified_envelope, a per-deployment response-shape flag applied
+    # identically to every caller.
+    "pipefy_mcp.core.tool_error_envelope -> pipefy_mcp.settings",
+    # Reviewed: the composition root builds the runtime from settings at
+    # startup; tool_context only reads the already-built runtime off the
+    # lifespan context, never settings at call time.
+    "pipefy_mcp.core.runtime -> pipefy_mcp.settings",
+    # Reviewed: imports the Settings type for startup identity resolution.
+    # StartupIdentity receives settings from the composition root and
+    # RequestScopedIdentity resolves from the request bearer — no call-time
+    # global read. Reached transitively via core.runtime.
+    "pipefy_mcp.auth.session_identity -> pipefy_mcp.settings",
+    # Reviewed: reads McpSettings.host and the transport allowlist at startup
+    # for bind-safety / DNS-rebinding config — per-deployment, not a per-user
+    # decision. Reached transitively via core.runtime.
+    "pipefy_mcp.core.transport_security -> pipefy_mcp.settings",
+]
+
 # Next ratchet (disabled): lock the domain as framework-free once it has a home.
 # The pure domain is still scattered: the error/success envelope lives in
 # core/tool_error_envelope.py and the payload builders under tools/, with no single

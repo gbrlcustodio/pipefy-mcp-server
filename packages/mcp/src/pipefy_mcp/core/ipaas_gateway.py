@@ -294,7 +294,13 @@ class IpaasGateway:
             raise IpaasGatewayError(
                 f"iPaaS {method} returned a response with no result."
             )
-        return payload["result"]
+        result = payload["result"]
+        # A JSON-RPC success with an explicit null (or non-object) result is a
+        # protocol violation: every MCP result the callers read is an object.
+        # Reject it here so callers never dereference a None result.
+        if not isinstance(result, dict):
+            raise IpaasGatewayError(f"iPaaS {method} returned a non-object result.")
+        return result
 
 
 def _query_param(url: str, name: str) -> str | None:

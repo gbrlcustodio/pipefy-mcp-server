@@ -363,6 +363,19 @@ async def test_sse_notification_frames_before_the_response_are_skipped(
 
 @pytest.mark.anyio
 @respx.mock
+async def test_null_result_is_a_protocol_error(respx_mock, gateway):
+    """A JSON-RPC success with an explicit null result is a gateway error, not None."""
+    _mock_auth_chain(respx_mock)
+    respx_mock.post(f"{IPAAS_URL}/mcp").respond(
+        200, json={"jsonrpc": "2.0", "id": 2, "result": None}
+    )
+
+    with pytest.raises(IpaasGatewayError, match="tools/call.*non-object result"):
+        await gateway.call_tool("embed-jwt", "ap_list_flows")
+
+
+@pytest.mark.anyio
+@respx.mock
 async def test_session_exchange_missing_key_names_the_step(respx_mock, gateway):
     """A 200 with a body missing an expected key is a step error, not a raw KeyError."""
     respx_mock.post(f"{IPAAS_URL}/api/v1/managed-authn/external-token").respond(

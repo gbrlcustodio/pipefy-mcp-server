@@ -91,6 +91,8 @@ async def test_compact_catalog_lists_names_and_first_lines(
     assert "Create a new flow" in payload["result"]
     assert "Longer guidance" not in payload["result"]
     assert "inputSchema" not in payload["result"]
+    # The hint names the full discover -> expand -> call loop.
+    assert "call_ipaas_tool" in payload["result"]
 
 
 @pytest.mark.anyio
@@ -261,6 +263,27 @@ async def test_call_tool_maps_host_iserror_to_error_payload(
     payload = extract_payload(result)
     assert payload["success"] is False
     assert "flow not found" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+async def test_call_tool_null_result_becomes_error_payload_not_attribute_error(
+    mock_client, mock_gateway, extract_payload
+):
+    """A host `result: null` surfaces (via the gateway guard) as the standard
+    envelope, never a bare `AttributeError` on a None result."""
+    mock_gateway.call_tool = AsyncMock(
+        side_effect=IpaasGatewayError("iPaaS tools/call returned a non-object result.")
+    )
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        result = await session.call_tool(
+            "call_ipaas_tool",
+            {"pipe_id": "303088927", "tool_name": "ap_list_flows"},
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "non-object result" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

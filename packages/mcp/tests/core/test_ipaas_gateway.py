@@ -200,3 +200,51 @@ async def test_jsonrpc_error_from_tools_list_raises(respx_mock, gateway):
 
     with pytest.raises(IpaasGatewayError, match="tools/list returned an error"):
         await gateway.list_tools("embed-jwt")
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_session_exchange_missing_key_names_the_step(respx_mock, gateway):
+    """A 200 with a body missing an expected key is a step error, not a raw KeyError."""
+    respx_mock.post(f"{IPAAS_URL}/api/v1/managed-authn/external-token").respond(
+        200, json={}
+    )
+
+    with pytest.raises(IpaasGatewayError, match="session exchange.*without 'token'"):
+        await gateway.list_tools("embed-jwt")
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_non_json_body_names_the_step(respx_mock, gateway):
+    """A 200 whose body is not JSON is a step error, not a raw ValueError."""
+    respx_mock.post(f"{IPAAS_URL}/api/v1/managed-authn/external-token").respond(
+        200, text="<html>not json</html>", headers={"content-type": "text/html"}
+    )
+
+    with pytest.raises(IpaasGatewayError, match="session exchange.*not valid JSON"):
+        await gateway.list_tools("embed-jwt")
+
+
+@pytest.mark.anyio
+@respx.mock
+async def test_tools_list_missing_result_names_the_step(respx_mock, gateway):
+    """A 200 tools/list body without ``result`` is a step error, not a raw KeyError."""
+    respx_mock.post(f"{IPAAS_URL}/api/v1/managed-authn/external-token").respond(
+        200, json={"token": "session-token", "projectId": "proj-1"}
+    )
+    respx_mock.get(url__startswith=f"{IPAAS_URL}/authorize").respond(
+        302,
+        headers={"location": f"{IPAAS_URL}/mcp-authorize?authRequestId=auth-req-jwt"},
+    )
+    respx_mock.post(f"{IPAAS_URL}/api/v1/mcp-oauth/approve").respond(
+        200, json={"redirectUrl": f"{REDIRECT_URI}?code=auth-code"}
+    )
+    respx_mock.post(f"{IPAAS_URL}/token").respond(
+        200, json={"access_token": "access-token"}
+    )
+    # initialize (ignored) and tools/list both get a 200 with no ``result`` key.
+    respx_mock.post(f"{IPAAS_URL}/mcp").respond(200, json={"jsonrpc": "2.0", "id": 2})
+
+    with pytest.raises(IpaasGatewayError, match="tools/list.*without 'result'"):
+        await gateway.list_tools("embed-jwt")

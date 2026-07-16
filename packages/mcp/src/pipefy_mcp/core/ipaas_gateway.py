@@ -41,6 +41,32 @@ def _step_error(step: str, response: httpx.Response) -> IpaasGatewayError:
     return IpaasGatewayError(f"{step} failed (HTTP {response.status_code}): {preview}")
 
 
+def _step_json(step: str, response: httpx.Response) -> dict[str, Any]:
+    """Decode a JSON object body, mapping a non-JSON/non-object body to a step error.
+
+    A 2xx status is not proof the body has the expected shape; without this a
+    malformed body would surface to the agent as a bare ``ValueError`` rather
+    than a message naming the step that misbehaved.
+    """
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise IpaasGatewayError(
+            f"{step} returned a body that is not valid JSON."
+        ) from exc
+    if not isinstance(body, dict):
+        raise IpaasGatewayError(f"{step} returned a JSON body that is not an object.")
+    return body
+
+
+def _step_field(step: str, body: dict[str, Any], key: str) -> Any:
+    """Read a required key, mapping its absence to a step-named error."""
+    try:
+        return body[key]
+    except KeyError as exc:
+        raise IpaasGatewayError(f"{step} returned a body without '{key}'.") from exc
+
+
 @dataclass(frozen=True)
 class IpaasGateway:
     """Stateless client for one iPaaS deployment (see module docstring)."""
@@ -87,8 +113,11 @@ class IpaasGateway:
         )
         if response.status_code not in (200, 201):
             raise _step_error("iPaaS session exchange", response)
-        payload = response.json()
-        return payload["token"], payload["projectId"]
+        payload = _step_json("iPaaS session exchange", response)
+        return (
+            _step_field("iPaaS session exchange", payload, "token"),
+            _step_field("iPaaS session exchange", payload, "projectId"),
+        )
 
     async def _oauth_access_token(
         self, http: httpx.AsyncClient, session_token: str, project_id: str
@@ -124,7 +153,8 @@ class IpaasGateway:
         )
         if response.status_code != 200:
             raise _step_error("iPaaS authorization approval", response)
-        code = _query_param(response.json().get("redirectUrl", ""), "code")
+        approval = _step_json("iPaaS authorization approval", response)
+        code = _query_param(approval.get("redirectUrl", ""), "code")
         if code is None:
             raise IpaasGatewayError(
                 "iPaaS authorization approval returned no authorization code."
@@ -142,7 +172,11 @@ class IpaasGateway:
         response = await http.post(f"{self.url}/token", data=token_form)
         if response.status_code != 200:
             raise _step_error("iPaaS token exchange", response)
-        return response.json()["access_token"]
+        return _step_field(
+            "iPaaS token exchange",
+            _step_json("iPaaS token exchange", response),
+            "access_token",
+        )
 
     async def _tools_list(
         self, http: httpx.AsyncClient, access_token: str
@@ -183,7 +217,10 @@ class IpaasGateway:
             raise IpaasGatewayError(
                 f"iPaaS tools/list returned an error: {payload['error']}"
             )
-        return payload["result"]["tools"]
+        result = _step_field("iPaaS tools/list", payload, "result")
+        if not isinstance(result, dict):
+            raise IpaasGatewayError("iPaaS tools/list returned a non-object result.")
+        return _step_field("iPaaS tools/list", result, "tools")
 
 
 def _query_param(url: str, name: str) -> str | None:
@@ -196,11 +233,16 @@ def _parse_mcp_response(response: httpx.Response) -> dict[str, Any]:
     if "text/event-stream" in response.headers.get("content-type", ""):
         for line in response.text.splitlines():
             if line.startswith("data:"):
-                return json.loads(line[len("data:") :].strip())
+                try:
+                    return json.loads(line[len("data:") :].strip())
+                except ValueError as exc:
+                    raise IpaasGatewayError(
+                        "iPaaS tools/list returned an event with a non-JSON data payload."
+                    ) from exc
         raise IpaasGatewayError(
             "iPaaS MCP endpoint returned an event stream with no data event."
         )
-    return response.json()
+    return _step_json("iPaaS tools/list", response)
 
 
 __all__ = ["IpaasGateway", "IpaasGatewayError"]

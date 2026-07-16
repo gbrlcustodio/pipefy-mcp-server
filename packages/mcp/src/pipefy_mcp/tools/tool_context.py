@@ -22,6 +22,22 @@ def get_ipaas_gateway(ctx: Context) -> IpaasGateway | None:
     return runtime.ipaas_gateway
 
 
+def is_remote_profile(ctx: Context) -> bool:
+    """Whether this server is running the hosted ``remote`` profile.
+
+    The call-time half of the "exposure vs input restriction" pattern
+    (see the remote-profile section of the package CLAUDE.md): a tool that is
+    exposed remotely but has inputs that only make sense against a
+    single-user local process (e.g. ``$env`` credential references, which
+    read the server's own environment) rejects those inputs per call. Read
+    off the runtime, not the module-global settings singleton, so embedders
+    and tests that build a runtime from explicit settings get the same
+    answer the serving profile was resolved from.
+    """
+    runtime: McpRuntime = ctx.request_context.lifespan_context
+    return runtime.settings.mcp.profile == "remote"
+
+
 def get_pipefy_client(ctx: Context) -> PipefyClient:
     """Return a Pipefy client session bound to the in-flight request's identity.
 

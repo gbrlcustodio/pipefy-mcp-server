@@ -32,17 +32,24 @@ TOOLS = [
 ]
 
 
-def build_ipaas_test_server(client, gateway):
+def build_ipaas_test_server(client, gateway, *, remote=False):
     """A FastMCP server whose runtime serves ``client`` and ``gateway``.
 
     Mirrors ``build_tool_test_server`` (tools/conftest.py) and additionally
     plants the iPaaS gateway on the runtime (the property reads the instance
-    attribute the composition normally sets from settings).
+    attribute the composition normally sets from settings). ``remote=True``
+    builds the runtime from settings resolved to the hosted profile, which is
+    what the tools' call-time input restrictions read.
     """
+    runtime_settings = settings
+    if remote:
+        runtime_settings = settings.model_copy(
+            update={"mcp": settings.mcp.model_copy(update={"profile": "remote"})}
+        )
 
     @asynccontextmanager
     async def _lifespan(_app):
-        runtime = McpRuntime(settings, RequestScopedIdentity())
+        runtime = McpRuntime(runtime_settings, RequestScopedIdentity())
         runtime.session_for_request = lambda _req: client
         runtime._ipaas_gateway = gateway
         yield runtime
@@ -468,6 +475,63 @@ async def test_create_connection_reports_missing_env_var(
 
 
 @pytest.mark.anyio
+async def test_create_connection_rejects_env_refs_on_remote_profile(
+    mock_client, mock_gateway, extract_payload, monkeypatch
+):
+    """A prefixed, set variable still does not resolve on the hosted profile.
+
+    The hosted server's environment belongs to the deployment and is shared
+    by every caller, so references are rejected before any lookup.
+    """
+    monkeypatch.setenv("PIPEFY_IPAAS_CONNECTION_DEMO_TOKEN", "resolved-secret")
+    server = build_ipaas_test_server(mock_client, mock_gateway, remote=True)
+    async with _session(server) as session:
+        result = await session.call_tool(
+            "create_ipaas_connection",
+            {
+                "pipe_id": "303088927",
+                "piece_name": PIECE_NAME,
+                "connection_type": "SECRET_TEXT",
+                "value": {
+                    "secret_text": {"$env": "PIPEFY_IPAAS_CONNECTION_DEMO_TOKEN"}
+                },
+            },
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert "hosted" in message
+    assert "resolved-secret" not in str(payload)
+    mock_gateway.upsert_connection.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_create_connection_literal_secret_works_on_remote_profile(
+    mock_client, mock_gateway, extract_payload
+):
+    """Literal mode stays allowed on hosted; only $env references are gated."""
+    mock_gateway.upsert_connection = AsyncMock(return_value=CREATED_CONNECTION)
+    server = build_ipaas_test_server(mock_client, mock_gateway, remote=True)
+    async with _session(server) as session:
+        result = await session.call_tool(
+            "create_ipaas_connection",
+            {
+                "pipe_id": "303088927",
+                "piece_name": PIECE_NAME,
+                "connection_type": "SECRET_TEXT",
+                "value": {"secret_text": "shh"},
+            },
+        )
+
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert mock_gateway.upsert_connection.await_args.kwargs["value"] == {
+        "secret_text": "shh"
+    }
+
+
+@pytest.mark.anyio
 async def test_create_connection_oauth_mode_builds_value_from_bundle(
     mock_client, mock_gateway, extract_payload
 ):
@@ -716,6 +780,22 @@ async def test_connection_auth_url_relays_bundle_and_instructions(
     assert "https://third-party.test/consent?x=1" in payload["result"]
     assert '"completion"' in payload["result"]
     assert "create_ipaas_connection" in payload["result"]
+
+
+@pytest.mark.anyio
+async def test_connection_auth_url_is_not_read_only(mock_client, mock_gateway):
+    """Step 1 POSTs for a fresh single-use PKCE bundle, so it is not a pure read;
+    hosted clients must not treat it as a cacheable read-only call."""
+    server = build_ipaas_test_server(mock_client, mock_gateway)
+    async with _session(server) as session:
+        listed = await session.list_tools()
+
+    by_name = {t.name: t for t in listed.tools}
+    auth_url = by_name["get_ipaas_connection_auth_url"]
+    assert auth_url.annotations is not None
+    assert auth_url.annotations.readOnlyHint is False
+    # The discovery meta-tool stays a genuine read.
+    assert by_name["get_ipaas_tools"].annotations.readOnlyHint is True
 
 
 @pytest.mark.anyio

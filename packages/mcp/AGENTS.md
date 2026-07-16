@@ -215,9 +215,14 @@ decision. Opting a tool in is a deliberate, reviewed change (it shifts the
 The `meta` marker expresses **exposure** only: whether a tool is available in the
 remote profile. The retired `GATED:` convention could also express *input*
 restriction within an exposed tool. Where a remotely-exposed tool needs restricted
-inputs (for example the attachment tools, which would accept a `file_url` rather
-than a local `file_path`), enforce that in the tool body gated on
-`settings.mcp.profile == "remote"` at call time, not via the marker. A tool whose
+inputs, enforce that in the tool body at call time via
+`is_remote_profile(ctx)` (`tools/tool_context.py`), not via the marker — and not
+via the module-global settings singleton, which can disagree with the profile the
+runtime was actually built from (embedders and tests construct runtimes from
+explicit settings). The shipped instance is `create_ipaas_connection`, which
+rejects `{"$env": ...}` credential references on the remote profile because they
+resolve from the deployment's own environment; the attachment tools (a `file_url`
+rather than a local `file_path`) would follow the same shape. A tool whose
 exclusion deserves a reason gets a plain code comment stating why; the exclusion
 itself needs no annotation.
 

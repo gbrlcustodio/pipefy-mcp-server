@@ -21,6 +21,7 @@ from pipefy_cli.commands.field import field_app
 from pipefy_cli.commands.field_condition import field_condition_app
 from pipefy_cli.commands.graphql import graphql_app
 from pipefy_cli.commands.introspect import introspect_app
+from pipefy_cli.commands.knowledge_base import kb_app
 from pipefy_cli.commands.label import label_app
 from pipefy_cli.commands.member import member_app
 from pipefy_cli.commands.org import org_app
@@ -127,6 +128,7 @@ app.add_typer(relation_app, name="relation")
 app.add_typer(member_app, name="member")
 app.add_typer(graphql_app, name="graphql")
 app.add_typer(introspect_app, name="introspect")
+app.add_typer(kb_app, name="kb")
 app.add_typer(export_app, name="export")
 app.add_typer(org_app, name="org")
 app.add_typer(report_org_app, name="report-org")

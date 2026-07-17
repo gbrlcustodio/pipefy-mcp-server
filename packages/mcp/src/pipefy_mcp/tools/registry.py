@@ -14,6 +14,7 @@ from pipefy_mcp.tools.automation_tools import AutomationTools
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 from pipefy_mcp.tools.ipaas_tools import IpaasTools
+from pipefy_mcp.tools.knowledge_base_tools import KnowledgeBaseTools
 from pipefy_mcp.tools.llm_provider_tools import LlmProviderTools
 from pipefy_mcp.tools.member_tools import MemberTools
 from pipefy_mcp.tools.observability_tools import ObservabilityTools
@@ -43,6 +44,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "create_automation",
         "create_card",
         "create_card_relation",
+        "create_ai_knowledge_base_plain_text",
         "create_field_condition",
         "create_ipaas_connection",
         "create_label",
@@ -63,6 +65,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "create_webhook",
         "delete_ai_agent",
         "delete_ai_automation",
+        "delete_ai_knowledge_base_plain_text",
         "delete_automation",
         "delete_card",
         "delete_card_relation",
@@ -101,6 +104,8 @@ PIPEFY_TOOL_NAMES = frozenset(
         "get_ai_automation",
         "get_ai_automations",
         "get_ai_credit_usage",
+        "get_ai_knowledge_base_plain_text",
+        "get_ai_knowledge_bases",
         "get_automation",
         "get_automation_actions",
         "get_automation_event_attributes",
@@ -171,6 +176,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "unpublish_sub_portal",
         "update_ai_agent",
         "update_ai_automation",
+        "update_ai_knowledge_base_plain_text",
         "update_automation",
         "update_card",
         "update_card_field",
@@ -196,6 +202,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "upload_attachment_to_table_record",
         "validate_ai_agent_behaviors",
         "validate_ai_automation_prompt",
+        "validate_knowledge_base_access",
         "validate_llm_provider_access",
     }
 )
@@ -222,6 +229,7 @@ _TOOLSETS = (
     AiAutomationTools,
     AiAgentTools,
     LlmProviderTools,
+    KnowledgeBaseTools,
 )
 
 

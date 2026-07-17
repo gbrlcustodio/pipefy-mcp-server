@@ -581,6 +581,7 @@ class AiAgentTools:
             pipe_id: PipefyId,
             behaviors: list[dict],
             strict_unknown_action_types: bool = True,
+            data_source_ids: list[str] | None = None,
         ) -> dict:
             """Dry-run validation of AI Agent behaviors against a pipe's fields, phases, and relations.
 
@@ -638,6 +639,12 @@ class AiAgentTools:
                     ``fieldId`` values (slug or ``internal_id``).
                 strict_unknown_action_types: When ``True`` (default), unknown ``actionType`` values
                     are reported in ``problems``. When ``False``, they appear in ``warnings`` only.
+                data_source_ids: Optional agent-level knowledge base IDs to attach. These are
+                    unioned with each behavior's ``actionParams.aiBehaviorParams.dataSourceIds``
+                    and checked against the pipe's knowledge bases (via ``get_ai_knowledge_bases``);
+                    unknown IDs produce **warnings** only (``valid`` stays true). If the knowledge
+                    base list cannot be read, a single warning is added and the membership check is
+                    skipped. Discover valid IDs via ``get_ai_knowledge_bases(pipe_uuid)``.
             """
             client = get_pipefy_client(ctx)
             pid = str(pipe_id).strip()
@@ -653,6 +660,7 @@ class AiAgentTools:
                 pid,
                 behaviors,
                 strict_unknown_action_types=strict_unknown_action_types,
+                data_source_ids=data_source_ids,
             )
             if not result.get("success"):
                 probs = result.get("problems") or []

@@ -635,7 +635,7 @@ def test_behavior_input_rejects_capability_string_list():
     payload = minimal_behavior_dict()
     abp = payload["actionParams"]["aiBehaviorParams"]
     abp["capabilitiesAttributes"] = ["advanced_ocr", "web_search"]
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="must be an object, not str"):
         BehaviorInput.model_validate(payload)
 
 

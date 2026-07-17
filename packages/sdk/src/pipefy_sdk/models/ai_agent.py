@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from pipefy_sdk.models.validators import NonBlankStr
 
@@ -143,6 +143,29 @@ def _validate_capability_entries(
             )
 
 
+def _reject_non_mapping_capability_entries(value: object) -> object:
+    """Give bare-string / non-object capability entries the canonical-shape error.
+
+    A legacy string list fails ``AiBehaviorCapabilityAttributes`` coercion with an
+    opaque ``model_type`` error before :func:`_validate_capability_entries` can run,
+    so the caller never sees the canonical-shape guidance. Catch non-object entries
+    here to surface the same actionable message as the other legacy shapes; object
+    entries (including the legacy ``{"type": ...}`` shape) pass through untouched to
+    normal coercion and the after-validator.
+    """
+    if not isinstance(value, list):
+        return value
+    for i, entry in enumerate(value):
+        if not isinstance(entry, (dict, AiBehaviorCapabilityAttributes)):
+            raise ValueError(
+                f"capabilitiesAttributes[{i}] must be an object, not "
+                f"{type(entry).__name__}. Use the canonical shape "
+                f"{_CAPABILITY_CANONICAL_SHAPE}; legacy shapes (string lists, "
+                f'{{"type": ...}}) are not accepted.'
+            )
+    return value
+
+
 def _validate_action_metadata(action: AiBehaviorActionAttributes) -> None:
     """Validate metadata for a single action based on its actionType.
 
@@ -210,9 +233,10 @@ class AiBehaviorParams(BaseModel):
     actions_attributes: list[AiBehaviorActionAttributes] | None = Field(
         default=None, alias="actionsAttributes"
     )
-    capabilities_attributes: list[AiBehaviorCapabilityAttributes] | None = Field(
-        default=None, alias="capabilitiesAttributes"
-    )
+    capabilities_attributes: Annotated[
+        list[AiBehaviorCapabilityAttributes] | None,
+        BeforeValidator(_reject_non_mapping_capability_entries),
+    ] = Field(default=None, alias="capabilitiesAttributes")
     data_source_ids: list[str] | None = Field(default=None, alias="dataSourceIds")
     referenced_field_ids: list[str] | None = Field(
         default=None, alias="referencedFieldIds"

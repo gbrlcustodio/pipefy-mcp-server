@@ -50,6 +50,10 @@ from pipefy_sdk.services.automation_graphql_types import (
 )
 from pipefy_sdk.services.automation_service import AutomationService
 from pipefy_sdk.services.card_service import CardService
+from pipefy_sdk.services.llm_provider_service import (
+    DEFAULT_PROVIDER_PAGE_SIZE,
+    LlmProviderService,
+)
 from pipefy_sdk.services.member_service import MemberService
 from pipefy_sdk.services.observability_service import (
     AUTOMATION_EXECUTION_METRICS_MAX_PAGE_SIZE,
@@ -76,7 +80,11 @@ from pipefy_sdk.services.types import (
     AiAgentGraphPayload,
     AutomationServiceResult,
     CardSearch,
+    LlmProviderPayload,
+    LlmProvidersResult,
     MePayload,
+    ProviderAccessProbeResult,
+    ProviderDependenciesResult,
     ToggleAgentStatusResult,
 )
 from pipefy_sdk.services.user_service import UserService
@@ -268,6 +276,7 @@ class PipefyClient:
         )
         self._automation_service = AutomationService(executor=ex.public)
         self._ai_agent_service = AiAgentService(executor=ex.public)
+        self._llm_provider_service = LlmProviderService(executor=ex.public)
         self._observability_service = ObservabilityService(executor=ex.public)
         self._report_service = ReportService(executor=ex.public)
         self._organization_service = OrganizationService(executor=ex.public)
@@ -909,6 +918,52 @@ class PipefyClient:
     async def delete_ai_agent(self, agent_uuid: str) -> dict:
         """Delete an AI Agent by UUID (permanent)."""
         return await self._ai_agent_service.delete_agent(agent_uuid)
+
+    async def get_llm_providers(
+        self,
+        organization_uuid: str,
+        *,
+        only_active: bool = False,
+        first: int = DEFAULT_PROVIDER_PAGE_SIZE,
+        after: str | None = None,
+    ) -> LlmProvidersResult:
+        """List the organization's LLM providers (custom + Pipefy-managed system)."""
+        return await self._llm_provider_service.get_llm_providers(
+            organization_uuid, only_active=only_active, first=first, after=after
+        )
+
+    async def get_available_ai_models(self, provider_name: str) -> list[str]:
+        """List the model names a provider vendor exposes (ProviderName enum)."""
+        return await self._llm_provider_service.get_available_ai_models(provider_name)
+
+    async def get_default_llm_provider(
+        self, owner_id: str, *, owner_type: str = "organization"
+    ) -> LlmProviderPayload:
+        """Resolve the default LLM provider for an owner (org default by default)."""
+        return await self._llm_provider_service.get_default_llm_provider(
+            owner_id, owner_type=owner_type
+        )
+
+    async def get_llm_provider_dependencies(
+        self,
+        provider_id: str,
+        organization_uuid: str,
+        *,
+        first: int = DEFAULT_PROVIDER_PAGE_SIZE,
+        after: str | None = None,
+    ) -> ProviderDependenciesResult:
+        """List the owners that depend on an LLM provider."""
+        return await self._llm_provider_service.get_llm_provider_dependencies(
+            provider_id, organization_uuid, first=first, after=after
+        )
+
+    async def validate_llm_provider_access(
+        self, organization_uuid: str
+    ) -> ProviderAccessProbeResult:
+        """Probe LLM provider read access; classifies errors instead of raising."""
+        return await self._llm_provider_service.validate_llm_provider_access(
+            organization_uuid
+        )
 
     async def create_ai_agent(
         self, agent_input: CreateAiAgentInput

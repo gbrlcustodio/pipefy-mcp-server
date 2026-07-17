@@ -120,6 +120,31 @@ Use real values from `get_pipe` / `get_start_form_fields` for your org. Placehol
 { "pipeId": "900000301", "fieldsAttributes": [{ "fieldId": "title", "inputMode": "fill_with_ai", "value": "" }] }
 ```
 
+### 5b — Optional: capabilities and LLM provider
+
+Inside `actionParams.aiBehaviorParams` a behavior may also carry:
+
+- **`capabilitiesAttributes`** — advanced tools the behavior can use. Each entry is exactly `{ "capabilityType": "<type>", "enabled": true|false }` (both keys required, no extra keys — bare strings or `{ "type": ... }` are rejected).
+
+  | Product name | `capabilityType` |
+  |---|---|
+  | IDP / Intelligent Document Processing | `advanced_ocr` |
+  | Calculations & Analysis | `math_operations` |
+  | Web Search | `web_search` |
+  | Web Scraping | `web_scraping` |
+  | Max effort | `max_effort` |
+
+  `capabilityType` is not checked against a fixed set — any value passes through and the API validates the enum on write, so new capabilities work without a toolkit update. Validation checks **shape only, not entitlement** — a capability may still require organization-level enablement to have any effect, so a green pre-flight does not guarantee the capability is active for the org.
+- **`providerId`** / **`systemProviderId`** — pick the behavior's LLM provider. Set **at most one** (a behavior resolves to a single active provider). Discover valid IDs via the organization's AI settings in the Pipefy UI.
+
+```json
+{
+  "instruction": "Extract totals from the attached invoice.",
+  "capabilitiesAttributes": [{ "capabilityType": "advanced_ocr", "enabled": true }],
+  "actionsAttributes": [ /* ... */ ]
+}
+```
+
 ### 6 — Validate (recommended for complex behaviors)
 
 `validate_ai_agent_behaviors(pipe_id, behaviors)` checks:
@@ -127,7 +152,7 @@ Use real values from `get_pipe` / `get_start_form_fields` for your org. Placehol
 - Phase IDs exist
 - Pipe relations exist for `create_connected_card`
 - Action types are valid
-- Behavior structure passes Pydantic validation
+- Behavior structure passes Pydantic validation (including canonical `capabilitiesAttributes` shape and at most one of `providerId` / `systemProviderId`)
 - Field IDs are checked against start-form and phase fields, accepting both slug `id` and numeric `internal_id`. Placeholders like `%{field:<slug>}` or `%{field:<internal_id>}` are validated but **not rewritten** at this step.
 
 ### 7 — Create the agent

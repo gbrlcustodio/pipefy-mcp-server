@@ -44,6 +44,21 @@ def test_update_ai_agent_mutation_includes_email_template_metadata_fields():
     assert "allowTemplateModifications" in printed
 
 
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "document",
+    [GET_AI_AGENT_QUERY.document, UPDATE_AI_AGENT_MUTATION.document],
+    ids=["get", "update"],
+)
+def test_ai_agent_selection_round_trips_capabilities_and_provider_ids(document):
+    printed = print_ast(document)
+    assert "capabilitiesAttributes" in printed
+    assert "capabilityType" in printed
+    assert "enabled" in printed
+    assert "providerId" in printed
+    assert "systemProviderId" in printed
+
+
 def _make_behavior_dict(instruction="", actions=None):
     result = {
         "name": "Test Behavior",

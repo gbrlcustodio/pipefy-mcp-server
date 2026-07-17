@@ -209,8 +209,17 @@ class AiAgentTools:
               - ``send_email_template`` → ``{"emailTemplateId": "<template_id>"}``;
                 optional ``allowTemplateModifications`` (boolean).
 
-            Optional ``actionParams.aiBehaviorParams.capabilitiesAttributes`` (list of strings), e.g.
-            ``advanced_ocr``, ``web_search`` — pass-through; the API validates capability types.
+            Optional ``actionParams.aiBehaviorParams.capabilitiesAttributes`` — a list of
+            capability entries, each exactly ``{"capabilityType": "<type>", "enabled": true|false}``
+            (legacy string lists / ``{"type": ...}`` / extra keys are rejected). Common types:
+            ``advanced_ocr`` (product name IDP / Intelligent Document Processing),
+            ``math_operations`` (Calculations & Analysis), ``web_search``, ``web_scraping``,
+            ``max_effort``; unknown types pass through — the API validates the enum and
+            entitlement on write (a capability may require organization-level enablement).
+
+            Optional ``actionParams.aiBehaviorParams.providerId`` / ``systemProviderId`` select the
+            behavior's LLM provider; set at most one. Discover IDs via the organization's AI
+            settings in the Pipefy UI.
 
             Optional ``eventParams`` per behavior (filters when the trigger fires):
               - ``field_updated`` event → ``{"triggerFieldIds": ["<field_id>"]}`` to fire only on specific fields.
@@ -366,8 +375,9 @@ class AiAgentTools:
               - ``send_email_template`` → ``{"emailTemplateId": "<template_id>"}``;
                 optional ``allowTemplateModifications`` (boolean).
 
-            Optional ``actionParams.aiBehaviorParams.capabilitiesAttributes`` (list of strings), e.g.
-            ``advanced_ocr``, ``web_search`` — pass-through; the API validates capability types.
+            Optional ``capabilitiesAttributes`` / ``providerId`` / ``systemProviderId`` inside
+            ``actionParams.aiBehaviorParams`` — same rules as ``create_ai_agent``; see its
+            docstring.
 
             Args:
                 uuid: UUID of the agent to update.
@@ -588,7 +598,12 @@ class AiAgentTools:
             pipe field-ID checks on its metadata.
 
             Runs Pydantic model validation (same as the mutation tools) plus cross-references
-            against live pipe data. Does not persist anything.
+            against live pipe data. Does not persist anything. Model validation rejects
+            malformed ``capabilitiesAttributes`` entries (each must be
+            ``{"capabilityType": "<type>", "enabled": true|false}``) and a behavior that sets
+            both ``providerId`` and ``systemProviderId``. ``capabilityType`` values are not
+            checked against a known-enum set — any value passes through and the API validates
+            the enum on write (capabilities may also require organization-level enablement).
 
             Field IDs are matched against start-form fields and phase fields (via
             ``get_phase_fields`` per phase), accepting both slug ``id`` and numeric

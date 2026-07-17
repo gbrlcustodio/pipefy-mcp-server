@@ -571,16 +571,109 @@ def test_metadata_rejects_non_bool_allow_template_modifications():
 
 
 @pytest.mark.unit
-def test_behavior_input_accepts_capabilities_attributes_on_ai_behavior_params():
+def test_behavior_input_accepts_canonical_capabilities_attributes():
     payload = minimal_behavior_dict()
     abp = payload["actionParams"]["aiBehaviorParams"]
-    abp["capabilitiesAttributes"] = [{"type": "advanced_ocr"}, {"type": "web_search"}]
+    abp["capabilitiesAttributes"] = [
+        {"capabilityType": "advanced_ocr", "enabled": True},
+        {"capabilityType": "web_search", "enabled": False},
+    ]
     inp = BehaviorInput.model_validate(payload)
     caps = inp.action_params.ai_behavior_params.capabilities_attributes
     assert [c.model_dump(by_alias=True, exclude_none=True) for c in caps] == [
-        {"type": "advanced_ocr"},
-        {"type": "web_search"},
+        {"capabilityType": "advanced_ocr", "enabled": True},
+        {"capabilityType": "web_search", "enabled": False},
     ]
+
+
+@pytest.mark.unit
+def test_behavior_input_rejects_unknown_capability_keys():
+    """The GraphQL capability input is closed; a typo'd key must fail clearly here."""
+    payload = minimal_behavior_dict()
+    abp = payload["actionParams"]["aiBehaviorParams"]
+    abp["capabilitiesAttributes"] = [
+        {"capabilityType": "advanced_ocr", "enabled": True, "enable": True}
+    ]
+    with pytest.raises(ValidationError, match="unknown key"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("field", ["providerId", "systemProviderId"])
+def test_behavior_input_rejects_blank_provider_id(field):
+    """Blank provider ids would dodge the co-presence check yet reach the wire."""
+    payload = minimal_behavior_dict()
+    payload["actionParams"]["aiBehaviorParams"][field] = "   "
+    with pytest.raises(ValidationError, match="non-empty"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_behavior_input_accepts_unknown_capability_type():
+    """Unknown capabilityType values are not checked client-side; the API validates the enum on write."""
+    payload = minimal_behavior_dict()
+    abp = payload["actionParams"]["aiBehaviorParams"]
+    abp["capabilitiesAttributes"] = [
+        {"capabilityType": "future_capability", "enabled": True}
+    ]
+    inp = BehaviorInput.model_validate(payload)
+    caps = inp.action_params.ai_behavior_params.capabilities_attributes
+    assert caps[0].capability_type == "future_capability"
+
+
+@pytest.mark.unit
+def test_behavior_input_rejects_legacy_type_capability_shape():
+    payload = minimal_behavior_dict()
+    abp = payload["actionParams"]["aiBehaviorParams"]
+    abp["capabilitiesAttributes"] = [{"type": "advanced_ocr"}]
+    with pytest.raises(ValidationError, match="capabilityType"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_behavior_input_rejects_capability_string_list():
+    payload = minimal_behavior_dict()
+    abp = payload["actionParams"]["aiBehaviorParams"]
+    abp["capabilitiesAttributes"] = ["advanced_ocr", "web_search"]
+    with pytest.raises(ValidationError, match="must be an object, not str"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_behavior_input_rejects_capability_missing_enabled():
+    payload = minimal_behavior_dict()
+    abp = payload["actionParams"]["aiBehaviorParams"]
+    abp["capabilitiesAttributes"] = [{"capabilityType": "advanced_ocr"}]
+    with pytest.raises(ValidationError, match="enabled"):
+        BehaviorInput.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_behavior_input_accepts_provider_id_alone():
+    payload = minimal_behavior_dict()
+    payload["actionParams"]["aiBehaviorParams"]["providerId"] = "prov-1"
+    inp = BehaviorInput.model_validate(payload)
+    assert inp.action_params.ai_behavior_params.provider_id == "prov-1"
+    assert inp.action_params.ai_behavior_params.system_provider_id is None
+
+
+@pytest.mark.unit
+def test_behavior_input_accepts_system_provider_id_alone():
+    payload = minimal_behavior_dict()
+    payload["actionParams"]["aiBehaviorParams"]["systemProviderId"] = "sys-1"
+    inp = BehaviorInput.model_validate(payload)
+    assert inp.action_params.ai_behavior_params.system_provider_id == "sys-1"
+    assert inp.action_params.ai_behavior_params.provider_id is None
+
+
+@pytest.mark.unit
+def test_behavior_input_rejects_both_provider_ids():
+    payload = minimal_behavior_dict()
+    abp = payload["actionParams"]["aiBehaviorParams"]
+    abp["providerId"] = "prov-1"
+    abp["systemProviderId"] = "sys-1"
+    with pytest.raises(ValidationError, match="at most one"):
+        BehaviorInput.model_validate(payload)
 
 
 # --- snake_case / camelCase normalization ---

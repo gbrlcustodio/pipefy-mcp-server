@@ -108,6 +108,11 @@ def mock_api_behavior_response(
                 "instruction": "Analyze the card and fill summary.",
                 "dataSourceIds": [],
                 "referencedFieldIds": [],
+                "providerId": None,
+                "systemProviderId": None,
+                "capabilitiesAttributes": [
+                    {"capabilityType": "advanced_ocr", "enabled": True},
+                ],
                 "actionsAttributes": [
                     {
                         "id": "456",

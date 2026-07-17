@@ -43,6 +43,12 @@ GET_AI_AGENT_QUERY = gql(
                         instruction
                         dataSourceIds
                         referencedFieldIds
+                        providerId
+                        systemProviderId
+                        capabilitiesAttributes {
+                            capabilityType
+                            enabled
+                        }
                         actionsAttributes {
                             id
                             name
@@ -161,6 +167,12 @@ UPDATE_AI_AGENT_MUTATION = gql(
                             instruction
                             dataSourceIds
                             referencedFieldIds
+                            providerId
+                            systemProviderId
+                            capabilitiesAttributes {
+                                capabilityType
+                                enabled
+                            }
                             actionsAttributes {
                                 id
                                 name

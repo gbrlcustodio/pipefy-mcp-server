@@ -141,6 +141,58 @@ class TestCreateAiAgent:
         assert payload["success"] is False
         assert "error" in payload
 
+    async def test_rejects_legacy_capability_shape(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        behavior = minimal_behavior_dict(name="B1")
+        behavior["actionParams"]["aiBehaviorParams"]["capabilitiesAttributes"] = [
+            {"type": "advanced_ocr"}
+        ]
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "Agent",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Purpose",
+                    "behaviors": [behavior],
+                },
+            )
+        assert result.isError is False
+        mock_pipefy_client.create_ai_agent.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "capabilityType" in str(payload["error"])
+
+    async def test_rejects_both_provider_ids(
+        self,
+        client_session,
+        mock_pipefy_client,
+        extract_payload,
+    ):
+        behavior = minimal_behavior_dict(name="B1")
+        abp = behavior["actionParams"]["aiBehaviorParams"]
+        abp["providerId"] = "prov-1"
+        abp["systemProviderId"] = "sys-1"
+        async with client_session as session:
+            result = await session.call_tool(
+                "create_ai_agent",
+                {
+                    "name": "Agent",
+                    "repo_uuid": "repo-456",
+                    "instruction": "Purpose",
+                    "behaviors": [behavior],
+                },
+            )
+        assert result.isError is False
+        mock_pipefy_client.create_ai_agent.assert_not_called()
+        payload = extract_payload(result)
+        assert payload["success"] is False
+        assert "at most one" in str(payload["error"])
+
     async def test_create_and_configure_success(
         self,
         client_session,

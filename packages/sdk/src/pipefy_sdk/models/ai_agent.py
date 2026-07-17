@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from pipefy_sdk.models.validators import NonBlankStr
 
@@ -100,6 +100,72 @@ def _validate_move_card_metadata(metadata: dict) -> None:
         )
 
 
+_CAPABILITY_CANONICAL_SHAPE = '{"capabilityType": "<type>", "enabled": true|false}'
+
+
+def _validate_capability_entries(
+    capabilities: list[AiBehaviorCapabilityAttributes] | None,
+) -> None:
+    """Enforce the canonical capability wire shape on each entry.
+
+    Every entry must carry a non-empty ``capabilityType`` string, a boolean
+    ``enabled``, and no other keys (the GraphQL input type is closed — an unknown
+    key fails the whole mutation with an opaque coercion error, so it is rejected
+    here with a clear one). Legacy shapes (bare string lists, ``{"type": ...}``)
+    are rejected: a string list fails Pydantic list coercion before this runs, and
+    ``{"type": ...}`` lands here with ``capability_type`` unset. Enum membership is
+    intentionally *not* checked — any ``capabilityType`` value passes through,
+    because the capability set grows over time and the API validates the enum
+    server-side on write.
+    """
+    if not capabilities:
+        return
+    for i, cap in enumerate(capabilities):
+        ctype = cap.capability_type
+        if not ctype or not ctype.strip():
+            raise ValueError(
+                f"capabilitiesAttributes[{i}] requires a non-empty 'capabilityType'. "
+                f"Use the canonical shape {_CAPABILITY_CANONICAL_SHAPE}; legacy shapes "
+                f'(string lists, {{"type": ...}}) are not accepted.'
+            )
+        if cap.enabled is None:
+            raise ValueError(
+                f"capabilitiesAttributes[{i}] (capabilityType '{ctype}') requires a "
+                f"boolean 'enabled'. Use the canonical shape "
+                f"{_CAPABILITY_CANONICAL_SHAPE}."
+            )
+        if cap.model_extra:
+            unknown = ", ".join(sorted(cap.model_extra))
+            raise ValueError(
+                f"capabilitiesAttributes[{i}] (capabilityType '{ctype}') has unknown "
+                f"key(s): {unknown}. The API accepts exactly 'capabilityType' and "
+                f"'enabled'; unknown keys make the whole mutation fail."
+            )
+
+
+def _reject_non_mapping_capability_entries(value: object) -> object:
+    """Give bare-string / non-object capability entries the canonical-shape error.
+
+    A legacy string list fails ``AiBehaviorCapabilityAttributes`` coercion with an
+    opaque ``model_type`` error before :func:`_validate_capability_entries` can run,
+    so the caller never sees the canonical-shape guidance. Catch non-object entries
+    here to surface the same actionable message as the other legacy shapes; object
+    entries (including the legacy ``{"type": ...}`` shape) pass through untouched to
+    normal coercion and the after-validator.
+    """
+    if not isinstance(value, list):
+        return value
+    for i, entry in enumerate(value):
+        if not isinstance(entry, (dict, AiBehaviorCapabilityAttributes)):
+            raise ValueError(
+                f"capabilitiesAttributes[{i}] must be an object, not "
+                f"{type(entry).__name__}. Use the canonical shape "
+                f"{_CAPABILITY_CANONICAL_SHAPE}; legacy shapes (string lists, "
+                f'{{"type": ...}}) are not accepted.'
+            )
+    return value
+
+
 def _validate_action_metadata(action: AiBehaviorActionAttributes) -> None:
     """Validate metadata for a single action based on its actionType.
 
@@ -121,9 +187,12 @@ def _validate_action_metadata(action: AiBehaviorActionAttributes) -> None:
 class AiBehaviorCapabilityAttributes(BaseModel):
     """One entry in ``aiBehaviorParams.capabilitiesAttributes``.
 
-    The typed shell only; no shape or enum validation lives here. Legacy shapes
-    (e.g. ``{"type": "advanced_ocr"}``) round-trip verbatim through ``extra="allow"``.
-    Capability shape/enum rules are declared on this model in a follow-up.
+    A lenient typed shell: it parses any dict (``extra="allow"`` keeps unknown keys),
+    so read/normalization paths (:class:`BehaviorPayload`) accept whatever the API
+    stores — reads always return ``{capabilityType, enabled}``, both non-null. The
+    canonical-shape rules (``capabilityType`` + boolean ``enabled`` required, no
+    unknown keys) are enforced at the input boundary by :class:`BehaviorInput`, not
+    here; enum membership is not checked client-side (the API validates it on write).
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
@@ -164,9 +233,10 @@ class AiBehaviorParams(BaseModel):
     actions_attributes: list[AiBehaviorActionAttributes] | None = Field(
         default=None, alias="actionsAttributes"
     )
-    capabilities_attributes: list[AiBehaviorCapabilityAttributes] | None = Field(
-        default=None, alias="capabilitiesAttributes"
-    )
+    capabilities_attributes: Annotated[
+        list[AiBehaviorCapabilityAttributes] | None,
+        BeforeValidator(_reject_non_mapping_capability_entries),
+    ] = Field(default=None, alias="capabilitiesAttributes")
     data_source_ids: list[str] | None = Field(default=None, alias="dataSourceIds")
     referenced_field_ids: list[str] | None = Field(
         default=None, alias="referencedFieldIds"
@@ -226,8 +296,14 @@ class BehaviorInput(BaseModel):
     Optional ``eventParams`` configures the trigger.
 
     Optional ``actionParams.aiBehaviorParams.capabilitiesAttributes`` is a list of capability
-    entries the API accepts (e.g. ``advanced_ocr``, ``web_search``). No extra structural
-    validation here — the API enforces capability shapes.
+    entries in the canonical shape ``{"capabilityType": "<type>", "enabled": true|false}``.
+    Both keys are required per entry; legacy shapes (bare string lists, ``{"type": ...}``)
+    are rejected. ``capabilityType`` values are not checked against a known-enum set
+    (any value passes through; the API validates the enum on write).
+
+    Optional ``providerId`` / ``systemProviderId`` select the behavior's LLM provider; at
+    most one may be set (reads resolve a single active provider, so co-presence is
+    unverifiable).
 
     For each action dict, known ``actionType`` values get ``metadata`` checks:
     ``update_card`` / ``create_card`` / ``create_connected_card`` need ``pipeId`` and non-empty
@@ -273,6 +349,24 @@ class BehaviorInput(BaseModel):
             )
         for action in actions:
             _validate_action_metadata(action)
+        _validate_capability_entries(abp.capabilities_attributes)
+        for wire_name, value in (
+            ("providerId", abp.provider_id),
+            ("systemProviderId", abp.system_provider_id),
+        ):
+            # Blank strings would dodge the co-presence check below (falsy) yet
+            # still be serialized to the API (exclude_none keeps them).
+            if value is not None and not value.strip():
+                raise ValueError(
+                    f"aiBehaviorParams.{wire_name} must be a non-empty string when "
+                    f"set; omit the field to leave the provider unset."
+                )
+        if abp.provider_id and abp.system_provider_id:
+            raise ValueError(
+                "A behavior may set at most one of providerId / systemProviderId. "
+                "Reads resolve a single active provider per behavior, so co-presence "
+                "is unverifiable — send only the one that applies."
+            )
         return self
 
 

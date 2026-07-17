@@ -14,6 +14,7 @@ from pipefy_mcp.tools.automation_tools import AutomationTools
 from pipefy_mcp.tools.field_condition_tools import FieldConditionTools
 from pipefy_mcp.tools.introspection_tools import IntrospectionTools
 from pipefy_mcp.tools.ipaas_tools import IpaasTools
+from pipefy_mcp.tools.llm_provider_tools import LlmProviderTools
 from pipefy_mcp.tools.member_tools import MemberTools
 from pipefy_mcp.tools.observability_tools import ObservabilityTools
 from pipefy_mcp.tools.organization_tools import OrganizationTools
@@ -111,6 +112,8 @@ PIPEFY_TOOL_NAMES = frozenset(
         "get_automation_logs_by_repo",
         "get_automations",
         "get_automations_usage",
+        "get_available_ai_models",
+        "get_default_llm_provider",
         "get_field_condition",
         "get_field_conditions",
         "get_card",
@@ -121,6 +124,8 @@ PIPEFY_TOOL_NAMES = frozenset(
         "get_ipaas_connection_auth_url",
         "get_ipaas_tools",
         "get_labels",
+        "get_llm_provider_dependencies",
+        "get_llm_providers",
         "get_organization",
         "get_organization_report",
         "get_organization_report_export",
@@ -191,6 +196,7 @@ PIPEFY_TOOL_NAMES = frozenset(
         "upload_attachment_to_table_record",
         "validate_ai_agent_behaviors",
         "validate_ai_automation_prompt",
+        "validate_llm_provider_access",
     }
 )
 
@@ -215,6 +221,7 @@ _TOOLSETS = (
     ObservabilityTools,
     AiAutomationTools,
     AiAgentTools,
+    LlmProviderTools,
 )
 
 

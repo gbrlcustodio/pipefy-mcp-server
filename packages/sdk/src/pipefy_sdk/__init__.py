@@ -11,6 +11,12 @@ from pipefy_sdk.field_filters import (
     filter_fields_by_definitions,
     skipped_field_ids,
 )
+from pipefy_sdk.graphql_problem import (
+    GraphQLProblem,
+    GraphQLProblemKind,
+    classify_exception,
+    classify_graphql_error_dicts,
+)
 from pipefy_sdk.models import (
     Attachment,
     AttachmentTarget,
@@ -64,7 +70,11 @@ from pipefy_sdk.services.table_service import (
 from pipefy_sdk.services.types import (
     AiAgentGraphPayload,
     CardSearch,
+    LlmProviderPayload,
+    LlmProvidersResult,
     MePayload,
+    ProviderAccessProbeResult,
+    ProviderDependenciesResult,
     copy_card_search,
 )
 from pipefy_sdk.settings import PipefySettings
@@ -100,6 +110,14 @@ __all__ = [
     "CreatePortalElementInput",
     "CreateSendTaskAutomationInput",
     "DeleteCommentInput",
+    "GraphQLProblem",
+    "GraphQLProblemKind",
+    "LlmProviderPayload",
+    "LlmProvidersResult",
+    "ProviderAccessProbeResult",
+    "ProviderDependenciesResult",
+    "classify_exception",
+    "classify_graphql_error_dicts",
     "download_bytes",
     "filter_editable_field_definitions",
     "filter_fields_by_definitions",

@@ -218,8 +218,9 @@ class AiAgentTools:
             entitlement on write (a capability may require organization-level enablement).
 
             Optional ``actionParams.aiBehaviorParams.providerId`` / ``systemProviderId`` select the
-            behavior's LLM provider; set at most one. Discover IDs via the organization's AI
-            settings in the Pipefy UI.
+            behavior's LLM provider; set at most one. Discover IDs with ``get_llm_providers``
+            (``providerId`` for a custom/byom provider, ``systemProviderId`` for a
+            Pipefy-managed/system one).
 
             Optional ``eventParams`` per behavior (filters when the trigger fires):
               - ``field_updated`` event → ``{"triggerFieldIds": ["<field_id>"]}`` to fire only on specific fields.

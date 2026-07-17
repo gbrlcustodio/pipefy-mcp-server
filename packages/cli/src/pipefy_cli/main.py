@@ -9,6 +9,7 @@ from pipefy_cli import __version__ as _cli_version
 from pipefy_cli.auth import BearerToken
 from pipefy_cli.commands.agent import agent_app
 from pipefy_cli.commands.ai_automation import ai_automation_app
+from pipefy_cli.commands.ai_provider import ai_provider_app
 from pipefy_cli.commands.attachment import attachment_app
 from pipefy_cli.commands.audit import audit_app
 from pipefy_cli.commands.auth import auth_app
@@ -106,6 +107,7 @@ def main(
 
 app.add_typer(agent_app, name="agent")
 app.add_typer(ai_automation_app, name="ai-automation")
+app.add_typer(ai_provider_app, name="ai-provider")
 app.add_typer(attachment_app, name="attachment")
 app.add_typer(audit_app, name="audit")
 app.add_typer(auth_app, name="auth")

@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **157** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **162** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -102,16 +102,20 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `get_automation_logs_by_repo` | `pipefy automation logs --repo` | shipped | — |
 | `get_automations` | `pipefy automation list` | shipped | (optional `--organization` / `--pipe`). |
 | `get_automations_usage` | `pipefy usage automations` (also `pipefy automation usage`) | shipped | (`--organization`, `--from`, `--to` ISO range). |
+| `get_available_ai_models` | `pipefy ai-provider models` | shipped | LLM provider discovery; vendor model list (`--provider-name`). |
 | `get_card` | `pipefy card get` | shipped | Supports `--include-fields`. |
 | `get_card_inbox_emails` | `pipefy email inbox list` | shipped | (`--card`). |
 | `get_card_relations` | `pipefy relation card list` | shipped | (raw ``get_card_relations`` payload). |
 | `get_cards` | `pipefy card list` | shipped | ``list`` maps to ``get_cards`` (``--pipe``, ``--title``, ``--search`` JSON / ``CardSearch``, ``--include-fields``, ``--first`` / ``--after``). Use ``pipefy card find`` for ``find_cards`` (single field equality). |
+| `get_default_llm_provider` | `pipefy ai-provider default get` | shipped | LLM provider discovery; owner default (`--owner-id`, `--owner-type`, default `organization`). |
 | `get_email_templates` | `pipefy email template list` | shipped | (`--repo`). |
 | `get_ipaas_connection_auth_url` | — | deferred | iPaaS (Advanced Automations) OAuth consent URL for connecting an app; MCP-first surface. |
 | `get_field_condition` | `pipefy field-condition get` | shipped | — |
 | `get_field_conditions` | `pipefy field-condition list` | shipped | (`--phase`). |
 | `get_ipaas_tools` | — | deferred | iPaaS (Advanced Automations) tool discovery; MCP-first surface, CLI twin considered alongside invocation's. |
 | `get_labels` | `pipefy label list` | shipped | — |
+| `get_llm_provider_dependencies` | `pipefy ai-provider dependencies` | shipped | LLM provider discovery; owners depending on a provider (`--provider-id`, `--org-uuid`). |
+| `get_llm_providers` | `pipefy ai-provider list` | shipped | LLM provider discovery; custom + system providers in one union (`--org-uuid`, `--only-active`, `--first` / `--after`). |
 | `get_organization` | `pipefy org get` | shipped | Organization-level read; out of v0.1 parity per spec. |
 | `get_organization_report` | `pipefy report-org get` | shipped | Organization reports. |
 | `get_organization_report_export` | (poll via `pipefy report-org export --format json`) | shipped | Organization reports + export-shaped. |
@@ -182,6 +186,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `upload_attachment_to_table_record` | `pipefy attachment upload --record` | shipped | (same supporting flags as card). |
 | `validate_ai_agent_behaviors` | `pipefy agent validate-behaviors` | shipped | AI Agents validation tooling. |
 | `validate_ai_automation_prompt` | `pipefy ai-automation validate-prompt` | shipped | AI Automations validation tooling. |
+| `validate_llm_provider_access` | `pipefy ai-provider validate-access` | shipped | LLM provider read-access probe; green proves read access only, never write entitlement. |
 
 ## Row count check
 
@@ -194,6 +199,6 @@ for n in m.body:
             print(len(v.args[0].elts))"
 ```
 
-Expect **157** tool names in `PIPEFY_TOOL_NAMES` and **157** data rows in the parity table (excluding the header rows).
+Expect **162** tool names in `PIPEFY_TOOL_NAMES` and **162** data rows in the parity table (excluding the header rows).
 
 When adding or removing an MCP tool, update **this file** and `PIPEFY_TOOL_NAMES` in the same change set.

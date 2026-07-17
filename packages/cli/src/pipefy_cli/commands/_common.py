@@ -335,6 +335,7 @@ def run_cli_command(
     *,
     exit_code_2_on_value_error: bool = True,
     format_transport_query_error: Callable[[TransportQueryError], str] | None = None,
+    exit_1_on_unsuccessful: bool = False,
 ) -> None:
     """Run an async coroutine factory with a configured client and render the result.
 
@@ -345,6 +346,9 @@ def run_cli_command(
         exit_code_2_on_value_error: Map ``ValueError`` to process exit code 2 (stderr).
         format_transport_query_error: Optional override for GraphQL transport errors
             (defaults to a single-line formatter).
+        exit_1_on_unsuccessful: After rendering, exit 1 when the result dict has
+            ``success`` falsy. For probe-style commands whose failure is data,
+            not an exception, but should still be scriptable via exit code.
     """
     pipefy_settings, auth = settings_and_auth_from_ctx(ctx)
     transport_fmt = format_transport_query_error or _format_transport_query_error
@@ -374,3 +378,9 @@ def run_cli_command(
         render_json(data)
     else:
         render_rich(data)
+    if (
+        exit_1_on_unsuccessful
+        and isinstance(data, dict)
+        and not data.get("success", True)
+    ):
+        raise typer.Exit(1)

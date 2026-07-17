@@ -285,19 +285,21 @@ def test_populate_overwrites_empty_list():
 
 
 @pytest.mark.unit
-def test_populate_with_snake_case_keys():
+def test_populate_with_declared_keys():
+    # populate runs after behavior keys are normalized to their declared wire
+    # names, so it reads the declared actionParams / aiBehaviorParams spelling.
     b = {
         "name": "B",
         "event_id": "card_created",
-        "action_params": {
-            "ai_behavior_params": {
+        "actionParams": {
+            "aiBehaviorParams": {
                 "instruction": "Hi %{field:159}",
                 "actionsAttributes": [],
             }
         },
     }
     populate_referenced_field_ids(b)
-    assert b["action_params"]["ai_behavior_params"]["referencedFieldIds"] == ["159"]
+    assert b["actionParams"]["aiBehaviorParams"]["referencedFieldIds"] == ["159"]
 
 
 @pytest.mark.unit

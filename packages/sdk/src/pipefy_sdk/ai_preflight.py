@@ -16,6 +16,7 @@ from pipefy_sdk.ai_pipe_validation import (
     collect_field_ids_for_pipe,
     fetch_pipe_validation_context,
     phase_field_fetch_warning,
+    pipe_ids_from_behavior,
     validate_behaviors_against_pipe,
 )
 from pipefy_sdk.behavior_placeholders import expand_behaviors_placeholders
@@ -329,15 +330,8 @@ async def validate_ai_agent_behaviors_sdk(
     target_pipe_ids: set[str] = set()
     if related_pipe_ids is not None:
         for b in behaviors:
-            ap = b.get("actionParams") or b.get("action_params") or {}
-            abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-            for a in (
-                abp.get("actionsAttributes") or abp.get("actions_attributes") or []
-            ):
-                if not isinstance(a, dict):
-                    continue
-                meta_pipe = str((a.get("metadata") or {}).get("pipeId", ""))
-                if meta_pipe and meta_pipe != pid:
+            for meta_pipe in pipe_ids_from_behavior(b):
+                if meta_pipe != pid:
                     target_pipe_ids.add(meta_pipe)
 
     target_pipe_list = sorted(target_pipe_ids)

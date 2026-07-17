@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from pipefy_sdk.models.ai_agent import (
+    AiBehaviorActionAttributes,
+    AiBehaviorActionParams,
+    AiBehaviorCapabilityAttributes,
+    AiBehaviorParams,
     BehaviorInput,
+    BehaviorPayload,
     CreateAiAgentInput,
     UpdateAiAgentInput,
 )
@@ -39,6 +44,10 @@ from pipefy_sdk.models.send_task_automation import CreateSendTaskAutomationInput
 from pipefy_sdk.models.validators import NonBlankStr, PipefyId
 
 __all__ = [
+    "AiBehaviorActionAttributes",
+    "AiBehaviorActionParams",
+    "AiBehaviorCapabilityAttributes",
+    "AiBehaviorParams",
     "Attachment",
     "AttachmentTarget",
     "AttachmentUploadError",
@@ -47,6 +56,7 @@ __all__ = [
     "AutomationConditionInput",
     "AutomationEventParamsInput",
     "BehaviorInput",
+    "BehaviorPayload",
     "CardTarget",
     "CommentInput",
     "CreateAiAgentInput",

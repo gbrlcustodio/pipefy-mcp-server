@@ -5,6 +5,7 @@ from __future__ import annotations
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 from pipefy_sdk import (
+    BehaviorPayload,
     CreateAiAgentInput,
     PipefyClient,
     PipefyId,
@@ -66,16 +67,18 @@ def _extract_pipe_id_from_behaviors(behaviors: list[dict]) -> str | None:
     for b in behaviors:
         if not isinstance(b, dict):
             continue
-        ap = b.get("actionParams") or b.get("action_params") or {}
-        if not isinstance(ap, dict):
+        try:
+            payload = BehaviorPayload.model_validate(b)
+        except ValidationError:
             continue
-        abp = ap.get("aiBehaviorParams") or ap.get("ai_behavior_params") or {}
-        if not isinstance(abp, dict):
+        abp = (
+            payload.action_params.ai_behavior_params if payload.action_params else None
+        )
+        if abp is None:
             continue
-        for a in abp.get("actionsAttributes") or abp.get("actions_attributes") or []:
-            if not isinstance(a, dict):
-                continue
-            pid = (a.get("metadata") or {}).get("pipeId")
+        for a in abp.actions_attributes or []:
+            metadata = a.metadata if isinstance(a.metadata, dict) else {}
+            pid = metadata.get("pipeId")
             if pid:
                 return str(pid)
     return None

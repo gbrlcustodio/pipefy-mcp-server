@@ -100,15 +100,13 @@ def _validate_move_card_metadata(metadata: dict) -> None:
         )
 
 
-def _validate_action_metadata(action: dict) -> None:
+def _validate_action_metadata(action: AiBehaviorActionAttributes) -> None:
     """Validate metadata for a single action based on its actionType.
 
     Unknown actionTypes are passed through without validation.
     """
-    action_type = action.get("actionType", "")
-    metadata = action.get("metadata")
-    if not isinstance(metadata, dict):
-        metadata = {}
+    action_type = action.action_type or ""
+    metadata = action.metadata if isinstance(action.metadata, dict) else {}
 
     if action_type in _CARD_FIELD_ACTION_TYPES:
         _validate_card_field_metadata(action_type, metadata)
@@ -118,6 +116,105 @@ def _validate_action_metadata(action: dict) -> None:
         _validate_create_table_record_metadata(metadata)
     elif action_type == "send_email_template":
         _validate_send_email_template_metadata(metadata)
+
+
+class AiBehaviorCapabilityAttributes(BaseModel):
+    """One entry in ``aiBehaviorParams.capabilitiesAttributes``.
+
+    The typed shell only; no shape or enum validation lives here. Legacy shapes
+    (e.g. ``{"type": "advanced_ocr"}``) round-trip verbatim through ``extra="allow"``.
+    Capability shape/enum rules are declared on this model in a follow-up.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    capability_type: str | None = Field(default=None, alias="capabilityType")
+    enabled: bool | None = None
+
+
+class AiBehaviorActionAttributes(BaseModel):
+    """One entry in ``aiBehaviorParams.actionsAttributes``.
+
+    ``metadata`` stays an opaque dict: it is a typed input server-side but grows
+    frequently, so keeping it a pass-through keeps GET→update round-trips faithful.
+    Unknown keys (e.g. injected ``referenceId``) pass through via ``extra="allow"``.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    id: str | None = None
+    name: str | None = None
+    action_type: str | None = Field(default=None, alias="actionType")
+    reference_id: str | None = Field(default=None, alias="referenceId")
+    metadata: dict | None = None
+
+
+class AiBehaviorParams(BaseModel):
+    """The ``actionParams.aiBehaviorParams`` payload.
+
+    Per-field camelCase aliases match the declared ``AiBehaviorParamsInput`` schema
+    names; ``extra="allow"`` lets unknown keys pass through verbatim. No structural
+    validation here beyond the nested models — the presence/shape rules live on
+    :class:`BehaviorInput`.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    instruction: str | None = None
+    actions_attributes: list[AiBehaviorActionAttributes] | None = Field(
+        default=None, alias="actionsAttributes"
+    )
+    capabilities_attributes: list[AiBehaviorCapabilityAttributes] | None = Field(
+        default=None, alias="capabilitiesAttributes"
+    )
+    data_source_ids: list[str] | None = Field(default=None, alias="dataSourceIds")
+    referenced_field_ids: list[str] | None = Field(
+        default=None, alias="referencedFieldIds"
+    )
+    provider_id: str | None = Field(default=None, alias="providerId")
+    system_provider_id: str | None = Field(default=None, alias="systemProviderId")
+
+
+class AiBehaviorActionParams(BaseModel):
+    """The ``actionParams`` payload for an AI behavior.
+
+    Only ``aiBehaviorParams`` is modeled. Sibling automation-action params
+    (e.g. ``card_id``, ``to_phase_id``, ``field_map`` — genuinely snake_case wire
+    names in ``AutomationActionParamsInput``) are never touched: ``extra="allow"``
+    passes them through byte-for-byte. Aliasing is strictly per declared field, so
+    no blanket snake→camel conversion can corrupt those siblings.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    ai_behavior_params: AiBehaviorParams | None = Field(
+        default=None, alias="aiBehaviorParams"
+    )
+
+
+class BehaviorPayload(BaseModel):
+    """Lenient, casing-agnostic view of a behavior for reads and normalization.
+
+    ``populate_by_name`` accepts snake_case or camelCase for every field (via the
+    same per-field aliases as :class:`BehaviorInput`); ``extra="allow"`` preserves
+    tool-boundary sugar (``instruction_template``, ``template_params``) and any
+    other keys. Unlike :class:`BehaviorInput` it runs no structural validation, so
+    consumers can parse once and read typed attributes instead of walking the dict
+    with dual-alias branches. Dumping with ``by_alias=True`` emits the declared
+    wire names.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    name: str | None = None
+    event_id: str | None = Field(default=None, alias="eventId")
+    action_id: str | None = Field(default=None, alias="actionId")
+    active: bool | None = None
+    condition: dict | None = None
+    event_params: dict | None = Field(default=None, alias="eventParams")
+    action_params: AiBehaviorActionParams | None = Field(
+        default=None, alias="actionParams"
+    )
 
 
 class BehaviorInput(BaseModel):
@@ -149,34 +246,33 @@ class BehaviorInput(BaseModel):
     active: bool = True
     condition: dict | None = None
     event_params: dict | None = Field(default=None, alias="eventParams")
-    action_params: dict | None = Field(default=None, alias="actionParams")
+    action_params: AiBehaviorActionParams | None = Field(
+        default=None, alias="actionParams"
+    )
 
     @model_validator(mode="after")
     def ai_behavior_must_include_at_least_one_action(self) -> Self:
         """Reject behaviors that would fail updateAiAgent in production."""
         params = self.action_params
-        if not params:
+        if params is None:
             raise ValueError(
                 "Each behavior must include actionParams with aiBehaviorParams.actionsAttributes "
                 'containing at least one action (e.g. actionType "move_card" with metadata).'
             )
-        abp = None
-        if isinstance(params, dict):
-            abp = params.get("aiBehaviorParams") or params.get("ai_behavior_params")
-        if not isinstance(abp, dict):
+        abp = params.ai_behavior_params
+        if abp is None:
             raise ValueError(
                 "Each behavior must include actionParams.aiBehaviorParams with "
                 "a non-empty actionsAttributes list."
             )
-        actions = abp.get("actionsAttributes") or abp.get("actions_attributes")
-        if not isinstance(actions, list) or not actions:
+        actions = abp.actions_attributes
+        if not actions:
             raise ValueError(
                 "Each behavior must set actionParams.aiBehaviorParams.actionsAttributes with "
                 'at least one action (Pipefy: "The instructions must contain at least 1 action").'
             )
         for action in actions:
-            if isinstance(action, dict):
-                _validate_action_metadata(action)
+            _validate_action_metadata(action)
         return self
 
 

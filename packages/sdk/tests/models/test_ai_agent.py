@@ -154,7 +154,7 @@ def test_behavior_input_accepts_condition_and_action_params():
     inp = BehaviorInput.model_validate(payload)
     assert inp.condition == condition
     assert inp.action_params is not None
-    assert "aiBehaviorParams" in inp.action_params
+    assert inp.action_params.ai_behavior_params is not None
 
 
 @pytest.mark.unit
@@ -358,8 +358,8 @@ def test_metadata_valid_for_card_field_actions(action_type):
     }
     payload = behavior_with_action(action_type, metadata)
     inp = BehaviorInput.model_validate(payload)
-    action = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]
-    assert action["metadata"]["pipeId"] == EXAMPLE_PIPE_ID
+    action = inp.action_params.ai_behavior_params.actions_attributes[0]
+    assert action.metadata["pipeId"] == EXAMPLE_PIPE_ID
 
 
 @pytest.mark.unit
@@ -442,8 +442,8 @@ def test_metadata_allows_empty_value_in_fields_attributes(action_type):
 def test_metadata_valid_for_move_card():
     payload = behavior_with_action("move_card", {"destinationPhaseId": "999"})
     inp = BehaviorInput.model_validate(payload)
-    action = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]
-    assert action["metadata"]["destinationPhaseId"] == "999"
+    action = inp.action_params.ai_behavior_params.actions_attributes[0]
+    assert action.metadata["destinationPhaseId"] == "999"
 
 
 @pytest.mark.unit
@@ -464,8 +464,8 @@ def test_metadata_rejects_blank_destination_phase_id_for_move_card():
 def test_metadata_passes_through_unknown_action_type():
     payload = behavior_with_action("send_email", {"to": "user@example.com"})
     inp = BehaviorInput.model_validate(payload)
-    action = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]
-    assert action["metadata"]["to"] == "user@example.com"
+    action = inp.action_params.ai_behavior_params.actions_attributes[0]
+    assert action.metadata["to"] == "user@example.com"
 
 
 @pytest.mark.unit
@@ -482,8 +482,8 @@ def test_metadata_valid_for_create_table_record():
     }
     payload = behavior_with_action("create_table_record", metadata)
     inp = BehaviorInput.model_validate(payload)
-    action = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]
-    assert action["metadata"]["tableId"] == "tbl-999"
+    action = inp.action_params.ai_behavior_params.actions_attributes[0]
+    assert action.metadata["tableId"] == "tbl-999"
 
 
 @pytest.mark.unit
@@ -531,7 +531,7 @@ def test_metadata_valid_for_send_email_template():
         {"emailTemplateId": "tmpl-1"},
     )
     inp = BehaviorInput.model_validate(payload)
-    meta = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]["metadata"]
+    meta = inp.action_params.ai_behavior_params.actions_attributes[0].metadata
     assert meta["emailTemplateId"] == "tmpl-1"
 
 
@@ -542,7 +542,7 @@ def test_metadata_send_email_template_accepts_allow_template_modifications():
         {"emailTemplateId": "tmpl-1", "allowTemplateModifications": False},
     )
     inp = BehaviorInput.model_validate(payload)
-    meta = inp.action_params["aiBehaviorParams"]["actionsAttributes"][0]["metadata"]
+    meta = inp.action_params.ai_behavior_params.actions_attributes[0].metadata
     assert meta["allowTemplateModifications"] is False
 
 
@@ -576,8 +576,11 @@ def test_behavior_input_accepts_capabilities_attributes_on_ai_behavior_params():
     abp = payload["actionParams"]["aiBehaviorParams"]
     abp["capabilitiesAttributes"] = [{"type": "advanced_ocr"}, {"type": "web_search"}]
     inp = BehaviorInput.model_validate(payload)
-    caps = inp.action_params["aiBehaviorParams"]["capabilitiesAttributes"]
-    assert caps == [{"type": "advanced_ocr"}, {"type": "web_search"}]
+    caps = inp.action_params.ai_behavior_params.capabilities_attributes
+    assert [c.model_dump(by_alias=True, exclude_none=True) for c in caps] == [
+        {"type": "advanced_ocr"},
+        {"type": "web_search"},
+    ]
 
 
 # --- snake_case / camelCase normalization ---

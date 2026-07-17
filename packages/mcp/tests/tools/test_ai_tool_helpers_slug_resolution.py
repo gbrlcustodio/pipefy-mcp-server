@@ -386,7 +386,9 @@ async def test_resolve_handles_snake_case_keys():
     ]
     resolved = await resolve_field_slugs_to_numeric(client, behaviors)
 
-    fa = resolved[0]["action_params"]["ai_behavior_params"]["actions_attributes"][0][
+    # snake_case inner keys are normalized to their declared wire names on the way
+    # out (the API only accepts the declared spelling); the slug is resolved too.
+    fa = resolved[0]["actionParams"]["aiBehaviorParams"]["actionsAttributes"][0][
         "metadata"
     ]["fieldsAttributes"]
     assert fa[0]["fieldId"] == "555"

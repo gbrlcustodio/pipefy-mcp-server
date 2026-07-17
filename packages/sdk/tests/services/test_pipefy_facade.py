@@ -762,7 +762,7 @@ async def test_pipefy_client_ai_agent_write_methods_delegate_to_ai_agent_service
     assert isinstance(forwarded, UpdateAiAgentInput)
     assert forwarded.uuid == uin.uuid
     assert (
-        forwarded.behaviors[0].action_params["aiBehaviorParams"]["referencedFieldIds"]
+        forwarded.behaviors[0].action_params.ai_behavior_params.referenced_field_ids
         == []
     )
 

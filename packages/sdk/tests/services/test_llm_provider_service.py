@@ -20,7 +20,10 @@ BYOM_NODE = {
     "type": "byom",
     "active": True,
     "organizationDefault": False,
-    "configuration": {"provider": "azure_openai", "auth": {"accessToken": "__REDACTED__"}},
+    "configuration": {
+        "provider": "azure_openai",
+        "auth": {"accessToken": "__REDACTED__"},
+    },
 }
 
 SYSTEM_NODE = {
@@ -38,7 +41,9 @@ SYSTEM_NODE = {
 }
 
 
-def providers_connection(nodes: list[dict], *, has_next: bool = False, cursor: str | None = None) -> dict:
+def providers_connection(
+    nodes: list[dict], *, has_next: bool = False, cursor: str | None = None
+) -> dict:
     return {
         "allLlmProvidersByOrganization": {
             "edges": [{"node": n} for n in nodes],
@@ -358,8 +363,13 @@ class TestGraphQLProblemClassifier:
         feature = classify_graphql_error_dicts(
             [{"message": "off", "extensions": {"code": "FEATURE_NOT_ENABLED"}}]
         )
-        assert invalid is not None and invalid.kind is GraphQLProblemKind.INVALID_ARGUMENTS
-        assert feature is not None and feature.kind is GraphQLProblemKind.FEATURE_NOT_ENABLED
+        assert (
+            invalid is not None and invalid.kind is GraphQLProblemKind.INVALID_ARGUMENTS
+        )
+        assert (
+            feature is not None
+            and feature.kind is GraphQLProblemKind.FEATURE_NOT_ENABLED
+        )
 
     def test_unrecognized_error_is_runtime(self):
         problem = classify_graphql_error_dicts(

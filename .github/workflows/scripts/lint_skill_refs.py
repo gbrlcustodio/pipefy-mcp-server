@@ -15,6 +15,7 @@ PIPEFY_CLI_ROOT_COMMANDS = frozenset(
     {
         "agent",
         "ai-automation",
+        "ai-provider",
         "attachment",
         "audit",
         "automation",

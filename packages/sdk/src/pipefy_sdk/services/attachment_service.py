@@ -164,11 +164,18 @@ class AttachmentService:
             )
         upload_url = upload_url.strip()
 
-        put_result = await self._s3_uploader.put(
-            url=upload_url,
-            bytes_=file.bytes,
-            content_type=effective_type,
-        )
+        try:
+            put_result = await self._s3_uploader.put(
+                url=upload_url,
+                bytes_=file.bytes,
+                content_type=effective_type,
+            )
+        except Exception as exc:
+            # Transport errors and the uploader's host-allowlist rejection are
+            # s3_upload-stage failures; tag them so the step contract holds.
+            raise AttachmentUploadError(
+                f"S3 upload failed: {exc}", step="s3_upload"
+            ) from exc
         status = put_result.get("status_code", 0)
         if not isinstance(status, int) or status >= 400:
             body_snippet = put_result.get("body_snippet")

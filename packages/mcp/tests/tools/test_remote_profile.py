@@ -53,6 +53,18 @@ REMOTE_SEED = frozenset(
         "validate_ai_automation_prompt",
         "get_ai_credit_usage",
         "get_available_ai_models",
+        # knowledge base & LLM provider reads (#438): read/validate tools that
+        # reach the API with the request-scoped bearer and are governed by API
+        # permissions; no filesystem or per-user process-global settings reads.
+        "get_ai_knowledge_bases",
+        "get_ai_knowledge_base_plain_text",
+        "get_ai_knowledge_base_document",
+        "get_ai_knowledge_base_data_lookup",
+        "validate_knowledge_base_access",
+        "get_llm_providers",
+        "get_llm_provider_dependencies",
+        "get_default_llm_provider",
+        "validate_llm_provider_access",
     }
 )
 

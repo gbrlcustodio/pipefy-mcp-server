@@ -115,8 +115,10 @@ class KnowledgeBaseTools:
             """List every knowledge base item on a pipe: plain texts, documents, and data lookups in one surface. Use this to discover the `dataSourceIds` values an AI agent or behavior can attach.
 
             Each item carries `id` (the data-source ID used in `dataSourceIds`),
-            `type` (e.g. `knowledge_base_plain_texts`), `name`, `description`, and
-            `updatedAt`. There is no pagination; the full list is returned.
+            `type`, `name`, `description`, and `updatedAt`. The `type` values are
+            `knowledge_base_plain_texts`, `knowledge_base_documents`, and
+            `data_lookups` (the data lookup discriminator is not prefixed). There
+            is no pagination; the full list is returned.
 
             Args:
                 pipe_uuid: Pipe UUID (not the numeric ID; `get_pipe` returns the `uuid` field).

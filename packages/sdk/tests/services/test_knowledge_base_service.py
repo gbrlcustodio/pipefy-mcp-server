@@ -969,7 +969,7 @@ class TestCreateDataLookup:
     async def test_ai_condition_missing_trio_rejected(self):
         service = self._service(mock_executor({}))
 
-        with pytest.raises(ValueError, match="input_type, input_description"):
+        with pytest.raises(ValueError, match="inputType, inputDescription"):
             await self._create(
                 service,
                 conditions=[

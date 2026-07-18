@@ -155,7 +155,7 @@ Tool descriptions and `Args:` blocks come from Python docstrings (what MCP clien
 | **Reports** | 17 | Pipe and organization reports, async exports. | [docs](docs/mcp/tools/reports.md) |
 | **Automations & AI** | 23 | Automations, AI automations, AI agents, validators. | [docs](docs/mcp/tools/automations-and-ai.md) |
 | **LLM providers** | 5 | Discovery reads for the organization's LLM providers (custom + Pipefy-managed), vendor model lists, owner defaults, dependencies, and a read-access probe. | [docs](docs/mcp/tools/llm-providers.md) |
-| **Knowledge bases** | 10 | Pipe-scoped AI knowledge bases: list all items, plain text and document CRUD (one-shot PDF upload), and a read-access probe. Attach sources to agents/behaviors via `dataSourceIds`. | [docs](docs/mcp/tools/knowledge-bases.md) |
+| **Knowledge bases** | 14 | Pipe-scoped AI knowledge bases: list all items, plain text / document (one-shot PDF upload) / data lookup CRUD, and a read-access probe. Attach sources to agents/behaviors via `dataSourceIds`. | [docs](docs/mcp/tools/knowledge-bases.md) |
 | **iPaaS** | 4 | Lazy discovery, invocation, and app-connection setup for a pipe's iPaaS (Advanced Automations) workspace (`get_ipaas_tools`, `call_ipaas_tool`, plus the connection meta-tools). | [docs](docs/mcp/tools/ipaas.md) |
 | **Observability** | 11 | Logs, usage, credits, execution metrics, job exports. | [docs](docs/mcp/tools/observability.md) |
 | **Members, email & webhooks** | 11 | Membership, inbox email, webhooks. | [docs](docs/mcp/tools/members-email-webhooks.md) |

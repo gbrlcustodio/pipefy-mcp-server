@@ -16,7 +16,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from pipefy_sdk.models.validators import NonBlankStr
 
-_FILL_WITH_AI_FIELDS = ("input_name", "input_type", "input_description")
+# Attribute name → camelCase alias, so error messages name the field the same
+# way the tool/docs teach it (``inputName``, not ``input_name``).
+_FILL_WITH_AI_FIELDS = {
+    "input_name": "inputName",
+    "input_type": "inputType",
+    "input_description": "inputDescription",
+}
 
 
 class DataLookupCondition(BaseModel):
@@ -60,7 +66,9 @@ class DataLookupCondition(BaseModel):
     def _check_shape(self) -> DataLookupCondition:
         if self.using_fill_with_ai:
             missing = [
-                name for name in _FILL_WITH_AI_FIELDS if getattr(self, name) is None
+                alias
+                for name, alias in _FILL_WITH_AI_FIELDS.items()
+                if getattr(self, name) is None
             ]
             if missing:
                 raise ValueError(
@@ -80,7 +88,9 @@ class DataLookupCondition(BaseModel):
                     "inputDescription)"
                 )
             extras = [
-                name for name in _FILL_WITH_AI_FIELDS if getattr(self, name) is not None
+                alias
+                for name, alias in _FILL_WITH_AI_FIELDS.items()
+                if getattr(self, name) is not None
             ]
             if extras:
                 raise ValueError(

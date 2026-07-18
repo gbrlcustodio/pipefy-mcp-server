@@ -762,7 +762,9 @@ def _parse_data_lookup_definition(
             per-item failures.
     """
     repo_id = _require_non_blank(source_repo_id, "source_repo_id")
-    if not repo_id.isdecimal():
+    # ASCII digits only: str.isdigit()/isdecimal() also accept Unicode digit
+    # characters (superscripts, other scripts) that are not a valid pipe ID.
+    if not (repo_id.isascii() and repo_id.isdigit()):
         raise ValueError(
             "source_repo_id must be the numeric pipe ID (a pipe UUID is "
             "accepted by the API but breaks the lookup when an agent runs it)"

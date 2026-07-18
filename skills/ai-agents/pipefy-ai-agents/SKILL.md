@@ -182,7 +182,7 @@ Knowledge bases are pipe-scoped data sources an agent draws on. Attach one by pu
 
 | Tool (MCP) | CLI | Read-only | Purpose |
 |------------|-----|-----------|---------|
-| `get_ai_knowledge_bases` | `pipefy kb list` | Yes | List every item on a pipe (plain texts, documents, data lookups); each has an `id` for `dataSourceIds`. |
+| `get_ai_knowledge_bases` | `pipefy kb list` | Yes | List every item on a pipe (plain texts, documents, data lookups); each has an `id` for `dataSourceIds` and a `type` (`knowledge_base_plain_texts`, `knowledge_base_documents`, or `data_lookups`). |
 | `get_ai_knowledge_base_plain_text` | `pipefy kb plain-text get` | Yes | Fetch one plain text with its content. |
 | `create_ai_knowledge_base_plain_text` | `pipefy kb plain-text create` | No | Create a plain text (`name`, `content` 1-3500, `description` 1-900 — all required). |
 | `update_ai_knowledge_base_plain_text` | `pipefy kb plain-text update` | No | Partial update; pass at least one of name/content/description. |

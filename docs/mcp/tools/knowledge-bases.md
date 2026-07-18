@@ -8,7 +8,7 @@ Knowledge bases are the data sources an AI agent draws on. Each item's `id` is w
 
 | Tool | Read-only | Role |
 |------|-----------|------|
-| `get_ai_knowledge_bases` | Yes | Lists every knowledge base item on a pipe (plain texts, documents, data lookups) as one flat list — no pagination. Each item carries `id`, `type` (e.g. `knowledge_base_plain_texts`), `name`, `description`, `updatedAt`. |
+| `get_ai_knowledge_bases` | Yes | Lists every knowledge base item on a pipe (plain texts, documents, data lookups) as one flat list — no pagination. Each item carries `id`, `type` (`knowledge_base_plain_texts`, `knowledge_base_documents`, or `data_lookups` — the data lookup discriminator is not prefixed), `name`, `description`, `updatedAt`. |
 | `get_ai_knowledge_base_plain_text` | Yes | Fetches one plain text by `id`, including its full `content`. |
 | `create_ai_knowledge_base_plain_text` | No | Creates a plain text. `name`, `content` (1-3500 chars), and `description` (1-900 chars) are all required. |
 | `update_ai_knowledge_base_plain_text` | No | Partial update by `plain_text_id`: pass any of `name` / `content` / `description` (at least one); omitted fields keep their stored value. |

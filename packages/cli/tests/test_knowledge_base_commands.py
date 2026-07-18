@@ -712,9 +712,9 @@ def test_kb_data_lookup_create_invalid_conditions_json_rejected(
     with _client_patch(mock_client):
         result = runner.invoke(app, args)
     assert result.exit_code != 0
-    assert "--conditions must be a JSON array of objects" in (
-        result.stdout + (result.stderr or "")
-    )
+    # Match the color-stable fragment: rich colorizes the ``--conditions``
+    # option name in the error box, splitting it with ANSI codes.
+    assert "must be a JSON array of objects" in (result.stdout + (result.stderr or ""))
     mock_client.create_ai_knowledge_base_data_lookup.assert_not_awaited()
 
 
@@ -730,9 +730,8 @@ def test_kb_data_lookup_create_invalid_output_fields_rejected(
     with _client_patch(mock_client):
         result = runner.invoke(app, args)
     assert result.exit_code != 0
-    assert "--output-fields must be a JSON array of strings" in (
-        result.stdout + (result.stderr or "")
-    )
+    # Match the color-stable fragment (see the conditions test above).
+    assert "must be a JSON array of strings" in (result.stdout + (result.stderr or ""))
     mock_client.create_ai_knowledge_base_data_lookup.assert_not_awaited()
 
 

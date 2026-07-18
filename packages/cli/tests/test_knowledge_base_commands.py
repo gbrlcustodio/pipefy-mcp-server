@@ -217,6 +217,46 @@ def test_kb_plain_text_create_denied_probe_blocks_write(
     mock_client.create_ai_knowledge_base_plain_text.assert_not_awaited()
 
 
+def test_kb_plain_text_create_blocked_by_partial_denial_probe(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    """A probe that is ok BUT carries a problem is partial denial: write blocked."""
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.validate_knowledge_base_access = AsyncMock(
+        return_value={
+            "ok": True,
+            "knowledge_base_count": 1,
+            "problem": {"kind": "permission_denied", "message": "Partial denial"},
+        }
+    )
+    mock_client.create_ai_knowledge_base_plain_text = AsyncMock()
+
+    with _client_patch(mock_client):
+        result = runner.invoke(
+            app,
+            [
+                "kb",
+                "plain-text",
+                "create",
+                "--pipe-uuid",
+                "pipe-uuid-1",
+                "--name",
+                "n",
+                "--content",
+                "c",
+                "--description",
+                "d",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["success"] is False
+    assert data["problem"]["kind"] == "permission_denied"
+    mock_client.create_ai_knowledge_base_plain_text.assert_not_awaited()
+
+
 def test_kb_plain_text_update_partial(runner, clean_pipefy_env, saved_cwd, monkeypatch):
     _env(monkeypatch)
     mock_client = MagicMock()

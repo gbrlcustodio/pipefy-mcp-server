@@ -41,6 +41,7 @@ from pipefy_mcp.tools.graphql_error_helpers import (
     enrich_permission_denied_error,
     extract_error_strings,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 VALIDATE_FETCH_TIMEOUT_SECONDS = 30
@@ -481,6 +482,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_ai_agent(ctx: Context, uuid: str) -> dict:
             """Get an AI Agent by UUID with full behavior configuration.
@@ -513,6 +515,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_ai_agents(ctx: Context, repo_uuid: str) -> dict:
             """List all AI Agents for a pipe. Use before creating an agent to avoid duplicates.
@@ -575,6 +578,7 @@ class AiAgentTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def validate_ai_agent_behaviors(
             ctx: Context,

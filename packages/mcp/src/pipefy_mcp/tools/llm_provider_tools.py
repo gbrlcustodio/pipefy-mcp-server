@@ -25,18 +25,23 @@ _PROVIDER_ID_DISCOVERY_HINT = (
 )
 
 
-def _provider_tool_error_from_exception(exc: BaseException) -> dict[str, Any]:
+def _provider_tool_error_from_exception(
+    exc: BaseException, *, not_found_hint: bool = True
+) -> dict[str, Any]:
     """Map an SDK/GraphQL exception onto the canonical tool failure envelope.
 
     Uses the shared SDK classifier (``pipefy_sdk.classify_exception``) so the
     kind/code the CLI and probes see is the same one reported here. A
     transport-level failure with no GraphQL errors falls back to ``str(exc)``.
+    ``not_found_hint`` scopes the id-discovery hint to the per-id tools; the
+    list tool passes False so its own failure never tells the caller to retry
+    the call that just failed.
     """
     problem = classify_exception(exc)
     if problem is None:
         return tool_error(str(exc))
     message = problem.message
-    if problem.kind.value == "not_found":
+    if not_found_hint and problem.kind.value == "not_found":
         message = f"{message} {_PROVIDER_ID_DISCOVERY_HINT}"
     details: dict[str, Any] = {"kind": problem.kind.value}
     if problem.correlation_id:
@@ -119,7 +124,7 @@ class LlmProviderTools:
                     after=after,
                 )
             except Exception as exc:  # noqa: BLE001
-                return _provider_tool_error_from_exception(exc)
+                return _provider_tool_error_from_exception(exc, not_found_hint=False)
             return _read_success(
                 {"providers": result["providers"]},
                 message="LLM providers retrieved.",

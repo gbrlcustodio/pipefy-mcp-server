@@ -51,6 +51,18 @@ def permission_denied_error() -> TransportQueryError:
     )
 
 
+def not_found_error() -> TransportQueryError:
+    return TransportQueryError(
+        "missing",
+        errors=[
+            {
+                "message": "Couldn't find LlmProvider with id bogus",
+                "extensions": {"code": "RESOURCE_NOT_FOUND"},
+            }
+        ],
+    )
+
+
 @pytest.fixture
 def mock_provider_client():
     client = MagicMock(PipefyClient)
@@ -293,6 +305,43 @@ async def test_validate_llm_provider_access_failure_maps_problem(
     assert payload["error"]["code"] == "PERMISSION_DENIED"
     assert payload["error"]["details"]["kind"] == "permission_denied"
     assert payload["error"]["details"]["correlation_id"] == "corr-2"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_get_llm_providers_not_found_has_no_self_referential_hint(
+    provider_session, mock_provider_client, extract_payload
+):
+    """A failed list must not tell the caller to retry the list tool itself."""
+    mock_provider_client.get_llm_providers = AsyncMock(side_effect=not_found_error())
+    async with provider_session as session:
+        result = await session.call_tool(
+            "get_llm_providers", {"organization_uuid": "org-uuid-1"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["details"]["kind"] == "not_found"
+    assert "get_llm_providers" not in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("provider_session", [None], indirect=True)
+async def test_get_llm_provider_dependencies_not_found_adds_discovery_hint(
+    provider_session, mock_provider_client, extract_payload
+):
+    """A per-id tool keeps the discovery hint so the caller can find valid IDs."""
+    mock_provider_client.get_llm_provider_dependencies = AsyncMock(
+        side_effect=not_found_error()
+    )
+    async with provider_session as session:
+        result = await session.call_tool(
+            "get_llm_provider_dependencies",
+            {"provider_id": "bogus", "organization_uuid": "org-uuid-1"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["details"]["kind"] == "not_found"
+    assert "get_llm_providers" in tool_error_message(payload)
 
 
 @pytest.mark.anyio

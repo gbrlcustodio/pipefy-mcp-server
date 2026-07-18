@@ -270,9 +270,17 @@ class KnowledgeBaseService:
 def _unwrap_plain_text(
     response: dict[str, Any], mutation_key: str
 ) -> KnowledgeBasePlainTextPayload:
+    """Unwrap a write mutation's plain text; a missing payload is a failure.
+
+    A write that returns no GraphQL errors but a null ``knowledgeBasePlainText``
+    must not read as success — the caller cannot know whether it persisted.
+    """
     payload = response.get(mutation_key)
     if isinstance(payload, dict):
         plain_text = payload.get("knowledgeBasePlainText")
-        if isinstance(plain_text, dict):
+        if isinstance(plain_text, dict) and plain_text:
             return plain_text
-    return {}
+    raise ValueError(
+        f"{mutation_key} returned no plain text payload; "
+        "the write may not have persisted."
+    )

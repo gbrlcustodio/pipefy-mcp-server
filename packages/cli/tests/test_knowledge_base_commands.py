@@ -120,6 +120,34 @@ def test_kb_plain_text_get_json(runner, clean_pipefy_env, saved_cwd, monkeypatch
     )
 
 
+def test_kb_plain_text_get_empty_result_exits_1(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    """Missing id resolves to `{}` from the SDK; the CLI must not report success."""
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.get_ai_knowledge_base_plain_text = AsyncMock(return_value={})
+
+    with _client_patch(mock_client):
+        result = runner.invoke(
+            app,
+            [
+                "kb",
+                "plain-text",
+                "get",
+                "--id",
+                "kb-missing",
+                "--pipe-uuid",
+                "pipe-uuid-1",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["success"] is False
+    assert "not found" in data["error"].lower()
+
+
 def test_kb_plain_text_create_gated_on_probe(
     runner, clean_pipefy_env, saved_cwd, monkeypatch
 ):

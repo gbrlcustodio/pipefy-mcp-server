@@ -74,15 +74,27 @@ def kb_plain_text_get(
         False, "--json", "-j", help="Print machine-readable JSON to stdout."
     ),
 ) -> None:
-    """Fetch one knowledge base plain text with its content (``get_ai_knowledge_base_plain_text``)."""
+    """Fetch one knowledge base plain text with its content (``get_ai_knowledge_base_plain_text``).
+
+    Exits 1 with ``success: false`` when the API resolves no plain text for the
+    id (mirrors the MCP tool's not-found handling).
+    """
 
     async def factory(client: PipefyClient):
         plain_text = await client.get_ai_knowledge_base_plain_text(
             plain_text_id, pipe_uuid
         )
+        if not plain_text:
+            return {
+                "success": False,
+                "error": (
+                    f"Knowledge base plain text not found: {plain_text_id}. "
+                    "Use `pipefy kb list` to list knowledge base IDs for the pipe."
+                ),
+            }
         return {"success": True, "knowledge_base_plain_text": plain_text}
 
-    run_cli_command(ctx, json_out, factory)
+    run_cli_command(ctx, json_out, factory, exit_1_on_unsuccessful=True)
 
 
 @plain_text_app.command("create")

@@ -179,6 +179,18 @@ class TestCreatePlainText:
         )
         executor.execute_query.assert_awaited_once()
 
+    @pytest.mark.anyio
+    async def test_null_payload_without_errors_is_a_failure(self):
+        executor = mock_executor(
+            {"createAiKnowledgeBasePlainText": {"knowledgeBasePlainText": None}}
+        )
+        service = KnowledgeBaseService(executor=executor)
+
+        with pytest.raises(ValueError, match="no plain text payload"):
+            await service.create_ai_knowledge_base_plain_text(
+                "p", name="n", content="c", description="d"
+            )
+
 
 class TestUpdatePlainText:
     @pytest.mark.anyio
@@ -224,6 +236,16 @@ class TestUpdatePlainText:
                 "kb-1", "p", content="x" * (MAX_PLAIN_TEXT_CONTENT_LENGTH + 1)
             )
         executor.execute_query.assert_not_awaited()
+
+    @pytest.mark.anyio
+    async def test_null_payload_without_errors_is_a_failure(self):
+        executor = mock_executor(
+            {"updateAiKnowledgeBasePlainText": {"knowledgeBasePlainText": None}}
+        )
+        service = KnowledgeBaseService(executor=executor)
+
+        with pytest.raises(ValueError, match="no plain text payload"):
+            await service.update_ai_knowledge_base_plain_text("kb-1", "p", content="c")
 
 
 class TestDeletePlainText:

@@ -1746,6 +1746,9 @@ Usage: pipefy kb plain-text get [OPTIONS]
  Fetch one knowledge base plain text with its content
  (``get_ai_knowledge_base_plain_text``).
 
+ Exits 1 with ``success: false`` when the API resolves no plain text for the id
+ (mirrors the MCP tool's not-found handling).
+
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --id                 TEXT  Knowledge base plain text ID (from `pipefy kb  │
 │                               list`).                                        │

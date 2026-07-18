@@ -324,3 +324,20 @@ async def test_get_plain_text_not_found_error_adds_discovery_hint(
     assert payload["success"] is False
     assert payload["error"]["details"]["kind"] == "not_found"
     assert "get_ai_knowledge_bases" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_get_knowledge_bases_not_found_has_no_self_referential_hint(
+    kb_session, mock_kb_client, extract_payload
+):
+    """A failed list must not tell the caller to retry the list tool itself."""
+    mock_kb_client.get_ai_knowledge_bases = AsyncMock(side_effect=not_found_error())
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_bases", {"pipe_uuid": "bogus"}
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["details"]["kind"] == "not_found"
+    assert "get_ai_knowledge_bases" not in tool_error_message(payload)

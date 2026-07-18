@@ -50,6 +50,7 @@ from pipefy_sdk.services.automation_graphql_types import (
 )
 from pipefy_sdk.services.automation_service import AutomationService
 from pipefy_sdk.services.card_service import CardService
+from pipefy_sdk.services.knowledge_base_service import KnowledgeBaseService
 from pipefy_sdk.services.llm_provider_service import (
     DEFAULT_PROVIDER_PAGE_SIZE,
     LlmProviderService,
@@ -80,6 +81,10 @@ from pipefy_sdk.services.types import (
     AiAgentGraphPayload,
     AutomationServiceResult,
     CardSearch,
+    KnowledgeBaseAccessProbeResult,
+    KnowledgeBaseDeleteResult,
+    KnowledgeBasePayload,
+    KnowledgeBasePlainTextPayload,
     LlmProviderPayload,
     LlmProvidersResult,
     MePayload,
@@ -277,6 +282,7 @@ class PipefyClient:
         self._automation_service = AutomationService(executor=ex.public)
         self._ai_agent_service = AiAgentService(executor=ex.public)
         self._llm_provider_service = LlmProviderService(executor=ex.public)
+        self._knowledge_base_service = KnowledgeBaseService(executor=ex.public)
         self._observability_service = ObservabilityService(executor=ex.public)
         self._report_service = ReportService(executor=ex.public)
         self._organization_service = OrganizationService(executor=ex.public)
@@ -963,6 +969,67 @@ class PipefyClient:
         """Probe LLM provider read access; classifies errors instead of raising."""
         return await self._llm_provider_service.validate_llm_provider_access(
             organization_uuid
+        )
+
+    async def get_ai_knowledge_bases(
+        self, pipe_uuid: str
+    ) -> list[KnowledgeBasePayload]:
+        """List every knowledge base item on a pipe (plain text, docs, lookups)."""
+        return await self._knowledge_base_service.get_ai_knowledge_bases(pipe_uuid)
+
+    async def get_ai_knowledge_base_plain_text(
+        self, plain_text_id: str, pipe_uuid: str
+    ) -> KnowledgeBasePlainTextPayload:
+        """Fetch one pipe-scoped knowledge base plain text by id."""
+        return await self._knowledge_base_service.get_ai_knowledge_base_plain_text(
+            plain_text_id, pipe_uuid
+        )
+
+    async def create_ai_knowledge_base_plain_text(
+        self,
+        pipe_uuid: str,
+        *,
+        name: str,
+        content: str,
+        description: str,
+    ) -> KnowledgeBasePlainTextPayload:
+        """Create a pipe-scoped knowledge base plain text (limits enforced client-side)."""
+        return await self._knowledge_base_service.create_ai_knowledge_base_plain_text(
+            pipe_uuid, name=name, content=content, description=description
+        )
+
+    async def update_ai_knowledge_base_plain_text(
+        self,
+        plain_text_id: str,
+        pipe_uuid: str,
+        *,
+        name: str | None = None,
+        content: str | None = None,
+        description: str | None = None,
+    ) -> KnowledgeBasePlainTextPayload:
+        """Update a pipe-scoped knowledge base plain text (partial; validates given fields)."""
+        return await self._knowledge_base_service.update_ai_knowledge_base_plain_text(
+            plain_text_id,
+            pipe_uuid,
+            name=name,
+            content=content,
+            description=description,
+        )
+
+    async def delete_ai_knowledge_base_plain_text(
+        self, plain_text_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDeleteResult:
+        """Delete a pipe-scoped knowledge base plain text (permanent)."""
+        return await self._knowledge_base_service.delete_ai_knowledge_base_plain_text(
+            plain_text_id, pipe_uuid
+        )
+
+    async def validate_knowledge_base_access(
+        self, pipe_uuid: str
+    ) -> KnowledgeBaseAccessProbeResult:
+        """Probe knowledge-base read access for a pipe; classifies errors instead of raising."""
+        return await self._knowledge_base_service.validate_knowledge_base_access(
+            pipe_uuid
         )
 
     async def create_ai_agent(

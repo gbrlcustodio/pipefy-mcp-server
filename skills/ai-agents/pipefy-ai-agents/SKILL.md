@@ -3,7 +3,8 @@ name: pipefy-ai-agents
 description: >
   Use this skill when the user wants to create, read, update, delete,
   or troubleshoot AI agents (conversational agents with behaviors).
-  Covers 7 MCP tools including pre-flight validation.
+  Covers 7 MCP tools including pre-flight validation, plus pipe-scoped
+  knowledge bases (list, plain text CRUD, access probe) attached via dataSourceIds.
   For traditional automations and AI automations, see skills/automations/.
 tags: [pipefy, ai-agents, behaviors, conversational]
 ---
@@ -136,6 +137,7 @@ Inside `actionParams.aiBehaviorParams` a behavior may also carry:
 
   `capabilityType` is not checked against a fixed set — any value passes through and the API validates the enum on write, so new capabilities work without a toolkit update. Validation checks **shape only, not entitlement** — a capability may still require organization-level enablement to have any effect, so a green pre-flight does not guarantee the capability is active for the org.
 - **`providerId`** / **`systemProviderId`** — pick the behavior's LLM provider. Set **at most one** (a behavior resolves to a single active provider). Discover valid IDs with `get_llm_providers` (CLI: `pipefy ai-provider list`): each provider carries `type` — use `providerId` for a custom (`byom`) provider and `systemProviderId` for a Pipefy-managed (`system`) one. `get_default_llm_provider` shows what a behavior falls back to when neither is set. IDs are also visible in the organization's AI settings in the Pipefy UI.
+- **`dataSourceIds`** — knowledge base sources the behavior can draw on. Each ID is a knowledge base item ID from `get_ai_knowledge_bases` (CLI: `pipefy kb list`). Agents also carry an agent-level `data_source_ids`; the two are unioned. See [Knowledge bases](#knowledge-bases-data-sources) below for the create → attach flow.
 
 ```json
 {
@@ -154,6 +156,7 @@ Inside `actionParams.aiBehaviorParams` a behavior may also carry:
 - Action types are valid
 - Behavior structure passes Pydantic validation (including canonical `capabilitiesAttributes` shape and at most one of `providerId` / `systemProviderId`)
 - Field IDs are checked against start-form and phase fields, accepting both slug `id` and numeric `internal_id`. Placeholders like `%{field:<slug>}` or `%{field:<internal_id>}` are validated but **not rewritten** at this step.
+- Pass `data_source_ids` (agent-level) to also check knowledge base membership: it is unioned with each behavior's `dataSourceIds` and checked against the pipe's knowledge bases. Unknown IDs are **warnings only** (`valid` stays true); if the knowledge base list cannot be read, a single warning is added and the check is skipped.
 
 ### 7 — Create the agent
 
@@ -170,6 +173,27 @@ On create/update, slug `fieldId` values are resolved to numeric `internal_id`, `
 ### 9 — Verify
 
 `get_ai_agent(uuid)` to confirm behaviors match expectations.
+
+---
+
+## Knowledge bases (data sources)
+
+Knowledge bases are pipe-scoped data sources an agent draws on. Attach one by putting its ID in a behavior's `dataSourceIds` (or the agent-level `data_source_ids`). All knowledge base operations are scoped by the pipe **UUID** (`pipe_uuid`), not the numeric pipe ID — `get_pipe` returns the `uuid`.
+
+| Tool (MCP) | CLI | Read-only | Purpose |
+|------------|-----|-----------|---------|
+| `get_ai_knowledge_bases` | `pipefy kb list` | Yes | List every item on a pipe (plain texts, documents, data lookups); each has an `id` for `dataSourceIds`. |
+| `get_ai_knowledge_base_plain_text` | `pipefy kb plain-text get` | Yes | Fetch one plain text with its content. |
+| `create_ai_knowledge_base_plain_text` | `pipefy kb plain-text create` | No | Create a plain text (`name`, `content` 1-3500, `description` 1-900 — all required). |
+| `update_ai_knowledge_base_plain_text` | `pipefy kb plain-text update` | No | Partial update; pass at least one of name/content/description. |
+| `delete_ai_knowledge_base_plain_text` | `pipefy kb plain-text delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
+| `validate_knowledge_base_access` | `pipefy kb validate-access` | Yes | Probe read access before writes. |
+
+### Flow: validate-access → create plain text → attach
+
+1. **Probe access** — `validate_knowledge_base_access(pipe_uuid)` (CLI: `pipefy kb validate-access`). A green result proves read access only (`read_ai_agents`), never the `manage_ai_agents` entitlement writes need. The CLI create/update commands gate on this automatically; MCP callers should probe first (create/update do not auto-probe).
+2. **Create the source** — `create_ai_knowledge_base_plain_text(pipe_uuid, name, content, description)`. Limits fail fast client-side: `content` 1-3500 chars, `description` 1-900 chars (both required). Keep the returned `id`.
+3. **Attach** — add that `id` to a behavior's `dataSourceIds` (or the agent-level `data_source_ids`) when calling `create_ai_agent` / `update_ai_agent`. Validate first with `validate_ai_agent_behaviors(pipe_id, behaviors, data_source_ids=[...])` — unknown IDs surface as warnings.
 
 ---
 

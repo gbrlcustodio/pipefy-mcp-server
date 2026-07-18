@@ -26,6 +26,7 @@ PIPEFY_CLI_ROOT_COMMANDS = frozenset(
         "field-condition",
         "graphql",
         "introspect",
+        "kb",
         "label",
         "member",
         "org",

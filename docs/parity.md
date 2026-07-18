@@ -2,7 +2,7 @@
 
 This matrix is the source of truth for **MCP tool ↔ `pipefy` CLI** coverage. Update it whenever MCP tools or CLI commands are added, renamed, or removed.
 
-**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **162** tools).
+**Registry source:** `PIPEFY_TOOL_NAMES` in `packages/mcp/src/pipefy_mcp/tools/registry.py` (must stay in sync with this table: **168** tools).
 
 **Later CLI coverage:** areas such as attachments, field conditions, email, audit export, traditional automations, exports/usage, introspection, and raw GraphQL appear as **shipped** below when the matching Typer commands exist in `packages/cli`.
 
@@ -30,6 +30,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `clone_pipe` | `pipefy pipe clone` | shipped | optional `--org`. |
 | `create_ai_agent` | `pipefy agent create` | shipped | AI Agents domain; post-v0.1 CLI unless explicitly rescoped. |
 | `create_ai_automation` | `pipefy ai-automation create` | shipped | AI Automations domain; post-v0.1 CLI unless explicitly rescoped. |
+| `create_ai_knowledge_base_plain_text` | `pipefy kb plain-text create` | shipped | Knowledge bases; pipe-scoped (`--pipe-uuid`, `--name`, `--content` <=3500, `--description` <=900, all required). CLI gates on the read-access probe; limits fail fast client-side. |
 | `create_automation` | `pipefy automation create` | shipped | (`--pipe`, `--name`, `--trigger-id`, `--action-id`, optional `--extra` JSON). |
 | `create_card` | `pipefy card create` | shipped | (`--fields` JSON, optional `--title`, optional `--phase-id` for `CreateCardInput.phase_id`). |
 | `create_card_relation` | `pipefy relation card create` | shipped | — |
@@ -53,6 +54,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `create_webhook` | `pipefy webhook create` | shipped | — |
 | `delete_ai_agent` | `pipefy agent delete` | shipped | AI Agents domain. |
 | `delete_ai_automation` | `pipefy ai-automation delete` | shipped | AI Automations domain. |
+| `delete_ai_knowledge_base_plain_text` | `pipefy kb plain-text delete` | shipped | Knowledge bases; pipe-scoped (`--id`, `--pipe-uuid`). MCP requires `confirm=true`; CLI requires `--yes` (or interactive prompt). |
 | `delete_automation` | `pipefy automation delete` | shipped | destructive: `--yes` or confirm. |
 | `delete_card` | `pipefy card delete` | shipped | destructive: `--yes` or interactive confirm. |
 | `delete_card_relation` | `pipefy relation card delete` | shipped | requires OAuth (internal API); `--yes`. |
@@ -91,6 +93,8 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `get_ai_automation` | `pipefy ai-automation get` | shipped | AI Automations domain. |
 | `get_ai_automations` | `pipefy ai-automation list` | shipped | AI Automations domain. |
 | `get_ai_credit_usage` | `pipefy usage credits` | shipped | (`--organization`, `--period`). |
+| `get_ai_knowledge_base_plain_text` | `pipefy kb plain-text get` | shipped | Knowledge bases; pipe-scoped plain text with content (`--id`, `--pipe-uuid`). |
+| `get_ai_knowledge_bases` | `pipefy kb list` | shipped | Knowledge bases; all items on a pipe (plain text, documents, data lookups) with `id` for `dataSourceIds` (`--pipe-uuid`; no pagination). |
 | `get_automation` | `pipefy automation get` | shipped | — |
 | `get_automation_actions` | `pipefy automation actions list` | shipped | (`--pipe`). |
 | `get_automation_event_attributes` | `pipefy automation event-attributes` | shipped | Official ``field_map`` event-attribute token catalog. |
@@ -161,6 +165,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `unpublish_sub_portal` | `pipefy portal sub-portal unpublish` | shipped | internal_api `updateSubPortalElement(subPortalUuid: null)`; sets `subPortals[].published` to false. |
 | `update_ai_agent` | `pipefy agent update` | shipped | AI Agents domain. |
 | `update_ai_automation` | `pipefy ai-automation update` | shipped | AI Automations domain. |
+| `update_ai_knowledge_base_plain_text` | `pipefy kb plain-text update` | shipped | Knowledge bases; partial update (`--id`, `--pipe-uuid`, optional `--name`/`--content`/`--description`, at least one). CLI gates on the read-access probe; limits fail fast client-side. |
 | `update_automation` | `pipefy automation update` | shipped | (`--extra` JSON). |
 | `update_card` | `pipefy card update` | shipped | (`--field-updates` JSON, optional title/labels/assignees/due-date). |
 | `update_card_field` | `pipefy card update` | shipped | Use `--field-updates` JSON array (). |
@@ -186,6 +191,7 @@ For **database records**, `find_records` result nodes may use **`fields`** while
 | `upload_attachment_to_table_record` | `pipefy attachment upload --record` | shipped | (same supporting flags as card). |
 | `validate_ai_agent_behaviors` | `pipefy agent validate-behaviors` | shipped | AI Agents validation tooling. |
 | `validate_ai_automation_prompt` | `pipefy ai-automation validate-prompt` | shipped | AI Automations validation tooling. |
+| `validate_knowledge_base_access` | `pipefy kb validate-access` | shipped | Knowledge base read-access probe (pipe-scoped, `--pipe-uuid`); green proves read access only (`read_ai_agents`), never write entitlement. |
 | `validate_llm_provider_access` | `pipefy ai-provider validate-access` | shipped | LLM provider read-access probe; green proves read access only, never write entitlement. |
 
 ## Row count check
@@ -199,6 +205,6 @@ for n in m.body:
             print(len(v.args[0].elts))"
 ```
 
-Expect **162** tool names in `PIPEFY_TOOL_NAMES` and **162** data rows in the parity table (excluding the header rows).
+Expect **168** tool names in `PIPEFY_TOOL_NAMES` and **168** data rows in the parity table (excluding the header rows).
 
 When adding or removing an MCP tool, update **this file** and `PIPEFY_TOOL_NAMES` in the same change set.

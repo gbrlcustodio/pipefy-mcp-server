@@ -126,3 +126,57 @@ class ProviderAccessProbeResult(TypedDict, total=False):
     provider_count: int
     note: str
     problem: dict[str, Any]
+
+
+class KnowledgeBasePayload(TypedDict, total=False):
+    """One item from the pipe's knowledge base list (``aiKnowledgeBases``).
+
+    ``type`` is the JSON:API resource type carried through from the backend
+    (e.g. ``knowledge_base_plain_texts``, ``knowledge_base_documents``,
+    ``data_lookups``); it can be null. ``id`` is the data-source UUID used to
+    attach the source to an agent/behavior via ``dataSourceIds``.
+    """
+
+    id: str
+    type: str | None
+    name: str
+    description: str | None
+    updatedAt: str | None
+
+
+class KnowledgeBasePlainTextPayload(TypedDict, total=False):
+    """A single pipe-scoped knowledge base plain text.
+
+    Returned by the get query and by create/update. ``content`` and ``name`` are
+    always present (non-null in the schema); ``description`` may be null only on
+    legacy rows — new writes always carry one (see the write validators).
+    """
+
+    id: str
+    name: str
+    description: str | None
+    content: str
+    updatedAt: str | None
+
+
+class KnowledgeBaseDeleteResult(TypedDict):
+    """Outcome of ``deleteAiKnowledgeBasePlainText``."""
+
+    success: bool
+    errors: list[str]
+
+
+class KnowledgeBaseAccessProbeResult(TypedDict, total=False):
+    """Outcome of the knowledge-base read-access probe (pipe-scoped).
+
+    ``ok`` is True when the list query succeeded (proves *read* access only —
+    ``read_ai_agents`` on the pipe — never the ``manage_ai_agents`` entitlement
+    that plain-text create/update/delete require). ``knowledge_base_count`` is
+    the number of items visible on the pipe. On failure, ``problem`` carries the
+    classified GraphQL problem (kind/message/code/correlation_id).
+    """
+
+    ok: bool
+    knowledge_base_count: int
+    note: str
+    problem: dict[str, Any]

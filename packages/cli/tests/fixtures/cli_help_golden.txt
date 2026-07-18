@@ -58,6 +58,8 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │ graphql           Execute arbitrary GraphQL (mutations require --yes). See   │
 │                   docs/cli/self-healing.md.                                  │
 │ introspect        Discover GraphQL types and operations (JSON default).      │
+│ kb                AI knowledge bases (pipe-scoped: list, plain text CRUD,    │
+│                   access probe).                                             │
 │ export            Bulk exports (automation jobs).                            │
 │ org               Organization operations.                                   │
 │ report-org        Organization reports.                                      │
@@ -244,17 +246,25 @@ Usage: pipefy agent validate-behaviors [OPTIONS]
  Dry-run behavior validation (``validate_ai_agent_behaviors``).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ *  --pipe                          TEXT  Numeric pipe id. [required]         │
-│ *  --behaviors                     TEXT  JSON array of behavior objects.     │
-│                                          [required]                          │
-│    --strict         --no-strict          Pre-flight strictness: --strict     │
-│                                          (default) reports unknown           │
-│                                          actionType values as problems;      │
-│                                          --no-strict reports them as         │
-│                                          warnings only.                      │
-│                                          [default: strict]                   │
-│    --json       -j                                                           │
-│    --help                                Show this message and exit.         │
+│ *  --pipe                               TEXT  Numeric pipe id. [required]    │
+│ *  --behaviors                          TEXT  JSON array of behavior         │
+│                                               objects.                       │
+│                                               [required]                     │
+│    --strict              --no-strict          Pre-flight strictness:         │
+│                                               --strict (default) reports     │
+│                                               unknown actionType values as   │
+│                                               problems; --no-strict reports  │
+│                                               them as warnings only.         │
+│                                               [default: strict]              │
+│    --data-source-id                     TEXT  Agent-level knowledge base ID  │
+│                                               to attach (repeatable).        │
+│                                               Unioned with behavior-level    │
+│                                               dataSourceIds and checked      │
+│                                               against the pipe's knowledge   │
+│                                               bases; unknown IDs are         │
+│                                               warnings only.                 │
+│    --json            -j                                                      │
+│    --help                                     Show this message and exit.    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP ai-automation
@@ -1637,6 +1647,155 @@ Usage: pipefy introspect type [OPTIONS] NAME
 │ --max-depth        INTEGER  Nested type resolution depth. [default: 1]       │
 │ --rich                      Pretty-print with Rich instead of JSON.          │
 │ --help                      Show this message and exit.                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb
+Usage: pipefy kb [OPTIONS] COMMAND [ARGS]...
+
+ AI knowledge bases (pipe-scoped: list, plain text CRUD, access probe).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ list              List a pipe's knowledge base items                         │
+│                   (``get_ai_knowledge_bases``).                              │
+│ validate-access   Probe knowledge-base read access                           │
+│                   (``validate_knowledge_base_access``).                      │
+│ plain-text        Knowledge base plain texts.                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/list
+Usage: pipefy kb list [OPTIONS]
+
+ List a pipe's knowledge base items (``get_ai_knowledge_bases``).
+
+ Each item carries ``id`` (used in ``dataSourceIds``), ``type``, ``name``,
+ ``description``, and ``updatedAt``. No pagination; the full list is returned.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/plain-text
+Usage: pipefy kb plain-text [OPTIONS] COMMAND [ARGS]...
+
+ Knowledge base plain texts.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get      Fetch one knowledge base plain text with its content                │
+│          (``get_ai_knowledge_base_plain_text``).                             │
+│ create   Create a knowledge base plain text                                  │
+│          (``create_ai_knowledge_base_plain_text``).                          │
+│ update   Update a knowledge base plain text                                  │
+│          (``update_ai_knowledge_base_plain_text``).                          │
+│ delete   Delete a knowledge base plain text permanently                      │
+│          (``delete_ai_knowledge_base_plain_text``).                          │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/plain-text/create
+Usage: pipefy kb plain-text create [OPTIONS]
+
+ Create a knowledge base plain text (``create_ai_knowledge_base_plain_text``).
+
+ Gated on the read-access probe: fails with the classified problem if the
+ credential cannot read the pipe's knowledge bases. Client-side limits (content
+ 1-3500, description 1-900) fail fast before the mutation is sent.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe-uuid            TEXT  Pipe UUID (not the numeric ID; `pipefy pipe  │
+│                                 get` shows the uuid).                        │
+│                                 [required]                                   │
+│ *  --name                 TEXT  Display name (required). [required]          │
+│ *  --content              TEXT  Plain text content (required, 1-3500         │
+│                                 characters).                                 │
+│                                 [required]                                   │
+│ *  --description          TEXT  Description (required, 1-900 characters).    │
+│                                 [required]                                   │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/plain-text/delete
+Usage: pipefy kb plain-text delete [OPTIONS]
+
+ Delete a knowledge base plain text permanently
+ (``delete_ai_knowledge_base_plain_text``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base plain text ID to delete.        │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --yes        -y            Skip the confirmation prompt.                  │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/plain-text/get
+Usage: pipefy kb plain-text get [OPTIONS]
+
+ Fetch one knowledge base plain text with its content
+ (``get_ai_knowledge_base_plain_text``).
+
+ Exits 1 with ``success: false`` when the API resolves no plain text for the id
+ (mirrors the MCP tool's not-found handling).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base plain text ID (from `pipefy kb  │
+│                               list`).                                        │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/plain-text/update
+Usage: pipefy kb plain-text update [OPTIONS]
+
+ Update a knowledge base plain text (``update_ai_knowledge_base_plain_text``).
+
+ Partial: only the fields you pass change. Provide at least one of --name,
+ --content, or --description. Gated on the read-access probe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                   TEXT  Knowledge base plain text ID to update.      │
+│                                 [required]                                   │
+│ *  --pipe-uuid            TEXT  Pipe UUID (not the numeric ID; `pipefy pipe  │
+│                                 get` shows the uuid).                        │
+│                                 [required]                                   │
+│    --name                 TEXT  New name (non-blank).                        │
+│    --content              TEXT  New content (1-3500 characters).             │
+│    --description          TEXT  New description (1-900 characters).          │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/validate-access
+Usage: pipefy kb validate-access [OPTIONS]
+
+ Probe knowledge-base read access (``validate_knowledge_base_access``).
+
+ A green probe proves read access only (``read_ai_agents``), never write
+ entitlement. Exits 1 when the probe classifies a failure, after rendering the
+ structured problem.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP label

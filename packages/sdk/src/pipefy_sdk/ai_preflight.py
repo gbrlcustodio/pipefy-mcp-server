@@ -241,12 +241,93 @@ def _behavior_input_validation_problems(exc: ValidationError) -> list[str]:
     return problems if problems else [str(exc)]
 
 
+def _behavior_data_source_ids(behavior: dict[str, Any]) -> list[str]:
+    """Extract ``actionParams.aiBehaviorParams.dataSourceIds`` from a behavior dict.
+
+    Accepts both camelCase and snake_case keys (behaviors arrive in either shape).
+    """
+    action_params = behavior.get("actionParams") or behavior.get("action_params")
+    if not isinstance(action_params, dict):
+        return []
+    ai_params = action_params.get("aiBehaviorParams") or action_params.get(
+        "ai_behavior_params"
+    )
+    if not isinstance(ai_params, dict):
+        return []
+    ids = ai_params.get("dataSourceIds") or ai_params.get("data_source_ids")
+    if not isinstance(ids, list):
+        return []
+    return [stripped for i in ids if (stripped := str(i).strip())]
+
+
+def _collect_configured_data_source_ids(
+    behaviors: list[dict[str, Any]],
+    agent_data_source_ids: list[str] | None,
+) -> set[str]:
+    """Union of agent-level and behavior-level configured data source ids."""
+    configured = {
+        stripped
+        for did in agent_data_source_ids or []
+        if (stripped := str(did).strip())
+    }
+    for behavior in behaviors:
+        configured.update(_behavior_data_source_ids(behavior))
+    return configured
+
+
+async def _data_source_membership_warnings(
+    client: PipefyClient,
+    pipe_id: str,
+    configured_ids: set[str],
+) -> list[str]:
+    """Warn (never block) for configured data source ids not on the pipe.
+
+    The knowledge base list is pipe-UUID-scoped, so this resolves the pipe UUID
+    first. A failed list probe (permission, feature, transport) yields a single
+    warning and skips every per-id membership claim, so an inability to read the
+    knowledge base is never reported as a broken reference.
+    """
+    try:
+        pipe_data = await client.get_pipe(pipe_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("data-source membership: pipe fetch failed: %s", exc)
+        return [
+            f"Could not verify data source membership: failed to load pipe {pipe_id}."
+        ]
+    pipe_uuid = (pipe_data.get("pipe") or {}).get("uuid")
+    if not pipe_uuid:
+        return [
+            "Could not verify data source membership: pipe "
+            f"{pipe_id} has no uuid in the response."
+        ]
+    try:
+        knowledge_bases = await client.get_ai_knowledge_bases(str(pipe_uuid))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("data-source membership: kb list failed: %s", exc)
+        return [
+            "Could not verify data source membership: knowledge base list "
+            f"probe failed ({exc})."
+        ]
+    known_ids = {
+        str(kb.get("id"))
+        for kb in knowledge_bases
+        if isinstance(kb, dict) and kb.get("id")
+    }
+    missing = sorted(cid for cid in configured_ids if cid not in known_ids)
+    return [
+        f"data_source id '{cid}' is not a knowledge base of pipe {pipe_id}; "
+        "attaching it may fail. Verify with get_ai_knowledge_bases."
+        for cid in missing
+    ]
+
+
 async def validate_ai_agent_behaviors_sdk(
     client: PipefyClient,
     pipe_id: str,
     behaviors: list[dict[str, Any]],
     *,
     strict_unknown_action_types: bool = True,
+    data_source_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Mirror MCP ``validate_ai_agent_behaviors`` (read-only).
 
@@ -255,6 +336,11 @@ async def validate_ai_agent_behaviors_sdk(
         pipe_id: Numeric pipe id for field/phase/relation context.
         behaviors: Raw behavior dicts (1-5).
         strict_unknown_action_types: When False, unknown action types become warnings only.
+        data_source_ids: Optional agent-level knowledge base ids. These are unioned
+            with each behavior's ``actionParams.aiBehaviorParams.dataSourceIds`` and
+            checked against the pipe's knowledge bases; unknown ids yield warnings
+            only (``valid`` stays true). A failed list probe skips the membership
+            check with a single warning.
     """
     pid = str(pipe_id).strip()
     if not pid:
@@ -402,6 +488,17 @@ async def validate_ai_agent_behaviors_sdk(
     )
     problems = [*problems, *transition_problems]
     warnings = [*tool_warnings, *helper_warnings]
+
+    configured_data_source_ids = _collect_configured_data_source_ids(
+        behaviors, data_source_ids
+    )
+    if configured_data_source_ids:
+        warnings = [
+            *warnings,
+            *await _data_source_membership_warnings(
+                client, pid, configured_data_source_ids
+            ),
+        ]
 
     if problems:
         msg = f"Found {len(problems)} problem(s) in behaviors."

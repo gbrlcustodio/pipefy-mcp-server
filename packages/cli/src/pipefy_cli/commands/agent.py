@@ -342,6 +342,15 @@ def agent_validate_behaviors(
             "values as problems; --no-strict reports them as warnings only."
         ),
     ),
+    data_source_id: list[str] = typer.Option(
+        [],
+        "--data-source-id",
+        help=(
+            "Agent-level knowledge base ID to attach (repeatable). Unioned with "
+            "behavior-level dataSourceIds and checked against the pipe's knowledge "
+            "bases; unknown IDs are warnings only."
+        ),
+    ),
     json_out: bool = typer.Option(False, "--json", "-j"),
 ) -> None:
     """Dry-run behavior validation (``validate_ai_agent_behaviors``)."""
@@ -353,6 +362,7 @@ def agent_validate_behaviors(
             pipe.strip(),
             behavior_list,
             strict_unknown_action_types=strict_unknown,
+            data_source_ids=data_source_id or None,
         )
 
     run_cli_command(ctx, json_out, factory)

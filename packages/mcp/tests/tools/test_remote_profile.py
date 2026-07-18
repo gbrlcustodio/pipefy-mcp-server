@@ -65,6 +65,21 @@ REMOTE_SEED = frozenset(
         "get_llm_provider_dependencies",
         "get_default_llm_provider",
         "validate_llm_provider_access",
+        # traditional automation reads (#439): read/log tools that reach the API
+        # with the request-scoped bearer and are governed by API permissions; no
+        # filesystem or per-user process-global settings reads. The export CSV
+        # tool downloads in-memory (no local file) with per-call size caps.
+        "get_automation",
+        "get_automations",
+        "get_automation_actions",
+        "get_automation_events",
+        "get_automation_event_attributes",
+        "get_automation_execution_metrics",
+        "get_automation_logs",
+        "get_automation_logs_by_repo",
+        "get_automations_usage",
+        "get_automation_jobs_export",
+        "get_automation_jobs_export_csv",
     }
 )
 

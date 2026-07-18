@@ -370,6 +370,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_phase_allowed_move_targets(
             phase_id: PipefyId,
@@ -423,6 +424,7 @@ class PipeConfigTools:
             annotations=ToolAnnotations(
                 readOnlyHint=True,
             ),
+            meta=REMOTE,
         )
         async def get_phase_cards_count(
             phase_id: PipefyId,

@@ -92,6 +92,25 @@ REMOTE_SEED = frozenset(
         "get_pipe_report_columns",
         "get_pipe_report_filterable_fields",
         "get_pipe_report_export",
+        # pipe / card / field / member / webhook / portal reads (#441): read tools
+        # that reach the API with the request-scoped bearer and are governed by API
+        # permissions; no filesystem or per-user process-global settings reads. The
+        # relation reads may hit Pipefy's Internal API, which receives whatever
+        # credential the caller already carries (nothing service-account-specific).
+        "get_card_relations",
+        "get_card_inbox_emails",
+        "get_field_condition",
+        "get_field_conditions",
+        "get_labels",
+        "get_pipe_members",
+        "get_pipe_relations",
+        "get_phase_allowed_move_targets",
+        "get_phase_cards_count",
+        "get_table_relations",
+        "get_webhooks",
+        "get_email_templates",
+        "get_portal",
+        "list_portals",
     }
 )
 

@@ -128,6 +128,45 @@ class ProviderAccessProbeResult(TypedDict, total=False):
     problem: dict[str, Any]
 
 
+class LlmProviderWritePayload(TypedDict, total=False):
+    """A custom (BYOM) provider as returned by create/update.
+
+    Deliberately omits ``configuration``: the write mutations never select it so
+    secret material is never returned. ``type`` is ``byom`` for a custom
+    provider. ``name`` is nullable in the schema.
+    """
+
+    id: str
+    name: str | None
+    type: str
+    active: bool
+    organizationDefault: bool
+
+
+class ActiveLlmProviderPayload(TypedDict, total=False):
+    """The owner→provider assignment returned by ``set_default_llm_provider``.
+
+    Exactly one of ``llmProviderId`` (custom/BYOM) or ``systemLlmProviderId``
+    (Pipefy-managed) is populated, matching the id kind that was assigned.
+    """
+
+    id: str
+    ownerId: str
+    ownerType: str
+    llmProviderId: str | None
+    systemLlmProviderId: str | None
+
+
+class LlmProviderMutationResult(TypedDict):
+    """Outcome of a provider write that reports a bare ``success`` boolean.
+
+    Shared by delete, set-active-status, and reset-default — none of which
+    return an entity or a backend ``errors`` list.
+    """
+
+    success: bool
+
+
 class KnowledgeBasePayload(TypedDict, total=False):
     """One item from the pipe's knowledge base list (``aiKnowledgeBases``).
 

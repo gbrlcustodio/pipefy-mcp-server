@@ -79,6 +79,7 @@ from pipefy_sdk.services.table_service import (
     TableService,
 )
 from pipefy_sdk.services.types import (
+    ActiveLlmProviderPayload,
     AgentServiceResult,
     AiAgentGraphPayload,
     AutomationServiceResult,
@@ -89,8 +90,10 @@ from pipefy_sdk.services.types import (
     KnowledgeBaseDocumentPayload,
     KnowledgeBasePayload,
     KnowledgeBasePlainTextPayload,
+    LlmProviderMutationResult,
     LlmProviderPayload,
     LlmProvidersResult,
+    LlmProviderWritePayload,
     MePayload,
     ProviderAccessProbeResult,
     ProviderDependenciesResult,
@@ -973,6 +976,74 @@ class PipefyClient:
         """Probe LLM provider read access; classifies errors instead of raising."""
         return await self._llm_provider_service.validate_llm_provider_access(
             organization_uuid
+        )
+
+    async def create_llm_provider(
+        self,
+        organization_uuid: str,
+        *,
+        name: str,
+        configuration_file_path: str | Path,
+    ) -> LlmProviderWritePayload:
+        """Create a custom (BYOM) LLM provider (configuration from a local JSON file)."""
+        return await self._llm_provider_service.create_llm_provider(
+            organization_uuid,
+            name=name,
+            configuration_file_path=configuration_file_path,
+        )
+
+    async def update_llm_provider(
+        self,
+        provider_id: str,
+        organization_uuid: str,
+        *,
+        configuration_file_path: str | Path,
+        name: str | None = None,
+    ) -> LlmProviderWritePayload:
+        """Update a custom (BYOM) LLM provider (full configuration replacement)."""
+        return await self._llm_provider_service.update_llm_provider(
+            provider_id,
+            organization_uuid,
+            configuration_file_path=configuration_file_path,
+            name=name,
+        )
+
+    async def delete_llm_provider(
+        self, provider_id: str, organization_uuid: str
+    ) -> LlmProviderMutationResult:
+        """Delete a custom (BYOM) LLM provider (permanent)."""
+        return await self._llm_provider_service.delete_llm_provider(
+            provider_id, organization_uuid
+        )
+
+    async def set_llm_provider_active_status(
+        self, provider_id: str, *, active: bool
+    ) -> LlmProviderMutationResult:
+        """Activate or deactivate a custom (BYOM) LLM provider."""
+        return await self._llm_provider_service.set_llm_provider_active_status(
+            provider_id, active=active
+        )
+
+    async def set_default_llm_provider(
+        self,
+        organization_id: str,
+        *,
+        provider_id: str | None = None,
+        system_provider_id: str | None = None,
+    ) -> ActiveLlmProviderPayload:
+        """Set the organization default provider (exactly one of provider/system id)."""
+        return await self._llm_provider_service.set_default_llm_provider(
+            organization_id,
+            provider_id=provider_id,
+            system_provider_id=system_provider_id,
+        )
+
+    async def reset_default_llm_provider(
+        self, organization_id: str
+    ) -> LlmProviderMutationResult:
+        """Reset (clear) the organization's default LLM provider assignment."""
+        return await self._llm_provider_service.reset_default_llm_provider(
+            organization_id
         )
 
     async def get_ai_knowledge_bases(

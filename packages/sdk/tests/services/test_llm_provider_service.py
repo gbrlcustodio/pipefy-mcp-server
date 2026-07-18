@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from _shared.mock_clients import mock_executor
+from graphql import print_ast
 
 from pipefy_sdk.graphql_executor import GraphQLResult
 from pipefy_sdk.graphql_problem import (
@@ -11,7 +14,32 @@ from pipefy_sdk.graphql_problem import (
     classify_exception,
     classify_graphql_error_dicts,
 )
-from pipefy_sdk.services.llm_provider_service import LlmProviderService
+from pipefy_sdk.queries.llm_provider_queries import (
+    CREATE_LLM_PROVIDER_MUTATION,
+    UPDATE_LLM_PROVIDER_MUTATION,
+)
+from pipefy_sdk.services.llm_provider_service import (
+    LlmProviderService,
+    _read_configuration_object,
+)
+
+# A configuration file always holds at least one secret; tests assert it never
+# leaks into a response, an error, or the static mutation document.
+SECRET = "sk-SUPER-SECRET-TOKEN"
+WRITTEN_PROVIDER = {
+    "id": "42",
+    "name": "My OpenAI",
+    "type": "byom",
+    "active": True,
+    "organizationDefault": False,
+}
+
+
+def _config_file(tmp_path, payload) -> str:
+    path = tmp_path / "config.json"
+    path.write_text(payload if isinstance(payload, str) else json.dumps(payload))
+    return str(path)
+
 
 BYOM_NODE = {
     "__typename": "LlmProvider",
@@ -399,3 +427,256 @@ class TestGraphQLProblemClassifier:
 
     def test_classify_exception_without_graphql_errors_returns_none(self):
         assert classify_exception(RuntimeError("socket closed")) is None
+
+
+class TestConfigurationSecrecyInvariants:
+    def test_create_and_update_documents_never_select_configuration(self):
+        """The mutation payloads must not request `configuration` (secret echo)."""
+
+        def _text(node) -> str:
+            return print_ast(getattr(node, "document", node))
+
+        assert "configuration" not in _text(CREATE_LLM_PROVIDER_MUTATION)
+        assert "configuration" not in _text(UPDATE_LLM_PROVIDER_MUTATION)
+
+    def test_valid_object_parsed(self, tmp_path):
+        cfg = {"provider": "openai", "auth": {"token": SECRET}}
+        assert _read_configuration_object(_config_file(tmp_path, cfg)) == cfg
+
+    def test_missing_file_error_has_no_contents(self, tmp_path):
+        with pytest.raises(ValueError, match="Could not read configuration file"):
+            _read_configuration_object(str(tmp_path / "nope.json"))
+
+    def test_invalid_json_error_never_echoes_secret(self, tmp_path):
+        # A secret-bearing but malformed file: the parse error must not leak it.
+        path = _config_file(tmp_path, f'{{"auth": {{"token": "{SECRET}"}} TRAILING')
+        with pytest.raises(ValueError) as exc:
+            _read_configuration_object(path)
+        assert SECRET not in str(exc.value)
+        assert "not valid JSON" in str(exc.value)
+
+    def test_non_object_value_rejected_without_echoing_secret(self, tmp_path):
+        # A bare JSON string that happens to be a secret must not be echoed.
+        path = _config_file(tmp_path, json.dumps(SECRET))
+        with pytest.raises(ValueError, match="non-empty JSON object"):
+            _read_configuration_object(path)
+        with pytest.raises(ValueError) as exc:
+            _read_configuration_object(path)
+        assert SECRET not in str(exc.value)
+
+    def test_empty_object_rejected(self, tmp_path):
+        with pytest.raises(ValueError, match="non-empty JSON object"):
+            _read_configuration_object(_config_file(tmp_path, {}))
+
+    def test_oversized_file_rejected(self, tmp_path):
+        path = tmp_path / "big.json"
+        path.write_text('{"x": "' + "a" * (256 * 1024) + '"}')
+        with pytest.raises(ValueError, match="exceeds"):
+            _read_configuration_object(str(path))
+
+
+class TestCreateLlmProvider:
+    @pytest.mark.anyio
+    async def test_sends_configuration_from_file_and_returns_provider(self, tmp_path):
+        executor = mock_executor(
+            {"createLlmProvider": {"llmProvider": WRITTEN_PROVIDER}}
+        )
+        service = LlmProviderService(executor=executor)
+        cfg = {"provider": "openai", "model": "gpt-4o", "auth": {"token": SECRET}}
+
+        provider = await service.create_llm_provider(
+            "org-uuid-1",
+            name="My OpenAI",
+            configuration_file_path=_config_file(tmp_path, cfg),
+        )
+
+        assert provider == WRITTEN_PROVIDER
+        assert "configuration" not in provider  # secret never returned
+        _, variables = executor.execute_query.await_args.args
+        assert variables["input"]["configuration"] == cfg
+        assert variables["input"]["name"] == "My OpenAI"
+        assert variables["input"]["organizationUuid"] == "org-uuid-1"
+
+    @pytest.mark.anyio
+    async def test_blank_name_rejected_before_wire(self, tmp_path):
+        executor = mock_executor({})
+        service = LlmProviderService(executor=executor)
+        with pytest.raises(ValueError, match="name"):
+            await service.create_llm_provider(
+                "org-uuid-1",
+                name="  ",
+                configuration_file_path=_config_file(tmp_path, {"provider": "openai"}),
+            )
+        executor.execute_query.assert_not_awaited()
+
+    @pytest.mark.anyio
+    async def test_null_payload_reads_as_failure(self, tmp_path):
+        executor = mock_executor({"createLlmProvider": {"llmProvider": None}})
+        service = LlmProviderService(executor=executor)
+        with pytest.raises(ValueError, match="may not have persisted"):
+            await service.create_llm_provider(
+                "org-uuid-1",
+                name="X",
+                configuration_file_path=_config_file(tmp_path, {"provider": "openai"}),
+            )
+
+
+class TestUpdateLlmProvider:
+    @pytest.mark.anyio
+    async def test_full_replacement_configuration_required_and_sent(self, tmp_path):
+        executor = mock_executor(
+            {"updateLlmProvider": {"llmProvider": WRITTEN_PROVIDER}}
+        )
+        service = LlmProviderService(executor=executor)
+        cfg = {"provider": "openai", "model": "gpt-4o-mini", "auth": {"token": SECRET}}
+
+        provider = await service.update_llm_provider(
+            "42",
+            "org-uuid-1",
+            configuration_file_path=_config_file(tmp_path, cfg),
+            name="Renamed",
+        )
+
+        assert provider == WRITTEN_PROVIDER
+        _, variables = executor.execute_query.await_args.args
+        assert variables["input"]["configuration"] == cfg
+        assert variables["input"]["id"] == "42"
+        assert variables["input"]["name"] == "Renamed"
+
+    @pytest.mark.anyio
+    async def test_name_omitted_when_not_given(self, tmp_path):
+        executor = mock_executor(
+            {"updateLlmProvider": {"llmProvider": WRITTEN_PROVIDER}}
+        )
+        service = LlmProviderService(executor=executor)
+        await service.update_llm_provider(
+            "42",
+            "org-uuid-1",
+            configuration_file_path=_config_file(tmp_path, {"provider": "openai"}),
+        )
+        _, variables = executor.execute_query.await_args.args
+        assert "name" not in variables["input"]
+
+    @pytest.mark.anyio
+    async def test_redaction_placeholder_passed_through_unchanged(self, tmp_path):
+        """Sending back a fetched config keeps the placeholder — backend preserves."""
+        executor = mock_executor(
+            {"updateLlmProvider": {"llmProvider": WRITTEN_PROVIDER}}
+        )
+        service = LlmProviderService(executor=executor)
+        cfg = {"provider": "openai", "auth": {"token": "__REDACTED__"}}
+
+        await service.update_llm_provider(
+            "42",
+            "org-uuid-1",
+            configuration_file_path=_config_file(tmp_path, cfg),
+        )
+        _, variables = executor.execute_query.await_args.args
+        assert variables["input"]["configuration"]["auth"]["token"] == "__REDACTED__"
+
+
+class TestDeleteLlmProvider:
+    @pytest.mark.anyio
+    async def test_returns_success_and_sends_id_org(self):
+        executor = mock_executor({"deleteLlmProvider": {"success": True}})
+        service = LlmProviderService(executor=executor)
+
+        result = await service.delete_llm_provider("42", "org-uuid-1")
+
+        assert result == {"success": True}
+        _, variables = executor.execute_query.await_args.args
+        assert variables["input"] == {"id": "42", "organizationUuid": "org-uuid-1"}
+
+    @pytest.mark.anyio
+    async def test_null_success_reads_as_false(self):
+        executor = mock_executor({"deleteLlmProvider": {"success": None}})
+        service = LlmProviderService(executor=executor)
+        assert await service.delete_llm_provider("42", "org-uuid-1") == {
+            "success": False
+        }
+
+
+class TestSetLlmProviderActiveStatus:
+    @pytest.mark.anyio
+    async def test_sends_provider_id_and_active_flag(self):
+        executor = mock_executor({"setLlmProviderActiveStatus": {"success": True}})
+        service = LlmProviderService(executor=executor)
+
+        result = await service.set_llm_provider_active_status("42", active=False)
+
+        assert result == {"success": True}
+        _, variables = executor.execute_query.await_args.args
+        assert variables["input"] == {"providerId": "42", "active": False}
+
+
+class TestSetDefaultLlmProvider:
+    @pytest.mark.anyio
+    async def test_custom_provider_id_sets_organization_owner(self):
+        active = {
+            "id": "a1",
+            "ownerId": "123456",
+            "ownerType": "organization",
+            "llmProviderId": "42",
+            "systemLlmProviderId": None,
+        }
+        executor = mock_executor(
+            {"setActiveLlmProvider": {"activeLlmProvider": active}}
+        )
+        service = LlmProviderService(executor=executor)
+
+        result = await service.set_default_llm_provider("123456", provider_id="42")
+
+        assert result == active
+        _, variables = executor.execute_query.await_args.args
+        assert variables["input"] == {
+            "ownerId": "123456",
+            "ownerType": "organization",
+            "providerId": "42",
+        }
+
+    @pytest.mark.anyio
+    async def test_system_provider_id_uses_system_key(self):
+        executor = mock_executor(
+            {"setActiveLlmProvider": {"activeLlmProvider": {"id": "a2"}}}
+        )
+        service = LlmProviderService(executor=executor)
+
+        await service.set_default_llm_provider("123456", system_provider_id="7")
+
+        _, variables = executor.execute_query.await_args.args
+        assert variables["input"]["systemProviderId"] == "7"
+        assert "providerId" not in variables["input"]
+
+    @pytest.mark.anyio
+    async def test_both_ids_rejected(self):
+        executor = mock_executor({})
+        service = LlmProviderService(executor=executor)
+        with pytest.raises(ValueError, match="exactly one"):
+            await service.set_default_llm_provider(
+                "123456", provider_id="42", system_provider_id="7"
+            )
+        executor.execute_query.assert_not_awaited()
+
+    @pytest.mark.anyio
+    async def test_neither_id_rejected(self):
+        executor = mock_executor({})
+        service = LlmProviderService(executor=executor)
+        with pytest.raises(ValueError, match="exactly one"):
+            await service.set_default_llm_provider("123456")
+        executor.execute_query.assert_not_awaited()
+
+
+class TestResetDefaultLlmProvider:
+    @pytest.mark.anyio
+    async def test_sends_organization_owner_and_returns_success(self):
+        executor = mock_executor({"resetLlmProviderOwner": {"success": True}})
+        service = LlmProviderService(executor=executor)
+
+        result = await service.reset_default_llm_provider("123456")
+
+        assert result == {"success": True}
+        _, variables = executor.execute_query.await_args.args
+        assert variables["input"] == {
+            "ownerId": "123456",
+            "ownerType": "organization",
+        }

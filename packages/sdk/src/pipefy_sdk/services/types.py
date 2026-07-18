@@ -183,6 +183,24 @@ class KnowledgeBaseDocumentPayload(TypedDict, total=False):
     updatedAt: str | None
 
 
+class KnowledgeBaseDataLookupPayload(TypedDict, total=False):
+    """A single pipe-scoped knowledge base data lookup.
+
+    Returned by the get query and by create/update. ``conditions`` are never
+    part of the payload: the API stores them but does not expose them on
+    reads, so callers must keep the lookup definition client-side.
+    ``sourceRepoId`` is the numeric ID of the source pipe.
+    """
+
+    id: str
+    name: str
+    description: str | None
+    sourceRepoId: str | None
+    searchQuery: str | None
+    outputFields: list[str] | None
+    updatedAt: str | None
+
+
 KnowledgeBaseDocumentUploadStep = Literal[
     "file_read",
     "presigned_url",
@@ -220,7 +238,7 @@ class KnowledgeBaseAccessProbeResult(TypedDict, total=False):
 
     ``ok`` is True when the list query succeeded (proves *read* access only —
     ``read_ai_agents`` on the pipe — never the ``manage_ai_agents`` entitlement
-    that plain-text create/update/delete require). ``knowledge_base_count`` is
+    that knowledge base create/update/delete require). ``knowledge_base_count`` is
     the number of items visible on the pipe. On failure, ``problem`` carries the
     classified GraphQL problem (kind/message/code/correlation_id).
     """

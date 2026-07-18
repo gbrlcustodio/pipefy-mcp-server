@@ -1,4 +1,4 @@
-"""GraphQL operations for pipe-scoped AI knowledge bases (list, plain text, documents).
+"""GraphQL operations for pipe-scoped AI knowledge bases (list, plain text, documents, data lookups).
 
 All operations are pipe-scoped by ``pipeUuid`` (the pipe UUID, not the numeric
 id). The list query returns every knowledge base item on a pipe (plain text,
@@ -177,15 +177,91 @@ DELETE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION = gql(
     """
 )
 
+# Data lookup reads (and create/update payloads) never include ``conditions``:
+# the backend stores them but the GraphQL type does not expose them, so callers
+# must keep their lookup definition as the client-side source of truth.
+GET_AI_KNOWLEDGE_BASE_DATA_LOOKUP_QUERY = gql(
+    """
+    query aiKnowledgeBaseDataLookup($id: ID!, $pipeUuid: ID!) {
+        aiKnowledgeBaseDataLookup(id: $id, pipeUuid: $pipeUuid) {
+            id
+            name
+            description
+            sourceRepoId
+            searchQuery
+            outputFields
+            updatedAt
+        }
+    }
+    """
+)
+
+CREATE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION = gql(
+    """
+    mutation createAiKnowledgeBaseDataLookup(
+        $input: CreateKnowledgeBaseDataLookupInput!
+    ) {
+        createAiKnowledgeBaseDataLookup(input: $input) {
+            knowledgeBaseDataLookup {
+                id
+                name
+                description
+                sourceRepoId
+                searchQuery
+                outputFields
+                updatedAt
+            }
+        }
+    }
+    """
+)
+
+UPDATE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION = gql(
+    """
+    mutation updateAiKnowledgeBaseDataLookup(
+        $input: UpdateKnowledgeBaseDataLookupInput!
+    ) {
+        updateAiKnowledgeBaseDataLookup(input: $input) {
+            knowledgeBaseDataLookup {
+                id
+                name
+                description
+                sourceRepoId
+                searchQuery
+                outputFields
+                updatedAt
+            }
+        }
+    }
+    """
+)
+
+DELETE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION = gql(
+    """
+    mutation deleteAiKnowledgeBaseDataLookup(
+        $input: DeleteKnowledgeBaseDataLookupInput!
+    ) {
+        deleteAiKnowledgeBaseDataLookup(input: $input) {
+            success
+            errors
+        }
+    }
+    """
+)
+
 __all__ = [
+    "CREATE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION",
     "CREATE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION",
     "CREATE_AI_KNOWLEDGE_BASE_PLAIN_TEXT_MUTATION",
+    "DELETE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION",
     "DELETE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION",
     "DELETE_AI_KNOWLEDGE_BASE_PLAIN_TEXT_MUTATION",
     "GET_AI_KNOWLEDGE_BASES_QUERY",
+    "GET_AI_KNOWLEDGE_BASE_DATA_LOOKUP_QUERY",
     "GET_AI_KNOWLEDGE_BASE_DOCUMENT_QUERY",
     "GET_AI_KNOWLEDGE_BASE_PLAIN_TEXT_QUERY",
     "GET_PIPE_ORGANIZATION_QUERY",
+    "UPDATE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION",
     "UPDATE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION",
     "UPDATE_AI_KNOWLEDGE_BASE_PLAIN_TEXT_MUTATION",
 ]

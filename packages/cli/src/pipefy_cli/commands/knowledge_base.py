@@ -1,19 +1,24 @@
-"""AI knowledge bases (pipe-scoped): list, plain text/document CRUD, and access probe."""
+"""AI knowledge bases (pipe-scoped): list, plain text/document/data lookup CRUD, and access probe."""
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import typer
 from pipefy_sdk import KnowledgeBaseDocumentUploadError, PipefyClient
 
 from pipefy_cli.commands._common import (
     confirm_destructive,
+    parse_json_value,
     run_cli_command,
 )
 
 kb_app = typer.Typer(
-    help="AI knowledge bases (pipe-scoped: list, plain text/document CRUD, access probe).",
+    help=(
+        "AI knowledge bases (pipe-scoped: list, plain text/document/data "
+        "lookup CRUD, access probe)."
+    ),
     no_args_is_help=True,
 )
 plain_text_app = typer.Typer(help="Knowledge base plain texts.", no_args_is_help=True)
@@ -22,6 +27,11 @@ document_app = typer.Typer(
     help="Knowledge base documents (one-shot PDF upload).", no_args_is_help=True
 )
 kb_app.add_typer(document_app, name="document")
+data_lookup_app = typer.Typer(
+    help="Knowledge base data lookups (search cards in a source pipe).",
+    no_args_is_help=True,
+)
+kb_app.add_typer(data_lookup_app, name="data-lookup")
 
 _PIPE_UUID_HELP = "Pipe UUID (not the numeric ID; `pipefy pipe get` shows the uuid)."
 
@@ -347,6 +357,195 @@ def kb_document_delete(
 
     async def factory(client: PipefyClient):
         return await client.delete_ai_knowledge_base_document(document_id, pipe_uuid)
+
+    run_cli_command(ctx, json_out, factory, exit_1_on_unsuccessful=True)
+
+
+_SOURCE_REPO_HELP = "Numeric ID of the source pipe to look up data from."
+_OUTPUT_FIELDS_HELP = (
+    "JSON array of field IDs whose values matching records return (1-30)."
+)
+_CONDITIONS_HELP = (
+    "JSON array of condition objects. Each needs field + operator, and either "
+    'a string value (static) or "usingFillWithAi": true with '
+    "inputName/inputType/inputDescription (AI-filled)."
+)
+_SEARCH_QUERY_HELP = (
+    "Backend-defined search mode marker; leave unset unless you know the "
+    "backend value you need."
+)
+
+
+def _parse_data_lookup_options(
+    output_fields: str, conditions: str
+) -> tuple[list[str], list[dict[str, Any]]]:
+    """Parse the JSON-array options shared by data lookup create/update."""
+    parsed_fields = parse_json_value(output_fields, "--output-fields")
+    if not isinstance(parsed_fields, list) or not all(
+        isinstance(f, str) for f in parsed_fields
+    ):
+        raise typer.BadParameter("--output-fields must be a JSON array of strings")
+    parsed_conditions = parse_json_value(conditions, "--conditions")
+    if not isinstance(parsed_conditions, list) or not all(
+        isinstance(c, dict) for c in parsed_conditions
+    ):
+        raise typer.BadParameter("--conditions must be a JSON array of objects")
+    return parsed_fields, parsed_conditions
+
+
+@data_lookup_app.command("get")
+def kb_data_lookup_get(
+    ctx: typer.Context,
+    data_lookup_id: str = typer.Option(
+        ..., "--id", help="Knowledge base data lookup ID (from `pipefy kb list`)."
+    ),
+    pipe_uuid: str = typer.Option(..., "--pipe-uuid", help=_PIPE_UUID_HELP),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
+) -> None:
+    """Fetch one knowledge base data lookup (``get_ai_knowledge_base_data_lookup``).
+
+    The payload never includes ``conditions`` (the API does not expose them on
+    reads); keep the lookup definition client-side. Exits 1 with ``success:
+    false`` when the API resolves no data lookup for the id (mirrors the MCP
+    tool's not-found handling).
+    """
+
+    async def factory(client: PipefyClient):
+        data_lookup = await client.get_ai_knowledge_base_data_lookup(
+            data_lookup_id, pipe_uuid
+        )
+        if not data_lookup:
+            return _kb_not_found("Knowledge base data lookup", data_lookup_id)
+        return {"success": True, "knowledge_base_data_lookup": data_lookup}
+
+    run_cli_command(ctx, json_out, factory, exit_1_on_unsuccessful=True)
+
+
+@data_lookup_app.command("create")
+def kb_data_lookup_create(
+    ctx: typer.Context,
+    pipe_uuid: str = typer.Option(..., "--pipe-uuid", help=_PIPE_UUID_HELP),
+    name: str = typer.Option(..., "--name", help="Display name (required)."),
+    description: str = typer.Option(
+        ..., "--description", help="Description (required, 1-900 characters)."
+    ),
+    source_repo_id: str = typer.Option(..., "--source-repo-id", help=_SOURCE_REPO_HELP),
+    output_fields: str = typer.Option(..., "--output-fields", help=_OUTPUT_FIELDS_HELP),
+    conditions: str = typer.Option(..., "--conditions", help=_CONDITIONS_HELP),
+    search_query: str | None = typer.Option(
+        None, "--search-query", help=_SEARCH_QUERY_HELP
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
+) -> None:
+    """Create a knowledge base data lookup (``create_ai_knowledge_base_data_lookup``).
+
+    Gated on the read-access probe. The definition is validated client-side:
+    ``--source-repo-id`` must be numeric, ``--output-fields`` takes 1-30 field
+    IDs, and every condition is typed (static conditions need a string
+    ``value``; AI-filled ones need the input trio). Reads never return
+    conditions, so keep the definition you send as the source of truth.
+    """
+    fields, condition_list = _parse_data_lookup_options(output_fields, conditions)
+
+    async def factory(client: PipefyClient):
+        gate = await _probe_gate(client, pipe_uuid)
+        if gate is not None:
+            return gate
+        data_lookup = await client.create_ai_knowledge_base_data_lookup(
+            pipe_uuid,
+            name=name,
+            description=description,
+            source_repo_id=source_repo_id,
+            output_fields=fields,
+            conditions=condition_list,
+            search_query=search_query,
+        )
+        return {"success": True, "knowledge_base_data_lookup": data_lookup}
+
+    run_cli_command(ctx, json_out, factory, exit_1_on_unsuccessful=True)
+
+
+@data_lookup_app.command("update")
+def kb_data_lookup_update(
+    ctx: typer.Context,
+    data_lookup_id: str = typer.Option(
+        ..., "--id", help="Knowledge base data lookup ID to update."
+    ),
+    pipe_uuid: str = typer.Option(..., "--pipe-uuid", help=_PIPE_UUID_HELP),
+    source_repo_id: str = typer.Option(..., "--source-repo-id", help=_SOURCE_REPO_HELP),
+    output_fields: str = typer.Option(..., "--output-fields", help=_OUTPUT_FIELDS_HELP),
+    conditions: str = typer.Option(
+        ...,
+        "--conditions",
+        help=_CONDITIONS_HELP + " Pass the complete set, not a delta.",
+    ),
+    search_query: str | None = typer.Option(
+        None, "--search-query", help=_SEARCH_QUERY_HELP + " Omitted means cleared."
+    ),
+    name: str | None = typer.Option(None, "--name", help="New name (non-blank)."),
+    description: str | None = typer.Option(
+        None, "--description", help="New description (1-900 characters)."
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
+) -> None:
+    """Update a knowledge base data lookup by replacing its full definition (``update_ai_knowledge_base_data_lookup``).
+
+    Every update rewrites the stored definition with exactly what this call
+    carries: ``--source-repo-id``, ``--output-fields``, and ``--conditions``
+    are required every time, and omitting ``--search-query`` clears it. Only
+    ``--name``/``--description`` are partial. Gated on the read-access probe.
+    """
+    fields, condition_list = _parse_data_lookup_options(output_fields, conditions)
+
+    async def factory(client: PipefyClient):
+        gate = await _probe_gate(client, pipe_uuid)
+        if gate is not None:
+            return gate
+        data_lookup = await client.update_ai_knowledge_base_data_lookup(
+            data_lookup_id,
+            pipe_uuid,
+            source_repo_id=source_repo_id,
+            output_fields=fields,
+            conditions=condition_list,
+            search_query=search_query,
+            name=name,
+            description=description,
+        )
+        return {"success": True, "knowledge_base_data_lookup": data_lookup}
+
+    run_cli_command(ctx, json_out, factory, exit_1_on_unsuccessful=True)
+
+
+@data_lookup_app.command("delete")
+def kb_data_lookup_delete(
+    ctx: typer.Context,
+    data_lookup_id: str = typer.Option(
+        ..., "--id", help="Knowledge base data lookup ID to delete."
+    ),
+    pipe_uuid: str = typer.Option(..., "--pipe-uuid", help=_PIPE_UUID_HELP),
+    yes: bool = typer.Option(
+        False, "--yes", "-y", help="Skip the confirmation prompt."
+    ),
+    json_out: bool = typer.Option(
+        False, "--json", "-j", help="Print machine-readable JSON to stdout."
+    ),
+) -> None:
+    """Delete a knowledge base data lookup permanently (``delete_ai_knowledge_base_data_lookup``)."""
+    confirm_destructive(
+        yes=yes,
+        description=f"knowledge base data lookup {data_lookup_id}",
+    )
+
+    async def factory(client: PipefyClient):
+        return await client.delete_ai_knowledge_base_data_lookup(
+            data_lookup_id, pipe_uuid
+        )
 
     run_cli_command(ctx, json_out, factory, exit_1_on_unsuccessful=True)
 

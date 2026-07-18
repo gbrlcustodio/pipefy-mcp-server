@@ -35,6 +35,7 @@ from pipefy_sdk.models.comment import (
     DeleteCommentInput,
     UpdateCommentInput,
 )
+from pipefy_sdk.models.knowledge_base import DataLookupCondition
 from pipefy_sdk.models.member_invite import MemberInvite
 from pipefy_sdk.models.portal import (
     CreatePortalElementInput,
@@ -63,6 +64,7 @@ __all__ = [
     "CreateAiAutomationInput",
     "CreatePortalElementInput",
     "CreateSendTaskAutomationInput",
+    "DataLookupCondition",
     "DeleteCommentInput",
     "MemberInvite",
     "NonBlankStr",

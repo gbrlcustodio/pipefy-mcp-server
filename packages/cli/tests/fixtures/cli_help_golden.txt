@@ -58,8 +58,8 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │ graphql           Execute arbitrary GraphQL (mutations require --yes). See   │
 │                   docs/cli/self-healing.md.                                  │
 │ introspect        Discover GraphQL types and operations (JSON default).      │
-│ kb                AI knowledge bases (pipe-scoped: list, plain text/document │
-│                   CRUD, access probe).                                       │
+│ kb                AI knowledge bases (pipe-scoped: list, plain               │
+│                   text/document/data lookup CRUD, access probe).             │
 │ export            Bulk exports (automation jobs).                            │
 │ org               Organization operations.                                   │
 │ report-org        Organization reports.                                      │
@@ -1652,8 +1652,8 @@ Usage: pipefy introspect type [OPTIONS] NAME
 ### HELP kb
 Usage: pipefy kb [OPTIONS] COMMAND [ARGS]...
 
- AI knowledge bases (pipe-scoped: list, plain text/document CRUD, access
- probe).
+ AI knowledge bases (pipe-scoped: list, plain text/document/data lookup CRUD,
+ access probe).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
@@ -1665,6 +1665,144 @@ Usage: pipefy kb [OPTIONS] COMMAND [ARGS]...
 │                   (``validate_knowledge_base_access``).                      │
 │ plain-text        Knowledge base plain texts.                                │
 │ document          Knowledge base documents (one-shot PDF upload).            │
+│ data-lookup       Knowledge base data lookups (search cards in a source      │
+│                   pipe).                                                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/data-lookup
+Usage: pipefy kb data-lookup [OPTIONS] COMMAND [ARGS]...
+
+ Knowledge base data lookups (search cards in a source pipe).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get      Fetch one knowledge base data lookup                                │
+│          (``get_ai_knowledge_base_data_lookup``).                            │
+│ create   Create a knowledge base data lookup                                 │
+│          (``create_ai_knowledge_base_data_lookup``).                         │
+│ update   Update a knowledge base data lookup by replacing its full           │
+│          definition (``update_ai_knowledge_base_data_lookup``).              │
+│ delete   Delete a knowledge base data lookup permanently                     │
+│          (``delete_ai_knowledge_base_data_lookup``).                         │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/data-lookup/create
+Usage: pipefy kb data-lookup create [OPTIONS]
+
+ Create a knowledge base data lookup
+ (``create_ai_knowledge_base_data_lookup``).
+
+ Gated on the read-access probe. The definition is validated client-side:
+ ``--source-repo-id`` must be numeric, ``--output-fields`` takes 1-30 field
+ IDs, and every condition is typed (static conditions need a string ``value``;
+ AI-filled ones need the input trio). Reads never return conditions, so keep
+ the definition you send as the source of truth.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe-uuid               TEXT  Pipe UUID (not the numeric ID; `pipefy    │
+│                                    pipe get` shows the uuid).                │
+│                                    [required]                                │
+│ *  --name                    TEXT  Display name (required). [required]       │
+│ *  --description             TEXT  Description (required, 1-900 characters). │
+│                                    [required]                                │
+│ *  --source-repo-id          TEXT  Numeric ID of the source pipe to look up  │
+│                                    data from.                                │
+│                                    [required]                                │
+│ *  --output-fields           TEXT  JSON array of field IDs whose values      │
+│                                    matching records return (1-30).           │
+│                                    [required]                                │
+│ *  --conditions              TEXT  JSON array of condition objects. Each     │
+│                                    needs field + operator, and either a      │
+│                                    string value (static) or                  │
+│                                    "usingFillWithAi": true with              │
+│                                    inputName/inputType/inputDescription      │
+│                                    (AI-filled).                              │
+│                                    [required]                                │
+│    --search-query            TEXT  Backend-defined search mode marker; leave │
+│                                    unset unless you know the backend value   │
+│                                    you need.                                 │
+│    --json            -j            Print machine-readable JSON to stdout.    │
+│    --help                          Show this message and exit.               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/data-lookup/delete
+Usage: pipefy kb data-lookup delete [OPTIONS]
+
+ Delete a knowledge base data lookup permanently
+ (``delete_ai_knowledge_base_data_lookup``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base data lookup ID to delete.       │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --yes        -y            Skip the confirmation prompt.                  │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/data-lookup/get
+Usage: pipefy kb data-lookup get [OPTIONS]
+
+ Fetch one knowledge base data lookup (``get_ai_knowledge_base_data_lookup``).
+
+ The payload never includes ``conditions`` (the API does not expose them on
+ reads); keep the lookup definition client-side. Exits 1 with ``success:
+ false`` when the API resolves no data lookup for the id (mirrors the MCP
+ tool's not-found handling).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base data lookup ID (from `pipefy kb │
+│                               list`).                                        │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/data-lookup/update
+Usage: pipefy kb data-lookup update [OPTIONS]
+
+ Update a knowledge base data lookup by replacing its full definition
+ (``update_ai_knowledge_base_data_lookup``).
+
+ Every update rewrites the stored definition with exactly what this call
+ carries: ``--source-repo-id``, ``--output-fields``, and ``--conditions`` are
+ required every time, and omitting ``--search-query`` clears it. Only
+ ``--name``/``--description`` are partial. Gated on the read-access probe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                      TEXT  Knowledge base data lookup ID to update.  │
+│                                    [required]                                │
+│ *  --pipe-uuid               TEXT  Pipe UUID (not the numeric ID; `pipefy    │
+│                                    pipe get` shows the uuid).                │
+│                                    [required]                                │
+│ *  --source-repo-id          TEXT  Numeric ID of the source pipe to look up  │
+│                                    data from.                                │
+│                                    [required]                                │
+│ *  --output-fields           TEXT  JSON array of field IDs whose values      │
+│                                    matching records return (1-30).           │
+│                                    [required]                                │
+│ *  --conditions              TEXT  JSON array of condition objects. Each     │
+│                                    needs field + operator, and either a      │
+│                                    string value (static) or                  │
+│                                    "usingFillWithAi": true with              │
+│                                    inputName/inputType/inputDescription      │
+│                                    (AI-filled). Pass the complete set, not a │
+│                                    delta.                                    │
+│                                    [required]                                │
+│    --search-query            TEXT  Backend-defined search mode marker; leave │
+│                                    unset unless you know the backend value   │
+│                                    you need. Omitted means cleared.          │
+│    --name                    TEXT  New name (non-blank).                     │
+│    --description             TEXT  New description (1-900 characters).       │
+│    --json            -j            Print machine-readable JSON to stdout.    │
+│    --help                          Show this message and exit.               │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP kb/document

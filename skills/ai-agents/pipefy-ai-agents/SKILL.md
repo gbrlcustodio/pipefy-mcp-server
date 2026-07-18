@@ -4,7 +4,7 @@ description: >
   Use this skill when the user wants to create, read, update, delete,
   or troubleshoot AI agents (conversational agents with behaviors).
   Covers 7 MCP tools including pre-flight validation, plus pipe-scoped
-  knowledge bases (list, plain text and document CRUD, access probe) attached via dataSourceIds.
+  knowledge bases (list, plain text/document/data lookup CRUD, access probe) attached via dataSourceIds.
   For traditional automations and AI automations, see skills/automations/.
 tags: [pipefy, ai-agents, behaviors, conversational]
 ---
@@ -191,6 +191,10 @@ Knowledge bases are pipe-scoped data sources an agent draws on. Attach one by pu
 | `create_ai_knowledge_base_document` | `pipefy kb document create` | No | Upload a local PDF in one shot (`file_path`/`--file`, `name`, `description` 1-900). `.pdf` + 20 MiB cap client-side; indexing is async. |
 | `update_ai_knowledge_base_document` | `pipefy kb document update` | No | Metadata-only update (name/description); no file replacement. |
 | `delete_ai_knowledge_base_document` | `pipefy kb document delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
+| `get_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup get` | Yes | Fetch one data lookup; the payload never includes `conditions` — keep the definition client-side. |
+| `create_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup create` | No | Create a data lookup (`name`, `description` 1-900, `source_repo_id` numeric pipe ID, `output_fields` 1-30, `conditions` — all required). |
+| `update_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup update` | No | Full replacement: resend `source_repo_id`/`output_fields`/`conditions` every call; omitted `search_query` clears it; only name/description are partial. |
+| `delete_ai_knowledge_base_data_lookup` | `pipefy kb data-lookup delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
 | `validate_knowledge_base_access` | `pipefy kb validate-access` | Yes | Probe read access before writes. |
 
 ### Flow: validate-access → create plain text → attach
@@ -200,6 +204,21 @@ Knowledge bases are pipe-scoped data sources an agent draws on. Attach one by pu
 3. **Attach** — add that `id` to a behavior's `dataSourceIds` (or the agent-level `data_source_ids`) when calling `create_ai_agent` / `update_ai_agent`. Validate first with `validate_ai_agent_behaviors(pipe_id, behaviors, data_source_ids=[...])` — unknown IDs surface as warnings.
 
 For a **PDF document** instead of plain text, use `create_ai_knowledge_base_document(pipe_uuid, name, description, file_path)` (CLI: `pipefy kb document create --file …`) at step 2. It uploads the local PDF in one shot; `.pdf` and the 20 MiB cap are enforced client-side, and indexing is asynchronous (the document may not be searchable immediately). The rest of the flow is identical — keep the returned `id` and attach it.
+
+### Data lookups: create with an AI-filled condition → attach → update (full replacement)
+
+A **data lookup** lets the agent search cards in a source pipe by conditions and return selected field values. Same flow as above at step 2, with three rules of its own:
+
+1. **Create** — `create_ai_knowledge_base_data_lookup(pipe_uuid, name, description, source_repo_id, output_fields, conditions)` (CLI: `pipefy kb data-lookup create --source-repo-id … --output-fields '[…]' --conditions '[…]'`). `source_repo_id` is the **numeric** ID of the source pipe (a UUID is accepted by the API but the lookup then breaks when the agent runs it). `output_fields` takes 1-30 field IDs (field slugs plus static fields like `id`, `title`, `created_at`). Each condition needs `field` + `operator` (opaque backend string, e.g. `"eq"`, `"contains"`) and is either **static** (string `value` required) or **AI-filled** — the AI asks the user for the value at runtime:
+
+   ```json
+   [{"field": "customer_email", "operator": "eq", "usingFillWithAi": true,
+     "inputName": "Customer email", "inputType": "text",
+     "inputDescription": "The customer's email address"}]
+   ```
+
+2. **Attach** — keep the returned `id` and add it to `dataSourceIds`, exactly as for the other kinds. **Also keep the definition you sent**: reads never return `conditions`, so your copy is the only complete record of the lookup.
+3. **Update replaces everything** — `update_ai_knowledge_base_data_lookup` requires `source_repo_id`, `output_fields`, and `conditions` on every call (the complete condition set, not a delta), and omitting `search_query` clears it. Only `name`/`description` keep their stored values when omitted.
 
 ---
 

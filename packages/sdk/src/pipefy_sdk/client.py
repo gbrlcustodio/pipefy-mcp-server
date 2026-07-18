@@ -35,6 +35,7 @@ from pipefy_sdk.models.attachment import (
     AttachmentTarget,
     AttachmentUploadResult,
 )
+from pipefy_sdk.models.knowledge_base import DataLookupCondition
 from pipefy_sdk.services.advanced_automations_service import AdvancedAutomationsService
 from pipefy_sdk.services.ai_agent_service import AiAgentService
 from pipefy_sdk.services.attachment_service import AttachmentService
@@ -83,6 +84,7 @@ from pipefy_sdk.services.types import (
     AutomationServiceResult,
     CardSearch,
     KnowledgeBaseAccessProbeResult,
+    KnowledgeBaseDataLookupPayload,
     KnowledgeBaseDeleteResult,
     KnowledgeBaseDocumentPayload,
     KnowledgeBasePayload,
@@ -1071,6 +1073,68 @@ class PipefyClient:
         """Delete a pipe-scoped knowledge base document (permanent)."""
         return await self._knowledge_base_service.delete_ai_knowledge_base_document(
             document_id, pipe_uuid
+        )
+
+    async def get_ai_knowledge_base_data_lookup(
+        self, data_lookup_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDataLookupPayload:
+        """Fetch one pipe-scoped knowledge base data lookup by id (reads never include conditions)."""
+        return await self._knowledge_base_service.get_ai_knowledge_base_data_lookup(
+            data_lookup_id, pipe_uuid
+        )
+
+    async def create_ai_knowledge_base_data_lookup(
+        self,
+        pipe_uuid: str,
+        *,
+        name: str,
+        description: str,
+        source_repo_id: str,
+        output_fields: list[str],
+        conditions: list[dict[str, Any] | DataLookupCondition],
+        search_query: str | None = None,
+    ) -> KnowledgeBaseDataLookupPayload:
+        """Create a pipe-scoped knowledge base data lookup (definition validated client-side)."""
+        return await self._knowledge_base_service.create_ai_knowledge_base_data_lookup(
+            pipe_uuid,
+            name=name,
+            description=description,
+            source_repo_id=source_repo_id,
+            output_fields=output_fields,
+            conditions=conditions,
+            search_query=search_query,
+        )
+
+    async def update_ai_knowledge_base_data_lookup(
+        self,
+        data_lookup_id: str,
+        pipe_uuid: str,
+        *,
+        source_repo_id: str,
+        output_fields: list[str],
+        conditions: list[dict[str, Any] | DataLookupCondition],
+        search_query: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> KnowledgeBaseDataLookupPayload:
+        """Update a knowledge base data lookup (full replacement of the definition)."""
+        return await self._knowledge_base_service.update_ai_knowledge_base_data_lookup(
+            data_lookup_id,
+            pipe_uuid,
+            source_repo_id=source_repo_id,
+            output_fields=output_fields,
+            conditions=conditions,
+            search_query=search_query,
+            name=name,
+            description=description,
+        )
+
+    async def delete_ai_knowledge_base_data_lookup(
+        self, data_lookup_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDeleteResult:
+        """Delete a pipe-scoped knowledge base data lookup (permanent)."""
+        return await self._knowledge_base_service.delete_ai_knowledge_base_data_lookup(
+            data_lookup_id, pipe_uuid
         )
 
     async def validate_knowledge_base_access(

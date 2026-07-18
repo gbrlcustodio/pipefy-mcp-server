@@ -431,6 +431,27 @@ async def test_upload_attachment_s3_http_error_carries_snippet_and_status(tmp_pa
 
 @pytest.mark.unit
 @pytest.mark.asyncio
+async def test_upload_attachment_s3_put_exception_tagged_s3_upload(tmp_path):
+    """A raising PUT (transport error, allowlist rejection) carries the step tag."""
+    service, _ = _make_service()
+    service._s3_uploader.put = AsyncMock(
+        side_effect=ConnectionError("connection reset by peer")
+    )
+    attachment = _build_attachment(tmp_path, name="a.bin")
+
+    with pytest.raises(AttachmentUploadError) as ctx:
+        await service.upload_attachment(
+            attachment,
+            organization_id="org-1",
+            target=CardTarget(card_id="c1", field_id="f"),
+        )
+    assert ctx.value.step == "s3_upload"
+    assert "connection reset by peer" in str(ctx.value)
+    assert isinstance(ctx.value.__cause__, ConnectionError)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_upload_attachment_extract_storage_path_failure_maps_to_s3_step(tmp_path):
     """A ValueError from path parsing is reported under ``step=s3_upload``."""
     service, _ = _make_service(

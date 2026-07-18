@@ -18,6 +18,7 @@ from pipefy_mcp.tools.pagination_helpers import (
     build_pagination_info,
     validate_page_size,
 )
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.report_tool_helpers import (
     build_report_error_payload,
     build_report_mutation_success_payload,
@@ -42,6 +43,7 @@ class ReportTools:
     def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_reports(
             pipe_uuid: str,
@@ -104,6 +106,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_report(
             ctx: Context[ServerSession, None],
@@ -162,6 +165,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_report_columns(
             pipe_uuid: str,
@@ -198,6 +202,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_report_filterable_fields(
             pipe_uuid: str,
@@ -233,6 +238,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_organization_report(
             report_id: PipefyId,
@@ -266,6 +272,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_organization_reports(
             organization_id: PipefyId,
@@ -317,6 +324,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_pipe_report_export(
             export_id: PipefyId,
@@ -350,6 +358,7 @@ class ReportTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_organization_report_export(
             export_id: PipefyId,

@@ -458,11 +458,18 @@ class KnowledgeBaseService:
                 step="presigned_url",
             )
 
-        put_result = await self._s3_uploader.put(
-            url=upload_url.strip(),
-            bytes_=file.bytes,
-            content_type=DOCUMENT_CONTENT_TYPE,
-        )
+        try:
+            put_result = await self._s3_uploader.put(
+                url=upload_url.strip(),
+                bytes_=file.bytes,
+                content_type=DOCUMENT_CONTENT_TYPE,
+            )
+        except Exception as exc:
+            # Transport errors and the uploader's host-allowlist rejection are
+            # s3_upload-stage failures; tag them so the step contract holds.
+            raise KnowledgeBaseDocumentUploadError(
+                f"S3 upload failed: {exc}", step="s3_upload"
+            ) from exc
         status = put_result.get("status_code", 0)
         if not isinstance(status, int) or status >= 400:
             body_snippet = put_result.get("body_snippet")

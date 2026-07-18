@@ -336,6 +336,34 @@ def test_kb_document_get_json(runner, clean_pipefy_env, saved_cwd, monkeypatch):
     mock_client.get_ai_knowledge_base_document.assert_awaited_once_with("kb-2", "p")
 
 
+def test_kb_document_get_empty_result_exits_1(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    """Missing id resolves to `{}` from the SDK; the CLI must not report success."""
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.get_ai_knowledge_base_document = AsyncMock(return_value={})
+
+    with _client_patch(mock_client):
+        result = runner.invoke(
+            app,
+            [
+                "kb",
+                "document",
+                "get",
+                "--id",
+                "kb-missing",
+                "--pipe-uuid",
+                "pipe-uuid-1",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["success"] is False
+    assert "not found" in data["error"].lower()
+
+
 def test_kb_document_create_gated_success(
     runner, clean_pipefy_env, saved_cwd, monkeypatch, tmp_path
 ):

@@ -218,14 +218,24 @@ def kb_document_get(
 ) -> None:
     """Fetch one knowledge base document (``get_ai_knowledge_base_document``).
 
-    ``content`` is the stored document URL, not the extracted text.
+    ``content`` is the stored document URL, not the extracted text. Exits 1
+    with ``success: false`` when the API resolves no document for the id
+    (mirrors the MCP tool's not-found handling).
     """
 
     async def factory(client: PipefyClient):
         document = await client.get_ai_knowledge_base_document(document_id, pipe_uuid)
+        if not document:
+            return {
+                "success": False,
+                "error": (
+                    f"Knowledge base document not found: {document_id}. "
+                    "Use `pipefy kb list` to list knowledge base IDs for the pipe."
+                ),
+            }
         return {"success": True, "knowledge_base_document": document}
 
-    run_cli_command(ctx, json_out, factory)
+    run_cli_command(ctx, json_out, factory, exit_1_on_unsuccessful=True)
 
 
 @document_app.command("create")

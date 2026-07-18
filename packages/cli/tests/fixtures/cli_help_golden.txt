@@ -1733,7 +1733,9 @@ Usage: pipefy kb document get [OPTIONS]
 
  Fetch one knowledge base document (``get_ai_knowledge_base_document``).
 
- ``content`` is the stored document URL, not the extracted text.
+ ``content`` is the stored document URL, not the extracted text. Exits 1 with
+ ``success: false`` when the API resolves no document for the id (mirrors the
+ MCP tool's not-found handling).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ *  --id                 TEXT  Knowledge base document ID (from `pipefy kb    │

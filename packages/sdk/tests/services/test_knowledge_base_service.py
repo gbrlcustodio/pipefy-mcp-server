@@ -638,6 +638,34 @@ class TestCreateDocument:
         assert executor.execute_query.await_count == 2
 
     @pytest.mark.anyio
+    async def test_s3_put_exception_tagged_s3_upload(self, tmp_path):
+        """A raising PUT (transport error, allowlist rejection) carries the step tag."""
+        executor = mock_executor(
+            side_effect=[
+                {"pipe": {"organization": {"id": "300514213"}}},
+                {
+                    "createPresignedUrl": {
+                        "url": _UPLOAD_URL,
+                        "downloadUrl": _DOWNLOAD_URL,
+                    }
+                },
+            ]
+        )
+        uploader = _FakeUploader(error=ConnectionError("connection reset by peer"))
+        service = KnowledgeBaseService(executor=executor, s3_uploader=uploader)
+        pdf = _write_pdf(tmp_path)
+
+        with pytest.raises(KnowledgeBaseDocumentUploadError) as exc_info:
+            await service.create_ai_knowledge_base_document(
+                "p", name="n", description="d", file_path=pdf
+            )
+
+        assert exc_info.value.step == "s3_upload"
+        assert "connection reset by peer" in str(exc_info.value)
+        # the create mutation (third call) never ran
+        assert executor.execute_query.await_count == 2
+
+    @pytest.mark.anyio
     async def test_create_mutation_failure_tagged_kb_create(self, tmp_path):
         executor = mock_executor(
             side_effect=[

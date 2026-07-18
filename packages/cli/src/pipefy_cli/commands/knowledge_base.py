@@ -26,6 +26,21 @@ kb_app.add_typer(document_app, name="document")
 _PIPE_UUID_HELP = "Pipe UUID (not the numeric ID; `pipefy pipe get` shows the uuid)."
 
 
+def _kb_not_found(kind: str, resource_id: str) -> dict[str, object]:
+    """Failure payload for a per-id get whose id resolved to nothing.
+
+    Shared by every pipe-scoped knowledge base kind (plain text, document,
+    data lookup) so the not-found envelope and discovery hint stay identical.
+    """
+    return {
+        "success": False,
+        "error": (
+            f"{kind} not found: {resource_id}. "
+            "Use `pipefy kb list` to list knowledge base IDs for the pipe."
+        ),
+    }
+
+
 @kb_app.command("list")
 def kb_list(
     ctx: typer.Context,
@@ -91,13 +106,7 @@ def kb_plain_text_get(
             plain_text_id, pipe_uuid
         )
         if not plain_text:
-            return {
-                "success": False,
-                "error": (
-                    f"Knowledge base plain text not found: {plain_text_id}. "
-                    "Use `pipefy kb list` to list knowledge base IDs for the pipe."
-                ),
-            }
+            return _kb_not_found("Knowledge base plain text", plain_text_id)
         return {"success": True, "knowledge_base_plain_text": plain_text}
 
     run_cli_command(ctx, json_out, factory, exit_1_on_unsuccessful=True)
@@ -226,13 +235,7 @@ def kb_document_get(
     async def factory(client: PipefyClient):
         document = await client.get_ai_knowledge_base_document(document_id, pipe_uuid)
         if not document:
-            return {
-                "success": False,
-                "error": (
-                    f"Knowledge base document not found: {document_id}. "
-                    "Use `pipefy kb list` to list knowledge base IDs for the pipe."
-                ),
-            }
+            return _kb_not_found("Knowledge base document", document_id)
         return {"success": True, "knowledge_base_document": document}
 
     run_cli_command(ctx, json_out, factory, exit_1_on_unsuccessful=True)

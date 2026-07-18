@@ -38,6 +38,18 @@ DOCUMENT_FULL = {
     "updatedAt": "2026-07-16T00:00:00Z",
 }
 
+DATA_LOOKUP_FULL = {
+    "id": "kb-3",
+    "name": "Order lookup",
+    "description": "Find orders by customer email",
+    "sourceRepoId": "303088927",
+    "searchQuery": None,
+    "outputFields": ["title", "status"],
+    "updatedAt": "2026-07-18T00:00:00Z",
+}
+
+STATIC_CONDITION = {"field": "title", "operator": "contains", "value": "urgent"}
+
 
 def permission_denied_error() -> TransportQueryError:
     return TransportQueryError(
@@ -75,6 +87,10 @@ def mock_kb_client():
     client.create_ai_knowledge_base_document = AsyncMock()
     client.update_ai_knowledge_base_document = AsyncMock()
     client.delete_ai_knowledge_base_document = AsyncMock()
+    client.get_ai_knowledge_base_data_lookup = AsyncMock()
+    client.create_ai_knowledge_base_data_lookup = AsyncMock()
+    client.update_ai_knowledge_base_data_lookup = AsyncMock()
+    client.delete_ai_knowledge_base_data_lookup = AsyncMock()
     client.validate_knowledge_base_access = AsyncMock()
     return client
 
@@ -579,3 +595,214 @@ async def test_delete_document_with_confirm_executes(
     mock_kb_client.delete_ai_knowledge_base_document.assert_awaited_once_with(
         "kb-2", "pipe-uuid-1"
     )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_get_data_lookup_success(
+    kb_session, mock_kb_client, unified_envelope, extract_payload
+):
+    mock_kb_client.get_ai_knowledge_base_data_lookup = AsyncMock(
+        return_value=DATA_LOOKUP_FULL
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_base_data_lookup",
+            {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-1"},
+        )
+    assert result.isError is False
+    mock_kb_client.get_ai_knowledge_base_data_lookup.assert_awaited_once_with(
+        "kb-3", "pipe-uuid-1"
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"]["knowledge_base_data_lookup"] == DATA_LOOKUP_FULL
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_get_data_lookup_not_found(kb_session, mock_kb_client, extract_payload):
+    mock_kb_client.get_ai_knowledge_base_data_lookup = AsyncMock(return_value={})
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_base_data_lookup",
+            {"data_lookup_id": "kb-x", "pipe_uuid": "pipe-uuid-1"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    message = tool_error_message(payload)
+    assert "not found" in message.lower()
+    assert "get_ai_knowledge_bases" in message
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_create_data_lookup_success(
+    kb_session, mock_kb_client, unified_envelope, extract_payload
+):
+    mock_kb_client.create_ai_knowledge_base_data_lookup = AsyncMock(
+        return_value=DATA_LOOKUP_FULL
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "create_ai_knowledge_base_data_lookup",
+            {
+                "pipe_uuid": "pipe-uuid-1",
+                "name": "Order lookup",
+                "description": "Find orders",
+                "source_repo_id": "303088927",
+                "output_fields": ["title"],
+                "conditions": [STATIC_CONDITION],
+            },
+        )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"]["knowledge_base_data_lookup"] == DATA_LOOKUP_FULL
+    mock_kb_client.create_ai_knowledge_base_data_lookup.assert_awaited_once_with(
+        "pipe-uuid-1",
+        name="Order lookup",
+        description="Find orders",
+        source_repo_id="303088927",
+        output_fields=["title"],
+        conditions=[STATIC_CONDITION],
+        search_query=None,
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_create_data_lookup_definition_value_error_mapped(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.create_ai_knowledge_base_data_lookup = AsyncMock(
+        side_effect=ValueError(
+            "source_repo_id must be the numeric pipe ID (a pipe UUID is "
+            "accepted by the API but breaks the lookup when an agent runs it)"
+        )
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "create_ai_knowledge_base_data_lookup",
+            {
+                "pipe_uuid": "pipe-uuid-1",
+                "name": "Order lookup",
+                "description": "Find orders",
+                "source_repo_id": "5f66417e-5adc-4c83-908f-0b888493c847",
+                "output_fields": ["title"],
+                "conditions": [STATIC_CONDITION],
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "numeric pipe ID" in tool_error_message(payload)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_update_data_lookup_success(
+    kb_session, mock_kb_client, unified_envelope, extract_payload
+):
+    mock_kb_client.update_ai_knowledge_base_data_lookup = AsyncMock(
+        return_value=DATA_LOOKUP_FULL
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "update_ai_knowledge_base_data_lookup",
+            {
+                "data_lookup_id": "kb-3",
+                "pipe_uuid": "pipe-uuid-1",
+                "source_repo_id": "303088927",
+                "output_fields": ["title"],
+                "conditions": [STATIC_CONDITION],
+                "name": "Renamed",
+            },
+        )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    mock_kb_client.update_ai_knowledge_base_data_lookup.assert_awaited_once_with(
+        "kb-3",
+        "pipe-uuid-1",
+        source_repo_id="303088927",
+        output_fields=["title"],
+        conditions=[STATIC_CONDITION],
+        search_query=None,
+        name="Renamed",
+        description=None,
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_update_data_lookup_requires_full_definition_in_schema(kb_session):
+    """The tool schema itself enforces the full-definition contract."""
+    async with kb_session as session:
+        tools = await session.list_tools()
+    tool = next(
+        t for t in tools.tools if t.name == "update_ai_knowledge_base_data_lookup"
+    )
+    assert set(tool.inputSchema["required"]) >= {
+        "data_lookup_id",
+        "pipe_uuid",
+        "source_repo_id",
+        "output_fields",
+        "conditions",
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_delete_data_lookup_preview_without_confirm(
+    kb_session, mock_kb_client, extract_payload
+):
+    async with kb_session as session:
+        result = await session.call_tool(
+            "delete_ai_knowledge_base_data_lookup",
+            {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-1"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["requires_confirmation"] is True
+    mock_kb_client.delete_ai_knowledge_base_data_lookup.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_delete_data_lookup_with_confirm_executes(
+    kb_session, mock_kb_client, unified_envelope, extract_payload
+):
+    mock_kb_client.delete_ai_knowledge_base_data_lookup = AsyncMock(
+        return_value={"success": True, "errors": []}
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "delete_ai_knowledge_base_data_lookup",
+            {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-1", "confirm": True},
+        )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    mock_kb_client.delete_ai_knowledge_base_data_lookup.assert_awaited_once_with(
+        "kb-3", "pipe-uuid-1"
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_get_data_lookup_permission_denied_classified(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.get_ai_knowledge_base_data_lookup = AsyncMock(
+        side_effect=permission_denied_error()
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_base_data_lookup",
+            {"data_lookup_id": "kb-3", "pipe_uuid": "pipe-uuid-1"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    error = payload.get("error") or {}
+    details = error.get("details") or {}
+    assert details.get("kind") == "permission_denied"

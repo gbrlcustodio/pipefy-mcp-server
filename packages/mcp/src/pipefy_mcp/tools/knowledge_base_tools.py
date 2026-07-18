@@ -1,4 +1,4 @@
-"""MCP tools for pipe-scoped AI knowledge bases (list, plain text CRUD, probe).
+"""MCP tools for pipe-scoped AI knowledge bases (list, plain text/document/data lookup CRUD, probe).
 
 Reads and writes reach the API with the request-scoped credential and are fully
 governed by API permissions. Writes are gated on the caller running
@@ -83,6 +83,16 @@ def _blank_error(value: str, field: str) -> dict[str, Any] | None:
     return None
 
 
+def _kb_delete_failure(tool_name: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Failure envelope for a KB delete that returned ``success=false``.
+
+    Shared by every knowledge base kind so the error surface cannot drift.
+    """
+    errs = result.get("errors") or []
+    detail = "; ".join(str(e) for e in errs) if errs else "API returned success=false"
+    return tool_error(f"{tool_name} failed: {detail}")
+
+
 def _kb_success(data: dict[str, Any], *, message: str) -> dict[str, Any]:
     """Unified-envelope success (legacy flat payload when the flag is off)."""
     if is_unified_envelope_enabled():
@@ -105,8 +115,10 @@ class KnowledgeBaseTools:
             """List every knowledge base item on a pipe: plain texts, documents, and data lookups in one surface. Use this to discover the `dataSourceIds` values an AI agent or behavior can attach.
 
             Each item carries `id` (the data-source ID used in `dataSourceIds`),
-            `type` (e.g. `knowledge_base_plain_texts`), `name`, `description`, and
-            `updatedAt`. There is no pagination; the full list is returned.
+            `type`, `name`, `description`, and `updatedAt`. The `type` values are
+            `knowledge_base_plain_texts`, `knowledge_base_documents`, and
+            `data_lookups` (the data lookup discriminator is not prefixed). There
+            is no pagination; the full list is returned.
 
             Args:
                 pipe_uuid: Pipe UUID (not the numeric ID; `get_pipe` returns the `uuid` field).
@@ -293,15 +305,7 @@ class KnowledgeBaseTools:
             except Exception as exc:  # noqa: BLE001
                 return _kb_tool_error_from_exception(exc)
             if not result.get("success"):
-                errs = result.get("errors") or []
-                detail = (
-                    "; ".join(str(e) for e in errs)
-                    if errs
-                    else "API returned success=false"
-                )
-                return tool_error(
-                    f"delete_ai_knowledge_base_plain_text failed: {detail}"
-                )
+                return _kb_delete_failure("delete_ai_knowledge_base_plain_text", result)
             return _kb_success(
                 {"deleted_id": plain_text_id.strip()},
                 message="Knowledge base plain text deleted.",
@@ -485,16 +489,224 @@ class KnowledgeBaseTools:
             except Exception as exc:  # noqa: BLE001
                 return _kb_tool_error_from_exception(exc)
             if not result.get("success"):
-                errs = result.get("errors") or []
-                detail = (
-                    "; ".join(str(e) for e in errs)
-                    if errs
-                    else "API returned success=false"
-                )
-                return tool_error(f"delete_ai_knowledge_base_document failed: {detail}")
+                return _kb_delete_failure("delete_ai_knowledge_base_document", result)
             return _kb_success(
                 {"deleted_id": document_id.strip()},
                 message="Knowledge base document deleted.",
+            )
+
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+        async def get_ai_knowledge_base_data_lookup(
+            ctx: Context,
+            data_lookup_id: str,
+            pipe_uuid: str,
+        ) -> dict[str, Any]:
+            """Fetch one pipe-scoped knowledge base data lookup by ID.
+
+            Returns `name`, `description`, `sourceRepoId`, `searchQuery`, and
+            `outputFields` — never `conditions`: the API stores them but does
+            not expose them on reads, so keep your lookup definition (including
+            conditions) as the client-side source of truth for updates.
+
+            Args:
+                data_lookup_id: Knowledge base data lookup ID (from `get_ai_knowledge_bases`).
+                pipe_uuid: Pipe UUID (not the numeric ID).
+            """
+            client = get_pipefy_client(ctx)
+            err = _blank_error(data_lookup_id, "data_lookup_id") or _blank_error(
+                pipe_uuid, "pipe_uuid"
+            )
+            if err is not None:
+                return err
+            try:
+                data_lookup = await client.get_ai_knowledge_base_data_lookup(
+                    data_lookup_id.strip(), pipe_uuid.strip()
+                )
+            except Exception as exc:  # noqa: BLE001
+                return _kb_tool_error_from_exception(exc)
+            if not data_lookup:
+                return tool_error(
+                    f"Knowledge base data lookup not found: {data_lookup_id.strip()}. "
+                    f"{_KB_ID_DISCOVERY_HINT}"
+                )
+            return _kb_success(
+                {"knowledge_base_data_lookup": data_lookup},
+                message="Knowledge base data lookup retrieved.",
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        )
+        async def create_ai_knowledge_base_data_lookup(
+            ctx: Context,
+            pipe_uuid: str,
+            name: str,
+            description: str,
+            source_repo_id: str,
+            output_fields: list[str],
+            conditions: list[dict[str, Any]],
+            search_query: str | None = None,
+        ) -> dict[str, Any]:
+            """Create a pipe-scoped knowledge base data lookup: an agent data source that searches cards in a source pipe by conditions and returns selected fields. Requires manage_ai_agents on the pipe; run `validate_knowledge_base_access` first.
+
+            The definition is validated client-side because the API accepts
+            shapes that only break later, when an agent runs the lookup:
+            `source_repo_id` must be the numeric pipe ID (not a UUID);
+            `output_fields` takes 1-30 field IDs (field slugs plus static
+            fields like `id`, `title`, `created_at`); each condition needs
+            `field` and `operator` (an opaque backend string, e.g. `"eq"`,
+            `"contains"`) and is either static (string `value` required) or
+            AI-filled (`usingFillWithAi: true` with `inputName`, `inputType`
+            (e.g. `"text"`, `"number"`), and `inputDescription`; no `value`).
+            Keep the full definition client-side: reads never return
+            `conditions`. To attach the result to an agent, pass the returned
+            `id` in the agent's or behavior's `dataSourceIds`.
+
+            Args:
+                pipe_uuid: Pipe UUID (not the numeric ID) that owns the lookup.
+                name: Display name (required, non-blank).
+                description: Description (required, 1-900 characters).
+                source_repo_id: Numeric ID of the source pipe to look up data from.
+                output_fields: Field IDs whose values matching records return (1-30).
+                conditions: Condition objects (at least one), e.g.
+                    `{"field": "customer_email", "operator": "eq", "usingFillWithAi": true, "inputName": "Customer email", "inputType": "text", "inputDescription": "The customer's email address"}`.
+                search_query: Optional backend-defined search mode marker; leave unset unless you know the backend value you need.
+            """
+            client = get_pipefy_client(ctx)
+            err = _blank_error(pipe_uuid, "pipe_uuid")
+            if err is not None:
+                return err
+            try:
+                data_lookup = await client.create_ai_knowledge_base_data_lookup(
+                    pipe_uuid.strip(),
+                    name=name,
+                    description=description,
+                    source_repo_id=source_repo_id,
+                    output_fields=output_fields,
+                    conditions=conditions,
+                    search_query=search_query,
+                )
+            except ValueError as exc:
+                return tool_error(str(exc))
+            except Exception as exc:  # noqa: BLE001
+                return _kb_tool_error_from_exception(exc)
+            return _kb_success(
+                {"knowledge_base_data_lookup": data_lookup},
+                message="Knowledge base data lookup created.",
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        )
+        async def update_ai_knowledge_base_data_lookup(
+            ctx: Context,
+            data_lookup_id: str,
+            pipe_uuid: str,
+            source_repo_id: str,
+            output_fields: list[str],
+            conditions: list[dict[str, Any]],
+            search_query: str | None = None,
+            name: str | None = None,
+            description: str | None = None,
+        ) -> dict[str, Any]:
+            """Update a knowledge base data lookup by replacing its full definition. Requires manage_ai_agents; run `validate_knowledge_base_access` first.
+
+            Every update rewrites the whole definition: the API replaces the
+            stored definition with exactly what this call carries, so
+            `source_repo_id`, `output_fields`, and `conditions` are required
+            every time, and omitting `search_query` clears it. Reads never
+            return `conditions`, so resend the definition from your own
+            client-side copy. Only `name`/`description` are partial (omitted
+            means keep the stored value). Field rules match
+            `create_ai_knowledge_base_data_lookup`.
+
+            Args:
+                data_lookup_id: Data lookup ID to update (from `get_ai_knowledge_bases`).
+                pipe_uuid: Pipe UUID (not the numeric ID).
+                source_repo_id: Numeric ID of the source pipe (required; omitting it would strip the source from the stored definition).
+                output_fields: Field IDs whose values matching records return (1-30).
+                conditions: Condition objects (at least one) — the complete set, not a delta.
+                search_query: Optional backend-defined search mode marker; omitted means cleared.
+                name: New name (non-blank when given).
+                description: New description (1-900 characters when given).
+            """
+            client = get_pipefy_client(ctx)
+            err = _blank_error(data_lookup_id, "data_lookup_id") or _blank_error(
+                pipe_uuid, "pipe_uuid"
+            )
+            if err is not None:
+                return err
+            try:
+                data_lookup = await client.update_ai_knowledge_base_data_lookup(
+                    data_lookup_id.strip(),
+                    pipe_uuid.strip(),
+                    source_repo_id=source_repo_id,
+                    output_fields=output_fields,
+                    conditions=conditions,
+                    search_query=search_query,
+                    name=name,
+                    description=description,
+                )
+            except ValueError as exc:
+                return tool_error(str(exc))
+            except Exception as exc:  # noqa: BLE001
+                return _kb_tool_error_from_exception(exc)
+            return _kb_success(
+                {"knowledge_base_data_lookup": data_lookup},
+                message="Knowledge base data lookup updated.",
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+        )
+        async def delete_ai_knowledge_base_data_lookup(
+            ctx: Context,
+            data_lookup_id: str,
+            pipe_uuid: str,
+            confirm: bool = False,
+        ) -> dict[str, Any]:
+            """Delete a pipe-scoped knowledge base data lookup permanently. This action is irreversible.
+
+            Two-step operation: preview with `confirm=False` (default), then
+            execute with `confirm=True` after explicit human approval.
+            Elicitation does not authorize deletion (only `confirm=True` does).
+            Requires manage_ai_agents on the pipe.
+
+            Args:
+                data_lookup_id: Data lookup ID to delete (from `get_ai_knowledge_bases`).
+                pipe_uuid: Pipe UUID (not the numeric ID).
+                confirm: Must be `True` to run the delete mutation.
+            """
+            client = get_pipefy_client(ctx)
+            err = _blank_error(data_lookup_id, "data_lookup_id") or _blank_error(
+                pipe_uuid, "pipe_uuid"
+            )
+            if err is not None:
+                return err
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=(
+                    f"knowledge base data lookup (ID: {data_lookup_id.strip()})"
+                ),
+            )
+            if guard is not None:
+                return guard
+
+            try:
+                result = await client.delete_ai_knowledge_base_data_lookup(
+                    data_lookup_id.strip(), pipe_uuid.strip()
+                )
+            except Exception as exc:  # noqa: BLE001
+                return _kb_tool_error_from_exception(exc)
+            if not result.get("success"):
+                return _kb_delete_failure(
+                    "delete_ai_knowledge_base_data_lookup", result
+                )
+            return _kb_success(
+                {"deleted_id": data_lookup_id.strip()},
+                message="Knowledge base data lookup deleted.",
             )
 
         @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
@@ -502,7 +714,7 @@ class KnowledgeBaseTools:
             ctx: Context,
             pipe_uuid: str,
         ) -> dict[str, Any]:
-            """Probe whether the current credential can read a pipe's knowledge bases. A green result proves READ access only (read_ai_agents), never the manage_ai_agents entitlement plain-text create/update/delete require.
+            """Probe whether the current credential can read a pipe's knowledge bases. A green result proves READ access only (read_ai_agents), never the manage_ai_agents entitlement knowledge base writes (plain text, document, data lookup) require.
 
             On success, reports how many knowledge base items are visible. On a
             classified failure, returns the structured problem (permission denied /

@@ -1,11 +1,12 @@
-"""Service for pipe-scoped AI knowledge bases: list, plain text/document CRUD, probe.
+"""Service for pipe-scoped AI knowledge bases: list, plain text/document/data lookup CRUD, probe.
 
 Client-side limits fail fast before the network call so callers get an
 actionable ``ValueError`` instead of a backend 422. The limits mirror the
 downstream ``DataSource``/``KnowledgeBasePlainText`` model validations:
 ``content`` and ``name`` are required and ``content`` is capped at 3500 chars;
 ``description`` is required (the GraphQL schema marks it optional, but the
-backend rejects a blank one) and capped at 900 chars. Updates omit any field the
+backend rejects a blank one) and capped at 900 chars — one shared rule for
+every knowledge base kind. Plain-text/document updates omit any field the
 caller leaves unset, but validate every field they do pass.
 
 Documents are created one-shot from a local PDF: read the file (``.pdf``
@@ -15,6 +16,10 @@ PUT the bytes, then run the create mutation with the persistent download URL.
 Every stage raises :class:`KnowledgeBaseDocumentUploadError` tagged with the
 step that failed. The presign and S3 PUT primitives are shared with the
 attachment upload pipeline.
+
+Data lookups carry a full definition (source pipe, output fields, conditions)
+that the API stores but never returns on reads, and every update replaces that
+definition wholesale — see the data lookup methods for the resulting contract.
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from pipefy_infra.filesystem import LocalFile, LocalFileError
+from pydantic import ValidationError as PydanticValidationError
 
 from pipefy_sdk.graphql_executor import GraphQLExecutor
 from pipefy_sdk.graphql_problem import (
@@ -31,16 +37,21 @@ from pipefy_sdk.graphql_problem import (
     GraphQLProblemKind,
     classify_graphql_error_dicts,
 )
+from pipefy_sdk.models.knowledge_base import DataLookupCondition
 from pipefy_sdk.queries.attachment_queries import CREATE_PRESIGNED_URL_MUTATION
 from pipefy_sdk.queries.knowledge_base_queries import (
+    CREATE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION,
     CREATE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION,
     CREATE_AI_KNOWLEDGE_BASE_PLAIN_TEXT_MUTATION,
+    DELETE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION,
     DELETE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION,
     DELETE_AI_KNOWLEDGE_BASE_PLAIN_TEXT_MUTATION,
+    GET_AI_KNOWLEDGE_BASE_DATA_LOOKUP_QUERY,
     GET_AI_KNOWLEDGE_BASE_DOCUMENT_QUERY,
     GET_AI_KNOWLEDGE_BASE_PLAIN_TEXT_QUERY,
     GET_AI_KNOWLEDGE_BASES_QUERY,
     GET_PIPE_ORGANIZATION_QUERY,
+    UPDATE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION,
     UPDATE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION,
     UPDATE_AI_KNOWLEDGE_BASE_PLAIN_TEXT_MUTATION,
 )
@@ -51,6 +62,7 @@ from pipefy_sdk.services.attachment_service import (
 )
 from pipefy_sdk.services.types import (
     KnowledgeBaseAccessProbeResult,
+    KnowledgeBaseDataLookupPayload,
     KnowledgeBaseDeleteResult,
     KnowledgeBaseDocumentPayload,
     KnowledgeBaseDocumentUploadError,
@@ -59,20 +71,25 @@ from pipefy_sdk.services.types import (
 )
 
 MAX_PLAIN_TEXT_CONTENT_LENGTH = 3500
-MAX_PLAIN_TEXT_DESCRIPTION_LENGTH = 900
+
+# One shared cap for every knowledge base kind (plain text, document, data
+# lookup): the backend enforces it once, on the common ``DataSource`` model.
+MAX_KB_DESCRIPTION_LENGTH = 900
 
 # Document policy, enforced client-side because the backend skips PDF/size
 # validation when a document arrives as a URL (the only path these tools use).
-# The description cap matches the shared ``DataSource`` rule (max 900).
 DOCUMENT_PDF_SUFFIX = ".pdf"
 MAX_DOCUMENT_SIZE_BYTES = 20 * 1024 * 1024
-MAX_DOCUMENT_DESCRIPTION_LENGTH = 900
 DOCUMENT_CONTENT_TYPE = "application/pdf"
+
+# Backend cap on a data lookup's output fields.
+MAX_DATA_LOOKUP_OUTPUT_FIELDS = 30
 
 _PROBE_READ_ONLY_NOTE = (
     "Read access confirmed. This proves knowledge-base list/read access only "
-    "(read_ai_agents on the pipe), never write entitlement; plain-text "
-    "create/update/delete require manage_ai_agents and may still be denied."
+    "(read_ai_agents on the pipe), never write entitlement; knowledge base "
+    "writes (plain text, document, data lookup) require manage_ai_agents and "
+    "may still be denied."
 )
 
 
@@ -106,7 +123,7 @@ def _problem_dict(problem: GraphQLProblem) -> dict[str, Any]:
 
 
 class KnowledgeBaseService:
-    """Pipe-scoped AI knowledge base reads, plain-text/document writes, and the probe."""
+    """Pipe-scoped AI knowledge base reads, plain-text/document/data-lookup writes, and the probe."""
 
     def __init__(
         self,
@@ -185,13 +202,18 @@ class KnowledgeBaseService:
                 content, "content", MAX_PLAIN_TEXT_CONTENT_LENGTH
             ),
             "description": _require_bounded(
-                description, "description", MAX_PLAIN_TEXT_DESCRIPTION_LENGTH
+                description, "description", MAX_KB_DESCRIPTION_LENGTH
             ),
         }
         response = await self._executor.execute_query(
             CREATE_AI_KNOWLEDGE_BASE_PLAIN_TEXT_MUTATION, {"input": input_obj}
         )
-        return _unwrap_plain_text(response, "createAiKnowledgeBasePlainText")
+        return _unwrap_kb_write(
+            response,
+            "createAiKnowledgeBasePlainText",
+            "knowledgeBasePlainText",
+            "plain text",
+        )
 
     async def update_ai_knowledge_base_plain_text(
         self,
@@ -233,12 +255,17 @@ class KnowledgeBaseService:
             )
         if description is not None:
             input_obj["description"] = _require_bounded(
-                description, "description", MAX_PLAIN_TEXT_DESCRIPTION_LENGTH
+                description, "description", MAX_KB_DESCRIPTION_LENGTH
             )
         response = await self._executor.execute_query(
             UPDATE_AI_KNOWLEDGE_BASE_PLAIN_TEXT_MUTATION, {"input": input_obj}
         )
-        return _unwrap_plain_text(response, "updateAiKnowledgeBasePlainText")
+        return _unwrap_kb_write(
+            response,
+            "updateAiKnowledgeBasePlainText",
+            "knowledgeBasePlainText",
+            "plain text",
+        )
 
     async def delete_ai_knowledge_base_plain_text(
         self, plain_text_id: str, pipe_uuid: str
@@ -259,13 +286,7 @@ class KnowledgeBaseService:
         response = await self._executor.execute_query(
             DELETE_AI_KNOWLEDGE_BASE_PLAIN_TEXT_MUTATION, {"input": input_obj}
         )
-        payload = response.get("deleteAiKnowledgeBasePlainText")
-        payload = payload if isinstance(payload, dict) else {}
-        errors = payload.get("errors")
-        return {
-            "success": bool(payload.get("success")),
-            "errors": [str(e) for e in errors] if isinstance(errors, list) else [],
-        }
+        return _delete_result(response, "deleteAiKnowledgeBasePlainText")
 
     async def get_ai_knowledge_base_document(
         self, document_id: str, pipe_uuid: str
@@ -325,7 +346,7 @@ class KnowledgeBaseService:
         pipe_uuid = _require_non_blank(pipe_uuid, "pipe_uuid")
         name = _require_non_blank(name, "name")
         description = _require_bounded(
-            description, "description", MAX_DOCUMENT_DESCRIPTION_LENGTH
+            description, "description", MAX_KB_DESCRIPTION_LENGTH
         )
 
         file = await self._read_pdf(file_path)
@@ -342,7 +363,12 @@ class KnowledgeBaseService:
             response = await self._executor.execute_query(
                 CREATE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION, {"input": input_obj}
             )
-            return _unwrap_document(response, "createAiKnowledgeBaseDocument")
+            return _unwrap_kb_write(
+                response,
+                "createAiKnowledgeBaseDocument",
+                "knowledgeBaseDocument",
+                "document",
+            )
         except Exception as exc:
             raise KnowledgeBaseDocumentUploadError(
                 f"Document create failed: {exc}", step="kb_create"
@@ -381,12 +407,17 @@ class KnowledgeBaseService:
             input_obj["name"] = _require_non_blank(name, "name")
         if description is not None:
             input_obj["description"] = _require_bounded(
-                description, "description", MAX_DOCUMENT_DESCRIPTION_LENGTH
+                description, "description", MAX_KB_DESCRIPTION_LENGTH
             )
         response = await self._executor.execute_query(
             UPDATE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION, {"input": input_obj}
         )
-        return _unwrap_document(response, "updateAiKnowledgeBaseDocument")
+        return _unwrap_kb_write(
+            response,
+            "updateAiKnowledgeBaseDocument",
+            "knowledgeBaseDocument",
+            "document",
+        )
 
     async def delete_ai_knowledge_base_document(
         self, document_id: str, pipe_uuid: str
@@ -407,13 +438,163 @@ class KnowledgeBaseService:
         response = await self._executor.execute_query(
             DELETE_AI_KNOWLEDGE_BASE_DOCUMENT_MUTATION, {"input": input_obj}
         )
-        payload = response.get("deleteAiKnowledgeBaseDocument")
-        payload = payload if isinstance(payload, dict) else {}
-        errors = payload.get("errors")
-        return {
-            "success": bool(payload.get("success")),
-            "errors": [str(e) for e in errors] if isinstance(errors, list) else [],
+        return _delete_result(response, "deleteAiKnowledgeBaseDocument")
+
+    async def get_ai_knowledge_base_data_lookup(
+        self, data_lookup_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDataLookupPayload:
+        """Fetch one pipe-scoped knowledge base data lookup by id.
+
+        Args:
+            data_lookup_id: Knowledge base data lookup ID (from the list).
+            pipe_uuid: Pipe UUID (not the numeric id).
+
+        Returns:
+            The data lookup dict; empty dict when the API resolves nothing.
+            ``conditions`` are never included — the API does not expose them
+            on reads, so keep the definition client-side.
+        """
+        variables = {
+            "id": _require_non_blank(data_lookup_id, "data_lookup_id"),
+            "pipeUuid": _require_non_blank(pipe_uuid, "pipe_uuid"),
         }
+        response = await self._executor.execute_query(
+            GET_AI_KNOWLEDGE_BASE_DATA_LOOKUP_QUERY, variables
+        )
+        data_lookup = response.get("aiKnowledgeBaseDataLookup")
+        return data_lookup if isinstance(data_lookup, dict) else {}
+
+    async def create_ai_knowledge_base_data_lookup(
+        self,
+        pipe_uuid: str,
+        *,
+        name: str,
+        description: str,
+        source_repo_id: str,
+        output_fields: list[str],
+        conditions: list[dict[str, Any] | DataLookupCondition],
+        search_query: str | None = None,
+    ) -> KnowledgeBaseDataLookupPayload:
+        """Create a pipe-scoped knowledge base data lookup.
+
+        The definition is validated client-side (see
+        :func:`_parse_data_lookup_definition`) because the backend accepts
+        several shapes that only fail later, when an agent runs the lookup.
+
+        Args:
+            pipe_uuid: Pipe UUID (not the numeric id) that owns the lookup.
+            name: Display name (required, non-blank).
+            description: Description (required by the backend, 1-900 chars).
+            source_repo_id: Numeric ID of the source pipe to look up data from.
+            output_fields: Field IDs returned from matching records (1-30).
+            conditions: Record-filter conditions (at least one); dicts are
+                parsed into :class:`DataLookupCondition`.
+            search_query: Optional backend-defined search mode marker; leave
+                unset unless you know the backend value you need.
+
+        Returns:
+            The created data lookup dict (without ``conditions``).
+        """
+        input_obj = {
+            "pipeUuid": _require_non_blank(pipe_uuid, "pipe_uuid"),
+            "name": _require_non_blank(name, "name"),
+            "description": _require_bounded(
+                description, "description", MAX_KB_DESCRIPTION_LENGTH
+            ),
+            **_parse_data_lookup_definition(
+                source_repo_id, output_fields, conditions, search_query
+            ),
+        }
+        response = await self._executor.execute_query(
+            CREATE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION, {"input": input_obj}
+        )
+        return _unwrap_kb_write(
+            response,
+            "createAiKnowledgeBaseDataLookup",
+            "knowledgeBaseDataLookup",
+            "data lookup",
+        )
+
+    async def update_ai_knowledge_base_data_lookup(
+        self,
+        data_lookup_id: str,
+        pipe_uuid: str,
+        *,
+        source_repo_id: str,
+        output_fields: list[str],
+        conditions: list[dict[str, Any] | DataLookupCondition],
+        search_query: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> KnowledgeBaseDataLookupPayload:
+        """Update a pipe-scoped knowledge base data lookup (full replacement).
+
+        Every update rewrites the lookup's whole definition: the backend
+        replaces the stored definition with exactly what the mutation carries,
+        so the complete definition (``source_repo_id``, ``output_fields``,
+        ``conditions``) is required on every call and an omitted
+        ``search_query`` is cleared. Reads never return ``conditions``, so the
+        caller's own copy of the definition is the source of truth. Only
+        ``name``/``description`` may be omitted to keep their stored values.
+
+        Args:
+            data_lookup_id: Data lookup ID to update.
+            pipe_uuid: Pipe UUID (not the numeric id).
+            source_repo_id: Numeric ID of the source pipe (required — omitting
+                it would silently strip the source from the stored definition).
+            output_fields: Field IDs returned from matching records (1-30).
+            conditions: Record-filter conditions (at least one).
+            search_query: Optional backend-defined search mode marker; omitted
+                means cleared.
+            name: New name (non-blank when given; unset keeps stored value).
+            description: New description (1-900 chars when given).
+
+        Returns:
+            The updated data lookup dict (without ``conditions``).
+        """
+        input_obj: dict[str, Any] = {
+            "pipeUuid": _require_non_blank(pipe_uuid, "pipe_uuid"),
+            "dataLookupId": _require_non_blank(data_lookup_id, "data_lookup_id"),
+            **_parse_data_lookup_definition(
+                source_repo_id, output_fields, conditions, search_query
+            ),
+        }
+        if name is not None:
+            input_obj["name"] = _require_non_blank(name, "name")
+        if description is not None:
+            input_obj["description"] = _require_bounded(
+                description, "description", MAX_KB_DESCRIPTION_LENGTH
+            )
+        response = await self._executor.execute_query(
+            UPDATE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION, {"input": input_obj}
+        )
+        return _unwrap_kb_write(
+            response,
+            "updateAiKnowledgeBaseDataLookup",
+            "knowledgeBaseDataLookup",
+            "data lookup",
+        )
+
+    async def delete_ai_knowledge_base_data_lookup(
+        self, data_lookup_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDeleteResult:
+        """Delete a pipe-scoped knowledge base data lookup (permanent).
+
+        Args:
+            data_lookup_id: Data lookup ID to delete.
+            pipe_uuid: Pipe UUID (not the numeric id).
+
+        Returns:
+            ``success`` and any backend ``errors``.
+        """
+        input_obj = {
+            "pipeUuid": _require_non_blank(pipe_uuid, "pipe_uuid"),
+            "dataLookupId": _require_non_blank(data_lookup_id, "data_lookup_id"),
+        }
+        response = await self._executor.execute_query(
+            DELETE_AI_KNOWLEDGE_BASE_DATA_LOOKUP_MUTATION, {"input": input_obj}
+        )
+        return _delete_result(response, "deleteAiKnowledgeBaseDataLookup")
 
     async def _read_pdf(self, file_path: str | Path) -> LocalFile:
         """Read and validate the local PDF (``file_read`` step)."""
@@ -522,7 +703,7 @@ class KnowledgeBaseService:
         Runs the list query through the partial-success executor and classifies
         any GraphQL errors instead of raising. A green result proves read access
         only (``read_ai_agents``), never the ``manage_ai_agents`` entitlement the
-        plain-text writes require — spelled out in ``note``.
+        knowledge base writes require — spelled out in ``note``.
         """
         variables = {"pipeUuid": _require_non_blank(pipe_uuid, "pipe_uuid")}
         result = await self._executor.execute(GET_AI_KNOWLEDGE_BASES_QUERY, variables)
@@ -555,39 +736,111 @@ class KnowledgeBaseService:
         return probe
 
 
-def _unwrap_plain_text(
-    response: dict[str, Any], mutation_key: str
-) -> KnowledgeBasePlainTextPayload:
-    """Unwrap a write mutation's plain text; a missing payload is a failure.
+def _parse_data_lookup_definition(
+    source_repo_id: str,
+    output_fields: list[str],
+    conditions: list[dict[str, Any] | DataLookupCondition],
+    search_query: str | None,
+) -> dict[str, Any]:
+    """Parse a data lookup definition into the mutation's input fields.
 
-    A write that returns no GraphQL errors but a null ``knowledgeBasePlainText``
-    must not read as success — the caller cannot know whether it persisted.
+    Enforced client-side because the backend under-validates in ways that only
+    surface when an agent later runs the lookup:
+
+    - ``source_repo_id`` must be the numeric pipe ID. The API would accept a
+      pipe UUID on create, but the lookup then breaks when an agent runs it —
+      long after the write succeeded.
+    - Static conditions must carry a string ``value`` (write-time validation
+      only checks ``field``/``operator``; the runtime hard-fails on a missing
+      or non-string value). AI-filled conditions need their input trio. Both
+      rules live on :class:`DataLookupCondition`.
+    - ``output_fields`` must be non-empty (backend-enforced) and at most 30
+      (the backend ``DataLookup`` model cap), each entry a non-blank field ID.
+
+    Raises:
+        ValueError: On any rule violation, with the offending index for
+            per-item failures.
+    """
+    repo_id = _require_non_blank(source_repo_id, "source_repo_id")
+    # ASCII digits only: str.isdigit()/isdecimal() also accept Unicode digit
+    # characters (superscripts, other scripts) that are not a valid pipe ID.
+    if not (repo_id.isascii() and repo_id.isdigit()):
+        raise ValueError(
+            "source_repo_id must be the numeric pipe ID (a pipe UUID is "
+            "accepted by the API but breaks the lookup when an agent runs it)"
+        )
+    if not output_fields:
+        raise ValueError("output_fields must contain at least one field ID")
+    if len(output_fields) > MAX_DATA_LOOKUP_OUTPUT_FIELDS:
+        raise ValueError(
+            f"output_fields must have at most {MAX_DATA_LOOKUP_OUTPUT_FIELDS} "
+            f"entries (got {len(output_fields)})"
+        )
+    fields = [
+        _require_non_blank(field, f"output_fields[{i}]")
+        for i, field in enumerate(output_fields)
+    ]
+    if not conditions:
+        raise ValueError("conditions must contain at least one condition")
+    parsed_conditions: list[DataLookupCondition] = []
+    for i, condition in enumerate(conditions):
+        if isinstance(condition, DataLookupCondition):
+            parsed_conditions.append(condition)
+            continue
+        try:
+            parsed_conditions.append(DataLookupCondition.model_validate(condition))
+        except PydanticValidationError as exc:
+            details = "; ".join(_condition_error_detail(err) for err in exc.errors())
+            raise ValueError(f"conditions[{i}]: {details}") from exc
+    definition: dict[str, Any] = {
+        "sourceRepoId": repo_id,
+        "outputFields": fields,
+        "conditions": [c.to_input() for c in parsed_conditions],
+    }
+    if search_query is not None:
+        definition["searchQuery"] = _require_non_blank(search_query, "search_query")
+    return definition
+
+
+def _condition_error_detail(error: dict[str, Any]) -> str:
+    """One human line per pydantic error, without the pydantic URL noise."""
+    location = ".".join(str(part) for part in error.get("loc", ()))
+    message = error.get("msg", "invalid value")
+    return f"{location}: {message}" if location else message
+
+
+def _unwrap_kb_write(
+    response: dict[str, Any], mutation_key: str, payload_key: str, noun: str
+) -> dict[str, Any]:
+    """Unwrap a KB write mutation's payload; a missing payload is a failure.
+
+    A write that returns no GraphQL errors but a null payload must not read as
+    success — the caller cannot know whether it persisted. Shared by every
+    knowledge base kind (plain text, document, data lookup) so the contract
+    cannot drift between them.
     """
     payload = response.get(mutation_key)
     if isinstance(payload, dict):
-        plain_text = payload.get("knowledgeBasePlainText")
-        if isinstance(plain_text, dict) and plain_text:
-            return plain_text
+        node = payload.get(payload_key)
+        if isinstance(node, dict) and node:
+            return node
     raise ValueError(
-        f"{mutation_key} returned no plain text payload; "
-        "the write may not have persisted."
+        f"{mutation_key} returned no {noun} payload; the write may not have persisted."
     )
 
 
-def _unwrap_document(
+def _delete_result(
     response: dict[str, Any], mutation_key: str
-) -> KnowledgeBaseDocumentPayload:
-    """Unwrap a write mutation's document; a missing payload is a failure.
+) -> KnowledgeBaseDeleteResult:
+    """Coerce a KB delete mutation's payload onto ``success``/``errors``.
 
-    A write that returns no GraphQL errors but a null ``knowledgeBaseDocument``
-    must not read as success — the caller cannot know whether it persisted.
+    Shared by every knowledge base kind: a non-dict payload reads as failure,
+    non-list ``errors`` are dropped, entries are stringified.
     """
     payload = response.get(mutation_key)
-    if isinstance(payload, dict):
-        document = payload.get("knowledgeBaseDocument")
-        if isinstance(document, dict) and document:
-            return document
-    raise ValueError(
-        f"{mutation_key} returned no document payload; "
-        "the write may not have persisted."
-    )
+    payload = payload if isinstance(payload, dict) else {}
+    errors = payload.get("errors")
+    return {
+        "success": bool(payload.get("success")),
+        "errors": [str(e) for e in errors] if isinstance(errors, list) else [],
+    }

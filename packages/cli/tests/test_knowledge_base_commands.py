@@ -570,3 +570,294 @@ def test_kb_document_delete_with_yes(runner, clean_pipefy_env, saved_cwd, monkey
     mock_client.delete_ai_knowledge_base_document.assert_awaited_once_with(
         "kb-2", "pipe-uuid-1"
     )
+
+
+DATA_LOOKUP_FULL = {
+    "id": "kb-3",
+    "name": "Order lookup",
+    "description": "Find orders by customer email",
+    "sourceRepoId": "303088927",
+    "searchQuery": None,
+    "outputFields": ["title", "status"],
+    "updatedAt": "2026-07-18T00:00:00Z",
+}
+
+_STATIC_CONDITION_JSON = '[{"field": "title", "operator": "contains", "value": "x"}]'
+
+_DATA_LOOKUP_CREATE_ARGS = [
+    "kb",
+    "data-lookup",
+    "create",
+    "--pipe-uuid",
+    "pipe-uuid-1",
+    "--name",
+    "Order lookup",
+    "--description",
+    "Find orders",
+    "--source-repo-id",
+    "303088927",
+    "--output-fields",
+    '["title"]',
+    "--conditions",
+    _STATIC_CONDITION_JSON,
+]
+
+
+def test_kb_data_lookup_get_json(runner, clean_pipefy_env, saved_cwd, monkeypatch):
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.get_ai_knowledge_base_data_lookup = AsyncMock(
+        return_value=DATA_LOOKUP_FULL
+    )
+
+    with _client_patch(mock_client):
+        result = runner.invoke(
+            app,
+            [
+                "kb",
+                "data-lookup",
+                "get",
+                "--id",
+                "kb-3",
+                "--pipe-uuid",
+                "pipe-uuid-1",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    data = json.loads(result.stdout)
+    assert data["success"] is True
+    assert data["knowledge_base_data_lookup"] == DATA_LOOKUP_FULL
+    mock_client.get_ai_knowledge_base_data_lookup.assert_awaited_once_with(
+        "kb-3", "pipe-uuid-1"
+    )
+
+
+def test_kb_data_lookup_get_not_found_exits_1(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.get_ai_knowledge_base_data_lookup = AsyncMock(return_value={})
+
+    with _client_patch(mock_client):
+        result = runner.invoke(
+            app,
+            [
+                "kb",
+                "data-lookup",
+                "get",
+                "--id",
+                "kb-x",
+                "--pipe-uuid",
+                "pipe-uuid-1",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 1
+    data = json.loads(result.stdout)
+    assert data["success"] is False
+    assert "pipefy kb list" in data["error"]
+
+
+def test_kb_data_lookup_create_json(runner, clean_pipefy_env, saved_cwd, monkeypatch):
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.validate_knowledge_base_access = AsyncMock(return_value=GREEN_PROBE)
+    mock_client.create_ai_knowledge_base_data_lookup = AsyncMock(
+        return_value=DATA_LOOKUP_FULL
+    )
+
+    with _client_patch(mock_client):
+        result = runner.invoke(app, [*_DATA_LOOKUP_CREATE_ARGS, "--json"])
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    data = json.loads(result.stdout)
+    assert data["success"] is True
+    assert data["knowledge_base_data_lookup"] == DATA_LOOKUP_FULL
+    mock_client.create_ai_knowledge_base_data_lookup.assert_awaited_once_with(
+        "pipe-uuid-1",
+        name="Order lookup",
+        description="Find orders",
+        source_repo_id="303088927",
+        output_fields=["title"],
+        conditions=[{"field": "title", "operator": "contains", "value": "x"}],
+        search_query=None,
+    )
+
+
+def test_kb_data_lookup_create_gated_on_denied_probe(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.validate_knowledge_base_access = AsyncMock(return_value=DENIED_PROBE)
+    mock_client.create_ai_knowledge_base_data_lookup = AsyncMock()
+
+    with _client_patch(mock_client):
+        result = runner.invoke(app, [*_DATA_LOOKUP_CREATE_ARGS, "--json"])
+    assert result.exit_code == 1
+    assert json.loads(result.stdout)["success"] is False
+    mock_client.create_ai_knowledge_base_data_lookup.assert_not_awaited()
+
+
+def test_kb_data_lookup_create_invalid_conditions_json_rejected(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.create_ai_knowledge_base_data_lookup = AsyncMock()
+
+    args = list(_DATA_LOOKUP_CREATE_ARGS)
+    args[args.index(_STATIC_CONDITION_JSON)] = '{"not": "an array"}'
+    with _client_patch(mock_client):
+        result = runner.invoke(app, args)
+    assert result.exit_code != 0
+    # Match the color-stable fragment: rich colorizes the ``--conditions``
+    # option name in the error box, splitting it with ANSI codes.
+    assert "must be a JSON array of objects" in (result.stdout + (result.stderr or ""))
+    mock_client.create_ai_knowledge_base_data_lookup.assert_not_awaited()
+
+
+def test_kb_data_lookup_create_invalid_output_fields_rejected(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.create_ai_knowledge_base_data_lookup = AsyncMock()
+
+    args = list(_DATA_LOOKUP_CREATE_ARGS)
+    args[args.index('["title"]')] = "[1, 2]"
+    with _client_patch(mock_client):
+        result = runner.invoke(app, args)
+    assert result.exit_code != 0
+    # Match the color-stable fragment (see the conditions test above).
+    assert "must be a JSON array of strings" in (result.stdout + (result.stderr or ""))
+    mock_client.create_ai_knowledge_base_data_lookup.assert_not_awaited()
+
+
+def test_kb_data_lookup_update_sends_full_definition(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.validate_knowledge_base_access = AsyncMock(return_value=GREEN_PROBE)
+    mock_client.update_ai_knowledge_base_data_lookup = AsyncMock(
+        return_value=DATA_LOOKUP_FULL
+    )
+
+    with _client_patch(mock_client):
+        result = runner.invoke(
+            app,
+            [
+                "kb",
+                "data-lookup",
+                "update",
+                "--id",
+                "kb-3",
+                "--pipe-uuid",
+                "pipe-uuid-1",
+                "--source-repo-id",
+                "303088927",
+                "--output-fields",
+                '["title"]',
+                "--conditions",
+                _STATIC_CONDITION_JSON,
+                "--name",
+                "Renamed",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout)["success"] is True
+    mock_client.update_ai_knowledge_base_data_lookup.assert_awaited_once_with(
+        "kb-3",
+        "pipe-uuid-1",
+        source_repo_id="303088927",
+        output_fields=["title"],
+        conditions=[{"field": "title", "operator": "contains", "value": "x"}],
+        search_query=None,
+        name="Renamed",
+        description=None,
+    )
+
+
+def test_kb_data_lookup_update_requires_definition_options(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.update_ai_knowledge_base_data_lookup = AsyncMock()
+
+    with _client_patch(mock_client):
+        result = runner.invoke(
+            app,
+            [
+                "kb",
+                "data-lookup",
+                "update",
+                "--id",
+                "kb-3",
+                "--pipe-uuid",
+                "pipe-uuid-1",
+                "--name",
+                "Renamed",
+            ],
+        )
+    assert result.exit_code != 0
+    mock_client.update_ai_knowledge_base_data_lookup.assert_not_awaited()
+
+
+def test_kb_data_lookup_delete_requires_confirmation(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.delete_ai_knowledge_base_data_lookup = AsyncMock()
+
+    with _client_patch(mock_client):
+        result = runner.invoke(
+            app,
+            [
+                "kb",
+                "data-lookup",
+                "delete",
+                "--id",
+                "kb-3",
+                "--pipe-uuid",
+                "pipe-uuid-1",
+            ],
+            input="n\n",
+        )
+    assert result.exit_code != 0
+    mock_client.delete_ai_knowledge_base_data_lookup.assert_not_awaited()
+
+
+def test_kb_data_lookup_delete_with_yes(
+    runner, clean_pipefy_env, saved_cwd, monkeypatch
+):
+    _env(monkeypatch)
+    mock_client = MagicMock()
+    mock_client.delete_ai_knowledge_base_data_lookup = AsyncMock(
+        return_value={"success": True, "errors": []}
+    )
+
+    with _client_patch(mock_client):
+        result = runner.invoke(
+            app,
+            [
+                "kb",
+                "data-lookup",
+                "delete",
+                "--id",
+                "kb-3",
+                "--pipe-uuid",
+                "pipe-uuid-1",
+                "--yes",
+                "--json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout + (result.stderr or "")
+    assert json.loads(result.stdout)["success"] is True
+    mock_client.delete_ai_knowledge_base_data_lookup.assert_awaited_once_with(
+        "kb-3", "pipe-uuid-1"
+    )

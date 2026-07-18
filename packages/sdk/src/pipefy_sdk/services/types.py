@@ -166,6 +166,55 @@ class KnowledgeBaseDeleteResult(TypedDict):
     errors: list[str]
 
 
+class KnowledgeBaseDocumentPayload(TypedDict, total=False):
+    """A single pipe-scoped knowledge base document.
+
+    Returned by the get query and by create/update. ``content`` is the stored
+    document URL (the persistent download URL the file was uploaded to), not the
+    extracted text; it may be null on legacy rows. ``description`` is required on
+    write (the backing ``DataSource`` model enforces presence) but may be null on
+    legacy rows.
+    """
+
+    id: str
+    name: str
+    description: str | None
+    content: str | None
+    updatedAt: str | None
+
+
+KnowledgeBaseDocumentUploadStep = Literal[
+    "file_read",
+    "presigned_url",
+    "s3_upload",
+    "kb_create",
+]
+
+
+class KnowledgeBaseDocumentUploadError(Exception):
+    """Raised on knowledge base document upload pipeline failure.
+
+    The ``step`` attribute identifies which stage failed (``file_read`` reads and
+    validates the local PDF, ``presigned_url`` resolves the org and mints the
+    upload URL, ``s3_upload`` PUTs the bytes, ``kb_create`` runs the create
+    mutation) so surfaces can map it to a step-aware error envelope (MCP) or
+    typer message (CLI) without parsing strings.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        step: KnowledgeBaseDocumentUploadStep,
+        body_snippet: str | None = None,
+        status_code: int | None = None,
+    ) -> None:
+        self.step = step
+        self.body_snippet = body_snippet
+        self.status_code = status_code
+        super().__init__(message)
+
+
 class KnowledgeBaseAccessProbeResult(TypedDict, total=False):
     """Outcome of the knowledge-base read-access probe (pipe-scoped).
 

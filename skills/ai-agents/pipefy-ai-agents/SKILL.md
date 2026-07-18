@@ -4,7 +4,7 @@ description: >
   Use this skill when the user wants to create, read, update, delete,
   or troubleshoot AI agents (conversational agents with behaviors).
   Covers 7 MCP tools including pre-flight validation, plus pipe-scoped
-  knowledge bases (list, plain text CRUD, access probe) attached via dataSourceIds.
+  knowledge bases (list, plain text and document CRUD, access probe) attached via dataSourceIds.
   For traditional automations and AI automations, see skills/automations/.
 tags: [pipefy, ai-agents, behaviors, conversational]
 ---
@@ -187,6 +187,10 @@ Knowledge bases are pipe-scoped data sources an agent draws on. Attach one by pu
 | `create_ai_knowledge_base_plain_text` | `pipefy kb plain-text create` | No | Create a plain text (`name`, `content` 1-3500, `description` 1-900 — all required). |
 | `update_ai_knowledge_base_plain_text` | `pipefy kb plain-text update` | No | Partial update; pass at least one of name/content/description. |
 | `delete_ai_knowledge_base_plain_text` | `pipefy kb plain-text delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
+| `get_ai_knowledge_base_document` | `pipefy kb document get` | Yes | Fetch one document's metadata (`content` is the stored URL, not text). |
+| `create_ai_knowledge_base_document` | `pipefy kb document create` | No | Upload a local PDF in one shot (`file_path`/`--file`, `name`, `description` 1-900). `.pdf` + 20 MiB cap client-side; indexing is async. |
+| `update_ai_knowledge_base_document` | `pipefy kb document update` | No | Metadata-only update (name/description); no file replacement. |
+| `delete_ai_knowledge_base_document` | `pipefy kb document delete` | No | **(Two-step destructive)** MCP needs `confirm=true`; CLI needs `--yes`. |
 | `validate_knowledge_base_access` | `pipefy kb validate-access` | Yes | Probe read access before writes. |
 
 ### Flow: validate-access → create plain text → attach
@@ -194,6 +198,8 @@ Knowledge bases are pipe-scoped data sources an agent draws on. Attach one by pu
 1. **Probe access** — `validate_knowledge_base_access(pipe_uuid)` (CLI: `pipefy kb validate-access`). A green result proves read access only (`read_ai_agents`), never the `manage_ai_agents` entitlement writes need. The CLI create/update commands gate on this automatically; MCP callers should probe first (create/update do not auto-probe).
 2. **Create the source** — `create_ai_knowledge_base_plain_text(pipe_uuid, name, content, description)`. Limits fail fast client-side: `content` 1-3500 chars, `description` 1-900 chars (both required). Keep the returned `id`.
 3. **Attach** — add that `id` to a behavior's `dataSourceIds` (or the agent-level `data_source_ids`) when calling `create_ai_agent` / `update_ai_agent`. Validate first with `validate_ai_agent_behaviors(pipe_id, behaviors, data_source_ids=[...])` — unknown IDs surface as warnings.
+
+For a **PDF document** instead of plain text, use `create_ai_knowledge_base_document(pipe_uuid, name, description, file_path)` (CLI: `pipefy kb document create --file …`) at step 2. It uploads the local PDF in one shot; `.pdf` and the 20 MiB cap are enforced client-side, and indexing is asynchronous (the document may not be searchable immediately). The rest of the flow is identical — keep the returned `id` and attach it.
 
 ---
 

@@ -8,7 +8,7 @@ from gql.transport.exceptions import TransportQueryError
 from mcp.shared.memory import (
     create_connected_server_and_client_session as create_client_session,
 )
-from pipefy_sdk import PipefyClient
+from pipefy_sdk import KnowledgeBaseDocumentUploadError, PipefyClient
 
 from pipefy_mcp.core.tool_error_envelope import tool_error_message
 from pipefy_mcp.tools.knowledge_base_tools import KnowledgeBaseTools
@@ -28,6 +28,14 @@ PLAIN_TEXT_FULL = {
     "description": "How to onboard",
     "content": "Step 1...",
     "updatedAt": "2026-07-17T00:00:00Z",
+}
+
+DOCUMENT_FULL = {
+    "id": "kb-2",
+    "name": "Handbook",
+    "description": "Company handbook",
+    "content": "https://app.pipefy.com/storage/v1/signed/orgs/o/u/h.pdf?sig=x",
+    "updatedAt": "2026-07-16T00:00:00Z",
 }
 
 
@@ -63,6 +71,10 @@ def mock_kb_client():
     client.create_ai_knowledge_base_plain_text = AsyncMock()
     client.update_ai_knowledge_base_plain_text = AsyncMock()
     client.delete_ai_knowledge_base_plain_text = AsyncMock()
+    client.get_ai_knowledge_base_document = AsyncMock()
+    client.create_ai_knowledge_base_document = AsyncMock()
+    client.update_ai_knowledge_base_document = AsyncMock()
+    client.delete_ai_knowledge_base_document = AsyncMock()
     client.validate_knowledge_base_access = AsyncMock()
     return client
 
@@ -341,3 +353,229 @@ async def test_get_knowledge_bases_not_found_has_no_self_referential_hint(
     assert payload["success"] is False
     assert payload["error"]["details"]["kind"] == "not_found"
     assert "get_ai_knowledge_bases" not in tool_error_message(payload)
+
+
+async def test_get_document_success(
+    kb_session, mock_kb_client, unified_envelope, extract_payload
+):
+    mock_kb_client.get_ai_knowledge_base_document = AsyncMock(
+        return_value=DOCUMENT_FULL
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_base_document",
+            {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-1"},
+        )
+    assert result.isError is False
+    mock_kb_client.get_ai_knowledge_base_document.assert_awaited_once_with(
+        "kb-2", "pipe-uuid-1"
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"]["knowledge_base_document"] == DOCUMENT_FULL
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_get_document_not_found(kb_session, mock_kb_client, extract_payload):
+    mock_kb_client.get_ai_knowledge_base_document = AsyncMock(return_value={})
+    async with kb_session as session:
+        result = await session.call_tool(
+            "get_ai_knowledge_base_document",
+            {"document_id": "kb-x", "pipe_uuid": "pipe-uuid-1"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "not found" in tool_error_message(payload).lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_create_document_success(
+    kb_session, mock_kb_client, unified_envelope, extract_payload
+):
+    mock_kb_client.create_ai_knowledge_base_document = AsyncMock(
+        return_value=DOCUMENT_FULL
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "create_ai_knowledge_base_document",
+            {
+                "pipe_uuid": "pipe-uuid-1",
+                "name": "Handbook",
+                "description": "Company handbook",
+                "file_path": "/tmp/handbook.pdf",
+            },
+        )
+    assert result.isError is False
+    mock_kb_client.create_ai_knowledge_base_document.assert_awaited_once_with(
+        "pipe-uuid-1",
+        name="Handbook",
+        description="Company handbook",
+        file_path="/tmp/handbook.pdf",
+    )
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    assert payload["data"]["knowledge_base_document"] == DOCUMENT_FULL
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_create_document_blank_file_path_rejected(
+    kb_session, mock_kb_client, extract_payload
+):
+    async with kb_session as session:
+        result = await session.call_tool(
+            "create_ai_knowledge_base_document",
+            {
+                "pipe_uuid": "pipe-uuid-1",
+                "name": "Handbook",
+                "description": "d",
+                "file_path": "   ",
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert "file_path" in tool_error_message(payload)
+    mock_kb_client.create_ai_knowledge_base_document.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_create_document_non_pdf_maps_file_read_step(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.create_ai_knowledge_base_document = AsyncMock(
+        side_effect=KnowledgeBaseDocumentUploadError(
+            "File must be a .pdf: notes.txt", step="file_read"
+        )
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "create_ai_knowledge_base_document",
+            {
+                "pipe_uuid": "pipe-uuid-1",
+                "name": "n",
+                "description": "d",
+                "file_path": "/tmp/notes.txt",
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert ".pdf" in tool_error_message(payload)
+    assert payload["error"]["details"]["step"] == "file_read"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_create_document_s3_failure_carries_step_and_snippet(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.create_ai_knowledge_base_document = AsyncMock(
+        side_effect=KnowledgeBaseDocumentUploadError(
+            "S3 upload failed with HTTP 403.",
+            step="s3_upload",
+            body_snippet="AccessDenied",
+            status_code=403,
+        )
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "create_ai_knowledge_base_document",
+            {
+                "pipe_uuid": "pipe-uuid-1",
+                "name": "n",
+                "description": "d",
+                "file_path": "/tmp/handbook.pdf",
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["details"]["step"] == "s3_upload"
+    assert payload["error"]["details"]["body_snippet"] == "AccessDenied"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_create_document_kb_create_failure_classified(
+    kb_session, mock_kb_client, extract_payload
+):
+    mock_kb_client.create_ai_knowledge_base_document = AsyncMock(
+        side_effect=KnowledgeBaseDocumentUploadError(
+            "Document create failed: denied",
+            step="kb_create",
+        )
+    )
+    mock_kb_client.create_ai_knowledge_base_document.side_effect.__cause__ = (
+        permission_denied_error()
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "create_ai_knowledge_base_document",
+            {
+                "pipe_uuid": "pipe-uuid-1",
+                "name": "n",
+                "description": "d",
+                "file_path": "/tmp/handbook.pdf",
+            },
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["error"]["details"]["step"] == "kb_create"
+    assert payload["error"]["code"] == "PERMISSION_DENIED"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_update_document_success(
+    kb_session, mock_kb_client, unified_envelope, extract_payload
+):
+    mock_kb_client.update_ai_knowledge_base_document = AsyncMock(
+        return_value=DOCUMENT_FULL
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "update_ai_knowledge_base_document",
+            {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-1", "name": "New name"},
+        )
+    assert result.isError is False
+    mock_kb_client.update_ai_knowledge_base_document.assert_awaited_once_with(
+        "kb-2", "pipe-uuid-1", name="New name", description=None
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_delete_document_preview_without_confirm(
+    kb_session, mock_kb_client, extract_payload
+):
+    async with kb_session as session:
+        result = await session.call_tool(
+            "delete_ai_knowledge_base_document",
+            {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-1"},
+        )
+    payload = extract_payload(result)
+    assert payload["success"] is False
+    assert payload["requires_confirmation"] is True
+    mock_kb_client.delete_ai_knowledge_base_document.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kb_session", [None], indirect=True)
+async def test_delete_document_with_confirm_executes(
+    kb_session, mock_kb_client, unified_envelope, extract_payload
+):
+    mock_kb_client.delete_ai_knowledge_base_document = AsyncMock(
+        return_value={"success": True, "errors": []}
+    )
+    async with kb_session as session:
+        result = await session.call_tool(
+            "delete_ai_knowledge_base_document",
+            {"document_id": "kb-2", "pipe_uuid": "pipe-uuid-1", "confirm": True},
+        )
+    assert result.isError is False
+    payload = extract_payload(result)
+    assert payload["success"] is True
+    mock_kb_client.delete_ai_knowledge_base_document.assert_awaited_once_with(
+        "kb-2", "pipe-uuid-1"
+    )

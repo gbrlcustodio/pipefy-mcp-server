@@ -12,7 +12,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
-from pipefy_sdk import classify_exception
+from pipefy_sdk import KnowledgeBaseDocumentUploadError, classify_exception
 
 from pipefy_mcp.core.tool_error_envelope import (
     is_unified_envelope_enabled,
@@ -25,6 +25,33 @@ from pipefy_mcp.tools.tool_context import get_pipefy_client
 _KB_ID_DISCOVERY_HINT = (
     "Use 'get_ai_knowledge_bases' to list knowledge base IDs for the pipe."
 )
+
+
+def _kb_document_upload_error(
+    exc: KnowledgeBaseDocumentUploadError,
+) -> dict[str, Any]:
+    """Map a step-tagged document upload failure onto the tool failure envelope.
+
+    ``file_read`` and ``s3_upload`` failures carry their own actionable message;
+    ``presigned_url``/``kb_create`` failures are GraphQL/transport errors, so the
+    shared SDK classifier is used for a clean kind/code (falling back to the raw
+    message). ``step`` (and any S3 ``body_snippet``) always rides in ``details``.
+    """
+    details: dict[str, Any] = {"step": exc.step}
+    if exc.step == "file_read":
+        message = str(exc.__cause__) if exc.__cause__ else str(exc)
+        return tool_error(message, details=details)
+    if exc.step == "s3_upload":
+        if exc.body_snippet:
+            details["body_snippet"] = exc.body_snippet
+        return tool_error(str(exc), details=details)
+    problem = classify_exception(exc.__cause__) if exc.__cause__ else None
+    if problem is None:
+        return tool_error(str(exc), details=details)
+    details["kind"] = problem.kind.value
+    if problem.correlation_id:
+        details["correlation_id"] = problem.correlation_id
+    return tool_error(problem.message, code=problem.code, details=details)
 
 
 def _kb_tool_error_from_exception(
@@ -278,6 +305,196 @@ class KnowledgeBaseTools:
             return _kb_success(
                 {"deleted_id": plain_text_id.strip()},
                 message="Knowledge base plain text deleted.",
+            )
+
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+        async def get_ai_knowledge_base_document(
+            ctx: Context,
+            document_id: str,
+            pipe_uuid: str,
+        ) -> dict[str, Any]:
+            """Fetch one pipe-scoped knowledge base document by ID.
+
+            `content` is the stored document URL (where the PDF was uploaded),
+            not the extracted text.
+
+            Args:
+                document_id: Knowledge base document ID (from `get_ai_knowledge_bases`).
+                pipe_uuid: Pipe UUID (not the numeric ID).
+            """
+            client = get_pipefy_client(ctx)
+            err = _blank_error(document_id, "document_id") or _blank_error(
+                pipe_uuid, "pipe_uuid"
+            )
+            if err is not None:
+                return err
+            try:
+                document = await client.get_ai_knowledge_base_document(
+                    document_id.strip(), pipe_uuid.strip()
+                )
+            except Exception as exc:  # noqa: BLE001
+                return _kb_tool_error_from_exception(exc)
+            if not document:
+                return tool_error(
+                    f"Knowledge base document not found: {document_id.strip()}. "
+                    f"{_KB_ID_DISCOVERY_HINT}"
+                )
+            return _kb_success(
+                {"knowledge_base_document": document},
+                message="Knowledge base document retrieved.",
+            )
+
+        # Left unmarked for the remote profile: create reads a local file_path,
+        # which has no meaning on a hosted server (mirrors the attachment tools).
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        )
+        async def create_ai_knowledge_base_document(
+            ctx: Context,
+            pipe_uuid: str,
+            name: str,
+            description: str,
+            file_path: str,
+        ) -> dict[str, Any]:
+            """Create a pipe-scoped knowledge base document from a local PDF (one-shot upload). Requires manage_ai_agents on the pipe; run `validate_knowledge_base_access` first.
+
+            Reads the local PDF the MCP server (running as the user) can access,
+            uploads it via a presigned URL, then registers the document. `~` is
+            expanded. Client-side checks fail fast: the file must be a `.pdf`
+            (case-insensitive) under 20 MiB, and `description` is 1-900
+            characters (required). Indexing is asynchronous: the document may
+            not be searchable by agents immediately. To attach it to an agent,
+            pass the returned `id` in the agent's or behavior's `dataSourceIds`.
+
+            Args:
+                pipe_uuid: Pipe UUID (not the numeric ID).
+                name: Display name (required, non-blank).
+                description: Description (required, 1-900 characters).
+                file_path: Local path to a `.pdf` file. Supports `~` expansion.
+            """
+            client = get_pipefy_client(ctx)
+            err = _blank_error(pipe_uuid, "pipe_uuid") or _blank_error(
+                file_path, "file_path"
+            )
+            if err is not None:
+                return err
+            try:
+                document = await client.create_ai_knowledge_base_document(
+                    pipe_uuid.strip(),
+                    name=name,
+                    description=description,
+                    file_path=file_path.strip(),
+                )
+            except KnowledgeBaseDocumentUploadError as exc:
+                return _kb_document_upload_error(exc)
+            except ValueError as exc:
+                return tool_error(str(exc))
+            except Exception as exc:  # noqa: BLE001
+                return _kb_tool_error_from_exception(exc)
+            return _kb_success(
+                {"knowledge_base_document": document},
+                message="Knowledge base document created.",
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False),
+        )
+        async def update_ai_knowledge_base_document(
+            ctx: Context,
+            document_id: str,
+            pipe_uuid: str,
+            name: str | None = None,
+            description: str | None = None,
+        ) -> dict[str, Any]:
+            """Update a knowledge base document's metadata. Requires manage_ai_agents; run `validate_knowledge_base_access` first.
+
+            Metadata only: `name` and/or `description`; the PDF file cannot be
+            replaced. Provide at least one field. When given, `description` is
+            1-900 characters (enforced client-side).
+
+            Args:
+                document_id: Document ID to update (from `get_ai_knowledge_bases`).
+                pipe_uuid: Pipe UUID (not the numeric ID).
+                name: New name (non-blank when given).
+                description: New description (1-900 characters when given).
+            """
+            client = get_pipefy_client(ctx)
+            err = _blank_error(document_id, "document_id") or _blank_error(
+                pipe_uuid, "pipe_uuid"
+            )
+            if err is not None:
+                return err
+            try:
+                document = await client.update_ai_knowledge_base_document(
+                    document_id.strip(),
+                    pipe_uuid.strip(),
+                    name=name,
+                    description=description,
+                )
+            except ValueError as exc:
+                return tool_error(str(exc))
+            except Exception as exc:  # noqa: BLE001
+                return _kb_tool_error_from_exception(exc)
+            return _kb_success(
+                {"knowledge_base_document": document},
+                message="Knowledge base document updated.",
+            )
+
+        @mcp.tool(
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+        )
+        async def delete_ai_knowledge_base_document(
+            ctx: Context,
+            document_id: str,
+            pipe_uuid: str,
+            confirm: bool = False,
+        ) -> dict[str, Any]:
+            """Delete a pipe-scoped knowledge base document permanently. This action is irreversible.
+
+            Two-step operation: preview with `confirm=False` (default), then
+            execute with `confirm=True` after explicit human approval.
+            Elicitation does not authorize deletion (only `confirm=True` does).
+            Requires manage_ai_agents on the pipe.
+
+            Args:
+                document_id: Document ID to delete (from `get_ai_knowledge_bases`).
+                pipe_uuid: Pipe UUID (not the numeric ID).
+                confirm: Must be `True` to run the delete mutation.
+            """
+            client = get_pipefy_client(ctx)
+            err = _blank_error(document_id, "document_id") or _blank_error(
+                pipe_uuid, "pipe_uuid"
+            )
+            if err is not None:
+                return err
+
+            guard = await check_destructive_confirmation(
+                ctx,
+                confirm=confirm,
+                resource_descriptor=(
+                    f"knowledge base document (ID: {document_id.strip()})"
+                ),
+            )
+            if guard is not None:
+                return guard
+
+            try:
+                result = await client.delete_ai_knowledge_base_document(
+                    document_id.strip(), pipe_uuid.strip()
+                )
+            except Exception as exc:  # noqa: BLE001
+                return _kb_tool_error_from_exception(exc)
+            if not result.get("success"):
+                errs = result.get("errors") or []
+                detail = (
+                    "; ".join(str(e) for e in errs)
+                    if errs
+                    else "API returned success=false"
+                )
+                return tool_error(f"delete_ai_knowledge_base_document failed: {detail}")
+            return _kb_success(
+                {"deleted_id": document_id.strip()},
+                message="Knowledge base document deleted.",
             )
 
         @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))

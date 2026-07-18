@@ -58,8 +58,8 @@ Usage: pipefy [OPTIONS] COMMAND [ARGS]...
 │ graphql           Execute arbitrary GraphQL (mutations require --yes). See   │
 │                   docs/cli/self-healing.md.                                  │
 │ introspect        Discover GraphQL types and operations (JSON default).      │
-│ kb                AI knowledge bases (pipe-scoped: list, plain text CRUD,    │
-│                   access probe).                                             │
+│ kb                AI knowledge bases (pipe-scoped: list, plain text/document │
+│                   CRUD, access probe).                                       │
 │ export            Bulk exports (automation jobs).                            │
 │ org               Organization operations.                                   │
 │ report-org        Organization reports.                                      │
@@ -1652,7 +1652,8 @@ Usage: pipefy introspect type [OPTIONS] NAME
 ### HELP kb
 Usage: pipefy kb [OPTIONS] COMMAND [ARGS]...
 
- AI knowledge bases (pipe-scoped: list, plain text CRUD, access probe).
+ AI knowledge bases (pipe-scoped: list, plain text/document CRUD, access
+ probe).
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
 │ --help          Show this message and exit.                                  │
@@ -1663,6 +1664,109 @@ Usage: pipefy kb [OPTIONS] COMMAND [ARGS]...
 │ validate-access   Probe knowledge-base read access                           │
 │                   (``validate_knowledge_base_access``).                      │
 │ plain-text        Knowledge base plain texts.                                │
+│ document          Knowledge base documents (one-shot PDF upload).            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/document
+Usage: pipefy kb document [OPTIONS] COMMAND [ARGS]...
+
+ Knowledge base documents (one-shot PDF upload).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ --help          Show this message and exit.                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─ Commands ───────────────────────────────────────────────────────────────────╮
+│ get      Fetch one knowledge base document                                   │
+│          (``get_ai_knowledge_base_document``).                               │
+│ create   Create a knowledge base document from a local PDF                   │
+│          (``create_ai_knowledge_base_document``).                            │
+│ update   Update a knowledge base document's metadata                         │
+│          (``update_ai_knowledge_base_document``).                            │
+│ delete   Delete a knowledge base document permanently                        │
+│          (``delete_ai_knowledge_base_document``).                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/document/create
+Usage: pipefy kb document create [OPTIONS]
+
+ Create a knowledge base document from a local PDF
+ (``create_ai_knowledge_base_document``).
+
+ One-shot: presigned URL, S3 PUT, then the create mutation. Gated on the
+ read-access probe. Client-side checks fail fast (``.pdf`` extension, 20 MiB
+ cap, description 1-900). Indexing is asynchronous, so the document may not be
+ searchable by agents immediately.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --pipe-uuid            TEXT  Pipe UUID (not the numeric ID; `pipefy pipe  │
+│                                 get` shows the uuid).                        │
+│                                 [required]                                   │
+│ *  --file         -f      PATH  Local .pdf file to upload (<=20 MiB).        │
+│                                 Supports ~ expansion.                        │
+│                                 [required]                                   │
+│ *  --name                 TEXT  Display name (required). [required]          │
+│ *  --description          TEXT  Description (required, 1-900 characters).    │
+│                                 [required]                                   │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/document/delete
+Usage: pipefy kb document delete [OPTIONS]
+
+ Delete a knowledge base document permanently
+ (``delete_ai_knowledge_base_document``).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base document ID to delete.          │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --yes        -y            Skip the confirmation prompt.                  │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/document/get
+Usage: pipefy kb document get [OPTIONS]
+
+ Fetch one knowledge base document (``get_ai_knowledge_base_document``).
+
+ ``content`` is the stored document URL, not the extracted text. Exits 1 with
+ ``success: false`` when the API resolves no document for the id (mirrors the
+ MCP tool's not-found handling).
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                 TEXT  Knowledge base document ID (from `pipefy kb    │
+│                               list`).                                        │
+│                               [required]                                     │
+│ *  --pipe-uuid          TEXT  Pipe UUID (not the numeric ID; `pipefy pipe    │
+│                               get` shows the uuid).                          │
+│                               [required]                                     │
+│    --json       -j            Print machine-readable JSON to stdout.         │
+│    --help                     Show this message and exit.                    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+### HELP kb/document/update
+Usage: pipefy kb document update [OPTIONS]
+
+ Update a knowledge base document's metadata
+ (``update_ai_knowledge_base_document``).
+
+ Metadata only (name/description); the PDF cannot be replaced. Provide at least
+ one of --name or --description. Gated on the read-access probe.
+
+╭─ Options ────────────────────────────────────────────────────────────────────╮
+│ *  --id                   TEXT  Knowledge base document ID to update.        │
+│                                 [required]                                   │
+│ *  --pipe-uuid            TEXT  Pipe UUID (not the numeric ID; `pipefy pipe  │
+│                                 get` shows the uuid).                        │
+│                                 [required]                                   │
+│    --name                 TEXT  New name (non-blank).                        │
+│    --description          TEXT  New description (1-900 characters).          │
+│    --json         -j            Print machine-readable JSON to stdout.       │
+│    --help                       Show this message and exit.                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ### HELP kb/list

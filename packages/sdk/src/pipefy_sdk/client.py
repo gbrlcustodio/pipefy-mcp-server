@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from httpx import Auth
@@ -83,6 +84,7 @@ from pipefy_sdk.services.types import (
     CardSearch,
     KnowledgeBaseAccessProbeResult,
     KnowledgeBaseDeleteResult,
+    KnowledgeBaseDocumentPayload,
     KnowledgeBasePayload,
     KnowledgeBasePlainTextPayload,
     LlmProviderPayload,
@@ -1022,6 +1024,53 @@ class PipefyClient:
         """Delete a pipe-scoped knowledge base plain text (permanent)."""
         return await self._knowledge_base_service.delete_ai_knowledge_base_plain_text(
             plain_text_id, pipe_uuid
+        )
+
+    async def get_ai_knowledge_base_document(
+        self, document_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDocumentPayload:
+        """Fetch one pipe-scoped knowledge base document by id."""
+        return await self._knowledge_base_service.get_ai_knowledge_base_document(
+            document_id, pipe_uuid
+        )
+
+    async def create_ai_knowledge_base_document(
+        self,
+        pipe_uuid: str,
+        *,
+        name: str,
+        description: str,
+        file_path: str | Path,
+    ) -> KnowledgeBaseDocumentPayload:
+        """Create a pipe-scoped knowledge base document from a local PDF (one-shot upload).
+
+        Reads the PDF (``.pdf`` and 20 MiB cap enforced client-side), uploads it
+        via a presigned URL, then runs the create mutation. Raises
+        ``KnowledgeBaseDocumentUploadError`` (with ``step``) on pipeline failure.
+        """
+        return await self._knowledge_base_service.create_ai_knowledge_base_document(
+            pipe_uuid, name=name, description=description, file_path=file_path
+        )
+
+    async def update_ai_knowledge_base_document(
+        self,
+        document_id: str,
+        pipe_uuid: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> KnowledgeBaseDocumentPayload:
+        """Update a knowledge base document's metadata (name/description; no file replacement)."""
+        return await self._knowledge_base_service.update_ai_knowledge_base_document(
+            document_id, pipe_uuid, name=name, description=description
+        )
+
+    async def delete_ai_knowledge_base_document(
+        self, document_id: str, pipe_uuid: str
+    ) -> KnowledgeBaseDeleteResult:
+        """Delete a pipe-scoped knowledge base document (permanent)."""
+        return await self._knowledge_base_service.delete_ai_knowledge_base_document(
+            document_id, pipe_uuid
         )
 
     async def validate_knowledge_base_access(

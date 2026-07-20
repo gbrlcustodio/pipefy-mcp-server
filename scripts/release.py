@@ -3,13 +3,18 @@
 
 The release has a single natural fault line: ``git push origin <tag>`` triggers
 PyPI publishing, which cannot be undone. Everything before it is local and
-reversible; everything after is read-only verification. So this tool is two
-subcommands with a review gate between them:
+reversible; everything after is read-only verification. So this tool splits
+into subcommands with a review gate between the reversible and irreversible
+halves:
 
-* ``prepare`` — bump the version, stamp CHANGELOG, commit. All local; nothing
-  has left the machine. It stops and tells you to review the commit.
+* ``release-pr`` — branch off the latest ``origin/dev``, run the ``prepare``
+  bump, push, and open a release PR into ``main``. Reversible; the PR review
+  is the gate.
+* ``prepare`` — bump the version, stamp CHANGELOG, commit on ``main``. All
+  local; nothing has left the machine. It stops and tells you to review.
 * ``publish`` — tag, push, watch the Release workflow, then verify. Asks for
   one explicit confirmation before the irreversible push.
+* ``verify`` — re-run the post-publish checks for a tag.
 
 The version transform itself is NOT reimplemented here: ``bump_version.py``
 stays the sole owner of which files carry the version and how they are
@@ -151,18 +156,17 @@ def stamp_changelog(version: str) -> None:
     CHANGELOG.write_text(new_text, encoding="utf-8")
 
 
-def compute_target_version(bump_arg: str) -> tuple[str, str]:
-    """Resolve ``(current, target)`` for a bump argument without mutating anything.
+def target_for(bump_arg: str, current: str) -> str:
+    """Apply a bump argument to ``current`` via ``bump_version``'s own functions.
 
-    Uses ``bump_version``'s own bump functions so the version previewed here is
-    exactly what the bump will write. Lets ``prepare`` show the target and
-    confirm it before touching any file — catching a wrong bump (e.g. expecting
-    ``beta.1`` from ``prerelease``, which only increments the current track)
-    while it is still a no-op to walk away.
+    Uses bump_version's bump logic so the version previewed here is exactly what
+    the bump will write — letting a caller show the target and confirm it before
+    touching any file, and catching a wrong bump (e.g. expecting ``beta.1`` from
+    ``prerelease``, which only increments the current track) while walking away
+    is still a no-op.
     """
-    current = bump_version.read_sdk_version()
     if bump_arg.lower().startswith("version="):
-        return current, bump_version.parse_explicit_version(bump_arg)
+        return bump_version.parse_explicit_version(bump_arg)
     bumpers = {
         "major": bump_version.bump_major,
         "minor": bump_version.bump_minor,
@@ -174,19 +178,22 @@ def compute_target_version(bump_arg: str) -> tuple[str, str]:
             f"Unknown bump {bump_arg!r}. Use major, minor, patch, prerelease, "
             "or version=X.Y.Z"
         )
-    return current, bumpers[bump_arg](current)
+    return bumpers[bump_arg](current)
 
 
-def prepare(bump_arg: str, *, assume_yes: bool = False) -> str:
-    """Bump, stamp the CHANGELOG, and commit. Returns the new version string."""
-    preflight_prepare()
+def compute_target_version(bump_arg: str) -> tuple[str, str]:
+    """Resolve ``(current, target)`` from the working tree's current version."""
+    current = bump_version.read_sdk_version()
+    return current, target_for(bump_arg, current)
 
-    current, target = compute_target_version(bump_arg)
-    confirm(
-        f"Will bump {current} -> {target} and cut tag v{target}. Proceed?",
-        assume_yes=assume_yes,
-    )
 
+def _apply_prepare(bump_arg: str, target: str) -> str:
+    """Bump, stamp the CHANGELOG, and commit on the current branch.
+
+    The mutating core shared by ``prepare`` (main flow) and ``release_pr``
+    (dev→main flow); callers own the preflight and confirmation. Returns the
+    version bump_version actually wrote.
+    """
     # bump_version.py owns the transform; run its CLI so the file set and lock
     # refresh live in exactly one place.
     run(["uv", "run", "python", "scripts/bump_version.py", bump_arg])
@@ -195,11 +202,22 @@ def prepare(bump_arg: str, *, assume_yes: bool = False) -> str:
         raise ReleaseError(
             f"bump_version wrote {version!r} but {target!r} was confirmed"
         )
-
     stamp_changelog(version)
-
     run(["git", "add", "-A"])
     run(["git", "commit", "-m", f"chore: release v{version}"])
+    return version
+
+
+def prepare(bump_arg: str, *, assume_yes: bool = False) -> str:
+    """Bump, stamp the CHANGELOG, and commit on ``main``. Returns the version."""
+    preflight_prepare()
+
+    current, target = compute_target_version(bump_arg)
+    confirm(
+        f"Will bump {current} -> {target} and cut tag v{target}. Proceed?",
+        assume_yes=assume_yes,
+    )
+    version = _apply_prepare(bump_arg, target)
 
     print()
     print(f"Prepared v{version}. Review the release commit:")
@@ -207,6 +225,134 @@ def prepare(bump_arg: str, *, assume_yes: bool = False) -> str:
     print("Then publish with:")
     print("    uv run python scripts/release.py publish")
     return version
+
+
+# --- release-pr (dev -> main) ----------------------------------------------
+
+DEV_BRANCH = "dev"
+MAIN_BRANCH = "main"
+
+
+def branch_exists(branch: str) -> bool:
+    """Whether ``branch`` exists locally or on origin."""
+    local = capture(["git", "branch", "--list", branch])
+    remote = capture(["git", "ls-remote", "--heads", "origin", branch])
+    return bool(local or remote)
+
+
+def _show_at(ref: str, path: str) -> str:
+    """Return the contents of ``path`` as of ``ref`` without checking it out."""
+    return capture(["git", "show", f"{ref}:{path}"])
+
+
+def _dev_current_version() -> str:
+    """The lockstep version on ``origin/dev`` (read from its root pyproject).
+
+    ``release_pr`` computes the target from dev's version, not the working
+    tree's — the branch it is invoked from may carry a different version.
+    """
+    import tomllib
+
+    data = tomllib.loads(_show_at(f"origin/{DEV_BRANCH}", "pyproject.toml"))
+    return data["project"]["version"]
+
+
+def _dev_unreleased_body() -> str:
+    """The text under ``## [Unreleased]`` in ``origin/dev``'s CHANGELOG."""
+    m = UNRELEASED_RE.search(_show_at(f"origin/{DEV_BRANCH}", "CHANGELOG.md"))
+    if not m:
+        raise ReleaseError(
+            f"No '## [Unreleased]' section in CHANGELOG.md on origin/{DEV_BRANCH}"
+        )
+    return m.group(2).strip()
+
+
+def _release_pr_body(previous: str, version: str, released: str) -> str:
+    """Body for the dev→main release PR.
+
+    Inlines the released content (the ``[Unreleased]`` notes being finalized)
+    so a reviewer sees what ships without opening the CHANGELOG diff.
+    """
+    from packaging.version import Version
+
+    today = datetime.date.today().isoformat()
+    kind = "pre-release" if Version(version).is_prerelease else "stable"
+    return (
+        f"Cuts `v{version}`, capturing everything merged into `{DEV_BRANCH}` "
+        f"since `v{previous}`. Tagging publishes a GitHub Release with wheels "
+        f"and a {kind} PyPI upload.\n\n"
+        "## What this PR contains\n\n"
+        f"- Lockstep version bump `{previous}` -> `{version}` across every "
+        "workspace package's `__init__.py`, the root `pyproject.toml`, "
+        "`.claude-plugin/plugin.json`, and `uv.lock`.\n"
+        f"- `CHANGELOG.md`: `## [Unreleased]` finalized to "
+        f"`## [{version}] - {today}`; the Release workflow uses this section as "
+        "the GitHub Release body.\n\n"
+        "## Released content (already in dev)\n\n"
+        f"{released}\n\n"
+        "## After merge\n\n"
+        f"Run `uv run python scripts/release.py publish` from `{MAIN_BRANCH}` "
+        "to tag and publish — the one irreversible, human-gated step."
+    )
+
+
+def release_pr(bump_arg: str, *, assume_yes: bool = False) -> None:
+    """Cut a release-prep branch off the latest ``dev`` and open a PR into ``main``.
+
+    Automates the reversible half of a dev→main release: fetch dev, branch off
+    it, bump + stamp + commit, push, and open the PR. Deliberately does NOT
+    tag or publish — that stays a human ``publish`` from ``main`` after review,
+    so the tag push still triggers the Release workflow.
+    """
+    if not working_tree_clean():
+        raise ReleaseError("Working tree is dirty; commit or stash first")
+
+    run(["git", "fetch", "--quiet", "origin", DEV_BRANCH, MAIN_BRANCH])
+
+    released = _dev_unreleased_body()
+    if not released:
+        raise ReleaseError(
+            f"'## [Unreleased]' in CHANGELOG.md on origin/{DEV_BRANCH} is empty; "
+            "add release notes first"
+        )
+
+    current = _dev_current_version()
+    target = target_for(bump_arg, current)
+    branch = f"rc-{MAIN_BRANCH}/release/v{target}"
+    if branch_exists(branch):
+        raise ReleaseError(f"Branch {branch} already exists")
+
+    confirm(
+        f"Will branch off origin/{DEV_BRANCH}, bump {current} -> {target}, and "
+        f"open a release PR into {MAIN_BRANCH}. Proceed?",
+        assume_yes=assume_yes,
+    )
+
+    run(["git", "checkout", "-b", branch, f"origin/{DEV_BRANCH}"])
+    version = _apply_prepare(bump_arg, target)
+    run(["git", "push", "-u", "origin", branch])
+
+    url = capture(
+        [
+            "gh",
+            "pr",
+            "create",
+            "--base",
+            MAIN_BRANCH,
+            "--head",
+            branch,
+            "--title",
+            f"chore: release v{version}",
+            "--body",
+            _release_pr_body(current, version, released),
+        ]
+    )
+    print(f"\nOpened release PR: {url}")
+    print(
+        f"After it is approved and merged into {MAIN_BRANCH}, run from {MAIN_BRANCH}:"
+    )
+    print(f"    git checkout {MAIN_BRANCH} && git pull")
+    print("    uv run python scripts/release.py publish")
 
 
 # --- publish ---------------------------------------------------------------
@@ -472,7 +618,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_prepare = sub.add_parser(
-        "prepare", help="bump version, stamp CHANGELOG, commit (all local)"
+        "prepare", help="bump version, stamp CHANGELOG, commit on main (all local)"
     )
     p_prepare.add_argument(
         "bump",
@@ -480,6 +626,17 @@ def main() -> int:
     )
     p_prepare.add_argument(
         "--yes", action="store_true", help="skip the version confirmation prompt"
+    )
+
+    p_release_pr = sub.add_parser(
+        "release-pr", help="branch off dev, prepare, open a release PR into main"
+    )
+    p_release_pr.add_argument(
+        "bump",
+        help="major | minor | patch | prerelease | version=X.Y.Z",
+    )
+    p_release_pr.add_argument(
+        "--yes", action="store_true", help="skip the confirmation prompt"
     )
 
     p_publish = sub.add_parser(
@@ -496,6 +653,8 @@ def main() -> int:
     try:
         if args.command == "prepare":
             prepare(args.bump, assume_yes=args.yes)
+        elif args.command == "release-pr":
+            release_pr(args.bump, assume_yes=args.yes)
         elif args.command == "publish":
             publish(assume_yes=args.yes)
         elif args.command == "verify":

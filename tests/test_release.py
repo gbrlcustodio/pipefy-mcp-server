@@ -54,6 +54,24 @@ def test_unreleased_re_captures_heading_and_body() -> None:
     assert "old" not in m.group(2)
 
 
+def test_release_pr_body_inlines_content() -> None:
+    body = _release._release_pr_body(
+        "0.3.0-beta.4", "0.3.0-beta.5", "### Added\n\n- a shipped thing"
+    )
+    assert "Cuts `v0.3.0-beta.5`" in body
+    assert "since `v0.3.0-beta.4`" in body
+    assert "`0.3.0-beta.4` -> `0.3.0-beta.5`" in body
+    assert "## Released content" in body
+    assert "- a shipped thing" in body  # the released notes are inlined
+    assert "pre-release PyPI upload" in body
+    assert "release.py publish" in body
+
+
+def test_release_pr_body_marks_stable() -> None:
+    body = _release._release_pr_body("0.9.0", "1.0.0", "### Added\n\n- x")
+    assert "stable PyPI upload" in body
+
+
 def test_stamp_changelog_renames_and_reseeds(tmp_path: Path, monkeypatch) -> None:
     changelog = tmp_path / "CHANGELOG.md"
     changelog.write_text(

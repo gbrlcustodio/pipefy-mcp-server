@@ -20,6 +20,7 @@ from pipefy_mcp.core.tool_error_envelope import (
     tool_success,
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 
 _KB_ID_DISCOVERY_HINT = (
@@ -107,7 +108,7 @@ class KnowledgeBaseTools:
     def register(mcp: FastMCP) -> None:
         """Register knowledge base tools on the MCP server."""
 
-        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True), meta=REMOTE)
         async def get_ai_knowledge_bases(
             ctx: Context,
             pipe_uuid: str,
@@ -135,7 +136,7 @@ class KnowledgeBaseTools:
                 {"knowledge_bases": items}, message="Knowledge bases retrieved."
             )
 
-        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True), meta=REMOTE)
         async def get_ai_knowledge_base_plain_text(
             ctx: Context,
             plain_text_id: str,
@@ -311,7 +312,7 @@ class KnowledgeBaseTools:
                 message="Knowledge base plain text deleted.",
             )
 
-        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True), meta=REMOTE)
         async def get_ai_knowledge_base_document(
             ctx: Context,
             document_id: str,
@@ -495,7 +496,7 @@ class KnowledgeBaseTools:
                 message="Knowledge base document deleted.",
             )
 
-        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True), meta=REMOTE)
         async def get_ai_knowledge_base_data_lookup(
             ctx: Context,
             data_lookup_id: str,
@@ -709,7 +710,7 @@ class KnowledgeBaseTools:
                 message="Knowledge base data lookup deleted.",
             )
 
-        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True))
+        @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True), meta=REMOTE)
         async def validate_knowledge_base_access(
             ctx: Context,
             pipe_uuid: str,

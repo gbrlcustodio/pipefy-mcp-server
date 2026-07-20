@@ -162,6 +162,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automation_logs(
             automation_id: PipefyId,
@@ -213,6 +214,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automation_logs_by_repo(
             repo_id: PipefyId,
@@ -319,6 +321,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automations_usage(
             organization_uuid: PipefyId,
@@ -417,6 +420,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automation_execution_metrics(
             organization_id: PipefyId,
@@ -562,6 +566,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automation_jobs_export(
             export_id: PipefyId,
@@ -595,6 +600,7 @@ class ObservabilityTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True),
+            meta=REMOTE,
         )
         async def get_automation_jobs_export_csv(
             export_id: PipefyId,

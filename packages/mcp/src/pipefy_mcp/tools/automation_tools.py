@@ -21,6 +21,7 @@ from pipefy_mcp.tools.automation_tool_helpers import (
 )
 from pipefy_mcp.tools.destructive_tool_guard import check_destructive_confirmation
 from pipefy_mcp.tools.graphql_error_helpers import enrich_permission_denied_error
+from pipefy_mcp.tools.remote_profile import REMOTE
 from pipefy_mcp.tools.tool_context import get_pipefy_client
 from pipefy_mcp.tools.validation_helpers import (
     mutation_error_if_not_optional_dict,
@@ -46,6 +47,7 @@ class AutomationTools:
     def register(mcp: FastMCP) -> None:
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation(
             ctx: Context, automation_id: PipefyId
@@ -90,6 +92,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automations(
             ctx: Context,
@@ -145,6 +148,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation_actions(
             ctx: Context,
@@ -189,6 +193,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation_events(
             ctx: Context, pipe_id: PipefyId
@@ -223,6 +228,7 @@ class AutomationTools:
 
         @mcp.tool(
             annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+            meta=REMOTE,
         )
         async def get_automation_event_attributes(ctx: Context) -> dict[str, Any]:
             """List the official **event-scoped** ``field_map.value`` token catalog.
